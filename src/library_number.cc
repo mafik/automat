@@ -217,20 +217,18 @@ void Number::SerializeState(ObjectSerializer& writer) const {
   writer.Key("value");
   writer.RawValue(text_field->text.data(), text_field->text.size(), rapidjson::kNumberType);
 }
-void Number::DeserializeState(ObjectDeserializer& d) {
-  Status status;
-  for (auto& key : ObjectView(d, status)) {
-    if (DeserializeField(d, key, status)) {
-      continue;
-    } else if (key == "value") {
-      d.Get(value, status);
-      if (!OK(status)) {
-        ReportError("Couldn't deserialize Number value: " + status.ToStr());
-        return;
-      }
-      text_field->text = GetText();
+bool Number::DeserializeKey(ObjectDeserializer& d, StrView key) {
+  if (key == "value") {
+    Status status;
+    d.Get(value, status);
+    if (!OK(status)) {
+      ReportError("Couldn't deserialize Number value: " + status.ToStr());
+      return true;
     }
+    text_field->text = GetText();
+    return true;
   }
+  return false;
 }
 
 }  // namespace automat::library

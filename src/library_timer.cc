@@ -770,38 +770,37 @@ void TimerDelay::SerializeState(ObjectSerializer& writer) const {
     writer.Double(time::ToSeconds(time::SteadyNow() - start_time));
   }
 }
-void TimerDelay::DeserializeState(ObjectDeserializer& d) {
+bool TimerDelay::DeserializeKey(ObjectDeserializer& d, StrView key) {
   Status status;
-  // TODO: handle deserialization into a running timer
-  for (auto& key : ObjectView(d, status)) {
-    if (DeserializeField(d, key, status)) {
-      continue;
-    } else if (key == "running") {
-      double value = 0;
-      d.Get(value, status);
-      BeginLongRunning(make_unique<RunTask>(here));
-      start_time = time::SteadyNow() - time::FromSeconds(value);
-    } else if (key == "duration_seconds") {
-      double value;
-      d.Get(value, status);
-      if (OK(status)) {
-        duration.value = time::FromSeconds(value);
-      }
-    } else if (key == "range") {
-      Str value;
-      d.Get(value, status);
-      if (OK(status)) {
-        range = TimerRangeFromStr(value, status);
+  if (key == "running") {
+    double value = 0;
+    d.Get(value, status);
+    BeginLongRunning(make_unique<RunTask>(here));
+    start_time = time::SteadyNow() - time::FromSeconds(value);
+    ScheduleAt(*here, start_time + duration.value);
+  } else if (key == "duration_seconds") {
+    double value;
+    d.Get(value, status);
+    if (OK(status)) {
+      duration.value = time::FromSeconds(value);
+      UpdateTextField(*this);
+      if (this->IsRunning()) {
+        ScheduleAt(*here, start_time + duration.value);
       }
     }
+  } else if (key == "range") {
+    Str value;
+    d.Get(value, status);
+    if (OK(status)) {
+      range = TimerRangeFromStr(value, status);
+      UpdateTextField(*this);
+    }
+  } else {
+    return false;
   }
-  UpdateTextField(*this);
-  if (this->IsRunning()) {
-    ScheduleAt(*here, start_time + duration.value);
-  }
-
   if (!OK(status)) {
     ReportError("Failed to deserialize TimerDelay: " + status.ToStr());
   }
+  return true;
 }
 }  // namespace automat::library

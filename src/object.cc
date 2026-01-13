@@ -414,44 +414,19 @@ void Object::SerializeState(ObjectSerializer& writer) const {
   }
 }
 
-bool Object::DeserializeField(ObjectDeserializer& d, StrView key, Status& status) {
-  if (key == "type") {
-    d.Skip();  // Already handled during object creation
-    return true;
-  } else if (key == "args") {
-    for (auto& arg_name : ObjectView(d, status)) {
-      Argument* from_arg = dynamic_cast<Argument*>(PartFromName(arg_name));
-      if (from_arg) {
-        Str to_name;
-        d.Get(to_name, status);
-        auto to_part = d.LookupPart(to_name);
-        if (to_part) {
-          from_arg->Connect(*this, to_part);
-        }
-      } else {
-        d.Skip();
-      }
+bool Object::DeserializeKey(ObjectDeserializer& d, StrView key) {
+  if (key == "value") {
+    Status status;
+    Str value;
+    d.Get(value, status);
+    if (!OK(status)) {
+      ReportError(status.ToStr());
+      return true;
     }
+    SetText(value);
     return true;
   }
   return false;
-}
-
-void Object::DeserializeState(ObjectDeserializer& d) {
-  Status status;
-  for (auto& key : ObjectView(d, status)) {
-    if (DeserializeField(d, key, status)) {
-      continue;
-    } else if (key == "value") {
-      Str value;
-      d.Get(value, status);
-      if (!OK(status)) {
-        ReportError(status.ToStr());
-        return;
-      }
-      SetText(value);
-    }
-  }
 }
 
 audio::Sound& Object::NextSound() { return embedded::assets_SFX_next_wav; }

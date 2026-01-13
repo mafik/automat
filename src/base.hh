@@ -167,7 +167,7 @@ struct Machine : Object, ui::Widget, ui::DropTarget {
 
   void SerializeState(ObjectSerializer& writer) const override;
 
-  void DeserializeState(ObjectDeserializer& d) override;
+  bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 
   Location* LocationAtPoint(Vec2);
 

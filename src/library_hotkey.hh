@@ -56,7 +56,7 @@ struct HotKey : Object, Object::WidgetBase, OnOff, ui::CaretOwner, ui::KeyGrabbe
   void FillChildren(Vec<Widget*>& children) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
-  void DeserializeState(ObjectDeserializer& d) override;
+  bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };
 
 }  // namespace automat::library

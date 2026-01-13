@@ -19,7 +19,7 @@ struct FlipFlop : Object, Runnable, OnOff {
 
   void OnRun(std::unique_ptr<RunTask>&) override;
   void SerializeState(ObjectSerializer& writer) const override;
-  void DeserializeState(ObjectDeserializer& d) override;
+  bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 
   bool IsOn() const override { return current_state; }
   void OnTurnOn() override;

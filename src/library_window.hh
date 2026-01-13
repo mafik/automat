@@ -37,7 +37,7 @@ struct Window : public Object, Runnable, ImageProvider {
   void Relocate(Location* new_here) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
-  void DeserializeState(ObjectDeserializer& d) override;
+  bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 
   // ImageProvider interface
   sk_sp<SkImage> GetImage() override;

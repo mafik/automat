@@ -623,26 +623,24 @@ void MacroRecorder::SerializeState(ObjectSerializer& writer) const {
   writer.Key("recording");
   writer.Bool(keylogging != nullptr);
 }
-void MacroRecorder::DeserializeState(ObjectDeserializer& d) {
-  Status status;
-  for (auto& key : ObjectView(d, status)) {
-    if (DeserializeField(d, key, status)) {
-      continue;
-    } else if (key == "recording") {
-      bool value;
-      d.Get(value, status);
-      if (OK(status) && IsOn() != value) {
-        if (value) {
-          MyLocation()->ScheduleRun();
-        } else {
-          (new CancelTask(MyLocation()))->Schedule();
-        }
+bool MacroRecorder::DeserializeKey(ObjectDeserializer& d, StrView key) {
+  if (key == "recording") {
+    Status status;
+    bool value;
+    d.Get(value, status);
+    if (OK(status) && IsOn() != value) {
+      if (value) {
+        MyLocation()->ScheduleRun();
+      } else {
+        (new CancelTask(MyLocation()))->Schedule();
       }
     }
+    if (!OK(status)) {
+      ReportError("Failed to deserialize MacroRecorder. " + status.ToStr());
+    }
+    return true;
   }
-  if (!OK(status)) {
-    ReportError("Failed to deserialize MacroRecorder. " + status.ToStr());
-  }
+  return false;
 }
 
 }  // namespace automat::library

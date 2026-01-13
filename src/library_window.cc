@@ -694,26 +694,24 @@ void Window::SerializeState(ObjectSerializer& writer) const {
   writer.Double(capture_time);
 }
 
-void Window::DeserializeState(ObjectDeserializer& d) {
+bool Window::DeserializeKey(ObjectDeserializer& d, StrView key) {
   Status status;
-  for (auto key : ObjectView(d, status)) {
-    if (DeserializeField(d, key, status)) {
-      continue;
-    } else if (key == "title") {
-      d.Get(title, status);
-    } else if (key == "run_continuously") {
-      d.Get(run_continuously, status);
-    } else if (key == "capture_time") {
-      d.Get(capture_time, status);
+  if (key == "title") {
+    d.Get(title, status);
+    if (!title.empty()) {
+      AttachToTitle();
     }
-    // Skip deprecated ratio fields for backward compatibility
+  } else if (key == "run_continuously") {
+    d.Get(run_continuously, status);
+  } else if (key == "capture_time") {
+    d.Get(capture_time, status);
+  } else {
+    return false;
   }
   if (!OK(status)) {
     ReportError(status.ToStr());
   }
-  if (!title.empty()) {
-    AttachToTitle();
-  }
+  return true;
 }
 
 // ImageProvider interface implementation

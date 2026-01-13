@@ -263,22 +263,19 @@ void KeyPresser::SerializeState(ObjectSerializer& writer) const {
   auto key_name = ToStr(this->key);
   writer.String(key_name.data(), key_name.size());
 }
-void KeyPresser::DeserializeState(ObjectDeserializer& d) {
-  Status status;
-  for (auto& key : ObjectView(d, status)) {
-    if (DeserializeField(d, key, status)) {
-      continue;
-    } else if (key == "key") {
-      Str value;
-      d.Get(value, status);
-      if (OK(status)) {
-        SetKey(ui::AnsiKeyFromStr(value));
-      }
+bool KeyPresser::DeserializeKey(ObjectDeserializer& d, StrView keyName) {
+  if (keyName == "key") {
+    Status status;
+    Str value;
+    d.Get(value, status);
+    if (OK(status)) {
+      SetKey(ui::AnsiKeyFromStr(value));
+    } else {
+      ReportError("Failed to deserialize KeyPresser. " + status.ToStr());
     }
+    return true;
   }
-  if (!OK(status)) {
-    ReportError("Failed to deserialize KeyPresser. " + status.ToStr());
-  }
+  return false;
 }
 
 KeyPresser::~KeyPresser() {

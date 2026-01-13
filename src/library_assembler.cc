@@ -349,43 +349,31 @@ void Assembler::SerializeState(ObjectSerializer& writer) const {
   // TODO: store currently executing instruction
 }
 
-void Assembler::DeserializeState(ObjectDeserializer& d) {
+bool Assembler::DeserializeKey(ObjectDeserializer& d, StrView key) {
   Status status;
-  for (auto& key : ObjectView(d, status)) {
-    if (DeserializeField(d, key, status)) {
-      continue;
-    }
-    bool found = false;
-    for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-      auto& reg = kRegisters[i];
-      if (key == reg.name) {
-        found = true;
-        Str hex_value;
-        d.Get(hex_value, status);
-        if (hex_value.size() != 16) {
-          AppendErrorMessage(status) += "Registers should have 16 hex digits";
-          continue;
-        }
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+    auto& reg = kRegisters[i];
+    if (key == reg.name) {
+      Str hex_value;
+      d.Get(hex_value, status);
+      if (hex_value.size() != 16) {
+        AppendErrorMessage(status) += "Registers should have 16 hex digits";
+      } else {
         static_assert(sizeof(state.regs[i]) == 8);
         HexToBytesUnchecked(hex_value, (char*)&state.regs[i]);
+        // Update the controller state
+        if (mc_controller) {
+          mc_controller->ChangeState([&](mc::Controller::State& mc_state) { mc_state = state; },
+                                     status);
+        }
       }
+      if (!OK(status)) {
+        ReportError(status.ToStr());
+      }
+      return true;
     }
-    if (!found) {
-      AppendErrorMessage(status) += "Unknown register name: " + key;
-    }
   }
-  if (!OK(status)) {
-    ReportError(status.ToStr());
-    return;
-  }
-
-  if (mc_controller) {
-    mc_controller->ChangeState([&](mc::Controller::State& mc_state) { mc_state = state; }, status);
-  }
-  if (!OK(status)) {
-    ReportError(status.ToStr());
-    return;
-  }
+  return false;
 }
 
 AssemblerWidget::AssemblerWidget(Widget* parent, WeakPtr<Assembler> assembler_weak)
@@ -836,29 +824,27 @@ void Register::SerializeState(ObjectSerializer& writer) const {
   writer.String(reg.name.data(), reg.name.size());
 }
 
-void Register::DeserializeState(ObjectDeserializer& d) {
-  Status status;
-  for (auto& key : ObjectView(d, status)) {
-    if (DeserializeField(d, key, status)) {
-      continue;
-    } else if (key == "reg") {
-      std::string reg_name;
-      d.Get(reg_name, status);
-      if (!OK(status)) {
-        ReportError(status.ToStr());
-        register_index = 0;
-        break;
-      }
-      for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-        if (kRegisters[i].name == reg_name) {
-          register_index = i;
-          break;
-        }
-      }
-      ReportError(f("Unknown register name: {}", reg_name));
+bool Register::DeserializeKey(ObjectDeserializer& d, StrView key) {
+  if (key == "reg") {
+    Status status;
+    std::string reg_name;
+    d.Get(reg_name, status);
+    if (!OK(status)) {
+      ReportError(status.ToStr());
       register_index = 0;
+      return true;
     }
+    for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+      if (kRegisters[i].name == reg_name) {
+        register_index = i;
+        return true;
+      }
+    }
+    ReportError(f("Unknown register name: {}", reg_name));
+    register_index = 0;
+    return true;
   }
+  return false;
 }
 
 }  // namespace automat::library

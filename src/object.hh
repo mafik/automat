@@ -77,12 +77,10 @@ struct Object : public ReferenceCounted {
 
   virtual void SerializeState(ObjectSerializer& writer) const;
 
-  // Restores state when Automat is restarted.
-  virtual void DeserializeState(ObjectDeserializer& d);
-
-  // Helper for DeserializeState: handles "type" and "args" fields.
-  // Returns true if the key was handled, false if the derived class should process it.
-  bool DeserializeField(ObjectDeserializer& d, StrView key, Status& status);
+  // Deserializes a single field of the object. Returns true if the key was handled.
+  // Called from persistence.cc for each key in the object's JSON representation.
+  // Derived classes should override this to handle their own fields.
+  virtual bool DeserializeKey(ObjectDeserializer& d, StrView key);
 
   virtual std::string GetText() const { return ""; }
   virtual void SetText(std::string_view text) {}

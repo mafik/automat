@@ -376,46 +376,52 @@ void HotKey::SerializeState(ObjectSerializer& writer) const {
   writer.Bool(IsOn());
 }
 
-void HotKey::DeserializeState(ObjectDeserializer& d) {
+bool HotKey::DeserializeKey(ObjectDeserializer& d, StrView keyName) {
   Status status;
-  bool on = IsOn();
-  if (on) {
-    OnTurnOff();  // temporarily switch off to ungrab the old key combo
-  }
-  for (auto& key : ObjectView(d, status)) {
-    if (DeserializeField(d, key, status)) {
-      continue;
-    } else if (key == "key") {
-      Str key_str;
-      d.Get(key_str, status);
-      if (OK(status)) {
-        this->key = AnsiKeyFromStr(key_str);
-      }
-    } else if (key == "ctrl") {
-      d.Get(ctrl, status);
-    } else if (key == "alt") {
-      d.Get(alt, status);
-    } else if (key == "shift") {
-      d.Get(shift, status);
-    } else if (key == "windows") {
-      d.Get(windows, status);
-    } else if (key == "active") {
-      d.Get(on, status);
-    }
-  }
-  if (on) {
-    OnTurnOn();
-  }
+  bool was_on = IsOn();
 
-  shortcut_button->SetLabel(ToStr(this->key));
-  ctrl_button->fg = KeyColor(ctrl);
-  alt_button->fg = KeyColor(alt);
-  shift_button->fg = KeyColor(shift);
-  windows_button->fg = KeyColor(windows);
+  // Helper lambda to temporarily disable hotkey, change setting, then re-enable if needed
+  auto ModifySetting = [&](auto&& setter) {
+    if (was_on) OnTurnOff();
+    setter();
+    if (was_on) OnTurnOn();
+  };
+
+  if (keyName == "key") {
+    Str key_str;
+    d.Get(key_str, status);
+    if (OK(status)) {
+      ModifySetting([&] { this->key = AnsiKeyFromStr(key_str); });
+      shortcut_button->SetLabel(ToStr(this->key));
+    }
+  } else if (keyName == "ctrl") {
+    ModifySetting([&] { d.Get(ctrl, status); });
+    ctrl_button->fg = KeyColor(ctrl);
+  } else if (keyName == "alt") {
+    ModifySetting([&] { d.Get(alt, status); });
+    alt_button->fg = KeyColor(alt);
+  } else if (keyName == "shift") {
+    ModifySetting([&] { d.Get(shift, status); });
+    shift_button->fg = KeyColor(shift);
+  } else if (keyName == "windows") {
+    ModifySetting([&] { d.Get(windows, status); });
+    windows_button->fg = KeyColor(windows);
+  } else if (keyName == "active") {
+    bool should_be_on = false;
+    d.Get(should_be_on, status);
+    if (should_be_on && !was_on) {
+      OnTurnOn();
+    } else if (!should_be_on && was_on) {
+      OnTurnOff();
+    }
+  } else {
+    return false;
+  }
 
   if (!OK(status)) {
     ReportError(status.ToStr());
   }
+  return true;
 }
 
 void HotKey::HotKeyRunnable::OnRun(std::unique_ptr<RunTask>& run_task) {}

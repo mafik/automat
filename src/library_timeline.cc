@@ -2678,8 +2678,8 @@ void Timeline::SerializeState(ObjectSerializer& writer) const {
   }
 }
 
-bool TrackBase::TryDeserializeField(Deserializer& d, Str& field_name) {
-  if (field_name == "timestamps") {
+bool TrackBase::DeserializeKey(ObjectDeserializer& d, StrView key) {
+  if (key == "timestamps") {
     timestamps.clear();
     Status status;
     for (int i : ArrayView(d, status)) {
@@ -2696,8 +2696,9 @@ bool TrackBase::TryDeserializeField(Deserializer& d, Str& field_name) {
   }
   return false;
 }
-bool OnOffTrack::TryDeserializeField(Deserializer& d, Str& field_name) {
-  if (field_name == "on_at") {
+
+bool OnOffTrack::DeserializeKey(ObjectDeserializer& d, StrView key) {
+  if (key == "on_at") {
     Status status;
     double t;
     d.Get(t, status);
@@ -2707,18 +2708,19 @@ bool OnOffTrack::TryDeserializeField(Deserializer& d, Str& field_name) {
     }
     return true;
   }
-  return TrackBase::TryDeserializeField(d, field_name);
+  return TrackBase::DeserializeKey(d, key);
 }
-bool Vec2Track::TryDeserializeField(Deserializer& d, Str& field_name) {
-  if (field_name == "values") {
+
+bool Vec2Track::DeserializeKey(ObjectDeserializer& d, StrView key) {
+  if (key == "values") {
     values.clear();
     Status status;
     for (int i : ArrayView(d, status)) {
       Vec2 v;
-      for (int i : ArrayView(d, status)) {
-        if (i == 0) {
+      for (int j : ArrayView(d, status)) {
+        if (j == 0) {
           d.Get(v.x, status);
-        } else if (i == 1) {
+        } else if (j == 1) {
           d.Get(v.y, status);
         }
       }
@@ -2731,10 +2733,11 @@ bool Vec2Track::TryDeserializeField(Deserializer& d, Str& field_name) {
     }
     return true;
   }
-  return TrackBase::TryDeserializeField(d, field_name);
+  return TrackBase::DeserializeKey(d, key);
 }
-bool Float64Track::TryDeserializeField(Deserializer& d, Str& field_name) {
-  if (field_name == "values") {
+
+bool Float64Track::DeserializeKey(ObjectDeserializer& d, StrView key) {
+  if (key == "values") {
     values.clear();
     Status status;
     for (int i : ArrayView(d, status)) {
@@ -2749,91 +2752,74 @@ bool Float64Track::TryDeserializeField(Deserializer& d, Str& field_name) {
     }
     return true;
   }
-  return TrackBase::TryDeserializeField(d, field_name);
+  return TrackBase::DeserializeKey(d, key);
 }
 
-void TrackBase::DeserializeState(ObjectDeserializer& d) {
-  ERROR << "TrackBase::DeserializeState() not implemented";
-}
-
-void OnOffTrack::DeserializeState(ObjectDeserializer& d) {
-  ERROR << "OnOffTrack::DeserializeState() not implemented";
-}
-
-void Vec2Track::DeserializeState(ObjectDeserializer& d) {
-  ERROR << "Vec2Track::DeserializeState() not implemented";
-}
-
-void Float64Track::DeserializeState(ObjectDeserializer& d) {
-  ERROR << "Vec2Track::DeserializeState() not implemented";
-}
-
-void Timeline::DeserializeState(ObjectDeserializer& d) {
+bool Timeline::DeserializeKey(ObjectDeserializer& d, StrView key) {
   Status status;
   here = MyLocation();
-  for (auto& key : ObjectView(d, status)) {
-    if (DeserializeField(d, key, status)) {
-      continue;
-    } else if (key == "tracks") {
-      for (auto& track_name : ObjectView(d, status)) {
-        Str track_type = "";
-        TrackBase* track = nullptr;
-        for (auto& track_key : ObjectView(d, status)) {
-          if (track_key == "type") {
-            d.Get(track_type, status);
-            if (OK(status)) {
-              if (track_type == "On/Off Track") {
-                track = &AddOnOffTrack(track_name);
-              } else if (track_type == "Vec2 Track") {
-                track = &AddVec2Track(track_name);
-              } else if (track_type == "Float64 Track") {
-                track = &AddFloat64Track(track_name);
-              } else {
-                AppendErrorMessage(status) += f("Unknown track type: {}", track_type);
-              }
-            }
-          } else {
-            if (track) {
-              track->TryDeserializeField(d, track_key);
+  if (key == "tracks") {
+    for (auto& track_name : ObjectView(d, status)) {
+      Str track_type = "";
+      TrackBase* track = nullptr;
+      for (auto& track_key : ObjectView(d, status)) {
+        if (track_key == "type") {
+          d.Get(track_type, status);
+          if (OK(status)) {
+            if (track_type == "On/Off Track") {
+              track = &AddOnOffTrack(track_name);
+            } else if (track_type == "Vec2 Track") {
+              track = &AddVec2Track(track_name);
+            } else if (track_type == "Float64 Track") {
+              track = &AddFloat64Track(track_name);
             } else {
-              d.Skip();
+              AppendErrorMessage(status) += f("Unknown track type: {}", track_type);
             }
+          }
+        } else {
+          if (track) {
+            track->DeserializeKey(d, track_key);
+          } else {
+            d.Skip();
           }
         }
       }
-    } else if (key == "zoom") {
-      d.Get(zoom, status);
-    } else if (key == "length") {
-      double t;
-      d.Get(t, status);
-      timeline_length = time::FromSeconds(t);
-    } else if (key == "paused") {
-      state = kPaused;
-      double t;
-      d.Get(t, status);
-      paused.playback_offset = time::FromSeconds(t);
-    } else if (key == "playing") {
-      state = kPlaying;
-      double value = 0;
-      d.Get(value, status);
-      time::SteadyPoint now = time::SteadyNow();
-      playing.started_at = now - time::FromSeconds(value);
-      // We're not updating the outputs because they should be deserialized in a proper state
-      // TimelineUpdateOutputs(l, *this, playing.started_at, now);
-      TimelineScheduleNextAfter(*this, now);
-      BeginLongRunning(std::make_unique<RunTask>(here));
-    } else if (key == "recording") {
-      state = kRecording;
-      double value = 0;
-      d.Get(value, status);
-      auto duration_double_s = std::chrono::duration<double>(value);
-      recording.started_at =
-          time::SteadyNow() - std::chrono::duration_cast<time::Duration>(duration_double_s);
     }
+  } else if (key == "zoom") {
+    d.Get(zoom, status);
+  } else if (key == "length") {
+    double t;
+    d.Get(t, status);
+    timeline_length = time::FromSeconds(t);
+  } else if (key == "paused") {
+    state = kPaused;
+    double t;
+    d.Get(t, status);
+    paused.playback_offset = time::FromSeconds(t);
+  } else if (key == "playing") {
+    state = kPlaying;
+    double value = 0;
+    d.Get(value, status);
+    time::SteadyPoint now = time::SteadyNow();
+    playing.started_at = now - time::FromSeconds(value);
+    // We're not updating the outputs because they should be deserialized in a proper state
+    // TimelineUpdateOutputs(l, *this, playing.started_at, now);
+    TimelineScheduleNextAfter(*this, now);
+    BeginLongRunning(std::make_unique<RunTask>(here));
+  } else if (key == "recording") {
+    state = kRecording;
+    double value = 0;
+    d.Get(value, status);
+    auto duration_double_s = std::chrono::duration<double>(value);
+    recording.started_at =
+        time::SteadyNow() - std::chrono::duration_cast<time::Duration>(duration_double_s);
+  } else {
+    return false;
   }
   if (!OK(status)) {
     ReportError(status.ToStr());
   }
+  return true;
 }
 
 SkRRect SideButton::RRect() const {

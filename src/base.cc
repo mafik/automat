@@ -137,44 +137,43 @@ void Machine::SerializeState(ObjectSerializer& writer) const {
   }
 }
 
-void Machine::DeserializeState(ObjectDeserializer& d) {
+bool Machine::DeserializeKey(ObjectDeserializer& d, StrView key) {
   Status status;
-  for (auto& key : ObjectView(d, status)) {
-    if (DeserializeField(d, key, status)) {
-      continue;
-    } else if (key == "name") {
-      d.Get(name, status);
-    } else if (key == "locations") {
-      for (auto& object_name : ObjectView(d, status)) {
-        auto* object = d.LookupObject(object_name);
+  if (key == "name") {
+    d.Get(name, status);
+  } else if (key == "locations") {
+    for (auto& object_name : ObjectView(d, status)) {
+      auto* object = d.LookupObject(object_name);
 
-        auto& loc = CreateEmpty();
-        {  // Place the new location below all the others.
-          locations.emplace_back(std::move(locations.front()));
-          locations.pop_front();
-        }
-        object->here = &loc;
-        if (auto widget = dynamic_cast<ui::Widget*>(object)) {
-          widget->parent = &loc;
-        }
-        loc.InsertHere(object->AcquirePtr());
+      auto& loc = CreateEmpty();
+      {  // Place the new location below all the others.
+        locations.emplace_back(std::move(locations.front()));
+        locations.pop_front();
+      }
+      object->here = &loc;
+      if (auto widget = dynamic_cast<ui::Widget*>(object)) {
+        widget->parent = &loc;
+      }
+      loc.InsertHere(object->AcquirePtr());
 
-        // Read the [x, y] position array
-        for (auto i : ArrayView(d, status)) {
-          if (i == 0) {
-            d.Get(loc.position.x, status);
-          } else if (i == 1) {
-            d.Get(loc.position.y, status);
-          } else {
-            d.Skip();
-          }
+      // Read the [x, y] position array
+      for (auto i : ArrayView(d, status)) {
+        if (i == 0) {
+          d.Get(loc.position.x, status);
+        } else if (i == 1) {
+          d.Get(loc.position.y, status);
+        } else {
+          d.Skip();
         }
       }
     }
+  } else {
+    return false;
   }
   if (!OK(status)) {
     ReportError(status.ToStr());
   }
+  return true;
 }
 
 Machine::Machine(ui::Widget* parent) : ui::Widget(parent) {}

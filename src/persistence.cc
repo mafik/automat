@@ -6,6 +6,7 @@
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/rapidjson.h>
 
+#include "argument.hh"
 #include "automat.hh"
 #include "root_widget.hh"
 #include "status.hh"
@@ -103,7 +104,28 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
       // This is an object - deserialize its state
       auto* object = d.LookupObject(key);
       if (object) {
-        object->DeserializeState(d);
+        for (auto& field : ObjectView(d, status)) {
+          if (field == "type") {
+            d.Skip();  // Already handled during object creation in first pass
+          } else if (field == "args") {
+            // Deserialize argument connections
+            for (auto& arg_name : ObjectView(d, status)) {
+              Argument* from_arg = dynamic_cast<Argument*>(object->PartFromName(arg_name));
+              if (from_arg) {
+                Str to_name;
+                d.Get(to_name, status);
+                auto to_part = d.LookupPart(to_name);
+                if (to_part) {
+                  from_arg->Connect(*object, to_part);
+                }
+              } else {
+                d.Skip();
+              }
+            }
+          } else if (!object->DeserializeKey(d, field)) {
+            d.Skip();  // Unknown field, skip it
+          }
+        }
       } else {
         d.Skip();
       }

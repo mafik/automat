@@ -3756,7 +3756,7 @@ void Instruction::SerializeState(ObjectSerializer& writer) const {
   }
 }
 
-void Instruction::DeserializeState(ObjectDeserializer& d) {
+bool Instruction::DeserializeKey(ObjectDeserializer& d, StrView key) {
   static StringMap<unsigned> opcode_map = [] {
     auto& assembler = LLVM_Assembler::Get();
     StringMap<unsigned> map;
@@ -3776,131 +3776,127 @@ void Instruction::DeserializeState(ObjectDeserializer& d) {
 
   auto& assembler = LLVM_Assembler::Get();
   Status status;
-  for (auto& key : ObjectView(d, status)) {
-    if (DeserializeField(d, key, status)) {
-      continue;
-    } else if (key == "opcode") {
-      Str opcode_name;
-      d.Get(opcode_name, status);
-      if (!OK(status)) {
-        AppendErrorMessage(status) += "Opcode name must be a string";
-        break;
-      }
+
+  if (key == "opcode") {
+    Str opcode_name;
+    d.Get(opcode_name, status);
+    if (!OK(status)) {
+      AppendErrorMessage(status) += "Opcode name must be a string";
+    } else {
       auto opcode_i = opcode_map.find(opcode_name);
       if (opcode_i == opcode_map.end()) {
         AppendErrorMessage(status) += "Opcode name is not a valid x86 LLVM opcode name";
-        break;
-      }
-      mc_inst.setOpcode(opcode_i->second);
-    } else if (key == "immediate_mode") {
-      Str mode_name;
-      d.Get(mode_name, status);
-      if (!OK(status)) {
-        AppendErrorMessage(status) += "Immediate mode must be a string";
-        break;
-      }
-      if (mode_name == "signed") {
-        imm_type = Buffer::Type::Signed;
-      } else if (mode_name == "unsigned") {
-        imm_type = Buffer::Type::Unsigned;
-      } else if (mode_name == "hexadecimal") {
-        imm_type = Buffer::Type::Hexadecimal;
-      } else if (mode_name == "text") {
-        imm_type = Buffer::Type::Text;
       } else {
-        AppendErrorMessage(status) += "Unknown immediate mode";
+        mc_inst.setOpcode(opcode_i->second);
+      }
+    }
+  } else if (key == "immediate_mode") {
+    Str mode_name;
+    d.Get(mode_name, status);
+    if (!OK(status)) {
+      AppendErrorMessage(status) += "Immediate mode must be a string";
+    } else if (mode_name == "signed") {
+      imm_type = Buffer::Type::Signed;
+    } else if (mode_name == "unsigned") {
+      imm_type = Buffer::Type::Unsigned;
+    } else if (mode_name == "hexadecimal") {
+      imm_type = Buffer::Type::Hexadecimal;
+    } else if (mode_name == "text") {
+      imm_type = Buffer::Type::Text;
+    } else {
+      AppendErrorMessage(status) += "Unknown immediate mode";
+    }
+  } else if (key == "operands") {
+    auto& instr_info = assembler.mc_instr_info->get(mc_inst.getOpcode());
+    for (auto operand_i : ArrayView(d, status)) {
+      if (operand_i >= instr_info.getNumOperands()) {
+        auto& msg = AppendErrorMessage(status);
+        msg += "Too many operands for ";
+        msg += assembler.mc_instr_info->getName(mc_inst.getOpcode());
         break;
       }
-    } else if (key == "operands") {
-      auto& instr_info = assembler.mc_instr_info->get(mc_inst.getOpcode());
-      for (auto operand_i : ArrayView(d, status)) {
-        if (operand_i >= instr_info.getNumOperands()) {
+      auto& operand = instr_info.operands()[operand_i];
+      if (operand.OperandType == MCOI::OPERAND_REGISTER) {
+        // Recover register index from string
+        Str reg_name;
+        d.Get(reg_name, status);
+        if (!OK(status)) {
           auto& msg = AppendErrorMessage(status);
-          msg += "Too many operands for ";
-          msg += assembler.mc_instr_info->getName(mc_inst.getOpcode());
+          msg += "Operand ";
+          msg += std::to_string(operand_i);
+          msg += " must be a valid x86 LLVM register name";
           break;
         }
-        auto& operand = instr_info.operands()[operand_i];
-        if (operand.OperandType == MCOI::OPERAND_REGISTER) {
-          // Recover register index from string
-          Str reg_name;
-          d.Get(reg_name, status);
+        auto reg_i = reg_map.find(reg_name);
+        if (reg_i == reg_map.end()) {
+          auto& msg = AppendErrorMessage(status);
+          msg += "Operand ";
+          msg += std::to_string(operand_i);
+          msg += " must be a valid x86 LLVM register name";
+          break;
+        }
+        mc_inst.addOperand(MCOperand::createReg(reg_i->second));
+      } else {
+        // Immediate
+        if (imm_type == Buffer::Type::Signed) {
+          int64_t immediate;
+          d.Get(immediate, status);
           if (!OK(status)) {
             auto& msg = AppendErrorMessage(status);
             msg += "Operand ";
             msg += std::to_string(operand_i);
-            msg += " must be a valid x86 LLVM register name";
-            // TODO: fill with a generic register
+            msg += " of ";
+            msg += assembler.mc_instr_info->getName(mc_inst.getOpcode());
+            msg += " must be an integer";
             break;
           }
-          auto reg_i = reg_map.find(reg_name);
-          if (reg_i == reg_map.end()) {
+          mc_inst.addOperand(MCOperand::createImm(immediate));
+        } else if (imm_type == Buffer::Type::Unsigned) {
+          uint64_t immediate;
+          d.Get(immediate, status);
+          if (!OK(status)) {
             auto& msg = AppendErrorMessage(status);
             msg += "Operand ";
             msg += std::to_string(operand_i);
-            msg += " must be a valid x86 LLVM register name";
-            // TODO: fill with a generic register
+            msg += " of ";
+            msg += assembler.mc_instr_info->getName(mc_inst.getOpcode());
+            msg += " must be an unsigned integer";
             break;
           }
-          mc_inst.addOperand(MCOperand::createReg(reg_i->second));
-        } else {
-          // Immediate
-          if (imm_type == Buffer::Type::Signed) {
-            int64_t immediate;
-            d.Get(immediate, status);
-            if (!OK(status)) {
-              auto& msg = AppendErrorMessage(status);
-              msg += "Operand ";
-              msg += std::to_string(operand_i);
-              msg += " of ";
-              msg += assembler.mc_instr_info->getName(mc_inst.getOpcode());
-              msg += " must be an integer";
-              break;
+          mc_inst.addOperand(MCOperand::createImm(immediate));
+        } else if (imm_type == Buffer::Type::Hexadecimal || imm_type == Buffer::Type::Text) {
+          Str str;
+          d.Get(str, status);
+          if (!OK(status)) {
+            auto& msg = AppendErrorMessage(status);
+            msg += "Operand ";
+            msg += std::to_string(operand_i);
+            msg += " of ";
+            msg += assembler.mc_instr_info->getName(mc_inst.getOpcode());
+            msg += " must be a string";
+            break;
+          }
+          if (imm_type == Buffer::Type::Hexadecimal) {
+            uint64_t value = 0;
+            sscanf(str.data(), "%lx", &value);
+            mc_inst.addOperand(MCOperand::createImm(value));
+          } else {
+            while (str.size() < 8) {
+              str += '\0';
             }
-            mc_inst.addOperand(MCOperand::createImm(immediate));
-          } else if (imm_type == Buffer::Type::Unsigned) {
-            uint64_t immediate;
-            d.Get(immediate, status);
-            if (!OK(status)) {
-              auto& msg = AppendErrorMessage(status);
-              msg += "Operand ";
-              msg += std::to_string(operand_i);
-              msg += " of ";
-              msg += assembler.mc_instr_info->getName(mc_inst.getOpcode());
-              msg += " must be an unsigned integer";
-              break;
-            }
-            mc_inst.addOperand(MCOperand::createImm(immediate));
-          } else if (imm_type == Buffer::Type::Hexadecimal || imm_type == Buffer::Type::Text) {
-            Str str;
-            d.Get(str, status);
-            if (!OK(status)) {
-              auto& msg = AppendErrorMessage(status);
-              msg += "Operand ";
-              msg += std::to_string(operand_i);
-              msg += " of ";
-              msg += assembler.mc_instr_info->getName(mc_inst.getOpcode());
-              msg += " must be a string";
-              break;
-            }
-            if (imm_type == Buffer::Type::Hexadecimal) {
-              uint64_t value = 0;
-              sscanf(str.data(), "%lx", &value);
-              mc_inst.addOperand(MCOperand::createImm(value));
-            } else {
-              while (str.size() < 8) {
-                str += '\0';
-              }
-              int64_t value = *reinterpret_cast<int64_t*>(str.data());
-              mc_inst.addOperand(MCOperand::createImm(value));
-            }
+            int64_t value = *reinterpret_cast<int64_t*>(str.data());
+            mc_inst.addOperand(MCOperand::createImm(value));
           }
         }
       }
     }
+  } else {
+    return false;
   }
+
   if (!OK(status)) {
     ReportError(status.ToStr());
   }
+  return true;
 }
 }  // namespace automat::library

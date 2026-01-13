@@ -1222,26 +1222,25 @@ void TesseractOCR::SerializeState(ObjectSerializer& writer) const {
   writer.Double(y_max_ratio);
 }
 
-void TesseractOCR::DeserializeState(ObjectDeserializer& d) {
+bool TesseractOCR::DeserializeKey(ObjectDeserializer& d, StrView key) {
   Status status;
-  for (auto key : ObjectView(d, status)) {
-    if (DeserializeField(d, key, status)) {
-      continue;
-    } else if (key == "ocr_text") {
-      d.Get(ocr_text, status);
-    } else if (key == "x_min_ratio") {
-      d.Get(x_min_ratio, status);
-    } else if (key == "x_max_ratio") {
-      d.Get(x_max_ratio, status);
-    } else if (key == "y_min_ratio") {
-      d.Get(y_min_ratio, status);
-    } else if (key == "y_max_ratio") {
-      d.Get(y_max_ratio, status);
-    }
+  if (key == "ocr_text") {
+    d.Get(ocr_text, status);
+  } else if (key == "x_min_ratio") {
+    d.Get(x_min_ratio, status);
+  } else if (key == "x_max_ratio") {
+    d.Get(x_max_ratio, status);
+  } else if (key == "y_min_ratio") {
+    d.Get(y_min_ratio, status);
+  } else if (key == "y_max_ratio") {
+    d.Get(y_max_ratio, status);
+  } else {
+    return false;
   }
   if (!OK(status)) {
     ReportError(status.ToStr());
   }
+  return true;
 }
 
 std::string TesseractOCR::GetText() const {

@@ -57,7 +57,7 @@ struct TimerDelay : Object, Object::WidgetBase, Runnable, LongRunning, TimerNoti
   bool CenteredAtZero() const override { return true; }
 
   void SerializeState(ObjectSerializer& writer) const override;
-  void DeserializeState(ObjectDeserializer& d) override;
+  bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };
 
 StrView ToStr(TimerDelay::Range);

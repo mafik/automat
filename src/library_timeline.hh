@@ -28,8 +28,7 @@ struct TrackBase : Object {
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override = 0;
 
   void SerializeState(ObjectSerializer& writer) const override;
-  void DeserializeState(ObjectDeserializer& d) override;
-  virtual bool TryDeserializeField(Deserializer& d, Str& field_name);
+  bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };
 
 struct OnOffTrack : TrackBase, OnOff {
@@ -45,8 +44,7 @@ struct OnOffTrack : TrackBase, OnOff {
   void OnTurnOff() override {}
 
   void SerializeState(ObjectSerializer& writer) const override;
-  void DeserializeState(ObjectDeserializer& d) override;
-  bool TryDeserializeField(Deserializer& d, Str& field_name) override;
+  bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };
 
 // A track that holds a sequence of relative values.
@@ -61,8 +59,7 @@ struct Vec2Track : TrackBase {
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
-  void DeserializeState(ObjectDeserializer& d) override;
-  bool TryDeserializeField(Deserializer& d, Str& field_name) override;
+  bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };
 
 // A track that holds a sequence of 64-bit floating point numbers.
@@ -77,8 +74,7 @@ struct Float64Track : TrackBase {
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
-  void DeserializeState(ObjectDeserializer& d) override;
-  bool TryDeserializeField(Deserializer& d, Str& field_name) override;
+  bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };
 
 struct TrackArgument : InlineArgument {
@@ -153,7 +149,7 @@ struct Timeline : Object, Runnable, LongRunning, TimerNotificationReceiver {
   time::Duration MaxTrackLength() const;
 
   void SerializeState(ObjectSerializer& writer) const override;
-  void DeserializeState(ObjectDeserializer& d) override;
+  bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };
 
 }  // namespace automat::library

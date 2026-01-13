@@ -138,24 +138,20 @@ void Gear::SerializeState(ObjectSerializer& writer) const {
   writer.EndArray();
 }
 
-void Gear::DeserializeState(ObjectDeserializer& d) {
-  Status status;
-  for (auto& prop : ObjectView(d, status)) {
-    if (DeserializeField(d, prop, status)) {
-      continue;
-    } else if (prop == "sinks") {
-      for (int i : ArrayView(d, status)) {
-        Str sink_name;
-        d.Get(sink_name, status);
-        NestedPtr<Part> target = d.LookupPart(sink_name);
-        if (auto interface = target.DynamicCast<Interface>()) {
-          AddSink(interface);
-        }
+bool Gear::DeserializeKey(ObjectDeserializer& d, StrView key) {
+  if (key == "sinks") {
+    Status status;
+    for (int i : ArrayView(d, status)) {
+      Str sink_name;
+      d.Get(sink_name, status);
+      NestedPtr<Part> target = d.LookupPart(sink_name);
+      if (auto interface = target.DynamicCast<Interface>()) {
+        AddSink(interface);
       }
-    } else {
-      AppendErrorMessage(status) += "Gear couldn't deserialize unknown property: " + prop;
     }
+    return true;
   }
+  return false;
 }
 
 }  // namespace automat

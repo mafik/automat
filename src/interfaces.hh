@@ -50,7 +50,7 @@ struct Gear : Object {
 
   void SerializeState(ObjectSerializer& writer) const override;
 
-  void DeserializeState(ObjectDeserializer& d) override;
+  bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };
 
 // Some objects within Automat may provide interfaces that can be "synced". A synced interface

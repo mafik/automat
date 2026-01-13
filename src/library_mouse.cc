@@ -523,31 +523,30 @@ void MouseButtonEvent::SerializeState(ObjectSerializer& writer) const {
     writer.String("up");
   }
 }
-void MouseButtonEvent::DeserializeState(ObjectDeserializer& d) {
+bool MouseButtonEvent::DeserializeKey(ObjectDeserializer& d, StrView key) {
   Status status;
-  for (auto& key : ObjectView(d, status)) {
-    if (DeserializeField(d, key, status)) {
-      continue;
-    } else if (key == "button") {
-      Str button_name;
-      d.Get(button_name, status);
-      button = ButtonNameToEnum(button_name);
-    } else if (key == "event") {
-      Str event_name;
-      d.Get(event_name, status);
-      if (event_name == "down") {
-        down = true;
-      } else if (event_name == "up") {
-        down = false;
-      } else {
-        down = false;
-        AppendErrorMessage(status) += "Unknown event name: " + event_name;
-      }
+  if (key == "button") {
+    Str button_name;
+    d.Get(button_name, status);
+    button = ButtonNameToEnum(button_name);
+  } else if (key == "event") {
+    Str event_name;
+    d.Get(event_name, status);
+    if (event_name == "down") {
+      down = true;
+    } else if (event_name == "up") {
+      down = false;
+    } else {
+      down = false;
+      AppendErrorMessage(status) += "Unknown event name: " + event_name;
     }
+  } else {
+    return false;
   }
   if (!OK(status)) {
     ReportError("Failed to deserialize MouseButtonEvent. " + status.ToStr());
   }
+  return true;
 }
 
 string_view MouseMove::Name() const { return "Mouse Move"; }
@@ -924,20 +923,18 @@ void MouseButtonPresser::SerializeState(ObjectSerializer& writer) const {
   writer.String(ButtonEnumToName(button));
 }
 
-void MouseButtonPresser::DeserializeState(ObjectDeserializer& d) {
-  Status status;
-  for (auto& key : ObjectView(d, status)) {
-    if (DeserializeField(d, key, status)) {
-      continue;
-    } else if (key == "button") {
-      Str button_name;
-      d.Get(button_name, status);
-      button = ButtonNameToEnum(button_name);
+bool MouseButtonPresser::DeserializeKey(ObjectDeserializer& d, StrView key) {
+  if (key == "button") {
+    Status status;
+    Str button_name;
+    d.Get(button_name, status);
+    button = ButtonNameToEnum(button_name);
+    if (!OK(status)) {
+      ReportError("Failed to deserialize MouseButtonPresser. " + status.ToStr());
     }
+    return true;
   }
-  if (!OK(status)) {
-    ReportError("Failed to deserialize MouseButtonPresser. " + status.ToStr());
-  }
+  return false;
 }
 
 MouseButtonPresser::~MouseButtonPresser() {

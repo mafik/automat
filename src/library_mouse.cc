@@ -526,7 +526,9 @@ void MouseButtonEvent::SerializeState(ObjectSerializer& writer) const {
 void MouseButtonEvent::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
-    if (key == "button") {
+    if (DeserializeField(d, key, status)) {
+      continue;
+    } else if (key == "button") {
       Str button_name;
       d.Get(button_name, status);
       button = ButtonNameToEnum(button_name);
@@ -925,7 +927,9 @@ void MouseButtonPresser::SerializeState(ObjectSerializer& writer) const {
 void MouseButtonPresser::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
-    if (key == "button") {
+    if (DeserializeField(d, key, status)) {
+      continue;
+    } else if (key == "button") {
       Str button_name;
       d.Get(button_name, status);
       button = ButtonNameToEnum(button_name);

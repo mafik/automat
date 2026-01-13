@@ -141,7 +141,9 @@ void Gear::SerializeState(ObjectSerializer& writer) const {
 void Gear::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto& prop : ObjectView(d, status)) {
-    if (prop == "sinks") {
+    if (DeserializeField(d, prop, status)) {
+      continue;
+    } else if (prop == "sinks") {
       for (int i : ArrayView(d, status)) {
         Str sink_name;
         d.Get(sink_name, status);

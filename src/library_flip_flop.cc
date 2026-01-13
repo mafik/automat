@@ -73,13 +73,13 @@ void FlipFlop::SerializeState(ObjectSerializer& writer) const {
 void FlipFlop::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
-    if (key == "on") {
+    if (DeserializeField(d, key, status)) {
+      continue;
+    } else if (key == "on") {
       d.Get(current_state, status);
       if (!OK(status)) {
         ReportError(status.ToStr());
       }
-    } else {
-      d.Skip();
     }
   }
 }

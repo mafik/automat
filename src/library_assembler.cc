@@ -352,6 +352,9 @@ void Assembler::SerializeState(ObjectSerializer& writer) const {
 void Assembler::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
+    if (DeserializeField(d, key, status)) {
+      continue;
+    }
     bool found = false;
     for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
       auto& reg = kRegisters[i];
@@ -836,7 +839,9 @@ void Register::SerializeState(ObjectSerializer& writer) const {
 void Register::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
-    if (key == "reg") {
+    if (DeserializeField(d, key, status)) {
+      continue;
+    } else if (key == "reg") {
       std::string reg_name;
       d.Get(reg_name, status);
       if (!OK(status)) {
@@ -852,8 +857,6 @@ void Register::DeserializeState(ObjectDeserializer& d) {
       }
       ReportError(f("Unknown register name: {}", reg_name));
       register_index = 0;
-    } else {
-      d.Skip();
     }
   }
 }

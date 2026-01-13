@@ -1225,7 +1225,9 @@ void TesseractOCR::SerializeState(ObjectSerializer& writer) const {
 void TesseractOCR::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto key : ObjectView(d, status)) {
-    if (key == "ocr_text") {
+    if (DeserializeField(d, key, status)) {
+      continue;
+    } else if (key == "ocr_text") {
       d.Get(ocr_text, status);
     } else if (key == "x_min_ratio") {
       d.Get(x_min_ratio, status);

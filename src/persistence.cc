@@ -47,21 +47,72 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
       return;
     }
   }
+
   rapidjson::StringStream stream(contents.data());
   ObjectDeserializer d(stream);
 
+  // First pass: Create objects and register them by name
+  // We use a lookahead deserializer to parse ahead without consuming the main stream
+  {
+    rapidjson::StringStream lookahead_stream(contents.data());
+    Deserializer lookahead(lookahead_stream);
+
+    for (auto& key : ObjectView(lookahead, status)) {
+      if (key == "version") {
+        int version;
+        lookahead.Get(version, status);
+        if (OK(status) && version != 2) {
+          AppendErrorMessage(status) += "Unsupported version: " + std::to_string(version);
+        }
+      } else if (key == "window") {
+        root_widget.DeserializeState(lookahead, status);
+      } else {
+        // This is an object definition - find the type and create it
+        for (auto& field : ObjectView(lookahead, status)) {
+          if (field == "type") {
+            Str type;
+            lookahead.Get(type, status);
+            if (OK(status)) {
+              if (type == "Root machine") {
+                d.RegisterObject(key, *root_machine);
+              } else {
+                auto proto = prototypes->Find(type);
+                if (proto == nullptr) {
+                  root_machine->ReportError(f("Unknown object type: {}", type));
+                } else {
+                  auto object = proto->Clone();
+                  d.RegisterObject(key, *object);
+                }
+              }
+            }
+          } else {
+            lookahead.Skip();  // skip other fields in first pass
+          }
+        }
+      }
+    }
+  }
+
+  // Second pass: Deserialize object states and connections
   for (auto& key : ObjectView(d, status)) {
     if (key == "version") {
-      int version;
-      d.Get(version, status);
-      if (OK(status) && version != 2) {
-        AppendErrorMessage(status) += "Unsupported version: " + std::to_string(version);
-      }
+      d.Skip();  // already handled
     } else if (key == "window") {
-      root_widget.DeserializeState(d, status);
-    } else if (key == "root") {
-      root_machine->DeserializeState(d);
+      d.Skip();  // already handled
+    } else {
+      // This is an object - deserialize its state
+      auto* object = d.LookupObject(key);
+      if (object) {
+        object->DeserializeState(d);
+      } else {
+        d.Skip();
+      }
     }
+  }
+
+  // Objects may have been rendered in their incomplete state - re-render them all.
+  for (auto& loc : root_machine->locations) {
+    loc->WakeAnimation();
   }
 
   bool fully_decoded = d.reader.IterativeParseComplete();

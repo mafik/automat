@@ -2772,30 +2772,31 @@ void Timeline::DeserializeState(ObjectDeserializer& d) {
   Status status;
   here = MyLocation();
   for (auto& key : ObjectView(d, status)) {
-    if (key == "tracks") {
-      for (auto elem : ArrayView(d, status)) {
-        Str track_name = "";
+    if (DeserializeField(d, key, status)) {
+      continue;
+    } else if (key == "tracks") {
+      for (auto& track_name : ObjectView(d, status)) {
         Str track_type = "";
         TrackBase* track = nullptr;
-        for (auto track_key : ObjectView(d, status)) {
-          if (track_key == "name") {
-            d.Get(track_name, status);
-          } else if (track_key == "type") {
+        for (auto& track_key : ObjectView(d, status)) {
+          if (track_key == "type") {
             d.Get(track_type, status);
-          } else {
-            if (track == nullptr) {
-              if (track_type == "on/off") {
+            if (OK(status)) {
+              if (track_type == "On/Off Track") {
                 track = &AddOnOffTrack(track_name);
-              } else if (track_type == "vec2") {
+              } else if (track_type == "Vec2 Track") {
                 track = &AddVec2Track(track_name);
-              } else if (track_type == "float64") {
+              } else if (track_type == "Float64 Track") {
                 track = &AddFloat64Track(track_name);
               } else {
                 AppendErrorMessage(status) += f("Unknown track type: {}", track_type);
               }
             }
+          } else {
             if (track) {
               track->TryDeserializeField(d, track_key);
+            } else {
+              d.Skip();
             }
           }
         }

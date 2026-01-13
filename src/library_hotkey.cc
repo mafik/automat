@@ -383,7 +383,9 @@ void HotKey::DeserializeState(ObjectDeserializer& d) {
     OnTurnOff();  // temporarily switch off to ungrab the old key combo
   }
   for (auto& key : ObjectView(d, status)) {
-    if (key == "key") {
+    if (DeserializeField(d, key, status)) {
+      continue;
+    } else if (key == "key") {
       Str key_str;
       d.Get(key_str, status);
       if (OK(status)) {

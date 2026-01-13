@@ -266,7 +266,9 @@ void KeyPresser::SerializeState(ObjectSerializer& writer) const {
 void KeyPresser::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
-    if (key == "key") {
+    if (DeserializeField(d, key, status)) {
+      continue;
+    } else if (key == "key") {
       Str value;
       d.Get(value, status);
       if (OK(status)) {

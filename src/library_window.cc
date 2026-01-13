@@ -697,7 +697,9 @@ void Window::SerializeState(ObjectSerializer& writer) const {
 void Window::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto key : ObjectView(d, status)) {
-    if (key == "title") {
+    if (DeserializeField(d, key, status)) {
+      continue;
+    } else if (key == "title") {
       d.Get(title, status);
     } else if (key == "run_continuously") {
       d.Get(run_continuously, status);

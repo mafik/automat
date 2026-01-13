@@ -626,7 +626,9 @@ void MacroRecorder::SerializeState(ObjectSerializer& writer) const {
 void MacroRecorder::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
-    if (key == "recording") {
+    if (DeserializeField(d, key, status)) {
+      continue;
+    } else if (key == "recording") {
       bool value;
       d.Get(value, status);
       if (OK(status) && IsOn() != value) {

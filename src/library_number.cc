@@ -220,7 +220,9 @@ void Number::SerializeState(ObjectSerializer& writer) const {
 void Number::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
-    if (key == "value") {
+    if (DeserializeField(d, key, status)) {
+      continue;
+    } else if (key == "value") {
       d.Get(value, status);
       if (!OK(status)) {
         ReportError("Couldn't deserialize Number value: " + status.ToStr());

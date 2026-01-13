@@ -3777,7 +3777,9 @@ void Instruction::DeserializeState(ObjectDeserializer& d) {
   auto& assembler = LLVM_Assembler::Get();
   Status status;
   for (auto& key : ObjectView(d, status)) {
-    if (key == "opcode") {
+    if (DeserializeField(d, key, status)) {
+      continue;
+    } else if (key == "opcode") {
       Str opcode_name;
       d.Get(opcode_name, status);
       if (!OK(status)) {

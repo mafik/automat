@@ -774,7 +774,9 @@ void TimerDelay::DeserializeState(ObjectDeserializer& d) {
   Status status;
   // TODO: handle deserialization into a running timer
   for (auto& key : ObjectView(d, status)) {
-    if (key == "running") {
+    if (DeserializeField(d, key, status)) {
+      continue;
+    } else if (key == "running") {
       double value = 0;
       d.Get(value, status);
       BeginLongRunning(make_unique<RunTask>(here));

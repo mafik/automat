@@ -80,6 +80,10 @@ struct Object : public ReferenceCounted {
   // Restores state when Automat is restarted.
   virtual void DeserializeState(ObjectDeserializer& d);
 
+  // Helper for DeserializeState: handles "type" and "args" fields.
+  // Returns true if the key was handled, false if the derived class should process it.
+  bool DeserializeField(ObjectDeserializer& d, StrView key, Status& status);
+
   virtual std::string GetText() const { return ""; }
   virtual void SetText(std::string_view text) {}
 

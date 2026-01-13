@@ -140,108 +140,40 @@ void Machine::SerializeState(ObjectSerializer& writer) const {
 void Machine::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
-    if (key == "name") {
+    if (DeserializeField(d, key, status)) {
+      continue;
+    } else if (key == "name") {
       d.Get(name, status);
     } else if (key == "locations") {
-      // First deserialization pass:
-      // Deserialize each location with uninitialized objects (but correct pointers) first.
+      for (auto& object_name : ObjectView(d, status)) {
+        auto* object = d.LookupObject(object_name);
 
-      rapidjson::StringStream stream(d.stream.src_ + 1);
-      Deserializer lookahead(stream);
-
-      for (auto& location_name : ObjectView(lookahead, status)) {
-        auto& l = CreateEmpty();
+        auto& loc = CreateEmpty();
         {  // Place the new location below all the others.
-          // Normally new locations are created at the top of all the others (front of the locations
-          // deque). We actually want to recreate the same order as the original save file.
           locations.emplace_back(std::move(locations.front()));
           locations.pop_front();
         }
+        object->here = &loc;
+        if (auto widget = dynamic_cast<ui::Widget*>(object)) {
+          widget->parent = &loc;
+        }
+        loc.InsertHere(object->AcquirePtr());
 
-        for (auto& field : ObjectView(lookahead, status)) {
-          if (field == "type") {
-            Str type;
-            lookahead.Get(type, status);
-            if (OK(status)) {
-              auto proto = prototypes->Find(type);
-              if (proto == nullptr) {
-                ReportError(f("Unknown object type: {}", type));
-                // try to continue parsing
-              } else {
-                auto object = proto->Clone();
-                object->here = &l;
-                if (auto widget = dynamic_cast<Widget*>(object.get())) {
-                  widget->parent = &l;
-                }
-                d.RegisterObject(location_name, *object);
-              }
-            }
-          } else if (field == "x") {
-            lookahead.Get(l.position.x, status);
-          } else if (field == "y") {
-            lookahead.Get(l.position.y, status);
-          } else if (field == "value") {
-            lookahead.Skip();
-            // Deserialize this later
-          } else if (field == "parts") {
-            lookahead.Skip();
-            // Deserialize this later
+        // Read the [x, y] position array
+        for (auto i : ArrayView(d, status)) {
+          if (i == 0) {
+            d.Get(loc.position.x, status);
+          } else if (i == 1) {
+            d.Get(loc.position.y, status);
+          } else {
+            d.Skip();
           }
         }
-      }
-
-      // Second deserialization pass - deserialize objects & their arguments
-      for (auto& location_name : ObjectView(d, status)) {
-        auto lookup = d.LookupPart(location_name);
-        auto lookup_obj = lookup.Owner<Object>();
-        Ptr<Object> object = lookup_obj->AcquirePtr();
-        if (!object) {
-          continue;
-        }
-        auto& l = *object->here;
-
-        for (auto& field : ObjectView(d, status)) {
-          if (field == "type") {
-            // ignore - already handled
-            d.Skip();
-          } else if (field == "x") {
-            // ignore - already handled
-            d.Skip();
-          } else if (field == "y") {
-            // ignore - already handled
-            d.Skip();
-          } else if (field == "value") {
-            if (object) {
-              object->DeserializeState(d);
-            }
-          } else if (field == "parts") {
-            for (auto& part_name : ObjectView(d, status)) {
-              Argument* from_arg = dynamic_cast<Argument*>(object->PartFromName(part_name));
-              if (from_arg == nullptr) {
-                d.Skip();
-                continue;
-              }
-              Str to_name;
-              d.Get(to_name, status);
-              auto to_part = d.LookupPart(to_name);
-              if (to_part) {
-                from_arg->Connect(*object, to_part);
-              }
-            }
-          }
-        }
-
-        // Objects are inserted into the location only after their state has been deserialized.
-        l.InsertHere(std::move(object));
       }
     }
   }
   if (!OK(status)) {
     ReportError(status.ToStr());
-  }
-  // Objects may have been rendered in their incomplete state - re-render them all.
-  for (auto& loc : locations) {
-    loc->WakeAnimation();
   }
 }
 

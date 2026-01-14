@@ -198,9 +198,10 @@ struct DeiconifyOption : TextOption {
   Dir PreferredDir() const override { return NE; }
 };
 
-static const char* InterfaceName(NestedWeakPtr<Interface>& weak) {
+static StrView InterfaceName(NestedWeakPtr<Interface>& weak) {
   if (auto ptr = weak.Lock()) {
-    return ptr->Name().data();
+    LOG << "Interface Name: " << ptr->Name();
+    return ptr->Name();
   }
   return "Field of a deleted object";
 }
@@ -318,7 +319,7 @@ struct UnsyncOption : TextOption {
 struct FieldOption : TextOption, OptionsProvider {
   NestedWeakPtr<Interface> interface_weak;
   FieldOption(NestedWeakPtr<Interface> weak)
-      : TextOption(InterfaceName(weak)), interface_weak(weak) {}
+      : TextOption(Str(InterfaceName(weak))), interface_weak(weak) {}
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<FieldOption>(interface_weak);
   }

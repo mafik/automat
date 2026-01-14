@@ -50,9 +50,9 @@ Ptr<Object> FlipFlop::Clone() const {
   return ret;
 }
 
-void FlipFlop::OnRun(std::unique_ptr<RunTask>&) {
+void FlipFlop::Flip::OnRun(std::unique_ptr<RunTask>& task) {
   ZoneScopedN("FlipFlop");
-  Toggle();
+  GetFlipFlop().Toggle();
 }
 
 void FlipFlop::OnTurnOn() {

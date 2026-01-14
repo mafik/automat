@@ -8,6 +8,11 @@
 #include "animation.hh"
 #include "embedded.hh"
 #include "global_resources.hh"
+#include "include/core/SkClipOp.h"
+#include "include/core/SkPaint.h"
+#include "location.hh"
+#include "math.hh"
+#include "root_widget.hh"
 #include "status.hh"
 #include "time.hh"
 #include "units.hh"
@@ -90,6 +95,22 @@ void Gear::FullSync(NestedPtr<Interface>& interface) {
 }
 
 struct GearWidget : Object::WidgetBase {
+  Rect bounds;
+
+  struct Belt {
+    Object* object_unsafe = nullptr;
+    Interface* interface_unsafe = nullptr;
+    SkPath end_shape;
+    Vec2 end{};
+    bool sink = false;
+    bool source = false;
+
+    Belt(Object* object_unsafe, Interface* interface_unsafe)
+        : object_unsafe(object_unsafe), interface_unsafe(interface_unsafe) {}
+  };
+
+  std::vector<Belt> belts;
+
   GearWidget(Gear& sync_block, Widget* parent) : WidgetBase(parent) {
     object = sync_block.AcquireWeakPtr();
   }
@@ -98,7 +119,55 @@ struct GearWidget : Object::WidgetBase {
 
   bool CenteredAtZero() const override { return true; }
 
-  animation::Phase Tick(time::Timer& t) override { return animation::Animating; }
+  animation::Phase Tick(time::Timer& t) override {
+    bounds = Shape().getBounds();
+    auto& widget_store = WidgetStore();
+    auto gear = LockObject<Gear>();
+    belts.clear();
+
+    auto SetBeltEnd = [&](Belt& belt) {
+      if (auto owner_widget = widget_store.FindOrNull(*belt.object_unsafe)) {
+        belt.end_shape = owner_widget->PartShape(belt.interface_unsafe);
+        belt.end_shape.transform(TransformBetween(*owner_widget, *this));
+        auto end_bounds = belt.end_shape.getBounds();
+        belt.end = end_bounds.center();
+        bounds.ExpandToInclude(end_bounds);
+      }
+    };
+
+    if (gear) {
+      for (auto& sink_weak : gear->sinks) {
+        if (auto sink = sink_weak.Lock()) {
+          auto* owner = sink.Owner<Object>();
+          auto* belt = &belts.emplace_back(owner, sink.Get());
+          SetBeltEnd(*belt);
+          belt->sink = true;
+        }
+      }
+      for (auto& source_weak : gear->sources) {
+        if (auto source = source_weak.Lock()) {
+          auto* owner = source.Owner<Object>();
+          Belt* belt = nullptr;
+          for (Belt& existing : belts) {
+            if (existing.object_unsafe == owner && existing.interface_unsafe == source.Get()) {
+              belt = &existing;
+              break;
+            }
+          }
+          if (belt == nullptr) {
+            belt = &belts.emplace_back(owner, source.Get());
+            SetBeltEnd(*belt);
+          }
+          belt->source = true;
+        }
+      }
+    }
+    return animation::Animating;
+  }
+
+  constexpr static float kPrimaryGearRadius = 9_mm;
+  constexpr static float kSecondaryGearRadius = 6_mm;
+  constexpr static float kTeethAmplitude = 0.7_mm;
 
   void Draw(SkCanvas& canvas) const override {
     Status status;
@@ -106,15 +175,68 @@ struct GearWidget : Object::WidgetBase {
     if (!OK(status)) {
       FATAL << status;
     }
+    float primary_rotation = time::SteadySaw<20.0>() * M_PI * 2;
     SkRuntimeEffectBuilder builder(effect);
-    builder.uniform("iTime") = (float)time::SteadySaw<M_PI * 2>();
+    builder.uniform("iRotationRad") = primary_rotation;
     SkMatrix px_to_local;
     (void)canvas.getLocalToDeviceAs3x3().invert(&px_to_local);
     builder.uniform("iPixelRadius") = (float)px_to_local.mapRadius(1);
-    SkPaint paint;
-    paint.setShader(builder.makeShader());
-    canvas.drawCircle(0, 0, 1_cm, paint);
+    builder.uniform("iGearCount") = (float)12;
+    builder.uniform("iTeethAmplitudeCm") = (float)(kTeethAmplitude / 1_cm);
+    builder.uniform("iRadiusCm") = (float)(kPrimaryGearRadius / 1_cm);
+    builder.uniform("iGrooveStartCm") = (float)0.25;
+    builder.uniform("iGrooveMiddleCm") = (float)0.35;
+    builder.uniform("iGrooveEndCm") = (float)0.85;
+    builder.uniform("iHoleRadiusCm") = 0.1f;
+    builder.uniform("iHoleRoundnessCm") = 0.05f;
+    builder.uniform("iEndPos") = Vec2(0, 0);
+    SkPaint gear_paint;
+    gear_paint.setShader(builder.makeShader());
+    canvas.drawCircle(0, 0, kPrimaryGearRadius + kTeethAmplitude, gear_paint);
+
+    builder.uniform("iGearCount") = (float)8;
+    builder.uniform("iRadiusCm") = (float)(kSecondaryGearRadius / 1_cm);
+    builder.uniform("iGrooveStartCm") = (float)10.25;  // no groove
+    builder.uniform("iGrooveMiddleCm") = (float)10.35;
+    builder.uniform("iGrooveEndCm") = (float)10.85;
+    builder.uniform("iHoleRadiusCm") = (float)(3_mm / 1_cm);
+    builder.uniform("iHoleRoundnessCm") = 0.1f;
+
+    SkPaint belt_paint;
+    belt_paint.setColor("#404040"_color);
+    belt_paint.setStyle(SkPaint::kStroke_Style);
+    belt_paint.setStrokeWidth(6_mm);
+    for (auto& belt : belts) {
+      auto dir = Normalize(belt.end);
+      auto start = dir * (kPrimaryGearRadius + kSecondaryGearRadius);
+
+      float ratio = kPrimaryGearRadius / kSecondaryGearRadius;
+
+      canvas.save();
+      canvas.clipPath(belt.end_shape, SkClipOp::kDifference);
+      canvas.save();
+      canvas.translate(start.x, start.y);
+
+      float rot_offset = atan(dir);
+
+      float secondary_gear_rot = rot_offset * (ratio + 1) + primary_rotation * ratio;
+
+      SkPaint secondary_gear_paint;
+      builder.uniform("iRotationRad") = -secondary_gear_rot;
+      builder.uniform("iEndPos") = belt.end - start;
+      secondary_gear_paint.setShader(builder.makeShader());
+      secondary_gear_paint.setStyle(SkPaint::kStroke_Style);
+      secondary_gear_paint.setStrokeWidth((kSecondaryGearRadius + kTeethAmplitude) * 2);
+      secondary_gear_paint.setStrokeCap(SkPaint::kSquare_Cap);
+      canvas.drawLine(Vec2(0, 0), belt.end - start, secondary_gear_paint);
+
+      canvas.restore();
+
+      canvas.restore();
+    }
   }
+
+  Optional<Rect> TextureBounds() const override { return bounds; }
 };
 
 std::unique_ptr<ObjectWidget> Gear::MakeWidget(ui::Widget* parent) {

@@ -88,6 +88,8 @@ struct Interface : InlineArgument {
 
   void CanConnect(Object& start, Part& end, Status&) const override;
 
+  Style GetStyle() const override { return Style::Invisible; }
+
   void Unsync();
 
   template <class Self>

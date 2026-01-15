@@ -34,7 +34,7 @@ namespace automat {
 // # Notable subclasses
 //
 // - Argument (argument.hh/cc) - allows objects to link to (parts of) other objects
-// - Interface (interface.hh/cc) - allows objects to synchronize their behavior
+// - Syncable (sync.hh/cc) - allows objects to synchronize their behavior
 //
 // # Representation
 //
@@ -48,7 +48,7 @@ namespace automat {
 //
 // # TODOs
 //
-// TODO: rename & cleanup of Synchronization.md / interface.hh/cc
+// TODO: rename & cleanup of Synchronization.md / sync.hh/cc
 // TODO: design & document the approach to serialization
 // TODO: design & document menu generation
 struct Part {

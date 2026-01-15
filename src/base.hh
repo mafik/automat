@@ -23,7 +23,6 @@
 #include "drag_action.hh"
 #include "error.hh"
 #include "format.hh"
-#include "interfaces.hh"
 #include "location.hh"
 #include "log.hh"
 #include "on_off.hh"
@@ -31,6 +30,7 @@
 #include "prototypes.hh"
 #include "ptr.hh"
 #include "run_button.hh"
+#include "sync.hh"
 #include "tasks.hh"
 #include "widget.hh"
 
@@ -107,7 +107,7 @@ struct SignalNext : virtual Part {
   NestedWeakPtr<Runnable> next;
 };
 
-struct Runnable : Interface, SignalNext {
+struct Runnable : Syncable, SignalNext {
   // Derived classes should override this method to implement their behavior.
   //
   // If an object must use the CPU for some computation it can stay busy as long as it needs to.

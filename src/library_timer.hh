@@ -4,8 +4,8 @@
 
 #include "animation.hh"
 #include "base.hh"
-#include "interfaces.hh"
 #include "number_text_field.hh"
+#include "sync.hh"
 #include "time.hh"
 #include "timer_thread.hh"
 
@@ -14,7 +14,7 @@ namespace automat::library {
 struct TimerDelay : Object, Object::WidgetBase, Runnable, LongRunning, TimerNotificationReceiver {
   // Guards access to duration & LongRunning members
   std::mutex mtx;
-  struct MyDuration : Interface {
+  struct MyDuration : Syncable {
     time::Duration value = 10s;
     StrView Name() const override { return "duration"sv; }
     SkColor Tint() const override { return "#6e4521"_color; }

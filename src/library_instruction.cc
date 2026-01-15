@@ -132,7 +132,7 @@ void JumpArgument::Connect(Object& start, const NestedPtr<Part>& end) {
 NestedPtr<Part> JumpArgument::Find(const Object& start) const {
   if (auto* inst = dynamic_cast<const Instruction*>(&start)) {
     if (auto locked = inst->jump_target.Lock()) {
-      return NestedPtr<Interface>(locked.GetOwnerWeak().Lock(), locked.Get());
+      return NestedPtr<Syncable>(locked.GetOwnerWeak().Lock(), locked.Get());
     }
   }
   return {};

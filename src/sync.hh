@@ -10,7 +10,7 @@
 
 namespace automat {
 
-struct Interface;
+struct Syncable;
 
 // Gear-shaped object that can make multiple interfaces act as one.
 //
@@ -24,8 +24,8 @@ struct Interface;
 struct Gear : Object {
   std::shared_mutex mutex;
 
-  std::vector<NestedWeakPtr<Interface>> sinks;
-  std::vector<NestedWeakPtr<Interface>> sources;
+  std::vector<NestedWeakPtr<Syncable>> sinks;
+  std::vector<NestedWeakPtr<Syncable>> sources;
 
   ~Gear();
 
@@ -34,17 +34,17 @@ struct Gear : Object {
   // Make sure that this member will receive sync notifications from the Sources in this SyncGroup.
   //
   // Under the hood it adds the given member to the `members` list.
-  void AddSink(NestedPtr<Interface>&);
+  void AddSink(NestedPtr<Syncable>&);
 
-  // Make sure that the sync notifications from this interface will be propagated to Sinks of this
+  // Make sure that the sync notifications from this Syncable will be propagated to Sinks of this
   // Gear.
   //
-  // This will set Interface.sync_block to this Gear. Any existing Gear will be merged as
+  // This will set Syncable.sync_block to this Gear. Any existing Gear will be merged as
   // well.
-  void AddSource(NestedPtr<Interface>&);
+  void AddSource(NestedPtr<Syncable>&);
 
   // AddSink & AddSource together.
-  void FullSync(NestedPtr<Interface>&);
+  void FullSync(NestedPtr<Syncable>&);
 
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
 
@@ -53,36 +53,37 @@ struct Gear : Object {
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };
 
-// Some objects within Automat may provide interfaces that can be "synced". A synced interface
-// allows several objects that follow some interface to act as one.
+// Some objects within Automat may provide Syncables that can be "synced". A synced Syncable
+// allows several objects that follow some Syncable to act as one.
 //
-// Interface should be subclassed as a specific abstract interface (like OnOff) before it's
-// used byObjects within Automat.
+// Syncable should be subclassed as a specific abstract Syncable (like OnOff) before it's
+// used by Objects within Automat.
 //
-// For each command-like method a specific abstract interface should provide a protected virtual
+// For each command-like method a specific abstract Syncable should provide a protected virtual
 // entry point, whose name starts with "On". It's intended to be overridden by a concrete
 // implementation.
 //
-// In addition to that, each SAI should also provide two non-virtual ways to call the method:
+// In addition to that, each specific abstract Syncable (SAS) should also provide two non-virtual
+// ways to call the method:
 // - as a command - these methods should follow verb-like names, like "TurnOn", "Increment".
 //   A "Do" prefix may be used if a good verb is not available. This method should use the
-//   "ForwardDo" helper to forward the call to all syced interface implementations.
+//   "ForwardDo" helper to forward the call to all synced Syncable implementations.
 // - as a notification - these methods should start with "Notify". This method should use the
-//   "ForwardNotify" helper to forward the call to _other_ synced interface implementations.
+//   "ForwardNotify" helper to forward the call to _other_ synced Syncable implementations.
 //
-// The distinction between "Do" commands and "Notify" notifications allows interfaces that track
+// The distinction between "Do" commands and "Notify" notifications allows Syncables that track
 // external state to interoperate with other Automat objects without sending redundant commands to
 // their externally tracked objects.
 //
 // IMPORTANT: To actually make this work, the "On" entry points should not be used directly (only
 // through the "ForwardDo" & "ForwardNotify" wrappers). Whenever the "On" entry point us used
 // directly, it's not going to be propagated to the other synced implementations.
-struct Interface : InlineArgument {
+struct Syncable : InlineArgument {
   // Note GetValueUnsafe used throughout the methods here is actually safe, because
-  // ~Interface will remove itself from Gear. Gear never contains dead pointers.
-  ~Interface() {
+  // ~Syncable will remove itself from Gear. Gear never contains dead pointers.
+  ~Syncable() {
     if (end) {
-      ERROR << "Some Specific Abstract Interface forgot to call Unsync in its destructor";
+      ERROR << "Some specific abstract Syncable forgot to call Unsync in its destructor";
     }
   }
 
@@ -117,19 +118,19 @@ struct Interface : InlineArgument {
   }
 
  protected:
-  // Called when Interface becomes a source - it should start monitoring its updates and call the
+  // Called when Syncable becomes a source - it should start monitoring its updates and call the
   // Notify methods.
   virtual void OnSync() {}
 
-  // Called when Interface stops being a source - it may stop monitoring its underlying state. No
+  // Called when Syncable stops being a source - it may stop monitoring its underlying state. No
   // need to call Notify methods any more.
   virtual void OnUnsync() {}
 
   friend class Gear;
 };
 
-// Returns a reference to the existing or a new Gear. This interface is initialized as a sync
+// Returns a reference to the existing or a new Gear. This Syncable is initialized as a sync
 // source.
-Ptr<Gear> Sync(NestedPtr<Interface>& source);
+Ptr<Gear> Sync(NestedPtr<Syncable>& source);
 
 }  // namespace automat

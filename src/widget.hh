@@ -27,7 +27,7 @@ namespace automat {
 struct Object;
 struct Argument;
 struct Location;
-struct Interface;
+struct Syncable;
 }  // namespace automat
 
 namespace automat::ui {

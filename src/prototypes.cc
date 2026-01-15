@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 #include "prototypes.hh"
 
-#include "interfaces.hh"
 #include "library_assembler.hh"
 #include "library_flip_flop.hh"
 #include "library_hotkey.hh"
@@ -16,6 +15,7 @@
 #include "library_timer.hh"
 #include "library_window.hh"
 #include "object.hh"
+#include "sync.hh"
 
 using namespace automat::library;
 

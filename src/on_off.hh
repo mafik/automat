@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
 
-#include "interfaces.hh"
+#include "sync.hh"
 
 namespace automat {
 
@@ -10,7 +10,7 @@ struct FlipFlopIcon : PaintDrawable {
   void onDraw(SkCanvas* canvas) override;
 };
 
-struct OnOff : Interface {
+struct OnOff : Syncable {
   FlipFlopIcon icon;
   PaintDrawable& Icon() override;
 

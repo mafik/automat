@@ -23,7 +23,7 @@ struct Argument;
 struct ImageProvider;
 struct OnOff;
 struct LongRunning;
-struct Interface;
+struct Syncable;
 struct ObjectSerializer;
 struct ObjectDeserializer;
 

@@ -198,9 +198,9 @@ struct DeiconifyOption : TextOption {
   Dir PreferredDir() const override { return NE; }
 };
 
-static StrView InterfaceName(NestedWeakPtr<Interface>& weak) {
+static StrView SyncableName(NestedWeakPtr<Syncable>& weak) {
   if (auto ptr = weak.Lock()) {
-    LOG << "Interface Name: " << ptr->Name();
+    LOG << "Syncable Name: " << ptr->Name();
     return ptr->Name();
   }
   return "Field of a deleted object";
@@ -246,30 +246,30 @@ struct SyncWidget : ui::Widget {
 };
 
 struct SyncAction : Action {
-  NestedWeakPtr<Interface> weak;
+  NestedWeakPtr<Syncable> weak;
   TrackedPtr<ObjectWidget> object_widget;
   SyncWidget sync_widget;
-  SyncAction(ui::Pointer& pointer, NestedWeakPtr<Interface> weak, ObjectWidget* widget)
+  SyncAction(ui::Pointer& pointer, NestedWeakPtr<Syncable> weak, ObjectWidget* widget)
       : Action(pointer),
         weak(weak),
         object_widget(widget->AcquireTrackedPtr()),
         sync_widget(pointer.GetWidget()) {
-    // TODO: invite objects to show their fields that satisfy the syncable interface
+    // TODO: invite objects to show their fields that satisfy the Syncable
     Update();
   }
   ~SyncAction() {
     // TODO: tell objects to hide their fields
-    // Check if the pointer is over a compatible interface
-    if (auto interface = weak.Lock()) {
+    // Check if the pointer is over a compatible Syncable
+    if (auto syncable = weak.Lock()) {
       auto target_location = root_machine->LocationAtPoint(sync_widget.end);
       if (target_location == nullptr || target_location->object == nullptr) return;
       // TODO: make this work with fields
-      // TODO: make this work with other (non-on/off) interfaces
-      auto* target_interface = (OnOff*)(*target_location->object);  // operator cast
-      if (target_interface == nullptr) return;
-      auto sync_block = Sync(interface);
-      NestedPtr<Interface> target{target_location->object, target_interface};
-      sync_block->FullSync(interface);
+      // TODO: make this work with other (non-on/off) Syncables
+      auto* target_syncable = (OnOff*)(*target_location->object);  // operator cast
+      if (target_syncable == nullptr) return;
+      auto sync_block = Sync(syncable);
+      NestedPtr<Syncable> target{target_location->object, target_syncable};
+      sync_block->FullSync(syncable);
       sync_block->FullSync(target);
       auto& loc = root_machine->Insert(sync_block);
       loc.position = target_location->position;
@@ -277,9 +277,9 @@ struct SyncAction : Action {
     }
   }
   void Update() {
-    if (auto interface = weak.Lock()) {
-      auto* widget = pointer.root_widget.widgets.FindOrNull(*interface.Owner<Object>());
-      auto start_local = widget->PartShape(interface.Get()).getBounds().center();
+    if (auto syncable = weak.Lock()) {
+      auto* widget = pointer.root_widget.widgets.FindOrNull(*syncable.Owner<Object>());
+      auto start_local = widget->PartShape(syncable.Get()).getBounds().center();
       auto start = TransformBetween(*widget, *root_machine).mapPoint(start_local);
       sync_widget.start = start;
       sync_widget.end = pointer.PositionWithinRootMachine();
@@ -292,58 +292,58 @@ struct SyncAction : Action {
 };
 
 struct SyncOption : TextOption {
-  NestedWeakPtr<Interface> weak;
-  SyncOption(NestedWeakPtr<Interface> weak) : TextOption("Sync"), weak(weak) {}
+  NestedWeakPtr<Syncable> weak;
+  SyncOption(NestedWeakPtr<Syncable> weak) : TextOption("Sync"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<SyncOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    if (auto interface = weak.Lock()) {
-      auto widget = pointer.root_widget.widgets.FindOrNull(*interface.Owner<Object>());
-      return std::make_unique<SyncAction>(pointer, interface, widget);
+    if (auto syncable = weak.Lock()) {
+      auto widget = pointer.root_widget.widgets.FindOrNull(*syncable.Owner<Object>());
+      return std::make_unique<SyncAction>(pointer, syncable, widget);
     }
     return nullptr;
   }
 };
 
 struct UnsyncOption : TextOption {
-  NestedWeakPtr<Interface> weak;
-  UnsyncOption(NestedWeakPtr<Interface> weak) : TextOption("Unsync"), weak(weak) {}
+  NestedWeakPtr<Syncable> weak;
+  UnsyncOption(NestedWeakPtr<Syncable> weak) : TextOption("Unsync"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<UnsyncOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    if (auto interface = weak.Lock()) {
-      interface->Unsync();
+    if (auto syncable = weak.Lock()) {
+      syncable->Unsync();
     }
     return nullptr;
   }
 };
 
 struct FieldOption : TextOption, OptionsProvider {
-  NestedWeakPtr<Interface> interface_weak;
-  FieldOption(NestedWeakPtr<Interface> weak)
-      : TextOption(Str(InterfaceName(weak))), interface_weak(weak) {}
+  NestedWeakPtr<Syncable> syncable_weak;
+  FieldOption(NestedWeakPtr<Syncable> weak)
+      : TextOption(Str(SyncableName(weak))), syncable_weak(weak) {}
   std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<FieldOption>(interface_weak);
+    return std::make_unique<FieldOption>(syncable_weak);
   }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    if (auto ptr = interface_weak.Lock()) {
+    if (auto ptr = syncable_weak.Lock()) {
       return OpenMenu(pointer);
     }
     return nullptr;
   }
   void VisitOptions(const OptionsVisitor& visitor) const override {
-    if (auto interface = interface_weak.Lock()) {
-      if (auto* on_off = dynamic_cast<OnOff*>(interface.Get())) {
+    if (auto syncable = syncable_weak.Lock()) {
+      if (auto* on_off = dynamic_cast<OnOff*>(syncable.Get())) {
         if (on_off->IsOn()) {
-          TurnOffOption turn_off(NestedWeakPtr<OnOff>(interface_weak.GetOwnerWeak(), on_off));
+          TurnOffOption turn_off(NestedWeakPtr<OnOff>(syncable_weak.GetOwnerWeak(), on_off));
           visitor(turn_off);
         } else {
-          TurnOnOption turn_on(NestedWeakPtr<OnOff>(interface_weak.GetOwnerWeak(), on_off));
+          TurnOnOption turn_on(NestedWeakPtr<OnOff>(syncable_weak.GetOwnerWeak(), on_off));
           visitor(turn_on);
         }
       }
-      SyncOption sync(interface);
+      SyncOption sync(syncable);
       visitor(sync);
-      if (!interface->end.IsExpired()) {
-        UnsyncOption unsync(interface);
+      if (!syncable->end.IsExpired()) {
+        UnsyncOption unsync(syncable);
         visitor(unsync);
       }
     }
@@ -370,10 +370,10 @@ void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
     }
     if (auto obj = object.Lock()) {
       obj->Parts([&](Part& part) {
-        if (auto* interface = dynamic_cast<Interface*>(&part)) {
-          FieldOption field_option{NestedWeakPtr<Interface>(WeakPtr<Object>(object), interface)};
+        if (auto* syncable = dynamic_cast<Syncable*>(&part)) {
+          FieldOption field_option{NestedWeakPtr<Syncable>(WeakPtr<Object>(object), syncable)};
           Str part_name;
-          obj->PartName(*interface, part_name);
+          obj->PartName(*syncable, part_name);
           // Sometimes it's convenient for an object to expose some options more directly (without
           // nested menus). We do this when the object uses some part without giving it a name.
           if (part_name.empty()) {

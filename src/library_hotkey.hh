@@ -3,9 +3,9 @@
 #pragma once
 
 #include "base.hh"
-#include "interfaces.hh"
 #include "key_button.hh"
 #include "keyboard.hh"
+#include "sync.hh"
 
 namespace automat::library {
 

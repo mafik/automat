@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
 
-#include "interfaces.hh"
+#include "sync.hh"
 
 #include <mutex>
 
@@ -19,7 +19,7 @@
 
 namespace automat {
 
-void Interface::Unsync() {
+void Syncable::Unsync() {
   auto sync_block = end.LockAs<Gear>();
   if (!sync_block) return;
   auto lock = std::unique_lock(sync_block->mutex);
@@ -46,7 +46,7 @@ void Interface::Unsync() {
   OnUnsync();
 }
 
-Ptr<Gear> Sync(NestedPtr<Interface>& source) {
+Ptr<Gear> Sync(NestedPtr<Syncable>& source) {
   auto sync_block = source->end.OwnerLockAs<Gear>();
   if (!sync_block) {
     sync_block = MAKE_PTR(Gear);
@@ -65,8 +65,8 @@ Gear::~Gear() {
   }
 }
 
-// Tells that this interface will receive notifications (receive-only sync)
-void Gear::AddSink(NestedPtr<Interface>& sink) {
+// Tells that this Syncable will receive notifications (receive-only sync)
+void Gear::AddSink(NestedPtr<Syncable>& sink) {
   auto guard = std::unique_lock(mutex);
   for (int i = 0; i < sinks.size(); ++i) {
     if (sinks[i] == sink) {
@@ -76,8 +76,8 @@ void Gear::AddSink(NestedPtr<Interface>& sink) {
   sinks.push_back(sink);
 }
 
-// Tells that this interface is the source of activity / notifications (notify-only sync)
-void Gear::AddSource(NestedPtr<Interface>& source) {
+// Tells that this Syncable is the source of activity / notifications (notify-only sync)
+void Gear::AddSource(NestedPtr<Syncable>& source) {
   auto old_sync_block = source->end.LockAs<Gear>();
   if (old_sync_block.Get() == this) {
     return;
@@ -89,9 +89,9 @@ void Gear::AddSource(NestedPtr<Interface>& source) {
   }
 }
 
-void Gear::FullSync(NestedPtr<Interface>& interface) {
-  AddSink(interface);
-  AddSource(interface);
+void Gear::FullSync(NestedPtr<Syncable>& syncable) {
+  AddSink(syncable);
+  AddSource(syncable);
 }
 
 struct GearWidget : Object::WidgetBase {
@@ -99,14 +99,14 @@ struct GearWidget : Object::WidgetBase {
 
   struct Belt {
     Object* object_unsafe = nullptr;
-    Interface* interface_unsafe = nullptr;
+    Syncable* syncable_unsafe = nullptr;
     SkPath end_shape;
     Vec2 end{};
     bool sink = false;
     bool source = false;
 
-    Belt(Object* object_unsafe, Interface* interface_unsafe)
-        : object_unsafe(object_unsafe), interface_unsafe(interface_unsafe) {}
+    Belt(Object* object_unsafe, Syncable* syncable_unsafe)
+        : object_unsafe(object_unsafe), syncable_unsafe(syncable_unsafe) {}
   };
 
   std::vector<Belt> belts;
@@ -127,7 +127,7 @@ struct GearWidget : Object::WidgetBase {
 
     auto SetBeltEnd = [&](Belt& belt) {
       if (auto owner_widget = widget_store.FindOrNull(*belt.object_unsafe)) {
-        belt.end_shape = owner_widget->PartShape(belt.interface_unsafe);
+        belt.end_shape = owner_widget->PartShape(belt.syncable_unsafe);
         belt.end_shape.transform(TransformBetween(*owner_widget, *this));
         auto end_bounds = belt.end_shape.getBounds();
         belt.end = end_bounds.center();
@@ -149,7 +149,7 @@ struct GearWidget : Object::WidgetBase {
           auto* owner = source.Owner<Object>();
           Belt* belt = nullptr;
           for (Belt& existing : belts) {
-            if (existing.object_unsafe == owner && existing.interface_unsafe == source.Get()) {
+            if (existing.object_unsafe == owner && existing.syncable_unsafe == source.Get()) {
               belt = &existing;
               break;
             }
@@ -243,7 +243,7 @@ std::unique_ptr<ObjectWidget> Gear::MakeWidget(ui::Widget* parent) {
   return std::make_unique<GearWidget>(*this, parent);
 }
 
-void Interface::CanConnect(Object& start, Part& end, Status& status) const {
+void Syncable::CanConnect(Object& start, Part& end, Status& status) const {
   if (dynamic_cast<Gear*>(&end) != nullptr) {
     AppendErrorMessage(status) += "Can only connect to Gear";
   }
@@ -267,8 +267,8 @@ bool Gear::DeserializeKey(ObjectDeserializer& d, StrView key) {
       Str sink_name;
       d.Get(sink_name, status);
       NestedPtr<Part> target = d.LookupPart(sink_name);
-      if (auto interface = target.DynamicCast<Interface>()) {
-        AddSink(interface);
+      if (auto syncable = target.DynamicCast<Syncable>()) {
+        AddSink(syncable);
       }
     }
     return true;

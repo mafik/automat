@@ -391,9 +391,11 @@ std::unique_ptr<Action> Object::WidgetBase::FindAction(ui::Pointer& p, ui::Actio
   return Widget::FindAction(p, btn);
 }
 
-void Object::Updated(Location& here, Location& updated) {
+void Object::Updated(WeakPtr<Object>& updated) {
   if (Runnable* runnable = dynamic_cast<Runnable*>(this)) {
-    here.ScheduleRun();
+    if (here) {
+      here->ScheduleRun();
+    }
   }
 }
 

@@ -228,7 +228,7 @@ struct Machine : Object, ui::Widget, ui::DropTarget {
     if (std::find(front.begin(), front.end(), &h) == front.end()) {
       front.push_back(&h);
     } else {
-      ERROR << "Attempted to add already present " << *h.object->Name() << " to " << *this
+      ERROR << "Attempted to add already present " << h.object->Name() << " to " << *this
             << " front panel";
     }
   }

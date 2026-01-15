@@ -198,11 +198,7 @@ std::string UpdateTask::Format() { return f("UpdateTask({}, {})", Name(target), 
 void UpdateTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("UpdateTask");
   if (auto t = target.lock()) {
-    if (auto u = updated.lock()) {
-      if (t->here) {
-        t->Updated(*t->here, *u->here);
-      }
-    }
+    t->Updated(updated);
   }
 }
 

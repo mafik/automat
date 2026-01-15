@@ -50,7 +50,7 @@ struct Timer : Object, Object::WidgetBase, Runnable, LongRunning, TimerNotificat
   void OnRun(std::unique_ptr<RunTask>&) override;
   void OnCancel() override;
   LongRunning* AsLongRunning() override { return this; }
-  void Updated(Location& here, Location& updated) override;
+  void Updated(WeakPtr<Object>& updated) override;
   void FillChildren(Vec<Widget*>& children) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   bool CenteredAtZero() const override { return true; }

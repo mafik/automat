@@ -45,7 +45,7 @@ struct TesseractOCR : public Object, Runnable {
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
 
   void Parts(const std::function<void(Part&)>&) override;
-  void Updated(Location& here, Location& updated) override;
+  void Updated(WeakPtr<Object>& updated) override;
   void OnRun(std::unique_ptr<RunTask>&) override;
 
   void SerializeState(ObjectSerializer& writer) const override;

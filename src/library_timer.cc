@@ -618,11 +618,13 @@ struct DragDurationHandleAction : Action {
   }
 };
 
-void Timer::Updated(Location& here, Location& updated) {
-  std::string duration_str = updated.object->GetText();
-  double n = std::stod(duration_str);
-  Duration d = time::Defloat(RangeDuration(range) * n / TickCount(range));
-  SetDuration(*this, d);
+void Timer::Updated(WeakPtr<Object>& updated) {
+  if (auto u = updated.Lock()) {
+    std::string duration_str = u->GetText();
+    double n = std::stod(duration_str);
+    Duration d = time::Defloat(RangeDuration(range) * n / TickCount(range));
+    SetDuration(*this, d);
+  }
 }
 
 struct DragHandAction : Action {

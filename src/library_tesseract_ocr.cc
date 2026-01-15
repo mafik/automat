@@ -1254,6 +1254,6 @@ void TesseractOCR::SetText(std::string_view text) {
   WakeWidgetsAnimation();
 }
 
-void TesseractOCR::Updated(Location& here, Location& updated) { WakeWidgetsAnimation(); }
+void TesseractOCR::Updated(WeakPtr<Object>& updated) { WakeWidgetsAnimation(); }
 
 }  // namespace automat::library

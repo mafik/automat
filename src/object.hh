@@ -103,7 +103,7 @@ struct Object : public ReferenceCounted {
   // Wrapper around Parts() that only reports Arguments
   void Args(const std::function<void(Argument&)>&);
 
-  virtual void Updated(Location& here, Location& updated);
+  virtual void Updated(WeakPtr<Object>& updated);
 
   virtual audio::Sound& NextSound();
 

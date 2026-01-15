@@ -133,7 +133,7 @@ struct Location : ReferenceCounted, ui::Widget {
   ////////////////////////////
 
   // Immediately execute this object's Updated function.
-  void Updated(Location& updated) { object->Updated(*this, updated); }
+  void Updated(WeakPtr<Object>& updated) { object->Updated(updated); }
 
   // Call this function when the value of the object has changed.
   //

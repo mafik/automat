@@ -67,38 +67,40 @@ void StartTimeThread(std::stop_token automat_stop_token) {
   timer_thread.detach();
 }
 
-static void TimerFinished(Location& here, SteadyPoint scheduled_time) {
-  TimerNotificationReceiver* timer = here.As<TimerNotificationReceiver>();
+static void TimerFinished(Object& object, SteadyPoint scheduled_time) {
+  TimerNotificationReceiver* timer = dynamic_cast<TimerNotificationReceiver*>(&object);
   if (timer == nullptr) {
-    ERROR << "Timer notification sent to an object which cannot receive it: " << here.Name();
+    ERROR << "Timer notification sent to an object which cannot receive it";
     return;
   }
-  timer->OnTimerNotification(here, scheduled_time);
+  if (object.here) {
+    timer->OnTimerNotification(*object.here, scheduled_time);
+  }
 }
 
 struct TimerFinishedTask : Task {
   time::SteadyPoint scheduled_time;
-  TimerFinishedTask(WeakPtr<Location> target, time::SteadyPoint scheduled_time)
+  TimerFinishedTask(WeakPtr<Object> target, time::SteadyPoint scheduled_time)
       : Task(target), scheduled_time(scheduled_time) {}
   std::string Format() override { return "TimerFinishedTask"; }
   void OnExecute(std::unique_ptr<Task>& self) override {
     ZoneScopedN("TimerFinishedTask");
-    auto loc = target.lock();
-    if (loc == nullptr) return;
-    TimerFinished(*loc, scheduled_time);
+    auto obj = target.lock();
+    if (obj == nullptr) return;
+    TimerFinished(*obj, scheduled_time);
   }
 };
 
 void ScheduleAt(Location& here, SteadyPoint time) {
   std::unique_lock<std::mutex> lck(mtx);
-  tasks.emplace(time, new TimerFinishedTask(here.AcquirePtr<Location>(), time));
+  tasks.emplace(time, new TimerFinishedTask(here.object->AcquireWeakPtr(), time));
   cv.notify_all();
 }
 
 void CancelScheduledAt(Location& here) {
   std::unique_lock<std::mutex> lck(mtx);
   for (auto it = tasks.begin(); it != tasks.end();) {
-    if (it->second->target.lock().get() == &here) {
+    if (it->second->target.lock().get() == here.object.get()) {
       it = tasks.erase(it);
     } else {
       ++it;
@@ -111,7 +113,7 @@ void CancelScheduledAt(Location& here, SteadyPoint time) {
   std::unique_lock<std::mutex> lck(mtx);
   auto [a, b] = tasks.equal_range(time);
   for (auto it = a; it != b; ++it) {
-    if (it->second->target.lock().get() == &here) {
+    if (it->second->target.lock().get() == here.object.get()) {
       tasks.erase(it);
       break;
     }
@@ -123,7 +125,7 @@ StatusCode RescheduleAt(Location& here, SteadyPoint old_time, SteadyPoint new_ti
   std::unique_lock<std::mutex> lck(mtx);
   auto [a, b] = tasks.equal_range(old_time);
   for (auto it = a; it != b; ++it) {
-    if (it->second->target.lock().get() == &here) {
+    if (it->second->target.lock().get() == here.object.get()) {
       static_cast<TimerFinishedTask*>(it->second.get())->scheduled_time = new_time;
       auto tmp = std::move(it->second);
       tasks.erase(it);

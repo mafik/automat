@@ -84,8 +84,7 @@ NextGuard::~NextGuard() {
   }
 }
 
-Task::Task(WeakPtr<Location> target)
-    : target(target), predecessors(), successors(global_successors) {
+Task::Task(WeakPtr<Object> target) : target(target), predecessors(), successors(global_successors) {
   for (Task* successor : successors) {
     successor->predecessors.push_back(this);
   }
@@ -94,7 +93,7 @@ Task::Task(WeakPtr<Location> target)
 void Task::Schedule() {
   ZoneScopedN("Schedule");
   if (scheduled) {
-    ERROR << "Task for " << *target.lock() << " already scheduled!";
+    ERROR << "Task for " << TargetName() << " already scheduled!";
     return;
   }
   scheduled = true;
@@ -129,7 +128,7 @@ void Task::Execute(std::unique_ptr<Task> self) {
 
 std::string Task::TargetName() {
   if (auto s = target.lock()) {
-    return s->ToStr();
+    return Str(s->Name());
   } else {
     return "Invalid";
   }
@@ -159,8 +158,8 @@ void ScheduleArgumentTargets(Object& source, Argument& arg) {
 void RunTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("RunTask");
   if (auto s = target.lock()) {
-    if (Runnable* runnable = s->As<Runnable>()) {
-      LongRunning* long_running = s->object->AsLongRunning();
+    if (Runnable* runnable = dynamic_cast<Runnable*>(s.get())) {
+      LongRunning* long_running = s->AsLongRunning();
       if (long_running && long_running->IsRunning()) {
         return;
       }
@@ -171,7 +170,7 @@ void RunTask::OnExecute(std::unique_ptr<Task>& self) {
       self.reset(self_as_run_task.release());
 
       if (self) {
-        DoneRunning(*s->object);
+        DoneRunning(*s);
       }
     }
   }
@@ -188,7 +187,7 @@ std::string CancelTask::Format() { return f("CancelTask({})", TargetName()); }
 void CancelTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("CancelTask");
   if (auto s = target.lock()) {
-    if (LongRunning* long_running = s->object->AsLongRunning()) {
+    if (LongRunning* long_running = s->AsLongRunning()) {
       long_running->Cancel();
     }
   }
@@ -203,7 +202,9 @@ void UpdateTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("UpdateTask");
   if (auto t = target.lock()) {
     if (auto u = updated.lock()) {
-      t->Updated(*u);
+      if (t->here) {
+        t->Updated(*t->here, *u);
+      }
     }
   }
 }
@@ -216,4 +217,5 @@ void FunctionTask::OnExecute(std::unique_ptr<Task>& self) {
     function(*t);
   }
 }
+
 }  // namespace automat

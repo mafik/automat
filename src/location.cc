@@ -68,10 +68,10 @@ void Location::Put(Ptr<Object> obj) {
 
 Ptr<Object> Location::Take() { return std::move(object); }
 
-void Location::ScheduleRun() { (new RunTask(AcquireWeakPtr()))->Schedule(); }
+void Location::ScheduleRun() { (new RunTask(object->AcquireWeakPtr()))->Schedule(); }
 
 void Location::ScheduleLocalUpdate(Location& updated) {
-  (new UpdateTask(AcquireWeakPtr(), updated.AcquireWeakPtr()))->Schedule();
+  (new UpdateTask(object->AcquireWeakPtr(), updated.AcquireWeakPtr()))->Schedule();
 }
 
 SkPath Location::Shape() const {

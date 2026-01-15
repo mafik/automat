@@ -772,7 +772,7 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
   if (key == "running") {
     double value = 0;
     d.Get(value, status);
-    BeginLongRunning(make_unique<RunTask>(here));
+    BeginLongRunning(make_unique<RunTask>(AcquireWeakPtr()));
     start_time = time::SteadyNow() - time::FromSeconds(value);
     ScheduleAt(*here, start_time + duration.value);
   } else if (key == "duration_seconds") {

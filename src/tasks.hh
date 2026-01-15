@@ -31,11 +31,11 @@ void ScheduleNext(Object& source);
 void ScheduleArgumentTargets(Object& source, Argument&);
 
 struct Task {
-  WeakPtr<Location> target;  // TODO: replace with WeakPtr<Object>
+  WeakPtr<Object> target;
   std::vector<Task*> predecessors;
   std::vector<Task*> successors;
   bool scheduled = false;  // only used for error detection
-  Task(WeakPtr<Location> target);
+  Task(WeakPtr<Object> target);
   virtual ~Task() {}
   // Add this task to the task queue.
   //
@@ -48,7 +48,7 @@ struct Task {
 };
 
 struct RunTask : Task {
-  RunTask(WeakPtr<Location> target) : Task(target) {}
+  RunTask(WeakPtr<Object> target) : Task(target) {}
   std::string Format() override;
   void OnExecute(std::unique_ptr<Task>& self) override;
 
@@ -56,22 +56,22 @@ struct RunTask : Task {
 };
 
 struct CancelTask : Task {
-  CancelTask(WeakPtr<Location> target) : Task(target) {}
+  CancelTask(WeakPtr<Object> target) : Task(target) {}
   std::string Format() override;
   void OnExecute(std::unique_ptr<Task>& self) override;
 };
 
 struct UpdateTask : Task {
   WeakPtr<Location> updated;
-  UpdateTask(WeakPtr<Location> target, WeakPtr<Location> updated)
+  UpdateTask(WeakPtr<Object> target, WeakPtr<Location> updated)
       : Task(target), updated(updated) {}
   std::string Format() override;
   void OnExecute(std::unique_ptr<Task>& self) override;
 };
 
 struct FunctionTask : Task {
-  std::function<void(Location&)> function;
-  FunctionTask(WeakPtr<Location> target, std::function<void(Location&)> function)
+  std::function<void(Object&)> function;
+  FunctionTask(WeakPtr<Object> target, std::function<void(Object&)> function)
       : Task(target), function(function) {}
   std::string Format() override;
   void OnExecute(std::unique_ptr<Task>& self) override;

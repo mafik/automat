@@ -2805,7 +2805,7 @@ bool Timeline::DeserializeKey(ObjectDeserializer& d, StrView key) {
     // We're not updating the outputs because they should be deserialized in a proper state
     // TimelineUpdateOutputs(l, *this, playing.started_at, now);
     TimelineScheduleNextAfter(*this, now);
-    BeginLongRunning(std::make_unique<RunTask>(here));
+    BeginLongRunning(std::make_unique<RunTask>(AcquireWeakPtr()));
   } else if (key == "recording") {
     state = kRecording;
     double value = 0;

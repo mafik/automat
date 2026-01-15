@@ -632,7 +632,7 @@ bool MacroRecorder::DeserializeKey(ObjectDeserializer& d, StrView key) {
       if (value) {
         MyLocation()->ScheduleRun();
       } else {
-        (new CancelTask(MyLocation()))->Schedule();
+        (new CancelTask(AcquireWeakPtr()))->Schedule();
       }
     }
     if (!OK(status)) {

@@ -290,7 +290,7 @@ void HotKey::Draw(SkCanvas& canvas) const {
 SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
 void HotKey::Parts(const std::function<void(Part&)>& cb) {
   Object::Parts(cb);
-  cb(runnable);
+  cb(next_arg);
 }
 
 void HotKey::FillChildren(Vec<Widget*>& children) {
@@ -337,10 +337,7 @@ void HotKey::KeyDown(ui::Caret&, ui::Key key) {
   }
 }
 
-void HotKey::KeyGrabberKeyDown(ui::KeyGrab&) {
-  ScheduleArgumentTargets(*this, runnable);
-  ScheduleNext(*this);
-}
+void HotKey::KeyGrabberKeyDown(ui::KeyGrab&) { ScheduleNext(*this); }
 void HotKey::KeyGrabberKeyUp(ui::KeyGrab&) {}
 
 void HotKey::OnTurnOff() {
@@ -423,6 +420,4 @@ bool HotKey::DeserializeKey(ObjectDeserializer& d, StrView keyName) {
   }
   return true;
 }
-
-void HotKey::HotKeyRunnable::OnRun(std::unique_ptr<RunTask>& run_task) {}
 }  // namespace automat::library

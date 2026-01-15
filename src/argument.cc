@@ -51,7 +51,7 @@ Object& Argument::ObjectOrMake(Object& start) const {
 }
 
 void NextArg::CanConnect(Object& start, Part& end, Status& status) const {
-  if (!dynamic_cast<Runnable*>(&start)) {
+  if (!dynamic_cast<SignalNext*>(&start)) {
     AppendErrorMessage(status) += "Next source must be a Runnable";
   }
   if (!dynamic_cast<Runnable*>(&end)) {
@@ -60,22 +60,23 @@ void NextArg::CanConnect(Object& start, Part& end, Status& status) const {
 }
 
 void NextArg::Connect(Object& start, const NestedPtr<Part>& end) {
-  Runnable* start_runnable = dynamic_cast<Runnable*>(&start);
-  if (start_runnable == nullptr) return;
+  SignalNext* start_signal = dynamic_cast<SignalNext*>(&start);
+  if (start_signal == nullptr) return;
   if (end) {
     if (Runnable* end_runnable = dynamic_cast<Runnable*>(end.Get())) {
-      start_runnable->next = NestedWeakPtr<Runnable>(end.GetOwnerWeak(), end_runnable);
+      start_signal->next = NestedWeakPtr<Runnable>(end.GetOwnerWeak(), end_runnable);
     }
   } else {
-    start_runnable->next = {};
+    start_signal->next = {};
   }
 }
 
 NestedPtr<Part> NextArg::Find(const Object& start) const {
-  if (auto* runnable = dynamic_cast<const Runnable*>(&start)) {
-    return runnable->next.Lock();
+  if (auto* start_signal = dynamic_cast<const SignalNext*>(&start)) {
+    return start_signal->next.Lock();
   } else {
-    ERROR_ONCE << start.Name() << " is not a Runnable - and can't be used as a source for NextArg";
+    ERROR_ONCE << start.Name()
+               << " is not a SignalNext - and can't be used as a source for NextArg";
   }
   return {};
 }

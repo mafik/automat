@@ -101,11 +101,13 @@ struct LongRunning : OnOff {
   void OnTurnOff() override { Cancel(); }
 };
 
-struct Runnable : Interface {
+struct Runnable;
+
+struct SignalNext : virtual Part {
   NestedWeakPtr<Runnable> next;
+};
 
-  // TODO: ForwardDo & ForwardNotify wrappers for Run
-
+struct Runnable : Interface, SignalNext {
   // Derived classes should override this method to implement their behavior.
   //
   // If an object must use the CPU for some computation it can stay busy as long as it needs to.

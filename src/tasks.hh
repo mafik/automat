@@ -44,7 +44,6 @@ struct Task {
   virtual std::string Format();
   virtual void OnExecute(std::unique_ptr<Task>& self) = 0;
   void Execute(std::unique_ptr<Task> self);
-  std::string TargetName();
 };
 
 struct RunTask : Task {
@@ -62,9 +61,8 @@ struct CancelTask : Task {
 };
 
 struct UpdateTask : Task {
-  WeakPtr<Location> updated;
-  UpdateTask(WeakPtr<Object> target, WeakPtr<Location> updated)
-      : Task(target), updated(updated) {}
+  WeakPtr<Object> updated;
+  UpdateTask(WeakPtr<Object> target, WeakPtr<Object> updated) : Task(target), updated(updated) {}
   std::string Format() override;
   void OnExecute(std::unique_ptr<Task>& self) override;
 };

@@ -70,10 +70,6 @@ Ptr<Object> Location::Take() { return std::move(object); }
 
 void Location::ScheduleRun() { (new RunTask(object->AcquireWeakPtr()))->Schedule(); }
 
-void Location::ScheduleLocalUpdate(Location& updated) {
-  (new UpdateTask(object->AcquireWeakPtr(), updated.AcquireWeakPtr()))->Schedule();
-}
-
 SkPath Location::Shape() const {
   static SkPath empty_path = SkPath();
   return empty_path;
@@ -304,8 +300,6 @@ std::unique_ptr<Action> Location::FindAction(ui::Pointer& p, ui::ActionTrigger b
 }
 
 void Location::SetNumber(double number) { SetText(f("{:g}", number)); }
-
-std::string Location::ToStr() const { return Str(object->Name()); }
 
 Vec2AndDir Location::ArgStart(Argument& arg) { return WidgetForObject().ArgStart(arg, parent); }
 

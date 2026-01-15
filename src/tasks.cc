@@ -90,10 +90,18 @@ Task::Task(WeakPtr<Object> target) : target(target), predecessors(), successors(
   }
 }
 
+static StrView Name(WeakPtr<Object>& weak) {
+  if (auto s = weak.Lock()) {
+    return s->Name();
+  } else {
+    return "Invalid";
+  }
+}
+
 void Task::Schedule() {
   ZoneScopedN("Schedule");
   if (scheduled) {
-    ERROR << "Task for " << TargetName() << " already scheduled!";
+    ERROR << "Task for " << Name(target) << " already scheduled!";
     return;
   }
   scheduled = true;
@@ -126,17 +134,9 @@ void Task::Execute(std::unique_ptr<Task> self) {
   }
 }
 
-std::string Task::TargetName() {
-  if (auto s = target.lock()) {
-    return Str(s->Name());
-  } else {
-    return "Invalid";
-  }
-}
-
 std::string Task::Format() { return "Task()"; }
 
-std::string RunTask::Format() { return f("RunTask({})", TargetName()); }
+std::string RunTask::Format() { return f("RunTask({})", Name(target)); }
 
 void ScheduleNext(Object& source) { ScheduleArgumentTargets(source, next_arg); }
 
@@ -182,7 +182,7 @@ void RunTask::DoneRunning(Object& object) {
   }
 }
 
-std::string CancelTask::Format() { return f("CancelTask({})", TargetName()); }
+std::string CancelTask::Format() { return f("CancelTask({})", Name(target)); }
 
 void CancelTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("CancelTask");
@@ -193,23 +193,20 @@ void CancelTask::OnExecute(std::unique_ptr<Task>& self) {
   }
 }
 
-std::string UpdateTask::Format() {
-  std::string updated_str = updated.lock() ? updated.lock()->ToStr() : "Invalid";
-  return f("UpdateTask({}, {})", TargetName(), updated_str);
-}
+std::string UpdateTask::Format() { return f("UpdateTask({}, {})", Name(target), Name(updated)); }
 
 void UpdateTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("UpdateTask");
   if (auto t = target.lock()) {
     if (auto u = updated.lock()) {
       if (t->here) {
-        t->Updated(*t->here, *u);
+        t->Updated(*t->here, *u->here);
       }
     }
   }
 }
 
-std::string FunctionTask::Format() { return f("FunctionTask({})", TargetName()); }
+std::string FunctionTask::Format() { return f("FunctionTask({})", Name(target)); }
 
 void FunctionTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("FunctionTask");

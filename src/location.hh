@@ -124,10 +124,6 @@ struct Location : ReferenceCounted, ui::Widget {
   // Location interface.
   ////////////////////////////
 
-  // Schedule this object's Updated function to be executed with the `updated`
-  // argument.
-  void ScheduleLocalUpdate(Location& updated);
-
   // Add this object to the task queue. Once it's turn comes, its `Run` method
   // will be executed.
   void ScheduleRun();
@@ -147,7 +143,7 @@ struct Location : ReferenceCounted, ui::Widget {
   // using the task queue.
   void ScheduleUpdate() {
     for (auto observer : update_observers) {
-      observer->ScheduleLocalUpdate(*this);
+      (new UpdateTask(observer->object->AcquireWeakPtr(), object->AcquireWeakPtr()))->Schedule();
     }
   }
 
@@ -217,8 +213,6 @@ struct Location : ReferenceCounted, ui::Widget {
   Vec2AndDir ArgStart(Argument&);
   void FillChildren(Vec<Widget*>& children) override;
   Optional<Rect> TextureBounds() const override;
-
-  std::string ToStr() const;
 };
 
 void PositionBelow(Location& origin, Location& below);

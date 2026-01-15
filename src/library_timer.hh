@@ -11,7 +11,7 @@
 
 namespace automat::library {
 
-struct TimerDelay : Object, Object::WidgetBase, Runnable, LongRunning, TimerNotificationReceiver {
+struct Timer : Object, Object::WidgetBase, Runnable, LongRunning, TimerNotificationReceiver {
   // Guards access to duration & LongRunning members
   std::mutex mtx;
   struct MyDuration : Syncable {
@@ -38,9 +38,8 @@ struct TimerDelay : Object, Object::WidgetBase, Runnable, LongRunning, TimerNoti
     Days,          // 0 - 7 d
     EndGuard,
   } range = Range::Seconds;
-  TimerDelay(ui::Widget* parent);
-  TimerDelay(const TimerDelay&);
-  string_view Name() const override;
+  Timer(ui::Widget* parent);
+  Timer(const Timer&);
   Ptr<Object> Clone() const override;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
@@ -60,7 +59,7 @@ struct TimerDelay : Object, Object::WidgetBase, Runnable, LongRunning, TimerNoti
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };
 
-StrView ToStr(TimerDelay::Range);
-TimerDelay::Range TimerRangeFromStr(StrView, Status&);
+StrView ToStr(Timer::Range);
+Timer::Range TimerRangeFromStr(StrView, Status&);
 
 }  // namespace automat::library

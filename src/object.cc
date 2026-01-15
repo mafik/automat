@@ -24,16 +24,6 @@
 
 namespace automat {
 
-std::string_view Object::WidgetBase::Name() const {
-  StrView name;
-  if (auto obj = object.lock()) {
-    name = obj->Name();
-  } else {
-    name = Widget::Name();
-  }
-  return name;
-}
-
 void Object::WidgetBase::Draw(SkCanvas& canvas) const {
   SkPath path = Shape();
 

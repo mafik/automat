@@ -119,7 +119,6 @@ struct Object : public ReferenceCounted {
 
     WidgetBase(Widget* parent) : ObjectWidget(parent) {}
 
-    std::string_view Name() const override;
     virtual float Width() const;
     virtual std::string Text() const { return std::string(Name()); }
     SkPath Shape() const override;

@@ -57,87 +57,87 @@ constexpr static float kTickMinorLength = r4 * 0.025;
 
 static constexpr time::Duration kHandPeriod = 100ms;
 
-void TimerDelay::OnTimerNotification(Location& here2, time::SteadyPoint) {
+void Timer::OnTimerNotification(Location& here2, time::SteadyPoint) {
   auto lock = std::lock_guard(mtx);
   Done(here2);
 }
 
 // How long it takes for the timer dial to rotate once.
-static Duration RangeDuration(TimerDelay::Range range) {
+static Duration RangeDuration(Timer::Range range) {
   switch (range) {
-    case TimerDelay::Range::Milliseconds:
+    case Timer::Range::Milliseconds:
       return 1s;
-    case TimerDelay::Range::Seconds:
+    case Timer::Range::Seconds:
       return 60s;
-    case TimerDelay::Range::Minutes:
+    case Timer::Range::Minutes:
       return 60min;
-    case TimerDelay::Range::Hours:
+    case Timer::Range::Hours:
       return 12h;
-    case TimerDelay::Range::Days:
+    case Timer::Range::Days:
       return 7 * 24h;
     default:
       return 1s;
   }
 }
 
-static int TickCount(TimerDelay::Range range) {
+static int TickCount(Timer::Range range) {
   switch (range) {
-    case TimerDelay::Range::Milliseconds:
+    case Timer::Range::Milliseconds:
       return 1000;
-    case TimerDelay::Range::Seconds:
+    case Timer::Range::Seconds:
       return 60;
-    case TimerDelay::Range::Minutes:
+    case Timer::Range::Minutes:
       return 60;
-    case TimerDelay::Range::Hours:
+    case Timer::Range::Hours:
       return 12;
-    case TimerDelay::Range::Days:
+    case Timer::Range::Days:
       return 7;
     default:
       return 100;
   }
 }
 
-static int MajorTickCount(TimerDelay::Range range) {
+static int MajorTickCount(Timer::Range range) {
   switch (range) {
-    case TimerDelay::Range::Milliseconds:
+    case Timer::Range::Milliseconds:
       return 10;
-    case TimerDelay::Range::Seconds:
+    case Timer::Range::Seconds:
       return 12;
-    case TimerDelay::Range::Minutes:
+    case Timer::Range::Minutes:
       return 12;
-    case TimerDelay::Range::Hours:
+    case Timer::Range::Hours:
       return 4;
-    case TimerDelay::Range::Days:
+    case Timer::Range::Days:
       return 7;
     default:
       return 10;
   }
 }
 
-static const char* RangeName(TimerDelay::Range range) {
+static const char* RangeName(Timer::Range range) {
   switch (range) {
-    case TimerDelay::Range::Milliseconds:
+    case Timer::Range::Milliseconds:
       return "milliseconds";
-    case TimerDelay::Range::Seconds:
+    case Timer::Range::Seconds:
       return "seconds";
-    case TimerDelay::Range::Minutes:
+    case Timer::Range::Minutes:
       return "minutes";
-    case TimerDelay::Range::Hours:
+    case Timer::Range::Hours:
       return "hours";
-    case TimerDelay::Range::Days:
+    case Timer::Range::Days:
       return "days";
     default:
       return "???";
   }
 }
 
-static void UpdateTextField(TimerDelay& timer) {
+static void UpdateTextField(Timer& timer) {
   auto n = TickCount(timer.range) * timer.duration.value /
            time::FloatDuration(RangeDuration(timer.range));
   timer.text_field->SetNumber(n);
 }
 
-static void SetDuration(TimerDelay& timer, Duration new_duration) {
+static void SetDuration(Timer& timer, Duration new_duration) {
   auto lock = std::lock_guard(timer.mtx);
   if (timer.IsRunning()) {
     if (auto h = timer.here) {
@@ -150,7 +150,7 @@ static void SetDuration(TimerDelay& timer, Duration new_duration) {
   timer.WakeAnimation();
 }
 
-static void PropagateDurationOutwards(TimerDelay& timer) {
+static void PropagateDurationOutwards(Timer& timer) {
   if (auto h = timer.here) {
     // auto duration_obj = timer.duration_arg.GetLocation(*h);
     // if (duration_obj.ok && duration_obj.location) {
@@ -160,7 +160,7 @@ static void PropagateDurationOutwards(TimerDelay& timer) {
   }
 }
 
-TimerDelay::TimerDelay(ui::Widget* parent)
+Timer::Timer(ui::Widget* parent)
     : WidgetBase(parent), text_field(new ui::NumberTextField(this, kTextWidth)) {
   text_field->local_to_parent = SkM44::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
   range_dial.velocity = 0;
@@ -171,7 +171,7 @@ TimerDelay::TimerDelay(ui::Widget* parent)
   SetDuration(*this, 10s);
 }
 
-TimerDelay::TimerDelay(const TimerDelay& other) : TimerDelay(other.parent) {
+Timer::Timer(const Timer& other) : Timer(other.parent) {
   range_dial.velocity = other.range_dial.velocity;
   range_dial.value = other.range_dial.value;
   hand_degrees.value = other.hand_degrees.value;
@@ -179,9 +179,7 @@ TimerDelay::TimerDelay(const TimerDelay& other) : TimerDelay(other.parent) {
   SetDuration(*this, other.duration.value);
 }
 
-string_view TimerDelay::Name() const { return "Delay"; }
-
-Ptr<Object> TimerDelay::Clone() const { return MAKE_PTR(TimerDelay, *this); }
+Ptr<Object> Timer::Clone() const { return MAKE_PTR(Timer, *this); }
 
 static sk_sp<SkShader> MakeGradient(SkPoint a, SkPoint b, SkColor color_a, SkColor color_b) {
   SkPoint pts[2] = {a, b};
@@ -234,7 +232,7 @@ static void DrawRing(SkCanvas& canvas, float outer_r, float inner_r, SkColor top
 constexpr static float kHandWidth = 0.0004;
 constexpr static float kHandLength = r4 * 0.8;
 
-static float HandBaseDegrees(const TimerDelay& timer) {
+static float HandBaseDegrees(const Timer& timer) {
   if (timer.IsRunning()) {
     Duration elapsed = SteadyClock::now() - timer.start_time;
     return 90 - 360 * elapsed / time::FloatDuration(RangeDuration(timer.range));
@@ -243,7 +241,7 @@ static float HandBaseDegrees(const TimerDelay& timer) {
   }
 }
 
-static SkPath HandPath(const TimerDelay& timer) {
+static SkPath HandPath(const Timer& timer) {
   float base_degrees = HandBaseDegrees(timer);
   float end_degrees = timer.hand_degrees.value;
   float twist_degrees = end_degrees - base_degrees;
@@ -279,7 +277,7 @@ const static SkPaint kHandPaint = [] {
   return paint;
 }();
 
-static void DrawHand(SkCanvas& canvas, const TimerDelay& timer) {
+static void DrawHand(SkCanvas& canvas, const Timer& timer) {
   SkPath path = HandPath(timer);
 
   canvas.save();
@@ -362,13 +360,13 @@ SkPaint kDurationPaint = [] {
   return paint;
 }();
 
-static SkPoint DurationHandlePos(const TimerDelay& timer) {
+static SkPoint DurationHandlePos(const Timer& timer) {
   float s = sin(timer.duration_handle_rotation);
   float c = cos(timer.duration_handle_rotation);
   return SkPoint::Make(c * r3, s * r3);
 }
 
-static SkPath DurationHandlePath(const TimerDelay& timer) {
+static SkPath DurationHandlePath(const Timer& timer) {
   static const SkPath path = [] {
     SkPath path;
     path.moveTo(kTickOuterRadius, 0);
@@ -383,7 +381,7 @@ static SkPath DurationHandlePath(const TimerDelay& timer) {
   return path.makeTransform(SkMatrix::RotateRad(timer.duration_handle_rotation));
 }
 
-static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, time::Duration duration) {
+static void DrawDial(SkCanvas& canvas, Timer::Range range, time::Duration duration) {
   int range_max = TickCount(range);
   int tick_count = TickCount(range);
   int major_tick_count = MajorTickCount(range);
@@ -440,7 +438,7 @@ static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, time::Duration d
   canvas.restore();
 }
 
-animation::Phase TimerDelay::Tick(time::Timer& timer) {
+animation::Phase Timer::Tick(time::Timer& timer) {
   auto phase = IsRunning() ? animation::Animating : animation::Finished;
   phase |= animation::ExponentialApproach(0, timer.d, 0.2, start_pusher_depression);
   phase |= animation::ExponentialApproach(0, timer.d, 0.2, left_pusher_depression);
@@ -474,7 +472,7 @@ animation::Phase TimerDelay::Tick(time::Timer& timer) {
   return phase;
 }
 
-void TimerDelay::Draw(SkCanvas& canvas) const {
+void Timer::Draw(SkCanvas& canvas) const {
   DrawRing(canvas, r4, r5, 0xffcfd0cf, 0xffc9c9cb);  // white watch face
 
   canvas.save();
@@ -557,9 +555,9 @@ void TimerDelay::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-void TimerDelay::FillChildren(Vec<Widget*>& children) { children.push_back(text_field.get()); }
+void Timer::FillChildren(Vec<Widget*>& children) { children.push_back(text_field.get()); }
 
-SkPath TimerDelay::PartShape(Part* part) const {
+SkPath Timer::PartShape(Part* part) const {
   if (part == &duration) {
     auto transform = SkMatrix::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
     return text_field->Shape().makeTransform(transform);
@@ -567,7 +565,7 @@ SkPath TimerDelay::PartShape(Part* part) const {
   return SkPath();
 }
 
-SkPath TimerDelay::Shape() const {
+SkPath Timer::Shape() const {
   static SkPath shape = [] {
     SkPathBuilder path_builder;
     path_builder.addOval(kOuterOval);
@@ -591,9 +589,8 @@ SkPath TimerDelay::Shape() const {
 }
 
 struct DragDurationHandleAction : Action {
-  TimerDelay& timer;
-  DragDurationHandleAction(ui::Pointer& pointer, TimerDelay& timer)
-      : Action(pointer), timer(timer) {}
+  Timer& timer;
+  DragDurationHandleAction(ui::Pointer& pointer, Timer& timer) : Action(pointer), timer(timer) {}
   void Update() override {
     auto pos = pointer.PositionWithin(timer);
     auto tick_count = TickCount(timer.range);
@@ -621,7 +618,7 @@ struct DragDurationHandleAction : Action {
   }
 };
 
-void TimerDelay::Updated(Location& here, Location& updated) {
+void Timer::Updated(Location& here, Location& updated) {
   std::string duration_str = updated.object->GetText();
   double n = std::stod(duration_str);
   Duration d = time::Defloat(RangeDuration(range) * n / TickCount(range));
@@ -629,8 +626,8 @@ void TimerDelay::Updated(Location& here, Location& updated) {
 }
 
 struct DragHandAction : Action {
-  WeakPtr<TimerDelay> timer_weak;
-  DragHandAction(ui::Pointer& pointer, Ptr<TimerDelay> timer) : Action(pointer), timer_weak(timer) {
+  WeakPtr<Timer> timer_weak;
+  DragHandAction(ui::Pointer& pointer, Ptr<Timer> timer) : Action(pointer), timer_weak(timer) {
     ++timer->hand_draggers;
   }
   virtual void Update() {
@@ -650,7 +647,7 @@ struct DragHandAction : Action {
   }
 };
 
-std::unique_ptr<Action> TimerDelay::FindAction(ui::Pointer& pointer, ui::ActionTrigger btn) {
+std::unique_ptr<Action> Timer::FindAction(ui::Pointer& pointer, ui::ActionTrigger btn) {
   if (btn == ui::PointerButton::Left) {
     auto pos = pointer.PositionWithin(*this);
     auto duration_handle_path = DurationHandlePath(*this);
@@ -692,34 +689,34 @@ std::unique_ptr<Action> TimerDelay::FindAction(ui::Pointer& pointer, ui::ActionT
     SkPath hand_outline;  // Hand is just a straight line so we have to "widen" it
     skpathutils::FillPathWithPaint(hand_path, kHandPaint, &hand_outline);
     if (hand_outline.contains(pos.x, pos.y)) {
-      return std::make_unique<DragHandAction>(pointer, AcquirePtr<TimerDelay>());
+      return std::make_unique<DragHandAction>(pointer, AcquirePtr<Timer>());
     }
   }
   return WidgetBase::FindAction(pointer, btn);
 }
 
-void TimerDelay::Parts(const std::function<void(Part&)>& cb) {
+void Timer::Parts(const std::function<void(Part&)>& cb) {
   cb(duration);
   cb(next_arg);
 }
 
-void TimerDelay::OnRun(std::unique_ptr<RunTask>& run_task) {
+void Timer::OnRun(std::unique_ptr<RunTask>& run_task) {
   auto lock = std::lock_guard(mtx);
-  ZoneScopedN("TimerDelay");
+  ZoneScopedN("Timer");
   start_time = time::SteadyClock::now();
   ScheduleAt(*here, start_time + duration.value);
   WakeAnimation();
   BeginLongRunning(std::move(run_task));
 }
 
-void TimerDelay::OnCancel() {
+void Timer::OnCancel() {
   if (auto h = here) {
     CancelScheduledAt(*h, start_time + duration.value);
   }
   WakeAnimation();
 }
 
-void TimerDelay::MyDuration::CanConnect(Object& start, Part& end, Status& status) const {
+void Timer::MyDuration::CanConnect(Object& start, Part& end, Status& status) const {
   if (auto* obj = dynamic_cast<Object*>(&end)) {
     Str text = obj->GetText();
     char* endptr = nullptr;
@@ -731,9 +728,9 @@ void TimerDelay::MyDuration::CanConnect(Object& start, Part& end, Status& status
   }
 }
 
-StrView ToStr(TimerDelay::Range r) {
+StrView ToStr(Timer::Range r) {
   switch (r) {
-    using enum TimerDelay::Range;
+    using enum Timer::Range;
     case Milliseconds:
       return "milliseconds";
     case Seconds:
@@ -748,8 +745,8 @@ StrView ToStr(TimerDelay::Range r) {
       return "unknown";
   }
 }
-TimerDelay::Range TimerRangeFromStr(StrView str, Status& status) {
-  using enum TimerDelay::Range;
+Timer::Range TimerRangeFromStr(StrView str, Status& status) {
+  using enum Timer::Range;
   if (str == "milliseconds") return Milliseconds;
   if (str == "seconds") return Seconds;
   if (str == "minutes") return Minutes;
@@ -759,7 +756,7 @@ TimerDelay::Range TimerRangeFromStr(StrView str, Status& status) {
   return Seconds;
 }
 
-void TimerDelay::SerializeState(ObjectSerializer& writer) const {
+void Timer::SerializeState(ObjectSerializer& writer) const {
   writer.Key("range");
   auto range_str = ToStr(range);
   writer.String(range_str.data(), range_str.size());
@@ -770,7 +767,7 @@ void TimerDelay::SerializeState(ObjectSerializer& writer) const {
     writer.Double(time::ToSeconds(time::SteadyNow() - start_time));
   }
 }
-bool TimerDelay::DeserializeKey(ObjectDeserializer& d, StrView key) {
+bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
   Status status;
   if (key == "running") {
     double value = 0;
@@ -799,7 +796,7 @@ bool TimerDelay::DeserializeKey(ObjectDeserializer& d, StrView key) {
     return false;
   }
   if (!OK(status)) {
-    ReportError("Failed to deserialize TimerDelay: " + status.ToStr());
+    ReportError("Failed to deserialize Timer: " + status.ToStr());
   }
   return true;
 }

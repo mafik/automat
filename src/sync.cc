@@ -3,14 +3,14 @@
 
 #include "sync.hh"
 
+#include <include/core/SkClipOp.h>
+#include <include/core/SkPaint.h>
+
 #include <mutex>
 
 #include "animation.hh"
 #include "embedded.hh"
 #include "global_resources.hh"
-#include "include/core/SkClipOp.h"
-#include "include/core/SkPaint.h"
-#include "location.hh"
 #include "math.hh"
 #include "root_widget.hh"
 #include "status.hh"

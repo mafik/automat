@@ -117,9 +117,7 @@ struct FlipFlopButton : ui::ToggleButton {
     static_cast<YingYangButton*>(this->off.get())->on_click =
         static_cast<YingYangButton*>(this->on.get())->on_click = [this](ui::Pointer&) {
           if (auto flip_flop_ptr = this->flip_flop.Lock()) {
-            if (auto h = flip_flop_ptr->here) {
-              h->ScheduleRun();
-            }
+            flip_flop_ptr->Toggle();
           }
         };
   }

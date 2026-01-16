@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: Copyright 2026 Automat Authors
 // SPDX-License-Identifier: MIT
 //
-// Metal gear shape
+// Metal gear shape with twisting belt
 
 uniform float iRotationRad;
 
@@ -23,6 +23,10 @@ uniform float iHoleRoundnessCm;
 uniform vec2 iEndPos;
 
 const float M_PI = 3.14159265358979323846;
+
+// Belt cross-section parameters (in cm)
+const float kBeltDepthCm = 0.15; // Half-extent in Z (cross-section depth)
+const float kCornerRadius = 0.01; // Radius of rounded corners (for normals only)
 
 float notch(float x, float left, float center, float right) {
   if (x > right || x < left) return 1;
@@ -45,10 +49,141 @@ float d_notch(float x, float left, float center, float right) {
   return d_smoothstep(center, right, x);
 }
 
+float linramp(float edge0, float edge1, float x) {
+  return (x - edge0) / (edge1 - edge0);
+}
+
+// Twist belt ray intersection
+// Returns: bestFace (0 = wide face/top, 1 = thin face/side, -1 = miss)
+// Outputs: localY (0-1 texture coordinate), bestNormal (surface normal)
+void twistBelt(in float theta, in float y, in float hY, in float holeY, in float hZ,
+               out float localY, out int bestFace, out vec3 bestNormal) {
+    float c = cos(theta);
+    float s = sin(theta);
+
+    bestFace = -1;
+    bestNormal = vec3(0.0);
+    localY = 0.0;
+
+    vec3 normalTop = vec3(0.0, c * c * sign(c) * sign(s), s * s);
+    vec3 normalSide = vec3(0.0, -s * s * sign(c) * sign(s), c * c);
+
+    // Wide sides (top & bottom) - the gear face
+    if (abs(s) > 0.001) {
+        float z;
+        if (s < 0.0) {  // Outer
+            z = (-hY - y * c) / s;
+        } else { // Inner
+            z = (-holeY - y * c) / s;
+        }
+        float local_z = -y * s + z * c;
+        if (abs(local_z) <= hZ) {
+            bestFace = 0;
+            localY = -local_z / hZ * 0.5 + 0.5;
+            float edge = clamp((abs(-local_z / hZ * 0.5) - 0.5 + kCornerRadius / hZ) / kCornerRadius * hZ, 0., 1.);
+            bestNormal = normalize(mix(normalTop, normalSide * sign(local_z), edge * 0.5));
+            return;
+        }
+    }
+
+    // Thin sides (left & right) - the belt edge
+    if (abs(c) > 0.001) {
+        float z = (hZ * sign(c) + y * s) / c;
+        float local_y = y * c + z * s;
+        local_y = linramp(holeY, hY, -local_y);
+        if (local_y >= 0. && local_y <= 1.) {
+            bestFace = 1;
+            localY = local_y;
+            float w = hY - holeY;
+            float edge = clamp((abs(local_y - 0.5) - 0.5 + kCornerRadius / w) / kCornerRadius * w, 0., 1.);
+            bestNormal = normalize(mix(normalSide, normalTop * sign(-local_y + 0.5), edge * 0.5));
+        }
+    }
+}
+
 vec4 main(vec2 localCoord) {
   vec2 uv = localCoord * 100; // scale coordinate system from metric, so that 1cm = 1
 
   vec2 end_pos_cm = iEndPos * 100;
+
+  // Early exit if no belt (iEndPos is zero)
+  if (length(iEndPos) < 0.0001) {
+    // Render normal gear without twist
+    vec2 uv_circ = uv;
+    float angle = atan(uv_circ.y, uv_circ.x);
+    float angleRot = (angle + iRotationRad) * iGearCount;
+    float x = length(uv_circ);
+    float hole_radius_cm = iHoleRadiusCm;
+    float teeth_amplitude = iTeethAmplitudeCm;
+    float margin = 0.1;
+
+    float h = 0.8 + 0.2 * sqrt(1 - pow(x, 2));
+    float dx = 0.2 * sin(x * M_PI / 2);
+    float dy = 0;
+
+    float r = iRadiusCm + teeth_amplitude * sin(angleRot);
+    float sdf = min(r - x, x - hole_radius_cm);
+    if (sdf <= 0) return vec4(0, 0, 0, 0);
+
+    float alpha = clamp(sdf / iPixelRadius / 100, 0, 1);
+
+    float edge_dist = r - margin - x;
+    if (edge_dist < 0) {
+      float mul = sqrt(1 - pow((edge_dist) / margin, 2));
+      dx = dx * mul - h * sin((edge_dist) / margin * M_PI / 2);
+      dy = h * -cos(angleRot) * (1 - mul);
+      h *= mul;
+    }
+
+    float hole_outer = hole_radius_cm + iHoleRoundnessCm;
+    if (x < hole_outer) {
+      float mul = sqrt(max(0, (1 - pow((x - hole_outer) / iHoleRoundnessCm, 2))));
+      dx = dx * mul + h * sin((x - hole_outer) / iHoleRoundnessCm * M_PI / 2);
+      h *= mul;
+    }
+
+    if (x > iGrooveStartCm && x < iGrooveEndCm) {
+      float mul = 0.3 + 0.7 * notch(x, iGrooveStartCm, iGrooveMiddleCm, iGrooveEndCm);
+      dx = dx * mul + h * 0.7 * d_notch(x, iGrooveStartCm, iGrooveMiddleCm, iGrooveEndCm);
+      h *= mul;
+    }
+
+    h = max(h, 0.0);
+
+    vec3 normal = vec3(
+        cos(angle) * dx - sin(angle) * dy,
+        sin(angle) * dx + cos(angle) * dy,
+        sqrt(1 - pow(dx, 2)));
+    normal = normalize(normal);
+
+    vec3 lightDir = normalize(vec3(0, 0.6, 0.8));
+    vec3 viewDir = vec3(0, 0, 1);
+    vec3 halfDir = normalize(lightDir + viewDir);
+
+    vec3 metalDark = vec3(0.25, 0.23, 0.22);
+    vec3 metalMid = vec3(0.45, 0.42, 0.40);
+    vec3 metalLight = vec3(0.65, 0.62, 0.58);
+    vec3 metalBright = vec3(0.85, 0.82, 0.78);
+
+    vec3 N = normalize(normal);
+    float NdotL = max(dot(N, lightDir), 0.0);
+    float diffuse = NdotL * 0.6 + 0.4;
+    float NdotH = max(dot(N, halfDir), 0.0);
+    float specular = pow(NdotH, 32.0) * 0.5;
+    float NdotV = max(dot(N, viewDir), 0.0);
+    float rim = pow(1.0 - NdotV, 2.0) * 0.3;
+    float ao = smoothstep(-1, 1.0, h);
+
+    vec3 baseColor = mix(metalDark, metalMid, smoothstep(0.0, 0.4, h));
+    baseColor = mix(baseColor, metalLight, smoothstep(0.4, 0.8, h));
+
+    vec3 color = baseColor * diffuse * ao;
+    color += metalBright * specular;
+    color += metalLight * rim;
+
+    return vec4(color, 1.0) * alpha;
+  }
+
   vec2 end_dir = normalize(iEndPos);
 
   float tape = dot(end_dir, uv);
@@ -56,70 +191,137 @@ vec4 main(vec2 localCoord) {
     return vec4(0, 0, 0, 0);
   }
   float tape_cross = end_dir.y * uv.x - end_dir.x * uv.y;
-  float twist;
 
-  vec2 uv_circ;
+  // Belt cross-section dimensions (in cm)
+  float hY = iRadiusCm + iTeethAmplitudeCm; // Outer radius of gear
+  float holeY = iHoleRadiusCm;               // Inner radius (hole)
+  float hZ = kBeltDepthCm;                   // Belt thickness
+
+  // For tape > 0, we're in the twisting region
   if (tape > 0) {
-    // Project all points onto the line perpendicular to end_pos_cm
-    uv_circ = uv - dot(uv, end_pos_cm) / dot(end_pos_cm, end_pos_cm) * end_pos_cm;
-    twist = 0.5 - cos(min(tape, 1) * M_PI) * 0.5;
-  } else {
-    uv_circ = uv;
-    twist = 0;
+    // Twist angle: 0 at tape=0, PI/2 at tape=twist_length
+    float twist_length = 1.0; // cm - length of the twist transition
+    float theta = (0.5 - cos(clamp(tape / twist_length, 0., 1.) * M_PI) * 0.5) * M_PI / 2.;
+
+    // y coordinate in the belt's local frame (perpendicular to tape direction)
+    float y = tape_cross;
+
+    float localY;
+    int bestFace;
+    vec3 bestNormal;
+
+    // Try both sides of the belt (positive and negative y)
+    twistBelt(theta, y, hY, holeY, hZ, localY, bestFace, bestNormal);
+
+    float texX = tape; // x position along the belt
+
+    if (bestFace < 0) {
+      twistBelt(theta, -y, hY, holeY, hZ, localY, bestFace, bestNormal);
+      texX = -texX; // Mirror for the other side
+    }
+
+    // No hit - background
+    if (bestFace < 0) {
+      return vec4(0, 0, 0, 0);
+    }
+
+    // Apply anti-aliasing at edges
+    float alpha = 1.0;
+
+    // Compute color based on face
+    vec3 faceColor;
+    float h_face = 0.8; // default height for shading
+
+    if (bestFace == 0) {
+      // Wide face (top/bottom) - debug red color
+      faceColor = vec3(1.0, 0.0, 0.0);
+    } else {
+      // Thin face (sides) - procedural gear teeth pattern
+      // Map localY (0-1) to radial position (holeY to hY)
+      float x_belt = mix(holeY, hY, localY);
+
+      // Compute angle-based gear teeth pattern from tape position
+      float belt_angle = texX * iGearCount / iRadiusCm + iRotationRad * iGearCount;
+      float teeth_amplitude = iTeethAmplitudeCm;
+      float r_belt = iRadiusCm + teeth_amplitude * sin(belt_angle);
+
+      // Height based on gear teeth profile
+      float margin = 0.1;
+      float edge_dist_belt = r_belt - margin - x_belt;
+
+      h_face = 0.8 + 0.2 * sqrt(max(0., 1. - pow(x_belt / hY, 2.)));
+
+      if (edge_dist_belt < 0.) {
+        float mul = sqrt(max(0., 1. - pow(edge_dist_belt / margin, 2.)));
+        h_face *= mul;
+      }
+
+      // Hole edge
+      float hole_outer = holeY + iHoleRoundnessCm;
+      if (x_belt < hole_outer) {
+        float mul = sqrt(max(0., 1. - pow((x_belt - hole_outer) / iHoleRoundnessCm, 2.)));
+        h_face *= mul;
+      }
+
+      // Metal shading for the side face
+      vec3 metalDark = vec3(0.25, 0.23, 0.22);
+      vec3 metalMid = vec3(0.45, 0.42, 0.40);
+      vec3 metalLight = vec3(0.65, 0.62, 0.58);
+
+      faceColor = mix(metalDark, metalMid, smoothstep(0.0, 0.4, h_face));
+      faceColor = mix(faceColor, metalLight, smoothstep(0.4, 0.8, h_face));
+
+      // Apply height-based AO
+      float ao = smoothstep(-1., 1.0, h_face);
+      faceColor *= ao;
+    }
+
+    // Simple directional lighting
+    vec3 lightDir = normalize(vec3(0.0, 0.0, 1.0));
+    float diffuse_light = max(dot(bestNormal, lightDir), 0.0);
+    float ambient = 0.3;
+    float lighting = ambient + (1.0 - ambient) * diffuse_light;
+
+    return vec4(faceColor * lighting, 1.0) * alpha;
   }
 
-  // Compute h
+  // tape <= 0: Render the circular gear
+  vec2 uv_circ = uv;
+
   float angle = atan(uv_circ.y, uv_circ.x);
   float angleRot = (angle + iRotationRad) * iGearCount;
   float x = length(uv_circ);
   float hole_radius_cm = iHoleRadiusCm;
   float teeth_amplitude = iTeethAmplitudeCm;
   float margin = 0.1;
-  float belt_width = iHoleRadiusCm;
 
   float h = 0.8 + 0.2 * sqrt(1 - pow(x, 2)); // rounded surface
 
-  // Also compute the normals of the gear surface
-  // Most of the formulas of the dx & dy were guessed based on looks and are probably not accurate.
-  float dx = 0.2 * sin(x * M_PI / 2); // Normal along the radius
-  float dy = 0; // Normal perpendicular to the radius
-
-  // if (tape > 1) {
-  //   if (x < belt_width) {
-  //     return vec4(0, 0, 0, 1);
-  //   } else {
-  //     return vec4(0, 0, 0, 0);
-  //   }
-  // }
-  if (tape > 0) {
-    angleRot += tape * sign(tape_cross) * iGearCount / iRadiusCm;
-    // float x_offset = (iHoleRadiusCm + iHoleRoundnessCm + belt_width) * twist;
-    // x /= (1 - twist) * sign(tape_cross);
-  }
+  float dx = 0.2 * sin(x * M_PI / 2);
+  float dy = 0;
 
   float r = iRadiusCm + teeth_amplitude * sin(angleRot);
-  float sdf = min(r - x, x - hole_radius_cm); // approx, it's only used for AA so accuracy doesn't matter
+  float sdf = min(r - x, x - hole_radius_cm);
   if (sdf <= 0) return vec4(0, 0, 0, 0);
 
   float alpha = clamp(sdf / iPixelRadius / 100, 0, 1);
 
-  // gear teeth
   float edge_dist = r - margin - x;
   if (edge_dist < 0) {
     float mul = sqrt(1 - pow((edge_dist) / margin, 2));
     dx = dx * mul - h * sin((edge_dist) / margin * M_PI / 2);
-    dy = h * -cos(angleRot) * (1 - mul); // certainly wrong but looks acceptable
+    dy = h * -cos(angleRot) * (1 - mul);
     h *= mul;
   }
 
   float hole_outer = hole_radius_cm + iHoleRoundnessCm;
-  if (x < hole_outer) { // center hole
+  if (x < hole_outer) {
     float mul = sqrt(max(0, (1 - pow((x - hole_outer) / iHoleRoundnessCm, 2))));
     dx = dx * mul + h * sin((x - hole_outer) / iHoleRoundnessCm * M_PI / 2);
     h *= mul;
   }
 
-  if (x > iGrooveStartCm && x < iGrooveEndCm) { // middle groove
+  if (x > iGrooveStartCm && x < iGrooveEndCm) {
     float mul = 0.3 + 0.7 * notch(x, iGrooveStartCm, iGrooveMiddleCm, iGrooveEndCm);
     dx = dx * mul + h * 0.7 * d_notch(x, iGrooveStartCm, iGrooveMiddleCm, iGrooveEndCm);
     h *= mul;
@@ -133,43 +335,31 @@ vec4 main(vec2 localCoord) {
       sqrt(1 - pow(dx, 2)));
   normal = normalize(normal);
 
-  // return vec4(normal * 0.5 + 0.5, 1) * alpha;
-
-  // Metal gear shading
-
   vec3 lightDir = normalize(vec3(0, 0.6, 0.8));
   vec3 viewDir = vec3(0, 0, 1);
   vec3 halfDir = normalize(lightDir + viewDir);
 
-  // Base metal colors (warm gray/brown tones from reference)
-  vec3 metalDark = vec3(0.25, 0.23, 0.22); // Dark recesses
-  vec3 metalMid = vec3(0.45, 0.42, 0.40); // Mid tones
-  vec3 metalLight = vec3(0.65, 0.62, 0.58); // Highlights
-  vec3 metalBright = vec3(0.85, 0.82, 0.78); // Bright specular
+  vec3 metalDark = vec3(0.25, 0.23, 0.22);
+  vec3 metalMid = vec3(0.45, 0.42, 0.40);
+  vec3 metalLight = vec3(0.65, 0.62, 0.58);
+  vec3 metalBright = vec3(0.85, 0.82, 0.78);
 
-  // Normalize the normal
   vec3 N = normalize(normal);
 
-  // Diffuse lighting (Lambert)
   float NdotL = max(dot(N, lightDir), 0.0);
-  float diffuse = NdotL * 0.6 + 0.4; // Some ambient fill
+  float diffuse = NdotL * 0.6 + 0.4;
 
-  // Specular (Blinn-Phong)
   float NdotH = max(dot(N, halfDir), 0.0);
   float specular = pow(NdotH, 32.0) * 0.5;
 
-  // Fresnel-like rim lighting - disabled because of weird normals
   float NdotV = max(dot(N, viewDir), 0.0);
   float rim = pow(1.0 - NdotV, 2.0) * 0.3;
 
-  // Height-based ambient occlusion
   float ao = smoothstep(-1, 1.0, h);
 
-  // Combine base color based on height and lighting
   vec3 baseColor = mix(metalDark, metalMid, smoothstep(0.0, 0.4, h));
   baseColor = mix(baseColor, metalLight, smoothstep(0.4, 0.8, h));
 
-  // Apply lighting
   vec3 color = baseColor * diffuse * ao;
   color += metalBright * specular;
   color += metalLight * rim;

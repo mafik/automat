@@ -226,7 +226,7 @@ struct GearWidget : Object::WidgetBase {
       builder.uniform("iEndPos") = belt.end - start;
       secondary_gear_paint.setShader(builder.makeShader());
       secondary_gear_paint.setStyle(SkPaint::kStroke_Style);
-      secondary_gear_paint.setStrokeWidth((kSecondaryGearRadius + kTeethAmplitude) * 2);
+      secondary_gear_paint.setStrokeWidth((kSecondaryGearRadius + kTeethAmplitude) * 2.2);
       secondary_gear_paint.setStrokeCap(SkPaint::kSquare_Cap);
       canvas.drawLine(Vec2(0, 0), belt.end - start, secondary_gear_paint);
 

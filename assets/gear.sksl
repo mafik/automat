@@ -163,14 +163,30 @@ void twistBelt(in float theta, in float y, in float hY, in float holeY, in float
     bestFace = 0;
     localY = (y - tapeBottom) / (tapeTop - tapeBottom);
     bestNormal = normalize(vec3(-sc, cc, ss));
+    // Round the tape edges
+    if (localY < 0.1) {
+      float angle = mix(-M_PI / 2, 0, localY / 0.1);
+      bestNormal *= mat3(
+          0, 0, 0,
+          0, cos(angle), -sin(angle),
+          0, sin(angle), cos(angle)
+        );
+    } else if (localY > 0.9) {
+      float angle = mix(0, M_PI / 2, (localY - 0.9) / 0.1);
+      bestNormal *= mat3(
+          0, 0, 0,
+          0, cos(angle), -sin(angle),
+          0, sin(angle), cos(angle)
+        );
+    }
     return;
   }
   float gearBottom = tapeTop;
-  float gearTop = gearBottom + (hY - holeY) * c;
+  float gearTop = gearBottom + (hY - holeY) * cc;
   if (y >= gearBottom && y < gearTop) {
     bestFace = 1;
     localY = (y - gearBottom) / (gearTop - gearBottom);
-    bestNormal = normalize(vec3(sc, -1 + c, c));
+    bestNormal = normalize(vec3(sc, -1 + cc, cc));
     return;
   }
 
@@ -265,12 +281,26 @@ vec4 main(vec2 localCoord) {
 
     if (bestFace == 0) {
       // Wide face (top/bottom) - rubber tape
-      faceColor = tapeNormal * 0.5 + 0.5;
-      vec2 texCoord = vec2(tape / iHoleRadiusCm / 2, localY) * 1024 / 2;
-      faceColor = iRubberColor.eval(texCoord).rgb;
+      // Note: iRotationRad is probably missing some scale factor
+      vec2 texCoord = vec2(iRotationRad + tape / iHoleRadiusCm / 2, localY) * 1024 / 2;
+      vec3 rubberColor = iRubberColor.eval(texCoord).rgb;
       vec3 rubberNormal = iRubberNormal.eval(texCoord).xyz * 2 - 1;
       rubberNormal = rotateVec(rubberNormal, tapeNormal);
-      // TODO: apply shading
+
+      // Apply rubber shading
+      vec3 lightDir = normalize(vec3(0., 0.6, 0.8));
+      vec3 viewDir = vec3(0., 0., 1.);
+      vec3 halfDir = normalize(lightDir + viewDir);
+
+      vec3 N = normalize(rubberNormal);
+      float NdotL = max(dot(N, lightDir), 0.0);
+      float diffuse = NdotL * 0.7 + 0.3;
+      float NdotH = max(dot(N, halfDir), 0.0);
+      float specular = pow(NdotH, 8.0) * 0.15; // Rubber has low, broad specular
+      float NdotV = max(dot(N, viewDir), 0.0);
+      float rim = pow(1.0 - NdotV, 4.0) * 0.25; // Subtle rim lighting
+
+      faceColor = rubberColor * diffuse + vec3(specular + rim);
     } else {
       // Thin face (sides) - procedural gear teeth pattern
       // Map localY (0-1) to radial position

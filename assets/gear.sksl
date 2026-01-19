@@ -165,8 +165,9 @@ void twistBelt(in float theta, in float y, in float hY, in float holeY, in float
     if (abs(local_z) <= hZ) {
       bestFace = 0;
       localY = -local_z / hZ * 0.5 + 0.5;
-      float edge = clamp((abs(-local_z / hZ * 0.5) - 0.5 + iHoleRoundnessCm / hZ) / iHoleRoundnessCm * hZ, 0., 1.);
-      bestNormal = normalize(mix(normalTop, normalSide * sign(local_z), edge * 0.5));
+      bestNormal = normalTop;
+      // float edge = clamp((abs(-local_z / hZ * 0.5) - 0.5 + iHoleRoundnessCm / hZ) / iHoleRoundnessCm * hZ, 0., 1.);
+      // bestNormal = normalize(mix(normalTop, normalSide * sign(local_z), edge * 0.5));
       return;
     }
   }
@@ -180,8 +181,9 @@ void twistBelt(in float theta, in float y, in float hY, in float holeY, in float
       bestFace = 1;
       localY = local_y;
       float w = hY - holeY;
-      float edge = clamp((abs(local_y - 0.5) - 0.5 + iHoleRoundnessCm / w) / iHoleRoundnessCm * w, 0., 1.);
-      bestNormal = normalize(mix(normalSide, normalTop * sign(-local_y + 0.5), edge * 0.5));
+      bestNormal = normalSide;
+      // float edge = clamp((abs(local_y - 0.5) - 0.5 + iHoleRoundnessCm / w) / iHoleRoundnessCm * w, 0., 1.);
+      // bestNormal = normalize(mix(normalSide, normalTop * sign(-local_y + 0.5), edge * 0.5));
     }
   }
 }
@@ -222,13 +224,13 @@ vec4 main(vec2 localCoord) {
 
     float localY;
     int bestFace;
-    vec3 bestNormal;
+    vec3 tapeNormal;
 
     // Try both sides of the belt (positive and negative y)
-    twistBelt(theta, tape_cross, outer_radius, iHoleRadiusCm, belt_width, localY, bestFace, bestNormal);
+    twistBelt(theta, tape_cross, outer_radius, iHoleRadiusCm, belt_width, localY, bestFace, tapeNormal);
 
     if (bestFace < 0) {
-      twistBelt(theta, -tape_cross, outer_radius, iHoleRadiusCm, belt_width, localY, bestFace, bestNormal);
+      twistBelt(theta, -tape_cross, outer_radius, iHoleRadiusCm, belt_width, localY, bestFace, tapeNormal);
     } else {
       tape = -tape;
     }
@@ -243,7 +245,7 @@ vec4 main(vec2 localCoord) {
 
     if (bestFace == 0) {
       // Wide face (top/bottom) - debug red color
-      faceColor = bestNormal * 0.5 + 0.5;
+      faceColor = tapeNormal * 0.5 + 0.5;
     } else {
       // Thin face (sides) - procedural gear teeth pattern
       // Map localY (0-1) to radial position
@@ -260,12 +262,22 @@ vec4 main(vec2 localCoord) {
       // - decide whether to remove twistBelt and replace it with a bunch of simpler sin-interpolations
 
       // Get gear teeth height for shading
-      vec3 beltNormal;
+      vec3 gearNormal;
       float h;
-      gearTeethSurface(uv / outerRadius, radial_x, angleRot, outer_radius, h, beltNormal, alpha);
+      gearTeethSurface(uv / outerRadius, radial_x, angleRot, outer_radius, h, gearNormal, alpha);
+
+      // Rotate tapeNormal by (angle + 90deg) along the z axis
+      tapeNormal *= mat3(
+          -sin(angle), -cos(angle), 0,
+          cos(angle), -sin(angle), 0,
+          0, 0, 1
+        );
+
+      // Rotate gearNormal by tapeNormal
+      
 
       // Apply metal shading with the belt normal
-      faceColor = metalShade(h, beltNormal);
+      faceColor = metalShade(h, gearNormal);
     }
 
     return vec4(faceColor, 1.0) * alpha;
@@ -278,6 +290,7 @@ vec4 main(vec2 localCoord) {
     gearTeethSurface(uv / outerRadius, x, angleRot, outerRadius, h, normal, alpha);
 
     vec3 color = metalShade(h, normal);
+    color = normal * 0.5 + 0.5;
     return vec4(color, 1.0) * alpha;
   }
 }

@@ -162,23 +162,31 @@ void twistBelt(in float theta, in float y, in float hY, in float holeY, in float
   if (y >= tapeBottom && y < tapeTop) {
     bestFace = 0;
     localY = (y - tapeBottom) / (tapeTop - tapeBottom);
-    bestNormal = normalize(vec3(-sc, cc, ss));
+
+    bestNormal = vec3(0, 0, 1);
+
+    float xAngle = cc * -M_PI / 2;
+
     // Round the tape edges
     if (localY < 0.1) {
-      float angle = mix(-M_PI / 2, 0, localY / 0.1);
-      bestNormal *= mat3(
-          0, 0, 0,
-          0, cos(angle), -sin(angle),
-          0, sin(angle), cos(angle)
-        );
+      xAngle = mix(-M_PI / 2, xAngle, localY / 0.1);
     } else if (localY > 0.9) {
-      float angle = mix(0, M_PI / 2, (localY - 0.9) / 0.1);
-      bestNormal *= mat3(
-          0, 0, 0,
-          0, cos(angle), -sin(angle),
-          0, sin(angle), cos(angle)
-        );
+      xAngle = mix(xAngle, M_PI / 2, (localY - 0.9) / 0.1);
     }
+    bestNormal *= mat3(
+        0, 0, 0,
+        0, cos(xAngle), -sin(xAngle),
+        0, sin(xAngle), cos(xAngle)
+      );
+
+    float yAngle = mix(0, M_PI / 2, -sc);
+    bestNormal *= mat3(
+        cos(yAngle), 0, sin(yAngle),
+        0, 1, 0,
+        -sin(yAngle), 0, cos(yAngle)
+      );
+
+    //bestNormal = normalize(vec3(-sc, cc, ss));
     return;
   }
   float gearBottom = tapeTop;
@@ -282,7 +290,7 @@ vec4 main(vec2 localCoord) {
     if (bestFace == 0) {
       // Wide face (top/bottom) - rubber tape
       // Note: iRotationRad is probably missing some scale factor
-      vec2 texCoord = vec2(iRotationRad + tape / iHoleRadiusCm / 2, localY) * 1024 / 2;
+      vec2 texCoord = vec2(iRotationRad + tape / iHoleRadiusCm / 2, localY) * 1024 / 4;
       vec3 rubberColor = iRubberColor.eval(texCoord).rgb;
       vec3 rubberNormal = iRubberNormal.eval(texCoord).xyz * 2 - 1;
       rubberNormal = rotateVec(rubberNormal, tapeNormal);
@@ -309,10 +317,6 @@ vec4 main(vec2 localCoord) {
       // Compute angle-based gear teeth pattern from tape position
       // float belt_angle = tape * iGearCount / iRadiusCm + iRotationRad * iGearCount;
       angleRot += tape * iGearCount / iRadiusCm;
-
-      // TODOs:
-      // - change the UV shader into black rubber
-      // - decide whether to remove twistBelt and replace it with a bunch of simpler sin-interpolations
 
       // Get gear teeth height for shading
       vec3 gearNormal;

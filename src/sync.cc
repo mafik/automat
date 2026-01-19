@@ -14,6 +14,7 @@
 #include "math.hh"
 #include "root_widget.hh"
 #include "status.hh"
+#include "textures.hh"
 #include "time.hh"
 #include "units.hh"
 
@@ -175,6 +176,21 @@ struct GearWidget : Object::WidgetBase {
     if (!OK(status)) {
       FATAL << status;
     }
+
+    static auto color = PersistentImage::MakeFromAsset(embedded::assets_rubber_color_webp,
+                                                       {
+                                                           .scale = 1,
+                                                           .tile_x = SkTileMode::kRepeat,
+                                                           .tile_y = SkTileMode::kRepeat,
+                                                       });
+    static auto normal = PersistentImage::MakeFromAsset(embedded::assets_rubber_normal_webp,
+                                                        {
+                                                            .scale = 1,
+                                                            .tile_x = SkTileMode::kRepeat,
+                                                            .tile_y = SkTileMode::kRepeat,
+                                                            .raw_shader = true,
+                                                        });
+
     float primary_rotation = time::SteadySaw<20.0>() * M_PI * 2;
     SkRuntimeEffectBuilder builder(effect);
     builder.uniform("iRotationRad") = primary_rotation;
@@ -190,6 +206,8 @@ struct GearWidget : Object::WidgetBase {
     builder.uniform("iHoleRadiusCm") = 0.1f;
     builder.uniform("iHoleRoundnessCm") = 0.05f;
     builder.uniform("iEndPos") = Vec2(0, 0);
+    builder.child("iRubberColor") = *color.shader;
+    builder.child("iRubberNormal") = *normal.shader;
     SkPaint gear_paint;
     gear_paint.setShader(builder.makeShader());
     canvas.drawCircle(0, 0, kPrimaryGearRadius + kTeethAmplitude, gear_paint);

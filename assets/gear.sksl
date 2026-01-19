@@ -22,6 +22,9 @@ uniform float iHoleRoundnessCm;
 
 uniform vec2 iEndPos;
 
+uniform shader iRubberColor;
+uniform shader iRubberNormal;
+
 const float M_PI = 3.14159265358979323846;
 
 // Metal color constants
@@ -176,6 +179,28 @@ void twistBelt(in float theta, in float y, in float hY, in float holeY, in float
   localY = 0.0;
 }
 
+vec3 rotateVec(vec3 gearNormal, vec3 tapeNormal) {
+  vec3 zAxis = vec3(0, 0, 1);
+  vec3 axis = cross(zAxis, tapeNormal);
+  float c = dot(zAxis, tapeNormal);
+  float s = length(axis);
+  if (s > 0.001) {
+    axis = axis / s;
+    // Rodrigues rotation formula as a matrix
+    mat3 K = mat3(
+        0, axis.z, -axis.y,
+        -axis.z, 0, axis.x,
+        axis.y, -axis.x, 0
+      );
+    mat3 R = mat3(1) + s * K + (1.0 - c) * K * K;
+    gearNormal = R * gearNormal;
+  } else if (c < 0.0) {
+    // tapeNormal is opposite to zAxis, flip
+    gearNormal.z = -gearNormal.z;
+  }
+  return gearNormal;
+}
+
 vec4 main(vec2 localCoord) {
   vec2 uv = localCoord * 100.; // scale coordinate system from metric, so that 1cm = 1
 
@@ -239,8 +264,13 @@ vec4 main(vec2 localCoord) {
     float alpha = 1;
 
     if (bestFace == 0) {
-      // Wide face (top/bottom) - debug red color
+      // Wide face (top/bottom) - rubber tape
       faceColor = tapeNormal * 0.5 + 0.5;
+      vec2 texCoord = vec2(tape / iHoleRadiusCm / 2, localY) * 1024 / 2;
+      faceColor = iRubberColor.eval(texCoord).rgb;
+      vec3 rubberNormal = iRubberNormal.eval(texCoord).xyz * 2 - 1;
+      rubberNormal = rotateVec(rubberNormal, tapeNormal);
+      // TODO: apply shading
     } else {
       // Thin face (sides) - procedural gear teeth pattern
       // Map localY (0-1) to radial position
@@ -260,24 +290,7 @@ vec4 main(vec2 localCoord) {
       gearTeethSurface(uv / outerRadius, radial_x, angleRot, outer_radius, h, gearNormal, alpha);
 
       // Rotate gearNormal by the rotation that takes (0,0,1) to tapeNormal
-      vec3 zAxis = vec3(0, 0, 1);
-      vec3 axis = cross(zAxis, tapeNormal);
-      float c = dot(zAxis, tapeNormal);
-      float s = length(axis);
-      if (s > 0.001) {
-        axis = axis / s;
-        // Rodrigues rotation formula as a matrix
-        mat3 K = mat3(
-            0, axis.z, -axis.y,
-            -axis.z, 0, axis.x,
-            axis.y, -axis.x, 0
-          );
-        mat3 R = mat3(1) + s * K + (1.0 - c) * K * K;
-        gearNormal = R * gearNormal;
-      } else if (c < 0.0) {
-        // tapeNormal is opposite to zAxis, flip
-        gearNormal.z = -gearNormal.z;
-      }
+      gearNormal = rotateVec(gearNormal, tapeNormal);
 
       // Apply metal shading with the combined normal
       faceColor = metalShade(h, gearNormal);

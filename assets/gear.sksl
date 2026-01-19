@@ -139,53 +139,41 @@ vec3 metalShade(float h, vec3 normal) {
 }
 
 // Twist belt ray intersection
-// Returns: bestFace (0 = wide face/top, 1 = thin face/side, -1 = miss)
+// Args:
+//  theta - belt twist, from 0 (gear teeth visible from the side) to M_PI / 2 (tape visible)
+//  y - distance from 0
+//  hY - y value where gear teeth end
+//  holeY - y value where gear teeth start
+// Returns: bestFace (0 = tape, 1 = gears, -1 = miss)
 // Outputs: localY (0-1 texture coordinate), bestNormal (surface normal)
 void twistBelt(in float theta, in float y, in float hY, in float holeY, in float hZ,
   out float localY, out int bestFace, out vec3 bestNormal) {
-  float c = cos(theta);
-  float s = sin(theta);
+  float c = cos(theta); // goes from flat 1 (near gear) to angled 0 (near tape)
+  float s = sin(theta); // goes from angled 0 (near gear) to flat 1 (near tape)
+  float cc = c * c; // goes from flat 1 (near gear) to flat 0 (near tape)
+  float ss = s * s; // goes from flat 0 (near gear) to flat 1 (near tape)
+  float sc = c * s; // goes from flat 0 (near gear) to flat 0 (near tape), with max = 0.5
+
+  float tapeBottom = holeY - holeY * 2 * s;
+  float tapeTop = holeY;
+  if (y >= tapeBottom && y < tapeTop) {
+    bestFace = 0;
+    localY = (y - tapeBottom) / (tapeTop - tapeBottom);
+    bestNormal = normalize(vec3(-sc, cc, ss));
+    return;
+  }
+  float gearBottom = tapeTop;
+  float gearTop = gearBottom + (hY - holeY) * c;
+  if (y >= gearBottom && y < gearTop) {
+    bestFace = 1;
+    localY = (y - gearBottom) / (gearTop - gearBottom);
+    bestNormal = normalize(vec3(sc, -1 + c, c));
+    return;
+  }
 
   bestFace = -1;
   bestNormal = vec3(0.0);
   localY = 0.0;
-
-  vec3 normalTop = vec3(0.0, c * c * sign(c) * sign(s), s * s);
-  vec3 normalSide = vec3(0.0, -s * s * sign(c) * sign(s), c * c);
-
-  // Wide sides (top & bottom) - the gear face
-  if (abs(s) > 0.001) {
-    float z;
-    if (s < 0.0) { // Outer
-      z = (-hY - y * c) / s;
-    } else { // Inner
-      z = (-holeY - y * c) / s;
-    }
-    float local_z = -y * s + z * c;
-    if (abs(local_z) <= hZ) {
-      bestFace = 0;
-      localY = -local_z / hZ * 0.5 + 0.5;
-      bestNormal = normalTop;
-      // float edge = clamp((abs(-local_z / hZ * 0.5) - 0.5 + iHoleRoundnessCm / hZ) / iHoleRoundnessCm * hZ, 0., 1.);
-      // bestNormal = normalize(mix(normalTop, normalSide * sign(local_z), edge * 0.5));
-      return;
-    }
-  }
-
-  // Thin sides (left & right) - the belt edge
-  if (abs(c) > 0.001) {
-    float z = (hZ * sign(c) + y * s) / c;
-    float local_y = y * c + z * s;
-    local_y = linramp(holeY, hY, -local_y);
-    if (local_y >= 0. && local_y <= 1.) {
-      bestFace = 1;
-      localY = local_y;
-      float w = hY - holeY;
-      bestNormal = normalSide;
-      // float edge = clamp((abs(local_y - 0.5) - 0.5 + iHoleRoundnessCm / w) / iHoleRoundnessCm * w, 0., 1.);
-      // bestNormal = normalize(mix(normalSide, normalTop * sign(-local_y + 0.5), edge * 0.5));
-    }
-  }
 }
 
 vec4 main(vec2 localCoord) {
@@ -231,14 +219,21 @@ vec4 main(vec2 localCoord) {
 
     if (bestFace < 0) {
       twistBelt(theta, -tape_cross, outer_radius, iHoleRadiusCm, belt_width, localY, bestFace, tapeNormal);
-    } else {
       tape = -tape;
+      tapeNormal.y = -tapeNormal.y;
     }
 
     // No hit - background
     if (bestFace < 0) {
       return vec4(0.);
     }
+
+    // Rotate tapeNormal towards end_dir (along the z axis)
+    tapeNormal *= mat3(
+        end_dir.x, -end_dir.y, 0,
+        end_dir.y, end_dir.x, 0,
+        0, 0, 1
+      );
 
     vec3 faceColor;
     float alpha = 1;
@@ -256,8 +251,6 @@ vec4 main(vec2 localCoord) {
       angleRot += tape * iGearCount / iRadiusCm;
 
       // TODOs:
-      // - rotate belt_normal by best_normal
-      // - fix normals in the flat part of the belt
       // - change the UV shader into black rubber
       // - decide whether to remove twistBelt and replace it with a bunch of simpler sin-interpolations
 
@@ -266,17 +259,27 @@ vec4 main(vec2 localCoord) {
       float h;
       gearTeethSurface(uv / outerRadius, radial_x, angleRot, outer_radius, h, gearNormal, alpha);
 
-      // Rotate tapeNormal by (angle + 90deg) along the z axis
-      tapeNormal *= mat3(
-          -sin(angle), -cos(angle), 0,
-          cos(angle), -sin(angle), 0,
-          0, 0, 1
-        );
+      // Rotate gearNormal by the rotation that takes (0,0,1) to tapeNormal
+      vec3 zAxis = vec3(0, 0, 1);
+      vec3 axis = cross(zAxis, tapeNormal);
+      float c = dot(zAxis, tapeNormal);
+      float s = length(axis);
+      if (s > 0.001) {
+        axis = axis / s;
+        // Rodrigues rotation formula as a matrix
+        mat3 K = mat3(
+            0, axis.z, -axis.y,
+            -axis.z, 0, axis.x,
+            axis.y, -axis.x, 0
+          );
+        mat3 R = mat3(1) + s * K + (1.0 - c) * K * K;
+        gearNormal = R * gearNormal;
+      } else if (c < 0.0) {
+        // tapeNormal is opposite to zAxis, flip
+        gearNormal.z = -gearNormal.z;
+      }
 
-      // Rotate gearNormal by tapeNormal
-      
-
-      // Apply metal shading with the belt normal
+      // Apply metal shading with the combined normal
       faceColor = metalShade(h, gearNormal);
     }
 
@@ -290,7 +293,6 @@ vec4 main(vec2 localCoord) {
     gearTeethSurface(uv / outerRadius, x, angleRot, outerRadius, h, normal, alpha);
 
     vec3 color = metalShade(h, normal);
-    color = normal * 0.5 + 0.5;
     return vec4(color, 1.0) * alpha;
   }
 }

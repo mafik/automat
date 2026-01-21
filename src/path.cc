@@ -151,15 +151,16 @@ void Path::MakeDirs(Status& status, bool make_parents) const {
     }
     if (make_parents && errno == ENOENT) {
       // Parent directory doesn't exist - create it first
-      errno = 0;
       auto parent = Parent();
       if (!parent.str.empty()) {
+        errno = 0;
         parent.MakeDirs(status);
         if (!OK(status)) {
           return;
         }
         // Retry creating this directory
         MakeDirs(status, false);
+        return;
       }
     }
     AppendErrorMessage(status) = "mkdir(" + str + ") failed";

@@ -87,7 +87,16 @@ def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
 
     paths = list(Path('static').glob('**/*'))
     paths += list(Path('assets').glob('**/*'))
-    paths.append(Path('gatekeeper.service'))
+    paths += list(Path('src').glob('**/*'))
+    paths += list(Path('run_py').glob('**/*'))
+    paths += list(Path('third_party/FastTrigo').glob('**/*'))
+    paths += list(Path('third_party/WinElevator').glob('**/*'))
+    paths += list(Path('third_party/cavalier_contours').glob('**/*'))
+    paths += list(Path('.').glob('*.md'))
+    paths.append(Path('run.bat'))
+    paths.append(Path('run.py'))
+    paths.append(Path('source_images/Mouse/Mouse.kra'))
+    paths.append(Path('source_images/Hand.kra'))
 
     # retain only files
     paths = [path for path in paths if path.is_file()]
@@ -100,8 +109,8 @@ def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
                     paths + [Path(__file__)],
                     desc='Embedding static files',
                     shortcut='embedded')
-    recipe.generated.add(hh_path)
-    recipe.generated.add(cc_path)
+    recipe.generated.add(str(hh_path))
+    recipe.generated.add(str(cc_path))
 
     hh_file = src.File(hh_path)
     srcs[str(hh_path)] = hh_file

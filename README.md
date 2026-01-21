@@ -81,6 +81,7 @@ Do your own due dilligence and check the licenses of the dependencies you use!
 - Silkscreen font -- [Jason Kottke](https://kottke.org/plus/type/silkscreen/)
 - Heavy Data font -- [Vic Fieger](https://www.vicfieger.com/) (website seems to be offline)
 - Pbio font -- [Gregor Adams](http://pixelass.com)
+- MIT License Logo -- [ExcaliburZero](https://www.deviantart.com/excaliburzero/art/MIT-License-Logo-595847140)
 
 ## Default Background
 

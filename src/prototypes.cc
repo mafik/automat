@@ -10,6 +10,7 @@
 #include "library_macro_recorder.hh"
 #include "library_mouse.hh"
 #include "library_number.hh"
+#include "library_sources.hh"
 #include "library_tesseract_ocr.hh"
 #include "library_timeline.hh"
 #include "library_timer.hh"
@@ -67,6 +68,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<Assembler>();
   index.Register<Window>();
   index.Register<TesseractOCR>();
+  index.Register<Sources>();
   index.Register<Gear, HideInToolbar>();
 }
 

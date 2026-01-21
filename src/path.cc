@@ -134,17 +134,35 @@ void Path::Rename(const Path& to, Status& status) const {
   }
 }
 
-void Path::MakeDirs(Status* status) const {
+void Path::MakeDirs(Status& status, bool make_parents) const {
+  if (str.empty()) {
+    return;
+  }
 #if defined(__linux__)
   int ret = mkdir(str.c_str(), 0777);
 #elif defined(_WIN32)
   int ret = _mkdir(str.c_str());
 #endif
-  if (status && ret < 0) {
-    AppendErrorMessage(*status) = "mkdir(" + str + ") failed";
-  }
-  if (status && ret < 0) {
-    AppendErrorMessage(*status) = "mkdir(" + str + ") failed";
+  if (ret < 0) {
+    if (errno == EEXIST) {
+      // Directory already exists - not an error
+      errno = 0;
+      return;
+    }
+    if (make_parents && errno == ENOENT) {
+      // Parent directory doesn't exist - create it first
+      errno = 0;
+      auto parent = Parent();
+      if (!parent.str.empty()) {
+        parent.MakeDirs(status);
+        if (!OK(status)) {
+          return;
+        }
+        // Retry creating this directory
+        MakeDirs(status, false);
+      }
+    }
+    AppendErrorMessage(status) = "mkdir(" + str + ") failed";
   }
 }
 

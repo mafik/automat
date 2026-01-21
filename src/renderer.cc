@@ -1397,7 +1397,8 @@ void RenderFrame(SkCanvas& canvas) {
           SkImageInfo image_info;
         };
 
-        Path("build/debug_widgets/").MakeDirs(nullptr);
+        Status ignored;
+        Path("build/debug_widgets/").MakeDirs(ignored);
 
         auto surface = state->rendered().surface;
 

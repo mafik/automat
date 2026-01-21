@@ -41,7 +41,7 @@ struct Path {
 
   void Rename(const Path& to, Status&) const;
 
-  void MakeDirs(Status*) const;
+  void MakeDirs(Status&, bool make_parents = true) const;
 
   // Final path component.
   Str Name() const;

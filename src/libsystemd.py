@@ -8,8 +8,7 @@ import fs_utils
 
 if sys.platform == 'linux':
     hook = extension_helper.ExtensionHelper('libsystemd', globals())
-    hook.checkout_dir = fs_utils.third_party_dir / 'libsystemd'
-    hook.src_dir = hook.checkout_dir
+    hook.FetchFromGit('https://github.com/systemd/systemd.git', 'v258.2')
     hook.ConfigureOptions(**{
         'static-libsystemd': 'true',
         'link-udev-shared': 'false',

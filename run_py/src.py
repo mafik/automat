@@ -164,24 +164,39 @@ def scan() -> dict[str, File]:
 
     return result
 
-extensions = {}
+# Extension loading utilities:
+# - 'load_extensions' returns the list of extensions in the order from the base to derived ones
+# - 'load_extension' utility for derived extensions that allow them to load their bases
+#
+# The point is to allow "derived extensions" to build upon "base extensions".
+#
+# For example the 'embedded' base extension exposes 'main_step' that is then used as a dependency
+# by the 'krita' derived extension.
+
+loaded_extensions = {}
+extensions_list: list[ModuleType] | None = None
 
 def load_extensions() -> list[ModuleType]:
+    global extensions_list
+    if extensions_list is not None:
+      return extensions_list
     extensions_list = []
     old_dont_write_bytecode = sys.dont_write_bytecode
     sys.dont_write_bytecode = True
     for path in fs_utils.src_dir.glob('*.py'):
         try:
-            module = load_extension(path.stem)
-            extensions_list.append(module)
+            load_extension(path.stem)
         except Exception as e:
             print(f'Failed to load extension {path.stem}: {e}')
     sys.dont_write_bytecode = old_dont_write_bytecode
     return extensions_list
 
 def load_extension(name: str) -> ModuleType:
-    if name in extensions:
-        return extensions[name]
+    global extensions_list
+    if extensions_list is None:
+        raise RuntimeError('load_extension may only be called from within an extension')
+    if name in loaded_extensions:
+        return loaded_extensions[name]
     spec = importlib.util.spec_from_file_location(name, fs_utils.src_dir / f'{name}.py')
     if not spec:
         raise ImportError(f'No module named {name}')
@@ -189,5 +204,6 @@ def load_extension(name: str) -> ModuleType:
     if not spec.loader:
         raise ImportError(f'No loader for {name}')
     spec.loader.exec_module(module)
-    extensions[name] = module
+    loaded_extensions[name] = module
+    extensions_list.append(module)
     return module

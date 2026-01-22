@@ -18,6 +18,11 @@
 #include "math_constants.hh"  // IWYU pragma: export
 #include "sincos.hh"
 
+// Window's doesn't have M_SQRT2f
+#ifndef M_SQRT2f
+#define M_SQRT2f 1.41421356237309504880f
+#endif
+
 union Vec2;
 
 constexpr float LengthSquared(Vec2 v);

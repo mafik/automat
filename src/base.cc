@@ -105,12 +105,13 @@ void LongRunning::Done(Location& here) {
   }
   long_running_task->DoneRunning(*here.object);
   long_running_task.reset();
+  NotifyTurnedOff();
 }
 
 void LongRunning::OnTurnOn() {
-  auto object = dynamic_cast<Object*>(this);
+  auto object = OnFindRunnable();
   if (object == nullptr) {
-    ERROR << "LongRunning::On called on a non-Object";
+    ERROR << "LongRunning::OnFindRunnable didn't return any Object!";
     return;
   }
   object->here->ScheduleRun();

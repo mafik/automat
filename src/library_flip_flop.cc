@@ -42,6 +42,9 @@ Rect FlipFlopRect() {
 }
 
 FlipFlop::FlipFlop() {}
+
+FlipFlop::~FlipFlop() { Unsync(); }
+
 string_view FlipFlop::Name() const { return "Flip-Flop"; }
 
 Ptr<Object> FlipFlop::Clone() const {

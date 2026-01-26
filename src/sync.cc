@@ -11,6 +11,7 @@
 #include "animation.hh"
 #include "embedded.hh"
 #include "global_resources.hh"
+#include "log.hh"
 #include "math.hh"
 #include "root_widget.hh"
 #include "status.hh"
@@ -98,7 +99,16 @@ void Gear::AddSource(NestedPtr<Syncable>& source) {
         members.back().weak.Lock()->end = NestedWeakPtr<Part>(AcquireWeakPtr<Object>(), this);
       }
     } else {
-      members.emplace_back(source, false);
+      bool found = false;
+      for (int i = 0; i < members.size(); ++i) {
+        if (members[i].weak == source) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        members.emplace_back(source, false);
+      }
     }
   }
   if (!was_source) {

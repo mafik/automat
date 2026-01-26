@@ -59,7 +59,7 @@ static constexpr time::Duration kHandPeriod = 100ms;
 
 void Timer::OnTimerNotification(Location& here2, time::SteadyPoint) {
   auto lock = std::lock_guard(mtx);
-  Done(here2);
+  timer_running.Done(here2);
 }
 
 // How long it takes for the timer dial to rotate once.
@@ -139,7 +139,7 @@ static void UpdateTextField(Timer& timer) {
 
 static void SetDuration(Timer& timer, Duration new_duration) {
   auto lock = std::lock_guard(timer.mtx);
-  if (timer.IsRunning()) {
+  if (timer.timer_running.IsRunning()) {
     if (auto h = timer.here) {
       RescheduleAt(*h, timer.start_time + timer.duration.value, timer.start_time + new_duration);
     }
@@ -233,7 +233,7 @@ constexpr static float kHandWidth = 0.0004;
 constexpr static float kHandLength = r4 * 0.8;
 
 static float HandBaseDegrees(const Timer& timer) {
-  if (timer.IsRunning()) {
+  if (timer.timer_running.IsRunning()) {
     Duration elapsed = SteadyClock::now() - timer.start_time;
     return 90 - 360 * elapsed / time::FloatDuration(RangeDuration(timer.range));
   } else {
@@ -439,7 +439,7 @@ static void DrawDial(SkCanvas& canvas, Timer::Range range, time::Duration durati
 }
 
 animation::Phase Timer::Tick(time::Timer& timer) {
-  auto phase = IsRunning() ? animation::Animating : animation::Finished;
+  auto phase = timer_running.IsRunning() ? animation::Animating : animation::Finished;
   phase |= animation::ExponentialApproach(0, timer.d, 0.2, start_pusher_depression);
   phase |= animation::ExponentialApproach(0, timer.d, 0.2, left_pusher_depression);
   phase |= animation::ExponentialApproach(0, timer.d, 0.2, right_pusher_depression);
@@ -460,7 +460,7 @@ animation::Phase Timer::Tick(time::Timer& timer) {
     // do nothing...
   } else {
     float hand_target;
-    if (IsRunning()) {
+    if (timer_running.IsRunning()) {
       auto base_degrees = HandBaseDegrees(*this);
       hand_target = base_degrees;
     } else {
@@ -660,8 +660,8 @@ std::unique_ptr<Action> Timer::FindAction(ui::Pointer& pointer, ui::ActionTrigge
       start_pusher_depression = 1;
       WakeAnimation();
       if (auto h = here) {
-        if (IsRunning()) {
-          Cancel();
+        if (timer_running.IsRunning()) {
+          timer_running.Cancel();
         } else {
           h->ScheduleRun();
         }
@@ -700,6 +700,15 @@ std::unique_ptr<Action> Timer::FindAction(ui::Pointer& pointer, ui::ActionTrigge
 void Timer::Parts(const std::function<void(Part&)>& cb) {
   cb(duration);
   cb(next_arg);
+  cb(*AsLongRunning());
+}
+
+void Timer::PartName(Part& part, Str& out_name) {
+  if (&part == AsLongRunning()) {
+    out_name = "Running";
+  } else if (&part == &duration) {
+    out_name = "Duration";
+  }
 }
 
 void Timer::OnRun(std::unique_ptr<RunTask>& run_task) {
@@ -708,14 +717,15 @@ void Timer::OnRun(std::unique_ptr<RunTask>& run_task) {
   start_time = time::SteadyClock::now();
   ScheduleAt(*here, start_time + duration.value);
   WakeAnimation();
-  BeginLongRunning(std::move(run_task));
+  timer_running.BeginLongRunning(std::move(run_task));
 }
 
-void Timer::OnCancel() {
-  if (auto h = here) {
-    CancelScheduledAt(*h, start_time + duration.value);
+void Timer::TimerRunning::OnCancel() {
+  auto& timer = GetTimer();
+  if (timer.here) {
+    CancelScheduledAt(*timer.here, timer.start_time + timer.duration.value);
   }
-  WakeAnimation();
+  timer.WakeAnimation();
 }
 
 void Timer::MyDuration::CanConnect(Object& start, Part& end, Status& status) const {
@@ -764,7 +774,7 @@ void Timer::SerializeState(ObjectSerializer& writer) const {
   writer.String(range_str.data(), range_str.size());
   writer.Key("duration_seconds");
   writer.Double(time::ToSeconds(duration.value));
-  if (this->IsRunning()) {
+  if (this->timer_running.IsRunning()) {
     writer.Key("running");
     writer.Double(time::ToSeconds(time::SteadyNow() - start_time));
   }
@@ -774,7 +784,7 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
   if (key == "running") {
     double value = 0;
     d.Get(value, status);
-    BeginLongRunning(make_unique<RunTask>(AcquireWeakPtr()));
+    timer_running.BeginLongRunning(make_unique<RunTask>(AcquireWeakPtr()));
     start_time = time::SteadyNow() - time::FromSeconds(value);
     ScheduleAt(*here, start_time + duration.value);
   } else if (key == "duration_seconds") {
@@ -783,7 +793,7 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
     if (OK(status)) {
       duration.value = time::FromSeconds(value);
       UpdateTextField(*this);
-      if (this->IsRunning()) {
+      if (this->timer_running.IsRunning()) {
         ScheduleAt(*here, start_time + duration.value);
       }
     }

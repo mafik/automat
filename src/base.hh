@@ -75,10 +75,13 @@ struct LongRunning : OnOff {
   // May be called from arbitrary thread.
   virtual void OnCancel() = 0;
 
+  // Override this to find the object that's supposed to be executed
+  virtual Object* OnFindRunnable() { return dynamic_cast<Object*>(this); }
+
   // Call this to cancel the long running job.
   void Cancel() {
     if (long_running_task == nullptr) {
-      FATAL << "LongRunning::Cancel called without a long_running_task";
+      ERROR << "LongRunning::Cancel called without a long_running_task";
     }
     OnCancel();
     long_running_task.reset();
@@ -92,7 +95,10 @@ struct LongRunning : OnOff {
   // because its not going to be used again.
   void Done(Location& here);
 
-  void BeginLongRunning(std::unique_ptr<RunTask>&& task) { long_running_task = std::move(task); }
+  void BeginLongRunning(std::unique_ptr<RunTask>&& task) {
+    long_running_task = std::move(task);
+    NotifyTurnedOn();
+  }
 
   bool IsOn() const override { return IsRunning(); }
 

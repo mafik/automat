@@ -11,7 +11,7 @@
 
 namespace automat::library {
 
-struct Timer : Object, Object::WidgetBase, Runnable, LongRunning, TimerNotificationReceiver {
+struct Timer : Object, Object::WidgetBase, Runnable, TimerNotificationReceiver {
   // Guards access to duration & LongRunning members
   std::mutex mtx;
   struct MyDuration : Syncable {
@@ -38,6 +38,15 @@ struct Timer : Object, Object::WidgetBase, Runnable, LongRunning, TimerNotificat
     Days,          // 0 - 7 d
     EndGuard,
   } range = Range::Seconds;
+  struct TimerRunning : LongRunning {
+    Timer& GetTimer() const {
+      return *reinterpret_cast<Timer*>(reinterpret_cast<intptr_t>(this) -
+                                       offsetof(Timer, timer_running));
+    }
+    Object* OnFindRunnable() override { return &GetTimer(); }
+    void OnCancel() override;
+  } timer_running;
+
   Timer(ui::Widget* parent);
   Timer(const Timer&);
   Ptr<Object> Clone() const override;
@@ -47,9 +56,9 @@ struct Timer : Object, Object::WidgetBase, Runnable, LongRunning, TimerNotificat
   SkPath PartShape(Part*) const override;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   void Parts(const std::function<void(Part&)>& cb) override;
+  void PartName(Part& part, Str& out_name) override;
   void OnRun(std::unique_ptr<RunTask>&) override;
-  void OnCancel() override;
-  LongRunning* AsLongRunning() override { return this; }
+  LongRunning* AsLongRunning() override { return &timer_running; }
   void Updated(WeakPtr<Object>& updated) override;
   void FillChildren(Vec<Widget*>& children) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;

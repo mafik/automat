@@ -20,6 +20,7 @@ struct FlipFlop : Object, OnOff {
   } flip;
 
   FlipFlop();
+  ~FlipFlop();
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   operator OnOff*() override { return this; }

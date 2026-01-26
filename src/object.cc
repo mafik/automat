@@ -189,10 +189,11 @@ struct DeiconifyOption : TextOption {
   Dir PreferredDir() const override { return NE; }
 };
 
-static StrView SyncableName(NestedWeakPtr<Syncable>& weak) {
+static Str SyncableName(NestedWeakPtr<Syncable>& weak) {
   if (auto ptr = weak.Lock()) {
-    LOG << "Syncable Name: " << ptr->Name();
-    return ptr->Name();
+    Str name;
+    ptr.Owner<Object>()->PartName(*ptr.Get(), name);
+    return name;
   }
   return "Field of a deleted object";
 }
@@ -312,8 +313,7 @@ struct UnsyncOption : TextOption {
 
 struct FieldOption : TextOption, OptionsProvider {
   NestedWeakPtr<Syncable> syncable_weak;
-  FieldOption(NestedWeakPtr<Syncable> weak)
-      : TextOption(Str(SyncableName(weak))), syncable_weak(weak) {}
+  FieldOption(NestedWeakPtr<Syncable> weak) : TextOption(SyncableName(weak)), syncable_weak(weak) {}
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<FieldOption>(syncable_weak);
   }

@@ -329,7 +329,7 @@ struct Instruction::Widget::Token {
     unsigned imm;
     unsigned fixed_reg;
     Flag flag;
-    unsigned cond_code;
+    unsigned cond_code;  // token_i of the condition immediate
     X86::CondCode fixed_cond;
   };
 };
@@ -3317,7 +3317,7 @@ Instruction::Widget::Widget(ui::Widget* parent, WeakPtr<Object> object) : Widget
         cond_widget = make_unique<LoopConditionCodeWidget>(this, instruction->AcquireWeakPtr());
       } else {
         cond_widget =
-            make_unique<ConditionCodeWidget>(this, instruction->AcquireWeakPtr(), token_i);
+            make_unique<ConditionCodeWidget>(this, instruction->AcquireWeakPtr(), token.cond_code);
       }
       cond_widget->local_to_parent.setIdentity();
       condition_code_widget = std::move(cond_widget);

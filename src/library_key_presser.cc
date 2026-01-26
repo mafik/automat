@@ -242,15 +242,21 @@ void KeyPresser::SetKey(ui::AnsiKey k) {
 
 void KeyPresser::OnTurnOn() {
   audio::Play(embedded::assets_SFX_key_down_wav);
-  SendKeyEvent(key, true);
+  if (key_pressed) {
+    return;
+  }
   key_pressed = true;
+  SendKeyEvent(key, true);
   WakeWidgetsAnimation();
 }
 
 void KeyPresser::OnTurnOff() {
   audio::Play(embedded::assets_SFX_key_up_wav);
-  SendKeyEvent(key, false);
+  if (!key_pressed) {
+    return;
+  }
   key_pressed = false;
+  SendKeyEvent(key, false);
   WakeWidgetsAnimation();
 }
 

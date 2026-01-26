@@ -24,6 +24,7 @@
 #include "location.hh"
 #include "math.hh"
 #include "object.hh"
+#include "object_iconified.hh"
 #include "root_widget.hh"
 #include "widget.hh"
 
@@ -364,7 +365,24 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   if (state) {
     state->hidden = overlapping;
   }
-  auto phase = animation::LinearApproach(overlapping ? 1 : 0, timer.d, 5, transparency);
+
+  bool should_be_hidden = overlapping;
+
+  bool start_iconified = IsIconified(a.StartObj());
+  if (start_iconified) {
+    // Hide the connector if the object is iconified
+    if (a.end_part) {
+      // cable is connected to something - keep it visible
+    } else if (manual_position.has_value()) {
+      // cable is held by the pointer - keep it visible
+    } else {
+      // cable is not connected and not held by the mouse
+      // it can be hidden
+      should_be_hidden = true;
+    }
+  }
+
+  auto phase = animation::LinearApproach(should_be_hidden ? 1 : 0, timer.d, 5, transparency);
 
   alpha = (1.f - a.StartObj()->here->transparency) * (1.f - transparency);
 

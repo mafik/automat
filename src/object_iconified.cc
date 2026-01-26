@@ -6,6 +6,7 @@
 #include <shared_mutex>
 #include <unordered_map>
 
+#include "base.hh"
 #include "object_lifetime.hh"
 
 namespace automat {
@@ -28,16 +29,18 @@ bool IsIconified(Object* object) {
 void Iconify(Object& object) {
   auto lock = std::unique_lock(iconified_objects_mutex);
   iconified_objects.emplace(&object, object);
+  object.here->InvalidateConnectionWidgets(false, false);
 }
 
 void Deiconify(Object& object) {
   auto lock = std::unique_lock(iconified_objects_mutex);
   iconified_objects.erase(&object);
+  object.here->InvalidateConnectionWidgets(false, false);
 }
 
 void SetIconified(Object& object, bool iconified) {
   if (iconified) {
-    Deiconify(object);
+    Iconify(object);
   } else {
     Deiconify(object);
   }

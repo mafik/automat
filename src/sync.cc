@@ -21,33 +21,25 @@
 namespace automat {
 
 void Syncable::Unsync() {
-  auto sync_block = end.LockAs<Gear>();
-  if (!sync_block) return;
-  auto lock = std::unique_lock(sync_block->mutex);
+  auto gear = end.LockAs<Gear>();
+  if (!gear) return;
+  auto lock = std::unique_lock(gear->mutex);
 
-  auto& sources = sync_block->sources;
-  for (int i = 0; i < sources.size(); ++i) {
-    auto* source = sources[i].GetUnsafe();
-    if (source == this) {
-      sources.erase(sources.begin() + i);
+  auto& members = gear->members;
+  for (int i = 0; i < members.size(); ++i) {
+    auto* member = members[i].weak.GetUnsafe();
+    if (member == this) {
+      members.erase(members.begin() + i);
       break;
     }
   }
 
-  auto& sinks = sync_block->sinks;
-  for (int i = 0; i < sinks.size(); ++i) {
-    auto* sink = sinks[i].GetUnsafe();
-    if (sink == this) {
-      sinks.erase(sinks.begin() + i);
-      break;
-    }
-  }
-
+  source = false;
   end.Reset();
   OnUnsync();
 }
 
-Ptr<Gear> Sync(NestedPtr<Syncable>& source) {
+Ptr<Gear> FindGearOrMake(NestedPtr<Syncable>& source) {
   auto sync_block = source->end.OwnerLockAs<Gear>();
   if (!sync_block) {
     sync_block = MAKE_PTR(Gear);
@@ -56,36 +48,61 @@ Ptr<Gear> Sync(NestedPtr<Syncable>& source) {
   return sync_block;
 }
 
+Ptr<Gear> FindGearOrNull(NestedPtr<Syncable>& source) {
+  auto sync_block = source->end.OwnerLockAs<Gear>();
+  if (!sync_block) {
+    return nullptr;
+  }
+  return sync_block;
+}
+
 Gear::~Gear() {
   auto lock = std::unique_lock(mutex);
-  while (!sources.empty()) {
-    if (auto source = sources.back().Lock()) {
-      source->OnUnsync();
+  while (!members.empty()) {
+    if (auto member = members.back().weak.Lock()) {
+      if (member->source) {
+        member->source = false;
+        member->end.Reset();
+        member->OnUnsync();
+      }
     }
-    sources.pop_back();
+    members.pop_back();
   }
 }
 
 // Tells that this Syncable will receive notifications (receive-only sync)
 void Gear::AddSink(NestedPtr<Syncable>& sink) {
   auto guard = std::unique_lock(mutex);
-  for (int i = 0; i < sinks.size(); ++i) {
-    if (sinks[i] == sink) {
+  for (int i = 0; i < members.size(); ++i) {
+    if (members[i].weak == sink) {
+      members[i].sink = true;
       return;
     }
   }
-  sinks.push_back(sink);
+  members.emplace_back(sink, true);
 }
 
 // Tells that this Syncable is the source of activity / notifications (notify-only sync)
 void Gear::AddSource(NestedPtr<Syncable>& source) {
   auto old_sync_block = source->end.LockAs<Gear>();
-  if (old_sync_block.Get() == this) {
-    return;
+  bool was_source = source->source;
+  if (old_sync_block.Get() != this) {
+    source->Connect(*source.Owner<Object>(), AcquirePtr());
+    if (old_sync_block) {
+      while (!old_sync_block->members.empty()) {
+        // stealing all of the members from the old gear
+        members.emplace_back(old_sync_block->members.back());
+        old_sync_block->members.pop_back();
+
+        // redirecting the members "sync" to this gear
+        members.back().weak.Lock()->end = NestedWeakPtr<Part>(AcquireWeakPtr<Object>(), this);
+      }
+    } else {
+      members.emplace_back(source, false);
+    }
   }
-  source->Connect(*source.Owner<Object>(), AcquirePtr());
-  sources.push_back(source);
-  if (!old_sync_block) {
+  if (!was_source) {
+    source->source = true;
     source->OnSync();
   }
 }
@@ -137,29 +154,13 @@ struct GearWidget : Object::WidgetBase {
     };
 
     if (gear) {
-      for (auto& sink_weak : gear->sinks) {
-        if (auto sink = sink_weak.Lock()) {
-          auto* owner = sink.Owner<Object>();
-          auto* belt = &belts.emplace_back(owner, sink.Get());
+      for (auto& member : gear->members) {
+        if (auto ptr = member.weak.Lock()) {
+          auto* owner = ptr.Owner<Object>();
+          auto* belt = &belts.emplace_back(owner, ptr.Get());
           SetBeltEnd(*belt);
-          belt->sink = true;
-        }
-      }
-      for (auto& source_weak : gear->sources) {
-        if (auto source = source_weak.Lock()) {
-          auto* owner = source.Owner<Object>();
-          Belt* belt = nullptr;
-          for (Belt& existing : belts) {
-            if (existing.object_unsafe == owner && existing.syncable_unsafe == source.Get()) {
-              belt = &existing;
-              break;
-            }
-          }
-          if (belt == nullptr) {
-            belt = &belts.emplace_back(owner, source.Get());
-            SetBeltEnd(*belt);
-          }
-          belt->source = true;
+          belt->sink = member.sink;
+          belt->source = ptr->source;
         }
       }
     }
@@ -268,25 +269,32 @@ void Syncable::CanConnect(Object& start, Part& end, Status& status) const {
 }
 
 void Gear::SerializeState(ObjectSerializer& writer) const {
-  writer.Key("sinks");
-  writer.StartArray();
-  for (auto& sink_weak : sinks) {
-    auto sink = sink_weak.Lock();
-    if (!sink) continue;
-    writer.String(writer.ResolveName(*sink.Owner<Object>(), sink.Get()));
+  writer.Key("members");
+  writer.StartObject();
+  for (auto& member : members) {
+    auto ptr = member.weak.Lock();
+    if (!ptr) continue;
+    writer.Key(writer.ResolveName(*ptr.Owner<Object>(), ptr.Get()));
+    writer.Bool(member.sink);
   }
-  writer.EndArray();
+  writer.EndObject();
 }
 
 bool Gear::DeserializeKey(ObjectDeserializer& d, StrView key) {
-  if (key == "sinks") {
+  if (key == "members") {
     Status status;
-    for (int i : ArrayView(d, status)) {
-      Str sink_name;
-      d.Get(sink_name, status);
-      NestedPtr<Part> target = d.LookupPart(sink_name);
+    for (auto& member_name : ObjectView(d, status)) {
+      bool is_sink;
+      d.Get(is_sink, status);
+      if (!OK(status)) {
+        // the value is not a boolean - just skip it
+        status.Reset();
+      }
+      if (!is_sink) continue;
+      NestedPtr<Part> target = d.LookupPart(member_name);
       if (auto syncable = target.DynamicCast<Syncable>()) {
         AddSink(syncable);
+        AddSource(syncable);
       }
     }
     return true;

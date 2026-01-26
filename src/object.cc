@@ -18,6 +18,7 @@
 #include "object_lifetime.hh"
 #include "pointer.hh"
 #include "root_widget.hh"
+#include "sync.hh"
 #include "time.hh"
 #include "ui_connection_widget.hh"
 #include "ui_constants.hh"
@@ -257,8 +258,11 @@ struct SyncAction : Action {
       // TODO: make this work with other (non-on/off) Syncables
       auto* target_syncable = (OnOff*)(*target_location->object);  // operator cast
       if (target_syncable == nullptr) return;
-      auto sync_block = Sync(syncable);
       NestedPtr<Syncable> target{target_location->object, target_syncable};
+      auto sync_block = FindGearOrNull(target);
+      if (sync_block == nullptr) {
+        sync_block = FindGearOrMake(syncable);
+      }
       sync_block->FullSync(syncable);
       sync_block->FullSync(target);
       auto& loc = root_machine->Insert(sync_block);

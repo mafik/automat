@@ -24,8 +24,12 @@ struct Syncable;
 struct Gear : Object {
   std::shared_mutex mutex;
 
-  std::vector<NestedWeakPtr<Syncable>> sinks;
-  std::vector<NestedWeakPtr<Syncable>> sources;
+  struct Member {
+    NestedWeakPtr<Syncable> weak;
+    bool sink;
+  };
+
+  std::vector<Member> members;
 
   ~Gear();
 
@@ -79,6 +83,8 @@ struct Gear : Object {
 // through the "ForwardDo" & "ForwardNotify" wrappers). Whenever the "On" entry point us used
 // directly, it's not going to be propagated to the other synced implementations.
 struct Syncable : InlineArgument {
+  bool source;
+
   // Note GetValueUnsafe used throughout the methods here is actually safe, because
   // ~Syncable will remove itself from Gear. Gear never contains dead pointers.
   ~Syncable() {
@@ -95,10 +101,13 @@ struct Syncable : InlineArgument {
 
   template <class Self>
   void ForwardDo(this Self& self, auto&& lambda) {
-    if (auto sync_block = self.end.template LockAs<Gear>()) {
+    if (!self.source) {
+      lambda(self);
+    } else if (auto sync_block = self.end.template LockAs<Gear>()) {
       auto lock = std::shared_lock(sync_block->mutex);
-      for (auto& other : sync_block->sinks) {
-        lambda(*other.template GetUnsafe<Self>());
+      for (auto& other : sync_block->members) {
+        if (!other.sink) continue;
+        lambda(*other.weak.template GetUnsafe<Self>());
       }
     } else {
       lambda(self);
@@ -107,10 +116,11 @@ struct Syncable : InlineArgument {
 
   template <class Self>
   void ForwardNotify(this Self& self, auto&& lambda) {
+    if (!self.source) return;
     if (auto sync_block = self.end.template LockAs<Gear>()) {
       auto lock = std::shared_lock(sync_block->mutex);
-      for (auto& other : sync_block->sinks) {
-        if (auto* other_cast = other.template GetUnsafe<Self>(); other_cast != &self) {
+      for (auto& other : sync_block->members) {
+        if (auto* other_cast = other.weak.template GetUnsafe<Self>(); other_cast != &self) {
           lambda(*other_cast);
         }
       }
@@ -131,6 +141,8 @@ struct Syncable : InlineArgument {
 
 // Returns a reference to the existing or a new Gear. This Syncable is initialized as a sync
 // source.
-Ptr<Gear> Sync(NestedPtr<Syncable>& source);
+Ptr<Gear> FindGearOrMake(NestedPtr<Syncable>& source);
+
+Ptr<Gear> FindGearOrNull(NestedPtr<Syncable>&);
 
 }  // namespace automat

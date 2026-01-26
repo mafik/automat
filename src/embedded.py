@@ -89,6 +89,7 @@ def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
     paths += list(Path('assets').glob('**/*'))
     paths += list(Path('src').glob('**/*'))
     paths += list(Path('run_py').glob('**/*'))
+    paths += list(Path('LICENSES').glob('**/*'))
     paths += list(Path('third_party/FastTrigo').glob('**/*'))
     paths += list(Path('third_party/WinElevator').glob('**/*'))
     paths += list(Path('third_party/cavalier_contours').glob('**/*'))

@@ -71,7 +71,7 @@ def artifact_download(url, path):
     main_file = files[0]
     zip_ref.extractall(path=path.parent, members=[main_file])
     shutil.move(path.parent / main_file, path)
-  
+
 def build_release():
   # report an error if there are uncommited changes
   uncommited_changes = bool(subprocess.run(['git', 'diff', '--quiet']).returncode)
@@ -91,7 +91,7 @@ def build_release():
   origin_sha = (fs_utils.project_root / '.git' / 'refs' / 'remotes' / 'origin' / 'main').read_text().strip()
   if main_hash != origin_sha:
     raise Exception('Local and origin main hashes are different, please push the changes before building the release')
-  
+
   # At this point we can either call GitHub "Build" action or SSH into build servers to build the per-platform releases
   # For new we'll just use GitHub
 
@@ -208,7 +208,7 @@ def upload_release():
     subprocess.run(args, stdout=subprocess.DEVNULL, check=True)
     print('Done!')
 
-    
+
 
 
 def hook_recipe(recipe):
@@ -216,11 +216,11 @@ def hook_recipe(recipe):
   recipe.generated.add(str(LINUX_X86_64_RELEASE_FILE))
   recipe.add_step(
     build_release,
+    inputs=[],
     outputs=[WINDOWS_X86_64_RELEASE_FILE, LINUX_X86_64_RELEASE_FILE],
-    inputs=[MAIN_HASH_FILE],
     desc = 'Building the release',
     shortcut='build release')
-  
+
   recipe.add_step(
     upload_release,
     inputs=[WINDOWS_X86_64_RELEASE_FILE, LINUX_X86_64_RELEASE_FILE],

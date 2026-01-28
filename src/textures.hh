@@ -9,6 +9,7 @@
 #include <include/core/SkShader.h>
 #include <include/core/SkTileMode.h>
 #include <include/gpu/graphite/ImageProvider.h>
+#include <mutex>
 
 #include "math.hh"
 #include "time.hh"

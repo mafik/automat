@@ -128,7 +128,7 @@ def CheckCommand(command: str, installer: Callable[[], None]):
     installer()
     RefreshPath()
 
-msvc_tools_dir = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\'
+msvc_tools_dir = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\'
 
 windows_sdk_dir = 'C:\\Program Files (x86)\\Windows Kits\\10\\'
 windows_sdk_version = '10.0.26100.0'
@@ -138,7 +138,7 @@ windows_sdk_lib_dir = windows_sdk_dir + 'lib\\' + windows_sdk_version + '\\'
 def EnsureVisualStudioBuildToolsInstalled():
   if os.path.exists(msvc_tools_dir) and os.path.exists(windows_sdk_include_dir) and os.path.exists(windows_sdk_lib_dir):
     return
-  url = 'https://aka.ms/vs/16/release/vs_buildtools.exe'
+  url = 'https://aka.ms/vs/17/release/vs_buildtools.exe'
   fs_utils.build_dir.mkdir(parents=True, exist_ok=True)
   filename = fs_utils.build_dir / 'vs_BuildTools.exe'
   # Microsoft seems to be changing the installer hash every now and then.
@@ -146,10 +146,10 @@ def EnsureVisualStudioBuildToolsInstalled():
   # 2025-06-06: 1d9a29c9b731030bc077f384ad2d7580747906576d1d0d2bc6b33bf6fcb483bc
   # As we don't really care about reproducibility ATM, we can accept Microsoft's decision and
   # use whatever they serve.
-  Download('Visual Studio 2019 Build Tools',
+  Download('Visual Studio 2022 Build Tools',
            url,
            filename, expected_sha256=None)
-  print('Installing Visual Studio 2019 Build Tools...')
+  print('Installing Visual Studio 2022 Build Tools...')
   run([filename,
        '--passive', # show progress window during install
        '--add', 'Microsoft.VisualStudio.Workload.VCTools', # very likely needed
@@ -158,11 +158,11 @@ def EnsureVisualStudioBuildToolsInstalled():
        '--includeRecommended', # unknown if needed
        '--norestart',
        '--wait'])
-  
+
 def SetupEnvironment():
   # See: https://clang.llvm.org/docs/UsersManual.html#windows-system-headers-and-library-lookup
   # Environment variables obtained from:
-  # C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvarsall.bat amd64 10.0.26100.0 -vcvars_ver=14.29
+  # C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat amd64 10.0.26100.0 -vcvars_ver=14.44
   # and then running `set`.
 
   os.environ['INCLUDE'] = ';'.join(
@@ -172,12 +172,12 @@ def SetupEnvironment():
      windows_sdk_include_dir + 'um',
      windows_sdk_include_dir + 'winrt',
      windows_sdk_include_dir + 'cppwinrt'])
-  
+
   os.environ['LIB'] = ';'.join(
     [msvc_tools_dir + 'lib\\x64',
      windows_sdk_lib_dir + 'ucrt\\x64',
      windows_sdk_lib_dir + 'um\\x64'])
-  
+
   os.environ['VCToolsInstallDir'] = msvc_tools_dir
 
 

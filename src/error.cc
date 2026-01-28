@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #include "error.hh"
 
+#include <mutex>
+
 #include "object.hh"
 
 namespace automat {

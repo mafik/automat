@@ -18,7 +18,8 @@ path_to_package = {
     "/usr/include/X11/extensions/XInput2.h": "libxi-dev",
     "/usr/include/GL/gl.h": "libgl-dev",
     "/usr/include/fontconfig/fontconfig.h": "libfontconfig-dev",
-    "/usr/bin/gperf": "gperf"
+    "/usr/bin/gperf": "gperf",
+    "/usr/include/sys/capability.h": "libcap-dev"
 }
 
 

@@ -3,6 +3,7 @@ Description=Release a new version of the Automat
 
 [Service]
 Type=oneshot
+ExecStart=%Y/../run.py 'build release'
 ExecStart=%Y/../run.py 'upload release'
 LoadCredential=GITHUB_TOKEN:/etc/credstore/GITHUB_TOKEN
 Environment=GITHUB_TOKEN_PATH=%d/GITHUB_TOKEN

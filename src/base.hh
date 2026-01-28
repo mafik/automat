@@ -85,6 +85,7 @@ struct LongRunning : OnOff {
     }
     OnCancel();
     long_running_task.reset();
+    NotifyTurnedOff();
   }
 
   bool IsRunning() const { return long_running_task != nullptr; }

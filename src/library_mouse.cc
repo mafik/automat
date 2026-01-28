@@ -894,7 +894,10 @@ string_view MouseButtonPresser::Name() const { return "Mouse Button Presser"sv; 
 
 Ptr<Object> MouseButtonPresser::Clone() const { return MAKE_PTR(MouseButtonPresser, button); }
 
-void MouseButtonPresser::Parts(const std::function<void(Part&)>& cb) { cb(next_arg); }
+void MouseButtonPresser::Parts(const std::function<void(Part&)>& cb) {
+  cb(*this);
+  cb(next_arg);
+}
 
 std::unique_ptr<ObjectWidget> MouseButtonPresser::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseButtonPresserWidget>(parent, AcquireWeakPtr());

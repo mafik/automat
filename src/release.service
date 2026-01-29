@@ -3,9 +3,8 @@ Description=Release a new version of the Automat
 
 [Service]
 Type=oneshot
-ExecStart=%Y/../run.py 'upload release' --fresh
+ExecStart=%Y/release.py --pull_and_restart
 LoadCredential=GITHUB_TOKEN:/etc/credstore/GITHUB_TOKEN
-Environment=GITHUB_TOKEN_PATH=%d/GITHUB_TOKEN
 
 [Install]
 WantedBy=release.timer

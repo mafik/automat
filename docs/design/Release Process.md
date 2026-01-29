@@ -38,11 +38,7 @@ Currently it's a responsibility of the pushing developer to run the necessary te
 
 Automat avoids cross-compilation as a build strategy because many platforms don't support it at all. The platforms which do support it, usually still provide a better build experience when building natively. So instead of one machine that can build Automat for all platforms, Automat opts for multiple machines (or VMs), each runing an environment that can build for that specific platform. This complicates the release process (and also testing) because the release script must talk to multiple other machines.
 
-Release code from `release.py` relies on GitHub Actions to build Automat for different platofrms (see `build.yaml`). This has some advantages (ensures that users on those platforms also can build the release) but also ties Automat to GitHub. 
-
-The risk for GitHub's entshittification is high (it's the current monopolist in the space) so it's necessary to take precautions. All functions relying on GitHub should be implemented with eventual replacement in mind.
-
-The current plan B for release builders is to have some SSH-able machines running different platforms, that could be contacted by `release.py` to build Automat for release.
+Release code from `release.py` relies on SSH to build Automat for different platofrms. You will have to tweak the SSH hosts in that file if you'd like that script to properly build binaries for multiple platforms.
 
 ## Upgrade Process
 
@@ -62,7 +58,7 @@ This is the same build system that is normally used for development. Downloading
 
 With a working build environment, users are free to tweak Automat to their liking by editing the sources.
 
-In the future a better infrastructure may come for customizing Automat (browsing and applying patches). Possibly from  within Automat itself...
+In the future a better infrastructure may come for customizing Automat (browsing and applying patches). Possibly from within Automat itself...
 
 ## Security
 

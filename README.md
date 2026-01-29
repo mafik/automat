@@ -1,28 +1,29 @@
 # Automat
 
-[![Build](https://github.com/mafik/automat/actions/workflows/build.yaml/badge.svg?branch=main)](https://github.com/mafik/automat/actions/workflows/build.yaml)
+[![License](https://img.shields.io/github/license/mafik/automat)](https://github.com/mafik/automat/blob/main/LICENSE) [![Last Commit](https://img.shields.io/github/last-commit/mafik/automat)](https://github.com/mafik/automat/commits/main) [![Release](https://img.shields.io/github/v/release/mafik/automat)](https://github.com/mafik/automat/releases/latest) [![Stars](https://img.shields.io/github/stars/mafik/automat?style=social)](https://github.com/mafik/automat)
 
-Automat's objective is to be able to semi-autonomously play a variety of games. It's the first step towards a more general environment for interacting with
-computers.
+Automat's objective is to be able to semi-autonomously play a variety of games.
+It's the first step towards a more general environment for interacting with computers.
 
 # Status
 
-Currently Automat's functionality is limited to keyboard macro recording &
-playback. It's fairly unstable but if you're lucky and it runs on your machine,
-it can be useful for automating some basic actions.
+Automat can:
 
-You can, of course, check it out just to see how the interface works - but
-don't assume that it's going to stay like that. It's very much a work in
-progress. Roadmap includes some pretty radical new features which will
-drastically change how it looks and works.
+- record and replay keyboard & mouse macros
+- react to hotkeys
+- capture windows as bitmaps and perform basic OCR
+- run a subset of x86 assembly to perform simple logic operations
+- runs on Windows & Linux (X11)
 
-Current roadmap can be found [here](https://www.tldraw.com/ro/3d97dFMiuM0MLgqyyP0SG?d=v-1312.-804.2500.1170.page).
+Stability of Automat is rather poor at the moment but it's good enough to be used as a macro utility.
+
+Automat is continuously developed. Its roadmap can be found [here](https://www.tldraw.com/ro/3d97dFMiuM0MLgqyyP0SG?d=v-1312.-804.2500.1170.page).
 
 # Downloading and Running
 
 Automat can be downloaded from the [releases page](https://github.com/mafik/automat/releases/latest/).
 
-[Release Process.md](docs/design/Release%20Process.md) contains some more notes about the Automat's release regime.
+[Release Process.md](docs/design/Release%20Process.md) contains some more notes about the Automat's release schedule.
 
 # Contributing
 

@@ -43,7 +43,7 @@ def EnsureLLVMInPath():
 def RefreshPath():
   system_path = WinRegGetSystemEnv('PATH')
   user_path = WinRegGetUserEnv('PATH')
-  os.environ['PATH'] = f'{system_path};{user_path}'
+  os.environ['PATH'] = os.path.expandvars(f'{system_path};{user_path}')
 
 
 def SHA256(path):

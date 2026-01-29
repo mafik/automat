@@ -28,7 +28,7 @@ else:
 
   DOWNLOAD_URL = 'https://github.com/ninja-build/ninja/releases/latest/download/' + ZIP_NAME
   ZIP_PATH = fs_utils.build_dir / ZIP_NAME
-  BIN = build.base.PREFIX() / 'bin' / 'ninja'
+  BIN = build.PREFIX / 'bin' / 'ninja'
 
   def download(url, out_path):
     import urllib.request, shutil

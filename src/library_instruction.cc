@@ -312,28 +312,6 @@ PersistentImage paper_texture = PersistentImage::MakeFromAsset(
     embedded::assets_04_paper_C_grain_webp,
     PersistentImage::MakeArgs{.tile_x = SkTileMode::kRepeat, .tile_y = SkTileMode::kRepeat});
 
-struct Instruction::Widget::Token {
-  enum Tag : uint8_t {
-    String,
-    RegisterOperand,
-    ImmediateOperand,
-    FixedRegister,
-    FixedFlag,
-    ConditionCode,
-    FixedCondition,
-    BreakLine,
-  } tag;
-  union {
-    const char* str;
-    unsigned reg;
-    unsigned imm;
-    unsigned fixed_reg;
-    Flag flag;
-    unsigned cond_code;  // token_i of the condition immediate
-    X86::CondCode fixed_cond;
-  };
-};
-
 using Token = Instruction::Widget::Token;
 
 std::span<const Token> PrintInstruction(const mc::Inst& inst) {

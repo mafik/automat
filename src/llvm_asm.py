@@ -31,7 +31,7 @@ UNSUPPORTED_REGISTER_CLASSES = set([
   'FR16X', 'FR32X', 'FR64X',
   'i8mem', 'i16mem', 'i32mem', 'i64mem', 'i128mem',
   'i512mem_GR32', 'i512mem_GR64',
-  'f64mem', 'lea64_32mem', 'lea64mem', 
+  'f64mem', 'lea64_32mem', 'lea64mem',
   'RSTi',
   'RFP32', 'RFP64', 'RFP80',
   'FR16', 'FR32', 'FR64',
@@ -104,7 +104,7 @@ def gen_x86_hh():
       del x[opcode_name]
 
   for opcode in x.values():
-    for field in IRRELEVANT_FIELDS: 
+    for field in IRRELEVANT_FIELDS:
       if field in opcode:
         del opcode[field]
 
@@ -117,7 +117,7 @@ def gen_x86_hh():
   # Returns one of: Imm16, Imm16PCRel, Imm32, Imm32PCRel, Imm32S, Imm64, Imm8, Imm8PCRel, Imm8Reg, NoImm.
   def get_opcode_imm(opcode_name):
     return x[opcode_name]['ImmT']['def']
-  
+
   opcode_imm_sizes = {
     'Imm16': 2,
     'Imm16PCRel': 0, # 2
@@ -136,7 +136,7 @@ def gen_x86_hh():
   def select_opcodes_by_regex(group, opcode_name_regexp):
     selected = {opcode_name: opcode for opcode_name, opcode in x.items() if re.match(opcode_name_regexp, opcode_name)}
     group.update(selected)
-  
+
   groups = {}
 
   class Group:
@@ -153,7 +153,7 @@ def gen_x86_hh():
       self.opcodes = {}
       for regexp in regexps:
         select_opcodes_by_regex(self.opcodes, regexp)
-      
+
     def sort_opcodes(self):
       # Sort opcodes by name without digits, then by numeric parts
       def sort_key(opcode_name):
@@ -287,7 +287,7 @@ def gen_x86_hh():
   grouped_opcodes = set()
   for group_obj in groups.values():
     grouped_opcodes.update(group_obj.opcodes.keys())
-  
+
   ungrouped_opcodes = set(x.keys()).difference(grouped_opcodes)
   for opcode_name in ungrouped_opcodes:
     # Useful reference: https://en.wikipedia.org/wiki/X86_instruction_listings
@@ -455,7 +455,7 @@ def hook_recipe(r: make.Recipe):
               inputs=[x86_json, __file__] + llvm.hook.beam,
               desc='Generating x86.hh',
               shortcut='x86.hh')
-    
+
 # Hook x86.hh into the build graph
 
 files_using_x86_hh = set()
@@ -468,4 +468,4 @@ def hook_srcs(srcs: dict[str, src.File], r: make.Recipe):
 def hook_plan(srcs: dict[str, src.File], objs: list[build.ObjectFile], bins: list[build.Binary], r: make.Recipe):
   for obj in objs:
     if obj.source in files_using_x86_hh:
-      obj.deps.add(x86_hh)
+      obj.deps.add(str(x86_hh))

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <llvm/MC/MCInst.h>
+#include <llvm/lib/Target/X86/X86Subtarget.h>
 
 #include "base.hh"
 #include "machine_code.hh"
@@ -115,7 +116,28 @@ struct Instruction : Object, Runnable, Buffer {
     float scale = 1;
     llvm::SmallVector<Vec2, 10> token_position;
     llvm::SmallVector<float, 10> string_width_scale;
-    struct Token;
+
+    struct Token {
+      enum Tag : uint8_t {
+        String,
+        RegisterOperand,
+        ImmediateOperand,
+        FixedRegister,
+        FixedFlag,
+        ConditionCode,
+        FixedCondition,
+        BreakLine,
+      } tag;
+      union {
+        const char* str;
+        unsigned reg;
+        unsigned imm;
+        unsigned fixed_reg;
+        Flag flag;
+        unsigned cond_code;  // token_i of the condition immediate
+        llvm::X86::CondCode fixed_cond;
+      };
+    };
 
     std::span<const Token> tokens;
 

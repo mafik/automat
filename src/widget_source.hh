@@ -4,6 +4,7 @@
 
 #include <functional>
 
+#include "ptr.hh"
 #include "widget.hh"
 
 namespace automat::ui {
@@ -34,10 +35,18 @@ struct ObjectWidget : ui::Widget {
   virtual SkPath PartShape(Part*) const { return Shape(); }
 };
 
-// Mixin class for objects that can create and manage widgets.
+// Mixin class for things that can create and manage widgets (Objects & some Parts).
 // Provides functionality for iterating over widgets and waking their animations.
 struct WidgetSource : virtual Part {
-  virtual std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) = 0;
+  // Produces a new Widget that can display this Part.
+  // The `parent` argument allows the Widget to be attached at the correct position in the Widget
+  // tree.
+  // The `object` argument is a reference to the Object - that manages the lifetime of this part.
+  // For most Objects the `object` will be the same as `this` (except for Objects which lifetime is
+  // bound to other Objects). For parts the `object` will point to the object that owns the part.
+  virtual std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
+                                                   WeakPtr<ReferenceCounted> object) = 0;
+
   void ForEachWidget(std::function<void(ui::RootWidget&, ui::Widget&)> cb);
   void WakeWidgetsAnimation();
 };

@@ -139,9 +139,9 @@ struct FlipFlopWidget : Object::WidgetBase {
   AnimationState animation_state;
   std::unique_ptr<FlipFlopButton> button;
 
-  FlipFlopWidget(ui::Widget* parent, WeakPtr<FlipFlop> weak_flip_flop)
-      : WidgetBase(parent), button(new FlipFlopButton(this, weak_flip_flop)) {
-    this->object = std::move(weak_flip_flop);
+  FlipFlopWidget(ui::Widget* parent, WeakPtr<ReferenceCounted>&& object)
+      : WidgetBase(parent), button(new FlipFlopButton(this, object.Copy<FlipFlop>())) {
+    this->object = std::move(object).Cast<Object>();
     auto rect = FlipFlopRect();
     button->local_to_parent = SkM44::Translate(rect.CenterX() - kYingYangButtonRadius,
                                                rect.CenterY() - kYingYangButtonRadius);
@@ -199,7 +199,8 @@ struct FlipFlopWidget : Object::WidgetBase {
   void FillChildren(Vec<ui::Widget*>& children) override { children.push_back(button.get()); }
 };
 
-std::unique_ptr<ObjectWidget> FlipFlop::MakeWidget(ui::Widget* parent) {
-  return std::make_unique<FlipFlopWidget>(parent, AcquireWeakPtr());
+std::unique_ptr<ObjectWidget> FlipFlop::MakeWidget(ui::Widget* parent,
+                                                   WeakPtr<ReferenceCounted> object) {
+  return std::make_unique<FlipFlopWidget>(parent, std::move(object));
 }
 }  // namespace automat::library

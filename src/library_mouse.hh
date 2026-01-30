@@ -21,7 +21,8 @@ namespace automat::library {
 struct Mouse : Object {
   string_view Name() const override { return "Mouse"; }
   Ptr<Object> Clone() const override;
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
+                                           WeakPtr<ReferenceCounted> object) override;
 };
 
 struct MouseButtonEvent : Object, Runnable {
@@ -33,7 +34,8 @@ struct MouseButtonEvent : Object, Runnable {
   void Parts(const std::function<void(Part&)>& cb) override;
   void OnRun(std::unique_ptr<RunTask>&) override;
   audio::Sound& NextSound() override;
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
+                                           WeakPtr<ReferenceCounted> object) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
@@ -42,7 +44,8 @@ struct MouseButtonEvent : Object, Runnable {
 struct MouseMove : Object {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
+                                           WeakPtr<ReferenceCounted> object) override;
   void OnMouseMove(Vec2);
 };
 
@@ -55,7 +58,8 @@ struct MouseScrollY : Object, SinkRelativeFloat64 {
   SinCos rotation;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
+                                           WeakPtr<ReferenceCounted> object) override;
   void OnRelativeFloat64(double) override;
 };
 
@@ -63,7 +67,8 @@ struct MouseScrollX : Object, SinkRelativeFloat64 {
   SinCos rotation;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
+                                           WeakPtr<ReferenceCounted> object) override;
   void OnRelativeFloat64(double) override;
 };
 
@@ -77,7 +82,8 @@ struct MouseButtonPresser : Object, Runnable, OnOff {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   void Parts(const std::function<void(Part&)>& cb) override;
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
+                                           WeakPtr<ReferenceCounted> object) override;
 
   void OnRun(std::unique_ptr<RunTask>& run_task) override;
 

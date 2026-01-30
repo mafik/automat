@@ -94,7 +94,7 @@ struct MakeObjectOption : Option {
   Dir dir;
   MakeObjectOption(Ptr<Object> proto, Dir dir = DIR_NONE) : proto(proto), dir(dir) {}
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
-    return proto->MakeWidget(parent);
+    return proto->MakeWidget(parent, proto->AcquireWeakPtr());
   }
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<MakeObjectOption>(proto, dir);
@@ -509,8 +509,9 @@ audio::Sound& MouseButtonEvent::NextSound() {
   return down ? embedded::assets_SFX_mouse_down_wav : embedded::assets_SFX_mouse_up_wav;
 }
 
-std::unique_ptr<ObjectWidget> MouseButtonEvent::MakeWidget(ui::Widget* parent) {
-  return std::make_unique<MouseButtonEventWidget>(parent, AcquireWeakPtr());
+std::unique_ptr<ObjectWidget> MouseButtonEvent::MakeWidget(ui::Widget* parent,
+                                                           WeakPtr<ReferenceCounted> object) {
+  return std::make_unique<MouseButtonEventWidget>(parent, std::move(object).Cast<Object>());
 }
 
 void MouseButtonEvent::SerializeState(ObjectSerializer& writer) const {
@@ -559,7 +560,7 @@ struct MouseMoveWidget : MouseWidget {
   std::atomic<int> trail_end_idx = 0;
   std::atomic<Vec2> trail[kMaxTrailPoints] = {};
 
-  MouseMoveWidget(ui::Widget* parent, WeakPtr<MouseMove>&& weak_mouse_move)
+  MouseMoveWidget(ui::Widget* parent, WeakPtr<Object>&& weak_mouse_move)
       : MouseWidget(parent, std::move(weak_mouse_move)) {}
 
   void VisitOptions(const OptionsVisitor& options_visitor) const override {
@@ -619,8 +620,9 @@ struct MouseMoveWidget : MouseWidget {
   }
 };
 
-std::unique_ptr<ObjectWidget> MouseMove::MakeWidget(ui::Widget* parent) {
-  return std::make_unique<MouseMoveWidget>(parent, AcquireWeakPtr());
+std::unique_ptr<ObjectWidget> MouseMove::MakeWidget(ui::Widget* parent,
+                                                    WeakPtr<ReferenceCounted> object) {
+  return std::make_unique<MouseMoveWidget>(parent, std::move(object).Cast<Object>());
 }
 
 Vec2 mouse_move_accumulator;
@@ -656,7 +658,7 @@ string_view MouseScrollX::Name() const { return "Scroll X"; }
 Ptr<Object> MouseScrollX::Clone() const { return MAKE_PTR(MouseScrollX); }
 
 struct MouseScrollYWidget : MouseWidgetBase {
-  MouseScrollYWidget(ui::Widget* parent, WeakPtr<MouseScrollY>&& obj_weak)
+  MouseScrollYWidget(ui::Widget* parent, WeakPtr<Object>&& obj_weak)
       : MouseWidgetBase(parent, std::move(obj_weak)) {}
 
   animation::SpringV2<SinCos> rotation;
@@ -727,7 +729,7 @@ struct MouseScrollYWidget : MouseWidgetBase {
 };
 
 struct MouseScrollXWidget : MouseWidgetBase {
-  MouseScrollXWidget(ui::Widget* parent, WeakPtr<MouseScrollX>&& obj_weak)
+  MouseScrollXWidget(ui::Widget* parent, WeakPtr<Object>&& obj_weak)
       : MouseWidgetBase(parent, std::move(obj_weak)) {}
 
   animation::SpringV2<SinCos> rotation;
@@ -794,12 +796,14 @@ struct MouseScrollXWidget : MouseWidgetBase {
   }
 };
 
-std::unique_ptr<ObjectWidget> MouseScrollY::MakeWidget(ui::Widget* parent) {
-  return std::make_unique<MouseScrollYWidget>(parent, AcquireWeakPtr());
+std::unique_ptr<ObjectWidget> MouseScrollY::MakeWidget(ui::Widget* parent,
+                                                       WeakPtr<ReferenceCounted> object) {
+  return std::make_unique<MouseScrollYWidget>(parent, std::move(object).Cast<Object>());
 }
 
-std::unique_ptr<ObjectWidget> MouseScrollX::MakeWidget(ui::Widget* parent) {
-  return std::make_unique<MouseScrollXWidget>(parent, AcquireWeakPtr());
+std::unique_ptr<ObjectWidget> MouseScrollX::MakeWidget(ui::Widget* parent,
+                                                       WeakPtr<ReferenceCounted> object) {
+  return std::make_unique<MouseScrollXWidget>(parent, std::move(object).Cast<Object>());
 }
 
 void MouseScrollY::OnRelativeFloat64(double delta) {
@@ -829,8 +833,9 @@ void MouseScrollX::OnRelativeFloat64(double delta) {
   WakeWidgetsAnimation();
 }
 
-std::unique_ptr<ObjectWidget> Mouse::MakeWidget(ui::Widget* parent) {
-  return std::make_unique<MouseWidget>(parent, AcquireWeakPtr());
+std::unique_ptr<ObjectWidget> Mouse::MakeWidget(ui::Widget* parent,
+                                                WeakPtr<ReferenceCounted> object) {
+  return std::make_unique<MouseWidget>(parent, std::move(object).Cast<Object>());
 }
 
 Ptr<Object> Mouse::Clone() const { return MAKE_PTR(Mouse); }
@@ -899,8 +904,9 @@ void MouseButtonPresser::Parts(const std::function<void(Part&)>& cb) {
   cb(next_arg);
 }
 
-std::unique_ptr<ObjectWidget> MouseButtonPresser::MakeWidget(ui::Widget* parent) {
-  return std::make_unique<MouseButtonPresserWidget>(parent, AcquireWeakPtr());
+std::unique_ptr<ObjectWidget> MouseButtonPresser::MakeWidget(ui::Widget* parent,
+                                                             WeakPtr<ReferenceCounted> object) {
+  return std::make_unique<MouseButtonPresserWidget>(parent, std::move(object).Cast<Object>());
 }
 
 void MouseButtonPresser::OnRun(std::unique_ptr<RunTask>& run_task) {

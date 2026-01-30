@@ -139,8 +139,8 @@ struct GearWidget : Object::WidgetBase {
 
   std::vector<Belt> belts;
 
-  GearWidget(Gear& sync_block, Widget* parent) : WidgetBase(parent) {
-    object = sync_block.AcquireWeakPtr();
+  GearWidget(Widget* parent, WeakPtr<ReferenceCounted>&& object) : WidgetBase(parent) {
+    this->object = std::move(object).Cast<Object>();
   }
 
   SkPath Shape() const override { return SkPath::Circle(0, 0, 1_cm); }
@@ -268,8 +268,9 @@ struct GearWidget : Object::WidgetBase {
   Optional<Rect> TextureBounds() const override { return bounds; }
 };
 
-std::unique_ptr<ObjectWidget> Gear::MakeWidget(ui::Widget* parent) {
-  return std::make_unique<GearWidget>(*this, parent);
+std::unique_ptr<ObjectWidget> Gear::MakeWidget(ui::Widget* parent,
+                                               WeakPtr<ReferenceCounted> object) {
+  return std::make_unique<GearWidget>(parent, std::move(object));
 }
 
 void Syncable::CanConnect(Object& start, Part& end, Status& status) const {

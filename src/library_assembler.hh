@@ -83,8 +83,9 @@ struct Register : Object {
 
   Ptr<Object> Clone() const override;
 
-  unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override {
-    return make_unique<RegisterWidget>(parent, AcquireWeakPtr<Object>());
+  unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
+                                      WeakPtr<ReferenceCounted> object) override {
+    return make_unique<RegisterWidget>(parent, std::move(object).Cast<Object>());
   }
 
   void Parts(const std::function<void(Part&)>& cb) override;
@@ -119,8 +120,9 @@ struct Assembler : Object, LongRunning, Container {
 
   void OnCancel() override;
 
-  unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override {
-    return make_unique<AssemblerWidget>(parent, AcquireWeakPtr());
+  unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
+                                      WeakPtr<ReferenceCounted> object) override {
+    return make_unique<AssemblerWidget>(parent, std::move(object).Cast<Assembler>());
   }
 
   Container* AsContainer() override { return this; }

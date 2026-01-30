@@ -124,11 +124,12 @@ struct Object : public ReferenceCounted, public WidgetSource {
     }
   };
 
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override {
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
+                                           WeakPtr<ReferenceCounted> object) override {
     if (auto w = dynamic_cast<ObjectWidget*>(this)) {
       // Many legacy objects (Object/Widget hybrids) don't properly set their `object` field.
       if (auto widget_base = dynamic_cast<WidgetBase*>(this)) {
-        widget_base->object = AcquireWeakPtr();
+        widget_base->object = std::move(object).Cast<Object>();
       }
       // Proxy object that can be lifetime-managed by the UI infrastructure (without
       // affecting the original object's lifetime).
@@ -158,7 +159,7 @@ struct Object : public ReferenceCounted, public WidgetSource {
       return std::make_unique<HybridAdapter>(parent, *this, *w);
     }
     auto w = std::make_unique<WidgetBase>(parent);
-    w->object = AcquireWeakPtr();
+    w->object = std::move(object).Cast<Object>();
     return w;
   }
 

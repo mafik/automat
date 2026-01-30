@@ -97,8 +97,9 @@ struct SourcesWidget : Object::WidgetBase {
   }
 };
 
-std::unique_ptr<ObjectWidget> Sources::MakeWidget(ui::Widget* parent) {
-  return std::make_unique<SourcesWidget>(parent, AcquireWeakPtr<Object>());
+std::unique_ptr<ObjectWidget> Sources::MakeWidget(ui::Widget* parent,
+                                                  WeakPtr<ReferenceCounted> object) {
+  return std::make_unique<SourcesWidget>(parent, std::move(object).Cast<Object>());
 }
 
 void Sources::SerializeState(ObjectSerializer& writer) const {

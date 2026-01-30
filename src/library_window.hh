@@ -25,7 +25,8 @@ struct Window : public Object, Runnable, ImageProvider {
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
+                                           WeakPtr<ReferenceCounted> object) override;
 
   void Parts(const std::function<void(Part&)>& cb) override;
   void OnRun(std::unique_ptr<RunTask>&) override;

@@ -447,7 +447,14 @@ struct [[clang::trivial_abi]] WeakPtr : PtrBase<T> {
 
   template <typename U>
   [[nodiscard]] WeakPtr<U> Cast() && {
+    // TODO: there could be a bug here! investigate
+    // the weak reference count could be increased (it shouldn't)
     return WeakPtr<U>(static_cast<U*>(this->Release()));
+  }
+
+  template <typename U>
+  [[nodiscard]] WeakPtr<U> Copy() {
+    return WeakPtr<U>(static_cast<U*>(this->obj));
   }
 
   std::strong_ordering operator<=>(const WeakPtr<T>& that) const { return this->obj <=> that.obj; }

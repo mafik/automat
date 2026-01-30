@@ -55,7 +55,7 @@ struct WidgetStore {
     auto weak = object.AcquireWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {
-      auto widget = object.MakeWidget(parent);
+      auto widget = object.MakeWidget(parent, object.AcquireWeakPtr());
       it = container.emplace(std::move(weak), std::move(widget)).first;
     } else {
       if (it->second->parent == nullptr) {

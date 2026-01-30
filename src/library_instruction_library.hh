@@ -104,7 +104,7 @@ struct InstructionLibrary : Object {
 
     std::vector<CategoryState> category_states;
 
-    Widget(ui::Widget* parent, WeakPtr<Object> object);
+    Widget(ui::Widget* parent, Object&);
 
     std::string_view Name() const override { return "Instruction Library Widget"; }
     SkPath Shape() const override;
@@ -121,7 +121,7 @@ struct InstructionLibrary : Object {
   };
 
   unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override {
-    return make_unique<Widget>(parent, object.AcquireWeakPtr());
+    return make_unique<Widget>(parent, object);
   }
 };
 

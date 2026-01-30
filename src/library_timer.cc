@@ -161,7 +161,7 @@ static void PropagateDurationOutwards(Timer& timer) {
 }
 
 Timer::Timer(ui::Widget* parent)
-    : WidgetBase(parent), text_field(new ui::NumberTextField(this, kTextWidth)) {
+    : WidgetBase(parent, *this), text_field(new ui::NumberTextField(this, kTextWidth)) {
   text_field->local_to_parent = SkM44::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
   range_dial.velocity = 0;
   range_dial.value = 1;

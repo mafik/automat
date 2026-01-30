@@ -244,8 +244,7 @@ struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
 
   Ptr<Window> LockWindow() const { return LockObject<Window>(); }
 
-  WindowWidget(ui::Widget* parent, WeakPtr<Object> window) : WidgetBase(parent) {
-    object = window;
+  WindowWidget(ui::Widget* parent, Object& window) : WidgetBase(parent, window) {
     pick_button = std::make_unique<PickButton>(this);
     pick_button->on_activate = [this](ui::Pointer& p) {
       p.EndAllActions();
@@ -487,7 +486,7 @@ struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
 };
 
 std::unique_ptr<ObjectWidget> Window::MakeWidget(ui::Widget* parent, Object& object) {
-  return std::make_unique<WindowWidget>(parent, object.AcquireWeakPtr());
+  return std::make_unique<WindowWidget>(parent, object);
 }
 
 void Window::Parts(const std::function<void(Part&)>& cb) { cb(next_arg); }

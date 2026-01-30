@@ -75,7 +75,7 @@ void NumberButton::Activate(ui::Pointer& pointer) {
   }
 }
 
-Number::Number(ui::Widget* parent, double x) : WidgetBase(parent), value(x) {
+Number::Number(ui::Widget* parent, double x) : WidgetBase(parent, *this), value(x) {
   text_field = std::make_unique<ui::NumberTextField>(
       this, kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth);
   dot = std::make_unique<NumberButton>(this, ".");

@@ -141,7 +141,7 @@ struct Instruction : Object, Runnable, Buffer {
 
     std::span<const Token> tokens;
 
-    Widget(ui::Widget* parent, WeakPtr<Object> object);
+    Widget(ui::Widget* parent, Object&);
 
     std::string_view Name() const override { return "Instruction Widget"; }
     SkPath Shape() const override;
@@ -157,9 +157,7 @@ struct Instruction : Object, Runnable, Buffer {
     return NestedWeakPtr<const mc::Inst>(AcquireWeakPtr<ReferenceCounted>(), &mc_inst);
   }
 
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override {
-    return std::make_unique<Widget>(parent, object.AcquireWeakPtr());
-  }
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object&) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

@@ -3271,8 +3271,7 @@ struct LoopConditionCodeWidget : public EnumKnobWidget {
   }
 };
 
-Instruction::Widget::Widget(ui::Widget* parent, WeakPtr<Object> object) : WidgetBase(parent) {
-  this->object = std::move(object);
+Instruction::Widget::Widget(ui::Widget* parent, Object& object) : WidgetBase(parent, object) {
   auto instruction = LockObject<Instruction>();
   if (instruction->BufferSize() > 0) {
     auto buffer_ptr =
@@ -3876,5 +3875,9 @@ bool Instruction::DeserializeKey(ObjectDeserializer& d, StrView key) {
     ReportError(status.ToStr());
   }
   return true;
+}
+
+std::unique_ptr<ObjectWidget> Instruction::MakeWidget(ui::Widget* parent, Object& object) {
+  return make_unique<Widget>(parent, object);
 }
 }  // namespace automat::library

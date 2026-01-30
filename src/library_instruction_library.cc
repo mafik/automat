@@ -163,9 +163,8 @@ string_view InstructionLibrary::Name() const { return "Instruction Library"; }
 
 Ptr<Object> InstructionLibrary::Clone() const { return MAKE_PTR(InstructionLibrary); }
 
-InstructionLibrary::Widget::Widget(ui::Widget* parent, WeakPtr<Object> object)
-    : WidgetBase(parent) {
-  this->object = std::move(object);
+InstructionLibrary::Widget::Widget(ui::Widget* parent, Object& object)
+    : WidgetBase(parent, object) {
   for (int i = 0; i < std::size(x86::kCategories); ++i) {
     if (category_states.size() <= i) {
       category_states.push_back(CategoryState{
@@ -347,7 +346,7 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
     if (!found) {
       auto instruction = MAKE_PTR(Instruction);
       instruction->mc_inst = inst;
-      auto widget = make_unique<Instruction::Widget>(this, instruction->AcquireWeakPtr<Object>());
+      auto widget = make_unique<Instruction::Widget>(this, *instruction);
       auto it = instruction_helix.insert(instruction_helix.begin() + insert_index,
                                          InstructionCard{std::move(widget), instruction});
       it->angle = CardAngleDeg(i + rotation_offset_t, n, helix_hover_tween);

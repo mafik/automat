@@ -68,7 +68,7 @@ static sk_sp<SkSVGDOM>& SharinganColor() {
 }
 
 MacroRecorder::MacroRecorder(ui::Widget* parent)
-    : WidgetBase(parent), record_button(new GlassRunButton(this, this)) {
+    : WidgetBase(parent, *this), record_button(new GlassRunButton(this, this)) {
   record_button->local_to_parent = SkM44::Translate(17.5_mm, 3.2_mm);
 }
 MacroRecorder::~MacroRecorder() {

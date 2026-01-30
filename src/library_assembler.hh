@@ -39,9 +39,7 @@ struct RegisterWidget : public Object::WidgetBase {
   constexpr static float kCellHeight = kInnerRect.Height() / 8;
   constexpr static float kCellWidth = kInnerRect.Width() / 8;
 
-  RegisterWidget(Widget* parent, WeakPtr<Object> register_weak) : WidgetBase(parent) {
-    object = std::move(register_weak);
-  }
+  RegisterWidget(Widget* parent, Object& reg) : WidgetBase(parent, reg) {}
   Ptr<Register> LockRegister() const { return LockObject<Register>(); }
   std::string_view Name() const override;
   SkPath Shape() const override;
@@ -57,10 +55,9 @@ struct AssemblerWidget : Object::WidgetBase, ui::DropTarget {
   constexpr static RRect kRRect =
       RRect::MakeSimple(Rect::MakeAtZero<CenterX, CenterY>(kWidth, kHeight), kRadius);
 
-  WeakPtr<Assembler> assembler_weak;
   Vec<RegisterWidget*> reg_widgets;
 
-  AssemblerWidget(Widget* parent, WeakPtr<Assembler>);
+  AssemblerWidget(Widget* parent, Assembler&);
   std::string_view Name() const override;
   void FillChildren(Vec<ui::Widget*>& children) override;
   SkPath Shape() const override;
@@ -84,7 +81,7 @@ struct Register : Object {
   Ptr<Object> Clone() const override;
 
   unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override {
-    return make_unique<RegisterWidget>(parent, object.AcquireWeakPtr());
+    return make_unique<RegisterWidget>(parent, object);
   }
 
   void Parts(const std::function<void(Part&)>& cb) override;
@@ -120,7 +117,7 @@ struct Assembler : Object, LongRunning, Container {
   void OnCancel() override;
 
   unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override {
-    return make_unique<AssemblerWidget>(parent, static_cast<Assembler&>(object).AcquireWeakPtr());
+    return make_unique<AssemblerWidget>(parent, static_cast<Assembler&>(object));
   }
 
   Container* AsContainer() override { return this; }

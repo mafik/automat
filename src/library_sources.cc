@@ -74,9 +74,7 @@ struct ExtractFilesOption : TextOption {
 };
 
 struct SourcesWidget : Object::WidgetBase {
-  SourcesWidget(ui::Widget* parent, WeakPtr<Object> sources) : WidgetBase(parent) {
-    object = sources;
-  }
+  SourcesWidget(ui::Widget* parent, Object& sources) : WidgetBase(parent, sources) {}
 
   Ptr<Sources> LockSources() const { return LockObject<Sources>(); }
 
@@ -98,7 +96,7 @@ struct SourcesWidget : Object::WidgetBase {
 };
 
 std::unique_ptr<ObjectWidget> Sources::MakeWidget(ui::Widget* parent, Object& object) {
-  return std::make_unique<SourcesWidget>(parent, object.AcquireWeakPtr());
+  return std::make_unique<SourcesWidget>(parent, object);
 }
 
 void Sources::SerializeState(ObjectSerializer& writer) const {

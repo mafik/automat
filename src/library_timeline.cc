@@ -769,11 +769,10 @@ struct TimelineWidget : Object::WidgetBase {
   time::Duration distance_to_seconds;  // populated on Tick
 
   TimelineWidget(ui::Widget* parent, Object& object)
-      : WidgetBase(parent),
+      : WidgetBase(parent, object),
         run_button(new TimelineRunButton(this, static_cast<Timeline&>(object).AcquireWeakPtr())),
         prev_button(new PrevButton(*this)),
         next_button(new NextButton(*this)) {
-    this->object = object.AcquireWeakPtr();
     run_button->local_to_parent = SkM44::Translate(-kPlayButtonRadius, kDisplayMargin);
     prev_button->local_to_parent =
         SkM44::Translate(-kPlasticWidth / 2 + kSideButtonMargin, -kSideButtonRadius);
@@ -2353,20 +2352,17 @@ struct Float64TrackWidget : TrackBaseWidget {
 };
 
 std::unique_ptr<ObjectWidget> OnOffTrack::MakeWidget(ui::Widget* parent, Object& object) {
-  auto ret = std::make_unique<OnOffTrackWidget>(parent);
-  ret->object = object.AcquireWeakPtr();
+  auto ret = std::make_unique<OnOffTrackWidget>(parent, object);
   return ret;
 }
 
 std::unique_ptr<ObjectWidget> Vec2Track::MakeWidget(ui::Widget* parent, Object& object) {
-  auto ret = std::make_unique<Vec2TrackWidget>(parent);
-  ret->object = object.AcquireWeakPtr();
+  auto ret = std::make_unique<Vec2TrackWidget>(parent, object);
   return ret;
 }
 
 std::unique_ptr<ObjectWidget> Float64Track::MakeWidget(ui::Widget* parent, Object& object) {
-  auto ret = std::make_unique<Float64TrackWidget>(parent);
-  ret->object = object.AcquireWeakPtr();
+  auto ret = std::make_unique<Float64TrackWidget>(parent, object);
   return ret;
 }
 

@@ -39,7 +39,7 @@ struct FlipFlop : Object, OnOff {
   void OnTurnOn() override;
   void OnTurnOff() override;
 
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object&) override;
 };
 
 }  // namespace automat::library

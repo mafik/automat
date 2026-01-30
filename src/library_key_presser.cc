@@ -121,8 +121,8 @@ struct KeyPresserWidget : Object::WidgetBase, ui::CaretOwner {
   // This is used to select the pressed key
   ui::Caret* key_selector = nullptr;
 
-  KeyPresserWidget(Widget* parent)
-      : WidgetBase(parent),
+  KeyPresserWidget(Widget* parent, Object& key_presser)
+      : WidgetBase(parent, key_presser),
         shortcut_button(new KeyPresserButton(this, "?", KeyColor(false), kBaseKeyWidth)) {
     shortcut_button->activate = [this](ui::Pointer& pointer) {
       if (key_selector) {
@@ -227,8 +227,7 @@ string_view KeyPresser::Name() const { return "Key Presser"; }
 Ptr<Object> KeyPresser::Clone() const { return MAKE_PTR(KeyPresser, key); }
 
 std::unique_ptr<ObjectWidget> KeyPresser::MakeWidget(ui::Widget* parent, Object& object) {
-  auto w = std::make_unique<KeyPresserWidget>(parent);
-  w->object = object.AcquireWeakPtr();
+  auto w = std::make_unique<KeyPresserWidget>(parent, object);
   w->shortcut_button->SetLabel(ToStr(key));
   return std::move(w);
 }

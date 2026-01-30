@@ -138,7 +138,7 @@ struct RegistersMenuOption : TextOption, OptionsProvider {
 
 void AssemblerWidget::VisitOptions(const OptionsVisitor& visitor) const {
   WidgetBase::VisitOptions(visitor);
-  RegistersMenuOption registers_option{assembler_weak};
+  RegistersMenuOption registers_option{object.Copy<Assembler>()};
   visitor(registers_option);
 }
 
@@ -376,10 +376,8 @@ bool Assembler::DeserializeKey(ObjectDeserializer& d, StrView key) {
   return false;
 }
 
-AssemblerWidget::AssemblerWidget(Widget* parent, WeakPtr<Assembler> assembler_weak)
-    : WidgetBase(parent), assembler_weak(assembler_weak) {
-  object = std::move(assembler_weak).Cast<Object>();
-}
+AssemblerWidget::AssemblerWidget(Widget* parent, Assembler& assembler)
+    : WidgetBase(parent, assembler) {}
 
 std::string_view AssemblerWidget::Name() const { return "Assembler"; }
 SkPath AssemblerWidget::Shape() const { return SkPath::RRect(kRRect.sk); }
@@ -390,7 +388,7 @@ static constexpr RRect kBorderMidRRect = AssemblerWidget::kRRect.Outset(-kFlatBo
 static constexpr RRect kInnerRRect = kBorderMidRRect.Outset(-kFlatBorderWidth);
 
 animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
-  auto assembler = assembler_weak.lock();
+  auto assembler = LockObject<Assembler>();
   if (!assembler || assembler->mc_controller == nullptr) {
     return animation::Finished;
   }
@@ -422,7 +420,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     if (assembler->state.regs[i] == 0) continue;
     if (assembler->reg_objects_idx[i] != nullptr) continue;
-    assembler->reg_objects_idx[i] = MAKE_PTR(Register, assembler_weak, i);
+    assembler->reg_objects_idx[i] = MAKE_PTR(Register, object.Copy<Assembler>(), i);
   }
 
   // Create new register widgets for register objects that don't have a widget.
@@ -582,7 +580,7 @@ void AssemblerWidget::TransformUpdated() {
 
 bool AssemblerWidget::CanDrop(Location& loc) const {
   if (auto reg = loc.As<Register>()) {
-    if (auto my_assembler = this->assembler_weak.lock()) {
+    if (auto my_assembler = LockObject<Assembler>()) {
       if (auto my_reg = my_assembler->reg_objects_idx[reg->register_index].lock()) {
         return my_reg.get() == reg;
       }
@@ -593,7 +591,7 @@ bool AssemblerWidget::CanDrop(Location& loc) const {
 
 void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
   if (auto reg = loc->As<Register>()) {
-    if (auto my_assembler = this->assembler_weak.lock()) {
+    if (auto my_assembler = LockObject<Assembler>()) {
       loc->object->ForEachWidget([&](ui::RootWidget& root_widget, ui::Widget& reg_widget_generic) {
         RegisterWidget& reg_widget = static_cast<RegisterWidget&>(reg_widget_generic);
         if (auto asm_widget_generic = root_widget.widgets.FindOrNull(*my_assembler)) {

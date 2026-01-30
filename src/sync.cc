@@ -139,9 +139,7 @@ struct GearWidget : Object::WidgetBase {
 
   std::vector<Belt> belts;
 
-  GearWidget(Widget* parent, Object& object) : WidgetBase(parent) {
-    this->object = object.AcquireWeakPtr();
-  }
+  GearWidget(Widget* parent, Object& object) : WidgetBase(parent, object) {}
 
   SkPath Shape() const override { return SkPath::Circle(0, 0, 1_cm); }
 

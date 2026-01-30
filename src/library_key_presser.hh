@@ -31,7 +31,7 @@ struct KeyPresser : Object, OnOff, ui::Keylogger {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
 
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object&) override;
 
   void SetKey(ui::AnsiKey);
 

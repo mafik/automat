@@ -88,7 +88,7 @@ static const SkRRect kShapeRRect = [] {
 // }
 
 HotKey::HotKey(ui::Widget* parent)
-    : WidgetBase(parent),
+    : WidgetBase(parent, *this),
       power_button(new PowerButton(this, this)),
       ctrl_button(new KeyButton(this, "Ctrl", KeyColor(ctrl), kCtrlKeyWidth)),
       alt_button(new KeyButton(this, "Alt", KeyColor(alt), kAltKeyWidth)),

@@ -140,9 +140,8 @@ struct FlipFlopWidget : Object::WidgetBase {
   std::unique_ptr<FlipFlopButton> button;
 
   FlipFlopWidget(ui::Widget* parent, Object& object)
-      : WidgetBase(parent),
+      : WidgetBase(parent, object),
         button(new FlipFlopButton(this, static_cast<FlipFlop&>(object).AcquireWeakPtr())) {
-    this->object = object.AcquireWeakPtr();
     auto rect = FlipFlopRect();
     button->local_to_parent = SkM44::Translate(rect.CenterX() - kYingYangButtonRadius,
                                                rect.CenterY() - kYingYangButtonRadius);

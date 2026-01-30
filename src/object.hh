@@ -96,7 +96,8 @@ struct Object : public ReferenceCounted, public WidgetSource {
   struct WidgetBase : ObjectWidget {
     WeakPtr<Object> object;
 
-    WidgetBase(Widget* parent) : ObjectWidget(parent) {}
+    WidgetBase(Widget* parent, Object& object_ref)
+        : ObjectWidget(parent), object(object_ref.AcquireWeakPtr()) {}
 
     virtual float Width() const;
     virtual std::string Text() const { return std::string(Name()); }
@@ -126,19 +127,14 @@ struct Object : public ReferenceCounted, public WidgetSource {
 
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override {
     if (auto w = dynamic_cast<ObjectWidget*>(this)) {
-      // Many legacy objects (Object/Widget hybrids) don't properly set their `object` field.
-      if (auto widget_base = dynamic_cast<WidgetBase*>(this)) {
-        widget_base->object = object.AcquireWeakPtr();
-      }
       // Proxy object that can be lifetime-managed by the UI infrastructure (without
       // affecting the original object's lifetime).
       struct HybridAdapter : WidgetBase {
         Ptr<Object> ptr;
         ObjectWidget& widget;
         HybridAdapter(Widget* parent, Object& obj, ObjectWidget& widget)
-            : WidgetBase(parent), ptr(obj.AcquirePtr()), widget(widget) {
+            : WidgetBase(parent, obj), ptr(obj.AcquirePtr()), widget(widget) {
           widget.parent = this;
-          object = ptr;
         }
         StrView Name() const override { return "HybridAdapter"; }
         SkPath Shape() const override { return widget.Shape(); }
@@ -157,8 +153,7 @@ struct Object : public ReferenceCounted, public WidgetSource {
       };
       return std::make_unique<HybridAdapter>(parent, *this, *w);
     }
-    auto w = std::make_unique<WidgetBase>(parent);
-    w->object = object.AcquireWeakPtr();
+    auto w = std::make_unique<WidgetBase>(parent, object);
     return w;
   }
 

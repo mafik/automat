@@ -82,7 +82,8 @@ compile_args += ['-static', '-std=gnu++26', '-fcolor-diagnostics', '-ffunction-s
     '-fdata-sections', '-funsigned-char', '-fno-signed-zeros',
     '-fno-strict-aliasing',
     '-D_FORTIFY_SOURCE=2', '-Wformat', '-Wno-c99-designator',
-    '-Wformat-security', '-Werror=format-security', '-Wno-vla-extension', '-Wno-trigraphs', '-Werror=return-type']
+    '-Wformat-security', '-Werror=format-security', '-Wno-vla-extension', '-Wno-trigraphs', '-Werror=return-type',
+    '--warning-suppression-mappings=src/warning_suppression_mappings.txt']
 
 # sdbus-c++ uses exceptions, so '-fno-exceptions' has been removed
 

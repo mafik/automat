@@ -4,7 +4,6 @@
 
 #include <functional>
 
-#include "ptr.hh"
 #include "widget.hh"
 
 namespace automat::ui {
@@ -12,6 +11,8 @@ struct RootWidget;
 }  // namespace automat::ui
 
 namespace automat {
+
+struct Object;
 
 // Widget interface for objects - defines the contract for widgets that represent objects.
 struct ObjectWidget : ui::Widget {
@@ -44,9 +45,7 @@ struct WidgetSource : virtual Part {
   // The `object` argument is a reference to the Object - that manages the lifetime of this part.
   // For most Objects the `object` will be the same as `this` (except for Objects which lifetime is
   // bound to other Objects). For parts the `object` will point to the object that owns the part.
-  virtual std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
-                                                   WeakPtr<ReferenceCounted> object) = 0;
-
+  virtual std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object&) = 0;
   void ForEachWidget(std::function<void(ui::RootWidget&, ui::Widget&)> cb);
   void WakeWidgetsAnimation();
 };

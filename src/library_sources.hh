@@ -13,8 +13,7 @@ struct Sources : Object {
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
-                                           WeakPtr<ReferenceCounted> object) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

@@ -120,9 +120,8 @@ struct InstructionLibrary : Object {
     void PointerLeave(ui::Pointer&) override;
   };
 
-  unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
-                                      WeakPtr<ReferenceCounted> object) override {
-    return make_unique<Widget>(parent, std::move(object).Cast<Object>());
+  unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override {
+    return make_unique<Widget>(parent, object.AcquireWeakPtr());
   }
 };
 

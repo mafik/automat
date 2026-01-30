@@ -768,12 +768,12 @@ struct TimelineWidget : Object::WidgetBase {
   float current_pos_ratio;             // populated on Tick
   time::Duration distance_to_seconds;  // populated on Tick
 
-  TimelineWidget(ui::Widget* parent, WeakPtr<ReferenceCounted>&& object)
+  TimelineWidget(ui::Widget* parent, Object& object)
       : WidgetBase(parent),
-        run_button(new TimelineRunButton(this, object.Copy<Timeline>())),
+        run_button(new TimelineRunButton(this, static_cast<Timeline&>(object).AcquireWeakPtr())),
         prev_button(new PrevButton(*this)),
         next_button(new NextButton(*this)) {
-    this->object = std::move(object).Cast<Object>();
+    this->object = object.AcquireWeakPtr();
     run_button->local_to_parent = SkM44::Translate(-kPlayButtonRadius, kDisplayMargin);
     prev_button->local_to_parent =
         SkM44::Translate(-kPlasticWidth / 2 + kSideButtonMargin, -kSideButtonRadius);
@@ -903,8 +903,7 @@ struct TimelineWidget : Object::WidgetBase {
   void AddMissingTrackWidgets(Timeline& timeline_locked) {
     auto& tracks = timeline_locked.tracks;
     for (size_t i = track_widgets.size(); i < tracks.size(); ++i) {
-      track_widgets.push_back(
-          tracks[i]->track->MakeWidget(this, tracks[i]->track->AcquireWeakPtr()));
+      track_widgets.push_back(tracks[i]->track->MakeWidget(this, *tracks[i]->track));
     }
   }
 
@@ -1815,9 +1814,8 @@ std::unique_ptr<Action> TimelineWidget::FindAction(ui::Pointer& ptr, ui::ActionT
   return Object::WidgetBase::FindAction(ptr, btn);
 }
 
-std::unique_ptr<ObjectWidget> Timeline::MakeWidget(ui::Widget* parent,
-                                                   WeakPtr<ReferenceCounted> object) {
-  return std::make_unique<TimelineWidget>(parent, std::move(object));
+std::unique_ptr<ObjectWidget> Timeline::MakeWidget(ui::Widget* parent, Object& object) {
+  return std::make_unique<TimelineWidget>(parent, object);
 }
 
 void Timeline::Parts(const function<void(Part&)>& cb) {
@@ -2354,24 +2352,21 @@ struct Float64TrackWidget : TrackBaseWidget {
   }
 };
 
-std::unique_ptr<ObjectWidget> OnOffTrack::MakeWidget(ui::Widget* parent,
-                                                     WeakPtr<ReferenceCounted> object) {
+std::unique_ptr<ObjectWidget> OnOffTrack::MakeWidget(ui::Widget* parent, Object& object) {
   auto ret = std::make_unique<OnOffTrackWidget>(parent);
-  ret->object = std::move(object).Cast<Object>();
+  ret->object = object.AcquireWeakPtr();
   return ret;
 }
 
-std::unique_ptr<ObjectWidget> Vec2Track::MakeWidget(ui::Widget* parent,
-                                                    WeakPtr<ReferenceCounted> object) {
+std::unique_ptr<ObjectWidget> Vec2Track::MakeWidget(ui::Widget* parent, Object& object) {
   auto ret = std::make_unique<Vec2TrackWidget>(parent);
-  ret->object = std::move(object).Cast<Object>();
+  ret->object = object.AcquireWeakPtr();
   return ret;
 }
 
-std::unique_ptr<ObjectWidget> Float64Track::MakeWidget(ui::Widget* parent,
-                                                       WeakPtr<ReferenceCounted> object) {
+std::unique_ptr<ObjectWidget> Float64Track::MakeWidget(ui::Widget* parent, Object& object) {
   auto ret = std::make_unique<Float64TrackWidget>(parent);
-  ret->object = std::move(object).Cast<Object>();
+  ret->object = object.AcquireWeakPtr();
   return ret;
 }
 

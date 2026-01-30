@@ -25,8 +25,7 @@ struct TrackBase : Object {
                             time::SteadyPoint now) = 0;
 
   // Each subtype must returns its own Widget derived from TrackBaseWidget.
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
-                                           WeakPtr<ReferenceCounted> object) override = 0;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override = 0;
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
@@ -36,8 +35,7 @@ struct OnOffTrack : TrackBase, OnOff {
   time::Duration on_at = time::kDurationGuard;
   string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
-                                           WeakPtr<ReferenceCounted> object) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -56,8 +54,7 @@ struct Vec2Track : TrackBase {
 
   string_view Name() const override { return "Vec2 Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Vec2Track, *this); }
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
-                                           WeakPtr<ReferenceCounted> object) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -72,8 +69,7 @@ struct Float64Track : TrackBase {
 
   string_view Name() const override { return "Float64 Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Float64Track, *this); }
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
-                                           WeakPtr<ReferenceCounted> object) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -134,8 +130,7 @@ struct Timeline : Object, Runnable, LongRunning, TimerNotificationReceiver {
   Timeline(const Timeline&);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
-                                           WeakPtr<ReferenceCounted> object) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override;
   void Parts(const std::function<void(Part&)>& cb) override;
   void OnRun(std::unique_ptr<RunTask>&) override;
   void OnCancel() override;

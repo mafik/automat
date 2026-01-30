@@ -432,7 +432,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     if (anim.prototype_alpha > 0) {
       if (!prototype_widget) {
         auto proto = a.start_arg->Prototype();
-        prototype_widget = proto->MakeWidget(this, proto->AcquireWeakPtr());
+        prototype_widget = proto->MakeWidget(this, *proto);
       }
       phase |= prototype_widget->Tick(timer);
     }

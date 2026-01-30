@@ -12,6 +12,7 @@
 #include "ptr.hh"
 #include "string_multimap.hh"
 #include "widget.hh"
+#include "widget_source.hh"
 
 namespace automat {
 
@@ -27,33 +28,11 @@ struct Syncable;
 struct ObjectSerializer;
 struct ObjectDeserializer;
 
-// Widget interface for objects - defines the contract for widgets that represent objects.
-struct ObjectWidget : ui::Widget {
-  using ui::Widget::Widget;
-
-  // Get the default scale that this object would like to have.
-  // Usually it's 1 but when it's iconified, it may want to shrink itself.
-  virtual float GetBaseScale() const = 0;
-
-  // Places where the connections to this widget may terminate.
-  // Local (metric) coordinates.
-  virtual void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const = 0;
-
-  // Returns the start position of the given argument.
-  // If coordinate_space is nullptr, returns local (metric) coordinates.
-  // If coordinate_space is provided, returns coordinates in that widget's space.
-  virtual Vec2AndDir ArgStart(const Argument&, ui::Widget* coordinate_space = nullptr);
-
-  // Describes the area of the widget where the given part is located.
-  // Local (metric) coordinates.
-  virtual SkPath PartShape(Part*) const { return Shape(); }
-};
-
 // Objects are interactive pieces of data & behavior.
 //
 // Instances of this class provide their logic.
 // Appearance is delegated to Widgets.
-struct Object : public ReferenceCounted {
+struct Object : public ReferenceCounted, public WidgetSource {
   Location* here = nullptr;
 
   Object() = default;
@@ -145,7 +124,7 @@ struct Object : public ReferenceCounted {
     }
   };
 
-  virtual std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) {
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override {
     if (auto w = dynamic_cast<ObjectWidget*>(this)) {
       // Many legacy objects (Object/Widget hybrids) don't properly set their `object` field.
       if (auto widget_base = dynamic_cast<WidgetBase*>(this)) {
@@ -182,10 +161,6 @@ struct Object : public ReferenceCounted {
     w->object = AcquireWeakPtr();
     return w;
   }
-
-  void ForEachWidget(std::function<void(ui::RootWidget&, ui::Widget&)> cb);
-
-  void WakeWidgetsAnimation();
 
   void InvalidateConnectionWidgets(const Argument* arg = nullptr) const;
 

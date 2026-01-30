@@ -428,18 +428,6 @@ bool Object::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 audio::Sound& Object::NextSound() { return embedded::assets_SFX_next_wav; }
 
-void Object::ForEachWidget(std::function<void(ui::RootWidget&, ui::Widget&)> cb) {
-  for (auto* root_widget : ui::root_widgets) {
-    if (auto widget = root_widget->widgets.FindOrNull(*this)) {
-      cb(*root_widget, *widget);
-    }
-  }
-}
-
-void Object::WakeWidgetsAnimation() {
-  ForEachWidget([](ui::RootWidget&, ui::Widget& widget) { widget.WakeAnimation(); });
-}
-
 void Object::ReportError(std::string_view message, std::source_location location) {
   automat::ReportError(*this, *this, message, location);
 }

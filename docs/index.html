@@ -187,6 +187,8 @@
         text-align: center;
         font-family: &quot;Homemade Apple&quot;, sans-serif;
         pointer-events: none;
+        color: #1714ccaa;
+        filter: blur(0.3px);
       "
     >
       A tangible interface for virtual things
@@ -218,7 +220,19 @@
         pointer-events: none;
       "
     >
-      ver. ALPHA !<br /><br />-keyboard macros
+      ver. <span id="ver">2026</span> !<br /><br />-mouse & keyboard<br />-assembly&nbsp;&nbsp;&nbsp;&nbsp;-OCR
+      <script>
+        function getISOWeekString() {
+          const d = new Date();
+          d.setHours(0, 0, 0, 0);
+          d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+          const year = d.getFullYear();
+          const yearStart = new Date(year, 0, 1);
+          const weekNumber = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+          return `${year}-W${String(weekNumber).padStart(2, "0")}`;
+        }
+        document.getElementById("ver").textContent = getISOWeekString();
+      </script>
     </p>
     <div
       class="grab"
@@ -253,6 +267,7 @@
           color: rgb(156, 255, 156);
           text-shadow: 0 0 5px green;
           background: linear-gradient(0deg, #0b2500, #000000ff 50%, #062509);
+          font-size: 0.8em;
         "
       >
         <span
@@ -260,16 +275,22 @@
           <a
             href="https://github.com/mafik/automat/releases/latest/download/automat_linux_64bit"
             >Linux</a
-          >
-          and
+          >,
           <a
             href="https://github.com/mafik/automat/releases/latest/download/automat_windows_64bit.exe"
             >Windows</a
+          >
+          & their
+          <a href="https://github.com/mafik/automat/releases/latest/"
+            >release notes</a
           >.</span
         >
-        <a href="https://github.com/mafik/automat/releases/latest/"
-          >Release notes</a
-        >
+        <span>Stable release coming soon:</span>
+        <img
+          alt="Steam - Wishlist Now!"
+          src="https://img.shields.io/badge/steam-wishlist_now!-black?style=for-the-badge&logo=steam"
+          style="margin: 0 auto"
+        />
       </div>
     </div>
     <audio preload class="sound_up">
@@ -755,7 +776,6 @@
     <div class="grab page6 page-right">
       Running on any hardware (let's but the bar at Raspberry PI) means that
       <em class="grab">every megabyte counts</em>. <br /><br /><br />
-      This elliminates browser-based solutions at the get go.
       <div class="next" onclick="NextPage()"></div>
     </div>
     <div class="grab page7 page-left">

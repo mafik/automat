@@ -47,7 +47,7 @@ struct Location : ReferenceCounted, ui::Widget {
   WeakPtr<Location> parent_location;
 
   Ptr<Object> object;
-  ObjectWidget* object_widget = nullptr;
+  Toy* toy = nullptr;
 
   Vec2 position = {0, 0};
   mutable float scale = 1.f;
@@ -69,7 +69,7 @@ struct Location : ReferenceCounted, ui::Widget {
 
   // Find (or create if needed) the Widget for this location's object.
   // Shortcut for Widget::ForObject(location.object, location)
-  ObjectWidget& WidgetForObject();
+  Toy& ToyForObject();
 
   Vec2 LocalAnchor() const override;
 
@@ -82,7 +82,7 @@ struct Location : ReferenceCounted, ui::Widget {
     auto typed = MAKE_PTR(T, std::forward<Args>(args)...);
     object = typed;
     object->Relocate(this);
-    object_widget = &WidgetForObject();
+    toy = &ToyForObject();
     ValidateHierarchy();
     return typed;
   }
@@ -206,7 +206,7 @@ struct Location : ReferenceCounted, ui::Widget {
 
   // DEPRECATED. Returns the position in parent's coordinates where the connections for this
   // argument should start.
-  // TODO: replace with ObjectWidget::ArgStart
+  // TODO: replace with Toy::ArgStart
   Vec2AndDir ArgStart(Argument&);
   void FillChildren(Vec<Widget*>& children) override;
   Optional<Rect> TextureBounds() const override;
@@ -219,7 +219,7 @@ void PositionBelow(Location& origin, Location& below);
 // This uses the arg's position & direction within `origin`.
 //
 // This version just returns the recommended position for the target_widget.
-Vec2 PositionAhead(Location& origin, const Argument& arg, const ObjectWidget& target_widget);
+Vec2 PositionAhead(Location& origin, const Argument& arg, const Toy& target_widget);
 
 // Similar to the above, but also sets the target's position.
 void PositionAhead(Location& origin, const Argument& arg, Location& target);

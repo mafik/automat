@@ -61,13 +61,13 @@ void FlipFlop::Flip::OnRun(std::unique_ptr<RunTask>& task) {
 void FlipFlop::State::OnTurnOn() {
   auto& flip_flop = GetFlipFlop();
   flip_flop.current_state = true;
-  flip_flop.WakeWidgetsAnimation();
+  flip_flop.WakeToys();
 }
 
 void FlipFlop::State::OnTurnOff() {
   auto& flip_flop = GetFlipFlop();
   flip_flop.current_state = false;
-  flip_flop.WakeWidgetsAnimation();
+  flip_flop.WakeToys();
 }
 
 void FlipFlop::SerializeState(ObjectSerializer& writer) const {
@@ -201,7 +201,7 @@ struct FlipFlopWidget : Object::WidgetBase {
   void FillChildren(Vec<ui::Widget*>& children) override { children.push_back(button.get()); }
 };
 
-std::unique_ptr<ObjectWidget> FlipFlop::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> FlipFlop::MakeToy(ui::Widget* parent, ReferenceCounted&) {
   return std::make_unique<FlipFlopWidget>(parent, *this);
 }
 }  // namespace automat::library

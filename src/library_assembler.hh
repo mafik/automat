@@ -80,8 +80,7 @@ struct Register : Object {
 
   Ptr<Object> Clone() const override;
 
-  unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
-                                      ReferenceCounted& prevent_release) override {
+  unique_ptr<Toy> MakeToy(ui::Widget* parent, ReferenceCounted& prevent_release) override {
     return make_unique<RegisterWidget>(parent, *this);
   }
 
@@ -127,7 +126,7 @@ struct Assembler : Object, Container {
 
   void RunMachineCode(library::Instruction* entry_point, std::unique_ptr<RunTask>&&);
 
-  unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, ReferenceCounted&) override {
+  unique_ptr<Toy> MakeToy(ui::Widget* parent, ReferenceCounted&) override {
     return make_unique<AssemblerWidget>(parent, *this);
   }
 

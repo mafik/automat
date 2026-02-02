@@ -172,7 +172,7 @@ struct PointerWidget : Widget {
   SkPath Shape() const override { return SkPath(); }
 
   struct HighlightState {
-    ObjectWidget* widget;
+    Toy* widget;
     Part* part;
     float highlight;
   };

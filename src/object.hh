@@ -11,8 +11,8 @@
 #include "deserializer.hh"
 #include "ptr.hh"
 #include "string_multimap.hh"
+#include "toy.hh"
 #include "widget.hh"
-#include "widget_source.hh"
 
 namespace automat {
 
@@ -32,7 +32,7 @@ struct ObjectDeserializer;
 //
 // Instances of this class provide their logic.
 // Appearance is delegated to Widgets.
-struct Object : public ReferenceCounted, public WidgetSource {
+struct Object : public ReferenceCounted, public ToyMaker {
   Location* here = nullptr;
 
   Object() = default;
@@ -93,11 +93,11 @@ struct Object : public ReferenceCounted, public WidgetSource {
   // Provides sensible defaults for most object widgets. Designed to be inherited and tweaked.
   //
   // It's rendered as a green box with the name of the object.
-  struct WidgetBase : ObjectWidget {
+  struct WidgetBase : Toy {
     WeakPtr<Object> object;
 
     WidgetBase(Widget* parent, Object& object_ref)
-        : ObjectWidget(parent), object(object_ref.AcquireWeakPtr()) {}
+        : Toy(parent), object(object_ref.AcquireWeakPtr()) {}
 
     virtual float Width() const;
     virtual std::string Text() const { return std::string(Name()); }
@@ -125,14 +125,14 @@ struct Object : public ReferenceCounted, public WidgetSource {
     }
   };
 
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, ReferenceCounted&) override {
-    if (auto w = dynamic_cast<ObjectWidget*>(this)) {
+  std::unique_ptr<Toy> MakeToy(ui::Widget* parent, ReferenceCounted&) override {
+    if (auto w = dynamic_cast<Toy*>(this)) {
       // Proxy object that can be lifetime-managed by the UI infrastructure (without
       // affecting the original object's lifetime).
       struct HybridAdapter : WidgetBase {
         Ptr<Object> ptr;
-        ObjectWidget& widget;
-        HybridAdapter(Widget* parent, Object& obj, ObjectWidget& widget)
+        Toy& widget;
+        HybridAdapter(Widget* parent, Object& obj, Toy& widget)
             : WidgetBase(parent, obj), ptr(obj.AcquirePtr()), widget(widget) {
           widget.parent = this;
         }

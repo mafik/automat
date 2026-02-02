@@ -485,7 +485,7 @@ struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
   }
 };
 
-std::unique_ptr<ObjectWidget> Window::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> Window::MakeToy(ui::Widget* parent, ReferenceCounted&) {
   return std::make_unique<WindowWidget>(parent, *this);
 }
 
@@ -648,7 +648,7 @@ void Window::Capture::OnRun(std::unique_ptr<RunTask>&) {
     }
   }
 #endif
-  w.WakeWidgetsAnimation();
+  w.WakeToys();
 
   w.here->ScheduleUpdate();
   // Re-schedule execution if continuous run is enabled

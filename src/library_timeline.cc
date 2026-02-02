@@ -336,7 +336,7 @@ void Timeline::AddTrack(Ptr<TrackBase>&& track, StrView name) {
   if (auto h = here) {
     h->InvalidateConnectionWidgets(true, true);
   }
-  WakeWidgetsAnimation();
+  WakeToys();
 }
 
 Timeline::Timeline(const Timeline& other) : Timeline() {
@@ -344,7 +344,7 @@ Timeline::Timeline(const Timeline& other) : Timeline() {
   for (const auto& track : other.tracks) {
     AddTrack(track->track->Clone().Cast<TrackBase>(), track->name);
   }
-  WakeWidgetsAnimation();
+  WakeToys();
 }
 
 string_view Timeline::Name() const { return "Timeline"; }
@@ -902,7 +902,7 @@ struct TimelineWidget : Object::WidgetBase {
   void AddMissingTrackWidgets(Timeline& timeline_locked) {
     auto& tracks = timeline_locked.tracks;
     for (size_t i = track_widgets.size(); i < tracks.size(); ++i) {
-      track_widgets.push_back(tracks[i]->track->MakeWidget(this, *tracks[i]->track));
+      track_widgets.push_back(tracks[i]->track->MakeToy(this, *tracks[i]->track));
     }
   }
 
@@ -924,7 +924,7 @@ struct TimelineWidget : Object::WidgetBase {
 
   void WakeAnimationResponsively(Timeline& timeline_locked, time::SteadyPoint now) {
     PullTimelineState(timeline_locked, now);
-    timeline_locked.WakeWidgetsAnimation();  // wakes this & other widgets
+    timeline_locked.WakeToys();  // wakes this & other widgets
     for (auto& t : track_widgets) {
       t->WakeAnimation();
     }
@@ -1813,7 +1813,7 @@ std::unique_ptr<Action> TimelineWidget::FindAction(ui::Pointer& ptr, ui::ActionT
   return Object::WidgetBase::FindAction(ptr, btn);
 }
 
-std::unique_ptr<ObjectWidget> Timeline::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> Timeline::MakeToy(ui::Widget* parent, ReferenceCounted&) {
   return std::make_unique<TimelineWidget>(parent, *this);
 }
 
@@ -2353,17 +2353,17 @@ struct Float64TrackWidget : TrackBaseWidget {
   }
 };
 
-std::unique_ptr<ObjectWidget> OnOffTrack::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> OnOffTrack::MakeToy(ui::Widget* parent, ReferenceCounted&) {
   auto ret = std::make_unique<OnOffTrackWidget>(parent, *this);
   return ret;
 }
 
-std::unique_ptr<ObjectWidget> Vec2Track::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> Vec2Track::MakeToy(ui::Widget* parent, ReferenceCounted&) {
   auto ret = std::make_unique<Vec2TrackWidget>(parent, *this);
   return ret;
 }
 
-std::unique_ptr<ObjectWidget> Float64Track::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> Float64Track::MakeToy(ui::Widget* parent, ReferenceCounted&) {
   auto ret = std::make_unique<Float64TrackWidget>(parent, *this);
   return ret;
 }
@@ -2449,7 +2449,7 @@ void Float64Track::UpdateOutput(Location& target, time::SteadyPoint started_at,
 }
 
 static void WakeRunButton(Timeline& timeline) {
-  timeline.ForEachWidget([](ui::RootWidget& root_widget, ui::Widget& widget) {
+  timeline.ForEachToy([](ui::RootWidget& root_widget, ui::Widget& widget) {
     TimelineWidget& timeline_widget = static_cast<TimelineWidget&>(widget);
     timeline_widget.run_button->WakeAnimation();
   });
@@ -2482,7 +2482,7 @@ void Timeline::Run::OnRun(std::unique_ptr<RunTask>& run_task) {
   TimelineUpdateOutputs(t, t.playing.started_at, now);
   TimelineScheduleNextAfter(t, now);
   WakeRunButton(t);
-  t.WakeWidgetsAnimation();
+  t.WakeToys();
   t.running.BeginLongRunning(std::move(run_task));
 }
 
@@ -2501,7 +2501,7 @@ void Timeline::BeginRecording() {
       break;
   }
   WakeRunButton(*this);
-  WakeWidgetsAnimation();
+  WakeToys();
 }
 
 void Timeline::StopRecording() {
@@ -2512,7 +2512,7 @@ void Timeline::StopRecording() {
   paused = {.playback_offset = min(time::SteadyNow() - recording.started_at, timeline_length)};
   state = Timeline::kPaused;
   WakeRunButton(*this);
-  WakeWidgetsAnimation();
+  WakeToys();
 }
 
 void OnOffTrack::Splice(time::Duration current_offset, time::Duration splice_to) {

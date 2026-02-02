@@ -49,9 +49,9 @@ void DragLocationAction::Update() {
   current_position = pointer.PositionWithinRootMachine();
 
   int n = locations.size();
-  ObjectWidget* widgets[n];
+  Toy* widgets[n];
   for (int i = 0; i < n; ++i) {
-    widgets[i] = &locations[i]->WidgetForObject();
+    widgets[i] = &locations[i]->ToyForObject();
   }
   Rect location_bounds[n];
   for (int i = 0; i < n; ++i) {
@@ -59,7 +59,7 @@ void DragLocationAction::Update() {
   }
   SkMatrix location_transform[n];
   for (int i = 0; i < n; ++i) {
-    float scale = locations[i]->object_widget->GetBaseScale();
+    float scale = locations[i]->toy->GetBaseScale();
     location_transform[i] =
         SkMatrix::Scale(scale, scale)
             .postTranslate(current_position.x, current_position.y)
@@ -133,15 +133,15 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
         Location::ToMatrix(location->position, location->scale, location->LocalAnchor());
     target_matrix.postConcat(fix);
 
-    auto& object_widget = location->WidgetForObject();
-    object_widget.local_to_parent.postConcat(SkM44(fix));
+    auto& toy = location->ToyForObject();
+    toy.local_to_parent.postConcat(SkM44(fix));
     {  // Transform velocities
       fix.mapVector(location->position_vel);
       fix.mapRadius(location->scale_vel);
     }
 
     location->parent = widget.get();
-    location->local_anchor = pointer.PositionWithin(object_widget);
+    location->local_anchor = pointer.PositionWithin(toy);
     location->WakeAnimation();
   }
   widget->ValidateHierarchy();

@@ -39,10 +39,10 @@ extern unique_ptr<RootWidget> root_widget;
 // It can be used either as a mixin or as a member.
 // TODO: introduce `WidgetMaker` interface, so that widgets can be created for non-Objects
 // TODO: delete widgets after some time
-struct WidgetStore {
-  std::map<WeakPtr<Object>, std::unique_ptr<ObjectWidget>> container;
+struct ToyStore {
+  std::map<WeakPtr<Object>, std::unique_ptr<Toy>> container;
 
-  ObjectWidget* FindOrNull(Object& object) const {
+  Toy* FindOrNull(Object& object) const {
     auto weak = object.AcquireWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {
@@ -51,11 +51,11 @@ struct WidgetStore {
     return it->second.get();
   }
 
-  ObjectWidget& FindOrMake(Object& object, Widget* parent) {
+  Toy& FindOrMake(Object& object, Widget* parent) {
     auto weak = object.AcquireWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {
-      auto widget = object.MakeWidget(parent, object);
+      auto widget = object.MakeToy(parent, object);
       it = container.emplace(std::move(weak), std::move(widget)).first;
     } else {
       if (it->second->parent == nullptr) {
@@ -93,7 +93,7 @@ struct RootWidget final : Widget, DropTarget {
 
   void InitToolbar();
 
-  struct WidgetStore widgets;
+  struct ToyStore toys;
   std::vector<Action*> active_actions;
 
   std::string_view Name() const override { return "RootWidget"; }

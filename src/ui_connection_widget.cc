@@ -69,7 +69,7 @@ Location* ConnectionWidget::EndLocation() const {
 }
 
 ConnectionWidget::ConnectionWidget(Widget* parent, ReferenceCounted& rc, Argument& arg)
-    : ObjectWidget(parent), start_weak(rc.AcquireWeakPtr(), &arg) {
+    : Toy(parent), start_weak(rc.AcquireWeakPtr(), &arg) {
   if (auto locked = start_weak.Lock()) {
     if (auto* arg = locked.Get()) {
       if (auto* obj = locked.Owner<Object>()) {
@@ -101,7 +101,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
   Location& from = *from_ptr;
 
   if (style == Argument::Style::Spotlight) {
-    auto target_bounds = from.WidgetForObject().CoarseBounds();
+    auto target_bounds = from.ToyForObject().CoarseBounds();
     Vec2 target = from.position;  //  + target_bounds.Center();
     float radius = target_bounds.rect.Hypotenuse() / 2;
 
@@ -218,7 +218,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     root_machine->NearbyCandidates(
         from, *arg, autoconnect_radius * 2 + 10_cm,
         [&](Location& candidate, Vec<Vec2AndDir>& to_points) {
-          auto m = TransformBetween(candidate.WidgetForObject(), *root_machine);
+          auto m = TransformBetween(candidate.ToyForObject(), *root_machine);
           for (auto& to : to_points) {
             to.pos = m.mapPoint(to.pos);
           }
@@ -252,8 +252,8 @@ void ConnectionWidget::FromMoved() {
   if (state) {
     if (state->stabilized && !state->stabilized_end.has_value()) {
       auto& object = *arg.Owner<Object>();
-      auto& object_widget = *WidgetStore().FindOrNull(object);
-      auto pos_dir = object_widget.ArgStart(*arg, root_machine.get());
+      auto& toy = *ToyStore().FindOrNull(object);
+      auto pos_dir = toy.ArgStart(*arg, root_machine.get());
       state->stabilized_start = pos_dir.pos;
       state->sections.front().pos = pos_dir.pos;
       state->sections.back().pos = pos_dir.pos;
@@ -267,22 +267,22 @@ void ConnectionWidget::FromMoved() {
 // Helper for methods of ConnectionWidget that need to access the start/end of the connection.
 // It performs the locking of weak pointers and locates the widgets of connected objects.
 struct ConnectionWidgetLocker {
-  WidgetStore& widget_store;
+  ToyStore& toy_store;
 
   NestedPtr<Argument> start_arg;
-  ObjectWidget* start_widget;
+  Toy* start_widget;
 
   NestedPtr<Part> end_part;
-  ObjectWidget* end_widget;
+  Toy* end_widget;
   SkMatrix end_transform;
 
   // Computing everything in initializer avoids zero-initialization
   ConnectionWidgetLocker(ConnectionWidget& w)
-      : widget_store(w.WidgetStore()),
+      : toy_store(w.ToyStore()),
         start_arg(w.start_weak.Lock()),
-        start_widget(StartObj() ? widget_store.FindOrNull(*StartObj()) : nullptr),
+        start_widget(StartObj() ? toy_store.FindOrNull(*StartObj()) : nullptr),
         end_part(StartObj() ? start_arg->Find(*StartObj()) : NestedPtr<Part>()),
-        end_widget(EndObj() ? widget_store.FindOrNull(*EndObj()) : nullptr),
+        end_widget(EndObj() ? toy_store.FindOrNull(*EndObj()) : nullptr),
         end_transform(end_widget ? TransformBetween(*end_widget, *root_machine) : SkMatrix()) {}
 
   Object* StartObj() const { return start_arg ? start_arg.Owner<Object>() : nullptr; }
@@ -432,7 +432,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     if (anim.prototype_alpha > 0) {
       if (!prototype_widget) {
         auto proto = a.start_arg->Prototype();
-        prototype_widget = proto->MakeWidget(this, *proto);
+        prototype_widget = proto->MakeToy(this, *proto);
       }
       phase |= prototype_widget->Tick(timer);
     }

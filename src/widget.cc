@@ -230,7 +230,7 @@ RootWidget& Widget::FindRootWidget() const {
   return *root;
 }
 
-WidgetStore& Widget::WidgetStore() const { return FindRootWidget().widgets; }
+ToyStore& Widget::ToyStore() const { return FindRootWidget().toys; }
 
 std::unique_ptr<Action> Widget::FindAction(Pointer& pointer, ActionTrigger btn) {
   if (btn == PointerButton::Right) {

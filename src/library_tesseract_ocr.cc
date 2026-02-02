@@ -1047,7 +1047,7 @@ struct TesseractWidget : Object::WidgetBase, ui::PointerMoveCallback {
               return;
           }
         }
-        tesseract->ForEachWidget([](ui::RootWidget&, ui::Widget& w) {
+        tesseract->ForEachToy([](ui::RootWidget&, ui::Widget& w) {
           w.WakeAnimation();
           w.RedrawThisFrame();
         });
@@ -1089,7 +1089,7 @@ const SkPath TesseractWidget::kEyeShape = PathFromSVG(
     "2.3929 9.8245 3.2222 7.6101 4.6757 5.3956 5.4623 3.5744 5.8813 1.2659 6.0694-2.5645 "
     "6.001-4.5481 5.7701-7.3867 5.1033-9.3703 4.0431-11.5847 2.4955-13.0382 1.2985-13.3888.9308Z");
 
-std::unique_ptr<ObjectWidget> TesseractOCR::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> TesseractOCR::MakeToy(ui::Widget* parent, ReferenceCounted&) {
   return std::make_unique<TesseractWidget>(parent, *this);
 }
 
@@ -1157,7 +1157,7 @@ void TesseractOCR::Run::OnRun(std::unique_ptr<RunTask>&) {
         self->status_rect = Rect(left, bottom, right, top);
         self->status_progress_ratio = etext->progress / 100.0f;
         self->status_mutex.unlock();
-        self->WakeWidgetsAnimation();
+        self->WakeToys();
       }
       return false;
     };
@@ -1205,7 +1205,7 @@ void TesseractOCR::Run::OnRun(std::unique_ptr<RunTask>&) {
     text_obj->SetText(utf8_text);
   }
 
-  t.WakeWidgetsAnimation();
+  t.WakeToys();
 }
 
 void TesseractOCR::SerializeState(ObjectSerializer& writer) const {
@@ -1250,9 +1250,9 @@ std::string TesseractOCR::GetText() const {
 void TesseractOCR::SetText(std::string_view text) {
   auto lock = std::lock_guard(mutex);
   ocr_text = text;
-  WakeWidgetsAnimation();
+  WakeToys();
 }
 
-void TesseractOCR::Updated(WeakPtr<Object>& updated) { WakeWidgetsAnimation(); }
+void TesseractOCR::Updated(WeakPtr<Object>& updated) { WakeToys(); }
 
 }  // namespace automat::library

@@ -75,7 +75,7 @@ SkPath Location::Shape() const {
 
 void Location::FillChildren(Vec<Widget*>& children) {
   if (object) {
-    children.push_back(&WidgetForObject());
+    children.push_back(&ToyForObject());
   }
 }
 
@@ -86,13 +86,13 @@ animation::Phase Location::Tick(time::Timer& timer) {
 
   phase |= animation::ExponentialApproach(0, timer.d, 0.1, transparency);
 
-  WidgetForObject();  // fills object_widget
+  ToyForObject();  // fills toy
 
-  if (object_widget) {
+  if (toy) {
     Vec2 local_pivot = LocalAnchor();
     Vec2 position_curr;
     float scale_curr;
-    FromMatrix(object_widget->local_to_parent.asM33(), local_pivot, position_curr, scale_curr);
+    FromMatrix(toy->local_to_parent.asM33(), local_pivot, position_curr, scale_curr);
 
     phase |= animation::LowLevelSpringTowards(scale, timer.d, kScaleSpringPeriod, kSpringHalfTime,
                                               scale_curr, scale_vel);
@@ -101,7 +101,7 @@ animation::Phase Location::Tick(time::Timer& timer) {
     phase |= animation::LowLevelSineTowards(position.y, timer.d, kPositionSpringPeriod,
                                             position_curr.y, position_vel.y);
 
-    object_widget->local_to_parent = SkM44(ToMatrix(position_curr, scale_curr, local_pivot));
+    toy->local_to_parent = SkM44(ToMatrix(position_curr, scale_curr, local_pivot));
   }
 
   // Connection widgets rely on position, scale & transparency so make sure they're updated.
@@ -118,12 +118,12 @@ animation::Phase Location::Tick(time::Timer& timer) {
 }
 
 void Location::Draw(SkCanvas& canvas) const {
-  if (object_widget == nullptr) {
+  if (toy == nullptr) {
     return;  // TODO: Draw a placeholder, we should support empty locations
   }
-  SkPath my_shape = object_widget->Shape();
+  SkPath my_shape = toy->Shape();
   Rect bounds = Rect(my_shape.getBounds());
-  object_widget->local_to_parent.asM33().mapRect(&bounds.sk);
+  toy->local_to_parent.asM33().mapRect(&bounds.sk);
 
   bool using_layer = false;
   if (transparency > 0.01) {
@@ -175,7 +175,7 @@ void Location::Draw(SkCanvas& canvas) const {
     canvas.translate(-offset_x, -offset_y + n_lines * line_height);
     n_lines += 1;
 
-    auto ctm = canvas.getLocalToDeviceAs3x3().preConcat(object_widget->local_to_parent.asM33());
+    auto ctm = canvas.getLocalToDeviceAs3x3().preConcat(toy->local_to_parent.asM33());
     auto my_shape_px = my_shape.makeTransform(ctm);
     Rect bounds_px = my_shape_px.getBounds();
     float blur_radius = ctm.mapRadius(7_mm);
@@ -257,17 +257,17 @@ std::unique_ptr<Action> Location::FindAction(ui::Pointer& p, ui::ActionTrigger b
 
 void Location::SetNumber(double number) { SetText(f("{:g}", number)); }
 
-Vec2AndDir Location::ArgStart(Argument& arg) { return WidgetForObject().ArgStart(arg, parent); }
+Vec2AndDir Location::ArgStart(Argument& arg) { return ToyForObject().ArgStart(arg, parent); }
 
-ObjectWidget& Location::WidgetForObject() {
-  if (!object_widget) {
+Toy& Location::ToyForObject() {
+  if (!toy) {
     if (object) {
-      object_widget = &WidgetStore().FindOrMake(*object, this);
-      scale = object_widget->GetBaseScale();
-      object_widget->local_to_parent = SkM44(ToMatrix(position, scale, LocalAnchor()));
+      toy = &ToyStore().FindOrMake(*object, this);
+      scale = toy->GetBaseScale();
+      toy->local_to_parent = SkM44(ToMatrix(position, scale, LocalAnchor()));
     }
   }
-  return *object_widget;
+  return *toy;
 }
 
 Location::~Location() {
@@ -313,8 +313,8 @@ void PositionBelow(Location& origin, Location& below) {
   }
 }
 
-Vec2 PositionAhead(Location& origin, const Argument& arg, const ObjectWidget& target_widget) {
-  auto& origin_widget = origin.WidgetForObject();
+Vec2 PositionAhead(Location& origin, const Argument& arg, const Toy& target_widget) {
+  auto& origin_widget = origin.ToyForObject();
   auto origin_shape = origin_widget.Shape();           // origin's local coordinates
   Vec2AndDir arg_start = origin_widget.ArgStart(arg);  // origin's local coordinates
   Vec2 drop_point;
@@ -355,13 +355,13 @@ Vec2 PositionAhead(Location& origin, const Argument& arg, const ObjectWidget& ta
 }
 
 void PositionAhead(Location& origin, const Argument& arg, Location& target) {
-  target.position = PositionAhead(origin, arg, target.WidgetForObject());
+  target.position = PositionAhead(origin, arg, target.ToyForObject());
 }
 
 void AnimateGrowFrom(Location& source, Location& grown) {
   grown.transparency = 1;
-  grown.WidgetForObject().local_to_parent =
-      SkM44(source.WidgetForObject().local_to_parent).preScale(0.5, 0.5);
+  grown.ToyForObject().local_to_parent =
+      SkM44(source.ToyForObject().local_to_parent).preScale(0.5, 0.5);
   grown.WakeAnimation();
 }
 
@@ -373,7 +373,7 @@ void Location::PreDraw(SkCanvas& canvas) const {
   constexpr float kMinElevation = 1_mm;
   constexpr float kElevationRange = 8_mm;
 
-  if (!object_widget->pack_frame_texture_bounds) {
+  if (!toy->pack_frame_texture_bounds) {
     return;  // no shadow for non-cached widgets
   }
   auto& root_widget = FindRootWidget();
@@ -413,8 +413,8 @@ void Location::PreDraw(SkCanvas& canvas) const {
                                       nullptr))));
   shadow_paint.setAlphaf(1.f - transparency);
   canvas.saveLayer(nullptr, &shadow_paint);
-  canvas.concat(object_widget->local_to_parent);
-  canvas.drawDrawable(object_widget->sk_drawable.get());
+  canvas.concat(toy->local_to_parent);
+  canvas.drawDrawable(toy->sk_drawable.get());
   canvas.restore();
 }
 
@@ -422,7 +422,7 @@ void Location::UpdateAutoconnectArgs() {
   if (object == nullptr) {
     return;
   }
-  auto& object_widget = WidgetForObject();
+  auto& toy = ToyForObject();
   auto parent_machine = root_machine.get();
   object->Args([&](Argument& arg) {
     float autoconnect_radius = arg.AutoconnectRadius();
@@ -430,7 +430,7 @@ void Location::UpdateAutoconnectArgs() {
       return;
     }
 
-    auto start = object_widget.ArgStart(arg, parent_machine);
+    auto start = toy.ArgStart(arg, parent_machine);
 
     // Find the current distance & target of this connection
     float old_dist2 = HUGE_VALF;
@@ -438,9 +438,9 @@ void Location::UpdateAutoconnectArgs() {
     if (auto end = arg.Find(*object)) {
       Vec<Vec2AndDir> to_positions;
       auto* end_loc = end.Owner<Object>()->MyLocation();
-      auto& to_object_widget = end_loc->WidgetForObject();
-      to_object_widget.ConnectionPositions(to_positions);
-      auto other_up = TransformBetween(to_object_widget, *parent_machine);
+      auto& end_toy = end_loc->ToyForObject();
+      end_toy.ConnectionPositions(to_positions);
+      auto other_up = TransformBetween(end_toy, *parent_machine);
       for (auto& to : to_positions) {
         Vec2 to_pos = other_up.mapPoint(to.pos);
         float dist2 = LengthSquared(start.pos - to_pos);
@@ -456,7 +456,7 @@ void Location::UpdateAutoconnectArgs() {
     Location* new_target = nullptr;
     parent_machine->NearbyCandidates(
         *this, arg, autoconnect_radius, [&](Location& other, Vec<Vec2AndDir>& to_points) {
-          auto other_up = TransformBetween(other.WidgetForObject(), *parent_machine);
+          auto other_up = TransformBetween(other.ToyForObject(), *parent_machine);
           for (auto& to : to_points) {
             Vec2 to_pos = other_up.mapPoint(to.pos);
             float dist2 = LengthSquared(start.pos - to_pos);
@@ -479,9 +479,9 @@ void Location::UpdateAutoconnectArgs() {
 
   // Now check other locatinos & their arguments that might want to connect to this location
 
-  auto here_up = TransformBetween(object_widget, *parent_machine);
+  auto here_up = TransformBetween(toy, *parent_machine);
   Vec<Vec2AndDir> to_points;
-  object_widget.ConnectionPositions(to_points);
+  toy.ConnectionPositions(to_points);
   for (auto& to : to_points) {
     to.pos = here_up.mapPoint(to.pos);
   }
@@ -490,7 +490,7 @@ void Location::UpdateAutoconnectArgs() {
     if (other.get() == this) {
       continue;
     }
-    auto& other_widget = other->WidgetForObject();
+    auto& other_widget = other->ToyForObject();
     auto other_up = TransformBetween(other_widget, *parent_machine);
     other->object->Args([&](Argument& arg) {
       float autoconnect_radius = arg.AutoconnectRadius();
@@ -515,9 +515,9 @@ void Location::UpdateAutoconnectArgs() {
       if (auto end = arg.Find(*other->object)) {
         Vec<Vec2AndDir> to_positions;
         auto* end_loc = end.Owner<Object>()->MyLocation();
-        auto& to_object_widget = end_loc->WidgetForObject();
-        to_object_widget.ConnectionPositions(to_positions);
-        auto to_up = TransformBetween(to_object_widget, *parent_machine);
+        auto& end_toy = end_loc->ToyForObject();
+        end_toy.ConnectionPositions(to_positions);
+        auto to_up = TransformBetween(end_toy, *parent_machine);
         for (auto& to : to_positions) {
           Vec2 to_pos = to_up.mapPoint(to.pos);
           float dist2 = LengthSquared(start.pos - to_pos);
@@ -554,7 +554,7 @@ void Location::UpdateAutoconnectArgs() {
 Ptr<Object> Location::InsertHere(Ptr<Object>&& object) {
   this->object.Swap(object);
   this->object->Relocate(this);
-  object_widget = nullptr;
+  toy = nullptr;
   return object;
 }
 Ptr<Object> Location::Create(const Object& prototype) { return InsertHere(prototype.Clone()); }
@@ -563,26 +563,26 @@ Vec2 Location::LocalAnchor() const {
   if (local_anchor.has_value()) {
     return local_anchor.value();
   }
-  if (object_widget) {
-    return object_widget->LocalAnchor();
+  if (toy) {
+    return toy->LocalAnchor();
   }
   return Vec2();
 }
 
 void Location::Iconify() {
   automat::Iconify(*object);
-  if (object_widget) {
-    scale = object_widget->GetBaseScale();
-    object_widget->WakeAnimation();
+  if (toy) {
+    scale = toy->GetBaseScale();
+    toy->WakeAnimation();
   }
   WakeAnimation();
 }
 
 void Location::Deiconify() {
   automat::Deiconify(*object);
-  if (object_widget) {
-    scale = object_widget->GetBaseScale();
-    object_widget->WakeAnimation();
+  if (toy) {
+    scale = toy->GetBaseScale();
+    toy->WakeAnimation();
   }
   WakeAnimation();
 }

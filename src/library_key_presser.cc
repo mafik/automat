@@ -226,7 +226,7 @@ KeyPresser::KeyPresser(ui::AnsiKey key) : key(key) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }
 Ptr<Object> KeyPresser::Clone() const { return MAKE_PTR(KeyPresser, key); }
 
-std::unique_ptr<ObjectWidget> KeyPresser::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> KeyPresser::MakeToy(ui::Widget* parent, ReferenceCounted&) {
   auto w = std::make_unique<KeyPresserWidget>(parent, *this);
   w->shortcut_button->SetLabel(ToStr(key));
   return std::move(w);
@@ -234,7 +234,7 @@ std::unique_ptr<ObjectWidget> KeyPresser::MakeWidget(ui::Widget* parent, Referen
 
 void KeyPresser::SetKey(ui::AnsiKey k) {
   key = k;
-  ForEachWidget([k](ui::RootWidget&, ui::Widget& widget) {
+  ForEachToy([k](ui::RootWidget&, ui::Widget& widget) {
     static_cast<KeyPresserWidget&>(widget).shortcut_button->SetLabel(ToStr(k));
   });
 }
@@ -247,7 +247,7 @@ void KeyPresser::State::OnTurnOn() {
   }
   kp.key_pressed = true;
   SendKeyEvent(kp.key, true);
-  kp.WakeWidgetsAnimation();
+  kp.WakeToys();
 }
 
 void KeyPresser::State::OnTurnOff() {
@@ -258,7 +258,7 @@ void KeyPresser::State::OnTurnOff() {
   }
   kp.key_pressed = false;
   SendKeyEvent(kp.key, false);
-  kp.WakeWidgetsAnimation();
+  kp.WakeToys();
 }
 
 void KeyPresser::State::OnSync() { GetKeyPresser().monitoring.TurnOn(); }
@@ -295,14 +295,14 @@ void KeyPresser::KeyloggerKeyDown(ui::Key key_down) {
   if (this->key != key_down.physical) return;
   key_pressed = true;
   state.NotifyTurnedOn();
-  WakeWidgetsAnimation();
+  WakeToys();
 }
 
 void KeyPresser::KeyloggerKeyUp(ui::Key key_up) {
   if (this->key != key_up.physical) return;
   key_pressed = false;
   state.NotifyTurnedOff();
-  WakeWidgetsAnimation();
+  WakeToys();
 }
 
 void KeyPresser::KeyloggerOnRelease(const ui::Keylogging&) { keylogging = nullptr; }

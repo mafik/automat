@@ -147,12 +147,12 @@ struct GearWidget : Object::WidgetBase {
 
   animation::Phase Tick(time::Timer& t) override {
     bounds = Shape().getBounds();
-    auto& widget_store = WidgetStore();
+    auto& toy_store = ToyStore();
     auto gear = LockObject<Gear>();
     belts.clear();
 
     auto SetBeltEnd = [&](Belt& belt) {
-      if (auto owner_widget = widget_store.FindOrNull(*belt.object_unsafe)) {
+      if (auto owner_widget = toy_store.FindOrNull(*belt.object_unsafe)) {
         belt.end_shape = owner_widget->PartShape(belt.syncable_unsafe);
         belt.end_shape.transform(TransformBetween(*owner_widget, *this));
         auto end_bounds = belt.end_shape.getBounds();
@@ -266,7 +266,7 @@ struct GearWidget : Object::WidgetBase {
   Optional<Rect> TextureBounds() const override { return bounds; }
 };
 
-std::unique_ptr<ObjectWidget> Gear::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> Gear::MakeToy(ui::Widget* parent, ReferenceCounted&) {
   return std::make_unique<GearWidget>(parent, *this);
 }
 

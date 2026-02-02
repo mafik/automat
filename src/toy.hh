@@ -15,7 +15,7 @@ namespace automat {
 struct Object;
 
 // Widget interface for objects - defines the contract for widgets that represent objects.
-struct ObjectWidget : ui::Widget {
+struct Toy : ui::Widget {
   using ui::Widget::Widget;
 
   // Get the default scale that this object would like to have.
@@ -38,15 +38,15 @@ struct ObjectWidget : ui::Widget {
 
 // Mixin class for things that can create and manage widgets (Objects & some Parts).
 // Provides functionality for iterating over widgets and waking their animations.
-struct WidgetSource : virtual Part {
+struct ToyMaker : virtual Part {
   // Produces a new Widget that can display this Part.
   // The `parent` argument allows the Widget to be attached at the correct position in the Widget
   // tree.
-  // If constructed ObjectWidget needs to access this Part (almost always yes), then it should do
+  // If constructed Toy needs to access this Part (almost always yes), then it should do
   // so through NestedWeakPtr, using the 2nd argument as the reference counter.
-  virtual std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, ReferenceCounted&) = 0;
-  void ForEachWidget(std::function<void(ui::RootWidget&, ui::Widget&)> cb);
-  void WakeWidgetsAnimation();
+  virtual std::unique_ptr<Toy> MakeToy(ui::Widget* parent, ReferenceCounted&) = 0;
+  void ForEachToy(std::function<void(ui::RootWidget&, Toy&)> cb);
+  void WakeToys();
 };
 
 }  // namespace automat

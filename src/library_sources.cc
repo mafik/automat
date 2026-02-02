@@ -95,7 +95,7 @@ struct SourcesWidget : Object::WidgetBase {
   }
 };
 
-std::unique_ptr<ObjectWidget> Sources::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> Sources::MakeToy(ui::Widget* parent, ReferenceCounted&) {
   return std::make_unique<SourcesWidget>(parent, *this);
 }
 

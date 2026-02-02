@@ -49,7 +49,7 @@ struct ShowRegisterOption : TextOption {
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto assembler = weak.lock()) {
       assembler->reg_objects_idx[register_index] = MAKE_PTR(Register, weak, register_index);
-      assembler->WakeWidgetsAnimation();
+      assembler->WakeToys();
     }
     return nullptr;
   }
@@ -69,7 +69,7 @@ struct HideRegisterOption : TextOption {
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto assembler = weak.lock()) {
       assembler->reg_objects_idx[register_index].reset();
-      assembler->WakeWidgetsAnimation();
+      assembler->WakeToys();
     }
     return nullptr;
   }
@@ -164,11 +164,11 @@ static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now
     for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
       if (old_regs[i] != assembler.state.regs[i]) {
         if (auto reg = assembler.reg_objects_idx[i].lock()) {
-          reg->WakeWidgetsAnimation();
+          reg->WakeToys();
         }
       }
     }
-    assembler.WakeWidgetsAnimation();
+    assembler.WakeToys();
     assembler.last_state_refresh = now;
   }
   if (assembler.running.IsRunning()) {
@@ -319,12 +319,12 @@ Ptr<Location> Assembler::Extract(Object& descendant) {
     if (reg != &descendant) continue;
     auto loc = MAKE_PTR(Location, root_machine.get(), root_location);
     loc->InsertHere(reg_objects_idx[i].borrow());
-    auto* reg_widget_untyped = loc->WidgetStore().FindOrNull(descendant);
+    auto* reg_widget_untyped = loc->ToyStore().FindOrNull(descendant);
     if (reg_widget_untyped) {
       auto* reg_widget = static_cast<RegisterWidget*>(reg_widget_untyped);
       if (auto* assembler_widget = dynamic_cast<AssemblerWidget*>(reg_widget->parent.get())) {
         assembler_widget->reg_widgets.Erase(reg_widget);
-        loc->object_widget = reg_widget_untyped;
+        loc->toy = reg_widget_untyped;
         reg_widget->parent = loc->AcquireTrackedPtr();
       } else {
         FATAL << "RegisterWidget's parent is not an AssemblerWidget";
@@ -332,7 +332,7 @@ Ptr<Location> Assembler::Extract(Object& descendant) {
     }
 
     audio::Play(embedded::assets_SFX_toolbar_pick_wav);
-    WakeWidgetsAnimation();
+    WakeToys();
     return loc;
   }
   return nullptr;
@@ -435,9 +435,9 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
     // Now create a widget if needed.
     if (assembler_reg) {
       if (reg_widgets_idx[i] != nullptr) continue;
-      auto* register_widget = WidgetStore().FindOrNull(*assembler_reg);
+      auto* register_widget = ToyStore().FindOrNull(*assembler_reg);
       if (register_widget == nullptr) {
-        register_widget = &WidgetStore().FindOrMake(*assembler_reg, this);
+        register_widget = &ToyStore().FindOrMake(*assembler_reg, this);
         register_widget->local_to_parent = SkM44::Translate(0, 10_cm);
       }
       register_widget->ValidateHierarchy();
@@ -598,9 +598,9 @@ bool AssemblerWidget::CanDrop(Location& loc) const {
 void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
   if (auto reg = loc->As<Register>()) {
     if (auto my_assembler = LockObject<Assembler>()) {
-      loc->object->ForEachWidget([&](ui::RootWidget& root_widget, ui::Widget& reg_widget_generic) {
+      loc->object->ForEachToy([&](ui::RootWidget& root_widget, ui::Widget& reg_widget_generic) {
         RegisterWidget& reg_widget = static_cast<RegisterWidget&>(reg_widget_generic);
-        if (auto asm_widget_generic = root_widget.widgets.FindOrNull(*my_assembler)) {
+        if (auto asm_widget_generic = root_widget.toys.FindOrNull(*my_assembler)) {
           auto* asm_widget = static_cast<AssemblerWidget*>(asm_widget_generic);
           reg_widget.local_to_parent = SkM44(TransformBetween(reg_widget, *asm_widget));
           reg_widget.parent = asm_widget->AcquireTrackedPtr();
@@ -609,7 +609,7 @@ void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
         }
       });
       my_assembler->reg_objects_idx[reg->register_index] = loc->Take().Cast<Register>();
-      my_assembler->WakeWidgetsAnimation();
+      my_assembler->WakeToys();
     }
   }
 }
@@ -819,7 +819,7 @@ void Register::SetText(std::string_view text) {
     ReportError(status.ToStr());
     return;
   }
-  WakeWidgetsAnimation();
+  WakeToys();
 }
 
 void Register::SerializeState(ObjectSerializer& writer) const {

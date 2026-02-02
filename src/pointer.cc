@@ -306,7 +306,7 @@ void Pointer::Logging::Release() {
 
 animation::Phase PointerWidget::Tick(time::Timer& timer) {
   struct Highlighted {
-    ObjectWidget* widget;
+    Toy* widget;
     Part* part;
 
     bool operator<(const Highlighted& other) const {
@@ -325,7 +325,7 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
   };
 
   std::vector<Highlighted> highlight_target;
-  auto HighlightCheck = [&](Object& obj, ObjectWidget& widget, Part& part) {
+  auto HighlightCheck = [&](Object& obj, Toy& widget, Part& part) {
     for (auto& action : pointer.actions) {
       if (action == nullptr) continue;
       if (action->Highlight(obj, part)) {
@@ -337,8 +337,8 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
   // Note: this could only iterate over visible locations
   for (auto& loc : root_machine->locations) {
     auto& obj = *loc->object;
-    HighlightCheck(obj, *loc->object_widget, obj);
-    obj.Parts([&](Part& part) { HighlightCheck(obj, *loc->object_widget, part); });
+    HighlightCheck(obj, *loc->toy, obj);
+    obj.Parts([&](Part& part) { HighlightCheck(obj, *loc->toy, part); });
   }
 
   sort_heap(highlight_target.begin(), highlight_target.end());
@@ -352,7 +352,7 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
 
   auto phase = animation::Finished;
 
-  auto HighlightTick = [&](ObjectWidget* obj, Part* part, float current, float target) {
+  auto HighlightTick = [&](Toy* obj, Part* part, float current, float target) {
     phase |= animation::ExponentialApproach(target, timer.d, 0.1, current);
     if (current > 0.01f) {
       highlight_next.emplace_back(obj, part, current);

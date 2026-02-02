@@ -39,7 +39,7 @@ Location* Machine::LocationAtPoint(Vec2 point) {
     Vec2 local_point = (point - loc->position) / loc->scale;
     SkPath shape;
     if (loc->object) {
-      shape = loc->WidgetForObject().Shape();
+      shape = loc->ToyForObject().Shape();
     }
     if (shape.contains(local_point.x, local_point.y)) {
       return loc.get();
@@ -51,7 +51,7 @@ Location* Machine::LocationAtPoint(Vec2 point) {
 void* Machine::Nearby(Vec2 start, float radius, std::function<void*(Location&)> callback) {
   float radius2 = radius * radius;
   for (auto& loc : locations) {
-    auto dist2 = (loc->object ? loc->WidgetForObject().CoarseBounds().rect : Rect{})
+    auto dist2 = (loc->object ? loc->ToyForObject().CoarseBounds().rect : Rect{})
                      .MoveBy(loc->position)
                      .DistanceSquared(start);
     if (dist2 > radius2) {
@@ -78,13 +78,13 @@ void Machine::NearbyCandidates(Location& here, const Argument& arg, float radius
           continue;
         }
         Vec<Vec2AndDir> to_points;
-        location->WidgetForObject().ConnectionPositions(to_points);
+        location->ToyForObject().ConnectionPositions(to_points);
         callback(*location, to_points);
       }
     }
   }
   // Query nearby objects in the machine
-  Vec2 center = here.WidgetForObject().ArgStart(arg, this).pos;
+  Vec2 center = here.ToyForObject().ArgStart(arg, this).pos;
   Nearby(center, radius, [&](Location& other) -> void* {
     if (&other == &here) {
       return nullptr;
@@ -93,7 +93,7 @@ void Machine::NearbyCandidates(Location& here, const Argument& arg, float radius
       return nullptr;
     }
     Vec<Vec2AndDir> to_points;
-    other.WidgetForObject().ConnectionPositions(to_points);
+    other.ToyForObject().ConnectionPositions(to_points);
     callback(other, to_points);
     return nullptr;
   });
@@ -269,7 +269,7 @@ void Machine::DropLocation(Ptr<Location>&& l) {
   l->parent_location = here;
   locations.insert(locations.begin(), std::move(l));
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
-  locations.front()->object->ForEachWidget(
+  locations.front()->object->ForEachToy(
       [](ui::RootWidget&, ui::Widget& w) { w.RedrawThisFrame(); });
 }
 

@@ -34,7 +34,7 @@ namespace automat::ui {
 
 struct Widget;
 struct RootWidget;
-struct WidgetStore;
+struct ToyStore;
 
 Str ToStr(Ptr<Widget> widget);
 
@@ -147,7 +147,7 @@ struct Widget : Trackable, OptionsProvider {
   bool rendering_to_screen = false;  // Whether the current render job is going to be presented.
 
   RootWidget& FindRootWidget() const;
-  WidgetStore& WidgetStore() const;
+  ToyStore& ToyStore() const;
 
   // Validates that the parent/children hierarchy is correctly maintained (in non-release builds).
   void ValidateHierarchy();
@@ -293,9 +293,6 @@ struct Widget : Trackable, OptionsProvider {
   };
 
   ParentsView Parents() const { return ParentsView{const_cast<Widget*>(this)}; }
-
-  // Methods related to Widgets that represent Objects.
-  // TODO: Move them to a separate class (ObjectWidget)
 
   // Find the shape of this widget. If it's shape is empty, combine its children's shapes.
   SkPath GetShapeRecursive() const;

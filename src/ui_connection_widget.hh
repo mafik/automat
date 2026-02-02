@@ -37,7 +37,7 @@ struct DragConnectionAction : Action {
 // - Analytically-routed Cable: a cable that always follows the nicest path
 //
 // TODO: separate the state of these three modes better
-struct ConnectionWidget : ObjectWidget {
+struct ConnectionWidget : Toy {
   NestedWeakPtr<Argument> start_weak;
 
   struct AnimationState {
@@ -69,7 +69,7 @@ struct ConnectionWidget : ObjectWidget {
   float transparency = 1;
   float alpha = 0;
   float length = 0;
-  mutable std::unique_ptr<ObjectWidget> prototype_widget;
+  mutable std::unique_ptr<Toy> prototype_widget;
 
   ConnectionWidget(Widget* parent, ReferenceCounted&, Argument&);
 

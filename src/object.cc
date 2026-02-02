@@ -128,7 +128,7 @@ struct MoveLocationOption : TextOption {
       if (auto container = container_object.AsContainer()) {
         auto& root_widget = location->FindRootWidget();
         if (auto extracted = container->Extract(*object)) {
-          extracted->parent = location->object_widget->AcquireTrackedPtr();
+          extracted->parent = location->toy->AcquireTrackedPtr();
           return std::make_unique<DragLocationAction>(pointer, std::move(extracted));
         } else {
           LOG << "Unable to extract " << object->Name() << " from " << container_object.Name()
@@ -141,7 +141,7 @@ struct MoveLocationOption : TextOption {
     }
     auto* machine = Closest<Machine>(*location);
     if (machine && location->object) {
-      machine->ForEachWidget([](ui::RootWidget&, ui::Widget& w) { w.RedrawThisFrame(); });
+      machine->ForEachToy([](ui::RootWidget&, ui::Widget& w) { w.RedrawThisFrame(); });
       return std::make_unique<DragLocationAction>(pointer, machine->ExtractStack(*location));
     }
     return nullptr;
@@ -239,12 +239,12 @@ struct SyncWidget : ui::Widget {
 
 struct SyncAction : Action {
   NestedWeakPtr<Syncable> weak;
-  TrackedPtr<ObjectWidget> object_widget;
+  TrackedPtr<Toy> toy;
   SyncWidget sync_widget;
-  SyncAction(ui::Pointer& pointer, NestedWeakPtr<Syncable> weak, ObjectWidget* widget)
+  SyncAction(ui::Pointer& pointer, NestedWeakPtr<Syncable> weak, Toy* toy)
       : Action(pointer),
         weak(weak),
-        object_widget(widget->AcquireTrackedPtr()),
+        toy(toy->AcquireTrackedPtr()),
         sync_widget(pointer.GetWidget()) {
     // TODO: invite objects to show their fields that satisfy the Syncable
     Update();
@@ -273,7 +273,7 @@ struct SyncAction : Action {
   }
   void Update() {
     if (auto syncable = weak.Lock()) {
-      auto* widget = pointer.root_widget.widgets.FindOrNull(*syncable.Owner<Object>());
+      auto* widget = pointer.root_widget.toys.FindOrNull(*syncable.Owner<Object>());
       auto start_local = widget->PartShape(syncable.Get()).getBounds().center();
       auto start = TransformBetween(*widget, *root_machine).mapPoint(start_local);
       sync_widget.start = start;
@@ -292,7 +292,7 @@ struct SyncOption : TextOption {
   std::unique_ptr<Option> Clone() const override { return std::make_unique<SyncOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto syncable = weak.Lock()) {
-      auto widget = pointer.root_widget.widgets.FindOrNull(*syncable.Owner<Object>());
+      auto widget = pointer.root_widget.toys.FindOrNull(*syncable.Owner<Object>());
       return std::make_unique<SyncAction>(pointer, syncable, widget);
     }
     return nullptr;
@@ -460,7 +460,7 @@ void Object::WidgetBase::ConnectionPositions(Vec<Vec2AndDir>& out_positions) con
   });
 }
 
-Vec2AndDir ObjectWidget::ArgStart(const Argument& arg, ui::Widget* coordinate_space) {
+Vec2AndDir Toy::ArgStart(const Argument& arg, ui::Widget* coordinate_space) {
   SkPath shape = PartShape(&const_cast<Argument&>(arg));
   Rect bounds = shape.getBounds();
   Vec2AndDir pos_dir{

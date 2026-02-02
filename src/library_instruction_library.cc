@@ -1099,7 +1099,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(ui::Pointer& p,
       audio::Play(embedded::assets_SFX_toolbar_pick_wav);
       contact_point -= kFrontInstructionRect.BottomLeftCorner();
       loc->position = p.PositionWithinRootMachine() - contact_point;
-      loc->WidgetForObject()
+      loc->ToyForObject()
           .local_to_parent.setTranslate(kFrontInstructionRect.left, kFrontInstructionRect.bottom)
           .postConcat(SkM44(ui::TransformBetween(*this, *root_machine)));
       return std::make_unique<DragLocationAction>(p, std::move(loc));

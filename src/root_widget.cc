@@ -547,9 +547,8 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
           return;
         }
         // Create a new widget.
-        auto object_widget = arg.MakeWidget(&root_widget, *loc->object);
-        root_widget.connection_widgets.emplace_back(
-            static_cast<ConnectionWidget*>(object_widget.release()));
+        auto toy = arg.MakeToy(&root_widget, *loc->object);
+        root_widget.connection_widgets.emplace_back(static_cast<ConnectionWidget*>(toy.release()));
       });
     }
   }

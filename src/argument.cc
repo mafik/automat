@@ -50,7 +50,7 @@ Object& Argument::ObjectOrMake(Object& start) const {
   return *l.object;
 }
 
-std::unique_ptr<ObjectWidget> Argument::MakeWidget(ui::Widget* parent, ReferenceCounted& rc) {
+std::unique_ptr<Toy> Argument::MakeToy(ui::Widget* parent, ReferenceCounted& rc) {
   return std::make_unique<ui::ConnectionWidget>(parent, rc, *this);
 }
 

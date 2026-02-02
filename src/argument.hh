@@ -20,7 +20,7 @@ enum class CableTexture {
 // - they may automatically create target objects using some prototype (Prototype)
 // - they control how the connection is stored (Connect / Disconnect / Find)
 // - finally - they control how a connection appears on screen - although this role
-//   may be moved into ObjectWidget in the future...
+//   may be moved into Toy in the future...
 //
 // In order to use an Argument, object needs to return it as one of its `Parts()`.
 // This however does NOT mean that the Argument must be a member of the object.
@@ -47,7 +47,7 @@ enum class CableTexture {
 //
 // TODO: think about pointer following
 // TODO: think about multiple targets
-struct Argument : WidgetSource {
+struct Argument : ToyMaker {
   enum class Style { Arrow, Cable, Spotlight, Invisible };
 
   virtual SkColor Tint() const { return "#404040"_color; }
@@ -99,7 +99,7 @@ struct Argument : WidgetSource {
   // This is the main way of creating new objects through this Argument's Prototype.
   Object& ObjectOrMake(Object& start) const;
 
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, ReferenceCounted&) override;
+  std::unique_ptr<Toy> MakeToy(ui::Widget* parent, ReferenceCounted&) override;
 };
 
 struct InlineArgument : Argument {

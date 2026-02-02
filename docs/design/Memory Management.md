@@ -34,7 +34,7 @@ ranging from duplicating all Object logic into two specialized variants (dynamic
 For now Object & ReferenceCounted are one - but this may (and should) change in
 the future!
 
-Many ObjectWidget's at the moment are constructed using two pointers:
+Many Toys at the moment are constructed using two pointers:
 
 - pointer to parent widget
 - pointer to object (derives from ReferenceCounted)

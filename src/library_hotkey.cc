@@ -319,7 +319,7 @@ void HotKey::Enabled::OnTurnOn() {
                                                        ERROR << status;
                                                      }
                                                    });
-  hk.WakeWidgetsAnimation();
+  hk.WakeToys();
   hk.power_button->WakeAnimation();
 }
 
@@ -347,7 +347,7 @@ void HotKey::Enabled::OnTurnOff() {
   auto& hk = GetHotKey();
   if (hk.hotkey) {
     hk.hotkey->Release();
-    hk.WakeWidgetsAnimation();
+    hk.WakeToys();
     hk.power_button->WakeAnimation();
   }
 }

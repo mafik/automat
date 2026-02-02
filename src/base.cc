@@ -56,20 +56,6 @@ void Machine::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
   }
 }
 
-Location* Machine::LocationAtPoint(Vec2 point) {
-  for (auto& loc : locations) {
-    Vec2 local_point = (point - loc->position) / loc->scale;
-    SkPath shape;
-    if (loc->object) {
-      shape = loc->ToyForObject().Shape();
-    }
-    if (shape.contains(local_point.x, local_point.y)) {
-      return loc.get();
-    }
-  }
-  return nullptr;
-}
-
 void* Machine::Nearby(Vec2 start, float radius, std::function<void*(Location&)> callback) {
   float radius2 = radius * radius;
   for (auto& loc : locations) {

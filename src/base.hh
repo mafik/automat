@@ -184,8 +184,6 @@ struct Machine : Object, ui::Widget, ui::DropTarget {
 
   void ConnectAtPoint(Object& start, Argument&, Vec2);
 
-  Location* LocationAtPoint(Vec2);
-
   // Iterate over all nearby objects (within the given radius around start point).
   //
   // Return non-null to stop iteration and return from Nearby.

@@ -11,7 +11,7 @@ struct FlipFlopIcon : PaintDrawable {
 };
 
 struct OnOff : Syncable {
-  FlipFlopIcon icon;
+  FlipFlopIcon icon;  // TODO: move this elsewhere
   PaintDrawable& Icon() override;
 
   virtual ~OnOff() { Unsync(); }

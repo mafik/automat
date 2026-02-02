@@ -6,6 +6,8 @@
 
 #include "action.hh"
 #include "math.hh"
+#include "object.hh"
+#include "ptr.hh"
 #include "str.hh"
 #include "time.hh"
 #include "vec.hh"
@@ -168,6 +170,19 @@ struct PointerWidget : Widget {
   Pointer& pointer;
   PointerWidget(Widget* parent, Pointer& pointer) : Widget(parent), pointer(pointer) {}
   SkPath Shape() const override { return SkPath(); }
+
+  struct HighlightState {
+    ObjectWidget* widget;
+    Part* part;
+    float highlight;
+  };
+
+  std::vector<HighlightState> highlight_current;
+  double time_seconds = 0;  // used to animate dashed lines
+
+  animation::Phase Tick(time::Timer&) override;
+  void Draw(SkCanvas& canvas) const override;
+
   void FillChildren(Vec<Widget*>& children) override {
     for (auto& action : pointer.actions) {
       if (action == nullptr) {

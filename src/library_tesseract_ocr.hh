@@ -10,9 +10,18 @@
 
 namespace automat::library {
 
-struct TesseractOCR : public Object, Runnable {
+struct TesseractOCR : public Object {
   mutable std::mutex mutex;
   Str ocr_text = "";
+
+  struct Run : Runnable {
+    void OnRun(std::unique_ptr<RunTask>&) override;
+
+    TesseractOCR& GetTesseractOCR() const {
+      return *reinterpret_cast<TesseractOCR*>(reinterpret_cast<intptr_t>(this) -
+                                              offsetof(TesseractOCR, run));
+    }
+  } run;
 
   // Guards access to the status variables
   std::mutex status_mutex;
@@ -46,7 +55,6 @@ struct TesseractOCR : public Object, Runnable {
 
   void Parts(const std::function<void(Part&)>&) override;
   void Updated(WeakPtr<Object>& updated) override;
-  void OnRun(std::unique_ptr<RunTask>&) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

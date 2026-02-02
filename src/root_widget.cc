@@ -547,8 +547,9 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
           return;
         }
         // Create a new widget.
-        root_widget.connection_widgets.emplace_back(new ui::ConnectionWidget(
-            &root_widget, NestedWeakPtr<Argument>(loc->object->AcquireWeakPtr(), &arg)));
+        auto object_widget = arg.MakeWidget(&root_widget, *loc->object);
+        root_widget.connection_widgets.emplace_back(
+            static_cast<ConnectionWidget*>(object_widget.release()));
       });
     }
   }

@@ -1,2 +1,5 @@
 [deprecated-declarations]
 src:*/build/*/PREFIX/include/*
+
+[invalid-offsetof]
+src:*/src/library_*

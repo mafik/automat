@@ -43,7 +43,7 @@ Rect FlipFlopRect() {
 
 FlipFlop::FlipFlop() {}
 
-FlipFlop::~FlipFlop() { Unsync(); }
+FlipFlop::~FlipFlop() { on_off.Unsync(); }
 
 string_view FlipFlop::Name() const { return "Flip-Flop"; }
 
@@ -55,17 +55,19 @@ Ptr<Object> FlipFlop::Clone() const {
 
 void FlipFlop::Flip::OnRun(std::unique_ptr<RunTask>& task) {
   ZoneScopedN("FlipFlop");
-  GetFlipFlop().Toggle();
+  GetFlipFlop().on_off.Toggle();
 }
 
-void FlipFlop::OnTurnOn() {
-  current_state = true;
-  WakeWidgetsAnimation();
+void FlipFlop::State::OnTurnOn() {
+  auto& flip_flop = GetFlipFlop();
+  flip_flop.current_state = true;
+  flip_flop.WakeWidgetsAnimation();
 }
 
-void FlipFlop::OnTurnOff() {
-  current_state = false;
-  WakeWidgetsAnimation();
+void FlipFlop::State::OnTurnOff() {
+  auto& flip_flop = GetFlipFlop();
+  flip_flop.current_state = false;
+  flip_flop.WakeWidgetsAnimation();
 }
 
 void FlipFlop::SerializeState(ObjectSerializer& writer) const {
@@ -120,7 +122,7 @@ struct FlipFlopButton : ui::ToggleButton {
     static_cast<YingYangButton*>(this->off.get())->on_click =
         static_cast<YingYangButton*>(this->on.get())->on_click = [this](ui::Pointer&) {
           if (auto flip_flop_ptr = this->flip_flop.Lock()) {
-            flip_flop_ptr->Toggle();
+            flip_flop_ptr->on_off.Toggle();
           }
         };
   }

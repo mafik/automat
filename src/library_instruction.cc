@@ -246,7 +246,12 @@ void Instruction::OnRun(std::unique_ptr<RunTask>& run_task) {
   assembler->RunMachineCode(this, std::move(run_task));
 }
 
-LongRunning* Instruction::AsLongRunning() { return FindAssembler(*this); }
+LongRunning* Instruction::AsLongRunning() {
+  if (auto* as = FindAssembler(*this)) {
+    return &as->running;
+  }
+  return nullptr;
+}
 
 static std::string AssemblyText(const mc::Inst& mc_inst) {
   // Nicely formatted assembly:

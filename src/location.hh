@@ -39,9 +39,6 @@ struct Location : ReferenceCounted, ui::Widget {
 
   // Animation state
   float transparency = 0;
-  float highlight = 0;
-  float highlight_target = 0;
-  double time_seconds = 0;  // used to animate dashed line
   animation::SpringV2<float> elevation;
 
   Optional<Vec2> local_anchor;  // used for animation & DragLocationAction

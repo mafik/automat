@@ -4,6 +4,9 @@
 
 namespace automat {
 
+struct Object;
+struct Part;
+
 namespace ui {
 struct Pointer;
 struct Widget;
@@ -27,6 +30,8 @@ struct Action {
   // Update is called when the pointer moves (although spurious calls are also possible). This
   // function may be called hundreds of times per second.
   virtual void Update() = 0;
+
+  virtual bool Highlight(Object&, Part&) const { return false; }
 
   virtual ui::Widget* Widget() { return nullptr; }
 };

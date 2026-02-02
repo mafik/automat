@@ -13,10 +13,8 @@
 #include <include/core/SkPoint3.h>
 #include <include/core/SkSurface.h>
 #include <include/core/SkTileMode.h>
-#include <include/effects/SkDashPathEffect.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/effects/SkImageFilters.h>
-#include <include/pathops/SkPathOps.h>
 #include <include/utils/SkShadowUtils.h>
 
 #include <cmath>
@@ -83,20 +81,6 @@ void Location::FillChildren(Vec<Widget*>& children) {
 
 Optional<Rect> Location::TextureBounds() const { return nullopt; }
 
-SkPath Outset(const SkPath& path, float distance) {
-  SkRRect rrect;
-  if (path.isRRect(&rrect)) {
-    rrect.outset(distance, distance);
-    return SkPath::RRect(rrect);
-  } else {
-    SkPath combined_path;
-    bool simplified = Simplify(path, &combined_path);
-    ArcLine arcline = ArcLine::MakeFromPath(simplified ? combined_path : path);
-    arcline.Outset(distance);
-    return arcline.ToPath();
-  }
-}
-
 animation::Phase Location::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
 
@@ -123,11 +107,6 @@ animation::Phase Location::Tick(time::Timer& timer) {
   // Connection widgets rely on position, scale & transparency so make sure they're updated.
   InvalidateConnectionWidgets(true, false);
 
-  phase |= animation::ExponentialApproach(highlight_target, timer.d, 0.1, highlight);
-  if (highlight > 0.01f) {
-    phase = animation::Animating;
-    time_seconds = timer.NowSeconds();
-  }
   {
     float target_elevation = IsDragged(*this) ? 1 : 0;
     phase |= elevation.SineTowards(target_elevation, timer.d, 0.2);
@@ -145,29 +124,6 @@ void Location::Draw(SkCanvas& canvas) const {
   SkPath my_shape = object_widget->Shape();
   Rect bounds = Rect(my_shape.getBounds());
   object_widget->local_to_parent.asM33().mapRect(&bounds.sk);
-
-  if (highlight > 0.01f) {  // Draw dashed highlight outline
-    SkPath outset_shape = Outset(my_shape, 2.5_mm * highlight);
-    outset_shape.setIsVolatile(true);
-    canvas.save();
-    canvas.concat(object_widget->local_to_parent);
-    static const SkPaint kHighlightPaint = [] {
-      SkPaint paint;
-      paint.setAntiAlias(true);
-      paint.setStyle(SkPaint::kStroke_Style);
-      paint.setStrokeWidth(0.0005);
-      paint.setColor(0xffa87347);
-      return paint;
-    }();
-    SkPaint dash_paint(kHighlightPaint);
-    dash_paint.setAlphaf(highlight);
-    float intervals[] = {0.0035, 0.0015};
-    float period_seconds = 200;
-    float phase = std::fmod(time_seconds, period_seconds) / period_seconds;
-    dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, phase));
-    canvas.drawPath(outset_shape, dash_paint);
-    canvas.restore();
-  }
 
   bool using_layer = false;
   if (transparency > 0.01) {

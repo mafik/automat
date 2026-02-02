@@ -7,7 +7,7 @@
 
 namespace automat::library {
 
-struct FlipFlop : Object, OnOff {
+struct FlipFlop : Object {
   bool current_state = false;
 
   struct Flip : Runnable {
@@ -19,11 +19,22 @@ struct FlipFlop : Object, OnOff {
     }
   } flip;
 
+  struct State : OnOff {
+    bool IsOn() const override { return GetFlipFlop().current_state; }
+    void OnTurnOn() override;
+    void OnTurnOff() override;
+
+    FlipFlop& GetFlipFlop() const {
+      return *reinterpret_cast<FlipFlop*>(reinterpret_cast<intptr_t>(this) -
+                                          offsetof(FlipFlop, on_off));
+    }
+  } on_off;
+
   FlipFlop();
   ~FlipFlop();
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  operator OnOff*() override { return this; }
+  operator OnOff*() override { return &on_off; }
 
   void SetKey(ui::AnsiKey);
 
@@ -33,11 +44,8 @@ struct FlipFlop : Object, OnOff {
   void Parts(const std::function<void(Part&)>& cb) override {
     Object::Parts(cb);
     cb(flip);
+    cb(on_off);
   }
-
-  bool IsOn() const override { return current_state; }
-  void OnTurnOn() override;
-  void OnTurnOff() override;
 
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, ReferenceCounted&) override;
 };

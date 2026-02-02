@@ -841,7 +841,7 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
     SkPath mouse_shape = krita::mouse::Shape();
 
     button = object.button;
-    presser_widget.is_on = object.IsOn();
+    presser_widget.is_on = object.state.IsOn();
 
     auto mask = MouseWidgetCommon::ButtonShape(button);
     Rect bounds = mask.getBounds();
@@ -864,7 +864,7 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
     {
       Ptr<MouseButtonPresser> object = LockObject<MouseButtonPresser>();
       button = object->button;
-      presser_widget.is_on = object->IsOn();
+      presser_widget.is_on = object->state.IsOn();
     }
     return MouseWidgetCommon::Tick(timer, *this, button, std::nullopt, &presser_widget);
   }
@@ -897,22 +897,25 @@ std::unique_ptr<ObjectWidget> MouseButtonPresser::MakeWidget(ui::Widget* parent,
   return std::make_unique<MouseButtonPresserWidget>(parent, *this);
 }
 
-void MouseButtonPresser::OnRun(std::unique_ptr<RunTask>& run_task) {
+void MouseButtonPresser::Click::OnRun(std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("MouseButtonPresser");
   audio::Play(embedded::assets_SFX_mouse_down_wav);
-  SendMouseButtonEvent(button, true);
-  SendMouseButtonEvent(button, false);
+  MouseButtonPresser& presser = GetMouseButtonPresser();
+  SendMouseButtonEvent(presser.button, true);
+  SendMouseButtonEvent(presser.button, false);
 }
 
-void MouseButtonPresser::OnTurnOn() {
+void MouseButtonPresser::State::OnTurnOn() {
   audio::Play(embedded::assets_SFX_mouse_down_wav);
-  SendMouseButtonEvent(button, true);
-  WakeWidgetsAnimation();
+  MouseButtonPresser& presser = GetMouseButtonPresser();
+  SendMouseButtonEvent(presser.button, true);
+  presser.WakeWidgetsAnimation();
 }
-void MouseButtonPresser::OnTurnOff() {
+void MouseButtonPresser::State::OnTurnOff() {
   audio::Play(embedded::assets_SFX_mouse_up_wav);
-  SendMouseButtonEvent(button, false);
-  WakeWidgetsAnimation();
+  MouseButtonPresser& presser = GetMouseButtonPresser();
+  SendMouseButtonEvent(presser.button, false);
+  presser.WakeWidgetsAnimation();
 }
 
 void MouseButtonPresser::SerializeState(ObjectSerializer& writer) const {
@@ -935,8 +938,8 @@ bool MouseButtonPresser::DeserializeKey(ObjectDeserializer& d, StrView key) {
 }
 
 MouseButtonPresser::~MouseButtonPresser() {
-  if (IsOn()) {
-    OnTurnOff();
+  if (state.IsOn()) {
+    state.OnTurnOff();
   }
 }
 

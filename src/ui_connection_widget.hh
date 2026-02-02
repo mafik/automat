@@ -6,6 +6,7 @@
 #include "audio.hh"
 #include "connector_optical.hh"
 #include "object.hh"
+#include "ptr.hh"
 #include "root_widget.hh"
 #include "widget.hh"
 
@@ -26,6 +27,7 @@ struct DragConnectionAction : Action {
   DragConnectionAction(Pointer&, ConnectionWidget&);
   ~DragConnectionAction() override;
   void Update() override;
+  bool Highlight(Object&, Part&) const override;
 };
 
 // ConnectionWidget can function in three different modes, depending on how the argument is set to
@@ -35,7 +37,7 @@ struct DragConnectionAction : Action {
 // - Analytically-routed Cable: a cable that always follows the nicest path
 //
 // TODO: separate the state of these three modes better
-struct ConnectionWidget : Widget {
+struct ConnectionWidget : ObjectWidget {
   NestedWeakPtr<Argument> start_weak;
 
   struct AnimationState {
@@ -69,7 +71,7 @@ struct ConnectionWidget : Widget {
   float length = 0;
   mutable std::unique_ptr<ObjectWidget> prototype_widget;
 
-  ConnectionWidget(Widget* parent, const NestedWeakPtr<Argument>& arg_weak);
+  ConnectionWidget(Widget* parent, ReferenceCounted&, Argument&);
 
   // Helper to get the Location and Argument from start_weak
   Location* StartLocation() const;  // TODO: remove
@@ -85,6 +87,12 @@ struct ConnectionWidget : Widget {
   Optional<Rect> TextureBounds() const override;
   Vec<Vec2> TextureAnchors() override;
   void FromMoved();
+
+  float GetBaseScale() const override { return 1.f; }
+
+  // Places where the connections to this widget may terminate.
+  // Local (metric) coordinates.
+  void ConnectionPositions(Vec<Vec2AndDir>&) const override {}
 };
 
 void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shape);

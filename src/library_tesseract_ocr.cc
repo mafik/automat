@@ -1099,25 +1099,26 @@ void TesseractOCR::Parts(const std::function<void(Part&)>& cb) {
   cb(next_arg);
 }
 
-void TesseractOCR::OnRun(std::unique_ptr<RunTask>&) {
+void TesseractOCR::Run::OnRun(std::unique_ptr<RunTask>&) {
   ZoneScopedN("TesseractOCR");
-  auto image_obj = image_arg.ObjectOrNull(*this);
-  auto text_obj = text_arg.ObjectOrNull(*this);
+  auto& t = GetTesseractOCR();
+  auto image_obj = image_arg.ObjectOrNull(t);
+  auto text_obj = text_arg.ObjectOrNull(t);
 
   if (!image_obj) {
-    ReportError("No image source connected");
+    t.ReportError("No image source connected");
     return;
   }
 
   auto image_provider = image_obj->AsImageProvider();
   if (!image_provider) {
-    ReportError("Connected object doesn't provide images");
+    t.ReportError("Connected object doesn't provide images");
     return;
   }
 
   auto image = image_provider->GetImage();
   if (!image) {
-    ReportError("No image available from source");
+    t.ReportError("No image available from source");
     return;
   }
 
@@ -1138,14 +1139,14 @@ void TesseractOCR::OnRun(std::unique_ptr<RunTask>&) {
       SkImageInfo::Make(width, height, kRGBA_8888_SkColorType, SkAlphaType::kUnpremul_SkAlphaType);
   pixmap.readPixels(pixInfo, pix_data, width * 4);
 
-  int ocr_left = x_min_ratio * width;
-  int ocr_top = (1 - y_max_ratio) * height;
-  int ocr_width = width * (x_max_ratio - x_min_ratio);
-  int ocr_height = height * (y_max_ratio - y_min_ratio);
+  int ocr_left = t.x_min_ratio * width;
+  int ocr_top = (1 - t.y_max_ratio) * height;
+  int ocr_width = width * (t.x_max_ratio - t.x_min_ratio);
+  int ocr_height = height * (t.y_max_ratio - t.y_min_ratio);
 
   if (ocr_width > 0 && ocr_height > 0) {
-    tesseract.SetImage(pix);
-    tesseract.SetRectangle(ocr_left, ocr_top, ocr_width, ocr_height);
+    t.tesseract.SetImage(pix);
+    t.tesseract.SetRectangle(ocr_left, ocr_top, ocr_width, ocr_height);
 
     tesseract::ETEXT_DESC monitor;
     monitor.cancel_this = this;
@@ -1161,34 +1162,34 @@ void TesseractOCR::OnRun(std::unique_ptr<RunTask>&) {
       return false;
     };
     {
-      auto lock = std::lock_guard(status_mutex);
-      status_rect = Rect(0, 0, 0, 0);
-      status_progress_ratio = 0.0f;
+      auto lock = std::lock_guard(t.status_mutex);
+      t.status_rect = Rect(0, 0, 0, 0);
+      t.status_progress_ratio = 0.0f;
     }
-    int recognize_status = tesseract.Recognize(&monitor);
+    int recognize_status = t.tesseract.Recognize(&monitor);
     if (recognize_status) {
       LOG << "Tesseract recognize failed: " << recognize_status;
     }
     {
-      auto lock = std::lock_guard(status_mutex);
-      status_rect = Rect(0, 0, 0, 0);
-      status_progress_ratio.reset();
-      std::unique_ptr<tesseract::ResultIterator> it(tesseract.GetIterator());
+      auto lock = std::lock_guard(t.status_mutex);
+      t.status_rect = Rect(0, 0, 0, 0);
+      t.status_progress_ratio.reset();
+      std::unique_ptr<tesseract::ResultIterator> it(t.tesseract.GetIterator());
       constexpr auto level = tesseract::RIL_TEXTLINE;
-      status_results.clear();
+      t.status_results.clear();
       if (it && !it->Empty(level)) {
         do {
           int left, top, right, bottom;
           it->BoundingBox(level, &left, &top, &right, &bottom);
           std::unique_ptr<char[]> text(it->GetUTF8Text(level));
-          status_results.push_back({Rect(left, bottom, right, top), text.get()});
+          t.status_results.push_back({Rect(left, bottom, right, top), text.get()});
           // LOG << "Bounding box: " << left << ", " << top << ", " << right << ", " << bottom << "
           // - "
           //     << text.get();
         } while (it->Next(level));
       }
     }
-    std::unique_ptr<char[]> text(tesseract.GetUTF8Text());
+    std::unique_ptr<char[]> text(t.tesseract.GetUTF8Text());
     utf8_text = text.get();
     StripTrailingWhitespace(utf8_text);
   }
@@ -1196,15 +1197,15 @@ void TesseractOCR::OnRun(std::unique_ptr<RunTask>&) {
   pixDestroy(&pix);
 
   {
-    auto lock = std::lock_guard(mutex);
-    ocr_text = utf8_text;
+    auto lock = std::lock_guard(t.mutex);
+    t.ocr_text = utf8_text;
   }
 
   if (text_obj) {
     text_obj->SetText(utf8_text);
   }
 
-  WakeWidgetsAnimation();
+  t.WakeWidgetsAnimation();
 }
 
 void TesseractOCR::SerializeState(ObjectSerializer& writer) const {

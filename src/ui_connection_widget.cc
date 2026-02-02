@@ -68,8 +68,8 @@ Location* ConnectionWidget::EndLocation() const {
   return nullptr;
 }
 
-ConnectionWidget::ConnectionWidget(Widget* parent, const NestedWeakPtr<Argument>& arg_weak)
-    : Widget(parent), start_weak(arg_weak) {
+ConnectionWidget::ConnectionWidget(Widget* parent, ReferenceCounted& rc, Argument& arg)
+    : ObjectWidget(parent), start_weak(rc.AcquireWeakPtr(), &arg) {
   if (auto locked = start_weak.Lock()) {
     if (auto* arg = locked.Get()) {
       if (auto* obj = locked.Owner<Object>()) {
@@ -264,8 +264,8 @@ void ConnectionWidget::FromMoved() {
   WakeAnimation();
 }
 
-// Helper for methods of ConnectionWidget that need to access the start/end of the connection. It
-// performs the locking of weak pointers and locates the widgets of connected objects.
+// Helper for methods of ConnectionWidget that need to access the start/end of the connection.
+// It performs the locking of weak pointers and locates the widgets of connected objects.
 struct ConnectionWidgetLocker {
   WidgetStore& widget_store;
 
@@ -290,8 +290,8 @@ struct ConnectionWidgetLocker {
 };
 
 // Updates ConnectionWidget.pos_dir & ConnectionWidget.to_points. This is shared among Tick &
-// TextureAnchors. Tick uses it for connection animation and TextureAnchors uses it to stretch the
-// texture into most up-to-date position.
+// TextureAnchors. Tick uses it for connection animation and TextureAnchors uses it to stretch
+// the texture into most up-to-date position.
 static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
   w.pos_dir = a.start_widget->ArgStart(*a.start_arg, root_machine.Get());
 
@@ -518,15 +518,8 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
     widget.manual_position = pointer_pos - grab_offset * widget.state->connector_scale;
   }
 
-  for (auto& l : root_machine->locations) {
-    if (arg->CanConnect(*start, *l->object)) {
-      l->highlight_target = 1;
-    } else {
-      l->highlight_target = 0;
-    }
-    l->WakeAnimation();
-  }
   widget.WakeAnimation();
+  pointer.pointer_widget->WakeAnimation();
 }
 
 DragConnectionAction::~DragConnectionAction() {
@@ -546,13 +539,8 @@ DragConnectionAction::~DragConnectionAction() {
   if (to != nullptr && arg->CanConnect(*start, *to->object)) {
     arg->Connect(*start, NestedPtr<Part>(to->object, to->object.Get()));
   }
-  widget.WakeAnimation();
-
   widget.manual_position.reset();
-  for (auto& l : root_machine->locations) {
-    l->highlight_target = 0;
-    l->WakeAnimation();
-  }
+  widget.WakeAnimation();
 }
 
 void DragConnectionAction::Update() {
@@ -564,6 +552,11 @@ void DragConnectionAction::Update() {
   Vec2 new_position = pointer.PositionWithin(*from->ParentAs<Machine>());
   widget.manual_position = new_position - grab_offset * widget.state->connector_scale;
   widget.WakeAnimation();
+  pointer.pointer_widget->WakeAnimation();
+}
+
+bool DragConnectionAction::Highlight(Object& obj, Part& part) const {
+  return widget.start_weak.Lock()->CanConnect(obj, part);
 }
 
 Optional<Rect> ConnectionWidget::TextureBounds() const {

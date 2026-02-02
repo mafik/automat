@@ -239,29 +239,31 @@ void KeyPresser::SetKey(ui::AnsiKey k) {
   });
 }
 
-void KeyPresser::OnTurnOn() {
+void KeyPresser::State::OnTurnOn() {
   audio::Play(embedded::assets_SFX_key_down_wav);
-  if (key_pressed) {
+  auto& kp = GetKeyPresser();
+  if (kp.key_pressed) {
     return;
   }
-  key_pressed = true;
-  SendKeyEvent(key, true);
-  WakeWidgetsAnimation();
+  kp.key_pressed = true;
+  SendKeyEvent(kp.key, true);
+  kp.WakeWidgetsAnimation();
 }
 
-void KeyPresser::OnTurnOff() {
+void KeyPresser::State::OnTurnOff() {
   audio::Play(embedded::assets_SFX_key_up_wav);
-  if (!key_pressed) {
+  auto& kp = GetKeyPresser();
+  if (!kp.key_pressed) {
     return;
   }
-  key_pressed = false;
-  SendKeyEvent(key, false);
-  WakeWidgetsAnimation();
+  kp.key_pressed = false;
+  SendKeyEvent(kp.key, false);
+  kp.WakeWidgetsAnimation();
 }
 
-void KeyPresser::OnSync() { monitoring.TurnOn(); }
+void KeyPresser::State::OnSync() { GetKeyPresser().monitoring.TurnOn(); }
 
-void KeyPresser::OnUnsync() { monitoring.TurnOff(); }
+void KeyPresser::State::OnUnsync() { GetKeyPresser().monitoring.TurnOff(); }
 
 void KeyPresser::SerializeState(ObjectSerializer& writer) const {
   writer.Key("key");
@@ -292,14 +294,14 @@ KeyPresser::~KeyPresser() {
 void KeyPresser::KeyloggerKeyDown(ui::Key key_down) {
   if (this->key != key_down.physical) return;
   key_pressed = true;
-  NotifyTurnedOn();
+  state.NotifyTurnedOn();
   WakeWidgetsAnimation();
 }
 
 void KeyPresser::KeyloggerKeyUp(ui::Key key_up) {
   if (this->key != key_up.physical) return;
   key_pressed = false;
-  NotifyTurnedOff();
+  state.NotifyTurnedOff();
   WakeWidgetsAnimation();
 }
 

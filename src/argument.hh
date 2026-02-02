@@ -47,7 +47,7 @@ enum class CableTexture {
 //
 // TODO: think about pointer following
 // TODO: think about multiple targets
-struct Argument : virtual Part {
+struct Argument : WidgetSource {
   enum class Style { Arrow, Cable, Spotlight, Invisible };
 
   virtual SkColor Tint() const { return "#404040"_color; }
@@ -98,6 +98,8 @@ struct Argument : virtual Part {
   //
   // This is the main way of creating new objects through this Argument's Prototype.
   Object& ObjectOrMake(Object& start) const;
+
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, ReferenceCounted&) override;
 };
 
 struct InlineArgument : Argument {

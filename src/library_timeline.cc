@@ -693,7 +693,7 @@ struct TimelineRunButton : ui::ToggleButton {
     auto timeline = timeline_weak.Lock();
     if (timeline) {
       auto lock = std::lock_guard(timeline->mutex);
-      return timeline->IsOn();
+      return timeline->running.IsOn();
     }
     return false;
   }
@@ -703,7 +703,7 @@ struct TimelineRunButton : ui::ToggleButton {
     auto lock = std::lock_guard(timeline->mutex);
     switch (timeline->state) {
       case Timeline::kPlaying:
-        timeline->Cancel();
+        timeline->running.Cancel();
         break;
       case Timeline::kPaused:
         if (auto h = timeline->here) {
@@ -1822,6 +1822,8 @@ void Timeline::Parts(const function<void(Part&)>& cb) {
     cb(*track_arg);
   }
   cb(next_arg);
+  cb(run);
+  cb(running);
 }
 
 struct TrackBaseWidget : Object::WidgetBase {
@@ -2453,33 +2455,35 @@ static void WakeRunButton(Timeline& timeline) {
   });
 }
 
-void Timeline::OnCancel() {
-  if (state == kPlaying) {
-    TimelineCancelScheduled(*this);
-    state = kPaused;
-    paused = {.playback_offset = time::SteadyNow() - playing.started_at};
-    TimelineUpdateOutputs(*this, time::SteadyPoint{},
-                          time::SteadyPoint{} + time::Duration(paused.playback_offset));
-    WakeRunButton(*this);
+void Timeline::Running::OnCancel() {
+  auto& t = GetTimeline();
+  if (t.state == kPlaying) {
+    TimelineCancelScheduled(t);
+    t.state = kPaused;
+    t.paused = {.playback_offset = time::SteadyNow() - t.playing.started_at};
+    TimelineUpdateOutputs(t, time::SteadyPoint{},
+                          time::SteadyPoint{} + time::Duration(t.paused.playback_offset));
+    WakeRunButton(t);
   }
 }
 
-void Timeline::OnRun(std::unique_ptr<RunTask>& run_task) {
+void Timeline::Run::OnRun(std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("Timeline");
-  if (state != kPaused) {
+  auto& t = GetTimeline();
+  if (t.state != kPaused) {
     return;
   }
-  if (paused.playback_offset >= MaxTrackLength()) {
-    paused.playback_offset = 0s;
+  if (t.paused.playback_offset >= t.MaxTrackLength()) {
+    t.paused.playback_offset = 0s;
   }
-  state = kPlaying;
+  t.state = kPlaying;
   time::SteadyPoint now = time::SteadyNow();
-  playing = {.started_at = now - time::Duration(paused.playback_offset)};
-  TimelineUpdateOutputs(*this, playing.started_at, now);
-  TimelineScheduleNextAfter(*this, now);
-  WakeRunButton(*this);
-  WakeWidgetsAnimation();
-  BeginLongRunning(std::move(run_task));
+  t.playing = {.started_at = now - time::Duration(t.paused.playback_offset)};
+  TimelineUpdateOutputs(t, t.playing.started_at, now);
+  TimelineScheduleNextAfter(t, now);
+  WakeRunButton(t);
+  t.WakeWidgetsAnimation();
+  t.running.BeginLongRunning(std::move(run_task));
 }
 
 void Timeline::BeginRecording() {
@@ -2573,7 +2577,7 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
   if (now >= end_at) {
     state = kPaused;
     paused = {.playback_offset = MaxTrackLength()};
-    Done(here);
+    running.Done(here);
     WakeRunButton(*this);
   }
   TimelineUpdateOutputs(*this, playing.started_at, now);
@@ -2801,7 +2805,7 @@ bool Timeline::DeserializeKey(ObjectDeserializer& d, StrView key) {
     // We're not updating the outputs because they should be deserialized in a proper state
     // TimelineUpdateOutputs(l, *this, playing.started_at, now);
     TimelineScheduleNextAfter(*this, now);
-    BeginLongRunning(std::make_unique<RunTask>(AcquireWeakPtr()));
+    running.BeginLongRunning(std::make_unique<RunTask>(AcquireWeakPtr()));
   } else if (key == "recording") {
     state = kRecording;
     double value = 0;

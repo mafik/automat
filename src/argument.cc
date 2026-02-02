@@ -50,6 +50,10 @@ Object& Argument::ObjectOrMake(Object& start) const {
   return *l.object;
 }
 
+std::unique_ptr<ObjectWidget> Argument::MakeWidget(ui::Widget* parent, ReferenceCounted& rc) {
+  return std::make_unique<ui::ConnectionWidget>(parent, rc, *this);
+}
+
 void NextArg::CanConnect(Object& start, Part& end, Status& status) const {
   if (!dynamic_cast<SignalNext*>(&start)) {
     AppendErrorMessage(status) += "Next source must be a Runnable";

@@ -2,10 +2,16 @@
 // SPDX-License-Identifier: MIT
 #include "pointer.hh"
 
+#include <include/effects/SkDashPathEffect.h>
+#include <include/pathops/SkPathOps.h>
+
+#include <algorithm>
 #include <cassert>
 
 #include "action.hh"
+#include "arcline.hh"
 #include "automat.hh"
+#include "object.hh"
 #include "root_widget.hh"
 #include "time.hh"
 #include "widget.hh"
@@ -297,4 +303,147 @@ void Pointer::Logging::Release() {
   pointer.loggings.EraseIndex(my_index);
   window.RegisterInput();
 }
+
+animation::Phase PointerWidget::Tick(time::Timer& timer) {
+  struct Highlighted {
+    ObjectWidget* widget;
+    Part* part;
+
+    bool operator<(const Highlighted& other) const {
+      if (widget == other.widget) {
+        return part < other.part;
+      }
+      return widget < other.widget;
+    }
+
+    auto operator<=>(const HighlightState& other) const {
+      if (widget == other.widget) {
+        return part <=> other.part;
+      }
+      return widget <=> other.widget;
+    }
+  };
+
+  std::vector<Highlighted> highlight_target;
+  auto HighlightCheck = [&](Object& obj, ObjectWidget& widget, Part& part) {
+    for (auto& action : pointer.actions) {
+      if (action == nullptr) continue;
+      if (action->Highlight(obj, part)) {
+        highlight_target.emplace_back(&widget, &part);
+        std::push_heap(highlight_target.begin(), highlight_target.end());
+      }
+    }
+  };
+  // Note: this could only iterate over visible locations
+  for (auto& loc : root_machine->locations) {
+    auto& obj = *loc->object;
+    HighlightCheck(obj, *loc->object_widget, obj);
+    obj.Parts([&](Part& part) { HighlightCheck(obj, *loc->object_widget, part); });
+  }
+
+  sort_heap(highlight_target.begin(), highlight_target.end());
+
+  auto target_it = highlight_target.begin();
+  auto current_it = highlight_current.begin();
+  auto TargetValid = [&]() { return target_it != highlight_target.end(); };
+  auto CurrentValid = [&]() { return current_it != highlight_current.end(); };
+
+  std::vector<HighlightState> highlight_next;
+
+  auto phase = animation::Finished;
+
+  auto HighlightTick = [&](ObjectWidget* obj, Part* part, float current, float target) {
+    phase |= animation::ExponentialApproach(target, timer.d, 0.1, current);
+    if (current > 0.01f) {
+      highlight_next.emplace_back(obj, part, current);
+      phase = animation::Animating;
+    }
+  };
+
+  if (TargetValid() && CurrentValid()) {
+    while (true) {
+      if (*target_it < *current_it) {
+        // Fade in (new)
+        HighlightTick(std::move(target_it->widget), target_it->part, 0, 1);
+        ++target_it;
+        if (!TargetValid()) break;
+      } else if (*target_it > *current_it) {
+        // Fade out
+        HighlightTick(std::move(current_it->widget), current_it->part, current_it->highlight, 0);
+        ++current_it;
+        if (!CurrentValid()) break;
+      } else {
+        // Fade in (old)
+        HighlightTick(std::move(target_it->widget), target_it->part, current_it->highlight, 1);
+        ++target_it;
+        ++current_it;
+        if (!TargetValid()) break;
+        if (!CurrentValid()) break;
+      }
+    }
+  }
+
+  while (TargetValid()) {
+    // Fade in (new)
+    HighlightTick(std::move(target_it->widget), target_it->part, 0, 1);
+    ++target_it;
+  }
+
+  while (CurrentValid()) {
+    // Fade out
+    HighlightTick(std::move(current_it->widget), current_it->part, current_it->highlight, 0);
+    ++current_it;
+  }
+
+  highlight_current = std::move(highlight_next);
+
+  if (phase != animation::Finished) {
+    time_seconds = timer.NowSeconds();
+  }
+
+  return phase;
+}
+
+SkPath Outset(const SkPath& path, float distance) {
+  SkRRect rrect;
+  if (path.isRRect(&rrect)) {
+    rrect.outset(distance, distance);
+    return SkPath::RRect(rrect);
+  } else {
+    SkPath combined_path;
+    bool simplified = Simplify(path, &combined_path);
+    ArcLine arcline = ArcLine::MakeFromPath(simplified ? combined_path : path);
+    arcline.Outset(distance);
+    return arcline.ToPath();
+  }
+}
+
+void PointerWidget::Draw(SkCanvas& canvas) const {
+  for (auto& state : highlight_current) {
+    auto shape = state.widget->PartShape(state.part);
+    SkPath outset_shape = Outset(shape, 2.5_mm * state.highlight);
+    outset_shape.setIsVolatile(true);
+    canvas.save();
+    canvas.concat(TransformBetween(*state.widget, *this));
+    static const SkPaint kHighlightPaint = [] {
+      SkPaint paint;
+      paint.setAntiAlias(true);
+      paint.setStyle(SkPaint::kStroke_Style);
+      paint.setStrokeWidth(0.0005);
+      paint.setColor(0xffa87347);
+      return paint;
+    }();
+    SkPaint dash_paint(kHighlightPaint);
+    dash_paint.setAlphaf(state.highlight);
+    float intervals[] = {0.0035, 0.0015};
+    float period_seconds = 200;
+    float phase = std::fmod(time_seconds, period_seconds) / period_seconds;
+    dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, phase));
+    canvas.drawPath(outset_shape, dash_paint);
+    canvas.restore();
+  }
+  DrawChildren(canvas);
+  return;
+}
+
 }  // namespace automat::ui

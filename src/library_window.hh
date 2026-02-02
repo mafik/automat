@@ -9,11 +9,22 @@
 
 namespace automat::library {
 
-struct Window : public Object, Runnable, ImageProvider {
+struct Window : public Object, ImageProvider {
   std::mutex mutex;
   Str title = "";
   bool run_continuously = true;
   sk_sp<SkImage> captured_image;  // Captured window image
+
+  struct Capture : Runnable {
+    StrView Name() const override { return "Capture"sv; }
+
+    void OnRun(std::unique_ptr<RunTask>&) override;
+
+    Window& GetWindow() const {
+      return *reinterpret_cast<Window*>(reinterpret_cast<intptr_t>(this) -
+                                        offsetof(Window, capture));
+    }
+  } capture;
 
   struct Impl;
   // Private implementation to avoid polluting header with platform-specific defines.
@@ -28,7 +39,6 @@ struct Window : public Object, Runnable, ImageProvider {
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, ReferenceCounted&) override;
 
   void Parts(const std::function<void(Part&)>& cb) override;
-  void OnRun(std::unique_ptr<RunTask>&) override;
 
   // Called after deserialization. Makes the window object attach its native handle to the window
   // with the current title.

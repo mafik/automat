@@ -67,9 +67,32 @@ struct MouseScrollX : Object, SinkRelativeFloat64 {
   void OnRelativeFloat64(double) override;
 };
 
-struct MouseButtonPresser : Object, Runnable, OnOff {
+struct MouseButtonPresser : Object {
   ui::PointerButton button;
   bool down = false;
+
+  struct Click : Runnable {
+    StrView Name() const override { return "Click"sv; }
+
+    void OnRun(std::unique_ptr<RunTask>&) override;
+
+    MouseButtonPresser& GetMouseButtonPresser() const {
+      return *reinterpret_cast<MouseButtonPresser*>(reinterpret_cast<intptr_t>(this) -
+                                                    offsetof(MouseButtonPresser, click));
+    }
+  } click;
+
+  struct State : OnOff {
+    StrView Name() const override { return "State"sv; }
+    bool IsOn() const override { return GetMouseButtonPresser().down; }
+    void OnTurnOn() override;
+    void OnTurnOff() override;
+
+    MouseButtonPresser& GetMouseButtonPresser() const {
+      return *reinterpret_cast<MouseButtonPresser*>(reinterpret_cast<intptr_t>(this) -
+                                                    offsetof(MouseButtonPresser, state));
+    }
+  } state;
 
   MouseButtonPresser(ui::PointerButton button);
   MouseButtonPresser();
@@ -79,13 +102,7 @@ struct MouseButtonPresser : Object, Runnable, OnOff {
   void Parts(const std::function<void(Part&)>& cb) override;
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, ReferenceCounted&) override;
 
-  void OnRun(std::unique_ptr<RunTask>& run_task) override;
-
-  bool IsOn() const override { return down; }
-  void OnTurnOn() override;
-  void OnTurnOff() override;
-
-  operator OnOff*() override { return this; }
+  operator OnOff*() override { return &state; }
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

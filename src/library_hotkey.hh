@@ -9,7 +9,7 @@
 
 namespace automat::library {
 
-struct HotKey : Object, Object::WidgetBase, OnOff, SignalNext, ui::CaretOwner, ui::KeyGrabber {
+struct HotKey : Object, Object::WidgetBase, SignalNext, ui::CaretOwner, ui::KeyGrabber {
   ui::AnsiKey key = ui::AnsiKey::F11;
   bool ctrl = true;
   bool alt = false;
@@ -29,6 +29,18 @@ struct HotKey : Object, Object::WidgetBase, OnOff, SignalNext, ui::CaretOwner, u
   // This is used to get hotkey events
   ui::KeyGrab* hotkey = nullptr;
 
+  struct Enabled : OnOff {
+    StrView Name() const override { return "Enabled"sv; }
+    bool IsOn() const override;
+    void OnTurnOn() override;
+    void OnTurnOff() override;
+
+    HotKey& GetHotKey() const {
+      return *reinterpret_cast<HotKey*>(reinterpret_cast<intptr_t>(this) -
+                                        offsetof(HotKey, enabled));
+    }
+  } enabled;
+
   HotKey(ui::Widget* parent);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
@@ -37,10 +49,6 @@ struct HotKey : Object, Object::WidgetBase, OnOff, SignalNext, ui::CaretOwner, u
   SkPath Shape() const override;
   bool CenteredAtZero() const override { return true; }
   void Parts(const std::function<void(Part&)>& cb) override;
-
-  bool IsOn() const override;
-  void OnTurnOn() override;
-  void OnTurnOff() override;
 
   void ReleaseCaret(ui::Caret&) override;
   void ReleaseKeyGrab(ui::KeyGrab&) override;

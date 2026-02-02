@@ -489,18 +489,23 @@ std::unique_ptr<ObjectWidget> Window::MakeWidget(ui::Widget* parent, ReferenceCo
   return std::make_unique<WindowWidget>(parent, *this);
 }
 
-void Window::Parts(const std::function<void(Part&)>& cb) { cb(next_arg); }
+void Window::Parts(const std::function<void(Part&)>& cb) {
+  cb(next_arg);
+  cb(capture);
+}
 
-void Window::OnRun(std::unique_ptr<RunTask>&) {
+void Window::Capture::OnRun(std::unique_ptr<RunTask>&) {
   ZoneScopedN("Window");
+  auto& w = GetWindow();
 #ifdef __linux__
   {
-    auto impl_lock = std::lock_guard(impl->mutex);
-    ClearOwnError();
+    auto impl_lock = std::lock_guard(w.impl->mutex);
+    auto& impl = w.impl;
+    w.ClearOwnError();
     if (impl->xcb_window == XCB_WINDOW_NONE) {
-      ReportError("No window selected");
+      w.ReportError("No window selected");
       return;
-    } else if (HasError(*this)) {
+    } else if (HasError(w)) {
       return;
     }
 
@@ -556,9 +561,9 @@ void Window::OnRun(std::unique_ptr<RunTask>&) {
     auto pixmap = SkPixmap(image_info, impl->data.data(), width * 4);
     auto new_image = SkImages::RasterFromPixmapCopy(pixmap);
 
-    auto window_lock = std::lock_guard(mutex);
-    captured_image = std::move(new_image);
-    capture_time = time::SecondsSinceEpoch();
+    auto window_lock = std::lock_guard(w.mutex);
+    w.captured_image = std::move(new_image);
+    w.capture_time = time::SecondsSinceEpoch();
   }
 #elif defined(_WIN32)
   {
@@ -643,12 +648,12 @@ void Window::OnRun(std::unique_ptr<RunTask>&) {
     }
   }
 #endif
-  WakeWidgetsAnimation();
+  w.WakeWidgetsAnimation();
 
-  here->ScheduleUpdate();
+  w.here->ScheduleUpdate();
   // Re-schedule execution if continuous run is enabled
-  if (run_continuously) {
-    here->ScheduleRun();
+  if (w.run_continuously) {
+    w.here->ScheduleRun();
   }
 }
 

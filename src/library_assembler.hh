@@ -95,10 +95,22 @@ struct Register : Object {
 // Combines functions of Assembler and Thread.
 // Assembler part takes care of emitting machine code to an executable memory region.
 // Thread part maintains register state across executions.
-struct Assembler : Object, LongRunning, Container {
+struct Assembler : Object, Container {
   using PrologueFn = uintptr_t (*)(void*);
 
+  struct Running : LongRunning {
+    StrView Name() const override { return "Running"sv; }
+
+    void OnCancel() override;
+
+    Assembler& GetAssembler() const {
+      return *reinterpret_cast<Assembler*>(reinterpret_cast<intptr_t>(this) -
+                                           offsetof(Assembler, running));
+    }
+  } running;
+
   Ptr<Object> Clone() const override;
+  void Parts(const std::function<void(Part&)>& cb) override;
 
   Assembler();
   ~Assembler();
@@ -114,8 +126,6 @@ struct Assembler : Object, LongRunning, Container {
   void UpdateMachineCode();
 
   void RunMachineCode(library::Instruction* entry_point, std::unique_ptr<RunTask>&&);
-
-  void OnCancel() override;
 
   unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, ReferenceCounted&) override {
     return make_unique<AssemblerWidget>(parent, *this);

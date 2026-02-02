@@ -89,7 +89,7 @@ static const SkRRect kShapeRRect = [] {
 
 HotKey::HotKey(ui::Widget* parent)
     : WidgetBase(parent, *this),
-      power_button(new PowerButton(this, this)),
+      power_button(new PowerButton(this, &enabled)),
       ctrl_button(new KeyButton(this, "Ctrl", KeyColor(ctrl), kCtrlKeyWidth)),
       alt_button(new KeyButton(this, "Alt", KeyColor(alt), kAltKeyWidth)),
       shift_button(new KeyButton(this, "Shift", KeyColor(shift), kShiftKeyWidth)),
@@ -119,46 +119,46 @@ HotKey::HotKey(ui::Widget* parent)
                        kShapeRect.bottom + kFrameWidth + kKeySpacing * 2 + kKeyHeight);
 
   ctrl_button->activate = [this](ui::Pointer&) {
-    bool on = IsOn();
+    bool on = enabled.IsOn();
     if (on) {
-      OnTurnOff();  // temporarily switch off to ungrab the old key combo
+      enabled.OnTurnOff();  // temporarily switch off to ungrab the old key combo
     }
     ctrl = !ctrl;
     if (on) {
-      OnTurnOn();
+      enabled.OnTurnOn();
     }
     ctrl_button->fg = KeyColor(ctrl);
   };
   alt_button->activate = [this](ui::Pointer&) {
-    bool on = IsOn();
+    bool on = enabled.IsOn();
     if (on) {
-      OnTurnOff();  // temporarily switch off to ungrab the old key combo
+      enabled.OnTurnOff();  // temporarily switch off to ungrab the old key combo
     }
     alt = !alt;
     if (on) {
-      OnTurnOn();
+      enabled.OnTurnOn();
     }
     alt_button->fg = KeyColor(alt);
   };
   shift_button->activate = [this](ui::Pointer&) {
-    bool on = IsOn();
+    bool on = enabled.IsOn();
     if (on) {
-      OnTurnOff();  // temporarily switch off to ungrab the old key combo
+      enabled.OnTurnOff();  // temporarily switch off to ungrab the old key combo
     }
     shift = !shift;
     if (on) {
-      OnTurnOn();
+      enabled.OnTurnOn();
     }
     shift_button->fg = KeyColor(shift);
   };
   windows_button->activate = [this](ui::Pointer&) {
-    bool on = IsOn();
+    bool on = enabled.IsOn();
     if (on) {
-      OnTurnOff();  // temporarily switch off to ungrab the old key combo
+      enabled.OnTurnOff();  // temporarily switch off to ungrab the old key combo
     }
     windows = !windows;
     if (on) {
-      OnTurnOn();
+      enabled.OnTurnOn();
     }
     windows_button->fg = KeyColor(windows);
   };
@@ -302,51 +302,53 @@ void HotKey::FillChildren(Vec<Widget*>& children) {
   children.push_back(shortcut_button.get());
 }
 
-bool HotKey::IsOn() const { return hotkey != nullptr; }
+bool HotKey::Enabled::IsOn() const { return GetHotKey().hotkey != nullptr; }
 
-void HotKey::OnTurnOn() {
-  if (hotkey) {  // just a sanity check, we should never get On multiple times in a row
-    hotkey->Release();
+void HotKey::Enabled::OnTurnOn() {
+  auto& hk = GetHotKey();
+  if (hk.hotkey) {  // just a sanity check, we should never get On multiple times in a row
+    hk.hotkey->Release();
   }
-  auto& root_widget = FindRootWidget();
-  hotkey = &root_widget.keyboard.RequestKeyGrab(*this, key, ctrl, alt, shift, windows,
-                                                [&](Status& status) {
-                                                  if (!OK(status)) {
-                                                    if (hotkey) {
-                                                      hotkey->Release();
-                                                    }
-                                                    ERROR << status;
-                                                  }
-                                                });
-  WakeWidgetsAnimation();
-  power_button->WakeAnimation();
+  auto& root_widget = hk.FindRootWidget();
+  hk.hotkey = &root_widget.keyboard.RequestKeyGrab(hk, hk.key, hk.ctrl, hk.alt, hk.shift,
+                                                   hk.windows, [&](Status& status) {
+                                                     if (!OK(status)) {
+                                                       if (hk.hotkey) {
+                                                         hk.hotkey->Release();
+                                                       }
+                                                       ERROR << status;
+                                                     }
+                                                   });
+  hk.WakeWidgetsAnimation();
+  hk.power_button->WakeAnimation();
 }
 
 // This is called when the new HotKey is selected by the user
 void HotKey::KeyDown(ui::Caret&, ui::Key key) {
-  bool on = IsOn();
+  bool on = enabled.IsOn();
   if (on) {
-    OnTurnOff();  // temporarily switch off to ungrab the old key combo
+    enabled.OnTurnOff();  // temporarily switch off to ungrab the old key combo
   }
   hotkey_selector->Release();
   // Maybe also set the modifiers from the key event?
   this->key = key.physical;
   shortcut_button->SetLabel(ToStr(key.physical));
   if (on) {
-    OnTurnOn();
+    enabled.OnTurnOn();
   }
 }
 
 void HotKey::KeyGrabberKeyDown(ui::KeyGrab&) { ScheduleNext(*this); }
 void HotKey::KeyGrabberKeyUp(ui::KeyGrab&) {}
 
-void HotKey::OnTurnOff() {
+void HotKey::Enabled::OnTurnOff() {
   // TODO: think about what happens if the recording starts or stops while the hotkey is active &
   // vice versa
-  if (hotkey) {
-    hotkey->Release();
-    WakeWidgetsAnimation();
-    power_button->WakeAnimation();
+  auto& hk = GetHotKey();
+  if (hk.hotkey) {
+    hk.hotkey->Release();
+    hk.WakeWidgetsAnimation();
+    hk.power_button->WakeAnimation();
   }
 }
 
@@ -369,19 +371,19 @@ void HotKey::SerializeState(ObjectSerializer& writer) const {
   writer.Bool(shift);
   writer.Key("windows");
   writer.Bool(windows);
-  writer.Key("active");
-  writer.Bool(IsOn());
+  writer.Key("enabled");
+  writer.Bool(enabled.IsOn());
 }
 
 bool HotKey::DeserializeKey(ObjectDeserializer& d, StrView keyName) {
   Status status;
-  bool was_on = IsOn();
+  bool was_on = enabled.IsOn();
 
   // Helper lambda to temporarily disable hotkey, change setting, then re-enable if needed
   auto ModifySetting = [&](auto&& setter) {
-    if (was_on) OnTurnOff();
+    if (was_on) enabled.OnTurnOff();
     setter();
-    if (was_on) OnTurnOn();
+    if (was_on) enabled.OnTurnOn();
   };
 
   if (keyName == "key") {
@@ -407,9 +409,9 @@ bool HotKey::DeserializeKey(ObjectDeserializer& d, StrView keyName) {
     bool should_be_on = false;
     d.Get(should_be_on, status);
     if (should_be_on && !was_on) {
-      OnTurnOn();
+      enabled.OnTurnOn();
     } else if (!should_be_on && was_on) {
-      OnTurnOff();
+      enabled.OnTurnOff();
     }
   } else {
     return false;

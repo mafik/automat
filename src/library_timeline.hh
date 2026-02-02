@@ -96,8 +96,30 @@ struct TrackArgument : InlineArgument {
 // This is fine for MVP but in the future, timeline should keep playing (stuck at the end).
 // The user should be able to connect the "next" connection to the "jump to start" so that it loops
 // (or stops).
-struct Timeline : Object, Runnable, LongRunning, TimerNotificationReceiver {
+struct Timeline : Object, SignalNext, TimerNotificationReceiver {
   std::mutex mutex;
+
+  struct Run : Runnable {
+    StrView Name() const override { return "Run"sv; }
+
+    void OnRun(std::unique_ptr<RunTask>&) override;
+
+    Timeline& GetTimeline() const {
+      return *reinterpret_cast<Timeline*>(reinterpret_cast<intptr_t>(this) -
+                                          offsetof(Timeline, run));
+    }
+  } run;
+
+  struct Running : LongRunning {
+    StrView Name() const override { return "Running"sv; }
+
+    void OnCancel() override;
+
+    Timeline& GetTimeline() const {
+      return *reinterpret_cast<Timeline*>(reinterpret_cast<intptr_t>(this) -
+                                          offsetof(Timeline, running));
+    }
+  } running;
 
   Vec<std::unique_ptr<TrackArgument>> tracks;
 
@@ -132,9 +154,7 @@ struct Timeline : Object, Runnable, LongRunning, TimerNotificationReceiver {
   Ptr<Object> Clone() const override;
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, ReferenceCounted&) override;
   void Parts(const std::function<void(Part&)>& cb) override;
-  void OnRun(std::unique_ptr<RunTask>&) override;
-  void OnCancel() override;
-  LongRunning* AsLongRunning() override { return this; }
+  LongRunning* AsLongRunning() override { return &running; }
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   OnOffTrack& AddOnOffTrack(StrView name);
   Vec2Track& AddVec2Track(StrView name);

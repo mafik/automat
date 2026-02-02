@@ -171,7 +171,7 @@ static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now
     assembler.WakeWidgetsAnimation();
     assembler.last_state_refresh = now;
   }
-  if (assembler.IsRunning()) {
+  if (assembler.running.IsRunning()) {
     return animation::Animating;
   } else {
     return animation::Finished;
@@ -179,7 +179,7 @@ static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now
 }
 
 void Assembler::ExitCallback(mc::CodePoint code_point) {
-  Done(*here);
+  running.Done(*here);
   RefreshState(*this, time::SteadyNow());
   Instruction* exit_inst = nullptr;
   if (code_point.instruction) {
@@ -207,6 +207,11 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
 }
 
 Ptr<Object> Assembler::Clone() const { return MAKE_PTR(Assembler); }
+
+void Assembler::Parts(const std::function<void(Part&)>& cb) {
+  cb(*this);
+  cb(running);
+}
 
 void UpdateCode(automat::mc::Controller& controller,
                 std::vector<Ptr<automat::library::Instruction>>&& instructions, Status& status) {
@@ -287,7 +292,7 @@ void Assembler::UpdateMachineCode() {
 
 void Assembler::RunMachineCode(library::Instruction* entry_point,
                                std::unique_ptr<RunTask>&& run_task) {
-  BeginLongRunning(std::move(run_task));
+  running.BeginLongRunning(std::move(run_task));
 
   Status status;
   auto inst = entry_point->ToMC();
@@ -298,9 +303,10 @@ void Assembler::RunMachineCode(library::Instruction* entry_point,
   }
 }
 
-void Assembler::OnCancel() {
+void Assembler::Running::OnCancel() {
   Status status;
-  mc_controller->Cancel(status);
+  auto& as = GetAssembler();
+  as.mc_controller->Cancel(status);
   if (!OK(status)) {
     ERROR << "Failed to cancel Assembler: " << status;
     return;

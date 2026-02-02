@@ -506,9 +506,12 @@ struct [[clang::trivial_abi]] NestedPtr {
     return this->ptr.template Get<U>();
   }
 
+  Ptr<ReferenceCounted> GetOwnerPtr() const { return ptr->AcquirePtr(); }
+
   WeakPtr<ReferenceCounted> GetOwnerWeak() const { return ptr->AcquireWeakPtr(); }
 
   T* Get() const { return obj; }
+
   void Reset() {
     ptr.Reset();
     obj = nullptr;

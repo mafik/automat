@@ -44,6 +44,9 @@ struct OnOff : Syncable {
  protected:
   virtual void OnTurnOn() = 0;
   virtual void OnTurnOff() = 0;
+  bool CanSync(const Syncable& other) const override {
+    return dynamic_cast<const OnOff*>(&other) != nullptr;
+  }
 };
 
 }  // namespace automat

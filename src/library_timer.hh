@@ -18,7 +18,9 @@ struct Timer : Object, Object::WidgetBase, Runnable, TimerNotificationReceiver {
     time::Duration value = 10s;
     StrView Name() const override { return "duration"sv; }
     SkColor Tint() const override { return "#6e4521"_color; }
-    void CanConnect(Object& start, Part& end, Status& status) const override;
+    bool CanSync(const Syncable& other) const override {
+      return dynamic_cast<const MyDuration*>(&other) != nullptr;
+    }
   } duration;
   time::SteadyPoint start_time;
   float start_pusher_depression = 0;

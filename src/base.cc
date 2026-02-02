@@ -34,6 +34,28 @@ using namespace std;
 
 namespace automat {
 
+void Machine::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
+  bool connected = false;
+  auto TryConnect = [&](Object& end, Part& part) {
+    if (connected) return;
+    if (arg.CanConnect(start, part)) {
+      arg.Connect(start, NestedPtr<Part>(end.AcquirePtr(), &part));
+      connected = true;
+    }
+  };
+  for (auto& loc : locations) {
+    Vec2 local_point = (point - loc->position) / loc->scale;
+    SkPath shape = loc->ToyForObject().Shape();
+    if (!shape.contains(local_point.x, local_point.y)) {
+      continue;
+    }
+    auto& obj = *loc->object;
+    TryConnect(obj, obj);
+    if (connected) return;
+    obj.Parts([&](Part& part) { TryConnect(obj, part); });
+  }
+}
+
 Location* Machine::LocationAtPoint(Vec2 point) {
   for (auto& loc : locations) {
     Vec2 local_point = (point - loc->position) / loc->scale;

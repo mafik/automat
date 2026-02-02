@@ -132,6 +132,10 @@ struct Runnable : Syncable, SignalNext {
   void NotifyRun(std::unique_ptr<RunTask>& run_task) {
     ForwardNotify([&](Runnable& r) { r.OnRun(run_task); });
   }
+
+  bool CanSync(const Syncable& other) const override {
+    return dynamic_cast<const Runnable*>(&other) != nullptr;
+  }
 };
 
 // 2D Canvas holding objects & a spaghetti of connections.
@@ -177,6 +181,8 @@ struct Machine : Object, ui::Widget, ui::DropTarget {
   void SerializeState(ObjectSerializer& writer) const override;
 
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
+
+  void ConnectAtPoint(Object& start, Argument&, Vec2);
 
   Location* LocationAtPoint(Vec2);
 

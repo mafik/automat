@@ -9,6 +9,8 @@
 #include <mutex>
 
 #include "animation.hh"
+#include "argument.hh"
+#include "automat.hh"
 #include "embedded.hh"
 #include "global_resources.hh"
 #include "log.hh"
@@ -271,8 +273,55 @@ std::unique_ptr<Toy> Gear::MakeToy(ui::Widget* parent, ReferenceCounted&) {
 }
 
 void Syncable::CanConnect(Object& start, Part& end, Status& status) const {
-  if (dynamic_cast<Gear*>(&end) != nullptr) {
-    AppendErrorMessage(status) += "Can only connect to Gear";
+  if (auto* other = dynamic_cast<Syncable*>(&end)) {
+    if (CanSync(*other)) {
+      return;
+    } else {
+      auto& msg = AppendErrorMessage(status);
+      msg += "Can only connect to ";
+      msg += typeid(this).name();
+    }
+  }
+  if (auto gear = dynamic_cast<Gear*>(&end)) {
+    auto lock = std::shared_lock(gear->mutex);
+    if (gear->members.empty()) {
+      return;
+    } else {
+      auto member = gear->members.front().weak.Lock();
+      if (CanSync(*member)) {
+        return;
+      } else {
+        auto& msg = AppendErrorMessage(status);
+        msg += "Wrong type of Gear ";
+        msg += typeid(this).name();
+      }
+    }
+  }
+  AppendErrorMessage(status) += "Can only connect to similar parts";
+}
+
+void Syncable::Connect(Object& start, const NestedPtr<Part>& end) {
+  InlineArgument::Connect(start, end);
+
+  auto* target_syncable = dynamic_cast<Syncable*>(end.Get());
+  if (target_syncable) {
+    NestedPtr<Syncable> syncable{start.AcquirePtr(), this};
+    NestedPtr<Syncable> target{end.GetOwnerPtr(), target_syncable};
+    auto sync_block = FindGearOrNull(target);
+    if (sync_block == nullptr) {
+      sync_block = FindGearOrMake(syncable);
+      auto& loc = root_machine->Insert(sync_block);
+      loc.position = (end.Owner<Object>()->here->position + start.here->position) / 2;
+      loc.position_vel = Vec2(0, 1);
+    }
+    sync_block->FullSync(syncable);
+    sync_block->FullSync(target);
+    return;
+  }
+  auto* gear = dynamic_cast<Gear*>(end.Get());
+  if (gear) {
+    NestedPtr<Syncable> syncable{start.AcquirePtr(), this};
+    gear->FullSync(syncable);
   }
 }
 

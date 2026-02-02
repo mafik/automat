@@ -31,6 +31,7 @@ struct Action {
   // function may be called hundreds of times per second.
   virtual void Update() = 0;
 
+  // Return true to highlight the given part of some object.
   virtual bool Highlight(Object&, Part&) const { return false; }
 
   virtual ui::Widget* Widget() { return nullptr; }

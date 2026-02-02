@@ -14,7 +14,7 @@ namespace automat {
 
 struct Object;
 
-// Widget interface for objects - defines the contract for widgets that represent objects.
+// A type of Widget that represents objects (or parts of objects).
 struct Toy : ui::Widget {
   using ui::Widget::Widget;
 

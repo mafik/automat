@@ -728,18 +728,6 @@ void Timer::TimerRunning::OnCancel() {
   timer.WakeAnimation();
 }
 
-void Timer::MyDuration::CanConnect(Object& start, Part& end, Status& status) const {
-  if (auto* obj = dynamic_cast<Object*>(&end)) {
-    Str text = obj->GetText();
-    char* endptr = nullptr;
-    double val = strtod(text.c_str(), &endptr);
-    (void)val;  // suppress unused warning
-    if (endptr == text.c_str() || endptr == nullptr) {
-      AppendErrorMessage(status) += "Duration argument must be a number.";
-    }
-  }
-}
-
 StrView ToStr(Timer::Range r) {
   switch (r) {
     using enum Timer::Range;

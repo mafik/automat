@@ -253,25 +253,10 @@ struct SyncAction : Action {
     // TODO: tell objects to hide their fields
     // Check if the pointer is over a compatible Syncable
     if (auto syncable = weak.Lock()) {
-      auto target_location = root_machine->LocationAtPoint(sync_widget.end);
-      if (target_location == nullptr || target_location->object == nullptr) return;
-      // TODO: make this work with fields
-      // TODO: make this work with other (non-on/off) Syncables
-      auto* target_syncable = (OnOff*)(*target_location->object);  // operator cast
-      if (target_syncable == nullptr) return;
-      NestedPtr<Syncable> target{target_location->object, target_syncable};
-      auto sync_block = FindGearOrNull(target);
-      if (sync_block == nullptr) {
-        sync_block = FindGearOrMake(syncable);
-      }
-      sync_block->FullSync(syncable);
-      sync_block->FullSync(target);
-      auto& loc = root_machine->Insert(sync_block);
-      loc.position = target_location->position;
-      loc.position_vel = Vec2(0, 1);
+      root_machine->ConnectAtPoint(*syncable.Owner<Object>(), *syncable, sync_widget.end);
     }
   }
-  void Update() {
+  void Update() override {
     if (auto syncable = weak.Lock()) {
       auto* widget = pointer.root_widget.toys.FindOrNull(*syncable.Owner<Object>());
       auto start_local = widget->PartShape(syncable.Get()).getBounds().center();
@@ -282,8 +267,14 @@ struct SyncAction : Action {
     } else {
       pointer.ReplaceAction(*this, nullptr);
     }
+    pointer.pointer_widget->WakeAnimation();
   }
-  ui::Widget* Widget() { return &sync_widget; }
+  bool Highlight(Object& end_obj, Part& end_part) const override {
+    auto ptr = weak.Lock();
+    Object& start = *ptr.Owner<Object>();
+    return ptr->Argument::CanConnect(start, end_part);
+  }
+  ui::Widget* Widget() override { return &sync_widget; }
 };
 
 struct SyncOption : TextOption {

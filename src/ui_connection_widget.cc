@@ -535,10 +535,7 @@ DragConnectionAction::~DragConnectionAction() {
   } else {
     return;
   }
-  Location* to = root_machine->LocationAtPoint(pos);
-  if (to != nullptr && arg->CanConnect(*start, *to->object)) {
-    arg->Connect(*start, NestedPtr<Part>(to->object, to->object.Get()));
-  }
+  root_machine->ConnectAtPoint(*start, *arg, pos);
   widget.manual_position.reset();
   widget.WakeAnimation();
 }

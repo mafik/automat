@@ -95,6 +95,8 @@ struct Syncable : InlineArgument {
 
   void CanConnect(Object& start, Part& end, Status&) const override;
 
+  void Connect(Object&, const NestedPtr<Part>& end) override;
+
   Style GetStyle() const override { return Style::Invisible; }
 
   void Unsync();
@@ -135,6 +137,9 @@ struct Syncable : InlineArgument {
   // Called when Syncable stops being a source - it may stop monitoring its underlying state. No
   // need to call Notify methods any more.
   virtual void OnUnsync() {}
+
+  // Checks whether this Syncable can be synchronized with `other`.
+  virtual bool CanSync(const Syncable& other) const = 0;
 
   friend class Gear;
 };

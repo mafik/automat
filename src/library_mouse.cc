@@ -507,8 +507,8 @@ audio::Sound& MouseButtonEvent::NextSound() {
   return down ? embedded::assets_SFX_mouse_down_wav : embedded::assets_SFX_mouse_up_wav;
 }
 
-std::unique_ptr<ObjectWidget> MouseButtonEvent::MakeWidget(ui::Widget* parent, Object& object) {
-  return std::make_unique<MouseButtonEventWidget>(parent, object);
+std::unique_ptr<ObjectWidget> MouseButtonEvent::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+  return std::make_unique<MouseButtonEventWidget>(parent, *this);
 }
 
 void MouseButtonEvent::SerializeState(ObjectSerializer& writer) const {
@@ -617,8 +617,8 @@ struct MouseMoveWidget : MouseWidget {
   }
 };
 
-std::unique_ptr<ObjectWidget> MouseMove::MakeWidget(ui::Widget* parent, Object& object) {
-  return std::make_unique<MouseMoveWidget>(parent, object);
+std::unique_ptr<ObjectWidget> MouseMove::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+  return std::make_unique<MouseMoveWidget>(parent, *this);
 }
 
 Vec2 mouse_move_accumulator;
@@ -790,12 +790,12 @@ struct MouseScrollXWidget : MouseWidgetBase {
   }
 };
 
-std::unique_ptr<ObjectWidget> MouseScrollY::MakeWidget(ui::Widget* parent, Object& object) {
-  return std::make_unique<MouseScrollYWidget>(parent, object);
+std::unique_ptr<ObjectWidget> MouseScrollY::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+  return std::make_unique<MouseScrollYWidget>(parent, *this);
 }
 
-std::unique_ptr<ObjectWidget> MouseScrollX::MakeWidget(ui::Widget* parent, Object& object) {
-  return std::make_unique<MouseScrollXWidget>(parent, object);
+std::unique_ptr<ObjectWidget> MouseScrollX::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+  return std::make_unique<MouseScrollXWidget>(parent, *this);
 }
 
 void MouseScrollY::OnRelativeFloat64(double delta) {
@@ -825,8 +825,8 @@ void MouseScrollX::OnRelativeFloat64(double delta) {
   WakeWidgetsAnimation();
 }
 
-std::unique_ptr<ObjectWidget> Mouse::MakeWidget(ui::Widget* parent, Object& object) {
-  return std::make_unique<MouseWidget>(parent, object);
+std::unique_ptr<ObjectWidget> Mouse::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+  return std::make_unique<MouseWidget>(parent, *this);
 }
 
 Ptr<Object> Mouse::Clone() const { return MAKE_PTR(Mouse); }
@@ -892,9 +892,9 @@ void MouseButtonPresser::Parts(const std::function<void(Part&)>& cb) {
   cb(next_arg);
 }
 
-std::unique_ptr<ObjectWidget> MouseButtonPresser::MakeWidget(ui::Widget* parent, Object& object) {
-  return std::make_unique<MouseButtonPresserWidget>(parent,
-                                                    static_cast<MouseButtonPresser&>(object));
+std::unique_ptr<ObjectWidget> MouseButtonPresser::MakeWidget(ui::Widget* parent,
+                                                             ReferenceCounted&) {
+  return std::make_unique<MouseButtonPresserWidget>(parent, *this);
 }
 
 void MouseButtonPresser::OnRun(std::unique_ptr<RunTask>& run_task) {

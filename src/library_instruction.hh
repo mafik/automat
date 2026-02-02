@@ -157,7 +157,7 @@ struct Instruction : Object, Runnable, Buffer {
     return NestedWeakPtr<const mc::Inst>(AcquireWeakPtr<ReferenceCounted>(), &mc_inst);
   }
 
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object&) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, ReferenceCounted&) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

@@ -1813,8 +1813,8 @@ std::unique_ptr<Action> TimelineWidget::FindAction(ui::Pointer& ptr, ui::ActionT
   return Object::WidgetBase::FindAction(ptr, btn);
 }
 
-std::unique_ptr<ObjectWidget> Timeline::MakeWidget(ui::Widget* parent, Object& object) {
-  return std::make_unique<TimelineWidget>(parent, object);
+std::unique_ptr<ObjectWidget> Timeline::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+  return std::make_unique<TimelineWidget>(parent, *this);
 }
 
 void Timeline::Parts(const function<void(Part&)>& cb) {
@@ -2351,18 +2351,18 @@ struct Float64TrackWidget : TrackBaseWidget {
   }
 };
 
-std::unique_ptr<ObjectWidget> OnOffTrack::MakeWidget(ui::Widget* parent, Object& object) {
-  auto ret = std::make_unique<OnOffTrackWidget>(parent, object);
+std::unique_ptr<ObjectWidget> OnOffTrack::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+  auto ret = std::make_unique<OnOffTrackWidget>(parent, *this);
   return ret;
 }
 
-std::unique_ptr<ObjectWidget> Vec2Track::MakeWidget(ui::Widget* parent, Object& object) {
-  auto ret = std::make_unique<Vec2TrackWidget>(parent, object);
+std::unique_ptr<ObjectWidget> Vec2Track::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+  auto ret = std::make_unique<Vec2TrackWidget>(parent, *this);
   return ret;
 }
 
-std::unique_ptr<ObjectWidget> Float64Track::MakeWidget(ui::Widget* parent, Object& object) {
-  auto ret = std::make_unique<Float64TrackWidget>(parent, object);
+std::unique_ptr<ObjectWidget> Float64Track::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+  auto ret = std::make_unique<Float64TrackWidget>(parent, *this);
   return ret;
 }
 

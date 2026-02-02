@@ -42,10 +42,9 @@ struct WidgetSource : virtual Part {
   // Produces a new Widget that can display this Part.
   // The `parent` argument allows the Widget to be attached at the correct position in the Widget
   // tree.
-  // The `object` argument is a reference to the Object - that manages the lifetime of this part.
-  // For most Objects the `object` will be the same as `this` (except for Objects which lifetime is
-  // bound to other Objects). For parts the `object` will point to the object that owns the part.
-  virtual std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object&) = 0;
+  // If constructed ObjectWidget needs to access this Part (almost always yes), then it should do
+  // so through NestedWeakPtr, using the 2nd argument as the reference counter.
+  virtual std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, ReferenceCounted&) = 0;
   void ForEachWidget(std::function<void(ui::RootWidget&, ui::Widget&)> cb);
   void WakeWidgetsAnimation();
 };

@@ -80,8 +80,9 @@ struct Register : Object {
 
   Ptr<Object> Clone() const override;
 
-  unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override {
-    return make_unique<RegisterWidget>(parent, object);
+  unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent,
+                                      ReferenceCounted& prevent_release) override {
+    return make_unique<RegisterWidget>(parent, *this);
   }
 
   void Parts(const std::function<void(Part&)>& cb) override;
@@ -116,8 +117,8 @@ struct Assembler : Object, LongRunning, Container {
 
   void OnCancel() override;
 
-  unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override {
-    return make_unique<AssemblerWidget>(parent, static_cast<Assembler&>(object));
+  unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, ReferenceCounted&) override {
+    return make_unique<AssemblerWidget>(parent, *this);
   }
 
   Container* AsContainer() override { return this; }

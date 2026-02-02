@@ -266,8 +266,8 @@ struct GearWidget : Object::WidgetBase {
   Optional<Rect> TextureBounds() const override { return bounds; }
 };
 
-std::unique_ptr<ObjectWidget> Gear::MakeWidget(ui::Widget* parent, Object& object) {
-  return std::make_unique<GearWidget>(parent, object);
+std::unique_ptr<ObjectWidget> Gear::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+  return std::make_unique<GearWidget>(parent, *this);
 }
 
 void Syncable::CanConnect(Object& start, Part& end, Status& status) const {

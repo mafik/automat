@@ -125,7 +125,7 @@ struct Object : public ReferenceCounted, public WidgetSource {
     }
   };
 
-  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, Object& object) override {
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent, ReferenceCounted&) override {
     if (auto w = dynamic_cast<ObjectWidget*>(this)) {
       // Proxy object that can be lifetime-managed by the UI infrastructure (without
       // affecting the original object's lifetime).
@@ -153,7 +153,13 @@ struct Object : public ReferenceCounted, public WidgetSource {
       };
       return std::make_unique<HybridAdapter>(parent, *this, *w);
     }
-    auto w = std::make_unique<WidgetBase>(parent, object);
+    // At the moment, Objects mix the memory management & their logic in one struct.
+    // Long-term (after this is decoupled) all WidgetBase should be constructed with separate `rc`
+    // control block.
+    // Until this happens, we ignore the `rc` passed into MakeWidget & use the Object's built-in
+    // ReferenceCounted base class.
+    // See `Memory Management.md`.
+    auto w = std::make_unique<WidgetBase>(parent, *this);
     return w;
   }
 

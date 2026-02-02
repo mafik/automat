@@ -485,8 +485,8 @@ struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
   }
 };
 
-std::unique_ptr<ObjectWidget> Window::MakeWidget(ui::Widget* parent, Object& object) {
-  return std::make_unique<WindowWidget>(parent, object);
+std::unique_ptr<ObjectWidget> Window::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+  return std::make_unique<WindowWidget>(parent, *this);
 }
 
 void Window::Parts(const std::function<void(Part&)>& cb) { cb(next_arg); }

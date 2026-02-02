@@ -95,8 +95,8 @@ struct SourcesWidget : Object::WidgetBase {
   }
 };
 
-std::unique_ptr<ObjectWidget> Sources::MakeWidget(ui::Widget* parent, Object& object) {
-  return std::make_unique<SourcesWidget>(parent, object);
+std::unique_ptr<ObjectWidget> Sources::MakeWidget(ui::Widget* parent, ReferenceCounted&) {
+  return std::make_unique<SourcesWidget>(parent, *this);
 }
 
 void Sources::SerializeState(ObjectSerializer& writer) const {

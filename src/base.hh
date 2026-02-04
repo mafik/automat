@@ -125,13 +125,24 @@ struct Runnable : Syncable, SignalNext {
   // pass it to BeginLongRunning.
   virtual void OnRun(std::unique_ptr<RunTask>& run_task) = 0;
 
+  // Call this to run this + all synchronized Runnables
   void Run(std::unique_ptr<RunTask>& run_task) {
     ForwardDo([&](Runnable& r) { r.OnRun(run_task); });
   }
 
+  // Call this if this Runnable has been extrenally executed. It'll run all of the synchronized
+  // Runnables.
   void NotifyRun(std::unique_ptr<RunTask>& run_task) {
     ForwardNotify([&](Runnable& r) { r.OnRun(run_task); });
   }
+
+  // Enqueue this Runnable to be executed at the earliest opportunity. It may be executed on another
+  // thread.
+  //
+  // Since this Runnable may be part of some Object (and that Object may be deleted while a Task
+  // waits for execution), the scheduled Task will take a weak reference to the Object. If the
+  // Object goes away, this Runnable will not be executed.
+  void ScheduleRun(Object& self) { (new RunTask(self.AcquireWeakPtr(), this))->Schedule(); }
 
   bool CanSync(const Syncable& other) const override {
     return dynamic_cast<const Runnable*>(&other) != nullptr;

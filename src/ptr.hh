@@ -510,7 +510,10 @@ struct [[clang::trivial_abi]] NestedPtr {
 
   WeakPtr<ReferenceCounted> GetOwnerWeak() const { return ptr->AcquireWeakPtr(); }
 
-  T* Get() const { return obj; }
+  template <typename U = T>
+  U* Get() const {
+    return static_cast<U*>(obj);
+  }
 
   void Reset() {
     ptr.Reset();

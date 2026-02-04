@@ -150,28 +150,26 @@ void ScheduleArgumentTargets(Object& source, Argument& arg) {
     w.WakeAnimation();
   }
 
-  if (auto next = arg.ObjectOrNull(source)) {
-    next->MyLocation()->ScheduleRun();
+  if (auto next = arg.Find(source)) {
+    dynamic_cast<Runnable*>(next.Get())->ScheduleRun(*next.Owner<Object>());
   }
 }
 
 void RunTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("RunTask");
   if (auto s = target.lock()) {
-    if (Runnable* runnable = dynamic_cast<Runnable*>(s.get())) {
-      LongRunning* long_running = s->AsLongRunning();
-      if (long_running && long_running->IsRunning()) {
-        return;
-      }
-      // Cast the `self` to RunTask for the OnRun invocation
-      std::unique_ptr<RunTask> self_as_run_task((RunTask*)self.release());
-      runnable->OnRun(self_as_run_task);
-      // If OnRun didn't "steal" the ownership then we have to return it back.
-      self.reset(self_as_run_task.release());
+    LongRunning* long_running = s->AsLongRunning();
+    if (long_running && long_running->IsRunning()) {
+      return;
+    }
+    // Cast the `self` to RunTask for the OnRun invocation
+    std::unique_ptr<RunTask> self_as_run_task((RunTask*)self.release());
+    runnable->OnRun(self_as_run_task);
+    // If OnRun didn't "steal" the ownership then we have to return it back.
+    self.reset(self_as_run_task.release());
 
-      if (self) {
-        DoneRunning(*s);
-      }
+    if (self) {
+      DoneRunning(*s);
     }
   }
 }

@@ -13,6 +13,7 @@
 
 namespace automat {
 
+struct Runnable;
 struct Location;
 struct Argument;
 struct Task;
@@ -47,7 +48,8 @@ struct Task {
 };
 
 struct RunTask : Task {
-  RunTask(WeakPtr<Object> target) : Task(target) {}
+  Runnable* runnable;
+  RunTask(WeakPtr<Object> target, Runnable* runnable) : Task(target), runnable(runnable) {}
   std::string Format() override;
   void OnExecute(std::unique_ptr<Task>& self) override;
 

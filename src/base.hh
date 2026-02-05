@@ -157,6 +157,7 @@ struct Machine : Object, ui::Widget, ui::DropTarget {
   vector<Location*> front;
 
   Ptr<Location> Extract(Location& location);
+  SkPath StackShape(Location& base);
   Vec<Ptr<Location>> ExtractStack(Location& base);
 
   // Create a new location on top of all the others.
@@ -215,8 +216,7 @@ struct Machine : Object, ui::Widget, ui::DropTarget {
     return m;
   }
 
-  void Draw(SkCanvas& canvas) const override { Widget::Draw(canvas); }
-  void PreDraw(SkCanvas&) const override;
+  void Draw(SkCanvas&) const override;
   Compositor GetCompositor() const override { return Compositor::QUANTUM_REALM; }
   ui::DropTarget* AsDropTarget() override { return this; }
   bool CanDrop(Location&) const override { return true; }

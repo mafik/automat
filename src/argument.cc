@@ -50,8 +50,8 @@ Object& Argument::ObjectOrMake(Object& start) const {
   return *l.object;
 }
 
-std::unique_ptr<Toy> Argument::MakeToy(ui::Widget* parent, ReferenceCounted& rc) {
-  return std::make_unique<ui::ConnectionWidget>(parent, rc, *this);
+std::unique_ptr<Toy> ArgumentOf::MakeToy(ui::Widget* parent) {
+  return std::make_unique<ui::ConnectionWidget>(parent, object, arg);
 }
 
 void NextArg::CanConnect(Object& start, Part& end, Status& status) const {

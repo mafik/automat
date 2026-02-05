@@ -485,7 +485,7 @@ struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
   }
 };
 
-std::unique_ptr<Toy> Window::MakeToy(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> Window::MakeToy(ui::Widget* parent) {
   return std::make_unique<WindowWidget>(parent, *this);
 }
 

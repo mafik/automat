@@ -41,6 +41,21 @@ void Machine::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
     if (arg.CanConnect(start, part)) {
       arg.Connect(start, NestedPtr<Part>(end.AcquirePtr(), &part));
       connected = true;
+      auto& root = FindRootWidget();
+      for (auto& conn : root.connection_widgets) {
+        if (conn->start_weak.OwnerUnsafe<Object>() != &start) continue;
+        if (conn->start_weak.GetUnsafe() != &arg) continue;
+        if (end.here->IsAbove(*conn->parent)) {
+          if (auto* location = dynamic_cast<Location*>(conn->parent.Get())) {
+            std::ranges::remove(location->overlays, conn.get());
+          }
+          conn->parent->RedrawThisFrame();
+
+          conn->parent = end.here;
+          end.here->overlays.insert(end.here->overlays.begin(), conn.get());
+          conn->parent->RedrawThisFrame();
+        }
+      }
     }
   };
   for (auto& loc : locations) {
@@ -188,9 +203,7 @@ bool Machine::DeserializeKey(ObjectDeserializer& d, StrView key) {
 Machine::Machine(ui::Widget* parent) : ui::Widget(parent) {}
 
 void Machine::FillChildren(Vec<Widget*>& children) {
-  int i = 0;
-  Size n = locations.size();
-  children.reserve(n);
+  children.reserve(locations.size());
   for (auto& l : locations) {
     children.push_back(l.get());
   }
@@ -240,7 +253,7 @@ SkPaint& GetBackgroundPaint(float px_per_m) {
   return paint;
 }
 
-void Machine::PreDraw(SkCanvas& canvas) const {
+void Machine::Draw(SkCanvas& canvas) const {
   auto shape = Shape();
   float px_per_m = canvas.getLocalToDeviceAs3x3().mapRadius(1);
   SkPaint background_paint = GetBackgroundPaint(px_per_m);
@@ -249,6 +262,7 @@ void Machine::PreDraw(SkCanvas& canvas) const {
   border_paint.setColor("#404040"_color);
   border_paint.setStyle(SkPaint::kStroke_Style);
   canvas.drawPath(shape, border_paint);
+  DrawChildren(canvas);
 }
 
 SkMatrix Machine::DropSnap(const Rect& rect_ref, Vec2 bounds_origin, Vec2* fixed_point) {
@@ -281,13 +295,39 @@ void Machine::DropLocation(Ptr<Location>&& l) {
       [](ui::RootWidget&, ui::Widget& w) { w.RedrawThisFrame(); });
 }
 
+SkPath Machine::StackShape(Location& base) {
+  auto base_it = std::find_if(locations.begin(), locations.end(),
+                              [&base](const Ptr<Location>& l) { return l.get() == &base; });
+  if (base_it != locations.end()) {
+    int base_index = std::distance(locations.begin(), base_it);
+    SkPath base_shape = base.ShapeRigid();
+
+    SkPath stack_shape;
+
+    // Move all the objects that are on top of the `base_shape`.
+    for (int atop_index = base_index - 1; atop_index >= 0; --atop_index) {
+      Location& atop = *locations[atop_index];
+      SkPath atop_shape = atop.ShapeRigid();
+      SkPath intersection;
+      bool op_success = Op(atop_shape, base_shape, kIntersect_SkPathOp, &intersection);
+      if (op_success && intersection.countVerbs() > 0) {
+        // Expand the base shape to include the atop shape.
+        Op(base_shape, atop_shape, kUnion_SkPathOp, &base_shape);
+        Op(stack_shape, atop.ShapeRecursive(), kUnion_SkPathOp, &stack_shape);
+      }
+    }
+    return stack_shape;
+  } else {
+    return {};
+  }
+}
+
 Vec<Ptr<Location>> Machine::ExtractStack(Location& base) {
   auto base_it = std::find_if(locations.begin(), locations.end(),
                               [&base](const Ptr<Location>& l) { return l.get() == &base; });
   if (base_it != locations.end()) {
     int base_index = std::distance(locations.begin(), base_it);
-    SkPath base_shape = base.GetShapeRecursive();
-    base_shape.transform(ui::TransformUp(base));  // top-level coordinates
+    SkPath base_shape = base.ShapeRigid();
 
     Vec<Ptr<Location>> result;
     result.push_back(std::move(*base_it));
@@ -296,8 +336,7 @@ Vec<Ptr<Location>> Machine::ExtractStack(Location& base) {
     // Move all the objects that are on top of the `base_shape`.
     for (int atop_index = base_index - 1; atop_index >= 0; --atop_index) {
       Location& atop = *locations[atop_index];
-      SkPath atop_shape = atop.GetShapeRecursive();
-      atop_shape.transform(ui::TransformUp(atop));  // top-level coordinates
+      SkPath atop_shape = atop.ShapeRigid();
       SkPath intersection;
       bool op_success = Op(atop_shape, base_shape, kIntersect_SkPathOp, &intersection);
       if (op_success && intersection.countVerbs() > 0) {

@@ -68,18 +68,12 @@ Location* ConnectionWidget::EndLocation() const {
   return nullptr;
 }
 
-ConnectionWidget::ConnectionWidget(Widget* parent, ReferenceCounted& rc, Argument& arg)
-    : Toy(parent), start_weak(rc.AcquireWeakPtr(), &arg) {
-  if (auto locked = start_weak.Lock()) {
-    if (auto* arg = locked.Get()) {
-      if (auto* obj = locked.Owner<Object>()) {
-        if (IsArgumentOptical(*obj, *arg)) {
-          if (auto* loc = obj->MyLocation()) {
-            auto pos_dir = loc->ArgStart(*arg);
-            state.emplace(*loc, *arg, pos_dir);
-          }
-        }
-      }
+ConnectionWidget::ConnectionWidget(Widget* parent, Object& start, Argument& arg)
+    : Toy(parent), start_weak(start.AcquireWeakPtr(), &arg) {
+  if (IsArgumentOptical(start, arg)) {
+    if (auto* loc = start.MyLocation()) {
+      auto pos_dir = loc->ArgStart(arg);
+      state.emplace(*loc, arg, pos_dir);
     }
   }
 }
@@ -311,7 +305,7 @@ static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
     }
   }
 
-  if (a.start_arg.Get() == &next_arg) {
+  if (w.start_weak.GetUnsafe() == &next_arg) {
     while (w.to_points.size() > 1) {
       // from the last two, pick the one which is closer to pointing down (-pi/2)
       float delta_1 = fabs((w.to_points[w.to_points.size() - 1].dir + 90_deg).ToRadians());
@@ -322,6 +316,30 @@ static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
       w.to_points.pop_back();
     }
   }
+}
+
+void UnparentConnectionWidget(ConnectionWidget& conn) {
+  if (conn.parent == nullptr) return;
+  if (auto* location = dynamic_cast<Location*>(conn.parent.Get())) {
+    std::ranges::remove(location->overlays, &conn);
+  }
+  conn.parent->RedrawThisFrame();
+  conn.parent = nullptr;
+}
+
+void ReparentConnectionWidget(ConnectionWidget& conn, Widget& new_parent) {
+  if (conn.parent.Get() == &new_parent) return;
+  if (conn.parent != nullptr) {
+    if (conn.parent->IsAbove(new_parent)) {
+      return;  // We're already attached to top-most parent
+    }
+    UnparentConnectionWidget(conn);
+  }
+  conn.parent = &new_parent;
+  if (auto* loc = dynamic_cast<Location*>(&new_parent)) {
+    loc->overlays.insert(loc->overlays.begin(), &conn);
+  }
+  conn.RedrawThisFrame();
 }
 
 animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
@@ -346,6 +364,20 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     to_shape.transform(a.end_transform);
   } else {
     to_shape.reset();
+  }
+
+  clip.reset();
+  if (auto* start_obj = a.StartObj()) {
+    auto* start_loc = start_obj->here;
+    if (parent.Get() != start_loc) {
+      clip = root_machine->StackShape(*start_loc);
+    }
+  }
+  if (auto* end_obj = a.EndObj()) {
+    auto* end_loc = end_obj->here;
+    if (parent.Get() != end_loc) {
+      clip = root_machine->StackShape(*end_loc);
+    }
   }
 
   // Don't draw the cable if one of the to_points is over from_shape
@@ -432,7 +464,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     if (anim.prototype_alpha > 0) {
       if (!prototype_widget) {
         auto proto = a.start_arg->Prototype();
-        prototype_widget = proto->MakeToy(this, *proto);
+        prototype_widget = proto->MakeToy(this);
       }
       phase |= prototype_widget->Tick(timer);
     }
@@ -444,6 +476,8 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
   if (style == Argument::Style::Invisible || style == Argument::Style::Spotlight) {
     return;
   }
+
+  canvas.clipPath(clip, SkClipOp::kDifference);
 
   auto arg = start_weak.Lock();
 
@@ -518,14 +552,17 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
     widget.manual_position = pointer_pos - grab_offset * widget.state->connector_scale;
   }
 
+  ReparentConnectionWidget(widget, *pointer.pointer_widget);
   widget.WakeAnimation();
-  pointer.pointer_widget->WakeAnimation();
 }
 
 DragConnectionAction::~DragConnectionAction() {
   auto arg = widget.start_weak.Lock();
   if (!arg) return;
   auto start = arg.GetOwnerWeak().Lock().Cast<Object>();
+
+  UnparentConnectionWidget(widget);
+  ReparentConnectionWidget(widget, *start->here);
 
   Vec2 pos;
   if (widget.state) {
@@ -555,6 +592,8 @@ void DragConnectionAction::Update() {
 bool DragConnectionAction::Highlight(Object& obj, Part& part) const {
   return widget.start_weak.Lock()->CanConnect(obj, part);
 }
+
+ui::Widget* DragConnectionAction::Widget() { return &widget; }
 
 Optional<Rect> ConnectionWidget::TextureBounds() const {
   if (transparency >= 0.99f) {

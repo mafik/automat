@@ -421,8 +421,9 @@ union RRect {
                    << rect.Height() / 2;
       }
     }
-    return {
-        .rect = rect, .radii{radius, radius, radius, radius}, .type = SkRRect::Type::kSimple_Type};
+    return {.rect = rect,
+            .radii{radius, radius, radius, radius},
+            .type = radius > 0 ? SkRRect::Type::kSimple_Type : SkRRect::Type::kRect_Type};
   }
 
   constexpr static RRect MakeWithRadii(Rect rect, float tl, float tr, float br, float bl) {
@@ -495,6 +496,8 @@ union RRect {
             .type = type};
   }
 };
+
+static_assert(sizeof(RRect) == 52);
 
 struct Vec2AndDir {
   Vec2 pos;

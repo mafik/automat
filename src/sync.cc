@@ -268,7 +268,7 @@ struct GearWidget : Object::WidgetBase {
   Optional<Rect> TextureBounds() const override { return bounds; }
 };
 
-std::unique_ptr<Toy> Gear::MakeToy(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> Gear::MakeToy(ui::Widget* parent) {
   return std::make_unique<GearWidget>(parent, *this);
 }
 

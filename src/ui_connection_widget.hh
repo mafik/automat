@@ -28,7 +28,11 @@ struct DragConnectionAction : Action {
   ~DragConnectionAction() override;
   void Update() override;
   bool Highlight(Object&, Part&) const override;
+  ui::Widget* Widget() override;
 };
+
+void UnparentConnectionWidget(ConnectionWidget&);
+void ReparentConnectionWidget(ConnectionWidget&, Widget& new_parent);
 
 // ConnectionWidget can function in three different modes, depending on how the argument is set to
 // draw:
@@ -64,6 +68,7 @@ struct ConnectionWidget : Toy {
   Vec2AndDir pos_dir;  // position of connection start
   SkPath from_shape;   // machine coords
   SkPath to_shape;     // machine coords
+  SkPath clip;         // machine coords
   mutable animation::Approach<> cable_width;
   Vec<Vec2AndDir> to_points;
   float transparency = 1;
@@ -71,7 +76,7 @@ struct ConnectionWidget : Toy {
   float length = 0;
   mutable std::unique_ptr<Toy> prototype_widget;
 
-  ConnectionWidget(Widget* parent, ReferenceCounted&, Argument&);
+  ConnectionWidget(Widget* parent, Object&, Argument&);
 
   // Helper to get the Location and Argument from start_weak
   Location* StartLocation() const;  // TODO: remove
@@ -93,6 +98,11 @@ struct ConnectionWidget : Toy {
   // Places where the connections to this widget may terminate.
   // Local (metric) coordinates.
   void ConnectionPositions(Vec<Vec2AndDir>&) const override {}
+
+  // TODO: Needs a function that will update the `parent` ptr.
+  // - called in ConnectionDragAction
+  // - called in ~ConnectionDragAction / RootMachine::ConnectAtPoint
+  // - called in
 };
 
 void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shape);

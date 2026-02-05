@@ -8,6 +8,7 @@
 
 namespace automat::ui {
 struct RootWidget;
+struct ConnectionWidget;
 }  // namespace automat::ui
 
 namespace automat {
@@ -38,14 +39,18 @@ struct Toy : ui::Widget {
 
 // Mixin class for things that can create and manage widgets (Objects & some Parts).
 // Provides functionality for iterating over widgets and waking their animations.
-struct ToyMaker : virtual Part {
+struct ToyMaker {
   // Produces a new Widget that can display this Part.
   // The `parent` argument allows the Widget to be attached at the correct position in the Widget
   // tree.
   // If constructed Toy needs to access this Part (almost always yes), then it should do
   // so through NestedWeakPtr, using the 2nd argument as the reference counter.
-  virtual std::unique_ptr<Toy> MakeToy(ui::Widget* parent, ReferenceCounted&) = 0;
+  virtual std::unique_ptr<Toy> MakeToy(ui::Widget* parent) = 0;
+
+  // TODO: this does not work for ArgumentOf yet!
   void ForEachToy(std::function<void(ui::RootWidget&, Toy&)> cb);
+
+  // TODO: this does not work for ArgumentOf yet!
   void WakeToys();
 };
 

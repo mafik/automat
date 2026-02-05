@@ -37,7 +37,6 @@ extern unique_ptr<RootWidget> root_widget;
 // Objects can create many widgets, to display themselves simultaneously in multiple contexts.
 // Each context which can display widgets must maintain their lifetime. This class helps with that.
 // It can be used either as a mixin or as a member.
-// TODO: introduce `WidgetMaker` interface, so that widgets can be created for non-Objects
 // TODO: delete widgets after some time
 struct ToyStore {
   std::map<WeakPtr<Object>, std::unique_ptr<Toy>> container;
@@ -55,7 +54,7 @@ struct ToyStore {
     auto weak = object.AcquireWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {
-      auto widget = object.MakeToy(parent, object);
+      auto widget = object.MakeToy(parent);
       it = container.emplace(std::move(weak), std::move(widget)).first;
     } else {
       if (it->second->parent == nullptr) {

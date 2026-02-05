@@ -120,7 +120,7 @@ struct InstructionLibrary : Object {
     void PointerLeave(ui::Pointer&) override;
   };
 
-  unique_ptr<Toy> MakeToy(ui::Widget* parent, ReferenceCounted&) override {
+  unique_ptr<Toy> MakeToy(ui::Widget* parent) override {
     return make_unique<Widget>(parent, *this);
   }
 };

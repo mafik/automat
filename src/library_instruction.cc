@@ -3882,7 +3882,7 @@ bool Instruction::DeserializeKey(ObjectDeserializer& d, StrView key) {
   return true;
 }
 
-std::unique_ptr<Toy> Instruction::MakeToy(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> Instruction::MakeToy(ui::Widget* parent) {
   return make_unique<Widget>(parent, *this);
 }
 }  // namespace automat::library

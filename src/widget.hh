@@ -202,6 +202,19 @@ struct Widget : Trackable, OptionsProvider {
   // children to extend to arbitrary shapes.
   virtual SkPath Shape() const = 0;
 
+  // Widgets that don't have shape (infinite layers) but which have some child widgets may attempt
+  // to report some shape by taking a union of their child shapes.
+  //
+  // This function defaults to Shape() - if not empty.
+  // Otherwise it combines the shapes of this Widget's children.
+  SkPath ShapeRecursive() const;
+
+  // Each Widget has some shape where it can function as a rigid base for other Widgets.
+  // This is used for ExtractStack - to grab a whole stack of objects.
+  //
+  // This defaults to ShapeRecursive().
+  virtual SkPath ShapeRigid() const;
+
   // Can be overridden to provide a more efficient alternative to `Shape()->getBounds()`.
   // When not overridden, `Shape().getBounds()` is used.
   // Local (metric) coordinates.
@@ -249,7 +262,11 @@ struct Widget : Trackable, OptionsProvider {
   virtual Optional<Rect> TextureBounds() const { return Shape().getBounds(); }
   virtual Vec<Vec2> TextureAnchors() { return {}; }
 
-  virtual void DrawChildCachced(SkCanvas&, const Widget& child) const;
+  // This will draw the given child widget using it's precomputed texture (if available).
+  //
+  // Can be overridden to change how child's textures are composited (or prevent children from being
+  // drawn entirely).
+  virtual void DrawChildCached(SkCanvas&, const Widget& child) const;
 
   virtual void PreDrawChildren(SkCanvas&) const;
 
@@ -266,6 +283,8 @@ struct Widget : Trackable, OptionsProvider {
     const_cast<Widget*>(this)->FillChildren(children);
     return children;
   }
+
+  bool IsAbove(Widget& other) const;
 
   // This can be used to block pointer events from propagating to children.
   virtual bool AllowChildPointerEvents(Widget& child) const { return true; }
@@ -293,9 +312,6 @@ struct Widget : Trackable, OptionsProvider {
   };
 
   ParentsView Parents() const { return ParentsView{const_cast<Widget*>(this)}; }
-
-  // Find the shape of this widget. If it's shape is empty, combine its children's shapes.
-  SkPath GetShapeRecursive() const;
 
   // Checks if the two widgets intersect (their shapes). This is accurate but also very slow so
   // avoid it if possible.

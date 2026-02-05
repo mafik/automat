@@ -902,7 +902,7 @@ struct TimelineWidget : Object::WidgetBase {
   void AddMissingTrackWidgets(Timeline& timeline_locked) {
     auto& tracks = timeline_locked.tracks;
     for (size_t i = track_widgets.size(); i < tracks.size(); ++i) {
-      track_widgets.push_back(tracks[i]->track->MakeToy(this, *tracks[i]->track));
+      track_widgets.push_back(tracks[i]->track->MakeToy(this));
     }
   }
 
@@ -1813,7 +1813,7 @@ std::unique_ptr<Action> TimelineWidget::FindAction(ui::Pointer& ptr, ui::ActionT
   return Object::WidgetBase::FindAction(ptr, btn);
 }
 
-std::unique_ptr<Toy> Timeline::MakeToy(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> Timeline::MakeToy(ui::Widget* parent) {
   return std::make_unique<TimelineWidget>(parent, *this);
 }
 
@@ -2353,17 +2353,17 @@ struct Float64TrackWidget : TrackBaseWidget {
   }
 };
 
-std::unique_ptr<Toy> OnOffTrack::MakeToy(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> OnOffTrack::MakeToy(ui::Widget* parent) {
   auto ret = std::make_unique<OnOffTrackWidget>(parent, *this);
   return ret;
 }
 
-std::unique_ptr<Toy> Vec2Track::MakeToy(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> Vec2Track::MakeToy(ui::Widget* parent) {
   auto ret = std::make_unique<Vec2TrackWidget>(parent, *this);
   return ret;
 }
 
-std::unique_ptr<Toy> Float64Track::MakeToy(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> Float64Track::MakeToy(ui::Widget* parent) {
   auto ret = std::make_unique<Float64TrackWidget>(parent, *this);
   return ret;
 }

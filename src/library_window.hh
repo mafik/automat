@@ -36,7 +36,7 @@ struct Window : public Object, ImageProvider {
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
-  std::unique_ptr<Toy> MakeToy(ui::Widget* parent, ReferenceCounted&) override;
+  std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
   void Parts(const std::function<void(Part&)>& cb) override;
 

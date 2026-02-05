@@ -49,6 +49,8 @@ struct Location : ReferenceCounted, ui::Widget {
   Ptr<Object> object;
   Toy* toy = nullptr;
 
+  std::vector<Widget*> overlays;
+
   Vec2 position = {0, 0};
   mutable float scale = 1.f;
 
@@ -197,6 +199,7 @@ struct Location : ReferenceCounted, ui::Widget {
   void InvalidateConnectionWidgets(bool moved, bool value_changed) const;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   SkPath Shape() const override;
+  SkPath ShapeRigid() const override;
 
   // Call this when the position of this location changes to update the autoconnect arguments.
   //

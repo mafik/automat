@@ -146,6 +146,26 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
   }
   widget->ValidateHierarchy();
   widget->RedrawThisFrame();
+
+  // Go over every ConnectionWidget that starts / ends in the dragged stack & update its parent
+  for (auto& connection_widget : ui::root_widget->connection_widgets) {
+    auto arg = connection_widget->start_weak.Lock();
+    if (!arg) continue;
+    auto& start = *arg.Owner<Object>();
+    auto* start_loc = start.here;
+    Location* end_loc = nullptr;
+    if (auto target = arg->Find(start)) {
+      auto& end = *target.Owner<Object>();
+      end_loc = end.here;
+    }
+
+    for (auto& location : locations) {
+      if (start_loc == location.Get() || end_loc == location.Get()) {
+        ReparentConnectionWidget(*connection_widget, *location);
+      }
+    }
+  }
+
   // Go over every ConnectionWidget and set their "radar" to 1, if needed.
   for (auto& connection_widget : ui::root_widget->connection_widgets) {
     auto arg = connection_widget->start_weak.Lock();

@@ -50,7 +50,7 @@ struct Gear : Object {
   // AddSink & AddSource together.
   void FullSync(NestedPtr<Syncable>&);
 
-  std::unique_ptr<Toy> MakeToy(ui::Widget* parent, ReferenceCounted&) override;
+  std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
 

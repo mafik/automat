@@ -439,7 +439,8 @@ static void DrawDial(SkCanvas& canvas, Timer::Range range, time::Duration durati
 }
 
 animation::Phase Timer::Tick(time::Timer& timer) {
-  auto phase = timer_running.IsRunning() ? animation::Animating : animation::Finished;
+  auto phase = WidgetBase::Tick(timer);
+  phase |= timer_running.IsRunning() ? animation::Animating : animation::Finished;
   phase |= animation::ExponentialApproach(0, timer.d, 0.2, start_pusher_depression);
   phase |= animation::ExponentialApproach(0, timer.d, 0.2, left_pusher_depression);
   phase |= animation::ExponentialApproach(0, timer.d, 0.2, right_pusher_depression);

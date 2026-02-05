@@ -184,7 +184,7 @@ animation::Phase ToggleButton::Tick(time::Timer& timer) {
   return animation::ExponentialApproach(Filled() ? 1 : 0, timer.d, 0.15, filling);
 }
 
-void ToggleButton::DrawChildCachced(SkCanvas& canvas, const Widget& child) const {
+void ToggleButton::DrawChildCached(SkCanvas& canvas, const Widget& child) const {
   auto on_widget = const_cast<ToggleButton*>(this)->OnWidget();
   if (filling >= 0.999) {
     if (&child == on_widget) {

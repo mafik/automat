@@ -62,10 +62,10 @@ void Widget::PreDrawChildren(SkCanvas& canvas) const {
 
 void Widget::DrawCached(SkCanvas& canvas) const {
   if (pack_frame_texture_bounds == nullopt) {
-    return Draw(canvas);
+    Draw(canvas);
+  } else {
+    canvas.drawDrawable(sk_drawable.get());
   }
-
-  canvas.drawDrawable(sk_drawable.get());
 }
 
 void Widget::WakeAnimation() const {
@@ -82,7 +82,7 @@ void Widget::WakeAnimationAt(time::SteadyPoint now) const {
   wake_time = min(wake_time, now);
 }
 
-void Widget::DrawChildCachced(SkCanvas& canvas, const Widget& child) const {
+void Widget::DrawChildCached(SkCanvas& canvas, const Widget& child) const {
   canvas.save();
   canvas.concat(child.local_to_parent);
   child.DrawCached(canvas);
@@ -92,14 +92,60 @@ void Widget::DrawChildCachced(SkCanvas& canvas, const Widget& child) const {
 void Widget::DrawChildrenSpan(SkCanvas& canvas, Span<Widget*> widgets) const {
   std::ranges::reverse_view rv{widgets};
   for (auto& widget : rv) {
-    DrawChildCachced(canvas, *widget);
+    DrawChildCached(canvas, *widget);
   }  // for each Widget
 }
 
 void Widget::DrawChildren(SkCanvas& canvas) const {
   PreDrawChildren(canvas);
   for (auto& child : ranges::reverse_view(Children())) {
-    DrawChildCachced(canvas, *child);
+    DrawChildCached(canvas, *child);
+  }
+}
+
+static void PathToRoot(const Widget* start, std::vector<const Widget*>& out_path) {
+  do {
+    out_path.push_back(start);
+    start = start->parent;
+  } while (start);
+}
+
+bool Widget::IsAbove(Widget& other) const {
+  std::vector<const Widget*> path_this;
+  std::vector<const Widget*> path_other;
+  PathToRoot(this, path_this);
+  PathToRoot(&other, path_other);
+  // Final element of both paths is guaranteed to be RootWidget
+  int n_common = 1;
+  // Descend into the path until paths differ
+  while (path_this.size() > n_common && path_other.size() > n_common &&
+         path_this[path_this.size() - n_common - 1] ==
+             path_other[path_other.size() - n_common - 1]) {
+    ++n_common;
+  }
+  if (n_common == path_this.size()) {
+    // `other` is a descendant of `this`
+    return true;
+  } else if (n_common == path_other.size()) {
+    // `other` is an ancestor of `this`
+    return false;
+  } else {
+    // `other` & `this` share an ancestor
+    auto* shared_ancestor = path_this[path_this.size() - n_common];
+    auto* this_ancestor = path_this[path_this.size() - n_common - 1];
+    auto* other_ancestor = path_other[path_other.size() - n_common - 1];
+    for (auto* child : shared_ancestor->Children()) {
+      if (child == this_ancestor) {
+        return true;
+      } else if (child == other_ancestor) {
+        return false;
+      }
+    }
+    ERROR_ONCE << "Cannot determine which widget is on top because " << shared_ancestor->Name()
+               << " (which is a shared ancestor of " << this->Name() << " and " << other.Name()
+               << ") didn't report either of their unique ancestors (" << this_ancestor->Name()
+               << " and " << other_ancestor->Name() << ") as its children";
+    return true;
   }
 }
 
@@ -199,11 +245,11 @@ void Widget::ValidateHierarchy() {
   }
 }
 
-SkPath Widget::GetShapeRecursive() const {
+SkPath Widget::ShapeRecursive() const {
   SkPath shape = Shape();
   if (shape.isEmpty()) {  // only descend into children if the parent widget has no shape
     for (auto& child : Children()) {
-      SkPath child_shape = child->GetShapeRecursive();
+      SkPath child_shape = child->ShapeRigid();
       child_shape.transform(child->local_to_parent.asM33());
       shape.addPath(child_shape);
     }
@@ -211,9 +257,11 @@ SkPath Widget::GetShapeRecursive() const {
   return shape;
 }
 
+SkPath Widget::ShapeRigid() const { return ShapeRecursive(); }
+
 bool Widget::Intersects(const Widget& a, const Widget& b) {
-  SkPath a_shape = a.GetShapeRecursive();
-  SkPath b_shape = b.GetShapeRecursive();
+  SkPath a_shape = a.ShapeRigid();
+  SkPath b_shape = b.ShapeRigid();
   a_shape.transform(TransformBetween(a, b));
   SkPath intersection;
   bool result = Op(a_shape, b_shape, kIntersect_SkPathOp, &intersection);

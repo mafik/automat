@@ -24,6 +24,7 @@
 
 #include <cmath>
 #include <map>
+#include <ranges>
 #include <tracy/Tracy.hpp>
 
 #include "../build/generated/embedded.hh"
@@ -806,7 +807,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
           .parent = parent,
           .parent_with_texture = parent,
       });
-      int i = tree.size() - 1;
+      int tree_index = tree.size() - 1;
 
       auto& node = tree.back();
 
@@ -820,7 +821,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
       {  // Update local_to_window & (maybe) call TransformUpdated()
         SkMatrix local_to_window = widget->local_to_parent.asM33();
-        if (parent != i) {
+        if (parent != tree_index) {
           local_to_window.postConcat(tree[parent].widget->local_to_window);
         }
         (void)local_to_window.invert(&node.window_to_local);
@@ -911,8 +912,8 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         }
         node.SetVerdict(Verdict::Skip_Clipped);
       } else {
-        for (auto& child : widget->Children()) {
-          q.push_back(make_pair(i, child));
+        for (auto* child : ranges::reverse_view(widget->Children())) {
+          q.push_back(make_pair(tree_index, child));
         }
       }
     }

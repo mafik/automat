@@ -94,7 +94,7 @@ struct MakeObjectOption : Option {
   Dir dir;
   MakeObjectOption(Ptr<Object> proto, Dir dir = DIR_NONE) : proto(proto), dir(dir) {}
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
-    return proto->MakeToy(parent, *proto);
+    return proto->MakeToy(parent);
   }
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<MakeObjectOption>(proto, dir);
@@ -507,7 +507,7 @@ audio::Sound& MouseButtonEvent::NextSound() {
   return down ? embedded::assets_SFX_mouse_down_wav : embedded::assets_SFX_mouse_up_wav;
 }
 
-std::unique_ptr<Toy> MouseButtonEvent::MakeToy(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> MouseButtonEvent::MakeToy(ui::Widget* parent) {
   return std::make_unique<MouseButtonEventWidget>(parent, *this);
 }
 
@@ -617,7 +617,7 @@ struct MouseMoveWidget : MouseWidget {
   }
 };
 
-std::unique_ptr<Toy> MouseMove::MakeToy(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> MouseMove::MakeToy(ui::Widget* parent) {
   return std::make_unique<MouseMoveWidget>(parent, *this);
 }
 
@@ -790,11 +790,11 @@ struct MouseScrollXWidget : MouseWidgetBase {
   }
 };
 
-std::unique_ptr<Toy> MouseScrollY::MakeToy(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> MouseScrollY::MakeToy(ui::Widget* parent) {
   return std::make_unique<MouseScrollYWidget>(parent, *this);
 }
 
-std::unique_ptr<Toy> MouseScrollX::MakeToy(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> MouseScrollX::MakeToy(ui::Widget* parent) {
   return std::make_unique<MouseScrollXWidget>(parent, *this);
 }
 
@@ -825,7 +825,7 @@ void MouseScrollX::OnRelativeFloat64(double delta) {
   WakeToys();
 }
 
-std::unique_ptr<Toy> Mouse::MakeToy(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> Mouse::MakeToy(ui::Widget* parent) {
   return std::make_unique<MouseWidget>(parent, *this);
 }
 
@@ -892,7 +892,7 @@ void MouseButtonPresser::Parts(const std::function<void(Part&)>& cb) {
   cb(next_arg);
 }
 
-std::unique_ptr<Toy> MouseButtonPresser::MakeToy(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> MouseButtonPresser::MakeToy(ui::Widget* parent) {
   return std::make_unique<MouseButtonPresserWidget>(parent, *this);
 }
 

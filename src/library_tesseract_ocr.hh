@@ -51,7 +51,7 @@ struct TesseractOCR : public Object {
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
-  std::unique_ptr<Toy> MakeToy(ui::Widget* parent, ReferenceCounted&) override;
+  std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
   void Parts(const std::function<void(Part&)>&) override;
   void Updated(WeakPtr<Object>& updated) override;

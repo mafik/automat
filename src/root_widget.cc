@@ -11,6 +11,7 @@
 #include <memory>
 
 #include "animation.hh"
+#include "argument.hh"
 #include "automat.hh"
 #include "black_hole.hh"
 #include "drag_action.hh"
@@ -103,6 +104,26 @@ void RootWidget::ZoomWarning::Draw(SkCanvas& canvas) const {
 }
 
 static SkColor background_color = SkColorSetRGB(0x80, 0x80, 0x80);
+
+static void UpdateConnectionWidgets(RootWidget& root_widget) {
+  if (root_machine == nullptr) {
+    return;
+  }
+  for (auto& loc : root_machine->locations) {
+    if (loc->object) {
+      loc->object->Args([&](Argument& arg) {
+        // Check if this argument already has a widget.
+        if (ConnectionWidget::FindOrNull(*loc->object, arg)) {
+          return;
+        }
+        // Create a new widget.
+        auto toy = arg.Of(*loc->object).MakeToy(loc.Get());
+        loc->overlays.push_back(toy.get());
+        root_widget.connection_widgets.emplace_back(static_cast<ConnectionWidget*>(toy.release()));
+      });
+    }
+  }
+}
 
 animation::Phase RootWidget::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
@@ -272,9 +293,8 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
       widget->local_to_parent = canvas_to_window44;
     }
   }
-  for (auto& each_connection_widget : connection_widgets) {
-    each_connection_widget->local_to_parent = canvas_to_window44;
-  }
+
+  UpdateConnectionWidgets(*this);
 
   return phase;
 }
@@ -535,31 +555,7 @@ void RootWidget::DropLocation(Ptr<Location>&& location) {
   audio::Play(embedded::assets_SFX_trash_wav);
 }
 
-static void UpdateConnectionWidgets(RootWidget& root_widget) {
-  if (root_machine == nullptr) {
-    return;
-  }
-  for (auto& loc : root_machine->locations) {
-    if (loc->object) {
-      loc->object->Args([&](Argument& arg) {
-        // Check if this argument already has a widget.
-        if (ConnectionWidget::FindOrNull(*loc->object, arg)) {
-          return;
-        }
-        // Create a new widget.
-        auto toy = arg.MakeToy(&root_widget, *loc->object);
-        root_widget.connection_widgets.emplace_back(static_cast<ConnectionWidget*>(toy.release()));
-      });
-    }
-  }
-
-  for (auto& widget : root_widget.connection_widgets) {
-    widget->local_to_parent = SkM44(root_widget.CanvasToWindow());
-  }
-}
-
 void RootWidget::FillChildren(Vec<Widget*>& out_children) {
-  UpdateConnectionWidgets(*this);
   out_children.reserve(3 + pointers.size() + connection_widgets.size());
 
   for (auto& child : children) {
@@ -568,15 +564,6 @@ void RootWidget::FillChildren(Vec<Widget*>& out_children) {
 
   out_children.push_back(&keyboard);
 
-  Vec<Widget*> connection_widgets_below;
-  connection_widgets_below.reserve(connection_widgets.size());
-  for (auto& it : connection_widgets) {
-    if (it->manual_position.has_value() || IsDragged(*it->StartLocation())) {
-      out_children.push_back(it.get());
-    } else {
-      connection_widgets_below.push_back(it.get());
-    }
-  }
   for (auto& pointer : pointers) {
     if (auto widget = pointer->GetWidget()) {
       out_children.push_back(widget);
@@ -587,9 +574,6 @@ void RootWidget::FillChildren(Vec<Widget*>& out_children) {
     out_children.push_back(toolbar.get());
   }
   out_children.push_back(&zoom_warning);
-  for (auto w : connection_widgets_below) {
-    out_children.push_back(w);
-  }
   if (root_machine) {
     out_children.push_back(root_machine.get());
   }

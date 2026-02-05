@@ -47,7 +47,7 @@ struct FlipFlop : Object {
     cb(on_off);
   }
 
-  std::unique_ptr<Toy> MakeToy(ui::Widget* parent, ReferenceCounted&) override;
+  std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 };
 
 }  // namespace automat::library

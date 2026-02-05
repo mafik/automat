@@ -77,7 +77,16 @@ SkPath Location::Shape() const {
   return empty_path;
 }
 
+SkPath Location::ShapeRigid() const {
+  auto toy_shape = toy->ShapeRigid();
+  toy_shape.transform(toy->local_to_parent.asM33());
+  return toy_shape;
+}
+
 void Location::FillChildren(Vec<Widget*>& children) {
+  for (auto* overlay : overlays) {
+    children.push_back(overlay);
+  }
   if (object) {
     children.push_back(&ToyForObject());
   }

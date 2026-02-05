@@ -226,7 +226,7 @@ KeyPresser::KeyPresser(ui::AnsiKey key) : key(key) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }
 Ptr<Object> KeyPresser::Clone() const { return MAKE_PTR(KeyPresser, key); }
 
-std::unique_ptr<Toy> KeyPresser::MakeToy(ui::Widget* parent, ReferenceCounted&) {
+std::unique_ptr<Toy> KeyPresser::MakeToy(ui::Widget* parent) {
   auto w = std::make_unique<KeyPresserWidget>(parent, *this);
   w->shortcut_button->SetLabel(ToStr(key));
   return std::move(w);

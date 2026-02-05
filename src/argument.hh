@@ -15,6 +15,16 @@ enum class CableTexture {
   Braided,
 };
 
+struct Argument;
+
+struct ArgumentOf : ToyMaker {
+  Object& object;
+  Argument& arg;
+  ArgumentOf(Object& object, Argument& arg) : object(object), arg(arg) {}
+
+  std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
+};
+
 // Arguments are responsible for finding dependencies (input & output) of objects.
 // - they know about the requirements of the target object (CanConnect)
 // - they may automatically create target objects using some prototype (Prototype)
@@ -47,7 +57,7 @@ enum class CableTexture {
 //
 // TODO: think about pointer following
 // TODO: think about multiple targets
-struct Argument : ToyMaker {
+struct Argument : virtual Part {
   enum class Style { Arrow, Cable, Spotlight, Invisible };
 
   virtual SkColor Tint() const { return "#404040"_color; }
@@ -99,7 +109,7 @@ struct Argument : ToyMaker {
   // This is the main way of creating new objects through this Argument's Prototype.
   Object& ObjectOrMake(Object& start) const;
 
-  std::unique_ptr<Toy> MakeToy(ui::Widget* parent, ReferenceCounted&) override;
+  ArgumentOf Of(Object& start) { return ArgumentOf(start, *this); }
 };
 
 struct InlineArgument : Argument {

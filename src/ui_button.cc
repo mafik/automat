@@ -153,7 +153,7 @@ animation::Phase Button::Tick(time::Timer& timer) {
   auto bg = BackgroundColor();
   auto fg = ForegroundColor();
 
-  for (auto& child : Children()) {
+  for (auto* child : Children()) {
     if (auto paint = PaintMixin::Get(child)) {
       if (paint->getColor() == fg) {
         continue;

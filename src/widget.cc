@@ -52,7 +52,7 @@ Str ToStr(PointerButton btn) {
 }
 
 void Widget::PreDrawChildren(SkCanvas& canvas) const {
-  for (auto& widget : ranges::reverse_view(Children())) {
+  for (auto* widget : ranges::reverse_view(Children())) {
     canvas.save();
     canvas.concat(widget->local_to_parent);
     widget->PreDraw(canvas);
@@ -98,7 +98,7 @@ void Widget::DrawChildrenSpan(SkCanvas& canvas, Span<Widget*> widgets) const {
 
 void Widget::DrawChildren(SkCanvas& canvas) const {
   PreDrawChildren(canvas);
-  for (auto& child : ranges::reverse_view(Children())) {
+  for (auto* child : ranges::reverse_view(Children())) {
     DrawChildCached(canvas, *child);
   }
 }
@@ -209,7 +209,7 @@ void Widget::RedrawThisFrame() {
   if (pack_frame_texture_bounds) {
     redraw_this_frame = true;
   } else {
-    for (auto& child : Children()) {
+    for (auto* child : Children()) {
       child->RedrawThisFrame();
     }
   }
@@ -248,7 +248,7 @@ void Widget::ValidateHierarchy() {
 SkPath Widget::ShapeRecursive() const {
   SkPath shape = Shape();
   if (shape.isEmpty()) {  // only descend into children if the parent widget has no shape
-    for (auto& child : Children()) {
+    for (auto* child : Children()) {
       SkPath child_shape = child->ShapeRigid();
       child_shape.transform(child->local_to_parent.asM33());
       shape.addPath(child_shape);

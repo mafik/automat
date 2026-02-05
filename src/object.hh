@@ -140,10 +140,7 @@ struct Object : public ReferenceCounted, public ToyMaker {
         SkPath Shape() const override { return widget.Shape(); }
         Optional<Rect> TextureBounds() const override { return std::nullopt; }
         bool CenteredAtZero() const override { return widget.CenteredAtZero(); }
-        void FillChildren(Vec<Widget*>& children) override {
-          WidgetBase::FillChildren(children);
-          children.push_back(&widget);
-        }
+        void FillChildren(Vec<Widget*>& children) override { children.push_back(&widget); }
         void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override {
           widget.ConnectionPositions(out_positions);
         }

@@ -1192,7 +1192,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       }
       if (auto* widget = Widget::Find(update.id)) {
         pack.fresh_texture_anchors[update.id] = widget->TextureAnchors();
-        for (auto& child : widget->Children()) {
+        for (auto* child : widget->Children()) {
           if (pack.fresh_texture_anchors.find(child->ID()) != pack.fresh_texture_anchors.end()) {
             continue;
           }

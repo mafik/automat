@@ -278,10 +278,12 @@ struct Widget : Trackable, OptionsProvider {
   // Widgets are stored in front-to-back order.
   virtual void FillChildren(Vec<Widget*>& children) {}
 
-  Vec<Widget*> Children() const {
-    Vec<Widget*> children;
-    const_cast<Widget*>(this)->FillChildren(children);
-    return children;
+  mutable Vec<Widget*> children_cache;
+
+  Span<Widget*> Children() const {
+    children_cache.clear();  // keeping Vec around prevents allocations
+    const_cast<Widget*>(this)->FillChildren(children_cache);
+    return children_cache;
   }
 
   bool IsAbove(Widget& other) const;

@@ -60,7 +60,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<MouseScrollX, HideInToolbar>();
   index.Register<MouseButtonEvent, HideInToolbar>(ui::PointerButton::Unknown, false);
   index.Register<MouseButtonPresser, HideInToolbar>();
-  index.Register<Number>(null_parent);
+  index.Register<Number>();
   index.Register<Timeline>();
   index.Register<InstructionLibrary>();
   index.Register<Instruction, HideInToolbar>();

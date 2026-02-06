@@ -10,6 +10,7 @@
 #include <charconv>
 
 #include "drag_action.hh"
+#include "number_text_field.hh"
 #include "svg.hh"
 #include "ui_button.hh"
 #include "ui_constants.hh"
@@ -52,114 +53,6 @@ static constexpr char kBackspaceShape[] =
 
 using ui::Text;
 
-NumberButton::NumberButton(ui::Widget* parent, SkPath shape) : Button(parent) {
-  child = std::make_unique<ShapeWidget>(this, shape);
-  UpdateChildTransform();
-}
-
-NumberButton::NumberButton(ui::Widget* parent, std::string text) : Button(parent) {
-  child = std::make_unique<Text>(this, text);
-  UpdateChildTransform();
-}
-
-SkColor NumberButton::BackgroundColor() const { return "#c8c4b7"_color; }
-
-void NumberButton::Activate(ui::Pointer& pointer) {
-  Button::Activate(pointer);
-  if (activate) {
-    if (auto l = Closest<Location>(*pointer.hover)) {
-      activate(*l);
-    }
-  } else {
-    LOG << "NumberButton::Activate() called without callback";
-  }
-}
-
-Number::Number(ui::Widget* parent, double x) : WidgetBase(parent, *this), value(x) {
-  text_field = std::make_unique<ui::NumberTextField>(
-      this, kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth);
-  dot = std::make_unique<NumberButton>(this, ".");
-  backspace = std::make_unique<NumberButton>(this, PathFromSVG(kBackspaceShape));
-  for (int i = 0; i < 10; ++i) {
-    digits[i] = std::make_unique<NumberButton>(this, std::to_string(i));
-    digits[i]->activate = [this, i](Location& l) {
-      if (text_field->text.empty() || text_field->text == "0") {
-        text_field->text = std::to_string(i);
-      } else {
-        text_field->text += std::to_string(i);
-      }
-      value = std::stod(text_field->text);
-      text_field->WakeAnimation();
-      l.ScheduleUpdate();
-    };
-  }
-
-  auto cell = [](int row, int col) {
-    float x = kBorderWidth + kAroundWidgetMargin + col * (kButtonWidth + kBetweenButtonsMargin);
-    float y = kBorderWidth + kAroundWidgetMargin + row * (kButtonHeight + kBetweenButtonsMargin);
-    return SkM44::Translate(x, y);
-  };
-  text_field->local_to_parent =
-      SkM44::Translate(kBorderWidth + kAroundWidgetMargin,
-                       kHeight - kBorderWidth - kAroundWidgetMargin - kTextHeight);
-
-  digits[0]->local_to_parent = cell(0, 0);
-
-  dot->local_to_parent = cell(0, 1);
-
-  backspace->local_to_parent = cell(0, 2);
-
-  for (int row = 0; row < 3; ++row) {
-    for (int col = 0; col < 3; ++col) {
-      int digit = 3 * row + col + 1;
-      digits[digit]->local_to_parent = cell(row + 1, col);
-    }
-  }
-
-  dot->activate = [this](Location& l) {
-    if (text_field->text.empty()) {
-      text_field->text = "0";
-    } else if (auto it = text_field->text.find('.'); it != std::string::npos) {
-      text_field->text.erase(it, 1);
-    }
-    text_field->text += ".";
-    while (text_field->text.size() > 1 && text_field->text[0] == '0' &&
-           text_field->text[1] != '.') {
-      text_field->text.erase(0, 1);
-    }
-    value = std::stod(text_field->text);
-    text_field->WakeAnimation();
-    l.ScheduleUpdate();
-  };
-  backspace->activate = [this](Location& l) {
-    if (!text_field->text.empty()) {
-      text_field->text.pop_back();
-    }
-    if (text_field->text.empty()) {
-      text_field->text = "0";
-    }
-    value = std::stod(text_field->text);
-    text_field->WakeAnimation();
-    l.ScheduleUpdate();
-  };
-}
-
-string_view Number::Name() const { return "Number"; }
-
-Ptr<Object> Number::Clone() const { return MAKE_PTR(Number, parent, value); }
-
-string Number::GetText() const {
-  char buffer[100];
-  auto [end, ec] = std::to_chars(buffer, buffer + 100, value);
-  *end = '\0';
-  return buffer;
-}
-
-void Number::SetText(string_view text) {
-  value = std::stod(string(text));
-  text_field->text = text;
-}
-
 static const SkRRect kNumberRRect = [] {
   return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, kWidth, kHeight), kCornerRadius, kCornerRadius);
 }();
@@ -195,28 +88,32 @@ static const SkPaint kNumberBorderPaint = [] {
   return paint_border;
 }();
 
-void Number::Draw(SkCanvas& canvas) const {
-  canvas.drawRRect(kNumberRRectInner, kNumberBackgroundPaint);
-  canvas.drawRRect(kNumberRRectInner, kNumberBorderPaint);
-  DrawChildren(canvas);
+// Number Object methods
+
+Number::Number(double x) : value(x) {}
+Number::Number(const Number& other) : value(other.value) {}
+
+string_view Number::Name() const { return "Number"; }
+Ptr<Object> Number::Clone() const { return MAKE_PTR(Number, *this); }
+
+string Number::GetText() const {
+  char buffer[100];
+  auto [end, ec] = std::to_chars(buffer, buffer + 100, value);
+  *end = '\0';
+  return buffer;
 }
 
-SkPath Number::Shape() const { return kNumberShape; }
-
-void Number::FillChildren(Vec<Widget*>& children) {
-  children.reserve(13);
-  children.push_back(dot.get());
-  children.push_back(backspace.get());
-  for (int i = 0; i < std::size(digits); ++i) {
-    children.push_back(digits[i].get());
-  }
-  children.push_back(text_field.get());
+void Number::SetText(string_view text) {
+  value = std::stod(string(text));
+  WakeToys();
 }
 
 void Number::SerializeState(ObjectSerializer& writer) const {
   writer.Key("value");
-  writer.RawValue(text_field->text.data(), text_field->text.size(), rapidjson::kNumberType);
+  auto text = GetText();
+  writer.RawValue(text.data(), text.size(), rapidjson::kNumberType);
 }
+
 bool Number::DeserializeKey(ObjectDeserializer& d, StrView key) {
   if (key == "value") {
     Status status;
@@ -225,10 +122,158 @@ bool Number::DeserializeKey(ObjectDeserializer& d, StrView key) {
       ReportError("Couldn't deserialize Number value: " + status.ToStr());
       return true;
     }
-    text_field->text = GetText();
+    WakeToys();
     return true;
   }
   return false;
+}
+
+// NumberButton
+
+struct NumberButton : ui::Button {
+  std::function<void(Location&)> activate;
+  NumberButton(ui::Widget* parent, SkPath shape) : Button(parent) {
+    child = std::make_unique<ShapeWidget>(this, shape);
+    UpdateChildTransform();
+  }
+  NumberButton(ui::Widget* parent, std::string text) : Button(parent) {
+    child = std::make_unique<Text>(this, text);
+    UpdateChildTransform();
+  }
+  void Activate(ui::Pointer& pointer) override {
+    Button::Activate(pointer);
+    if (activate) {
+      if (auto l = Closest<Location>(*pointer.hover)) {
+        activate(*l);
+      }
+    }
+  }
+  StrView Name() const override { return "NumberButton"; }
+  SkColor BackgroundColor() const override { return "#c8c4b7"_color; }
+};
+
+// NumberWidget
+
+struct NumberWidget : Object::WidgetBase {
+  std::unique_ptr<NumberButton> digits[10];
+  std::unique_ptr<NumberButton> dot;
+  std::unique_ptr<NumberButton> backspace;
+  std::unique_ptr<ui::NumberTextField> text_field;
+
+  Ptr<Number> LockNumber() const { return LockObject<Number>(); }
+
+  NumberWidget(ui::Widget* parent, Object& number_obj)
+      : WidgetBase(parent, number_obj) {
+    text_field = std::make_unique<ui::NumberTextField>(
+        this, kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth);
+    dot = std::make_unique<NumberButton>(this, ".");
+    backspace = std::make_unique<NumberButton>(this, PathFromSVG(kBackspaceShape));
+    for (int i = 0; i < 10; ++i) {
+      digits[i] = std::make_unique<NumberButton>(this, std::to_string(i));
+      digits[i]->activate = [this, i](Location& l) {
+        if (text_field->text.empty() || text_field->text == "0") {
+          text_field->text = std::to_string(i);
+        } else {
+          text_field->text += std::to_string(i);
+        }
+        if (auto num = LockNumber()) {
+          num->value = std::stod(text_field->text);
+        }
+        text_field->WakeAnimation();
+        l.ScheduleUpdate();
+      };
+    }
+
+    auto cell = [](int row, int col) {
+      float x = kBorderWidth + kAroundWidgetMargin + col * (kButtonWidth + kBetweenButtonsMargin);
+      float y = kBorderWidth + kAroundWidgetMargin + row * (kButtonHeight + kBetweenButtonsMargin);
+      return SkM44::Translate(x, y);
+    };
+    text_field->local_to_parent =
+        SkM44::Translate(kBorderWidth + kAroundWidgetMargin,
+                         kHeight - kBorderWidth - kAroundWidgetMargin - kTextHeight);
+
+    digits[0]->local_to_parent = cell(0, 0);
+    dot->local_to_parent = cell(0, 1);
+    backspace->local_to_parent = cell(0, 2);
+
+    for (int row = 0; row < 3; ++row) {
+      for (int col = 0; col < 3; ++col) {
+        int digit = 3 * row + col + 1;
+        digits[digit]->local_to_parent = cell(row + 1, col);
+      }
+    }
+
+    dot->activate = [this](Location& l) {
+      if (text_field->text.empty()) {
+        text_field->text = "0";
+      } else if (auto it = text_field->text.find('.'); it != std::string::npos) {
+        text_field->text.erase(it, 1);
+      }
+      text_field->text += ".";
+      while (text_field->text.size() > 1 && text_field->text[0] == '0' &&
+             text_field->text[1] != '.') {
+        text_field->text.erase(0, 1);
+      }
+      if (auto num = LockNumber()) {
+        num->value = std::stod(text_field->text);
+      }
+      text_field->WakeAnimation();
+      l.ScheduleUpdate();
+    };
+    backspace->activate = [this](Location& l) {
+      if (!text_field->text.empty()) {
+        text_field->text.pop_back();
+      }
+      if (text_field->text.empty()) {
+        text_field->text = "0";
+      }
+      if (auto num = LockNumber()) {
+        num->value = std::stod(text_field->text);
+      }
+      text_field->WakeAnimation();
+      l.ScheduleUpdate();
+    };
+
+    // Initialize text_field from Object state
+    if (auto num = LockNumber()) {
+      text_field->text = num->GetText();
+    }
+  }
+
+  animation::Phase Tick(time::Timer&) override {
+    if (auto num = LockNumber()) {
+      auto text = num->GetText();
+      if (text_field->text != text) {
+        text_field->text = text;
+        text_field->WakeAnimation();
+      }
+    }
+    return animation::Finished;
+  }
+
+  void Draw(SkCanvas& canvas) const override {
+    canvas.drawRRect(kNumberRRectInner, kNumberBackgroundPaint);
+    canvas.drawRRect(kNumberRRectInner, kNumberBorderPaint);
+    DrawChildren(canvas);
+  }
+
+  SkPath Shape() const override { return kNumberShape; }
+  bool CenteredAtZero() const override { return true; }
+
+  void FillChildren(Vec<Widget*>& children) override {
+    children.reserve(13);
+    children.push_back(dot.get());
+    children.push_back(backspace.get());
+    for (int i = 0; i < std::size(digits); ++i) {
+      children.push_back(digits[i].get());
+    }
+    children.push_back(text_field.get());
+  }
+};
+
+std::unique_ptr<Toy> Number::MakeToy(ui::Widget* parent) {
+  return std::make_unique<NumberWidget>(parent, *this);
 }
 
 }  // namespace automat::library

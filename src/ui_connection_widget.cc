@@ -367,16 +367,18 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   }
 
   clip.reset();
-  if (auto* start_obj = a.StartObj()) {
-    auto* start_loc = start_obj->here;
-    if (parent.Get() != start_loc) {
-      clip = root_machine->StackShape(*start_loc);
+  if (!Closest<Machine>(*this)) {
+    if (auto* start_obj = a.StartObj()) {
+      auto* start_loc = start_obj->here;
+      if (parent.Get() != start_loc) {
+        clip = root_machine->StackShape(*start_loc);
+      }
     }
-  }
-  if (auto* end_obj = a.EndObj()) {
-    auto* end_loc = end_obj->here;
-    if (parent.Get() != end_loc) {
-      clip = root_machine->StackShape(*end_loc);
+    if (auto* end_obj = a.EndObj()) {
+      auto* end_loc = end_obj->here;
+      if (parent.Get() != end_loc) {
+        clip = root_machine->StackShape(*end_loc);
+      }
     }
   }
 
@@ -477,7 +479,7 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
     return;
   }
 
-  canvas.clipPath(clip, SkClipOp::kDifference);
+  if (!clip.isEmpty()) canvas.clipPath(clip, SkClipOp::kDifference);
 
   auto arg = start_weak.Lock();
 

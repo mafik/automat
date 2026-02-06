@@ -311,6 +311,11 @@ void Machine::DropLocation(Ptr<Location>&& l) {
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
   locations.front()->object->ForEachToy(
       [](ui::RootWidget&, ui::Widget& w) { w.RedrawThisFrame(); });
+  // Walk over connections that start/end in the dropped location
+  // If the other end of the connection is obscured by another toy (obscurer), move the obscurer to
+  // the front of locations list.
+  // When moving the obscurer, make sure that any other toys that are stacked on top are moved
+  // alongside it (obscurer & its whole stack should be raised together).
 }
 
 SkPath Machine::StackShape(Location& base) {

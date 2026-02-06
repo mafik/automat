@@ -321,7 +321,7 @@ static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
 void UnparentConnectionWidget(ConnectionWidget& conn) {
   if (conn.parent == nullptr) return;
   if (auto* location = dynamic_cast<Location*>(conn.parent.Get())) {
-    std::ranges::remove(location->overlays, &conn);
+    std::erase(location->overlays, &conn);
   }
   conn.parent->RedrawThisFrame();
   conn.parent = nullptr;

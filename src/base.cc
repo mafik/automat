@@ -63,7 +63,7 @@ void Machine::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
         if (conn->start_weak.GetUnsafe() != &arg) continue;
         if (end.here->IsAbove(*conn->parent)) {
           if (auto* location = dynamic_cast<Location*>(conn->parent.Get())) {
-            std::ranges::remove(location->overlays, conn.get());
+            std::erase(location->overlays, conn.get());
           }
           conn->parent->RedrawThisFrame();
 

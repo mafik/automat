@@ -334,7 +334,7 @@ void Timeline::AddTrack(Ptr<TrackBase>&& track, StrView name) {
   arg->track = std::move(track);
   tracks.emplace_back(std::move(arg));
   if (auto h = here) {
-    h->InvalidateConnectionWidgets(true, true);
+    if (h->widget) h->widget->InvalidateConnectionWidgets(true, true);
   }
   WakeToys();
 }

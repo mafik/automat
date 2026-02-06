@@ -15,15 +15,7 @@ enum class CableTexture {
   Braided,
 };
 
-struct Argument;
-
-struct ArgumentOf : ToyMaker {
-  Object& object;
-  Argument& arg;
-  ArgumentOf(Object& object, Argument& arg) : object(object), arg(arg) {}
-
-  std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-};
+struct ArgumentOf;
 
 // Arguments are responsible for finding dependencies (input & output) of objects.
 // - they know about the requirements of the target object (CanConnect)
@@ -109,8 +101,20 @@ struct Argument : virtual Part {
   // This is the main way of creating new objects through this Argument's Prototype.
   Object& ObjectOrMake(Object& start) const;
 
-  ArgumentOf Of(Object& start) { return ArgumentOf(start, *this); }
+  ArgumentOf Of(Object& start);
 };
+
+struct ArgumentOf : ToyMaker {
+  Object& object;
+  Argument& arg;
+  ArgumentOf(Object& object, Argument& arg) : object(object), arg(arg) {}
+
+  ReferenceCounted* GetReferenceCounted() override { return &object; }
+  Part* GetPart() override { return &arg; }
+  std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
+};
+
+inline ArgumentOf Argument::Of(Object& start) { return ArgumentOf(start, *this); }
 
 struct InlineArgument : Argument {
   NestedWeakPtr<Part> end;

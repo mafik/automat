@@ -337,8 +337,9 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
   // Note: this could only iterate over visible locations
   for (auto& loc : root_machine->locations) {
     auto& obj = *loc->object;
-    HighlightCheck(obj, *loc->toy, obj);
-    obj.Parts([&](Part& part) { HighlightCheck(obj, *loc->toy, part); });
+    if (!loc->widget || !loc->widget->toy) continue;
+    HighlightCheck(obj, *loc->widget->toy, obj);
+    obj.Parts([&](Part& part) { HighlightCheck(obj, *loc->widget->toy, part); });
   }
 
   sort_heap(highlight_target.begin(), highlight_target.end());

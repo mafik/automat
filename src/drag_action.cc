@@ -59,11 +59,11 @@ void DragLocationAction::Update() {
   }
   SkMatrix location_transform[n];
   for (int i = 0; i < n; ++i) {
-    float scale = locations[i]->toy->GetBaseScale();
-    location_transform[i] =
-        SkMatrix::Scale(scale, scale)
-            .postTranslate(current_position.x, current_position.y)
-            .preTranslate(-locations[i]->local_anchor->x, -locations[i]->local_anchor->y);
+    float scale = locations[i]->widget->toy->GetBaseScale();
+    location_transform[i] = SkMatrix::Scale(scale, scale)
+                                .postTranslate(current_position.x, current_position.y)
+                                .preTranslate(-locations[i]->widget->local_anchor->x,
+                                              -locations[i]->widget->local_anchor->y);
   }
 
   Vec2 bounds_origin;
@@ -92,7 +92,7 @@ void DragLocationAction::Update() {
     location_transform[i].postConcat(snap);
     Vec2 new_position;
     float new_scale;
-    Location::FromMatrix(location_transform[i], locations[i]->LocalAnchor(), new_position,
+    Location::FromMatrix(location_transform[i], locations[i]->widget->LocalAnchor(), new_position,
                          new_scale);
     if (!NearlyEqual(new_position, locations[i]->position)) {
       moved = true;
@@ -105,11 +105,11 @@ void DragLocationAction::Update() {
 
   if (moved) {
     for (auto& location : locations) {
-      location->UpdateAutoconnectArgs();
+      if (location->widget) location->widget->UpdateAutoconnectArgs();
     }
     for (auto& location : locations) {
-      location->WakeAnimation();
-      location->InvalidateConnectionWidgets(true, false);
+      location->WakeToys();
+      if (location->widget) location->widget->InvalidateConnectionWidgets(true, false);
     }
   }
 
@@ -127,22 +127,22 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
     pointer.root_widget.black_hole.WakeAnimation();
   }
   for (auto& location : locations) {
-    auto fix = TransformBetween(*location, *widget);
+    auto* lw = location->widget;
+    auto fix = TransformBetween(*lw, *widget);
 
-    auto target_matrix =
-        Location::ToMatrix(location->position, location->scale, location->LocalAnchor());
+    auto target_matrix = Location::ToMatrix(location->position, location->scale, lw->LocalAnchor());
     target_matrix.postConcat(fix);
 
     auto& toy = location->ToyForObject();
     toy.local_to_parent.postConcat(SkM44(fix));
     {  // Transform velocities
-      fix.mapVector(location->position_vel);
-      fix.mapRadius(location->scale_vel);
+      fix.mapVector(lw->position_vel);
+      fix.mapRadius(lw->scale_vel);
     }
 
-    location->parent = widget.get();
-    location->local_anchor = pointer.PositionWithin(toy);
-    location->WakeAnimation();
+    lw->parent = widget.get();
+    lw->local_anchor = pointer.PositionWithin(toy);
+    location->WakeToys();
   }
   widget->ValidateHierarchy();
   widget->RedrawThisFrame();
@@ -161,7 +161,7 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
 
     for (auto& location : locations) {
       if (start_loc == location.Get() || end_loc == location.Get()) {
-        ReparentConnectionWidget(*connection_widget, *location);
+        if (location->widget) ReparentConnectionWidget(*connection_widget, *location->widget);
       }
     }
   }
@@ -198,12 +198,13 @@ DragLocationAction::~DragLocationAction() {
   ui::DropTarget* drop_target = FindDropTarget(*this);
   if (drop_target) {
     for (auto& location : std::ranges::reverse_view(locations)) {
-      location->WakeAnimation();
+      location->WakeToys();
       {  // Use matrix to keep the object in place while clearing the local anchor
-        auto matrix =
-            Location::ToMatrix(location->position, location->scale, *location->local_anchor);
-        location->local_anchor.reset();
-        Location::FromMatrix(matrix, location->LocalAnchor(), location->position, location->scale);
+        auto matrix = Location::ToMatrix(location->position, location->scale,
+                                         *location->widget->local_anchor);
+        location->widget->local_anchor.reset();
+        Location::FromMatrix(matrix, location->widget->LocalAnchor(), location->position,
+                             location->scale);
       }
       drop_target->DropLocation(std::move(location));
     }
@@ -218,12 +219,13 @@ DragLocationAction::~DragLocationAction() {
 
 void DragLocationWidget::FillChildren(Vec<Widget*>& children) {
   for (auto& location : action.locations) {
-    children.push_back(location.get());
+    if (location->widget) children.push_back(location->widget);
   }
 }
 
 bool IsDragged(const Location& location) {
-  return dynamic_cast<const DragLocationWidget*>(location.parent.get()) != nullptr;
+  return location.widget &&
+         dynamic_cast<const DragLocationWidget*>(location.widget->parent.get()) != nullptr;
 }
 
 }  // namespace automat

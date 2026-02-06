@@ -61,14 +61,14 @@ void Machine::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
       for (auto& conn : root.connection_widgets) {
         if (conn->start_weak.OwnerUnsafe<Object>() != &start) continue;
         if (conn->start_weak.GetUnsafe() != &arg) continue;
-        if (end.here->IsAbove(*conn->parent)) {
-          if (auto* location = dynamic_cast<Location*>(conn->parent.Get())) {
-            std::erase(location->overlays, conn.get());
+        if (end.here->widget && end.here->widget->IsAbove(*conn->parent)) {
+          if (auto* lw = dynamic_cast<LocationWidget*>(conn->parent.Get())) {
+            std::erase(lw->overlays, conn.get());
           }
           conn->parent->RedrawThisFrame();
 
-          conn->parent = end.here;
-          end.here->overlays.insert(end.here->overlays.begin(), conn.get());
+          conn->parent = end.here->widget;
+          end.here->widget->overlays.insert(end.here->widget->overlays.begin(), conn.get());
           conn->parent->RedrawThisFrame();
         }
       }
@@ -106,7 +106,7 @@ void* Machine::Nearby(Vec2 start, float radius, std::function<void*(Location&)> 
 void Machine::NearbyCandidates(Location& here, const Argument& arg, float radius,
                                std::function<void(Location&, Vec<Vec2AndDir>&)> callback) {
   // Check the currently dragged object
-  auto& root_widget = here.FindRootWidget();
+  auto& root_widget = *ui::root_widget;
   for (auto* action : root_widget.active_actions) {
     if (auto* drag_location_action = dynamic_cast<DragLocationAction*>(action)) {
       for (auto& location : drag_location_action->locations) {
@@ -193,9 +193,6 @@ bool Machine::DeserializeKey(ObjectDeserializer& d, StrView key) {
         locations.pop_front();
       }
       object->here = &loc;
-      if (auto widget = dynamic_cast<ui::Widget*>(object)) {
-        widget->parent = &loc;
-      }
       loc.InsertHere(object->AcquirePtr());
 
       // Read the [x, y] position array
@@ -223,7 +220,8 @@ Machine::Machine(ui::Widget* parent) : ui::Widget(parent) {}
 void Machine::FillChildren(Vec<Widget*>& children) {
   children.reserve(locations.size());
   for (auto& l : locations) {
-    children.push_back(l.get());
+    auto& toy = ToyStore().FindOrMake(*l, this);
+    children.push_back(&toy);
   }
 }
 
@@ -305,12 +303,11 @@ SkMatrix Machine::DropSnap(const Rect& rect_ref, Vec2 bounds_origin, Vec2* fixed
 }
 
 void Machine::DropLocation(Ptr<Location>&& l) {
-  l->parent = this;
   l->parent_location = here;
   locations.insert(locations.begin(), std::move(l));
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
   Location& dropped = *locations.front();
-  dropped.object->ForEachToy([](ui::RootWidget&, ui::Widget& w) { w.RedrawThisFrame(); });
+  dropped.object->ForEachToy([](ui::RootWidget&, Toy& w) { w.RedrawThisFrame(); });
   // Walk over connections that start/end in the dropped location.
   // If the other end of the connection is obscured by another location, raise that obscurer
   // (and its whole stack) to the front.
@@ -329,12 +326,12 @@ void Machine::DropLocation(Ptr<Location>&& l) {
                                  [&](const Ptr<Location>& loc) { return loc.get() == other; });
     if (other_it == locations.end()) continue;
     int other_index = std::distance(locations.begin(), other_it);
-    SkPath other_shape = other->ShapeRigid();
+    SkPath other_shape = other->widget->ShapeRigid();
     // Check if any location above `other` obscures it.
     for (int i = other_index - 1; i >= 0; --i) {
       Location& above = *locations[i];
       if (&above == &dropped) continue;
-      SkPath above_shape = above.ShapeRigid();
+      SkPath above_shape = above.widget->ShapeRigid();
       SkPath intersection;
       if (Op(above_shape, other_shape, kIntersect_SkPathOp, &intersection) &&
           intersection.countVerbs() > 0) {
@@ -350,11 +347,11 @@ void Machine::ForStack(Location& base, std::function<void(Location&, int index)>
                               [&base](const Ptr<Location>& l) { return l.get() == &base; });
   if (base_it == locations.end()) return;
   int base_index = std::distance(locations.begin(), base_it);
-  SkPath base_shape = base.ShapeRigid();
+  SkPath base_shape = base.widget->ShapeRigid();
   callback(base, base_index);
   for (int atop_index = base_index - 1; atop_index >= 0; --atop_index) {
     Location& atop = *locations[atop_index];
-    SkPath atop_shape = atop.ShapeRigid();
+    SkPath atop_shape = atop.widget->ShapeRigid();
     SkPath intersection;
     if (Op(atop_shape, base_shape, kIntersect_SkPathOp, &intersection) &&
         intersection.countVerbs() > 0) {
@@ -368,7 +365,7 @@ SkPath Machine::StackShape(Location& base) {
   SkPath stack_shape;
   ForStack(base, [&](Location& loc, int) {
     if (&loc != &base) {
-      Op(stack_shape, loc.ShapeRecursive(), kUnion_SkPathOp, &stack_shape);
+      Op(stack_shape, loc.widget->ShapeRecursive(), kUnion_SkPathOp, &stack_shape);
     }
   });
   return stack_shape;
@@ -437,7 +434,7 @@ Ptr<Location> Machine::Extract(Location& location) {
 }
 
 Location& Machine::CreateEmpty() {
-  auto& it = locations.emplace_front(new Location(this, here));
+  auto& it = locations.emplace_front(new Location(here));
   Location* h = it.get();
   return *h;
 }
@@ -445,7 +442,6 @@ void Machine::Relocate(Location* parent) {
   Object::Relocate(parent);
   for (auto& it : locations) {
     it->parent_location = here;
-    it->parent = this;
   }
 }
 }  // namespace automat

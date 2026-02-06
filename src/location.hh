@@ -21,6 +21,7 @@ struct ConnectionWidget;
 namespace automat {
 
 struct LongRunning;
+struct LocationWidget;
 
 // Each Container holds its inner objects in Locations.
 //
@@ -32,27 +33,24 @@ struct LongRunning;
 //
 // Implementations of this interface would typically extend it with
 // container-specific functions.
-struct Location : ReferenceCounted, ui::Widget {
-  constexpr static float kPositionSpringPeriod = 0.2;
-  constexpr static float kScaleSpringPeriod = 0.3;
-  constexpr static float kSpringHalfTime = kScaleSpringPeriod / 4;
-
-  // Animation state
-  float transparency = 0;
-  animation::SpringV2<float> elevation;
-
-  Optional<Vec2> local_anchor;  // used for animation & DragLocationAction
-  Vec2 position_vel = {};
-  float scale_vel = 0;
+struct Location : ReferenceCounted, ToyMaker {
   WeakPtr<Location> parent_location;
 
   Ptr<Object> object;
-  Toy* toy = nullptr;
-
-  std::vector<Widget*> overlays;
 
   Vec2 position = {0, 0};
   mutable float scale = 1.f;
+
+  std::unordered_set<Location*> update_observers;
+  std::unordered_set<Location*> observing_updates;
+
+  // Cached LocationWidget (set by MakeToy, cleared by LocationWidget dtor).
+  LocationWidget* widget = nullptr;
+
+  // ToyMaker overrides
+  ReferenceCounted* GetReferenceCounted() override { return this; }
+  Part* GetPart() override { return this; }
+  std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
   // Obtain a matrix representation of the given transform.
   static SkMatrix ToMatrix(Vec2 position, float scale, Vec2 anchor);
@@ -63,17 +61,11 @@ struct Location : ReferenceCounted, ui::Widget {
   void Iconify();
   void Deiconify();
 
-  std::unordered_set<Location*> update_observers;
-  std::unordered_set<Location*> observing_updates;
-
-  explicit Location(Widget* parent_widget, WeakPtr<Location> parent_location = {});
+  explicit Location(WeakPtr<Location> parent_location = {});
   ~Location();
 
   // Find (or create if needed) the Widget for this location's object.
-  // Shortcut for Widget::ForObject(location.object, location)
   Toy& ToyForObject();
-
-  Vec2 LocalAnchor() const override;
 
   Ptr<Object> InsertHere(Ptr<Object>&& object);
 
@@ -84,8 +76,6 @@ struct Location : ReferenceCounted, ui::Widget {
     auto typed = MAKE_PTR(T, std::forward<Args>(args)...);
     object = typed;
     object->Relocate(this);
-    toy = &ToyForObject();
-    ValidateHierarchy();
     return typed;
   }
 
@@ -188,27 +178,55 @@ struct Location : ReferenceCounted, ui::Widget {
     ScheduleUpdate();
   }
   void SetNumber(double number);
+};
 
+struct LocationWidget : Toy {
+  constexpr static float kPositionSpringPeriod = 0.2;
+  constexpr static float kScaleSpringPeriod = 0.3;
+  constexpr static float kSpringHalfTime = kScaleSpringPeriod / 4;
+
+  WeakPtr<Location> location_weak;
+
+  // Animation state (moved from Location)
+  float transparency = 0;
+  animation::SpringV2<float> elevation;
+  Optional<Vec2> local_anchor;
+  Vec2 position_vel = {};
+  float scale_vel = 0;
+  Toy* toy = nullptr;  // cached Object Toy
+  std::vector<ui::Widget*> overlays;
+
+  LocationWidget(ui::Widget* parent, Location& loc);
+  ~LocationWidget();
+
+  Ptr<Location> LockLocation() const { return location_weak.Lock(); }
+
+  Toy& ToyForObject();
+  Vec2 LocalAnchor() const override;
+
+  // Toy overrides
+  float GetBaseScale() const override { return 1; }
+  void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override;
+
+  // Widget overrides
   animation::Phase Tick(time::Timer& timer) override;
   void PreDraw(SkCanvas&) const override;
   void Draw(SkCanvas&) const override;
-  void InvalidateConnectionWidgets(bool moved, bool value_changed) const;
-  std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   SkPath Shape() const override;
   SkPath ShapeRigid() const override;
+  void FillChildren(Vec<ui::Widget*>& children) override;
+  Optional<Rect> TextureBounds() const override;
+  std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
+
+  void InvalidateConnectionWidgets(bool moved, bool value_changed) const;
 
   // Call this when the position of this location changes to update the autoconnect arguments.
-  //
-  // IMPORTANT: this function uses the widget-based screen coordinates to determine the position
-  // of the object. Pay attention to the parent location's animation_state!
   void UpdateAutoconnectArgs();
 
   // DEPRECATED. Returns the position in parent's coordinates where the connections for this
   // argument should start.
   // TODO: replace with Toy::ArgStart
   Vec2AndDir ArgStart(Argument&);
-  void FillChildren(Vec<Widget*>& children) override;
-  Optional<Rect> TextureBounds() const override;
 };
 
 void PositionBelow(Location& origin, Location& below);

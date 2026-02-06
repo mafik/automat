@@ -40,6 +40,10 @@ struct Toy : ui::Widget {
 // Mixin class for things that can create and manage widgets (Objects & some Parts).
 // Provides functionality for iterating over widgets and waking their animations.
 struct ToyMaker {
+  // Identity for ToyStore keying.
+  virtual ReferenceCounted* GetReferenceCounted() = 0;
+  virtual Part* GetPart() = 0;
+
   // Produces a new Widget that can display this Part.
   // The `parent` argument allows the Widget to be attached at the correct position in the Widget
   // tree.
@@ -47,10 +51,7 @@ struct ToyMaker {
   // so through NestedWeakPtr, using the 2nd argument as the reference counter.
   virtual std::unique_ptr<Toy> MakeToy(ui::Widget* parent) = 0;
 
-  // TODO: this does not work for ArgumentOf yet!
   void ForEachToy(std::function<void(ui::RootWidget&, Toy&)> cb);
-
-  // TODO: this does not work for ArgumentOf yet!
   void WakeToys();
 };
 

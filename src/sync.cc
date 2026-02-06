@@ -312,7 +312,7 @@ void Syncable::Connect(Object& start, const NestedPtr<Part>& end) {
       sync_block = FindGearOrMake(syncable);
       auto& loc = root_machine->Insert(sync_block);
       loc.position = (end.Owner<Object>()->here->position + start.here->position) / 2;
-      loc.position_vel = Vec2(0, 1);
+      if (loc.widget) loc.widget->position_vel = Vec2(0, 1);
     }
     sync_block->FullSync(syncable);
     sync_block->FullSync(target);

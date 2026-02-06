@@ -143,8 +143,10 @@ struct NumberButton : ui::Button {
   void Activate(ui::Pointer& pointer) override {
     Button::Activate(pointer);
     if (activate) {
-      if (auto l = Closest<Location>(*pointer.hover)) {
-        activate(*l);
+      if (auto* lw = Closest<LocationWidget>(*pointer.hover)) {
+        if (auto l = lw->LockLocation()) {
+          activate(*l);
+        }
       }
     }
   }

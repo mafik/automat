@@ -71,8 +71,8 @@ Location* ConnectionWidget::EndLocation() const {
 ConnectionWidget::ConnectionWidget(Widget* parent, Object& start, Argument& arg)
     : Toy(parent), start_weak(start.AcquireWeakPtr(), &arg) {
   if (IsArgumentOptical(start, arg)) {
-    if (auto* loc = start.MyLocation()) {
-      auto pos_dir = loc->ArgStart(arg);
+    if (auto* loc = start.MyLocation(); loc && loc->widget) {
+      auto pos_dir = loc->widget->ArgStart(arg);
       state.emplace(*loc, arg, pos_dir);
     }
   }
@@ -320,8 +320,8 @@ static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
 
 void UnparentConnectionWidget(ConnectionWidget& conn) {
   if (conn.parent == nullptr) return;
-  if (auto* location = dynamic_cast<Location*>(conn.parent.Get())) {
-    std::erase(location->overlays, &conn);
+  if (auto* lw = dynamic_cast<LocationWidget*>(conn.parent.Get())) {
+    std::erase(lw->overlays, &conn);
   }
   conn.parent->RedrawThisFrame();
   conn.parent = nullptr;
@@ -336,8 +336,8 @@ void ReparentConnectionWidget(ConnectionWidget& conn, Widget& new_parent) {
     UnparentConnectionWidget(conn);
   }
   conn.parent = &new_parent;
-  if (auto* loc = dynamic_cast<Location*>(&new_parent)) {
-    loc->overlays.insert(loc->overlays.begin(), &conn);
+  if (auto* lw = dynamic_cast<LocationWidget*>(&new_parent)) {
+    lw->overlays.insert(lw->overlays.begin(), &conn);
   }
   conn.RedrawThisFrame();
 }
@@ -370,13 +370,13 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   if (!Closest<Machine>(*this)) {
     if (auto* start_obj = a.StartObj()) {
       auto* start_loc = start_obj->here;
-      if (parent.Get() != start_loc) {
+      if (parent.Get() != static_cast<Widget*>(start_loc->widget)) {
         clip = root_machine->StackShape(*start_loc);
       }
     }
     if (auto* end_obj = a.EndObj()) {
       auto* end_loc = end_obj->here;
-      if (parent.Get() != end_loc) {
+      if (parent.Get() != static_cast<Widget*>(end_loc->widget)) {
         clip = root_machine->StackShape(*end_loc);
       }
     }
@@ -418,7 +418,10 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
 
   auto phase = animation::LinearApproach(should_be_hidden ? 1 : 0, timer.d, 5, transparency);
 
-  alpha = (1.f - a.StartObj()->here->transparency) * (1.f - transparency);
+  float loc_transparency = (a.StartObj()->here && a.StartObj()->here->widget)
+                               ? a.StartObj()->here->widget->transparency
+                               : 0.f;
+  alpha = (1.f - loc_transparency) * (1.f - transparency);
 
   if (!state.has_value() && style != Argument::Style::Arrow && alpha > 0.01f) {
     auto arcline = RouteCable(pos_dir, to_points, nullptr);
@@ -564,7 +567,7 @@ DragConnectionAction::~DragConnectionAction() {
   auto start = arg.GetOwnerWeak().Lock().Cast<Object>();
 
   UnparentConnectionWidget(widget);
-  ReparentConnectionWidget(widget, *start->here);
+  if (start->here->widget) ReparentConnectionWidget(widget, *start->here->widget);
 
   Vec2 pos;
   if (widget.state) {

@@ -145,7 +145,7 @@ int Main() {
   root_widget->loading_animation = std::make_unique<HypnoRect>();
   root_widget->InitToolbar();
 
-  root_location = MAKE_PTR(Location, root_widget.get());
+  root_location = MAKE_PTR(Location);
   root_machine = root_location->Create<Machine>(root_widget.get());
   // We don't want to display the root location. Root machine
   // should be connected directly to the root widget.

@@ -1093,7 +1093,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(ui::Pointer& p,
     auto contact_point = p.PositionWithin(*this);
 
     if (kFrontInstructionRect.Contains(contact_point)) {
-      auto loc = MAKE_PTR(Location, root_machine.get(), root_location);
+      auto loc = MAKE_PTR(Location, root_location);
 
       loc->InsertHere(instruction_helix.front().instruction->Clone());
       audio::Play(embedded::assets_SFX_toolbar_pick_wav);

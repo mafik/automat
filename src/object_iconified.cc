@@ -29,13 +29,13 @@ bool IsIconified(Object* object) {
 void Iconify(Object& object) {
   auto lock = std::unique_lock(iconified_objects_mutex);
   iconified_objects.emplace(&object, object);
-  object.here->InvalidateConnectionWidgets(false, false);
+  if (object.here && object.here->widget) object.here->widget->InvalidateConnectionWidgets(false, false);
 }
 
 void Deiconify(Object& object) {
   auto lock = std::unique_lock(iconified_objects_mutex);
   iconified_objects.erase(&object);
-  object.here->InvalidateConnectionWidgets(false, false);
+  if (object.here && object.here->widget) object.here->widget->InvalidateConnectionWidgets(false, false);
 }
 
 void SetIconified(Object& object, bool iconified) {

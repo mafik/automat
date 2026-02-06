@@ -45,8 +45,8 @@ Object& Argument::ObjectOrMake(Object& start) const {
   PositionBelow(l, *here);
   AnimateGrowFrom(*here,
                   l);  // this must go before UpdateAutoconnectArgs because of animation_state
-  l.UpdateAutoconnectArgs();
-  l.WakeAnimation();
+  if (l.widget) l.widget->UpdateAutoconnectArgs();
+  l.WakeToys();
   return *l.object;
 }
 

@@ -30,7 +30,7 @@ std::unique_ptr<Action> PrototypeButton::FindAction(ui::Pointer& pointer, ui::Ac
   if (btn != ui::PointerButton::Left) {
     return nullptr;
   }
-  auto loc = MAKE_PTR(Location, pointer.hover, root_location->AcquireWeakPtr());
+  auto loc = MAKE_PTR(Location, root_location->AcquireWeakPtr());
   loc->Create(*proto);
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
   return std::make_unique<DragLocationAction>(pointer, std::move(loc));

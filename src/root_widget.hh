@@ -39,28 +39,32 @@ extern unique_ptr<RootWidget> root_widget;
 // It can be used either as a mixin or as a member.
 // TODO: delete widgets after some time
 struct ToyStore {
-  std::map<WeakPtr<Object>, std::unique_ptr<Toy>> container;
+  using Key = std::pair<WeakPtr<ReferenceCounted>, Part*>;
+  std::map<Key, std::unique_ptr<Toy>> container;
 
-  Toy* FindOrNull(Object& object) const {
-    auto weak = object.AcquireWeakPtr();
-    auto it = container.find(weak);
+  static Key MakeKey(ReferenceCounted& rc, Part& part) {
+    return {WeakPtr<ReferenceCounted>(&rc), &part};
+  }
+
+  Toy* FindOrNull(ToyMaker& maker) const {
+    auto it = container.find(MakeKey(*maker.GetReferenceCounted(), *maker.GetPart()));
     if (it == container.end()) {
       return nullptr;
     }
     return it->second.get();
   }
 
-  Toy& FindOrMake(Object& object, Widget* parent) {
-    auto weak = object.AcquireWeakPtr();
-    auto it = container.find(weak);
+  Toy& FindOrMake(ToyMaker& maker, Widget* parent) {
+    auto key = MakeKey(*maker.GetReferenceCounted(), *maker.GetPart());
+    auto it = container.find(key);
     if (it == container.end()) {
-      auto widget = object.MakeToy(parent);
-      it = container.emplace(std::move(weak), std::move(widget)).first;
-    } else {
+      auto widget = maker.MakeToy(parent);
+      it = container.emplace(std::move(key), std::move(widget)).first;
+    } else if (it->second->parent != parent) {
       if (it->second->parent == nullptr) {
         it->second->parent = parent->AcquireTrackedPtr();
       } else {
-        LOG << parent->Name() << " is asking for a widget for " << object.Name()
+        LOG << parent->Name() << " is asking for a widget for " << maker.GetPart()->Name()
             << " but it's already owned by " << it->second->parent->Name()
             << ". TODO: figure out what to do in this situation";
       }

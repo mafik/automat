@@ -126,9 +126,7 @@ struct MoveLocationOption : TextOption {
     if (location->object != object) {
       Object& container_object = *location->object;
       if (auto container = container_object.AsContainer()) {
-        auto& root_widget = location->FindRootWidget();
         if (auto extracted = container->Extract(*object)) {
-          extracted->parent = location->toy->AcquireTrackedPtr();
           return std::make_unique<DragLocationAction>(pointer, std::move(extracted));
         } else {
           LOG << "Unable to extract " << object->Name() << " from " << container_object.Name()
@@ -139,9 +137,9 @@ struct MoveLocationOption : TextOption {
             << " (not a Container)";
       }
     }
-    auto* machine = Closest<Machine>(*location);
+    auto* machine = location->widget ? ui::Closest<Machine>(*location->widget) : nullptr;
     if (machine && location->object) {
-      machine->ForEachToy([](ui::RootWidget&, ui::Widget& w) { w.RedrawThisFrame(); });
+      machine->ForEachToy([](ui::RootWidget&, Toy& w) { w.RedrawThisFrame(); });
       return std::make_unique<DragLocationAction>(pointer, machine->ExtractStack(*location));
     }
     return nullptr;
@@ -323,7 +321,8 @@ struct FieldOption : TextOption, OptionsProvider {
 };
 
 void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
-  if (auto loc = ui::Closest<Location>(const_cast<WidgetBase&>(*this))) {
+  if (auto* lw = ui::Closest<LocationWidget>(const_cast<WidgetBase&>(*this))) {
+    if (auto loc = lw->LockLocation()) {
     auto loc_weak = loc->AcquireWeakPtr();
     DeleteOption del{loc_weak};
     visitor(del);
@@ -356,14 +355,16 @@ void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
         }
       });
     }
-  }
+  }}
 }
 
 std::unique_ptr<Action> Object::WidgetBase::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
   if (btn == ui::PointerButton::Left) {
-    if (auto* location = Closest<Location>(*p.hover)) {
-      MoveLocationOption move{location->AcquireWeakPtr(), object};
-      return move.Activate(p);
+    if (auto* lw = Closest<LocationWidget>(*p.hover)) {
+      if (auto loc = lw->LockLocation()) {
+        MoveLocationOption move{loc->AcquireWeakPtr(), object};
+        return move.Activate(p);
+      }
     } else {
       LOG << "No parent location";
     }

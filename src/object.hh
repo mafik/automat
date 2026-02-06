@@ -35,6 +35,9 @@ struct ObjectDeserializer;
 struct Object : public ReferenceCounted, public ToyMaker {
   Location* here = nullptr;
 
+  ReferenceCounted* GetReferenceCounted() override { return this; }
+  Part* GetPart() override { return this; }
+
   Object() = default;
 
   // Create a copy of this object.

@@ -134,7 +134,7 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
 
   // Objects may have been rendered in their incomplete state - re-render them all.
   for (auto& loc : root_machine->locations) {
-    loc->WakeAnimation();
+    loc->WakeToys();
   }
 
   bool fully_decoded = d.reader.IterativeParseComplete();

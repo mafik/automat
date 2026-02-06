@@ -317,15 +317,15 @@ Ptr<Location> Assembler::Extract(Object& descendant) {
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     auto* reg = reg_objects_idx[i].get();
     if (reg != &descendant) continue;
-    auto loc = MAKE_PTR(Location, root_machine.get(), root_location);
+    auto loc = MAKE_PTR(Location, root_location);
     loc->InsertHere(reg_objects_idx[i].borrow());
-    auto* reg_widget_untyped = loc->ToyStore().FindOrNull(descendant);
+    auto* reg_widget_untyped = ui::root_widget->toys.FindOrNull(descendant);
     if (reg_widget_untyped) {
       auto* reg_widget = static_cast<RegisterWidget*>(reg_widget_untyped);
       if (auto* assembler_widget = dynamic_cast<AssemblerWidget*>(reg_widget->parent.get())) {
         assembler_widget->reg_widgets.Erase(reg_widget);
-        loc->toy = reg_widget_untyped;
-        reg_widget->parent = loc->AcquireTrackedPtr();
+        if (loc->widget) loc->widget->toy = reg_widget_untyped;
+        reg_widget->parent = loc->widget;
       } else {
         FATAL << "RegisterWidget's parent is not an AssemblerWidget";
       }

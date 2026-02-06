@@ -9,6 +9,7 @@
 
 #include "action.hh"
 #include "animation.hh"
+#include "automat.hh"
 #include "log_skia.hh"
 #include "math.hh"
 #include "pointer.hh"
@@ -122,12 +123,17 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
     : Action(pointer),
       locations(std::move(locations_arg)),
       widget(new DragLocationWidget(pointer.GetWidget(), *this)) {
-  pointer.root_widget.drag_action_count++;
-  if (pointer.root_widget.drag_action_count == 1) {
-    pointer.root_widget.black_hole.WakeAnimation();
+  auto& root = pointer.root_widget;
+  root.drag_action_count++;
+  if (root.drag_action_count == 1) {
+    root.black_hole.WakeAnimation();
   }
   for (auto& location : locations) {
-    auto* lw = location->widget;
+    auto* lw = static_cast<LocationWidget*>(root.toys.FindOrNull(*location));
+    if (lw == nullptr) {
+      ERROR << "DragLocationAction for Location without a Widget";
+      continue;
+    }
     auto fix = TransformBetween(*lw, *widget);
 
     auto target_matrix = Location::ToMatrix(location->position, location->scale, lw->LocalAnchor());

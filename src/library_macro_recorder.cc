@@ -630,7 +630,7 @@ bool MacroRecorder::DeserializeKey(ObjectDeserializer& d, StrView key) {
     d.Get(value, status);
     if (OK(status) && IsOn() != value) {
       if (value) {
-        MyLocation()->ScheduleRun();
+        ScheduleRun(*this);
       } else {
         (new CancelTask(AcquireWeakPtr()))->Schedule();
       }

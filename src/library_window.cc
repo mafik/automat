@@ -95,7 +95,7 @@ struct EnableContinuousRunOption : TextOption {
       window->run_continuously = true;
       // Start continuous execution
       if (auto here_ptr = window->here) {
-        here_ptr->ScheduleRun();
+        window->capture.ScheduleRun(*window);
       }
     }
     return nullptr;
@@ -653,14 +653,14 @@ void Window::Capture::OnRun(std::unique_ptr<RunTask>&) {
   w.here->ScheduleUpdate();
   // Re-schedule execution if continuous run is enabled
   if (w.run_continuously) {
-    w.here->ScheduleRun();
+    w.capture.ScheduleRun(w);
   }
 }
 
 void Window::Relocate(Location* new_here) {
   Object::Relocate(new_here);
   if (run_continuously && new_here) {
-    new_here->ScheduleRun();
+    capture.ScheduleRun(*this);
   }
 }
 

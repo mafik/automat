@@ -706,9 +706,7 @@ struct TimelineRunButton : ui::ToggleButton {
         timeline->running.Cancel();
         break;
       case Timeline::kPaused:
-        if (auto h = timeline->here) {
-          h->ScheduleRun();
-        }
+        timeline->run.ScheduleRun(*timeline);
         break;
       case Timeline::kRecording:
         timeline->StopRecording();
@@ -2561,7 +2559,7 @@ void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
     }
   } else if (auto runnable = dynamic_cast<Runnable*>(target.object.get())) {
     if (on) {
-      target.ScheduleRun();
+      runnable->ScheduleRun(*target.object);
     } else {
       if (auto long_running = target.object->AsLongRunning(); long_running->IsRunning()) {
         long_running->Cancel();

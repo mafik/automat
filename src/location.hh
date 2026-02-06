@@ -123,10 +123,6 @@ struct Location : ReferenceCounted, ui::Widget {
   // Location interface.
   ////////////////////////////
 
-  // Add this object to the task queue. Once it's turn comes, its `Run` method
-  // will be executed.
-  void ScheduleRun();
-
   ////////////////////////////
   // Misc
   ////////////////////////////

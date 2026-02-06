@@ -34,6 +34,22 @@ using namespace std;
 
 namespace automat {
 
+RunOption::RunOption(WeakPtr<Object> object, Runnable& runnable)
+    : TextOption("Run"), weak(std::move(object)), runnable(&runnable) {}
+std::unique_ptr<Option> RunOption::Clone() const {
+  return std::make_unique<RunOption>(weak, *runnable);
+}
+std::unique_ptr<Action> RunOption::Activate(ui::Pointer& pointer) const {
+  if (auto object = weak.lock()) {
+    if (auto long_running = object->AsLongRunning(); long_running && long_running->IsRunning()) {
+      long_running->Cancel();
+    } else {
+      runnable->ScheduleRun(*object);
+    }
+  }
+  return nullptr;
+}
+
 void Machine::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
   bool connected = false;
   auto TryConnect = [&](Object& end, Part& part) {
@@ -137,7 +153,9 @@ void LongRunning::OnTurnOn() {
     ERROR << "LongRunning::OnFindRunnable didn't return any Object!";
     return;
   }
-  object->here->ScheduleRun();
+  if (auto* runnable = dynamic_cast<Runnable*>(object)) {
+    runnable->ScheduleRun(*object);
+  }
 }
 
 void Machine::SerializeState(ObjectSerializer& writer) const {

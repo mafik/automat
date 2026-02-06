@@ -38,6 +38,17 @@ struct KeyPresser : Object, ui::Keylogger {
     }
   } state;
 
+  struct Run : Runnable {
+    virtual void OnRun(std::unique_ptr<RunTask>& run_task) override {
+      GetKeyPresser().state.OnTurnOn();
+    }
+
+    KeyPresser& GetKeyPresser() const {
+      return *reinterpret_cast<KeyPresser*>(reinterpret_cast<intptr_t>(this) -
+                                            offsetof(KeyPresser, run));
+    }
+  } run;
+
   KeyPresser(ui::AnsiKey = ui::AnsiKey::F);
   ~KeyPresser() override;
   string_view Name() const override;
@@ -49,6 +60,7 @@ struct KeyPresser : Object, ui::Keylogger {
 
   void Parts(const std::function<void(Part&)>& cb) override {
     cb(monitoring);
+    cb(run);
     cb(*this);
   }
 

@@ -75,27 +75,6 @@ struct DragAndClickAction : Action {
   }
 };
 
-struct RunAction : Action {
-  Location& location;
-  RunAction(ui::Pointer& pointer, Location& location) : Action(pointer), location(location) {
-    if (auto long_running = location.object->AsLongRunning(); long_running->IsRunning()) {
-      long_running->Cancel();
-    } else {
-      location.ScheduleRun();
-    }
-  }
-  void Update() override {}
-};
-
-struct RunOption : TextOption {
-  ui::Widget* widget;
-  RunOption(ui::Widget* widget) : TextOption("Run"), widget(widget) {}
-  std::unique_ptr<Option> Clone() const override { return std::make_unique<RunOption>(widget); }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) const override {
-    return std::make_unique<RunAction>(p, *Closest<Location>(*widget));
-  }
-};
-
 struct UseObjectOption : TextOption {
   ui::Widget* widget;
 
@@ -186,8 +165,10 @@ struct KeyPresserWidget : Object::WidgetBase, ui::CaretOwner {
     auto hand_shape = GetHandShape();
     auto local_pos = p.PositionWithin(*this);
     if (hand_shape.contains(local_pos.x, local_pos.y)) {
-      return std::make_unique<DragAndClickAction>(p, btn, Object::WidgetBase::FindAction(p, btn),
-                                                  std::make_unique<RunOption>(this));
+      auto key_presser = LockObject<KeyPresser>();
+      return std::make_unique<DragAndClickAction>(
+          p, btn, Object::WidgetBase::FindAction(p, btn),
+          std::make_unique<RunOption>(key_presser->AcquireWeakPtr(), key_presser->run));
     } else {
       return std::make_unique<DragAndClickAction>(
           p, btn, Object::WidgetBase::FindAction(p, btn),

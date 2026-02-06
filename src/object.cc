@@ -150,19 +150,6 @@ struct MoveLocationOption : TextOption {
   Dir PreferredDir() const override { return N; }
 };
 
-struct RunOption : TextOption {
-  WeakPtr<Location> weak;
-  RunOption(WeakPtr<Location> weak) : TextOption("Run"), weak(weak) {}
-  std::unique_ptr<Option> Clone() const override { return std::make_unique<RunOption>(weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    if (auto loc = weak.lock()) {
-      loc->ScheduleRun();
-    }
-    return nullptr;
-  }
-  Dir PreferredDir() const override { return S; }
-};
-
 struct IconifyOption : TextOption {
   WeakPtr<Location> weak;
   IconifyOption(WeakPtr<Location> weak) : TextOption("Iconify"), weak(weak) {}
@@ -343,7 +330,7 @@ void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
     MoveLocationOption move{loc_weak, object};
     visitor(move);
     if (auto runnable = loc->As<Runnable>()) {
-      RunOption run{loc_weak};
+      RunOption run{this->object, *runnable};
       visitor(run);
     }
     if (IsIconified()) {
@@ -388,9 +375,7 @@ std::unique_ptr<Action> Object::WidgetBase::FindAction(ui::Pointer& p, ui::Actio
 
 void Object::Updated(WeakPtr<Object>& updated) {
   if (Runnable* runnable = dynamic_cast<Runnable*>(this)) {
-    if (here) {
-      here->ScheduleRun();
-    }
+    runnable->ScheduleRun(*this);
   }
 }
 

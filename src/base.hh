@@ -149,6 +149,15 @@ struct Runnable : Syncable, SignalNext {
   }
 };
 
+struct RunOption : TextOption {
+  WeakPtr<Object> weak;
+  Runnable* runnable;
+  RunOption(WeakPtr<Object> object, Runnable& runnable);
+  std::unique_ptr<Option> Clone() const override;
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override;
+  Dir PreferredDir() const override { return S; }
+};
+
 // 2D Canvas holding objects & a spaghetti of connections.
 struct Machine : Object, ui::Widget, ui::DropTarget {
   Machine(ui::Widget* parent);

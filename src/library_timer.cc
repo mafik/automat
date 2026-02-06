@@ -660,14 +660,12 @@ std::unique_ptr<Action> Timer::FindAction(ui::Pointer& pointer, ui::ActionTrigge
     if (kStartPusherBox.contains(pos.x, pos.y)) {
       start_pusher_depression = 1;
       WakeAnimation();
-      if (auto h = here) {
-        if (timer_running.IsRunning()) {
-          timer_running.Cancel();
-        } else {
-          h->ScheduleRun();
-        }
-        return nullptr;
+      if (timer_running.IsRunning()) {
+        timer_running.Cancel();
+      } else {
+        ScheduleRun(*this);
       }
+      return nullptr;
     }
     auto left_rot = SkMatrix::RotateDeg(-45).mapPoint(pos.sk);
     auto right_rot = SkMatrix::RotateDeg(45).mapPoint(pos.sk);

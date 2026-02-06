@@ -66,12 +66,6 @@ void Location::Put(Ptr<Object> obj) {
 
 Ptr<Object> Location::Take() { return std::move(object); }
 
-void Location::ScheduleRun() {
-  if (auto* runnable = dynamic_cast<Runnable*>(object.Get())) {
-    runnable->ScheduleRun(*object);
-  }
-}
-
 SkPath Location::Shape() const {
   static SkPath empty_path = SkPath();
   return empty_path;

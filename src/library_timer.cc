@@ -163,7 +163,7 @@ Ptr<Object> Timer::Clone() const { return MAKE_PTR(Timer, *this); }
 
 void Timer::OnTimerNotification(Location& here2, time::SteadyPoint) {
   auto lock = std::lock_guard(mtx);
-  timer_running.Done(here2);
+  timer_running.Done(*this);
 }
 
 void Timer::Updated(WeakPtr<Object>& updated) {

@@ -2575,7 +2575,7 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
   if (now >= end_at) {
     state = kPaused;
     paused = {.playback_offset = MaxTrackLength()};
-    running.Done(here);
+    running.Done(*this);
     WakeRunButton(*this);
   }
   TimelineUpdateOutputs(*this, playing.started_at, now);

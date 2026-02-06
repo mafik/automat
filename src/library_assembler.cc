@@ -179,7 +179,7 @@ static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now
 }
 
 void Assembler::ExitCallback(mc::CodePoint code_point) {
-  running.Done(*here);
+  running.Done(*this);
   RefreshState(*this, time::SteadyNow());
   Instruction* exit_inst = nullptr;
   if (code_point.instruction) {

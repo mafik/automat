@@ -138,11 +138,11 @@ void Machine::NearbyCandidates(Location& here, const Argument& arg, float radius
   });
 }
 
-void LongRunning::Done(Location& here) {
+void LongRunning::Done(Object& object) {
   if (long_running_task == nullptr) {
     FATAL << "LongRunning::Done called while long_running_task == null.";
   }
-  long_running_task->DoneRunning(*here.object);
+  long_running_task->DoneRunning(object);
   long_running_task.reset();
   NotifyTurnedOff();
 }

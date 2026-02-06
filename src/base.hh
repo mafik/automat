@@ -94,7 +94,7 @@ struct LongRunning : OnOff {
   //
   // After this call, the object is free to release the memory related to this LongRunning instance
   // because its not going to be used again.
-  void Done(Location& here);
+  void Done(Object& object);
 
   void BeginLongRunning(std::unique_ptr<RunTask>&& task) {
     long_running_task = std::move(task);

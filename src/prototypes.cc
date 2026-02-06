@@ -51,7 +51,7 @@ PrototypeLibrary::PrototypeLibrary() {
 
   index.Register<FlipFlop>();
   index.Register<MacroRecorder>(null_parent);
-  index.Register<Timer>(null_parent);
+  index.Register<Timer>();
   index.Register<HotKey>(null_parent);
   index.Register<KeyPresser>();
   index.Register<Mouse>();

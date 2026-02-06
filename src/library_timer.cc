@@ -57,11 +57,6 @@ constexpr static float kTickMinorLength = r4 * 0.025;
 
 static constexpr time::Duration kHandPeriod = 100ms;
 
-void Timer::OnTimerNotification(Location& here2, time::SteadyPoint) {
-  auto lock = std::lock_guard(mtx);
-  timer_running.Done(here2);
-}
-
 // How long it takes for the timer dial to rotate once.
 static Duration RangeDuration(Timer::Range range) {
   switch (range) {
@@ -131,12 +126,6 @@ static const char* RangeName(Timer::Range range) {
   }
 }
 
-static void UpdateTextField(Timer& timer) {
-  auto n = TickCount(timer.range) * timer.duration.value /
-           time::FloatDuration(RangeDuration(timer.range));
-  timer.text_field->SetNumber(n);
-}
-
 static void SetDuration(Timer& timer, Duration new_duration) {
   auto lock = std::lock_guard(timer.mtx);
   if (timer.timer_running.IsRunning()) {
@@ -146,8 +135,7 @@ static void SetDuration(Timer& timer, Duration new_duration) {
   }
 
   timer.duration.value = new_duration;
-  UpdateTextField(timer);
-  timer.WakeAnimation();
+  timer.WakeToys();
 }
 
 static void PropagateDurationOutwards(Timer& timer) {
@@ -160,26 +148,138 @@ static void PropagateDurationOutwards(Timer& timer) {
   }
 }
 
-Timer::Timer(ui::Widget* parent)
-    : WidgetBase(parent, *this), text_field(new ui::NumberTextField(this, kTextWidth)) {
-  text_field->local_to_parent = SkM44::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
-  range_dial.velocity = 0;
-  range_dial.value = 1;
+// ============================================================================
+// Timer (Object)
+// ============================================================================
 
-  hand_degrees.value = 90;
-  text_field->argument = NestedWeakPtr<Argument>(AcquireWeakPtr(), &duration);
-  SetDuration(*this, 10s);
-}
+Timer::Timer() {}
 
-Timer::Timer(const Timer& other) : Timer(other.parent) {
-  range_dial.velocity = other.range_dial.velocity;
-  range_dial.value = other.range_dial.value;
-  hand_degrees.value = other.hand_degrees.value;
-
-  SetDuration(*this, other.duration.value);
+Timer::Timer(const Timer& other) : Timer() {
+  range = other.range;
+  duration.value = other.duration.value;
 }
 
 Ptr<Object> Timer::Clone() const { return MAKE_PTR(Timer, *this); }
+
+void Timer::OnTimerNotification(Location& here2, time::SteadyPoint) {
+  auto lock = std::lock_guard(mtx);
+  timer_running.Done(here2);
+}
+
+void Timer::Updated(WeakPtr<Object>& updated) {
+  if (auto u = updated.Lock()) {
+    std::string duration_str = u->GetText();
+    double n = std::stod(duration_str);
+    Duration d = time::Defloat(RangeDuration(range) * n / TickCount(range));
+    SetDuration(*this, d);
+  }
+}
+
+void Timer::Parts(const std::function<void(Part&)>& cb) {
+  cb(duration);
+  cb(next_arg);
+  cb(*AsLongRunning());
+}
+
+void Timer::PartName(Part& part, Str& out_name) {
+  if (&part == AsLongRunning()) {
+    out_name = "Running";
+  } else if (&part == &duration) {
+    out_name = "Duration";
+  }
+}
+
+void Timer::OnRun(std::unique_ptr<RunTask>& run_task) {
+  auto lock = std::lock_guard(mtx);
+  ZoneScopedN("Timer");
+  start_time = time::SteadyClock::now();
+  ScheduleAt(*here, start_time + duration.value);
+  WakeToys();
+  timer_running.BeginLongRunning(std::move(run_task));
+}
+
+void Timer::TimerRunning::OnCancel() {
+  auto& timer = GetTimer();
+  if (timer.here) {
+    CancelScheduledAt(*timer.here, timer.start_time + timer.duration.value);
+  }
+  timer.WakeToys();
+}
+
+StrView ToStr(Timer::Range r) {
+  switch (r) {
+    using enum Timer::Range;
+    case Milliseconds:
+      return "milliseconds";
+    case Seconds:
+      return "seconds";
+    case Minutes:
+      return "minutes";
+    case Hours:
+      return "hours";
+    case Days:
+      return "days";
+    default:
+      return "unknown";
+  }
+}
+Timer::Range TimerRangeFromStr(StrView str, Status& status) {
+  using enum Timer::Range;
+  if (str == "milliseconds") return Milliseconds;
+  if (str == "seconds") return Seconds;
+  if (str == "minutes") return Minutes;
+  if (str == "hours") return Hours;
+  if (str == "days") return Days;
+  AppendErrorMessage(status) += "Unknown value for timer range: " + Str(str);
+  return Seconds;
+}
+
+void Timer::SerializeState(ObjectSerializer& writer) const {
+  writer.Key("range");
+  auto range_str = ToStr(range);
+  writer.String(range_str.data(), range_str.size());
+  writer.Key("duration_seconds");
+  writer.Double(time::ToSeconds(duration.value));
+  if (this->timer_running.IsRunning()) {
+    writer.Key("running");
+    writer.Double(time::ToSeconds(time::SteadyNow() - start_time));
+  }
+}
+bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
+  Status status;
+  if (key == "running") {
+    double value = 0;
+    d.Get(value, status);
+    timer_running.BeginLongRunning(make_unique<RunTask>(AcquireWeakPtr(), this));
+    start_time = time::SteadyNow() - time::FromSeconds(value);
+    ScheduleAt(*here, start_time + duration.value);
+  } else if (key == "duration_seconds") {
+    double value;
+    d.Get(value, status);
+    if (OK(status)) {
+      duration.value = time::FromSeconds(value);
+      if (this->timer_running.IsRunning()) {
+        ScheduleAt(*here, start_time + duration.value);
+      }
+    }
+  } else if (key == "range") {
+    Str value;
+    d.Get(value, status);
+    if (OK(status)) {
+      range = TimerRangeFromStr(value, status);
+    }
+  } else {
+    return false;
+  }
+  if (!OK(status)) {
+    ReportError("Failed to deserialize Timer: " + status.ToStr());
+  }
+  return true;
+}
+
+// ============================================================================
+// TimerWidget (Toy)
+// ============================================================================
 
 static sk_sp<SkShader> MakeGradient(SkPoint a, SkPoint b, SkColor color_a, SkColor color_b) {
   SkPoint pts[2] = {a, b};
@@ -203,7 +303,6 @@ static void DrawRing(SkCanvas& canvas, float outer_r, float inner_r, SkColor top
   if (mode == kRingAntiAliased) {
     paint.setAntiAlias(true);
   }
-  // paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.0001f, true));
   float radius;
   if (mode == kRingBlurred) {
     paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, (outer_r - inner_r) / 4));
@@ -231,67 +330,6 @@ static void DrawRing(SkCanvas& canvas, float outer_r, float inner_r, SkColor top
 
 constexpr static float kHandWidth = 0.0004;
 constexpr static float kHandLength = r4 * 0.8;
-
-static float HandBaseDegrees(const Timer& timer) {
-  if (timer.timer_running.IsRunning()) {
-    Duration elapsed = SteadyClock::now() - timer.start_time;
-    return 90 - 360 * elapsed / time::FloatDuration(RangeDuration(timer.range));
-  } else {
-    return 90;
-  }
-}
-
-static SkPath HandPath(const Timer& timer) {
-  float base_degrees = HandBaseDegrees(timer);
-  float end_degrees = timer.hand_degrees.value;
-  float twist_degrees = end_degrees - base_degrees;
-  animation::WrapModulo(twist_degrees, 0, 360);
-
-  if (fabs(twist_degrees) < 1) {
-    SkPath path;
-    auto end_point = SkMatrix::RotateDeg(end_degrees).mapPoint({kHandLength, 0});
-    path.lineTo(end_point);
-    return path;
-  }
-
-  float R = kHandLength / ((twist_degrees / 360) * 2 * M_PI);
-
-  SkPath path;
-
-  auto end_point =
-      SkMatrix::Translate(R, 0).postRotate(twist_degrees).postTranslate(-R, 0).mapPoint({0, 0});
-
-  path.rArcTo(R, R, 0, SkPath::kSmall_ArcSize,
-              twist_degrees > 0 ? SkPathDirection::kCW : SkPathDirection::kCCW, end_point.x(),
-              end_point.y());
-  path.transform(SkMatrix::RotateDeg(base_degrees - 90));
-  return path;
-}
-
-const static SkPaint kHandPaint = [] {
-  SkPaint paint;
-  paint.setColor(0xffd93f2a);
-  paint.setAntiAlias(true);
-  paint.setStrokeWidth(kHandWidth);
-  paint.setStyle(SkPaint::kStroke_Style);
-  return paint;
-}();
-
-static void DrawHand(SkCanvas& canvas, const Timer& timer) {
-  SkPath path = HandPath(timer);
-
-  canvas.save();
-  canvas.translate(0.001, -0.001);
-  SkPaint shadow_paint;
-  shadow_paint.setColor(0xff46464d);
-  shadow_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.0005f, true));
-  shadow_paint.setStyle(SkPaint::kStroke_Style);
-  shadow_paint.setStrokeWidth(kHandWidth);
-  canvas.drawPath(path, shadow_paint);
-  canvas.restore();
-
-  canvas.drawPath(path, kHandPaint);
-}
 
 constexpr static float kStartPusherAxleWidth = 0.003;
 constexpr static float kStartPusherAxleLength = 0.001;
@@ -360,27 +398,6 @@ SkPaint kDurationPaint = [] {
   return paint;
 }();
 
-static SkPoint DurationHandlePos(const Timer& timer) {
-  float s = sin(timer.duration_handle_rotation);
-  float c = cos(timer.duration_handle_rotation);
-  return SkPoint::Make(c * r3, s * r3);
-}
-
-static SkPath DurationHandlePath(const Timer& timer) {
-  static const SkPath path = [] {
-    SkPath path;
-    path.moveTo(kTickOuterRadius, 0);
-    float start_angle = atan2(0.001, r4) / M_PI * 180;
-    float handle_angle = 20;
-    path.arcTo(kDialOval, start_angle, handle_angle / 2 - start_angle, false);
-    path.arcTo(kOuterOval.makeOutset(0.0005, 0.0005), handle_angle / 2, -handle_angle, false);
-    path.arcTo(kDialOval, -handle_angle / 2, handle_angle / 2 - start_angle, false);
-    path.close();
-    return path;
-  }();
-  return path.makeTransform(SkMatrix::RotateRad(timer.duration_handle_rotation));
-}
-
 static void DrawDial(SkCanvas& canvas, Timer::Range range, time::Duration duration) {
   int range_max = TickCount(range);
   int tick_count = TickCount(range);
@@ -438,219 +455,343 @@ static void DrawDial(SkCanvas& canvas, Timer::Range range, time::Duration durati
   canvas.restore();
 }
 
-animation::Phase Timer::Tick(time::Timer& timer) {
-  auto phase = WidgetBase::Tick(timer);
-  phase |= timer_running.IsRunning() ? animation::Animating : animation::Finished;
-  phase |= animation::ExponentialApproach(0, timer.d, 0.2, start_pusher_depression);
-  phase |= animation::ExponentialApproach(0, timer.d, 0.2, left_pusher_depression);
-  phase |= animation::ExponentialApproach(0, timer.d, 0.2, right_pusher_depression);
-  int range_end = (int)Range::EndGuard;
-  animation::WrapModulo(range_dial.value, (float)range, range_end);
-  phase |= range_dial.SpringTowards((float)range, timer.d, 0.4, 0.05);
-  double circles;
-  float duration_handle_rotation_target =
-      M_PI * 2.5 -
-      modf(duration.value / time::FloatDuration(RangeDuration(range)), &circles) * 2 * M_PI;
-  duration_handle_rotation_target =
-      modf(duration_handle_rotation_target / (2 * M_PI), &circles) * 2 * M_PI;
-  animation::WrapModulo(duration_handle_rotation, duration_handle_rotation_target, M_PI * 2);
-  phase |= animation::ExponentialApproach(duration_handle_rotation_target, timer.d, 0.05,
-                                          duration_handle_rotation);
+struct TimerWidget;
 
-  if (hand_draggers) {
-    // do nothing...
-  } else {
-    float hand_target;
-    if (timer_running.IsRunning()) {
-      auto base_degrees = HandBaseDegrees(*this);
-      hand_target = base_degrees;
-    } else {
-      hand_target = 90;
+static float HandBaseDegrees(const TimerWidget& w);
+static SkPath HandPath(const TimerWidget& w);
+static SkPath DurationHandlePath(const TimerWidget& w);
+
+const static SkPaint kHandPaint = [] {
+  SkPaint paint;
+  paint.setColor(0xffd93f2a);
+  paint.setAntiAlias(true);
+  paint.setStrokeWidth(kHandWidth);
+  paint.setStyle(SkPaint::kStroke_Style);
+  return paint;
+}();
+
+struct TimerWidget : Object::WidgetBase {
+  // Animation state
+  float start_pusher_depression = 0;
+  float left_pusher_depression = 0;
+  float right_pusher_depression = 0;
+  animation::SpringV2<float> hand_degrees;
+  int hand_draggers = 0;
+  animation::SpringV2<float> range_dial;
+  float duration_handle_rotation = 0;
+  std::unique_ptr<ui::NumberTextField> text_field;
+
+  // Cached copies of Object state (refreshed in Tick)
+  Timer::Range range = Timer::Range::Seconds;
+  time::Duration duration_value = 10s;
+  bool is_running = false;
+  time::SteadyPoint start_time;
+
+  Ptr<Timer> LockTimer() const { return LockObject<Timer>(); }
+
+  TimerWidget(ui::Widget* parent, Object& timer_obj)
+      : WidgetBase(parent, timer_obj), text_field(new ui::NumberTextField(this, kTextWidth)) {
+    text_field->local_to_parent = SkM44::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
+    range_dial.velocity = 0;
+    range_dial.value = 1;
+    hand_degrees.value = 90;
+
+    if (auto timer = LockTimer()) {
+      text_field->argument = NestedWeakPtr<Argument>(timer->AcquireWeakPtr(), &timer->duration);
+      range = timer->range;
+      duration_value = timer->duration.value;
+      is_running = timer->timer_running.IsRunning();
+      start_time = timer->start_time;
+      UpdateTextField();
     }
-    animation::WrapModulo(hand_degrees.value, hand_target, 360);
-    phase |= hand_degrees.SpringTowards(hand_target, timer.d, time::ToSeconds(kHandPeriod), 0.05);
   }
-  return phase;
-}
 
-void Timer::Draw(SkCanvas& canvas) const {
-  DrawRing(canvas, r4, r5, 0xffcfd0cf, 0xffc9c9cb);  // white watch face
-
-  canvas.save();
-  canvas.clipRRect(SkRRect::MakeOval(SkRect::MakeXYWH(-r4, -r4, r4 * 2, r4 * 2)), false);
-  float fract = range_dial - roundf(range_dial);
-  // canvas.rotate(-180 * (range_dial - roundf(range_dial)), 0, r4);
-  // canvas.translate(-r4 * 2 * fract, 0);
-  if (fabs(fract) > 0.01) {
-    SkMatrix m;
-    m.setPerspX(-20 * fract);
-    m.postScale(1 - fabs(fract), 1);
-    m.postTranslate(-r4 * 2 * fract, 0);
-    m.postRotate(-90 * (range_dial - roundf(range_dial)), 0, 0);
-    m.normalizePerspective();
-    canvas.concat(m);
+  void UpdateTextField() {
+    auto n = TickCount(range) * duration_value / time::FloatDuration(RangeDuration(range));
+    text_field->SetNumber(n);
   }
-  int range_end = (int)Range::EndGuard;
-  DrawDial(canvas, (Range)(((int)roundf(range_dial) + range_end) % range_end), duration.value);
-  canvas.restore();
 
-  DrawChildren(canvas);
+  animation::Phase Tick(time::Timer& timer) override {
+    auto phase = WidgetBase::Tick(timer);
 
-  DrawRing(canvas, r4, r4_b, 0x46000000, 0xe1ffffff, kRingInset);  // shadow over white watch face
+    // Refresh cached Object state
+    if (auto t = LockTimer()) {
+      auto lock = std::lock_guard(t->mtx);
+      range = t->range;
+      duration_value = t->duration.value;
+      is_running = t->timer_running.IsRunning();
+      start_time = t->start_time;
+    }
+    UpdateTextField();
 
-  canvas.save();
-  canvas.translate(0.001, -0.001);
-  DrawRing(canvas, r5, 0, 0xff46464d, 0xff46464d, kRingBlurred);  // black pin shadow
-  canvas.restore();
+    phase |= is_running ? animation::Animating : animation::Finished;
+    phase |= animation::ExponentialApproach(0, timer.d, 0.2, start_pusher_depression);
+    phase |= animation::ExponentialApproach(0, timer.d, 0.2, left_pusher_depression);
+    phase |= animation::ExponentialApproach(0, timer.d, 0.2, right_pusher_depression);
+    int range_end = (int)Timer::Range::EndGuard;
+    animation::WrapModulo(range_dial.value, (float)range, range_end);
+    phase |= range_dial.SpringTowards((float)range, timer.d, 0.4, 0.05);
+    double circles;
+    float duration_handle_rotation_target =
+        M_PI * 2.5 -
+        modf(duration_value / time::FloatDuration(RangeDuration(range)), &circles) * 2 * M_PI;
+    duration_handle_rotation_target =
+        modf(duration_handle_rotation_target / (2 * M_PI), &circles) * 2 * M_PI;
+    animation::WrapModulo(duration_handle_rotation, duration_handle_rotation_target, M_PI * 2);
+    phase |= animation::ExponentialApproach(duration_handle_rotation_target, timer.d, 0.05,
+                                            duration_handle_rotation);
 
-  DrawRing(canvas, r0, r2, 0xfff6f6f0, 0xff6a6a71);              // white case
-  DrawRing(canvas, r0, r1, 0xfff7f4f2, 0xff5e5f65, kRingInset);  // white case soft edge
+    if (hand_draggers) {
+      // do nothing...
+    } else {
+      float hand_target;
+      if (is_running) {
+        hand_target = HandBaseDegrees(*this);
+      } else {
+        hand_target = 90;
+      }
+      animation::WrapModulo(hand_degrees.value, hand_target, 360);
+      phase |= hand_degrees.SpringTowards(hand_target, timer.d, time::ToSeconds(kHandPeriod), 0.05);
+    }
+    return phase;
+  }
 
-  {  // Draw pusher
-    SkColor colors1[] = {0x20ffffff, 0x15000000, 0xA0000000};
-    auto start_pusher =
-        kStartPusher.makeOffset(0, -start_pusher_depression * kStartPusherAxleLength);
-    DrawPusher(canvas, kStartPusherAxle, start_pusher, colors1);
+  void Draw(SkCanvas& canvas) const override {
+    DrawRing(canvas, r4, r5, 0xffcfd0cf, 0xffc9c9cb);  // white watch face
+
     canvas.save();
-    canvas.rotate(45);
-    SkColor colors2[] = {0xD0000000, 0x40000000, 0xD0000000};
-    auto left_pusher = kSmallPusher.makeOffset(0, -left_pusher_depression * kSmallAxleLength);
-    DrawPusher(canvas, kSmallAxle, left_pusher, colors2);
-    canvas.rotate(-90);
-    SkColor colors3[] = {0x40FFFFFF, 0x40000000, 0xFF000000};
-    auto right_pusher = kSmallPusher.makeOffset(0, -right_pusher_depression * kSmallAxleLength);
-    DrawPusher(canvas, kSmallAxle, right_pusher, colors3);
+    canvas.clipRRect(SkRRect::MakeOval(SkRect::MakeXYWH(-r4, -r4, r4 * 2, r4 * 2)), false);
+    float fract = range_dial - roundf(range_dial);
+    if (fabs(fract) > 0.01) {
+      SkMatrix m;
+      m.setPerspX(-20 * fract);
+      m.postScale(1 - fabs(fract), 1);
+      m.postTranslate(-r4 * 2 * fract, 0);
+      m.postRotate(-90 * (range_dial - roundf(range_dial)), 0, 0);
+      m.normalizePerspective();
+      canvas.concat(m);
+    }
+    int range_end = (int)Timer::Range::EndGuard;
+    DrawDial(canvas, (Timer::Range)(((int)roundf(range_dial) + range_end) % range_end),
+             duration_value);
+    canvas.restore();
+
+    DrawChildren(canvas);
+
+    DrawRing(canvas, r4, r4_b, 0x46000000, 0xe1ffffff, kRingInset);
+
+    canvas.save();
+    canvas.translate(0.001, -0.001);
+    DrawRing(canvas, r5, 0, 0xff46464d, 0xff46464d, kRingBlurred);
+    canvas.restore();
+
+    DrawRing(canvas, r0, r2, 0xfff6f6f0, 0xff6a6a71);
+    DrawRing(canvas, r0, r1, 0xfff7f4f2, 0xff5e5f65, kRingInset);
+
+    {  // Draw pusher
+      SkColor colors1[] = {0x20ffffff, 0x15000000, 0xA0000000};
+      auto start_pusher =
+          kStartPusher.makeOffset(0, -start_pusher_depression * kStartPusherAxleLength);
+      DrawPusher(canvas, kStartPusherAxle, start_pusher, colors1);
+      canvas.save();
+      canvas.rotate(45);
+      SkColor colors2[] = {0xD0000000, 0x40000000, 0xD0000000};
+      auto left_pusher = kSmallPusher.makeOffset(0, -left_pusher_depression * kSmallAxleLength);
+      DrawPusher(canvas, kSmallAxle, left_pusher, colors2);
+      canvas.rotate(-90);
+      SkColor colors3[] = {0x40FFFFFF, 0x40000000, 0xFF000000};
+      auto right_pusher = kSmallPusher.makeOffset(0, -right_pusher_depression * kSmallAxleLength);
+      DrawPusher(canvas, kSmallAxle, right_pusher, colors3);
+      canvas.restore();
+    }
+
+    DrawRing(canvas, r2, r3, 0xff878682, 0xff020302);
+    DrawRing(canvas, r3, r4, 0xff080604, 0xffe2e2e1);
+
+    // Draw hand
+    {
+      SkPath path = HandPath(*this);
+      canvas.save();
+      canvas.translate(0.001, -0.001);
+      SkPaint shadow_paint;
+      shadow_paint.setColor(0xff46464d);
+      shadow_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.0005f, true));
+      shadow_paint.setStyle(SkPaint::kStroke_Style);
+      shadow_paint.setStrokeWidth(kHandWidth);
+      canvas.drawPath(path, shadow_paint);
+      canvas.restore();
+      canvas.drawPath(path, kHandPaint);
+    }
+
+    DrawRing(canvas, r5, 0, 0xff25272e, 0xff0d0b0f);
+    DrawRing(canvas, r5, r6, 0xff7e7d7a, 0xff05070b, kRingInset);
+
+    auto duration_handle_matrix = SkMatrix::RotateRad(duration_handle_rotation);
+    SkPath duration_path_rotated = DurationHandlePath(*this);
+
+    SkPaint duration_handle_paint;
+    SkPoint quad[4];
+    duration_path_rotated.getBounds().toQuad(quad);
+    quad[1] = ClampLength(quad[1], kTickOuterRadius, kOuterRadius);
+    quad[3] = ClampLength(quad[3], kTickOuterRadius, kOuterRadius);
+    duration_handle_paint.setShader(MakeGradient(duration_handle_matrix.mapPoint({0, 0}),
+                                                 duration_handle_matrix.mapPoint({0, 0.0005}),
+                                                 0xff404040, 0xff202020));
+
+    SkPaint highlight_paint;
+    highlight_paint.setShader(MakeGradient(quad[3], quad[1], 0xff404040, 0xff202020));
+    highlight_paint.setStyle(SkPaint::kStroke_Style);
+    highlight_paint.setStrokeWidth(0.001);
+    highlight_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.0002));
+
+    canvas.save();
+    canvas.clipPath(duration_path_rotated, true);
+    canvas.drawPaint(duration_handle_paint);
+    canvas.drawPath(duration_path_rotated, highlight_paint);
     canvas.restore();
   }
 
-  DrawRing(canvas, r2, r3, 0xff878682, 0xff020302);  // black metal band outer edge
-  DrawRing(canvas, r3, r4, 0xff080604, 0xffe2e2e1);  // black metal band inner edge
+  void FillChildren(Vec<Widget*>& children) override { children.push_back(text_field.get()); }
 
-  DrawHand(canvas, *this);
-
-  DrawRing(canvas, r5, 0, 0xff25272e, 0xff0d0b0f);               // black pin fill
-  DrawRing(canvas, r5, r6, 0xff7e7d7a, 0xff05070b, kRingInset);  // black pin soft outer edge
-
-  auto duration_handle_matrix = SkMatrix::RotateRad(duration_handle_rotation);
-  SkPath duration_path_rotated = DurationHandlePath(*this);
-
-  SkPaint duration_handle_paint;
-  SkPoint quad[4];
-  duration_path_rotated.getBounds().toQuad(quad);
-  quad[1] = ClampLength(quad[1], kTickOuterRadius, kOuterRadius);
-  quad[3] = ClampLength(quad[3], kTickOuterRadius, kOuterRadius);
-  duration_handle_paint.setShader(MakeGradient(duration_handle_matrix.mapPoint({0, 0}),
-                                               duration_handle_matrix.mapPoint({0, 0.0005}),
-                                               0xff404040, 0xff202020));
-
-  SkPaint highlight_paint;
-  highlight_paint.setShader(MakeGradient(quad[3], quad[1], 0xff404040, 0xff202020));
-  highlight_paint.setStyle(SkPaint::kStroke_Style);
-  highlight_paint.setStrokeWidth(0.001);
-  highlight_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.0002));
-
-  canvas.save();
-  canvas.clipPath(duration_path_rotated, true);
-  canvas.drawPaint(duration_handle_paint);
-  canvas.drawPath(duration_path_rotated, highlight_paint);
-  canvas.restore();
-}
-
-void Timer::FillChildren(Vec<Widget*>& children) { children.push_back(text_field.get()); }
-
-SkPath Timer::PartShape(Part* part) const {
-  if (part == &duration) {
-    auto transform = SkMatrix::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
-    return text_field->Shape().makeTransform(transform);
-  }
-  return SkPath();
-}
-
-SkPath Timer::Shape() const {
-  static SkPath shape = [] {
-    SkPathBuilder path_builder;
-    path_builder.addOval(kOuterOval);
-    path_builder.addRect(kStartPusherAxleBox);
-    path_builder.addRRect(kStartPusher);
-    SkPath small_pusher = SkPath::RRect(kSmallPusher);
-    small_pusher.addRRect(kSmallAxle);
-    small_pusher.transform(SkMatrix::RotateDeg(45));
-    path_builder.addPath(small_pusher);
-    small_pusher.transform(SkMatrix::RotateDeg(-90));
-    path_builder.addPath(small_pusher);
-    SkPath path = path_builder.detach();
-    SkPath simple_path;
-    if (Simplify(path, &simple_path)) {
-      return simple_path;
-    } else {
-      return path;
+  SkPath PartShape(Part* part) const override {
+    if (auto timer = LockTimer()) {
+      if (part == &timer->duration) {
+        auto transform = SkMatrix::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
+        return text_field->Shape().makeTransform(transform);
+      }
     }
+    return Shape();
+  }
+
+  SkPath Shape() const override {
+    static SkPath shape = [] {
+      SkPathBuilder path_builder;
+      path_builder.addOval(kOuterOval);
+      path_builder.addRect(kStartPusherAxleBox);
+      path_builder.addRRect(kStartPusher);
+      SkPath small_pusher = SkPath::RRect(kSmallPusher);
+      small_pusher.addRRect(kSmallAxle);
+      small_pusher.transform(SkMatrix::RotateDeg(45));
+      path_builder.addPath(small_pusher);
+      small_pusher.transform(SkMatrix::RotateDeg(-90));
+      path_builder.addPath(small_pusher);
+      SkPath path = path_builder.detach();
+      SkPath simple_path;
+      if (Simplify(path, &simple_path)) {
+        return simple_path;
+      } else {
+        return path;
+      }
+    }();
+    return shape;
+  }
+
+  bool CenteredAtZero() const override { return true; }
+
+  std::unique_ptr<Action> FindAction(ui::Pointer& pointer, ui::ActionTrigger btn) override;
+};
+
+static float HandBaseDegrees(const TimerWidget& w) {
+  if (w.is_running) {
+    Duration elapsed = SteadyClock::now() - w.start_time;
+    return 90 - 360 * elapsed / time::FloatDuration(RangeDuration(w.range));
+  } else {
+    return 90;
+  }
+}
+
+static SkPath HandPath(const TimerWidget& w) {
+  float base_degrees = HandBaseDegrees(w);
+  float end_degrees = w.hand_degrees.value;
+  float twist_degrees = end_degrees - base_degrees;
+  animation::WrapModulo(twist_degrees, 0, 360);
+
+  if (fabs(twist_degrees) < 1) {
+    SkPath path;
+    auto end_point = SkMatrix::RotateDeg(end_degrees).mapPoint({kHandLength, 0});
+    path.lineTo(end_point);
+    return path;
+  }
+
+  float R = kHandLength / ((twist_degrees / 360) * 2 * M_PI);
+
+  SkPath path;
+
+  auto end_point =
+      SkMatrix::Translate(R, 0).postRotate(twist_degrees).postTranslate(-R, 0).mapPoint({0, 0});
+
+  path.rArcTo(R, R, 0, SkPath::kSmall_ArcSize,
+              twist_degrees > 0 ? SkPathDirection::kCW : SkPathDirection::kCCW, end_point.x(),
+              end_point.y());
+  path.transform(SkMatrix::RotateDeg(base_degrees - 90));
+  return path;
+}
+
+static SkPath DurationHandlePath(const TimerWidget& w) {
+  static const SkPath path = [] {
+    SkPath path;
+    path.moveTo(kTickOuterRadius, 0);
+    float start_angle = atan2(0.001, r4) / M_PI * 180;
+    float handle_angle = 20;
+    path.arcTo(kDialOval, start_angle, handle_angle / 2 - start_angle, false);
+    path.arcTo(kOuterOval.makeOutset(0.0005, 0.0005), handle_angle / 2, -handle_angle, false);
+    path.arcTo(kDialOval, -handle_angle / 2, handle_angle / 2 - start_angle, false);
+    path.close();
+    return path;
   }();
-  return shape;
+  return path.makeTransform(SkMatrix::RotateRad(w.duration_handle_rotation));
 }
 
 struct DragDurationHandleAction : Action {
-  Timer& timer;
-  DragDurationHandleAction(ui::Pointer& pointer, Timer& timer) : Action(pointer), timer(timer) {}
+  TimerWidget& widget;
+  DragDurationHandleAction(ui::Pointer& pointer, TimerWidget& widget)
+      : Action(pointer), widget(widget) {}
   void Update() override {
-    auto pos = pointer.PositionWithin(timer);
-    auto tick_count = TickCount(timer.range);
-    double angle = atan2(pos.sk.y(), pos.sk.x());
+    auto pos = pointer.PositionWithin(widget);
+    if (auto timer = widget.LockTimer()) {
+      auto tick_count = TickCount(timer->range);
+      double angle = atan2(pos.sk.y(), pos.sk.x());
 
-    // Rescale to [0, 1] with 0 & 1 at the top of the dial
-    double new_duration = (1.25 - angle / (2 * M_PI));
-    if (new_duration < 0) {
-      new_duration += 1;
-    } else if (new_duration > 1) {
-      new_duration -= 1;
-    }
-    {  // Snap to nearest tick
-      new_duration *= tick_count;
-      new_duration -= 0.5;
-      if (new_duration <= 0) {
-        new_duration += tick_count;
+      // Rescale to [0, 1] with 0 & 1 at the top of the dial
+      double new_duration = (1.25 - angle / (2 * M_PI));
+      if (new_duration < 0) {
+        new_duration += 1;
+      } else if (new_duration > 1) {
+        new_duration -= 1;
       }
-      new_duration = ceilf(new_duration);
-      new_duration /= tick_count;
-    }
+      {  // Snap to nearest tick
+        new_duration *= tick_count;
+        new_duration -= 0.5;
+        if (new_duration <= 0) {
+          new_duration += tick_count;
+        }
+        new_duration = ceilf(new_duration);
+        new_duration /= tick_count;
+      }
 
-    SetDuration(timer, time::Defloat(RangeDuration(timer.range) * new_duration));
-    PropagateDurationOutwards(timer);
+      SetDuration(*timer, time::Defloat(RangeDuration(timer->range) * new_duration));
+      PropagateDurationOutwards(*timer);
+    }
   }
 };
-
-void Timer::Updated(WeakPtr<Object>& updated) {
-  if (auto u = updated.Lock()) {
-    std::string duration_str = u->GetText();
-    double n = std::stod(duration_str);
-    Duration d = time::Defloat(RangeDuration(range) * n / TickCount(range));
-    SetDuration(*this, d);
-  }
-}
 
 struct DragHandAction : Action {
-  WeakPtr<Timer> timer_weak;
-  DragHandAction(ui::Pointer& pointer, Ptr<Timer> timer) : Action(pointer), timer_weak(timer) {
-    ++timer->hand_draggers;
+  TimerWidget* widget;
+  DragHandAction(ui::Pointer& pointer, TimerWidget& w) : Action(pointer), widget(&w) {
+    ++widget->hand_draggers;
   }
-  virtual void Update() {
-    auto timer_shared = timer_weak.lock();
-    if (!timer_shared) {
-      return;
-    }
-    Vec2 pos = ui::TransformDown(*timer_shared).mapPoint(pointer.pointer_position);
-    timer_shared->hand_degrees.value = atan(pos) * 180 / M_PI;
-    timer_shared->WakeAnimation();
+  void Update() override {
+    Vec2 pos = ui::TransformDown(*widget).mapPoint(pointer.pointer_position);
+    widget->hand_degrees.value = atan(pos) * 180 / M_PI;
+    widget->WakeAnimation();
   }
   ~DragHandAction() {
-    if (auto timer = timer_weak.lock()) {
-      --timer->hand_draggers;
-      timer->WakeAnimation();
-    }
+    --widget->hand_draggers;
+    widget->WakeAnimation();
   }
 };
 
-std::unique_ptr<Action> Timer::FindAction(ui::Pointer& pointer, ui::ActionTrigger btn) {
+std::unique_ptr<Action> TimerWidget::FindAction(ui::Pointer& pointer, ui::ActionTrigger btn) {
   if (btn == ui::PointerButton::Left) {
     auto pos = pointer.PositionWithin(*this);
     auto duration_handle_path = DurationHandlePath(*this);
@@ -660,28 +801,39 @@ std::unique_ptr<Action> Timer::FindAction(ui::Pointer& pointer, ui::ActionTrigge
     if (kStartPusherBox.contains(pos.x, pos.y)) {
       start_pusher_depression = 1;
       WakeAnimation();
-      if (timer_running.IsRunning()) {
-        timer_running.Cancel();
-      } else {
-        ScheduleRun(*this);
+      if (auto timer = LockTimer()) {
+        if (timer->timer_running.IsRunning()) {
+          timer->timer_running.Cancel();
+        } else {
+          timer->ScheduleRun(*timer);
+        }
       }
       return nullptr;
     }
     auto left_rot = SkMatrix::RotateDeg(-45).mapPoint(pos.sk);
     auto right_rot = SkMatrix::RotateDeg(45).mapPoint(pos.sk);
     if (kSmallPusherBox.contains(left_rot.x(), left_rot.y())) {
-      range = Range(((int)range + (int)Range::EndGuard - 1) % (int)Range::EndGuard);
       left_pusher_depression = 1;
-      UpdateTextField(*this);
-      PropagateDurationOutwards(*this);
+      if (auto timer = LockTimer()) {
+        timer->range = Timer::Range(((int)timer->range + (int)Timer::Range::EndGuard - 1) %
+                                    (int)Timer::Range::EndGuard);
+        range = timer->range;
+        duration_value = timer->duration.value;
+        UpdateTextField();
+        PropagateDurationOutwards(*timer);
+      }
       WakeAnimation();
       return nullptr;
     }
     if (kSmallPusherBox.contains(right_rot.x(), right_rot.y())) {
-      range = Range(((int)range + 1) % (int)Range::EndGuard);
       right_pusher_depression = 1;
-      UpdateTextField(*this);
-      PropagateDurationOutwards(*this);
+      if (auto timer = LockTimer()) {
+        timer->range = Timer::Range(((int)timer->range + 1) % (int)Timer::Range::EndGuard);
+        range = timer->range;
+        duration_value = timer->duration.value;
+        UpdateTextField();
+        PropagateDurationOutwards(*timer);
+      }
       WakeAnimation();
       return nullptr;
     }
@@ -690,113 +842,14 @@ std::unique_ptr<Action> Timer::FindAction(ui::Pointer& pointer, ui::ActionTrigge
     SkPath hand_outline;  // Hand is just a straight line so we have to "widen" it
     skpathutils::FillPathWithPaint(hand_path, kHandPaint, &hand_outline);
     if (hand_outline.contains(pos.x, pos.y)) {
-      return std::make_unique<DragHandAction>(pointer, AcquirePtr<Timer>());
+      return std::make_unique<DragHandAction>(pointer, *this);
     }
   }
   return WidgetBase::FindAction(pointer, btn);
 }
 
-void Timer::Parts(const std::function<void(Part&)>& cb) {
-  cb(duration);
-  cb(next_arg);
-  cb(*AsLongRunning());
+std::unique_ptr<Toy> Timer::MakeToy(ui::Widget* parent) {
+  return std::make_unique<TimerWidget>(parent, *this);
 }
 
-void Timer::PartName(Part& part, Str& out_name) {
-  if (&part == AsLongRunning()) {
-    out_name = "Running";
-  } else if (&part == &duration) {
-    out_name = "Duration";
-  }
-}
-
-void Timer::OnRun(std::unique_ptr<RunTask>& run_task) {
-  auto lock = std::lock_guard(mtx);
-  ZoneScopedN("Timer");
-  start_time = time::SteadyClock::now();
-  ScheduleAt(*here, start_time + duration.value);
-  WakeAnimation();
-  timer_running.BeginLongRunning(std::move(run_task));
-}
-
-void Timer::TimerRunning::OnCancel() {
-  auto& timer = GetTimer();
-  if (timer.here) {
-    CancelScheduledAt(*timer.here, timer.start_time + timer.duration.value);
-  }
-  timer.WakeAnimation();
-}
-
-StrView ToStr(Timer::Range r) {
-  switch (r) {
-    using enum Timer::Range;
-    case Milliseconds:
-      return "milliseconds";
-    case Seconds:
-      return "seconds";
-    case Minutes:
-      return "minutes";
-    case Hours:
-      return "hours";
-    case Days:
-      return "days";
-    default:
-      return "unknown";
-  }
-}
-Timer::Range TimerRangeFromStr(StrView str, Status& status) {
-  using enum Timer::Range;
-  if (str == "milliseconds") return Milliseconds;
-  if (str == "seconds") return Seconds;
-  if (str == "minutes") return Minutes;
-  if (str == "hours") return Hours;
-  if (str == "days") return Days;
-  AppendErrorMessage(status) += "Unknown value for timer range: " + Str(str);
-  return Seconds;
-}
-
-void Timer::SerializeState(ObjectSerializer& writer) const {
-  writer.Key("range");
-  auto range_str = ToStr(range);
-  writer.String(range_str.data(), range_str.size());
-  writer.Key("duration_seconds");
-  writer.Double(time::ToSeconds(duration.value));
-  if (this->timer_running.IsRunning()) {
-    writer.Key("running");
-    writer.Double(time::ToSeconds(time::SteadyNow() - start_time));
-  }
-}
-bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
-  Status status;
-  if (key == "running") {
-    double value = 0;
-    d.Get(value, status);
-    timer_running.BeginLongRunning(make_unique<RunTask>(AcquireWeakPtr(), this));
-    start_time = time::SteadyNow() - time::FromSeconds(value);
-    ScheduleAt(*here, start_time + duration.value);
-  } else if (key == "duration_seconds") {
-    double value;
-    d.Get(value, status);
-    if (OK(status)) {
-      duration.value = time::FromSeconds(value);
-      UpdateTextField(*this);
-      if (this->timer_running.IsRunning()) {
-        ScheduleAt(*here, start_time + duration.value);
-      }
-    }
-  } else if (key == "range") {
-    Str value;
-    d.Get(value, status);
-    if (OK(status)) {
-      range = TimerRangeFromStr(value, status);
-      UpdateTextField(*this);
-    }
-  } else {
-    return false;
-  }
-  if (!OK(status)) {
-    ReportError("Failed to deserialize Timer: " + status.ToStr());
-  }
-  return true;
-}
 }  // namespace automat::library

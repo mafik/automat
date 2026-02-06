@@ -2,16 +2,14 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include "animation.hh"
 #include "base.hh"
-#include "number_text_field.hh"
 #include "sync.hh"
 #include "time.hh"
 #include "timer_thread.hh"
 
 namespace automat::library {
 
-struct Timer : Object, Object::WidgetBase, Runnable, TimerNotificationReceiver {
+struct Timer : Object, Runnable, TimerNotificationReceiver {
   // Guards access to duration & LongRunning members
   std::mutex mtx;
   struct MyDuration : Syncable {
@@ -23,15 +21,6 @@ struct Timer : Object, Object::WidgetBase, Runnable, TimerNotificationReceiver {
     }
   } duration;
   time::SteadyPoint start_time;
-  float start_pusher_depression = 0;
-  float left_pusher_depression = 0;
-  float right_pusher_depression = 0;
-  animation::SpringV2<float> hand_degrees;
-  int hand_draggers = 0;
-  // Controls the current range (milliseconds, seconds, etc.)
-  animation::SpringV2<float> range_dial;
-  float duration_handle_rotation = 0;
-  std::unique_ptr<ui::NumberTextField> text_field;
   enum class Range : char {
     Milliseconds,  // 0 - 1000 ms
     Seconds,       // 0 - 60 s
@@ -49,22 +38,17 @@ struct Timer : Object, Object::WidgetBase, Runnable, TimerNotificationReceiver {
     void OnCancel() override;
   } timer_running;
 
-  Timer(ui::Widget* parent);
+  Timer();
   Timer(const Timer&);
+  StrView Name() const override { return "Timer"; }
   Ptr<Object> Clone() const override;
-  animation::Phase Tick(time::Timer&) override;
-  void Draw(SkCanvas&) const override;
-  SkPath Shape() const override;
-  SkPath PartShape(Part*) const override;
-  std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
+  std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   void Parts(const std::function<void(Part&)>& cb) override;
   void PartName(Part& part, Str& out_name) override;
   void OnRun(std::unique_ptr<RunTask>&) override;
   LongRunning* AsLongRunning() override { return &timer_running; }
   void Updated(WeakPtr<Object>& updated) override;
-  void FillChildren(Vec<Widget*>& children) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
-  bool CenteredAtZero() const override { return true; }
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

@@ -46,11 +46,8 @@ struct IndexHelper {
 PrototypeLibrary::PrototypeLibrary() {
   IndexHelper index(*this);
 
-  // TODO: Remove this once Objects are split from Widgets.
-  ui::Widget* null_parent = nullptr;
-
   index.Register<FlipFlop>();
-  index.Register<MacroRecorder>(null_parent);
+  index.Register<MacroRecorder>();
   index.Register<Timer>();
   index.Register<HotKey>();
   index.Register<KeyPresser>();

@@ -309,79 +309,111 @@ void Machine::DropLocation(Ptr<Location>&& l) {
   l->parent_location = here;
   locations.insert(locations.begin(), std::move(l));
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
-  locations.front()->object->ForEachToy(
-      [](ui::RootWidget&, ui::Widget& w) { w.RedrawThisFrame(); });
-  // Walk over connections that start/end in the dropped location
-  // If the other end of the connection is obscured by another toy (obscurer), move the obscurer to
-  // the front of locations list.
-  // When moving the obscurer, make sure that any other toys that are stacked on top are moved
-  // alongside it (obscurer & its whole stack should be raised together).
-}
-
-SkPath Machine::StackShape(Location& base) {
-  auto base_it = std::find_if(locations.begin(), locations.end(),
-                              [&base](const Ptr<Location>& l) { return l.get() == &base; });
-  if (base_it != locations.end()) {
-    int base_index = std::distance(locations.begin(), base_it);
-    SkPath base_shape = base.ShapeRigid();
-
-    SkPath stack_shape;
-
-    // Move all the objects that are on top of the `base_shape`.
-    for (int atop_index = base_index - 1; atop_index >= 0; --atop_index) {
-      Location& atop = *locations[atop_index];
-      SkPath atop_shape = atop.ShapeRigid();
+  Location& dropped = *locations.front();
+  dropped.object->ForEachToy([](ui::RootWidget&, ui::Widget& w) { w.RedrawThisFrame(); });
+  // Walk over connections that start/end in the dropped location.
+  // If the other end of the connection is obscured by another location, raise that obscurer
+  // (and its whole stack) to the front.
+  auto& root = FindRootWidget();
+  for (auto& conn : root.connection_widgets) {
+    Location* start_loc = conn->StartLocation();
+    Location* end_loc = conn->EndLocation();
+    Location* other = nullptr;
+    if (start_loc == &dropped) {
+      other = end_loc;
+    } else if (end_loc == &dropped) {
+      other = start_loc;
+    }
+    if (!other) continue;
+    auto other_it = std::find_if(locations.begin(), locations.end(),
+                                 [&](const Ptr<Location>& loc) { return loc.get() == other; });
+    if (other_it == locations.end()) continue;
+    int other_index = std::distance(locations.begin(), other_it);
+    SkPath other_shape = other->ShapeRigid();
+    // Check if any location above `other` obscures it.
+    for (int i = other_index - 1; i >= 0; --i) {
+      Location& above = *locations[i];
+      if (&above == &dropped) continue;
+      SkPath above_shape = above.ShapeRigid();
       SkPath intersection;
-      bool op_success = Op(atop_shape, base_shape, kIntersect_SkPathOp, &intersection);
-      if (op_success && intersection.countVerbs() > 0) {
-        // Expand the base shape to include the atop shape.
-        Op(base_shape, atop_shape, kUnion_SkPathOp, &base_shape);
-        Op(stack_shape, atop.ShapeRecursive(), kUnion_SkPathOp, &stack_shape);
+      if (Op(above_shape, other_shape, kIntersect_SkPathOp, &intersection) &&
+          intersection.countVerbs() > 0) {
+        RaiseStack(above);
+        break;
       }
     }
-    return stack_shape;
-  } else {
-    return {};
   }
 }
 
-Vec<Ptr<Location>> Machine::ExtractStack(Location& base) {
+void Machine::ForStack(Location& base, std::function<void(Location&, int index)> callback) {
   auto base_it = std::find_if(locations.begin(), locations.end(),
                               [&base](const Ptr<Location>& l) { return l.get() == &base; });
-  if (base_it != locations.end()) {
-    int base_index = std::distance(locations.begin(), base_it);
-    SkPath base_shape = base.ShapeRigid();
+  if (base_it == locations.end()) return;
+  int base_index = std::distance(locations.begin(), base_it);
+  SkPath base_shape = base.ShapeRigid();
+  callback(base, base_index);
+  for (int atop_index = base_index - 1; atop_index >= 0; --atop_index) {
+    Location& atop = *locations[atop_index];
+    SkPath atop_shape = atop.ShapeRigid();
+    SkPath intersection;
+    if (Op(atop_shape, base_shape, kIntersect_SkPathOp, &intersection) &&
+        intersection.countVerbs() > 0) {
+      callback(atop, atop_index);
+      Op(base_shape, atop_shape, kUnion_SkPathOp, &base_shape);
+    }
+  }
+}
 
-    Vec<Ptr<Location>> result;
-    result.push_back(std::move(*base_it));
-    locations.erase(base_it);
+SkPath Machine::StackShape(Location& base) {
+  SkPath stack_shape;
+  ForStack(base, [&](Location& loc, int) {
+    if (&loc != &base) {
+      Op(stack_shape, loc.ShapeRecursive(), kUnion_SkPathOp, &stack_shape);
+    }
+  });
+  return stack_shape;
+}
 
-    // Move all the objects that are on top of the `base_shape`.
-    for (int atop_index = base_index - 1; atop_index >= 0; --atop_index) {
-      Location& atop = *locations[atop_index];
-      SkPath atop_shape = atop.ShapeRigid();
-      SkPath intersection;
-      bool op_success = Op(atop_shape, base_shape, kIntersect_SkPathOp, &intersection);
-      if (op_success && intersection.countVerbs() > 0) {
-        result.insert(result.begin(), std::move(locations[atop_index]));
-        locations.erase(locations.begin() + atop_index);
-        // Expand the base shape to include the atop shape.
-        Op(base_shape, atop_shape, kUnion_SkPathOp, &base_shape);
+Vec<Ptr<Location>> Machine::ExtractStack(Location& base) {
+  Vec<int> stack_indices;
+  ForStack(base, [&](Location&, int index) { stack_indices.push_back(index); });
+  if (stack_indices.empty()) return {};
+
+  Vec<Ptr<Location>> result;
+  // Erase from highest index down (base is always last/highest).
+  for (int idx : stack_indices) {
+    result.insert(result.begin(), std::move(locations[idx]));
+    locations.erase(locations.begin() + idx);
+  }
+
+  for (int i = 0; i < front.size(); ++i) {
+    for (auto& r : result) {
+      if (front[i] == r.get()) {
+        front.erase(front.begin() + i);
       }
     }
+  }
+  WakeAnimation();
+  audio::Play(embedded::assets_SFX_canvas_pick_wav);
+  return result;
+}
 
-    for (int i = 0; i < front.size(); ++i) {
-      for (auto& r : result) {
-        if (front[i] == r.get()) {
-          front.erase(front.begin() + i);
-        }
-      }
-    }
-    WakeAnimation();
-    audio::Play(embedded::assets_SFX_canvas_pick_wav);
-    return result;
-  } else {
-    return {};
+void Machine::RaiseStack(Location& base) {
+  Vec<int> stack_indices;
+  ForStack(base, [&](Location&, int index) { stack_indices.push_back(index); });
+  if (stack_indices.empty()) return;
+
+  Vec<Ptr<Location>> stack;
+  // Erase from highest index down.
+  for (int i = stack_indices.size() - 1; i >= 0; --i) {
+    stack.push_back(std::move(locations[stack_indices[i]]));
+    locations.erase(locations.begin() + stack_indices[i]);
+  }
+  std::reverse(stack.begin(), stack.end());
+
+  // Re-insert at the front (top of Z-order).
+  for (int i = stack.size() - 1; i >= 0; --i) {
+    locations.insert(locations.begin(), std::move(stack[i]));
   }
 }
 

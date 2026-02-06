@@ -166,8 +166,15 @@ struct Machine : Object, ui::Widget, ui::DropTarget {
   vector<Location*> front;
 
   Ptr<Location> Extract(Location& location);
+
+  // Calls `callback` for each location in the stack of `base`, including `base` itself.
+  // `base` is always the first callback (highest index). Indexes are returned in
+  // decreasing order.
+  void ForStack(Location& base, std::function<void(Location&, int index)> callback);
+
   SkPath StackShape(Location& base);
   Vec<Ptr<Location>> ExtractStack(Location& base);
+  void RaiseStack(Location& base);
 
   // Create a new location on top of all the others.
   Location& CreateEmpty();

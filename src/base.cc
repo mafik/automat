@@ -380,7 +380,7 @@ Vec<Ptr<Location>> Machine::ExtractStack(Location& base) {
   if (stack_indices.empty()) return {};
 
   Vec<Ptr<Location>> result;
-  // Erase from highest index down (base is always last/highest).
+  // Indices are in decreasing order (base is always first/highest), so erasing in order is safe.
   for (int idx : stack_indices) {
     result.insert(result.begin(), std::move(locations[idx]));
     locations.erase(locations.begin() + idx);
@@ -404,12 +404,11 @@ void Machine::RaiseStack(Location& base) {
   if (stack_indices.empty()) return;
 
   Vec<Ptr<Location>> stack;
-  // Erase from highest index down.
-  for (int i = stack_indices.size() - 1; i >= 0; --i) {
-    stack.push_back(std::move(locations[stack_indices[i]]));
-    locations.erase(locations.begin() + stack_indices[i]);
+  // Indices are in decreasing order (highest first), so erasing in order is safe.
+  for (int idx : stack_indices) {
+    stack.insert(stack.begin(), std::move(locations[idx]));
+    locations.erase(locations.begin() + idx);
   }
-  std::reverse(stack.begin(), stack.end());
 
   // Re-insert at the front (top of Z-order).
   for (int i = stack.size() - 1; i >= 0; --i) {

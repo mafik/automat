@@ -54,6 +54,11 @@ struct ToyStore {
     return it->second.get();
   }
 
+  template <typename T>
+  T* FindOrNull(ToyMaker& maker) const {
+    return static_cast<T*>(FindOrNull(maker));
+  }
+
   Toy& FindOrMake(ToyMaker& maker, Widget* parent) {
     auto key = MakeKey(*maker.GetReferenceCounted(), *maker.GetPart());
     auto it = container.find(key);
@@ -70,6 +75,11 @@ struct ToyStore {
       }
     }
     return *it->second;
+  }
+
+  template <typename T>
+  T& FindOrMake(ToyMaker& maker, Widget* parent) {
+    return static_cast<T&>(FindOrMake(maker, parent));
   }
 };
 

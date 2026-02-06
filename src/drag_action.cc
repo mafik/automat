@@ -129,7 +129,7 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
     root.black_hole.WakeAnimation();
   }
   for (auto& location : locations) {
-    auto* lw = static_cast<LocationWidget*>(root.toys.FindOrNull(*location));
+    auto* lw = root.toys.FindOrNull<LocationWidget>(*location);
     if (lw == nullptr) {
       ERROR << "DragLocationAction for Location without a Widget";
       continue;

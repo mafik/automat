@@ -177,7 +177,7 @@ struct DeiconifyOption : TextOption {
 static Str SyncableName(NestedWeakPtr<Syncable>& weak) {
   if (auto ptr = weak.Lock()) {
     Str name;
-    ptr.Owner<Object>()->PartName(*ptr.Get(), name);
+    ptr.Owner<Object>()->AtomName(*ptr.Get(), name);
     return name;
   }
   return "Field of a deleted object";
@@ -244,7 +244,7 @@ struct SyncAction : Action {
   void Update() override {
     if (auto syncable = weak.Lock()) {
       auto* widget = pointer.root_widget.toys.FindOrNull(*syncable.Owner<Object>());
-      auto start_local = widget->PartShape(syncable.Get()).getBounds().center();
+      auto start_local = widget->AtomShape(syncable.Get()).getBounds().center();
       auto start = TransformBetween(*widget, *root_machine).mapPoint(start_local);
       sync_widget.start = start;
       sync_widget.end = pointer.PositionWithinRootMachine();
@@ -254,10 +254,10 @@ struct SyncAction : Action {
     }
     pointer.pointer_widget->WakeAnimation();
   }
-  bool Highlight(Object& end_obj, Part& end_part) const override {
+  bool Highlight(Object& end_obj, Atom& end_atom) const override {
     auto ptr = weak.Lock();
     Object& start = *ptr.Owner<Object>();
-    return ptr->Argument::CanConnect(start, end_part);
+    return ptr->Argument::CanConnect(start, end_atom);
   }
   ui::Widget* Widget() override { return &sync_widget; }
 };
@@ -323,39 +323,40 @@ struct FieldOption : TextOption, OptionsProvider {
 void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
   if (auto* lw = ui::Closest<LocationWidget>(const_cast<WidgetBase&>(*this))) {
     if (auto loc = lw->LockLocation()) {
-    auto loc_weak = loc->AcquireWeakPtr();
-    DeleteOption del{loc_weak};
-    visitor(del);
-    MoveLocationOption move{loc_weak, object};
-    visitor(move);
-    if (auto runnable = loc->As<Runnable>()) {
-      RunOption run{this->object, *runnable};
-      visitor(run);
-    }
-    if (IsIconified()) {
-      DeiconifyOption deiconify{loc_weak};
-      visitor(deiconify);
-    } else {
-      IconifyOption iconify{loc_weak};
-      visitor(iconify);
-    }
-    if (auto obj = object.Lock()) {
-      obj->Parts([&](Part& part) {
-        if (auto* syncable = dynamic_cast<Syncable*>(&part)) {
-          FieldOption field_option{NestedWeakPtr<Syncable>(WeakPtr<Object>(object), syncable)};
-          Str part_name;
-          obj->PartName(*syncable, part_name);
-          // Sometimes it's convenient for an object to expose some options more directly (without
-          // nested menus). We do this when the object uses some part without giving it a name.
-          if (part_name.empty()) {
-            field_option.VisitOptions(visitor);
-          } else {
-            visitor(field_option);
+      auto loc_weak = loc->AcquireWeakPtr();
+      DeleteOption del{loc_weak};
+      visitor(del);
+      MoveLocationOption move{loc_weak, object};
+      visitor(move);
+      if (auto runnable = loc->As<Runnable>()) {
+        RunOption run{this->object, *runnable};
+        visitor(run);
+      }
+      if (IsIconified()) {
+        DeiconifyOption deiconify{loc_weak};
+        visitor(deiconify);
+      } else {
+        IconifyOption iconify{loc_weak};
+        visitor(iconify);
+      }
+      if (auto obj = object.Lock()) {
+        obj->Atoms([&](Atom& atom) {
+          if (auto* syncable = dynamic_cast<Syncable*>(&atom)) {
+            FieldOption field_option{NestedWeakPtr<Syncable>(WeakPtr<Object>(object), syncable)};
+            Str atom_name;
+            obj->AtomName(*syncable, atom_name);
+            // Sometimes it's convenient for an object to expose some options more directly (without
+            // nested menus). We do this when the object uses some part without giving it a name.
+            if (atom_name.empty()) {
+              field_option.VisitOptions(visitor);
+            } else {
+              visitor(field_option);
+            }
           }
-        }
-      });
+        });
+      }
     }
-  }}
+  }
 }
 
 std::unique_ptr<Action> Object::WidgetBase::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
@@ -438,7 +439,7 @@ void Object::WidgetBase::ConnectionPositions(Vec<Vec2AndDir>& out_positions) con
 }
 
 Vec2AndDir Toy::ArgStart(const Argument& arg, ui::Widget* coordinate_space) {
-  SkPath shape = PartShape(&const_cast<Argument&>(arg));
+  SkPath shape = AtomShape(&const_cast<Argument&>(arg));
   Rect bounds = shape.getBounds();
   Vec2AndDir pos_dir{
       .pos = bounds.BottomCenter(),
@@ -459,19 +460,19 @@ bool Object::WidgetBase::AllowChildPointerEvents(ui::Widget&) const { return !Is
 
 bool Object::WidgetBase::IsIconified() const { return automat::IsIconified(object.GetUnsafe()); }
 
-void Object::Parts(const std::function<void(Part&)>& cb) { cb(*this); }
+void Object::Atoms(const std::function<void(Atom&)>& cb) { cb(*this); }
 
-void Object::PartName(Part& part, Str& out_name) {
-  if (&part == this) {
+void Object::AtomName(Atom& atom, Str& out_name) {
+  if (&atom == this) {
     out_name = "";
   } else {
-    out_name = part.Name();
+    out_name = atom.Name();
   }
 }
 
 void Object::Args(const std::function<void(Argument&)>& cb) {
-  Parts([&](Part& part) {
-    if (Argument* arg = dynamic_cast<Argument*>(&part)) {
+  Atoms([&](Atom& atom) {
+    if (Argument* arg = dynamic_cast<Argument*>(&atom)) {
       cb(*arg);
     }
   });
@@ -495,13 +496,13 @@ void Object::InvalidateConnectionWidgets(const Argument* arg) const {
   }
 }
 
-Part* Object::PartFromName(StrView needle) {
-  Part* result = nullptr;
-  Parts([&](Part& part) {
-    Str part_name;
-    PartName(part, part_name);
-    if (part_name == needle) {
-      result = &part;
+Atom* Object::AtomFromName(StrView needle) {
+  Atom* result = nullptr;
+  Atoms([&](Atom& atom) {
+    Str atom_name;
+    AtomName(atom, atom_name);
+    if (atom_name == needle) {
+      result = &atom;
     }
   });
   return result;
@@ -526,13 +527,13 @@ Str& ObjectSerializer::ResolveName(Object& object, StrView hint) {
   return it->second;
 }
 
-Str ObjectSerializer::ResolveName(Object& object, Part* part, StrView hint) {
+Str ObjectSerializer::ResolveName(Object& object, Atom* atom, StrView hint) {
   Str ret = ResolveName(object, hint);
-  if (part) {
-    Str part_name;
-    object.PartName(*part, part_name);
-    if (!part_name.empty()) {
-      ret += "." + part_name;
+  if (atom) {
+    Str atom_name;
+    object.AtomName(*atom, atom_name);
+    if (!atom_name.empty()) {
+      ret += "." + atom_name;
     }
   }
   return ret;
@@ -563,7 +564,7 @@ void ObjectSerializer::Serialize(Object& start) {
           StartObject();
         }
         Str arg_name;
-        o->PartName(arg, arg_name);
+        o->AtomName(arg, arg_name);
         Key(arg_name);
         auto to_name = ResolveName(*end.Owner<Object>(), end.Get());
         String(to_name);
@@ -589,25 +590,25 @@ Object* ObjectDeserializer::LookupObject(StrView name) {
   return to_it->second.Get();
 }
 
-NestedPtr<Part> ObjectDeserializer::LookupPart(StrView name) {
+NestedPtr<Atom> ObjectDeserializer::LookupAtom(StrView name) {
   auto dot_pos = name.find('.');
-  Str to_name, to_part;
+  Str to_name, to_atom;
   if (dot_pos != Str::npos) {
     to_name = name.substr(0, dot_pos);
-    to_part = name.substr(dot_pos + 1);
+    to_atom = name.substr(dot_pos + 1);
   } else {
     to_name = name;
-    to_part = "";
+    to_atom = "";
   }
   auto* to = LookupObject(to_name);
   if (to == nullptr) {
     return {};
   }
-  if (to_part.empty()) {
-    return NestedPtr<Part>(to->AcquirePtr(), to);
+  if (to_atom.empty()) {
+    return NestedPtr<Atom>(to->AcquirePtr(), to);
   } else {
-    auto* part = to->PartFromName(to_part);
-    return NestedPtr<Part>(to->AcquirePtr(), part);
+    auto* atom = to->AtomFromName(to_atom);
+    return NestedPtr<Atom>(to->AcquirePtr(), atom);
   }
 }
 

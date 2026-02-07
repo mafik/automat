@@ -38,9 +38,9 @@ struct AssemblerArgument : Argument {
   SkColor Tint() const override { return "#ff0000"_color; }
   Style GetStyle() const override { return Style::Invisible; }
   Ptr<Object> Prototype() const override;
-  void CanConnect(Object& start, Part& end, Status& status) const override;
-  void Connect(Object& start, const NestedPtr<Part>& end) override;
-  NestedPtr<Part> Find(const Object& start) const override;
+  void CanConnect(Object& start, Atom& end, Status& status) const override;
+  void Connect(Object& start, const NestedPtr<Atom>& end) override;
+  NestedPtr<Atom> Find(const Object& start) const override;
 };
 
 struct JumpArgument : Argument {
@@ -48,14 +48,14 @@ struct JumpArgument : Argument {
 
   StrView Name() const override { return "jump"sv; }
   PaintDrawable& Icon() override;
-  void CanConnect(Object& start, Part& end, Status& status) const override;
-  void Connect(Object& start, const NestedPtr<Part>& end) override;
-  NestedPtr<Part> Find(const Object& start) const override;
+  void CanConnect(Object& start, Atom& end, Status& status) const override;
+  void Connect(Object& start, const NestedPtr<Atom>& end) override;
+  NestedPtr<Atom> Find(const Object& start) const override;
 };
 
 // Same as NextArg - but calls UpdateMachineCode when it's reconnected
 struct NextInstructionArg : NextArg {
-  void Connect(Object& start, const NestedPtr<Part>& end) override;
+  void Connect(Object& start, const NestedPtr<Atom>& end) override;
 };
 
 extern AssemblerArgument assembler_arg;
@@ -67,7 +67,7 @@ struct Instruction : Object, Runnable, Buffer {
   NestedWeakPtr<Runnable> jump_target;  // Connection target for jump_arg
   NestedWeakPtr<Object> assembler_weak;
 
-  void Parts(const std::function<void(Part&)>& cb) override;
+  void Atoms(const std::function<void(Atom&)>& cb) override;
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;

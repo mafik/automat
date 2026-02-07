@@ -52,10 +52,10 @@ std::unique_ptr<Action> RunOption::Activate(ui::Pointer& pointer) const {
 
 void Machine::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
   bool connected = false;
-  auto TryConnect = [&](Object& end, Part& part) {
+  auto TryConnect = [&](Object& end, Atom& atom) {
     if (connected) return;
-    if (arg.CanConnect(start, part)) {
-      arg.Connect(start, NestedPtr<Part>(end.AcquirePtr(), &part));
+    if (arg.CanConnect(start, atom)) {
+      arg.Connect(start, NestedPtr<Atom>(end.AcquirePtr(), &atom));
       connected = true;
       auto& root = FindRootWidget();
       for (auto& conn : root.connection_widgets) {
@@ -83,7 +83,7 @@ void Machine::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
     auto& obj = *loc->object;
     TryConnect(obj, obj);
     if (connected) return;
-    obj.Parts([&](Part& part) { TryConnect(obj, part); });
+    obj.Atoms([&](Atom& atom) { TryConnect(obj, atom); });
   }
 }
 

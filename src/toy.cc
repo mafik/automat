@@ -8,8 +8,8 @@ namespace automat {
 
 void ToyMaker::ForEachToy(std::function<void(ui::RootWidget&, Toy&)> cb) {
   for (auto* root_widget : ui::root_widgets) {
-    auto it = root_widget->toys.container.find(
-        ui::ToyStore::MakeKey(*GetReferenceCounted(), *GetPart()));
+    auto it =
+        root_widget->toys.container.find(ui::ToyStore::MakeKey(*GetReferenceCounted(), *GetAtom()));
     if (it != root_widget->toys.container.end()) {
       cb(*root_widget, *it->second);
     }

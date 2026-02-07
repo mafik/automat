@@ -175,16 +175,16 @@ void Timer::Updated(WeakPtr<Object>& updated) {
   }
 }
 
-void Timer::Parts(const std::function<void(Part&)>& cb) {
+void Timer::Atoms(const std::function<void(Atom&)>& cb) {
   cb(duration);
   cb(next_arg);
   cb(*AsLongRunning());
 }
 
-void Timer::PartName(Part& part, Str& out_name) {
-  if (&part == AsLongRunning()) {
+void Timer::AtomName(Atom& atom, Str& out_name) {
+  if (&atom == AsLongRunning()) {
     out_name = "Running";
-  } else if (&part == &duration) {
+  } else if (&atom == &duration) {
     out_name = "Duration";
   }
 }
@@ -653,9 +653,9 @@ struct TimerWidget : Object::WidgetBase {
 
   void FillChildren(Vec<Widget*>& children) override { children.push_back(text_field.get()); }
 
-  SkPath PartShape(Part* part) const override {
+  SkPath AtomShape(Atom* atom) const override {
     if (auto timer = LockTimer()) {
-      if (part == &timer->duration) {
+      if (atom == &timer->duration) {
         auto transform = SkMatrix::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
         return text_field->Shape().makeTransform(transform);
       }

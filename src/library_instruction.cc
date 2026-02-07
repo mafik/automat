@@ -107,13 +107,13 @@ JumpArgument::JumpArgument() {
 
 PaintDrawable& JumpArgument::Icon() { return jump_icon; }
 
-void JumpArgument::CanConnect(Object& start, Part& end, Status& status) const {
+void JumpArgument::CanConnect(Object& start, Atom& end, Status& status) const {
   if (!dynamic_cast<Runnable*>(&end)) {
     AppendErrorMessage(status) += "Jump target must be a Runnable";
   }
 }
 
-void JumpArgument::Connect(Object& start, const NestedPtr<Part>& end) {
+void JumpArgument::Connect(Object& start, const NestedPtr<Atom>& end) {
   if (auto* inst = dynamic_cast<Instruction*>(&start)) {
     if (end) {
       if (auto* runnable = dynamic_cast<Runnable*>(end.Get())) {
@@ -129,7 +129,7 @@ void JumpArgument::Connect(Object& start, const NestedPtr<Part>& end) {
   }
 }
 
-NestedPtr<Part> JumpArgument::Find(const Object& start) const {
+NestedPtr<Atom> JumpArgument::Find(const Object& start) const {
   if (auto* inst = dynamic_cast<const Instruction*>(&start)) {
     if (auto locked = inst->jump_target.Lock()) {
       return NestedPtr<Syncable>(locked.GetOwnerWeak().Lock(), locked.Get());
@@ -140,7 +140,7 @@ NestedPtr<Part> JumpArgument::Find(const Object& start) const {
 
 JumpArgument jump_arg;
 
-void NextInstructionArg::Connect(Object& start, const NestedPtr<Part>& end) {
+void NextInstructionArg::Connect(Object& start, const NestedPtr<Atom>& end) {
   NextArg::Connect(start, end);
   if (auto* inst = dynamic_cast<Instruction*>(&start)) {
     // Notify assembler of change
@@ -152,13 +152,13 @@ void NextInstructionArg::Connect(Object& start, const NestedPtr<Part>& end) {
 
 NextInstructionArg next_instruction_arg;
 
-void AssemblerArgument::CanConnect(Object& start, Part& end, Status& status) const {
+void AssemblerArgument::CanConnect(Object& start, Atom& end, Status& status) const {
   if (!dynamic_cast<Assembler*>(&end)) {
     AppendErrorMessage(status) += "Must connect to an Assembler";
   }
 }
 
-void AssemblerArgument::Connect(Object& start, const NestedPtr<Part>& end) {
+void AssemblerArgument::Connect(Object& start, const NestedPtr<Atom>& end) {
   auto* instruction = dynamic_cast<Instruction*>(&start);
   if (instruction == nullptr) return;
 
@@ -184,11 +184,11 @@ void AssemblerArgument::Connect(Object& start, const NestedPtr<Part>& end) {
   }
 }
 
-NestedPtr<Part> AssemblerArgument::Find(const Object& start) const {
+NestedPtr<Atom> AssemblerArgument::Find(const Object& start) const {
   if (auto* instruction = dynamic_cast<const Instruction*>(&start)) {
     return instruction->assembler_weak.Lock();
   }
-  return NestedPtr<Part>();
+  return NestedPtr<Atom>();
 }
 
 Ptr<Object> AssemblerArgument::Prototype() const { return MAKE_PTR(Assembler); }
@@ -203,7 +203,7 @@ static Assembler* FindOrCreateAssembler(Object& start) {
   return dynamic_cast<Assembler*>(&assembler_arg.ObjectOrMake(start));
 }
 
-void Instruction::Parts(const std::function<void(Part&)>& cb) {
+void Instruction::Atoms(const std::function<void(Atom&)>& cb) {
   auto opcode = mc_inst.getOpcode();
   if (opcode != X86::JMP_1 && opcode != X86::JMP_4) {
     cb(next_instruction_arg);

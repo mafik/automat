@@ -49,7 +49,7 @@ struct ArgumentOf;
 //
 // TODO: think about pointer following
 // TODO: think about multiple targets
-struct Argument : virtual Part {
+struct Argument : virtual Atom {
   enum class Style { Arrow, Cable, Spotlight, Invisible };
 
   virtual SkColor Tint() const { return "#404040"_color; }
@@ -64,11 +64,11 @@ struct Argument : virtual Part {
 
   virtual ~Argument() = default;
 
-  virtual void CanConnect(Object& start, Part& end, Status& status) const {
+  virtual void CanConnect(Object& start, Atom& end, Status& status) const {
     AppendErrorMessage(status) += "Argument::CanConnect should be overridden";
   }
 
-  bool CanConnect(Object& start, Part& end) const {
+  bool CanConnect(Object& start, Atom& end) const {
     Status status;
     CanConnect(start, end, status);
     return OK(status);
@@ -79,11 +79,11 @@ struct Argument : virtual Part {
   //
   // When `end` is nullptr, this disconnects the existing connection. The implementation can check
   // the current connection value before clearing it (e.g., to call cleanup methods).
-  virtual void Connect(Object& start, const NestedPtr<Part>& end) = 0;
+  virtual void Connect(Object& start, const NestedPtr<Atom>& end) = 0;
 
   void Disconnect(Object& start) { Connect(start, {}); }
 
-  virtual NestedPtr<Part> Find(const Object& start) const = 0;
+  virtual NestedPtr<Atom> Find(const Object& start) const = 0;
 
   // Returns the prototype object for this argument, or nullptr if there is no prototype.
   // This is used by various *OnMake methods to create new object - and for object preview.
@@ -91,12 +91,12 @@ struct Argument : virtual Part {
 
   virtual PaintDrawable& Icon();  // TODO: weird - clean this up
 
-  // Use this method if you don't actually care about specific part that the argument points to -
-  // just the target object (that owns that part).
+  // Use this method if you don't actually care about specific atom that the argument points to -
+  // just the target object (that owns that atom).
   Object* ObjectOrNull(Object& start) const;
 
-  // Use this method if you don't actually care about specific part that the argument points to -
-  // just the target object (that owns that part).
+  // Use this method if you don't actually care about specific atom that the argument points to -
+  // just the target object (that owns that atom).
   //
   // This is the main way of creating new objects through this Argument's Prototype.
   Object& ObjectOrMake(Object& start) const;
@@ -110,25 +110,25 @@ struct ArgumentOf : ToyMaker {
   ArgumentOf(Object& object, Argument& arg) : object(object), arg(arg) {}
 
   ReferenceCounted* GetReferenceCounted() override { return &object; }
-  Part* GetPart() override { return &arg; }
+  Atom* GetAtom() override { return &arg; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 };
 
 inline ArgumentOf Argument::Of(Object& start) { return ArgumentOf(start, *this); }
 
 struct InlineArgument : Argument {
-  NestedWeakPtr<Part> end;
+  NestedWeakPtr<Atom> end;
 
-  void Connect(Object&, const NestedPtr<Part>& end) override { this->end = end; }
+  void Connect(Object&, const NestedPtr<Atom>& end) override { this->end = end; }
 
-  NestedPtr<Part> Find(const Object&) const override { return end.Lock(); };
+  NestedPtr<Atom> Find(const Object&) const override { return end.Lock(); };
 };
 
 struct NextArg : Argument {
   StrView Name() const override { return "Next"sv; }
-  void CanConnect(Object& start, Part& end, Status&) const override;
-  void Connect(Object& start, const NestedPtr<Part>& end) override;
-  NestedPtr<Part> Find(const Object& start) const override;
+  void CanConnect(Object& start, Atom& end, Status&) const override;
+  void Connect(Object& start, const NestedPtr<Atom>& end) override;
+  NestedPtr<Atom> Find(const Object& start) const override;
 };
 
 extern NextArg next_arg;

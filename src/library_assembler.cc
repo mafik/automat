@@ -208,7 +208,7 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
 
 Ptr<Object> Assembler::Clone() const { return MAKE_PTR(Assembler); }
 
-void Assembler::Parts(const std::function<void(Part&)>& cb) {
+void Assembler::Atoms(const std::function<void(Atom&)>& cb) {
   cb(*this);
   cb(running);
 }
@@ -766,13 +766,13 @@ struct RegisterAssemblerArgument : Argument {
   SkColor Tint() const override { return "#ff0000"_color; }
   Style GetStyle() const override { return Style::Spotlight; }
 
-  void CanConnect(Object& start, Part& end, Status& status) const override {
+  void CanConnect(Object& start, Atom& end, Status& status) const override {
     if (!dynamic_cast<Assembler*>(&end)) {
       AppendErrorMessage(status) += "Must connect to an Assembler";
     }
   }
 
-  void Connect(Object& start, const NestedPtr<Part>& end) override {
+  void Connect(Object& start, const NestedPtr<Atom>& end) override {
     if (auto* reg = dynamic_cast<Register*>(&start)) {
       if (end) {
         if (auto* assembler = dynamic_cast<Assembler*>(end.Get())) {
@@ -784,7 +784,7 @@ struct RegisterAssemblerArgument : Argument {
     }
   }
 
-  NestedPtr<Part> Find(const Object& start) const override {
+  NestedPtr<Atom> Find(const Object& start) const override {
     auto* reg = dynamic_cast<const Register*>(&start);
     if (reg == nullptr) return {};
     return reg->assembler_weak.Lock();
@@ -793,7 +793,7 @@ struct RegisterAssemblerArgument : Argument {
 
 static RegisterAssemblerArgument register_assembler_arg;
 
-void Register::Parts(const std::function<void(Part&)>& cb) { cb(register_assembler_arg); }
+void Register::Atoms(const std::function<void(Atom&)>& cb) { cb(register_assembler_arg); }
 
 void Register::SetText(std::string_view text) {
   auto assembler = assembler_weak.Lock();

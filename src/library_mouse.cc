@@ -109,7 +109,8 @@ struct MakeObjectOption : Option {
     audio::Play(embedded::assets_SFX_toolbar_pick_wav);
     auto action = std::make_unique<DragLocationAction>(pointer, std::move(loc));
     // Resetting the anchor makes the object dragged by the center point
-    if (action->locations.front()->widget) action->locations.front()->widget->local_anchor = Vec2(0, 0);
+    if (action->locations.front()->widget)
+      action->locations.front()->widget->local_anchor = Vec2(0, 0);
     return action;
   }
   Dir PreferredDir() const override { return dir; }
@@ -498,7 +499,7 @@ static void SendMouseButtonEvent(ui::PointerButton button, bool down) {
 string_view MouseButtonEvent::Name() const { return "Mouse Button Event"sv; }
 
 Ptr<Object> MouseButtonEvent::Clone() const { return MAKE_PTR(MouseButtonEvent, button, down); }
-void MouseButtonEvent::Parts(const std::function<void(Part&)>& cb) { cb(next_arg); }
+void MouseButtonEvent::Atoms(const std::function<void(Atom&)>& cb) { cb(next_arg); }
 void MouseButtonEvent::OnRun(std::unique_ptr<RunTask>&) {
   ZoneScopedN("MouseClick");
   SendMouseButtonEvent(button, down);
@@ -887,7 +888,7 @@ string_view MouseButtonPresser::Name() const { return "Mouse Button Presser"sv; 
 
 Ptr<Object> MouseButtonPresser::Clone() const { return MAKE_PTR(MouseButtonPresser, button); }
 
-void MouseButtonPresser::Parts(const std::function<void(Part&)>& cb) {
+void MouseButtonPresser::Atoms(const std::function<void(Atom&)>& cb) {
   cb(*this);
   cb(next_arg);
 }

@@ -5,7 +5,7 @@
 namespace automat {
 
 struct Object;
-struct Part;
+struct Atom;
 
 namespace ui {
 struct Pointer;
@@ -32,7 +32,7 @@ struct Action {
   virtual void Update() = 0;
 
   // Return true to highlight the given part of some object.
-  virtual bool Highlight(Object&, Part&) const { return false; }
+  virtual bool Highlight(Object&, Atom&) const { return false; }
 
   virtual ui::Widget* Widget() { return nullptr; }
 };

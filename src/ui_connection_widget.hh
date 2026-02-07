@@ -27,7 +27,7 @@ struct DragConnectionAction : Action {
   DragConnectionAction(Pointer&, ConnectionWidget&);
   ~DragConnectionAction() override;
   void Update() override;
-  bool Highlight(Object&, Part&) const override;
+  bool Highlight(Object&, Atom&) const override;
   ui::Widget* Widget() override;
 };
 

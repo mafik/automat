@@ -93,9 +93,9 @@ struct Syncable : InlineArgument {
     }
   }
 
-  void CanConnect(Object& start, Part& end, Status&) const override;
+  void CanConnect(Object& start, Atom& end, Status&) const override;
 
-  void Connect(Object&, const NestedPtr<Part>& end) override;
+  void Connect(Object&, const NestedPtr<Atom>& end) override;
 
   Style GetStyle() const override { return Style::Invisible; }
 

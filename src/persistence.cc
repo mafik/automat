@@ -110,13 +110,13 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
           } else if (field == "args") {
             // Deserialize argument connections
             for (auto& arg_name : ObjectView(d, status)) {
-              Argument* from_arg = dynamic_cast<Argument*>(object->PartFromName(arg_name));
+              Argument* from_arg = dynamic_cast<Argument*>(object->AtomFromName(arg_name));
               if (from_arg) {
                 Str to_name;
                 d.Get(to_name, status);
-                auto to_part = d.LookupPart(to_name);
-                if (to_part) {
-                  from_arg->Connect(*object, to_part);
+                auto to_atom = d.LookupAtom(to_name);
+                if (to_atom) {
+                  from_arg->Connect(*object, to_atom);
                 }
               } else {
                 d.Skip();

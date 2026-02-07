@@ -266,7 +266,7 @@ struct ConnectionWidgetLocker {
   NestedPtr<Argument> start_arg;
   Toy* start_widget;
 
-  NestedPtr<Part> end_part;
+  NestedPtr<Atom> end_atom;
   Toy* end_widget;
   SkMatrix end_transform;
 
@@ -275,12 +275,12 @@ struct ConnectionWidgetLocker {
       : toy_store(w.ToyStore()),
         start_arg(w.start_weak.Lock()),
         start_widget(StartObj() ? toy_store.FindOrNull(*StartObj()) : nullptr),
-        end_part(StartObj() ? start_arg->Find(*StartObj()) : NestedPtr<Part>()),
+        end_atom(StartObj() ? start_arg->Find(*StartObj()) : NestedPtr<Atom>()),
         end_widget(EndObj() ? toy_store.FindOrNull(*EndObj()) : nullptr),
         end_transform(end_widget ? TransformBetween(*end_widget, *root_machine) : SkMatrix()) {}
 
   Object* StartObj() const { return start_arg ? start_arg.Owner<Object>() : nullptr; }
-  Object* EndObj() const { return end_part ? end_part.Owner<Object>() : nullptr; }
+  Object* EndObj() const { return end_atom ? end_atom.Owner<Object>() : nullptr; }
 };
 
 // Updates ConnectionWidget.pos_dir & ConnectionWidget.to_points. This is shared among Tick &
@@ -291,7 +291,7 @@ static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
 
   w.to_points.clear();
 
-  if (a.end_part) {
+  if (a.end_atom) {
     a.end_widget->ConnectionPositions(w.to_points);
     for (auto& vec_and_dir : w.to_points) {
       vec_and_dir.pos = a.end_transform.mapPoint(vec_and_dir.pos);
@@ -353,14 +353,14 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     return animation::Finished;
   }
 
-  from_shape = a.start_widget->PartShape(a.start_arg.Get());
+  from_shape = a.start_widget->AtomShape(a.start_arg.Get());
   auto transform_from_to_machine = TransformBetween(*a.start_widget, *root_machine);
   from_shape.transform(transform_from_to_machine);
 
   UpdateEndpoints(*this, a);
 
-  if (a.end_part) {
-    to_shape = a.end_widget->PartShape(a.end_part.Get());
+  if (a.end_atom) {
+    to_shape = a.end_widget->AtomShape(a.end_atom.Get());
     to_shape.transform(a.end_transform);
   } else {
     to_shape.reset();
@@ -405,7 +405,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   bool start_iconified = IsIconified(a.StartObj());
   if (start_iconified) {
     // Hide the connector if the object is iconified
-    if (a.end_part) {
+    if (a.end_atom) {
       // cable is connected to something - keep it visible
     } else if (manual_position.has_value()) {
       // cable is held by the pointer - keep it visible
@@ -435,7 +435,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   }
 
   if (state) {
-    if (a.end_part) {
+    if (a.end_atom) {
       state->steel_insert_hidden.target = 1;
       // phase |= state->connector_scale.SpringTowards(
       //     to->scale, timer.d, Location::kScaleSpringPeriod, Location::kSpringHalfTime);
@@ -448,7 +448,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
 
     phase |= SimulateCablePhysics(timer, *state, pos_dir, to_points);
   } else if (style != Argument::Style::Arrow) {
-    cable_width.target = a.end_part ? 2_mm : 0;
+    cable_width.target = a.end_atom ? 2_mm : 0;
     cable_width.speed = 5;
     phase |= cable_width.Tick(timer);
   }
@@ -462,7 +462,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     }
 
     float prototype_alpha_target = anim.prototype_alpha_target;
-    if (a.end_part) {
+    if (a.end_atom) {
       prototype_alpha_target = 0;
     }
     phase |= animation::LinearApproach(prototype_alpha_target, timer.d, 2.f, anim.prototype_alpha);
@@ -594,8 +594,8 @@ void DragConnectionAction::Update() {
   pointer.pointer_widget->WakeAnimation();
 }
 
-bool DragConnectionAction::Highlight(Object& obj, Part& part) const {
-  return widget.start_weak.Lock()->CanConnect(obj, part);
+bool DragConnectionAction::Highlight(Object& obj, Atom& atom) const {
+  return widget.start_weak.Lock()->CanConnect(obj, atom);
 }
 
 ui::Widget* DragConnectionAction::Widget() { return &widget; }

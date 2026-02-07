@@ -98,7 +98,7 @@ void Gear::AddSource(NestedPtr<Syncable>& source) {
         old_sync_block->members.pop_back();
 
         // redirecting the members "sync" to this gear
-        members.back().weak.Lock()->end = NestedWeakPtr<Part>(AcquireWeakPtr<Object>(), this);
+        members.back().weak.Lock()->end = NestedWeakPtr<Atom>(AcquireWeakPtr<Object>(), this);
       }
     } else {
       bool found = false;
@@ -155,7 +155,7 @@ struct GearWidget : Object::WidgetBase {
 
     auto SetBeltEnd = [&](Belt& belt) {
       if (auto owner_widget = toy_store.FindOrNull(*belt.object_unsafe)) {
-        belt.end_shape = owner_widget->PartShape(belt.syncable_unsafe);
+        belt.end_shape = owner_widget->AtomShape(belt.syncable_unsafe);
         belt.end_shape.transform(TransformBetween(*owner_widget, *this));
         auto end_bounds = belt.end_shape.getBounds();
         belt.end = end_bounds.center();
@@ -272,7 +272,7 @@ std::unique_ptr<Toy> Gear::MakeToy(ui::Widget* parent) {
   return std::make_unique<GearWidget>(parent, *this);
 }
 
-void Syncable::CanConnect(Object& start, Part& end, Status& status) const {
+void Syncable::CanConnect(Object& start, Atom& end, Status& status) const {
   if (auto* other = dynamic_cast<Syncable*>(&end)) {
     if (CanSync(*other)) {
       return;
@@ -300,7 +300,7 @@ void Syncable::CanConnect(Object& start, Part& end, Status& status) const {
   AppendErrorMessage(status) += "Can only connect to similar parts";
 }
 
-void Syncable::Connect(Object& start, const NestedPtr<Part>& end) {
+void Syncable::Connect(Object& start, const NestedPtr<Atom>& end) {
   InlineArgument::Connect(start, end);
 
   auto* target_syncable = dynamic_cast<Syncable*>(end.Get());
@@ -350,7 +350,7 @@ bool Gear::DeserializeKey(ObjectDeserializer& d, StrView key) {
         status.Reset();
       }
       if (!is_sink) continue;
-      NestedPtr<Part> target = d.LookupPart(member_name);
+      NestedPtr<Atom> target = d.LookupAtom(member_name);
       if (auto syncable = target.DynamicCast<Syncable>()) {
         AddSink(syncable);
         AddSource(syncable);

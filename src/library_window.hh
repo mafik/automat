@@ -38,7 +38,7 @@ struct Window : public Object, ImageProvider {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  void Parts(const std::function<void(Part&)>& cb) override;
+  void Atoms(const std::function<void(Atom&)>& cb) override;
 
   // Called after deserialization. Makes the window object attach its native handle to the window
   // with the current title.

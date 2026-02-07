@@ -53,7 +53,7 @@ struct TesseractOCR : public Object {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  void Parts(const std::function<void(Part&)>&) override;
+  void Atoms(const std::function<void(Atom&)>&) override;
   void Updated(WeakPtr<Object>& updated) override;
 
   void SerializeState(ObjectSerializer& writer) const override;

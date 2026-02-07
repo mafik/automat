@@ -43,8 +43,8 @@ struct Timer : Object, Runnable, TimerNotificationReceiver {
   StrView Name() const override { return "Timer"; }
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  void Parts(const std::function<void(Part&)>& cb) override;
-  void PartName(Part& part, Str& out_name) override;
+  void Atoms(const std::function<void(Atom&)>& cb) override;
+  void AtomName(Atom&, Str& out_name) override;
   void OnRun(std::unique_ptr<RunTask>&) override;
   LongRunning* AsLongRunning() override { return &timer_running; }
   void Updated(WeakPtr<Object>& updated) override;

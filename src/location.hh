@@ -49,7 +49,7 @@ struct Location : ReferenceCounted, ToyMaker {
 
   // ToyMaker overrides
   ReferenceCounted* GetReferenceCounted() override { return this; }
-  Part* GetPart() override { return this; }
+  Atom* GetAtom() override { return this; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
   // Obtain a matrix representation of the given transform.

@@ -9,41 +9,41 @@
 
 namespace automat {
 
-// Part is a virtual(*) base class for most things in Automat.
+// Atom is a virtual(*) base class for most things in Automat.
 //
 // (*) "virtual" - means that even if some object has a complex, diamond-type inheritance, it's
-// always going to have exactly one `Part` base.
+// always going to have exactly one `Atom` base.
 //
-// Although Part itself doesn't expose much methods (only the ability to identify the specific
+// Although Atom itself doesn't expose much methods (only the ability to identify the specific
 // type), it's role is that it's a base for many interfaces.
 //
 // # Purpose
 //
 // TL;DR is:
 //
-// 1. Parts allow Objects to act in a *generic* way.
-// 2. Parts allow basic code reuse across Objects.
+// 1. Atoms allow Objects to act in a *generic* way.
+// 2. Atoms allow basic code reuse across Objects.
 //
-// Parts primary role is to allow objects to behave in a generic fashion. Parts are like programming
+// Atoms primary role is to allow objects to behave in a generic fashion. Atoms are like programming
 // interfaces that expose different behaviors in a standardized way.
 //
-// Objects expose their parts using Object::Parts function. Automat infrastructure uses this to
+// Objects expose their atoms using Object::Atoms function. Automat infrastructure uses this to
 // automatically populate menu with various options, help with (de)serialization of state, visualize
-// connections between parts etc.
+// connections between atoms etc.
 //
 // # Notable subclasses
 //
-// - Argument (argument.hh/cc) - allows objects to link to (parts of) other objects
+// - Argument (argument.hh/cc) - allows objects to link to (atoms of) other objects
 // - Syncable (sync.hh/cc) - allows objects to synchronize their behavior
 //
 // # Representation
 //
 // TODO: document:
-// 1. memory representation (weak ptr, external parts)
+// 1. memory representation (weak ptr, external atoms)
 // 2. menu system / serialization
 // 3. visual representation
 //
-// Parts are identified by their memory addresses. However, due to concurrent nature of Automat,
+// Atoms are identified by their memory addresses. However, due to concurrent nature of Automat,
 // where objects can go away at any time.
 //
 // # TODOs
@@ -51,8 +51,8 @@ namespace automat {
 // TODO: rename & cleanup of Synchronization.md / sync.hh/cc
 // TODO: design & document the approach to serialization
 // TODO: design & document menu generation
-struct Part {
-  virtual ~Part() = default;
+struct Atom {
+  virtual ~Atom() = default;
 
   virtual StrView Name() const {
     const std::type_info& info = typeid(*this);

@@ -58,18 +58,18 @@ struct KeyPresser : Object, ui::Keylogger {
 
   void SetKey(ui::AnsiKey);
 
-  void Parts(const std::function<void(Part&)>& cb) override {
+  void Atoms(const std::function<void(Atom&)>& cb) override {
     cb(monitoring);
     cb(run);
     cb(*this);
   }
 
-  void PartName(Part& part, Str& out_name) override {
-    if (&part == this) {
+  void AtomName(Atom& atom, Str& out_name) override {
+    if (&atom == this) {
       out_name = "";
       return;
     }
-    return Object::PartName(part, out_name);
+    return Object::AtomName(atom, out_name);
   }
 
   operator OnOff*() override { return &state; }

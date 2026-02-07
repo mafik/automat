@@ -36,7 +36,7 @@ struct Object : public ReferenceCounted, public ToyMaker {
   Location* here = nullptr;
 
   ReferenceCounted* GetReferenceCounted() override { return this; }
-  Part* GetPart() override { return this; }
+  Atom* GetAtom() override { return this; }
 
   Object() = default;
 
@@ -52,10 +52,10 @@ struct Object : public ReferenceCounted, public ToyMaker {
   // Release the memory occupied by this object.
   virtual ~Object();
 
-  // # Parts & Serialization
+  // # Atoms & Serialization
   //
   // Objects serialize themselves to the "value" property within the location objects
-  // - Each part my want to emit multiple properties
+  // - Each atom my want to emit multiple properties
 
   virtual void SerializeState(ObjectSerializer& writer) const;
 
@@ -76,13 +76,13 @@ struct Object : public ReferenceCounted, public ToyMaker {
 
   virtual operator OnOff*() { return nullptr; }
 
-  virtual void Parts(const std::function<void(Part&)>&);
+  virtual void Atoms(const std::function<void(Atom&)>&);
 
-  virtual void PartName(Part&, Str& out_name);
+  virtual void AtomName(Atom&, Str& out_name);
 
-  virtual Part* PartFromName(StrView name);
+  virtual Atom* AtomFromName(StrView name);
 
-  // Wrapper around Parts() that only reports Arguments
+  // Wrapper around Atoms() that only reports Arguments
   void Args(const std::function<void(Argument&)>&);
 
   virtual void Updated(WeakPtr<Object>& updated);
@@ -188,7 +188,7 @@ struct ObjectSerializer : Serializer {
   std::vector<Object*> serialization_queue;
 
   Str& ResolveName(Object&, StrView hint = ""sv);
-  Str ResolveName(Object&, Part*, StrView hint = ""sv);
+  Str ResolveName(Object&, Atom*, StrView hint = ""sv);
   void Serialize(Object&);
 };
 
@@ -200,7 +200,7 @@ struct ObjectDeserializer : Deserializer {
   void RegisterObject(StrView name, Object& object);
 
   Object* LookupObject(StrView name);
-  NestedPtr<Part> LookupPart(StrView name);
+  NestedPtr<Atom> LookupAtom(StrView name);
 };
 
 }  // namespace automat

@@ -41,8 +41,8 @@ struct FlipFlop : Object {
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 
-  void Parts(const std::function<void(Part&)>& cb) override {
-    Object::Parts(cb);
+  void Atoms(const std::function<void(Atom&)>& cb) override {
+    Object::Atoms(cb);
     cb(flip);
     cb(on_off);
   }

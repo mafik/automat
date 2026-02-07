@@ -15,7 +15,7 @@ namespace automat {
 
 struct Object;
 
-// A type of Widget that represents objects (or parts of objects).
+// A type of Widget that represents objects (or atoms of objects).
 struct Toy : ui::Widget {
   using ui::Widget::Widget;
 
@@ -32,22 +32,22 @@ struct Toy : ui::Widget {
   // If coordinate_space is provided, returns coordinates in that widget's space.
   virtual Vec2AndDir ArgStart(const Argument&, ui::Widget* coordinate_space = nullptr);
 
-  // Describes the area of the widget where the given part is located.
+  // Describes the area of the widget where the given atom is located.
   // Local (metric) coordinates.
-  virtual SkPath PartShape(Part*) const { return Shape(); }
+  virtual SkPath AtomShape(Atom*) const { return Shape(); }
 };
 
-// Mixin class for things that can create and manage widgets (Objects & some Parts).
+// Mixin class for things that can create and manage widgets (Objects & some Atoms).
 // Provides functionality for iterating over widgets and waking their animations.
 struct ToyMaker {
   // Identity for ToyStore keying.
   virtual ReferenceCounted* GetReferenceCounted() = 0;
-  virtual Part* GetPart() = 0;
+  virtual Atom* GetAtom() = 0;
 
-  // Produces a new Widget that can display this Part.
+  // Produces a new Widget that can display this Atom.
   // The `parent` argument allows the Widget to be attached at the correct position in the Widget
   // tree.
-  // If constructed Toy needs to access this Part (almost always yes), then it should do
+  // If constructed Toy needs to access this Atom (almost always yes), then it should do
   // so through NestedWeakPtr, using the 2nd argument as the reference counter.
   virtual std::unique_ptr<Toy> MakeToy(ui::Widget* parent) = 0;
 

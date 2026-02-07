@@ -81,13 +81,13 @@ struct TimelineArgument : Argument {
     return prototypes->Find<Timeline>()->AcquirePtr<Object>();
   }
 
-  void CanConnect(Object& start, Part& end, Status& status) const override {
+  void CanConnect(Object& start, Atom& end, Status& status) const override {
     if (!dynamic_cast<Timeline*>(&end)) {
       AppendErrorMessage(status) += "Must connect to a Timeline";
     }
   }
 
-  void Connect(Object& start, const NestedPtr<Part>& end) override {
+  void Connect(Object& start, const NestedPtr<Atom>& end) override {
     if (auto* recorder = dynamic_cast<MacroRecorder*>(&start)) {
       // Handle disconnect - check old connection before clearing
       if (!end) {
@@ -112,7 +112,7 @@ struct TimelineArgument : Argument {
     }
   }
 
-  NestedPtr<Part> Find(const Object& start) const override {
+  NestedPtr<Atom> Find(const Object& start) const override {
     if (auto* recorder = dynamic_cast<const MacroRecorder*>(&start)) {
       return recorder->timeline_connection.Lock();
     }
@@ -137,7 +137,7 @@ MacroRecorder::~MacroRecorder() {
   }
 }
 
-void MacroRecorder::Parts(const std::function<void(Part&)>& cb) { cb(timeline_arg); }
+void MacroRecorder::Atoms(const std::function<void(Atom&)>& cb) { cb(timeline_arg); }
 
 string_view MacroRecorder::Name() const { return "Macro Recorder"sv; }
 Ptr<Object> MacroRecorder::Clone() const { return MAKE_PTR(MacroRecorder, *this); }
@@ -447,8 +447,7 @@ struct MacroRecorderWidget : Object::WidgetBase, ui::PointerMoveCallback {
 
   Ptr<MacroRecorder> LockMacroRecorder() const { return LockObject<MacroRecorder>(); }
 
-  MacroRecorderWidget(ui::Widget* parent, Object& mr_obj)
-      : WidgetBase(parent, mr_obj) {
+  MacroRecorderWidget(ui::Widget* parent, Object& mr_obj) : WidgetBase(parent, mr_obj) {
     if (auto mr = LockMacroRecorder()) {
       record_button.reset(new GlassRunButton(this, mr.get()));
       record_button->local_to_parent = SkM44::Translate(17.5_mm, 3.2_mm);

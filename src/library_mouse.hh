@@ -30,7 +30,7 @@ struct MouseButtonEvent : Object, Runnable {
   MouseButtonEvent(ui::PointerButton button, bool down) : button(button), down(down) {}
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  void Parts(const std::function<void(Part&)>& cb) override;
+  void Atoms(const std::function<void(Atom&)>& cb) override;
   void OnRun(std::unique_ptr<RunTask>&) override;
   audio::Sound& NextSound() override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
@@ -99,7 +99,7 @@ struct MouseButtonPresser : Object {
   ~MouseButtonPresser() override;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  void Parts(const std::function<void(Part&)>& cb) override;
+  void Atoms(const std::function<void(Atom&)>& cb) override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
   operator OnOff*() override { return &state; }

@@ -12,7 +12,7 @@ struct Alert : Object, Runnable {
   std::unique_ptr<vector<string>> test_interceptor;
   string_view Name() const override { return "Alert"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Alert); }
-  void Parts(const std::function<void(Part&)>& cb) override { cb(message_arg); }
+  void Atoms(const std::function<void(Atom&)>& cb) override { cb(message_arg); }
   void OnRun(std::unique_ptr<RunTask>&) override;
 };
 

@@ -307,29 +307,29 @@ void Pointer::Logging::Release() {
 animation::Phase PointerWidget::Tick(time::Timer& timer) {
   struct Highlighted {
     Toy* widget;
-    Part* part;
+    Atom* atom;
 
     bool operator<(const Highlighted& other) const {
       if (widget == other.widget) {
-        return part < other.part;
+        return atom < other.atom;
       }
       return widget < other.widget;
     }
 
     auto operator<=>(const HighlightState& other) const {
       if (widget == other.widget) {
-        return part <=> other.part;
+        return atom <=> other.atom;
       }
       return widget <=> other.widget;
     }
   };
 
   std::vector<Highlighted> highlight_target;
-  auto HighlightCheck = [&](Object& obj, Toy& widget, Part& part) {
+  auto HighlightCheck = [&](Object& obj, Toy& widget, Atom& atom) {
     for (auto& action : pointer.actions) {
       if (action == nullptr) continue;
-      if (action->Highlight(obj, part)) {
-        highlight_target.emplace_back(&widget, &part);
+      if (action->Highlight(obj, atom)) {
+        highlight_target.emplace_back(&widget, &atom);
         std::push_heap(highlight_target.begin(), highlight_target.end());
       }
     }
@@ -339,7 +339,7 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
     auto& obj = *loc->object;
     if (!loc->widget || !loc->widget->toy) continue;
     HighlightCheck(obj, *loc->widget->toy, obj);
-    obj.Parts([&](Part& part) { HighlightCheck(obj, *loc->widget->toy, part); });
+    obj.Atoms([&](Atom& atom) { HighlightCheck(obj, *loc->widget->toy, atom); });
   }
 
   sort_heap(highlight_target.begin(), highlight_target.end());
@@ -353,10 +353,10 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
 
   auto phase = animation::Finished;
 
-  auto HighlightTick = [&](Toy* obj, Part* part, float current, float target) {
+  auto HighlightTick = [&](Toy* obj, Atom* atom, float current, float target) {
     phase |= animation::ExponentialApproach(target, timer.d, 0.1, current);
     if (current > 0.01f) {
-      highlight_next.emplace_back(obj, part, current);
+      highlight_next.emplace_back(obj, atom, current);
       phase = animation::Animating;
     }
   };
@@ -365,17 +365,17 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
     while (true) {
       if (*target_it < *current_it) {
         // Fade in (new)
-        HighlightTick(std::move(target_it->widget), target_it->part, 0, 1);
+        HighlightTick(std::move(target_it->widget), target_it->atom, 0, 1);
         ++target_it;
         if (!TargetValid()) break;
       } else if (*target_it > *current_it) {
         // Fade out
-        HighlightTick(std::move(current_it->widget), current_it->part, current_it->highlight, 0);
+        HighlightTick(std::move(current_it->widget), current_it->atom, current_it->highlight, 0);
         ++current_it;
         if (!CurrentValid()) break;
       } else {
         // Fade in (old)
-        HighlightTick(std::move(target_it->widget), target_it->part, current_it->highlight, 1);
+        HighlightTick(std::move(target_it->widget), target_it->atom, current_it->highlight, 1);
         ++target_it;
         ++current_it;
         if (!TargetValid()) break;
@@ -386,13 +386,13 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
 
   while (TargetValid()) {
     // Fade in (new)
-    HighlightTick(std::move(target_it->widget), target_it->part, 0, 1);
+    HighlightTick(std::move(target_it->widget), target_it->atom, 0, 1);
     ++target_it;
   }
 
   while (CurrentValid()) {
     // Fade out
-    HighlightTick(std::move(current_it->widget), current_it->part, current_it->highlight, 0);
+    HighlightTick(std::move(current_it->widget), current_it->atom, current_it->highlight, 0);
     ++current_it;
   }
 
@@ -421,7 +421,7 @@ SkPath Outset(const SkPath& path, float distance) {
 
 void PointerWidget::Draw(SkCanvas& canvas) const {
   for (auto& state : highlight_current) {
-    auto shape = state.widget->PartShape(state.part);
+    auto shape = state.widget->AtomShape(state.atom);
     SkPath outset_shape = Outset(shape, 2.5_mm * state.highlight);
     outset_shape.setIsVolatile(true);
     canvas.save();

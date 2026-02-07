@@ -24,7 +24,7 @@ struct MacroRecorder : Object,
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  void Parts(const std::function<void(Part&)>& cb) override;
+  void Atoms(const std::function<void(Atom&)>& cb) override;
 
   void OnRun(std::unique_ptr<RunTask>&) override;
   void OnCancel() override;

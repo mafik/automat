@@ -89,7 +89,7 @@ struct TrackArgument : InlineArgument {
   PaintDrawable& Icon() override;
   StrView Name() const override { return name; }
 
-  void CanConnect(Object& start, Part& end, Status& status) const override;
+  void CanConnect(Object& start, Atom& end, Status& status) const override;
 };
 
 // Currently Timeline pauses at end which is consistent with standard media player behavour.
@@ -153,7 +153,7 @@ struct Timeline : Object, SignalNext, TimerNotificationReceiver {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  void Parts(const std::function<void(Part&)>& cb) override;
+  void Atoms(const std::function<void(Atom&)>& cb) override;
   LongRunning* AsLongRunning() override { return &running; }
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   OnOffTrack& AddOnOffTrack(StrView name);

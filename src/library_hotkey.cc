@@ -74,8 +74,8 @@ HotKey::HotKey(const HotKey& other) : key(other.key), ctrl(other.ctrl), alt(othe
 string_view HotKey::Name() const { return "HotKey"; }
 Ptr<Object> HotKey::Clone() const { return MAKE_PTR(HotKey, *this); }
 
-void HotKey::Parts(const std::function<void(Part&)>& cb) {
-  Object::Parts(cb);
+void HotKey::Atoms(const std::function<void(Atom&)>& cb) {
+  Object::Atoms(cb);
   cb(next_arg);
 }
 

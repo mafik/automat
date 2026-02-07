@@ -302,7 +302,7 @@ TrackArgument::TrackArgument(StrView name) : icon(name, kKeyLetterSize, KeyFont(
 
 PaintDrawable& TrackArgument::Icon() { return icon; }
 
-void TrackArgument::CanConnect(Object& start, Part& end, Status& status) const {}
+void TrackArgument::CanConnect(Object& start, Atom& end, Status& status) const {}
 
 Timeline::Timeline()
     : state(kPaused), timeline_length(0), paused{.playback_offset = 0s}, zoom(10) {}
@@ -1815,7 +1815,7 @@ std::unique_ptr<Toy> Timeline::MakeToy(ui::Widget* parent) {
   return std::make_unique<TimelineWidget>(parent, *this);
 }
 
-void Timeline::Parts(const function<void(Part&)>& cb) {
+void Timeline::Atoms(const function<void(Atom&)>& cb) {
   for (auto& track_arg : tracks) {
     cb(*track_arg);
   }

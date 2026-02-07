@@ -489,7 +489,7 @@ std::unique_ptr<Toy> Window::MakeToy(ui::Widget* parent) {
   return std::make_unique<WindowWidget>(parent, *this);
 }
 
-void Window::Parts(const std::function<void(Part&)>& cb) {
+void Window::Atoms(const std::function<void(Atom&)>& cb) {
   cb(next_arg);
   cb(capture);
 }

@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <concepts>
 #include <functional>
 #include <map>
 
 #include "part.hh"
+#include "ptr.hh"
 #include "widget.hh"
 
 namespace automat::ui {
@@ -44,12 +46,32 @@ concept ToyPart = requires(T t) {
   requires Part<T>;
   typename T::Toy;
   requires std::derived_from<typename T::Toy, Toy>;
-  { t.MakeToy(std::declval<ui::Widget*>() /*parent*/) } -> std::same_as<std::unique_ptr<Toy>>;
+  {
+    t.MakeToy(std::declval<ui::Widget*>() /*parent*/)
+  } -> std::convertible_to<std::unique_ptr<Toy>>;
 };
 
-// Mixin class for things that can create and manage widgets (Objects & some Atoms).
+// Mixin class for ToyParts. Provides some utilities for working with Toys.
+struct ToyPartMixin {
+  static void ForEachToyImpl(ReferenceCounted& owner, Atom& atom,
+                             std::function<void(ui::RootWidget&, Toy&)> cb);
+
+  template <ToyPart Self>
+  void ForEachToy(this Self& self, std::function<void(ui::RootWidget&, typename Self::Toy&)> cb) {
+    ForEachToyImpl(self.GetOwner(), self.GetAtom(), [&](ui::RootWidget& root, automat::Toy& toy) {
+      cb(root, static_cast<Self::Toy&>(toy));
+    });
+  }
+
+  template <ToyPart Self>
+  void WakeToys(this Self& self) {
+    self.ForEachToy([](ui::RootWidget&, typename Self::Toy& t) { t.WakeAnimation(); });
+  }
+};
+
+// Interface for things that can create and manage widgets (Objects & some Atoms).
 // Provides functionality for iterating over widgets and waking their animations.
-struct ToyMaker {
+struct ToyMaker : ToyPartMixin {
   using Toy = automat::Toy;
   // Identity for ToyStore keying.
   virtual ReferenceCounted& GetOwner() = 0;
@@ -61,43 +83,48 @@ struct ToyMaker {
   // If constructed Toy needs to access this Atom (almost always yes), then it should do
   // so through NestedWeakPtr, using the 2nd argument as the reference counter.
   virtual std::unique_ptr<Toy> MakeToy(ui::Widget* parent) = 0;
-
-  void ForEachToy(std::function<void(ui::RootWidget&, Toy&)> cb);
-  void WakeToys();
 };
 
 static_assert(ToyPart<ToyMaker>);
 
-// Objects can create many widgets, to display themselves simultaneously in multiple contexts.
+// ToyParts can create many widgets, to display themselves simultaneously in multiple contexts.
 // Each context which can display widgets must maintain their lifetime. This class helps with that.
-// It can be used either as a mixin or as a member.
 // TODO: delete widgets after some time
 struct ToyStore {
   using Key = std::pair<WeakPtr<ReferenceCounted>, Atom*>;
   std::map<Key, std::unique_ptr<Toy>> container;
 
-  static Key MakeKey(ReferenceCounted& rc, Atom& atom) {
-    return {WeakPtr<ReferenceCounted>(&rc), &atom};
+  template <Part T>
+  static Key MakeKey(T& part) {
+    return {WeakPtr<ReferenceCounted>(&part.GetOwner()), &part.GetAtom()};
   }
 
-  Toy* FindOrNull(ToyMaker& maker) const {
-    auto it = container.find(MakeKey(maker.GetOwner(), maker.GetAtom()));
+  template <ToyPart T>
+  T::Toy* FindOrNull(T& maker) const {
+    auto it = container.find(MakeKey(maker));
     if (it == container.end()) {
       return nullptr;
     }
-    return it->second.get();
+    return static_cast<T::Toy*>(it->second.get());
   }
 
-  template <typename T>
-  T* FindOrNull(ToyMaker& maker) const {
-    return static_cast<T*>(FindOrNull(maker));
-  }
-
-  Toy& FindOrMake(ToyMaker& maker, ui::Widget* parent);
-
-  template <typename T>
-  T& FindOrMake(ToyMaker& maker, ui::Widget* parent) {
-    return static_cast<T&>(FindOrMake(maker, parent));
+  template <ToyPart T>
+  T::Toy& FindOrMake(T& maker, ui::Widget* parent) {
+    auto key = MakeKey(maker);
+    auto it = container.find(key);
+    if (it == container.end()) {
+      auto widget = maker.MakeToy(parent);
+      it = container.emplace(std::move(key), std::move(widget)).first;
+    } else if (it->second->parent != parent) {
+      if (it->second->parent == nullptr) {
+        it->second->parent = parent->AcquireTrackedPtr();
+      } else {
+        LOG << parent->Name() << " is asking for a widget for " << maker.GetAtom().Name()
+            << " but it's already owned by " << it->second->parent->Name()
+            << ". TODO: figure out what to do in this situation";
+      }
+    }
+    return static_cast<T::Toy&>(*it->second);
   }
 };
 

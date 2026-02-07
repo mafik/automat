@@ -319,7 +319,7 @@ Ptr<Location> Assembler::Extract(Object& descendant) {
     if (reg != &descendant) continue;
     auto loc = MAKE_PTR(Location, root_location);
     loc->InsertHere(reg_objects_idx[i].borrow());
-    auto* reg_widget = ui::root_widget->toys.FindOrNull<RegisterWidget>(descendant);
+    auto* reg_widget = ui::root_widget->toys.FindOrNull(*reg);
     if (reg_widget) {
       if (auto* assembler_widget = dynamic_cast<AssemblerWidget*>(reg_widget->parent.get())) {
         assembler_widget->reg_widgets.Erase(reg_widget);
@@ -599,7 +599,7 @@ void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
     if (auto my_assembler = LockObject<Assembler>()) {
       loc->object->ForEachToy([&](ui::RootWidget& root_widget, ui::Widget& reg_widget_generic) {
         RegisterWidget& reg_widget = static_cast<RegisterWidget&>(reg_widget_generic);
-        if (auto* asm_widget = root_widget.toys.FindOrNull<AssemblerWidget>(*my_assembler)) {
+        if (auto* asm_widget = root_widget.toys.FindOrNull(*my_assembler)) {
           reg_widget.local_to_parent = SkM44(TransformBetween(reg_widget, *asm_widget));
           reg_widget.parent = asm_widget->AcquireTrackedPtr();
           asm_widget->reg_widgets.emplace_back(&reg_widget);

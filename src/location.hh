@@ -12,6 +12,7 @@
 #include "tasks.hh"
 #include "text_field.hh"
 #include "time.hh"
+#include "toy.hh"
 #include "widget.hh"
 
 namespace automat::ui {
@@ -33,8 +34,9 @@ struct LocationWidget;
 //
 // Implementations of this interface would typically extend it with
 // container-specific functions.
-struct Location : ReferenceCounted, ToyMaker {
+struct Location : ReferenceCounted, ToyPartMixin {
   WeakPtr<Location> parent_location;
+  using Toy = LocationWidget;
 
   Ptr<Object> object;
 
@@ -48,9 +50,9 @@ struct Location : ReferenceCounted, ToyMaker {
   LocationWidget* widget = nullptr;
 
   // ToyMaker overrides
-  ReferenceCounted& GetOwner() override { return *this; }
-  Atom& GetAtom() override { return *this; }
-  std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
+  ReferenceCounted& GetOwner() { return *this; }
+  Atom& GetAtom() { return *this; }
+  std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 
   // Obtain a matrix representation of the given transform.
   static SkMatrix ToMatrix(Vec2 position, float scale, Vec2 anchor);
@@ -65,7 +67,7 @@ struct Location : ReferenceCounted, ToyMaker {
   ~Location();
 
   // Find (or create if needed) the Widget for this location's object.
-  Toy& ToyForObject();
+  automat::Toy& ToyForObject();
 
   Ptr<Object> InsertHere(Ptr<Object>&& object);
 
@@ -228,6 +230,8 @@ struct LocationWidget : Toy {
   // TODO: replace with Toy::ArgStart
   Vec2AndDir ArgStart(Argument&);
 };
+
+static_assert(ToyPart<Location>);
 
 void PositionBelow(Location& origin, Location& below);
 

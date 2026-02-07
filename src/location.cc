@@ -72,11 +72,11 @@ Location::~Location() {
   }
 }
 
-std::unique_ptr<Toy> Location::MakeToy(ui::Widget* parent) {
+std::unique_ptr<LocationWidget> Location::MakeToy(ui::Widget* parent) {
   return std::make_unique<LocationWidget>(parent, *this);
 }
 
-Toy& Location::ToyForObject() {
+automat::Toy& Location::ToyForObject() {
   if (!widget) {
     // Widget hasn't been created yet (before first render).
     // Create it eagerly through ToyStore.

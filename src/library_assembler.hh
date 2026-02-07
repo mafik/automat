@@ -73,6 +73,7 @@ struct AssemblerWidget : Object::WidgetBase, ui::DropTarget {
 };
 
 struct Register : Object {
+  using Toy = RegisterWidget;
   WeakPtr<Assembler> assembler_weak;
   int register_index;
 
@@ -80,7 +81,7 @@ struct Register : Object {
 
   Ptr<Object> Clone() const override;
 
-  unique_ptr<Toy> MakeToy(ui::Widget* parent) override {
+  unique_ptr<automat::Toy> MakeToy(ui::Widget* parent) override {
     return make_unique<RegisterWidget>(parent, *this);
   }
 
@@ -96,6 +97,7 @@ struct Register : Object {
 // Thread part maintains register state across executions.
 struct Assembler : Object, Container {
   using PrologueFn = uintptr_t (*)(void*);
+  using Toy = AssemblerWidget;
 
   struct Running : LongRunning {
     StrView Name() const override { return "Running"sv; }
@@ -126,7 +128,7 @@ struct Assembler : Object, Container {
 
   void RunMachineCode(library::Instruction* entry_point, std::unique_ptr<RunTask>&&);
 
-  unique_ptr<Toy> MakeToy(ui::Widget* parent) override {
+  unique_ptr<automat::Toy> MakeToy(ui::Widget* parent) override {
     return make_unique<AssemblerWidget>(parent, *this);
   }
 

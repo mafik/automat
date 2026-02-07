@@ -28,13 +28,13 @@ struct Object;
 struct Argument;
 struct Location;
 struct Syncable;
+struct ToyStore;
 }  // namespace automat
 
 namespace automat::ui {
 
 struct Widget;
 struct RootWidget;
-struct ToyStore;
 
 Str ToStr(Ptr<Widget> widget);
 

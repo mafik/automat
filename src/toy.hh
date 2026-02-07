@@ -3,6 +3,7 @@
 #pragma once
 
 #include <functional>
+#include <map>
 
 #include "part.hh"
 #include "widget.hh"
@@ -66,5 +67,38 @@ struct ToyMaker {
 };
 
 static_assert(ToyPart<ToyMaker>);
+
+// Objects can create many widgets, to display themselves simultaneously in multiple contexts.
+// Each context which can display widgets must maintain their lifetime. This class helps with that.
+// It can be used either as a mixin or as a member.
+// TODO: delete widgets after some time
+struct ToyStore {
+  using Key = std::pair<WeakPtr<ReferenceCounted>, Atom*>;
+  std::map<Key, std::unique_ptr<Toy>> container;
+
+  static Key MakeKey(ReferenceCounted& rc, Atom& atom) {
+    return {WeakPtr<ReferenceCounted>(&rc), &atom};
+  }
+
+  Toy* FindOrNull(ToyMaker& maker) const {
+    auto it = container.find(MakeKey(maker.GetOwner(), maker.GetAtom()));
+    if (it == container.end()) {
+      return nullptr;
+    }
+    return it->second.get();
+  }
+
+  template <typename T>
+  T* FindOrNull(ToyMaker& maker) const {
+    return static_cast<T*>(FindOrNull(maker));
+  }
+
+  Toy& FindOrMake(ToyMaker& maker, ui::Widget* parent);
+
+  template <typename T>
+  T& FindOrMake(ToyMaker& maker, ui::Widget* parent) {
+    return static_cast<T&>(FindOrMake(maker, parent));
+  }
+};
 
 }  // namespace automat

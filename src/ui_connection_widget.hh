@@ -107,7 +107,7 @@ struct ConnectionWidget : Toy {
 };
 
 // Now that ConnectionWidget is defined, we can check whether ArgumentOf can make toys
-static_assert(ToyPart<ArgumentOf>);
+static_assert(ToyMaker<ArgumentOf>);
 
 void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shape);
 

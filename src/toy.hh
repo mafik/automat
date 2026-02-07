@@ -40,9 +40,9 @@ struct Toy : ui::Widget {
   virtual SkPath AtomShape(Atom*) const { return Shape(); }
 };
 
-// ToyPart is a Part that can make toys
+// ToyMaker is a Part that can make toys
 template <typename T>
-concept ToyPart = requires(T t) {
+concept ToyMaker = requires(T t) {
   requires Part<T>;
   typename T::Toy;
   requires std::derived_from<typename T::Toy, Toy>;
@@ -51,43 +51,25 @@ concept ToyPart = requires(T t) {
   } -> std::convertible_to<std::unique_ptr<Toy>>;
 };
 
-// Mixin class for ToyParts. Provides some utilities for working with Toys.
-struct ToyPartMixin {
+// Mixin class for ToyMakers. Provides some utilities for working with Toys.
+struct ToyMakerMixin {
   static void ForEachToyImpl(ReferenceCounted& owner, Atom& atom,
                              std::function<void(ui::RootWidget&, Toy&)> cb);
 
-  template <ToyPart Self>
+  template <ToyMaker Self>
   void ForEachToy(this Self& self, std::function<void(ui::RootWidget&, typename Self::Toy&)> cb) {
     ForEachToyImpl(self.GetOwner(), self.GetAtom(), [&](ui::RootWidget& root, automat::Toy& toy) {
       cb(root, static_cast<Self::Toy&>(toy));
     });
   }
 
-  template <ToyPart Self>
+  template <ToyMaker Self>
   void WakeToys(this Self& self) {
     self.ForEachToy([](ui::RootWidget&, typename Self::Toy& t) { t.WakeAnimation(); });
   }
 };
 
-// Interface for things that can create and manage widgets (Objects & some Atoms).
-// Provides functionality for iterating over widgets and waking their animations.
-struct ToyMaker : ToyPartMixin {
-  using Toy = automat::Toy;
-  // Identity for ToyStore keying.
-  virtual ReferenceCounted& GetOwner() = 0;
-  virtual Atom& GetAtom() = 0;
-
-  // Produces a new Widget that can display this Atom.
-  // The `parent` argument allows the Widget to be attached at the correct position in the Widget
-  // tree.
-  // If constructed Toy needs to access this Atom (almost always yes), then it should do
-  // so through NestedWeakPtr, using the 2nd argument as the reference counter.
-  virtual std::unique_ptr<Toy> MakeToy(ui::Widget* parent) = 0;
-};
-
-static_assert(ToyPart<ToyMaker>);
-
-// ToyParts can create many widgets, to display themselves simultaneously in multiple contexts.
+// ToyMakers can create many toys to display themselves simultaneously in multiple contexts.
 // Each context which can display widgets must maintain their lifetime. This class helps with that.
 // TODO: delete widgets after some time
 struct ToyStore {
@@ -99,7 +81,7 @@ struct ToyStore {
     return {WeakPtr<ReferenceCounted>(&part.GetOwner()), &part.GetAtom()};
   }
 
-  template <ToyPart T>
+  template <ToyMaker T>
   T::Toy* FindOrNull(T& maker) const {
     auto it = container.find(MakeKey(maker));
     if (it == container.end()) {
@@ -108,7 +90,7 @@ struct ToyStore {
     return static_cast<T::Toy*>(it->second.get());
   }
 
-  template <ToyPart T>
+  template <ToyMaker T>
   T::Toy& FindOrMake(T& maker, ui::Widget* parent) {
     auto key = MakeKey(maker);
     auto it = container.find(key);

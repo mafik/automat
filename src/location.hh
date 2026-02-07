@@ -34,7 +34,7 @@ struct LocationWidget;
 //
 // Implementations of this interface would typically extend it with
 // container-specific functions.
-struct Location : ReferenceCounted, ToyPartMixin {
+struct Location : ReferenceCounted, ToyMakerMixin {
   WeakPtr<Location> parent_location;
   using Toy = LocationWidget;
 
@@ -49,7 +49,7 @@ struct Location : ReferenceCounted, ToyPartMixin {
   // Cached LocationWidget (set by MakeToy, cleared by LocationWidget dtor).
   LocationWidget* widget = nullptr;
 
-  // ToyPart concept
+  // ToyMaker concept
   ReferenceCounted& GetOwner() { return *this; }
   Atom& GetAtom() { return *this; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
@@ -231,7 +231,7 @@ struct LocationWidget : Toy {
   Vec2AndDir ArgStart(Argument&);
 };
 
-static_assert(ToyPart<Location>);
+static_assert(ToyMaker<Location>);
 
 void PositionBelow(Location& origin, Location& below);
 

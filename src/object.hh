@@ -32,11 +32,12 @@ struct ObjectDeserializer;
 //
 // Instances of this class provide their logic.
 // Appearance is delegated to Widgets.
-struct Object : public ReferenceCounted, public ToyMaker {
+struct Object : public ReferenceCounted, public ToyMakerMixin {
+  using Toy = automat::Toy;
   Location* here = nullptr;
 
-  ReferenceCounted& GetOwner() override { return *this; }
-  Atom& GetAtom() override { return *this; }
+  ReferenceCounted& GetOwner() { return *this; }
+  Atom& GetAtom() { return *this; }
 
   Object() = default;
 
@@ -128,7 +129,7 @@ struct Object : public ReferenceCounted, public ToyMaker {
     }
   };
 
-  std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override {
+  virtual std::unique_ptr<Toy> MakeToy(ui::Widget* parent) {
     if (auto w = dynamic_cast<Toy*>(this)) {
       // Proxy object that can be lifetime-managed by the UI infrastructure (without
       // affecting the original object's lifetime).
@@ -179,6 +180,8 @@ struct Object : public ReferenceCounted, public ToyMaker {
   // If this object is owned by a Machine, return the Location that's used to store it.
   Location* MyLocation();
 };
+
+static_assert(ToyMaker<Object>);
 
 struct ObjectSerializer : Serializer {
   using Serializer::Serializer;

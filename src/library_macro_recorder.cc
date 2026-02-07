@@ -431,7 +431,7 @@ struct GlassRunButton : ui::PowerButton {
 
 // MacroRecorderWidget
 
-struct MacroRecorderWidget : Object::WidgetBase, ui::PointerMoveCallback {
+struct MacroRecorderWidget : Object::Toy, ui::PointerMoveCallback {
   struct AnimationState {
     animation::SpringV2<Vec2> googly_left;
     animation::SpringV2<Vec2> googly_right;
@@ -447,7 +447,7 @@ struct MacroRecorderWidget : Object::WidgetBase, ui::PointerMoveCallback {
 
   Ptr<MacroRecorder> LockMacroRecorder() const { return LockObject<MacroRecorder>(); }
 
-  MacroRecorderWidget(ui::Widget* parent, Object& mr_obj) : WidgetBase(parent, mr_obj) {
+  MacroRecorderWidget(ui::Widget* parent, Object& mr_obj) : Object::Toy(parent, mr_obj) {
     if (auto mr = LockMacroRecorder()) {
       record_button.reset(new GlassRunButton(this, mr.get()));
       record_button->local_to_parent = SkM44::Translate(17.5_mm, 3.2_mm);
@@ -617,7 +617,7 @@ struct MacroRecorderWidget : Object::WidgetBase, ui::PointerMoveCallback {
   }
 };
 
-std::unique_ptr<Toy> MacroRecorder::MakeToy(ui::Widget* parent) {
+std::unique_ptr<Object::Toy> MacroRecorder::MakeToy(ui::Widget* parent) {
   return std::make_unique<MacroRecorderWidget>(parent, *this);
 }
 

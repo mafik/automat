@@ -69,7 +69,7 @@ Location* ConnectionWidget::EndLocation() const {
 }
 
 ConnectionWidget::ConnectionWidget(Widget* parent, Object& start, Argument& arg)
-    : Toy(parent), start_weak(start.AcquireWeakPtr(), &arg) {
+    : Toy(parent, start, arg), start_weak(start.AcquireWeakPtr(), &arg) {
   if (IsArgumentOptical(start, arg)) {
     if (auto* loc = start.MyLocation(); loc && loc->widget) {
       auto pos_dir = loc->widget->ArgStart(arg);
@@ -264,10 +264,10 @@ struct ConnectionWidgetLocker {
   ToyStore& toy_store;
 
   NestedPtr<Argument> start_arg;
-  Toy* start_widget;
+  Object::Toy* start_widget;
 
   NestedPtr<Atom> end_atom;
-  Toy* end_widget;
+  Object::Toy* end_widget;
   SkMatrix end_transform;
 
   // Computing everything in initializer avoids zero-initialization

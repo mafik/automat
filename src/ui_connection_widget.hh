@@ -75,7 +75,7 @@ struct ConnectionWidget : Toy {
   float transparency = 1;
   float alpha = 0;
   float length = 0;
-  mutable std::unique_ptr<Toy> prototype_widget;
+  mutable std::unique_ptr<Object::Toy> prototype_widget;
 
   ConnectionWidget(Widget* parent, Object&, Argument&);
 
@@ -93,12 +93,6 @@ struct ConnectionWidget : Toy {
   Optional<Rect> TextureBounds() const override;
   Vec<Vec2> TextureAnchors() override;
   void FromMoved();
-
-  float GetBaseScale() const override { return 1.f; }
-
-  // Places where the connections to this widget may terminate.
-  // Local (metric) coordinates.
-  void ConnectionPositions(Vec<Vec2AndDir>&) const override {}
 
   // TODO: Needs a function that will update the `parent` ptr.
   // - called in ConnectionDragAction

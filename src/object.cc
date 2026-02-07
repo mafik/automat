@@ -25,7 +25,7 @@
 
 namespace automat {
 
-void Object::WidgetBase::Draw(SkCanvas& canvas) const {
+void Object::Toy::Draw(SkCanvas& canvas) const {
   SkPath path = Shape();
 
   SkPaint paint;
@@ -67,7 +67,7 @@ void Object::WidgetBase::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-float Object::WidgetBase::Width() const {
+float Object::Toy::Width() const {
   auto text = Text();
   constexpr float kNameMargin = 0.001;
   float width_text = ui::GetFont().MeasureText(text) + 2 * kNameMargin;
@@ -76,7 +76,7 @@ float Object::WidgetBase::Width() const {
   return std::max(width_rounded, kMinWidth);
 }
 
-SkPath Object::WidgetBase::Shape() const {
+SkPath Object::Toy::Shape() const {
   static std::unordered_map<float, SkPath> basic_shapes;
   float width = Width();
   auto it = basic_shapes.find(width);
@@ -320,16 +320,16 @@ struct FieldOption : TextOption, OptionsProvider {
   }
 };
 
-void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
-  if (auto* lw = ui::Closest<LocationWidget>(const_cast<WidgetBase&>(*this))) {
+void Object::Toy::VisitOptions(const OptionsVisitor& visitor) const {
+  if (auto* lw = ui::Closest<LocationWidget>(const_cast<Toy&>(*this))) {
     if (auto loc = lw->LockLocation()) {
       auto loc_weak = loc->AcquireWeakPtr();
       DeleteOption del{loc_weak};
       visitor(del);
-      MoveLocationOption move{loc_weak, object};
+      MoveLocationOption move{loc_weak, owner.Copy<Object>()};
       visitor(move);
       if (auto runnable = loc->As<Runnable>()) {
-        RunOption run{this->object, *runnable};
+        RunOption run{owner.Copy<Object>(), *runnable};
         visitor(run);
       }
       if (IsIconified()) {
@@ -339,10 +339,10 @@ void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
         IconifyOption iconify{loc_weak};
         visitor(iconify);
       }
-      if (auto obj = object.Lock()) {
+      if (auto obj = LockOwner<Object>()) {
         obj->Atoms([&](Atom& atom) {
           if (auto* syncable = dynamic_cast<Syncable*>(&atom)) {
-            FieldOption field_option{NestedWeakPtr<Syncable>(WeakPtr<Object>(object), syncable)};
+            FieldOption field_option{NestedWeakPtr<Syncable>(owner.Copy<Object>(), syncable)};
             Str atom_name;
             obj->AtomName(*syncable, atom_name);
             // Sometimes it's convenient for an object to expose some options more directly (without
@@ -359,11 +359,11 @@ void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
   }
 }
 
-std::unique_ptr<Action> Object::WidgetBase::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
+std::unique_ptr<Action> Object::Toy::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
   if (btn == ui::PointerButton::Left) {
     if (auto* lw = Closest<LocationWidget>(*p.hover)) {
       if (auto loc = lw->LockLocation()) {
-        MoveLocationOption move{loc->AcquireWeakPtr(), object};
+        MoveLocationOption move{loc->AcquireWeakPtr(), owner.Copy<Object>()};
         return move.Activate(p);
       }
     } else {
@@ -412,15 +412,15 @@ void Object::ReportError(std::string_view message, std::source_location location
 
 void Object::ClearOwnError() { automat::ClearError(*this, *this); }
 
-float Object::WidgetBase::GetBaseScale() const {
-  if (automat::IsIconified(object.GetUnsafe())) {
+float Object::Toy::GetBaseScale() const {
+  if (automat::IsIconified(static_cast<Object*>(owner.GetUnsafe()))) {
     auto bounds = CoarseBounds().rect;
     return std::min<float>(1_cm / bounds.Width(), 1_cm / bounds.Height());
   }
   return 1;
 }
 
-void Object::WidgetBase::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
+void Object::Toy::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
   // By default just one position on the top of the bounding box.
   auto shape = Shape();
   Rect bounds = shape.getBounds();
@@ -438,7 +438,7 @@ void Object::WidgetBase::ConnectionPositions(Vec<Vec2AndDir>& out_positions) con
   });
 }
 
-Vec2AndDir Toy::ArgStart(const Argument& arg, ui::Widget* coordinate_space) {
+Vec2AndDir Object::Toy::ArgStart(const Argument& arg, ui::Widget* coordinate_space) {
   SkPath shape = AtomShape(&const_cast<Argument&>(arg));
   Rect bounds = shape.getBounds();
   Vec2AndDir pos_dir{
@@ -456,9 +456,9 @@ void Object::Relocate(Location* new_here) { here = new_here; }
 
 Object::~Object() { LifetimeObserver::CheckDestroyNotified(*this); }
 
-bool Object::WidgetBase::AllowChildPointerEvents(ui::Widget&) const { return !IsIconified(); }
+bool Object::Toy::AllowChildPointerEvents(ui::Widget&) const { return !IsIconified(); }
 
-bool Object::WidgetBase::IsIconified() const { return automat::IsIconified(object.GetUnsafe()); }
+bool Object::Toy::IsIconified() const { return automat::IsIconified(static_cast<Object*>(owner.GetUnsafe())); }
 
 void Object::Atoms(const std::function<void(Atom&)>& cb) { cb(*this); }
 

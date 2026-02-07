@@ -137,8 +137,8 @@ struct RegistersMenuOption : TextOption, OptionsProvider {
 };
 
 void AssemblerWidget::VisitOptions(const OptionsVisitor& visitor) const {
-  WidgetBase::VisitOptions(visitor);
-  RegistersMenuOption registers_option{object.Copy<Assembler>()};
+  Object::Toy::VisitOptions(visitor);
+  RegistersMenuOption registers_option{owner.Copy<Assembler>()};
   visitor(registers_option);
 }
 
@@ -382,7 +382,7 @@ bool Assembler::DeserializeKey(ObjectDeserializer& d, StrView key) {
 }
 
 AssemblerWidget::AssemblerWidget(Widget* parent, Assembler& assembler)
-    : WidgetBase(parent, assembler) {}
+    : Object::Toy(parent, assembler) {}
 
 std::string_view AssemblerWidget::Name() const { return "Assembler"; }
 SkPath AssemblerWidget::Shape() const { return SkPath::RRect(kRRect.sk); }
@@ -425,7 +425,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     if (assembler->state.regs[i] == 0) continue;
     if (assembler->reg_objects_idx[i] != nullptr) continue;
-    assembler->reg_objects_idx[i] = MAKE_PTR(Register, object.Copy<Assembler>(), i);
+    assembler->reg_objects_idx[i] = MAKE_PTR(Register, owner.Copy<Assembler>(), i);
   }
 
   // Create new register widgets for register objects that don't have a widget.
@@ -747,7 +747,7 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
 }
 
 void RegisterWidget::VisitOptions(const OptionsVisitor& visitor) const {
-  WidgetBase::VisitOptions(visitor);
+  Object::Toy::VisitOptions(visitor);
   auto register_obj = LockRegister();
   RegisterMenuOption register_menu_option = {register_obj->assembler_weak,
                                              register_obj->register_index};

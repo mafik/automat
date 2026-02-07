@@ -172,7 +172,7 @@ bool HotKey::DeserializeKey(ObjectDeserializer& d, StrView keyName) {
 
 // HotKeyWidget
 
-struct HotKeyWidget : Object::WidgetBase, ui::CaretOwner {
+struct HotKeyWidget : Object::Toy, ui::CaretOwner {
   unique_ptr<ui::PowerButton> power_button;
   unique_ptr<KeyButton> ctrl_button;
   unique_ptr<KeyButton> alt_button;
@@ -186,7 +186,7 @@ struct HotKeyWidget : Object::WidgetBase, ui::CaretOwner {
   Ptr<HotKey> LockHotKey() const { return LockObject<HotKey>(); }
 
   HotKeyWidget(ui::Widget* parent, Object& hotkey_obj)
-      : WidgetBase(parent, hotkey_obj) {
+      : Object::Toy(parent, hotkey_obj) {
     auto hk = LockHotKey();
 
     power_button.reset(new PowerButton(this, &hk->enabled));
@@ -427,7 +427,7 @@ struct HotKeyWidget : Object::WidgetBase, ui::CaretOwner {
   }
 };
 
-std::unique_ptr<Toy> HotKey::MakeToy(ui::Widget* parent) {
+std::unique_ptr<Object::Toy> HotKey::MakeToy(ui::Widget* parent) {
   return std::make_unique<HotKeyWidget>(parent, *this);
 }
 

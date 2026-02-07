@@ -76,7 +76,7 @@ std::unique_ptr<LocationWidget> Location::MakeToy(ui::Widget* parent) {
   return std::make_unique<LocationWidget>(parent, *this);
 }
 
-automat::Toy& Location::ToyForObject() {
+Object::Toy& Location::ToyForObject() {
   if (!widget) {
     // Widget hasn't been created yet (before first render).
     // Create it eagerly through ToyStore.
@@ -151,7 +151,7 @@ void Location::FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_
 ///////////////////////////////////////////////////////////////////////////////
 
 LocationWidget::LocationWidget(ui::Widget* parent, Location& loc)
-    : Toy(parent), elevation(0), location_weak(loc.AcquireWeakPtr()) {
+    : Toy(parent, loc, loc), elevation(0), location_weak(loc.AcquireWeakPtr()) {
   loc.widget = this;
 }
 
@@ -161,11 +161,11 @@ LocationWidget::~LocationWidget() {
   }
 }
 
-Toy& LocationWidget::ToyForObject() {
+Object::Toy& LocationWidget::ToyForObject() {
   if (!toy) {
     if (auto loc = LockLocation()) {
       if (loc->object) {
-        toy = &ToyStore().FindOrMake(*loc->object, this);
+        toy = &static_cast<Object::Toy&>(ToyStore().FindOrMake(*loc->object, this));
         loc->scale = toy->GetBaseScale();
         toy->local_to_parent = SkM44(Location::ToMatrix(loc->position, loc->scale, LocalAnchor()));
       }
@@ -577,12 +577,6 @@ void LocationWidget::UpdateAutoconnectArgs() {
 
 Vec2AndDir LocationWidget::ArgStart(Argument& arg) { return ToyForObject().ArgStart(arg, parent); }
 
-void LocationWidget::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
-  if (toy) {
-    toy->ConnectionPositions(out_positions);
-  }
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 // Free functions
 ///////////////////////////////////////////////////////////////////////////////
@@ -610,7 +604,7 @@ void PositionBelow(Location& origin, Location& below) {
   }
 }
 
-Vec2 PositionAhead(Location& origin, const Argument& arg, const Toy& target_widget) {
+Vec2 PositionAhead(Location& origin, const Argument& arg, const Object::Toy& target_widget) {
   auto& origin_widget = origin.ToyForObject();
   auto origin_shape = origin_widget.Shape();           // origin's local coordinates
   Vec2AndDir arg_start = origin_widget.ArgStart(arg);  // origin's local coordinates

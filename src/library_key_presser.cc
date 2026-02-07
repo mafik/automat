@@ -94,14 +94,14 @@ struct KeyPresserButton : KeyButton {
   float PressRatio() const override;
 };
 
-struct KeyPresserWidget : Object::WidgetBase, ui::CaretOwner {
+struct KeyPresserWidget : Object::Toy, ui::CaretOwner {
   mutable std::unique_ptr<KeyPresserButton> shortcut_button;
 
   // This is used to select the pressed key
   ui::Caret* key_selector = nullptr;
 
   KeyPresserWidget(Widget* parent, Object& key_presser)
-      : WidgetBase(parent, key_presser),
+      : Object::Toy(parent, key_presser),
         shortcut_button(new KeyPresserButton(this, "?", KeyColor(false), kBaseKeyWidth)) {
     shortcut_button->activate = [this](ui::Pointer& pointer) {
       if (key_selector) {
@@ -161,17 +161,17 @@ struct KeyPresserWidget : Object::WidgetBase, ui::CaretOwner {
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn != ui::PointerButton::Left) return WidgetBase::FindAction(p, btn);
+    if (btn != ui::PointerButton::Left) return Object::Toy::FindAction(p, btn);
     auto hand_shape = GetHandShape();
     auto local_pos = p.PositionWithin(*this);
     if (hand_shape.contains(local_pos.x, local_pos.y)) {
       auto key_presser = LockObject<KeyPresser>();
       return std::make_unique<DragAndClickAction>(
-          p, btn, Object::WidgetBase::FindAction(p, btn),
+          p, btn, Object::Toy::FindAction(p, btn),
           std::make_unique<RunOption>(key_presser->AcquireWeakPtr(), key_presser->run));
     } else {
       return std::make_unique<DragAndClickAction>(
-          p, btn, Object::WidgetBase::FindAction(p, btn),
+          p, btn, Object::Toy::FindAction(p, btn),
           std::make_unique<UseObjectOption>(shortcut_button.get()));
     }
   }
@@ -207,7 +207,7 @@ KeyPresser::KeyPresser(ui::AnsiKey key) : key(key) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }
 Ptr<Object> KeyPresser::Clone() const { return MAKE_PTR(KeyPresser, key); }
 
-std::unique_ptr<Toy> KeyPresser::MakeToy(ui::Widget* parent) {
+std::unique_ptr<Object::Toy> KeyPresser::MakeToy(ui::Widget* parent) {
   auto w = std::make_unique<KeyPresserWidget>(parent, *this);
   w->shortcut_button->SetLabel(ToStr(key));
   return std::move(w);

@@ -134,7 +134,7 @@ struct FlipFlopButton : ui::ToggleButton {
   }
 };
 
-struct FlipFlopWidget : Object::WidgetBase {
+struct FlipFlopWidget : Object::Toy {
   struct AnimationState {
     float light = 0;
   };
@@ -142,7 +142,7 @@ struct FlipFlopWidget : Object::WidgetBase {
   std::unique_ptr<FlipFlopButton> button;
 
   FlipFlopWidget(ui::Widget* parent, Object& object)
-      : WidgetBase(parent, object),
+      : Object::Toy(parent, object),
         button(new FlipFlopButton(this, static_cast<FlipFlop&>(object).AcquireWeakPtr())) {
     auto rect = FlipFlopRect();
     button->local_to_parent = SkM44::Translate(rect.CenterX() - kYingYangButtonRadius,
@@ -201,7 +201,7 @@ struct FlipFlopWidget : Object::WidgetBase {
   void FillChildren(Vec<ui::Widget*>& children) override { children.push_back(button.get()); }
 };
 
-std::unique_ptr<Toy> FlipFlop::MakeToy(ui::Widget* parent) {
+std::unique_ptr<Object::Toy> FlipFlop::MakeToy(ui::Widget* parent) {
   return std::make_unique<FlipFlopWidget>(parent, *this);
 }
 }  // namespace automat::library

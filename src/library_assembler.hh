@@ -27,7 +27,7 @@ struct Register;
 struct Assembler;
 struct AssemblerWidget;
 
-struct RegisterWidget : public Object::WidgetBase {
+struct RegisterWidget : public Object::Toy {
   constexpr static Rect kBaseRect = Rect::MakeAtZero<CenterX, CenterY>(3_cm, 3_cm);
   constexpr static Rect kBoundingRect = [] {
     auto rect = kBaseRect;
@@ -39,7 +39,7 @@ struct RegisterWidget : public Object::WidgetBase {
   constexpr static float kCellHeight = kInnerRect.Height() / 8;
   constexpr static float kCellWidth = kInnerRect.Width() / 8;
 
-  RegisterWidget(Widget* parent, Object& reg) : WidgetBase(parent, reg) {}
+  RegisterWidget(Widget* parent, Object& reg) : Object::Toy(parent, reg) {}
   Ptr<Register> LockRegister() const { return LockObject<Register>(); }
   std::string_view Name() const override;
   SkPath Shape() const override;
@@ -48,7 +48,7 @@ struct RegisterWidget : public Object::WidgetBase {
   void VisitOptions(const OptionsVisitor&) const override;
 };
 
-struct AssemblerWidget : Object::WidgetBase, ui::DropTarget {
+struct AssemblerWidget : Object::Toy, ui::DropTarget {
   constexpr static float kWidth = 8_cm;
   constexpr static float kHeight = 8_cm;
   constexpr static float kRadius = 1_cm;
@@ -81,7 +81,7 @@ struct Register : Object {
 
   Ptr<Object> Clone() const override;
 
-  unique_ptr<automat::Toy> MakeToy(ui::Widget* parent) override {
+  unique_ptr<Object::Toy> MakeToy(ui::Widget* parent) override {
     return make_unique<RegisterWidget>(parent, *this);
   }
 
@@ -128,7 +128,7 @@ struct Assembler : Object, Container {
 
   void RunMachineCode(library::Instruction* entry_point, std::unique_ptr<RunTask>&&);
 
-  unique_ptr<automat::Toy> MakeToy(ui::Widget* parent) override {
+  unique_ptr<Object::Toy> MakeToy(ui::Widget* parent) override {
     return make_unique<AssemblerWidget>(parent, *this);
   }
 

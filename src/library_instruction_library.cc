@@ -164,7 +164,7 @@ string_view InstructionLibrary::Name() const { return "Instruction Library"; }
 Ptr<Object> InstructionLibrary::Clone() const { return MAKE_PTR(InstructionLibrary); }
 
 InstructionLibrary::Widget::Widget(ui::Widget* parent, Object& object)
-    : WidgetBase(parent, object) {
+    : Toy(parent, object) {
   for (int i = 0; i < std::size(x86::kCategories); ++i) {
     if (category_states.size() <= i) {
       category_states.push_back(CategoryState{
@@ -299,7 +299,7 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
         animation::LinearApproach(write_to[i].pressed, timer.d, 5, write_to[i].pressed_animation);
   }
 
-  auto object_Ptr = object.lock();
+  auto object_Ptr = LockOwner<Object>();
   if (!object_Ptr) return animation::Finished;
 
   auto* library = dynamic_cast<InstructionLibrary*>(object_Ptr.get());
@@ -1106,11 +1106,11 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(ui::Pointer& p,
     }
 
     if (Length(contact_point) < kCornerDist) {
-      return std::make_unique<ScrollDeckAction>(p, *this, object.lock());
+      return std::make_unique<ScrollDeckAction>(p, *this, LockOwner<Object>());
     }
 
     if (auto reg_btn = FindRegisterFilterButton(contact_point)) {
-      auto object_Ptr = object.lock();
+      auto object_Ptr = LockOwner<Object>();
       if (!object_Ptr) return nullptr;
 
       auto* library = dynamic_cast<InstructionLibrary*>(object_Ptr.get());
@@ -1134,7 +1134,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(ui::Pointer& p,
       auto& category_state = category_states[i];
       float distance = Length(category_state.position - contact_point);
       if (distance < category_state.radius) {
-        auto object_Ptr = object.lock();
+        auto object_Ptr = LockOwner<Object>();
         if (!object_Ptr) return nullptr;
 
         auto* library = dynamic_cast<InstructionLibrary*>(object_Ptr.get());
@@ -1158,7 +1158,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(ui::Pointer& p,
         auto& leaf_state = category_state.leaves[j];
         float distance = Length(leaf_state.position - contact_point);
         if (distance < leaf_state.radius) {
-          auto object_Ptr = object.lock();
+          auto object_Ptr = LockOwner<Object>();
           if (!object_Ptr) return nullptr;
 
           auto* library = dynamic_cast<InstructionLibrary*>(object_Ptr.get());
@@ -1180,7 +1180,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(ui::Pointer& p,
       }
     }
   }
-  return WidgetBase::FindAction(p, btn);
+  return Toy::FindAction(p, btn);
 }
 
 }  // namespace automat::library

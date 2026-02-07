@@ -228,7 +228,7 @@ static void SearchWindows(xcb_window_t start, WindowVisitor visitor) {
 }
 #endif
 
-struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
+struct WindowWidget : Object::Toy, ui::PointerGrabber, ui::KeyGrabber {
   constexpr static float kWidth = 5_cm;
   constexpr static float kCornerRadius = 1_mm;
   constexpr static float kHeight = 5_cm;
@@ -244,7 +244,7 @@ struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
 
   Ptr<Window> LockWindow() const { return LockObject<Window>(); }
 
-  WindowWidget(ui::Widget* parent, Object& window) : WidgetBase(parent, window) {
+  WindowWidget(ui::Widget* parent, Object& window) : Object::Toy(parent, window) {
     pick_button = std::make_unique<PickButton>(this);
     pick_button->on_activate = [this](ui::Pointer& p) {
       p.EndAllActions();
@@ -471,7 +471,7 @@ struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
   }
 
   void VisitOptions(const OptionsVisitor& visitor) const override {
-    WidgetBase::VisitOptions(visitor);
+    Object::Toy::VisitOptions(visitor);
     if (auto window = LockWindow()) {
       auto lock = std::lock_guard(window->mutex);
       if (window->run_continuously) {
@@ -485,7 +485,7 @@ struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
   }
 };
 
-std::unique_ptr<Toy> Window::MakeToy(ui::Widget* parent) {
+std::unique_ptr<Object::Toy> Window::MakeToy(ui::Widget* parent) {
   return std::make_unique<WindowWidget>(parent, *this);
 }
 

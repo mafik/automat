@@ -67,7 +67,7 @@ struct Location : ReferenceCounted, ToyMakerMixin {
   ~Location();
 
   // Find (or create if needed) the Widget for this location's object.
-  automat::Toy& ToyForObject();
+  Object::Toy& ToyForObject();
 
   Ptr<Object> InsertHere(Ptr<Object>&& object);
 
@@ -195,7 +195,7 @@ struct LocationWidget : Toy {
   Optional<Vec2> local_anchor;
   Vec2 position_vel = {};
   float scale_vel = 0;
-  Toy* toy = nullptr;  // cached Object Toy
+  Object::Toy* toy = nullptr;  // cached Object Toy
   std::vector<ui::Widget*> overlays;
 
   LocationWidget(ui::Widget* parent, Location& loc);
@@ -203,12 +203,8 @@ struct LocationWidget : Toy {
 
   Ptr<Location> LockLocation() const { return location_weak.Lock(); }
 
-  Toy& ToyForObject();
+  Object::Toy& ToyForObject();
   Vec2 LocalAnchor() const override;
-
-  // Toy overrides
-  float GetBaseScale() const override { return 1; }
-  void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override;
 
   // Widget overrides
   animation::Phase Tick(time::Timer& timer) override;
@@ -240,7 +236,7 @@ void PositionBelow(Location& origin, Location& below);
 // This uses the arg's position & direction within `origin`.
 //
 // This version just returns the recommended position for the target_widget.
-Vec2 PositionAhead(Location& origin, const Argument& arg, const Toy& target_widget);
+Vec2 PositionAhead(Location& origin, const Argument& arg, const Object::Toy& target_widget);
 
 // Similar to the above, but also sets the target's position.
 void PositionAhead(Location& origin, const Argument& arg, Location& target);

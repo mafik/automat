@@ -124,7 +124,7 @@ void Gear::FullSync(NestedPtr<Syncable>& syncable) {
   AddSource(syncable);
 }
 
-struct GearWidget : Object::WidgetBase {
+struct GearWidget : Object::Toy {
   Rect bounds;
 
   struct Belt {
@@ -141,7 +141,7 @@ struct GearWidget : Object::WidgetBase {
 
   std::vector<Belt> belts;
 
-  GearWidget(Widget* parent, Object& object) : WidgetBase(parent, object) {}
+  GearWidget(Widget* parent, Object& object) : Object::Toy(parent, object) {}
 
   SkPath Shape() const override { return SkPath::Circle(0, 0, 1_cm); }
 
@@ -268,7 +268,7 @@ struct GearWidget : Object::WidgetBase {
   Optional<Rect> TextureBounds() const override { return bounds; }
 };
 
-std::unique_ptr<Toy> Gear::MakeToy(ui::Widget* parent) {
+std::unique_ptr<Object::Toy> Gear::MakeToy(ui::Widget* parent) {
   return std::make_unique<GearWidget>(parent, *this);
 }
 

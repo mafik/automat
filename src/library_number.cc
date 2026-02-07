@@ -156,7 +156,7 @@ struct NumberButton : ui::Button {
 
 // NumberWidget
 
-struct NumberWidget : Object::WidgetBase {
+struct NumberWidget : Object::Toy {
   std::unique_ptr<NumberButton> digits[10];
   std::unique_ptr<NumberButton> dot;
   std::unique_ptr<NumberButton> backspace;
@@ -165,7 +165,7 @@ struct NumberWidget : Object::WidgetBase {
   Ptr<Number> LockNumber() const { return LockObject<Number>(); }
 
   NumberWidget(ui::Widget* parent, Object& number_obj)
-      : WidgetBase(parent, number_obj) {
+      : Object::Toy(parent, number_obj) {
     text_field = std::make_unique<ui::NumberTextField>(
         this, kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth);
     dot = std::make_unique<NumberButton>(this, ".");
@@ -274,7 +274,7 @@ struct NumberWidget : Object::WidgetBase {
   }
 };
 
-std::unique_ptr<Toy> Number::MakeToy(ui::Widget* parent) {
+std::unique_ptr<Object::Toy> Number::MakeToy(ui::Widget* parent) {
   return std::make_unique<NumberWidget>(parent, *this);
 }
 

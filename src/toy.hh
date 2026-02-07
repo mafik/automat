@@ -20,24 +20,16 @@ struct Object;
 
 // A type of Widget that represents a Part (Atom owned by a ReferenceCounted).
 struct Toy : ui::Widget {
-  using ui::Widget::Widget;
+  WeakPtr<ReferenceCounted> owner;
+  Atom* atom;
 
-  // Get the default scale that this object would like to have.
-  // Usually it's 1 but when it's iconified, it may want to shrink itself.
-  virtual float GetBaseScale() const = 0;
+  Toy(ui::Widget* parent, ReferenceCounted& owner, Atom& atom)
+      : Widget(parent), owner(owner.AcquireWeakPtr()), atom(&atom) {}
 
-  // Places where the connections to this widget may terminate.
-  // Local (metric) coordinates.
-  virtual void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const = 0;
-
-  // Returns the start position of the given argument.
-  // If coordinate_space is nullptr, returns local (metric) coordinates.
-  // If coordinate_space is provided, returns coordinates in that widget's space.
-  virtual Vec2AndDir ArgStart(const Argument&, ui::Widget* coordinate_space = nullptr);
-
-  // Describes the area of the widget where the given atom is located.
-  // Local (metric) coordinates.
-  virtual SkPath AtomShape(Atom*) const { return Shape(); }
+  template <typename T = ReferenceCounted>
+  Ptr<T> LockOwner() const {
+    return owner.Lock().template Cast<T>();
+  }
 };
 
 // ToyMaker is a Part that can make toys

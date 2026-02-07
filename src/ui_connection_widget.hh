@@ -3,6 +3,7 @@
 #pragma once
 
 #include "animation.hh"
+#include "argument.hh"
 #include "audio.hh"
 #include "connector_optical.hh"
 #include "object.hh"
@@ -104,6 +105,9 @@ struct ConnectionWidget : Toy {
   // - called in ~ConnectionDragAction / RootMachine::ConnectAtPoint
   // - called in
 };
+
+// Now that ConnectionWidget is defined, we can check whether ArgumentOf can make toys
+static_assert(ToyPart<ArgumentOf>);
 
 void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shape);
 

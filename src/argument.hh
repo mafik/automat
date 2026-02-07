@@ -10,6 +10,10 @@
 
 namespace automat {
 
+namespace ui {
+struct ConnectionWidget;
+}
+
 enum class CableTexture {
   Smooth,
   Braided,
@@ -104,14 +108,15 @@ struct Argument : virtual Atom {
   ArgumentOf Of(Object& start);
 };
 
-struct ArgumentOf : ToyMaker {
+struct ArgumentOf {
+  using Toy = ui::ConnectionWidget;
   Object& object;
   Argument& arg;
   ArgumentOf(Object& object, Argument& arg) : object(object), arg(arg) {}
 
-  ReferenceCounted& GetOwner() override { return object; }
-  Atom& GetAtom() override { return arg; }
-  std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
+  ReferenceCounted& GetOwner() { return object; }
+  Atom& GetAtom() { return arg; }
+  std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 };
 
 inline ArgumentOf Argument::Of(Object& start) { return ArgumentOf(start, *this); }

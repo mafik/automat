@@ -49,7 +49,7 @@ struct Location : ReferenceCounted, ToyPartMixin {
   // Cached LocationWidget (set by MakeToy, cleared by LocationWidget dtor).
   LocationWidget* widget = nullptr;
 
-  // ToyMaker overrides
+  // ToyPart concept
   ReferenceCounted& GetOwner() { return *this; }
   Atom& GetAtom() { return *this; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent);

@@ -109,8 +109,8 @@ struct ArgumentOf : ToyMaker {
   Argument& arg;
   ArgumentOf(Object& object, Argument& arg) : object(object), arg(arg) {}
 
-  ReferenceCounted* GetReferenceCounted() override { return &object; }
-  Atom* GetAtom() override { return &arg; }
+  ReferenceCounted& GetOwner() override { return object; }
+  Atom& GetAtom() override { return arg; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 };
 

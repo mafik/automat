@@ -47,7 +47,7 @@ struct ToyStore {
   }
 
   Toy* FindOrNull(ToyMaker& maker) const {
-    auto it = container.find(MakeKey(*maker.GetReferenceCounted(), *maker.GetAtom()));
+    auto it = container.find(MakeKey(maker.GetOwner(), maker.GetAtom()));
     if (it == container.end()) {
       return nullptr;
     }
@@ -60,7 +60,7 @@ struct ToyStore {
   }
 
   Toy& FindOrMake(ToyMaker& maker, Widget* parent) {
-    auto key = MakeKey(*maker.GetReferenceCounted(), *maker.GetAtom());
+    auto key = MakeKey(maker.GetOwner(), maker.GetAtom());
     auto it = container.find(key);
     if (it == container.end()) {
       auto widget = maker.MakeToy(parent);
@@ -69,7 +69,7 @@ struct ToyStore {
       if (it->second->parent == nullptr) {
         it->second->parent = parent->AcquireTrackedPtr();
       } else {
-        LOG << parent->Name() << " is asking for a widget for " << maker.GetAtom()->Name()
+        LOG << parent->Name() << " is asking for a widget for " << maker.GetAtom().Name()
             << " but it's already owned by " << it->second->parent->Name()
             << ". TODO: figure out what to do in this situation";
       }

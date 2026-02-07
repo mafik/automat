@@ -35,8 +35,8 @@ struct ObjectDeserializer;
 struct Object : public ReferenceCounted, public ToyMaker {
   Location* here = nullptr;
 
-  ReferenceCounted* GetReferenceCounted() override { return this; }
-  Atom* GetAtom() override { return this; }
+  ReferenceCounted& GetOwner() override { return *this; }
+  Atom& GetAtom() override { return *this; }
 
   Object() = default;
 

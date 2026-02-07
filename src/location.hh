@@ -48,8 +48,8 @@ struct Location : ReferenceCounted, ToyMaker {
   LocationWidget* widget = nullptr;
 
   // ToyMaker overrides
-  ReferenceCounted* GetReferenceCounted() override { return this; }
-  Atom* GetAtom() override { return this; }
+  ReferenceCounted& GetOwner() override { return *this; }
+  Atom& GetAtom() override { return *this; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
   // Obtain a matrix representation of the given transform.

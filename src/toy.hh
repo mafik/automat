@@ -4,18 +4,18 @@
 
 #include <functional>
 
+#include "part.hh"
 #include "widget.hh"
 
 namespace automat::ui {
 struct RootWidget;
-struct ConnectionWidget;
 }  // namespace automat::ui
 
 namespace automat {
 
 struct Object;
 
-// A type of Widget that represents objects (or atoms of objects).
+// A type of Widget that represents a Part (Atom owned by a ReferenceCounted).
 struct Toy : ui::Widget {
   using ui::Widget::Widget;
 
@@ -37,12 +37,22 @@ struct Toy : ui::Widget {
   virtual SkPath AtomShape(Atom*) const { return Shape(); }
 };
 
+// ToyPart is a Part that can make toys
+template <typename T>
+concept ToyPart = requires(T t) {
+  requires Part<T>;
+  typename T::Toy;
+  requires std::derived_from<typename T::Toy, Toy>;
+  { t.MakeToy(std::declval<ui::Widget*>() /*parent*/) } -> std::same_as<std::unique_ptr<Toy>>;
+};
+
 // Mixin class for things that can create and manage widgets (Objects & some Atoms).
 // Provides functionality for iterating over widgets and waking their animations.
 struct ToyMaker {
+  using Toy = automat::Toy;
   // Identity for ToyStore keying.
-  virtual ReferenceCounted* GetReferenceCounted() = 0;
-  virtual Atom* GetAtom() = 0;
+  virtual ReferenceCounted& GetOwner() = 0;
+  virtual Atom& GetAtom() = 0;
 
   // Produces a new Widget that can display this Atom.
   // The `parent` argument allows the Widget to be attached at the correct position in the Widget
@@ -54,5 +64,7 @@ struct ToyMaker {
   void ForEachToy(std::function<void(ui::RootWidget&, Toy&)> cb);
   void WakeToys();
 };
+
+static_assert(ToyPart<ToyMaker>);
 
 }  // namespace automat

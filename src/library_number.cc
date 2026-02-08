@@ -105,7 +105,7 @@ string Number::GetText() const {
 
 void Number::SetText(string_view text) {
   value = std::stod(string(text));
-  Notify();
+  WakeToys();
 }
 
 void Number::SerializeState(ObjectSerializer& writer) const {
@@ -122,7 +122,7 @@ bool Number::DeserializeKey(ObjectDeserializer& d, StrView key) {
       ReportError("Couldn't deserialize Number value: " + status.ToStr());
       return true;
     }
-    Notify();
+    WakeToys();
     return true;
   }
   return false;
@@ -164,8 +164,7 @@ struct NumberWidget : Object::Toy {
 
   Ptr<Number> LockNumber() const { return LockObject<Number>(); }
 
-  NumberWidget(ui::Widget* parent, Object& number_obj)
-      : Object::Toy(parent, number_obj) {
+  NumberWidget(ui::Widget* parent, Object& number_obj) : Object::Toy(parent, number_obj) {
     text_field = std::make_unique<ui::NumberTextField>(
         this, kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth);
     dot = std::make_unique<NumberButton>(this, ".");

@@ -54,18 +54,12 @@ struct ToyMakerMixin {
   static void ForEachToyImpl(ReferenceCounted& owner, Atom& atom,
                              std::function<void(ui::RootWidget&, Toy&)> cb);
 
-  // DEPRECATED: This is not thread-safe. Use Notify on the Toy owner instead.
+  // DEPRECATED: This is not thread-safe. Update this Object's local state & call WakeToys instead.
   template <ToyMaker Self>
   void ForEachToy(this Self& self, std::function<void(ui::RootWidget&, typename Self::Toy&)> cb) {
     ForEachToyImpl(self.GetOwner(), self.GetAtom(), [&](ui::RootWidget& root, automat::Toy& toy) {
       cb(root, static_cast<Self::Toy&>(toy));
     });
-  }
-
-  // DEPRECATED: This is not thread-safe. Use Notify on the Toy owner instead.
-  template <ToyMaker Self>
-  void WakeToys(this Self& self) {
-    self.ForEachToy([](ui::RootWidget&, typename Self::Toy& t) { t.WakeAnimation(); });
   }
 };
 
@@ -98,7 +92,7 @@ struct ToyStore {
       // Safe to read through WeakPtr: memory survives until weak_refs hits 0.
       auto* rc = owner_weak.GetUnsafe<ReferenceCounted>();
       if (rc == nullptr) continue;
-      uint32_t current = rc->notify_counter.load(std::memory_order_relaxed);
+      uint32_t current = rc->wake_counter.load(std::memory_order_relaxed);
       if (current != toy->observed_notify_counter) {
         toy->observed_notify_counter = current;
         toy->WakeAnimation();

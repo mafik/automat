@@ -130,12 +130,10 @@ struct ReferenceCounted : virtual Atom {
   // Incremented when object state changes. UI-side Toys observe this to know when
   // to wake up and pull fresh state. Readable through WeakPtr without locking
   // because memory survives until weak_refs hits 0.
-  AtomicCounter notify_counter = 0;
+  AtomicCounter wake_counter = 0;
 
   // Bump the counter to notify Toys that state has changed.
-  //
-  // TODO: Once the old WakeToys is gone, rename this one to MakeToys
-  void Notify() { notify_counter.fetch_add(1, std::memory_order_relaxed); }
+  void WakeToys() { wake_counter.fetch_add(1, std::memory_order_relaxed); }
 
   ReferenceCounted() = default;
   ReferenceCounted(const ReferenceCounted&) : owning_refs(1), weak_refs(1) {}

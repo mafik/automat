@@ -18,7 +18,12 @@ namespace automat {
 
 struct Object;
 
-// A type of Widget that represents a Part (Atom owned by a ReferenceCounted).
+// A type of Widget that represents a memory-managed entity.
+//
+// Notable subclasses are:
+// * Object::Toy (+ its subclasses for specific Objects)
+// * ConnectionWidget
+// * LocationWidget
 struct Toy : ui::Widget {
   WeakPtr<ReferenceCounted> owner;
   Atom* atom;

@@ -136,49 +136,7 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   };
 
   virtual std::unique_ptr<Toy> MakeToy(ui::Widget* parent) {
-    if (auto w = dynamic_cast<automat::Toy*>(this)) {
-      // Proxy object that can be lifetime-managed by the UI infrastructure (without
-      // affecting the original object's lifetime).
-      struct HybridAdapter : Toy {
-        Ptr<Object> ptr;
-        automat::Toy& widget;
-        HybridAdapter(Widget* parent, Object& obj, automat::Toy& widget)
-            : Toy(parent, obj), ptr(obj.AcquirePtr()), widget(widget) {
-          widget.parent = this;
-        }
-        StrView Name() const override { return "HybridAdapter"; }
-        SkPath Shape() const override { return widget.Shape(); }
-        Optional<Rect> TextureBounds() const override { return std::nullopt; }
-        bool CenteredAtZero() const override { return widget.CenteredAtZero(); }
-        void FillChildren(Vec<Widget*>& children) override { children.push_back(&widget); }
-        void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override {
-          // Delegate to widget if it's also an Object::Toy
-          if (auto* obj_toy = dynamic_cast<Object::Toy*>(&widget)) {
-            obj_toy->ConnectionPositions(out_positions);
-          }
-        }
-        void Draw(SkCanvas& canvas) const override {
-          // We don't want the default green fill for the object.
-          Widget::Draw(canvas);
-        }
-
-        float GetBaseScale() const override {
-          if (auto* obj_toy = dynamic_cast<Object::Toy*>(&widget)) {
-            return obj_toy->GetBaseScale();
-          }
-          return 1;
-        }
-      };
-      return std::make_unique<HybridAdapter>(parent, *this, *w);
-    }
-    // At the moment, Objects mix the memory management & their logic in one struct.
-    // Long-term (after this is decoupled) all Toy should be constructed with separate `rc`
-    // control block.
-    // Until this happens, we ignore the `rc` passed into MakeWidget & use the Object's built-in
-    // ReferenceCounted base class.
-    // See `Memory Management.md`.
-    auto w = std::make_unique<Toy>(parent, *this);
-    return w;
+    return std::make_unique<Toy>(parent, *this);
   }
 
   void InvalidateConnectionWidgets(const Argument* arg = nullptr) const;

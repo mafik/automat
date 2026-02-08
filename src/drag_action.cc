@@ -110,7 +110,7 @@ void DragLocationAction::Update() {
     }
     for (auto& location : locations) {
       location->WakeToys();
-      if (location->widget) location->widget->InvalidateConnectionWidgets(true, false);
+      location->InvalidateConnectionWidgets(true, false);
     }
   }
 

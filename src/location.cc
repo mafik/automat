@@ -233,7 +233,7 @@ animation::Phase LocationWidget::Tick(time::Timer& timer) {
   }
 
   // Connection widgets rely on position, scale & transparency so make sure they're updated.
-  InvalidateConnectionWidgets(true, false);
+  loc->InvalidateConnectionWidgets(true, false);
 
   {
     float target_elevation = IsDragged(*loc) ? 1 : 0;
@@ -419,14 +419,12 @@ std::unique_ptr<Action> LocationWidget::FindAction(ui::Pointer& p, ui::ActionTri
   return nullptr;
 }
 
-void LocationWidget::InvalidateConnectionWidgets(bool moved, bool value_changed) const {
-  auto loc = LockLocation();
-  if (!loc) return;
+void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const {
   // We don't have backlinks to connection widgets so we have to iterate over all connection widgets
   // in root_widget and check if they're connected to this location.
   for (auto& w : ui::root_widget->connection_widgets) {
     if (w->start_weak.OwnerUnsafe<Object>() ==
-        loc->object.Get()) {  // updates all outgoing connection widgets
+        object.Get()) {  // updates all outgoing connection widgets
       if (moved && !value_changed) {
         w->FromMoved();
       } else {
@@ -435,7 +433,7 @@ void LocationWidget::InvalidateConnectionWidgets(bool moved, bool value_changed)
           w->state->stabilized = false;
         }
       }
-    } else if (w->EndLocation() == loc.get()) {
+    } else if (w->EndLocation() == this) {
       w->WakeAnimation();
     }
   }

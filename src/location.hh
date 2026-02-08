@@ -69,6 +69,8 @@ struct Location : ReferenceCounted, ToyMakerMixin {
   // Find (or create if needed) the Widget for this location's object.
   Object::Toy& ToyForObject();
 
+  void InvalidateConnectionWidgets(bool moved, bool value_changed) const;
+
   Ptr<Object> InsertHere(Ptr<Object>&& object);
 
   Ptr<Object> Create(const Object& prototype);
@@ -215,8 +217,6 @@ struct LocationWidget : Toy {
   void FillChildren(Vec<ui::Widget*>& children) override;
   Optional<Rect> TextureBounds() const override;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
-
-  void InvalidateConnectionWidgets(bool moved, bool value_changed) const;
 
   // Call this when the position of this location changes to update the autoconnect arguments.
   void UpdateAutoconnectArgs();

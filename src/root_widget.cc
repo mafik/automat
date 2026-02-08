@@ -117,8 +117,9 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
           return;
         }
         // Create a new widget.
-        auto toy = arg.Of(*loc->object).MakeToy(loc->widget);
-        if (loc->widget) loc->widget->overlays.push_back(toy.get());
+        auto& loc_widget = root_widget.toys.FindOrMake(*loc, root_machine.Get());
+        auto toy = arg.Of(*loc->object).MakeToy(&loc_widget);
+        loc_widget.overlays.push_back(toy.get());
         root_widget.connection_widgets.emplace_back(static_cast<ConnectionWidget*>(toy.release()));
       });
     }

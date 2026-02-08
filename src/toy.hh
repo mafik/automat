@@ -27,6 +27,7 @@ struct Object;
 struct Toy : ui::Widget {
   WeakPtr<ReferenceCounted> owner;
   Atom* atom;
+  uint32_t observed_notify_counter = 0;  // UI-thread only — last seen notify_counter
 
   Toy(ui::Widget* parent, ReferenceCounted& owner, Atom& atom)
       : Widget(parent), owner(owner.AcquireWeakPtr()), atom(&atom) {}
@@ -53,6 +54,7 @@ struct ToyMakerMixin {
   static void ForEachToyImpl(ReferenceCounted& owner, Atom& atom,
                              std::function<void(ui::RootWidget&, Toy&)> cb);
 
+  // DEPRECATED: This is not thread-safe. Use Notify on the Toy owner instead.
   template <ToyMaker Self>
   void ForEachToy(this Self& self, std::function<void(ui::RootWidget&, typename Self::Toy&)> cb) {
     ForEachToyImpl(self.GetOwner(), self.GetAtom(), [&](ui::RootWidget& root, automat::Toy& toy) {
@@ -60,6 +62,7 @@ struct ToyMakerMixin {
     });
   }
 
+  // DEPRECATED: This is not thread-safe. Use Notify on the Toy owner instead.
   template <ToyMaker Self>
   void WakeToys(this Self& self) {
     self.ForEachToy([](ui::RootWidget&, typename Self::Toy& t) { t.WakeAnimation(); });
@@ -85,6 +88,22 @@ struct ToyStore {
       return nullptr;
     }
     return static_cast<T::Toy*>(it->second.get());
+  }
+
+  // Scan all toys for owners whose generation has changed. Wake those toys.
+  // Called once per frame on the UI thread.
+  void WakeUpdatedToys() {
+    for (auto& [key, toy] : container) {
+      auto& [owner_weak, atom] = key;
+      // Safe to read through WeakPtr: memory survives until weak_refs hits 0.
+      auto* rc = owner_weak.GetUnsafe<ReferenceCounted>();
+      if (rc == nullptr) continue;
+      uint32_t current = rc->notify_counter.load(std::memory_order_relaxed);
+      if (current != toy->observed_notify_counter) {
+        toy->observed_notify_counter = current;
+        toy->WakeAnimation();
+      }
+    }
   }
 
   template <ToyMaker T>

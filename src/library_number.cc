@@ -105,7 +105,7 @@ string Number::GetText() const {
 
 void Number::SetText(string_view text) {
   value = std::stod(string(text));
-  WakeToys();
+  Notify();
 }
 
 void Number::SerializeState(ObjectSerializer& writer) const {
@@ -122,7 +122,7 @@ bool Number::DeserializeKey(ObjectDeserializer& d, StrView key) {
       ReportError("Couldn't deserialize Number value: " + status.ToStr());
       return true;
     }
-    WakeToys();
+    Notify();
     return true;
   }
   return false;

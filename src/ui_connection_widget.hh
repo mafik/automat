@@ -29,11 +29,7 @@ struct DragConnectionAction : Action {
   ~DragConnectionAction() override;
   void Update() override;
   bool Highlight(Object&, Atom&) const override;
-  ui::Widget* Widget() override;
 };
-
-void UnparentConnectionWidget(ConnectionWidget&);
-void ReparentConnectionWidget(ConnectionWidget&, Widget& new_parent);
 
 // ConnectionWidget can function in three different modes, depending on how the argument is set to
 // draw:
@@ -69,7 +65,6 @@ struct ConnectionWidget : Toy {
   Vec2AndDir pos_dir;  // position of connection start
   SkPath from_shape;   // machine coords
   SkPath to_shape;     // machine coords
-  SkPath clip;         // machine coords
   mutable animation::Approach<> cable_width;
   Vec<Vec2AndDir> to_points;
   float transparency = 1;

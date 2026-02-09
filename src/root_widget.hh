@@ -172,6 +172,8 @@ struct RootWidget final : Widget, DropTarget {
   // TODO: move all children into this vector
   Vec<std::unique_ptr<Widget>> children;
 
+  Vec<Widget*> child_toys;
+
   std::mutex mutex;
 };
 

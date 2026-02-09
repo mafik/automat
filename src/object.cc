@@ -12,6 +12,7 @@
 #include "base.hh"
 #include "drag_action.hh"
 #include "font.hh"
+#include "format.hh"
 #include "location.hh"
 #include "menu.hh"
 #include "object_iconified.hh"
@@ -137,7 +138,8 @@ struct MoveLocationOption : TextOption {
             << " (not a Container)";
       }
     }
-    auto* machine = location->widget ? ui::Closest<Machine>(*location->widget) : nullptr;
+    auto parent_location = location->parent_location.Lock();
+    auto* machine = parent_location->ThisAs<Machine>();
     if (machine && location->object) {
       machine->ForEachToy([](ui::RootWidget&, Toy& w) { w.RedrawThisFrame(); });
       return std::make_unique<DragLocationAction>(pointer, machine->ExtractStack(*location));
@@ -458,7 +460,9 @@ Object::~Object() { LifetimeObserver::CheckDestroyNotified(*this); }
 
 bool Object::Toy::AllowChildPointerEvents(ui::Widget&) const { return !IsIconified(); }
 
-bool Object::Toy::IsIconified() const { return automat::IsIconified(static_cast<Object*>(owner.GetUnsafe())); }
+bool Object::Toy::IsIconified() const {
+  return automat::IsIconified(static_cast<Object*>(owner.GetUnsafe()));
+}
 
 void Object::Atoms(const std::function<void(Atom&)>& cb) { cb(*this); }
 

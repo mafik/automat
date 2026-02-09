@@ -57,20 +57,6 @@ void Machine::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
     if (arg.CanConnect(start, atom)) {
       arg.Connect(start, NestedPtr<Atom>(end.AcquirePtr(), &atom));
       connected = true;
-      auto& root = FindRootWidget();
-      auto arg_of = arg.Of(start);
-      if (auto* conn = root.toys.FindOrNull(arg_of)) {
-        if (end.here->widget && end.here->widget->IsAbove(*conn->parent)) {
-          if (auto* lw = dynamic_cast<LocationWidget*>(conn->parent.Get())) {
-            std::erase(lw->overlays, conn);
-          }
-          conn->parent->RedrawThisFrame();
-
-          conn->parent = end.here->widget;
-          end.here->widget->overlays.insert(end.here->widget->overlays.begin(), conn);
-          conn->parent->RedrawThisFrame();
-        }
-      }
     }
   };
   for (auto& loc : locations) {
@@ -215,14 +201,6 @@ bool Machine::DeserializeKey(ObjectDeserializer& d, StrView key) {
 }
 
 Machine::Machine(ui::Widget* parent) : ui::Widget(parent) {}
-
-void Machine::FillChildren(Vec<Widget*>& children) {
-  children.reserve(locations.size());
-  for (auto& l : locations) {
-    auto& toy = ToyStore().FindOrMake(*l, this);
-    children.push_back(&toy);
-  }
-}
 
 SkPath Machine::Shape() const {
   SkPath rect = SkPath::Rect(Rect::MakeCenterZero(100_cm, 100_cm));

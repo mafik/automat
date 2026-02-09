@@ -22,6 +22,7 @@
 #include "object.hh"
 #include "pointer.hh"
 #include "prototypes.hh"
+#include "ptr.hh"
 #include "sync.hh"
 #include "time.hh"
 #include "touchpad.hh"
@@ -105,37 +106,6 @@ void RootWidget::ZoomWarning::Draw(SkCanvas& canvas) const {
 }
 
 static SkColor background_color = SkColorSetRGB(0x80, 0x80, 0x80);
-
-static void UpdateArgWidgets(RootWidget& root_widget) {
-  if (root_machine == nullptr) {
-    return;
-  }
-  for (auto& loc : root_machine->locations) {
-    if (!loc->object) continue;
-    auto& loc_widget = root_widget.toys.FindOrMake(*loc, root_machine.Get());
-    loc->object->Args([&](Argument& arg) {
-      Toy* w = nullptr;
-      if (auto* syncable = dynamic_cast<Syncable*>(&arg)) {
-        // if (!syncable->end) return;
-        auto member_of = SyncMemberOf{*loc->object, *syncable};
-        if (root_widget.toys.FindOrNull(member_of)) {
-          return;
-        }
-        w = &root_widget.toys.FindOrMake(member_of, &loc_widget);
-      } else {
-        auto arg_of = arg.Of(*loc->object);
-        if (root_widget.toys.FindOrNull(arg_of)) {
-          return;
-        }
-        w = &root_widget.toys.FindOrMake(arg_of, &loc_widget);
-      }
-      if (std::find(loc_widget.overlays.begin(), loc_widget.overlays.end(), w) ==
-          loc_widget.overlays.end()) {
-        loc_widget.overlays.push_back(w);
-      }
-    });
-  }
-}
 
 animation::Phase RootWidget::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
@@ -306,7 +276,75 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
     }
   }
 
-  UpdateArgWidgets(*this);
+  child_toys.clear();
+  if (root_machine) {
+    // TODO: this is buggy - replace it with something better...
+    std::map<ReferenceCounted*, int> toy_idx;
+
+    // Flatten the Toys in front-to-back order.
+    auto VisitObject = [&](Object& o) {
+      auto& loc_widget = toys.FindOrMake(*o.here, this);
+      loc_widget.local_to_parent = canvas_to_window44;
+      toy_idx[&o] = child_toys.size();
+      child_toys.push_back(&loc_widget);
+
+      // Make sure that each argument has a toy
+      o.Args([&](Argument& arg) {
+        if (auto* syncable = dynamic_cast<Syncable*>(&arg)) {
+          auto member_of = SyncMemberOf{o, *syncable};
+          toys.FindOrMake(member_of, this);
+        } else {
+          auto arg_of = arg.Of(o);
+          toys.FindOrMake(arg_of, this);
+        }
+      });
+    };
+
+    // First flatten Toys dragged by pointers
+    for (auto p : pointers) {
+      for (auto& a : p->actions) {
+        if (a == nullptr) continue;
+        a->VisitObjects(VisitObject);
+      }
+    }
+
+    // Then flatten the Toys tored by the Machines
+    for (auto& loc : root_machine->locations) {
+      VisitObject(*loc->object);
+    }
+
+    // Finally, flatten the machine itself
+    // TODO: split Machine & MachineWidget
+    child_toys.push_back(root_machine.Get());
+
+    // Insert the toys for arguments
+    for (auto& it : toys.container) {
+      auto& toy = *it.second;
+      if (toy.parent != this) {
+        continue;
+      }
+      auto owner = toy.LockOwner<Object>();
+      if (owner == nullptr) {
+        continue;  // dead toy?
+      }
+      auto* arg = dynamic_cast<Argument*>(toy.atom);
+      if (arg == nullptr) {
+        continue;  // not a Syncable / Argument toy
+      }
+
+      std::string arg_name;
+      owner->AtomName(*arg, arg_name);
+
+      toy.local_to_parent = canvas_to_window44;
+      // Find the index of start toy & end toy
+      // Insert the `w` into child_toys, before min(start, end)
+      auto end = arg->Find(*owner);
+      int start_idx = toy_idx[owner.Get()];
+      int end_idx = toy_idx[end.Owner()];
+      int idx = min(start_idx, end_idx);
+      child_toys.insert(child_toys.begin() + idx, &toy);
+    }
+  }
 
   return phase;
 }
@@ -586,9 +624,7 @@ void RootWidget::FillChildren(Vec<Widget*>& out_children) {
     out_children.push_back(toolbar.get());
   }
   out_children.push_back(&zoom_warning);
-  if (root_machine) {
-    out_children.push_back(root_machine.get());
-  }
+  out_children.insert(out_children.end(), child_toys.begin(), child_toys.end());
 }
 
 static void UpdateLocalToParent(RootWidget& root_widget) {

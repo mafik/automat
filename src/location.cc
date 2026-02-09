@@ -664,4 +664,22 @@ void AnimateGrowFrom(Location& source, Location& grown) {
   });
 }
 
+void LocationWidget::OnReparent(ui::Widget& new_parent, SkM44& fix) {
+  // Ugly fix for Location reparenting
+  // This allows LocationWidgets to be created with random parents
+  // These Locations will then be reparented to RootMachine & the transform of object toy
+  // will be adjusted to keep the toy at the same screen position.
+  auto canvas_to_window = ui::root_widget->CanvasToWindow();
+  SkMatrix window_to_canvas;
+  (void)canvas_to_window.invert(&window_to_canvas);
+  fix.postConcat(SkM44(window_to_canvas));
+
+  auto& toy = ToyForObject();
+  toy.local_to_parent.postConcat(fix);
+  {  // Transform velocities
+    auto fix33 = fix.asM33();
+    fix33.mapVector(position_vel);
+    fix33.mapRadius(scale_vel);
+  }
+}
 }  // namespace automat

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <functional>
+
 namespace automat {
 
 struct Object;
@@ -35,6 +37,8 @@ struct Action {
   virtual bool Highlight(Object&, Atom&) const { return false; }
 
   virtual ui::Widget* Widget() { return nullptr; }
+
+  virtual void VisitObjects(std::function<void(Object&)> visitor) {}
 };
 
 struct EmptyAction : Action {

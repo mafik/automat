@@ -256,6 +256,14 @@ struct Widget : Trackable, OptionsProvider {
   // Return true if the widget should be highlighted as draggable.
   virtual bool CanDrag() { return false; }
 
+  // Called when this Widget is reparented.
+  //
+  // The `fix` matrix may be applied to local_to_parent in order to keep the widget at the same
+  // screen position (default implementation does exactly that).
+  virtual void OnReparent(Widget& new_parent, SkM44& fix) { local_to_parent.postConcat(fix); }
+
+  void Reparent(Widget& new_parent);
+
   virtual DropTarget* AsDropTarget() { return nullptr; }
 
   // If the object should be cached into a texture, return its bounds in local coordinates.

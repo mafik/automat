@@ -117,6 +117,12 @@ void DragLocationAction::Update() {
   last_position = current_position;
 }
 
+void DragLocationAction::VisitObjects(std::function<void(Object&)> visitor) {
+  for (auto& loc : locations) {
+    visitor(*loc->object);
+  }
+}
+
 SkPath DragLocationWidget::Shape() const { return SkPath(); }
 
 DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&& locations_arg)
@@ -134,45 +140,12 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
       ERROR << "DragLocationAction for Location without a Widget";
       continue;
     }
-    auto fix = TransformBetween(*lw, *widget);
-
-    auto target_matrix = Location::ToMatrix(location->position, location->scale, lw->LocalAnchor());
-    target_matrix.postConcat(fix);
-
     auto& toy = location->ToyForObject();
-    toy.local_to_parent.postConcat(SkM44(fix));
-    {  // Transform velocities
-      fix.mapVector(lw->position_vel);
-      fix.mapRadius(lw->scale_vel);
-    }
-
-    lw->parent = widget.get();
     lw->local_anchor = pointer.PositionWithin(toy);
     location->WakeToys();
   }
   widget->ValidateHierarchy();
   widget->RedrawThisFrame();
-
-  // Go over every ConnectionWidget that starts / ends in the dragged stack & update its parent
-  for (auto& [key, toy] : ui::root_widget->toys.container) {
-    auto* connection_widget = dynamic_cast<ui::ConnectionWidget*>(toy.get());
-    if (!connection_widget) continue;
-    auto arg = connection_widget->start_weak.Lock();
-    if (!arg) continue;
-    auto& start = *arg.Owner<Object>();
-    auto* start_loc = start.here;
-    Location* end_loc = nullptr;
-    if (auto target = arg->Find(start)) {
-      auto& end = *target.Owner<Object>();
-      end_loc = end.here;
-    }
-
-    for (auto& location : locations) {
-      if (start_loc == location.Get() || end_loc == location.Get()) {
-        if (location->widget) ReparentConnectionWidget(*connection_widget, *location->widget);
-      }
-    }
-  }
 
   // Go over every ConnectionWidget and set their "radar" to 1, if needed.
   for (auto& [key, toy] : ui::root_widget->toys.container) {
@@ -227,12 +200,6 @@ DragLocationAction::~DragLocationAction() {
     }
   }
   ui::root_widget->WakeAnimation();
-}
-
-void DragLocationWidget::FillChildren(Vec<Widget*>& children) {
-  for (auto& location : action.locations) {
-    if (location->widget) children.push_back(location->widget);
-  }
 }
 
 bool IsDragged(const Location& location) {

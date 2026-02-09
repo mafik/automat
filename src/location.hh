@@ -225,6 +225,8 @@ struct LocationWidget : Toy {
   // argument should start.
   // TODO: replace with Toy::ArgStart
   Vec2AndDir ArgStart(Argument&);
+
+  void OnReparent(ui::Widget& new_parent, SkM44& fix) override;
 };
 
 static_assert(ToyMaker<Location>);

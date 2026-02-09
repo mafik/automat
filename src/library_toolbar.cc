@@ -37,13 +37,6 @@ std::unique_ptr<Action> PrototypeButton::FindAction(ui::Pointer& pointer, ui::Ac
   return std::make_unique<DragLocationAction>(pointer, std::move(loc));
 }
 
-// Ptr<Object> Toolbar::Clone() const {
-//   auto new_toolbar = MAKE_PTR(Toolbar);
-//   for (const auto& prototype : prototypes) {
-//     new_toolbar->AddObjectPrototype(prototype);
-//   }
-//   return new_toolbar;
-// }
 constexpr float kMarginBetweenIcons = 1_mm;
 constexpr float kMarginAroundIcons = 7_mm;
 constexpr float kMarginAboveIcons = 8_mm;

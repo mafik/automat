@@ -107,13 +107,11 @@ struct ToyStore {
     if (it == container.end()) {
       auto widget = maker.MakeToy(parent);
       it = container.emplace(std::move(key), std::move(widget)).first;
-    } else if (it->second->parent != parent) {
-      if (it->second->parent == nullptr) {
-        it->second->parent = parent->AcquireTrackedPtr();
+    } else if (auto& toy = *it->second; toy.parent != parent) {
+      if (toy.parent == nullptr) {
+        toy.parent = parent->AcquireTrackedPtr();
       } else {
-        LOG << parent->Name() << " is asking for a widget for " << maker.GetAtom().Name()
-            << " but it's already owned by " << it->second->parent->Name()
-            << ". TODO: figure out what to do in this situation";
+        toy.Reparent(*parent);
       }
     }
     return static_cast<T::Toy&>(*it->second);

@@ -242,7 +242,6 @@ struct Machine : Object, ui::Widget, ui::DropTarget {
 
   SkPath Shape() const override;
 
-  void FillChildren(Vec<Widget*>& children) override;
   void Relocate(Location* parent) override;
 
   string ToStr() const { return f("Machine({})", name); }

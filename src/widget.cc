@@ -51,6 +51,13 @@ Str ToStr(PointerButton btn) {
   }
 }
 
+void Widget::Reparent(Widget& new_parent) {
+  auto fix = TransformBetween(*parent, new_parent);
+  SkM44 fix44(fix);
+  OnReparent(new_parent, fix44);
+  parent = new_parent.AcquireTrackedPtr();
+}
+
 void Widget::PreDrawChildren(SkCanvas& canvas) const {
   for (auto* widget : ranges::reverse_view(Children())) {
     canvas.save();

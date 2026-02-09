@@ -135,13 +135,9 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
     root.black_hole.WakeAnimation();
   }
   for (auto& location : locations) {
-    auto* lw = root.toys.FindOrNull(*location);
-    if (lw == nullptr) {
-      ERROR << "DragLocationAction for Location without a Widget";
-      continue;
-    }
+    auto& lw = root.toys.FindOrMake(*location, &root);
     auto& toy = location->ToyForObject();
-    lw->local_anchor = pointer.PositionWithin(toy);
+    lw.local_anchor = pointer.PositionWithin(toy);
     location->WakeToys();
   }
   widget->ValidateHierarchy();

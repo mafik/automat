@@ -111,6 +111,8 @@ struct ToyStore {
       if (toy.parent == nullptr) {
         toy.parent = parent->AcquireTrackedPtr();
       } else {
+        LOG << "Reparenting " << toy.Name() << " from " << toy.parent->Name() << " to "
+            << parent->Name();
         toy.Reparent(*parent);
       }
     }

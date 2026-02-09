@@ -30,9 +30,12 @@ std::unique_ptr<Action> PrototypeButton::FindAction(ui::Pointer& pointer, ui::Ac
   if (btn != ui::PointerButton::Left) {
     return nullptr;
   }
+  auto obj = proto->Clone();
+  // Create a toy parented to this button. Location will reparent & animate it.
+  pointer.root_widget.toys.FindOrMake(*obj, this);
   auto loc = MAKE_PTR(Location, root_location->AcquireWeakPtr());
-  loc->Create(*proto);
-  pointer.root_widget.toys.FindOrMake(*loc, this);
+  loc->InsertHere(std::move(obj));
+
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
   return std::make_unique<DragLocationAction>(pointer, std::move(loc));
 }

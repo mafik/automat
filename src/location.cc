@@ -151,6 +151,12 @@ void Location::FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_
 LocationWidget::LocationWidget(ui::Widget* parent, Location& loc)
     : Toy(parent, loc, loc), elevation(0), location_weak(loc.AcquireWeakPtr()) {
   loc.widget = this;
+  local_to_parent = SkM44(root_widget->CanvasToWindow());
+  if (auto* obj_toy = ToyStore().FindOrNull(*loc.object)) {
+    // If the object already has a toy, reparent it to keep transform
+    toy = obj_toy;
+    toy->Reparent(*this);
+  }
 }
 
 LocationWidget::~LocationWidget() {
@@ -163,7 +169,7 @@ Object::Toy& LocationWidget::ToyForObject() {
   if (!toy) {
     if (auto loc = LockLocation()) {
       if (loc->object) {
-        toy = &static_cast<Object::Toy&>(ToyStore().FindOrMake(*loc->object, this));
+        toy = &ToyStore().FindOrMake(*loc->object, this);
         loc->scale = toy->GetBaseScale();
         toy->local_to_parent = SkM44(Location::ToMatrix(loc->position, loc->scale, LocalAnchor()));
       }
@@ -665,15 +671,6 @@ void AnimateGrowFrom(Location& source, Location& grown) {
 }
 
 void LocationWidget::OnReparent(ui::Widget& new_parent, SkM44& fix) {
-  // Ugly fix for Location reparenting
-  // This allows LocationWidgets to be created with random parents
-  // These Locations will then be reparented to RootMachine & the transform of object toy
-  // will be adjusted to keep the toy at the same screen position.
-  auto canvas_to_window = ui::root_widget->CanvasToWindow();
-  SkMatrix window_to_canvas;
-  (void)canvas_to_window.invert(&window_to_canvas);
-  fix.postConcat(SkM44(window_to_canvas));
-
   auto& toy = ToyForObject();
   toy.local_to_parent.postConcat(fix);
   {  // Transform velocities

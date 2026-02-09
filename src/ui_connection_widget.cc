@@ -32,17 +32,6 @@ using namespace automat;
 
 namespace automat::ui {
 
-struct DummyRunnable : Object, Runnable {
-  void OnRun(std::unique_ptr<RunTask>&) override { return; }
-  Ptr<Object> Clone() const override { return MAKE_PTR(DummyRunnable); }
-} kDummyRunnable;
-
-static bool IsArgumentOptical(Object& obj, Argument& arg) {
-  Status status;
-  arg.CanConnect(obj, kDummyRunnable, status);
-  return OK(status);
-}
-
 // Helper to get the Location from start_weak
 Location* ConnectionWidget::StartLocation() const {
   if (auto locked = start_weak.Lock()) {
@@ -69,14 +58,7 @@ Location* ConnectionWidget::EndLocation() const {
 }
 
 ConnectionWidget::ConnectionWidget(Widget* parent, Object& start, Argument& arg)
-    : Toy(parent, start, arg), start_weak(start.AcquireWeakPtr(), &arg) {
-  if (IsArgumentOptical(start, arg)) {
-    if (auto* loc = start.MyLocation(); loc && loc->widget) {
-      auto pos_dir = loc->widget->ArgStart(arg);
-      state.emplace(*loc, arg, pos_dir);
-    }
-  }
-}
+    : Toy(parent, start, arg), start_weak(start.AcquireWeakPtr(), &arg) {}
 
 SkPath ConnectionWidget::Shape() const {
   if (state && transparency < 0.99f) {
@@ -334,6 +316,13 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   from_shape.transform(transform_from_to_machine);
 
   UpdateEndpoints(*this, a);
+
+  // Lazy initialization of cable physics state
+  if (!state.has_value() && style == Argument::Style::Cable) {
+    if (auto* loc = a.StartObj()->MyLocation()) {
+      state.emplace(*loc, *a.start_arg, pos_dir);
+    }
+  }
 
   if (a.end_atom) {
     to_shape = a.end_widget->AtomShape(a.end_atom.Get());

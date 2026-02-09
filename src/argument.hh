@@ -131,6 +131,7 @@ struct InlineArgument : Argument {
 
 struct NextArg : Argument {
   StrView Name() const override { return "Next"sv; }
+  Style GetStyle() const override { return Style::Cable; }
   void CanConnect(Object& start, Atom& end, Status&) const override;
   void Connect(Object& start, const NestedPtr<Atom>& end) override;
   NestedPtr<Atom> Find(const Object& start) const override;

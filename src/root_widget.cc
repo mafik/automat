@@ -278,29 +278,34 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
 
   child_toys.clear();
   if (root_machine) {
-    // TODO: this is buggy - replace it with something better...
-    std::map<ReferenceCounted*, int> toy_idx;
+    // TODO: std maps & sets are slow - use something better here
+    //  (ideally something that would avoid allocations)
+    std::multimap<Object*, Toy*> args;
 
-    // Flatten the Toys in front-to-back order.
+    // Flatten the Objects Toys in front-to-back order.
+    Vec<Object*> objects_flat;
     auto VisitObject = [&](Object& o) {
-      auto& loc_widget = toys.FindOrMake(*o.here, this);
-      loc_widget.local_to_parent = canvas_to_window44;
-      toy_idx[&o] = child_toys.size();
-      child_toys.push_back(&loc_widget);
+      objects_flat.push_back(&o);
 
       // Make sure that each argument has a toy
       o.Args([&](Argument& arg) {
+        Toy* toy = nullptr;
         if (auto* syncable = dynamic_cast<Syncable*>(&arg)) {
           auto member_of = SyncMemberOf{o, *syncable};
-          toys.FindOrMake(member_of, this);
+          toy = &toys.FindOrMake(member_of, this);
         } else {
           auto arg_of = arg.Of(o);
-          toys.FindOrMake(arg_of, this);
+          toy = &toys.FindOrMake(arg_of, this);
+        }
+        args.insert(std::make_pair(&o, toy));
+        auto end = arg.Find(o);
+        if (end) {
+          args.insert(std::make_pair(end.Owner<Object>(), toy));
         }
       });
     };
 
-    // First flatten Toys dragged by pointers
+    // First flatten Object Toys dragged by pointers
     for (auto p : pointers) {
       for (auto& a : p->actions) {
         if (a == nullptr) continue;
@@ -308,42 +313,32 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
       }
     }
 
-    // Then flatten the Toys tored by the Machines
+    // Then flatten the Object Toys tored by the Machines
     for (auto& loc : root_machine->locations) {
       VisitObject(*loc->object);
     }
 
-    // Finally, flatten the machine itself
+    // Finally, serialize the objects_flat into child_toys
+    std::set<Toy*> added;
+    for (auto* o : objects_flat) {
+      auto r = args.equal_range(o);
+      for (auto it = r.first; it != r.second; ++it) {
+        auto* arg_toy = it->second;
+        if (!added.contains(arg_toy)) {
+          child_toys.push_back(arg_toy);
+          arg_toy->local_to_parent = canvas_to_window44;
+          added.insert(arg_toy);
+        }
+      }
+      auto& loc_widget = toys.FindOrMake(*o->here, this);
+      loc_widget.local_to_parent = canvas_to_window44;
+      loc_widget.ToyForObject();
+      child_toys.push_back(&loc_widget);
+    }
+
+    // At the very end - add the machine
     // TODO: split Machine & MachineWidget
     child_toys.push_back(root_machine.Get());
-
-    // Insert the toys for arguments
-    for (auto& it : toys.container) {
-      auto& toy = *it.second;
-      if (toy.parent != this) {
-        continue;
-      }
-      auto owner = toy.LockOwner<Object>();
-      if (owner == nullptr) {
-        continue;  // dead toy?
-      }
-      auto* arg = dynamic_cast<Argument*>(toy.atom);
-      if (arg == nullptr) {
-        continue;  // not a Syncable / Argument toy
-      }
-
-      std::string arg_name;
-      owner->AtomName(*arg, arg_name);
-
-      toy.local_to_parent = canvas_to_window44;
-      // Find the index of start toy & end toy
-      // Insert the `w` into child_toys, before min(start, end)
-      auto end = arg->Find(*owner);
-      int start_idx = toy_idx[owner.Get()];
-      int end_idx = toy_idx[end.Owner()];
-      int idx = min(start_idx, end_idx);
-      child_toys.insert(child_toys.begin() + idx, &toy);
-    }
   }
 
   return phase;

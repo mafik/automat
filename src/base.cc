@@ -58,17 +58,16 @@ void Machine::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
       arg.Connect(start, NestedPtr<Atom>(end.AcquirePtr(), &atom));
       connected = true;
       auto& root = FindRootWidget();
-      for (auto& conn : root.connection_widgets) {
-        if (conn->start_weak.OwnerUnsafe<Object>() != &start) continue;
-        if (conn->start_weak.GetUnsafe() != &arg) continue;
+      auto arg_of = arg.Of(start);
+      if (auto* conn = root.toys.FindOrNull(arg_of)) {
         if (end.here->widget && end.here->widget->IsAbove(*conn->parent)) {
           if (auto* lw = dynamic_cast<LocationWidget*>(conn->parent.Get())) {
-            std::erase(lw->overlays, conn.get());
+            std::erase(lw->overlays, conn);
           }
           conn->parent->RedrawThisFrame();
 
           conn->parent = end.here->widget;
-          end.here->widget->overlays.insert(end.here->widget->overlays.begin(), conn.get());
+          end.here->widget->overlays.insert(end.here->widget->overlays.begin(), conn);
           conn->parent->RedrawThisFrame();
         }
       }
@@ -312,7 +311,9 @@ void Machine::DropLocation(Ptr<Location>&& l) {
   // If the other end of the connection is obscured by another location, raise that obscurer
   // (and its whole stack) to the front.
   auto& root = FindRootWidget();
-  for (auto& conn : root.connection_widgets) {
+  for (auto& [key, toy] : root.toys.container) {
+    auto* conn = dynamic_cast<ui::ConnectionWidget*>(toy.get());
+    if (!conn) continue;
     Location* start_loc = conn->StartLocation();
     Location* end_loc = conn->EndLocation();
     Location* other = nullptr;

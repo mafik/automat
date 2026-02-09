@@ -109,48 +109,48 @@ struct ConnectionWidgetRange {
   const Object* obj;
   const Argument* arg;
 
+  using MapType = std::map<ToyStore::Key, std::unique_ptr<Toy>>;
   struct end_iterator {};
 
   struct iterator {
     const Object* obj;
     const Argument* arg;
-    int i;
+    MapType::iterator it;
+    MapType::iterator end_it;
 
-    iterator(const Object* obj, const Argument* arg, int i) : obj(obj), arg(arg), i(i) {
+    iterator(const Object* obj, const Argument* arg, MapType::iterator it, MapType::iterator end_it)
+        : obj(obj), arg(arg), it(it), end_it(end_it) {
       Advance();
     }
 
-    // Function that exits ONLY when the iterator is pointing at a valid connection widget or end of
-    // range.
     void Advance() {
-      auto& widgets = ui::root_widget->connection_widgets;
-      auto size = widgets.size();
-      while (i < size) {
-        ConnectionWidget& w = *widgets[i];
-        if (w.start_weak.OwnerUnsafe<Object>() == obj &&
-            (arg == nullptr || w.start_weak.GetUnsafe() == arg)) {
+      while (it != end_it) {
+        auto* w = dynamic_cast<ConnectionWidget*>(it->second.get());
+        if (w && w->start_weak.OwnerUnsafe<Object>() == obj &&
+            (arg == nullptr || w->start_weak.GetUnsafe() == arg)) {
           return;
         }
-        ++i;
+        ++it;
       }
     }
 
     iterator& operator++() {
-      ++i;
+      ++it;
       Advance();
       return *this;
     }
 
-    bool operator==(const end_iterator&) const {
-      return i == ui::root_widget->connection_widgets.size();
-    }
+    bool operator==(const end_iterator&) const { return it == end_it; }
 
-    ConnectionWidget& operator*() const { return *ui::root_widget->connection_widgets[i]; }
+    ConnectionWidget& operator*() const { return static_cast<ConnectionWidget&>(*it->second); }
   };
 
   ConnectionWidgetRange(const Object* obj, const Argument* arg) : obj(obj), arg(arg) {}
 
-  iterator begin() const { return iterator{obj, arg, 0}; }
+  iterator begin() const {
+    auto& container = ui::root_widget->toys.container;
+    return iterator{obj, arg, container.begin(), container.end()};
+  }
 
   end_iterator end() const { return end_iterator{}; }
 };

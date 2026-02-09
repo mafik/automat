@@ -154,7 +154,9 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
   widget->RedrawThisFrame();
 
   // Go over every ConnectionWidget that starts / ends in the dragged stack & update its parent
-  for (auto& connection_widget : ui::root_widget->connection_widgets) {
+  for (auto& [key, toy] : ui::root_widget->toys.container) {
+    auto* connection_widget = dynamic_cast<ui::ConnectionWidget*>(toy.get());
+    if (!connection_widget) continue;
     auto arg = connection_widget->start_weak.Lock();
     if (!arg) continue;
     auto& start = *arg.Owner<Object>();
@@ -173,7 +175,9 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
   }
 
   // Go over every ConnectionWidget and set their "radar" to 1, if needed.
-  for (auto& connection_widget : ui::root_widget->connection_widgets) {
+  for (auto& [key, toy] : ui::root_widget->toys.container) {
+    auto* connection_widget = dynamic_cast<ui::ConnectionWidget*>(toy.get());
+    if (!connection_widget) continue;
     auto arg = connection_widget->start_weak.Lock();
     if (!arg) continue;
     auto& start = *arg.Owner<Object>();
@@ -217,8 +221,10 @@ DragLocationAction::~DragLocationAction() {
   }
 
   pointer.root_widget.drag_action_count--;
-  for (auto& connection_widget : ui::root_widget->connection_widgets) {
-    connection_widget->animation_state.radar_alpha_target = 0;
+  for (auto& [key, toy] : ui::root_widget->toys.container) {
+    if (auto* connection_widget = dynamic_cast<ui::ConnectionWidget*>(toy.get())) {
+      connection_widget->animation_state.radar_alpha_target = 0;
+    }
   }
   ui::root_widget->WakeAnimation();
 }

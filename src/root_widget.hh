@@ -146,7 +146,6 @@ struct RootWidget final : Widget, DropTarget {
   // TODO: Remove (use window.px_per_meter instead)
   float display_pixels_per_meter = 96 / kMetersPerInch;  // default value assumes 96 DPI
   unique_ptr<Toolbar> toolbar;
-  std::vector<unique_ptr<ui::ConnectionWidget>> connection_widgets;
 
   float zoom = 1;
   float zoom_target = 1;

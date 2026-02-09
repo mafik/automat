@@ -8,11 +8,12 @@
 
 - `python run.py "link automat"` - Build automat binary without running it (for testing compilation) (build/fast/automat)
 - `python run.py "link automat" --variant=debug` - Build debug variant - for running under GDB (build/debug/automat)
-- `python run.py "link automat" --variant=release` - Build release variant - it's actually the fastest variant to build for testing (build/debug/automat)
+- `python run.py "link automat" --variant=release` - Build release variant - fastest variant to build for testing (build/release/automat)
 - `python run.py compile-commands.json` - Generate `compile_commands.json` for LSP support
 - `python run.py screenshot` - Take a screenshot of running automat (saved to `build/{variant}/screenshot.png`)
 - Build dashboard available at http://localhost:8000/ when running build commands
 - Custom build system written in Python, located in `run_py/` directory
+- Build variants: `fast` (default), `debug`, `release`, `asan`, `tsan`, `ubsan`
 
 ### Important Notes
 
@@ -21,18 +22,25 @@
 
 ## Architecture Overview
 
-Automat is a C++ application for semi-autonomous game automation with a layered architecture:
+Automat is a C++ application for semi-autonomous automation with a layered architecture:
 
 ### Core Architecture Layers
 
 1. **Objects Layer** - Heart of Automat containing virtual devices that can connect to each other
    - Located in `src/library*.cc/hh`
    - Objects use typed connections defined by `Argument` class
+   - Objects inherit `ReferenceCounted` (thread-safe ref-counted via `Ptr<T>`) and `ToyMakerMixin`
    - Key files: `src/object.hh`, `src/argument.hh`, `src/base.hh`
 
-2. **Widgets Layer** - UI rendering using Skia graphics library
-   - Files starting with `ui_*` in `src/`
-   - Heavy use of Skia for cross-platform rendering
+2. **Toys Layer** - UI display widgets, separated from Object logic
+   - **`automat::Toy`** (`src/toy.hh`) — base for all display widgets, inherits `ui::Widget`
+   - **`Object::Toy`** (`src/object.hh`) — base for Object-specific widgets (Shape, Draw, ArgStart, etc.)
+   - **`ToyStore`** (`src/toy.hh`) — manages Toy lifetimes, keyed by `(WeakPtr<owner>, Atom*)`
+   - **`ToyMaker`** concept — any `Part` with a `Toy` type and `MakeToy(Widget*)` method
+   - Widget struct definitions typically live in .cc files; headers only declare `MakeToy`
+   - `ConnectionWidget` (`src/ui_connection_widget.hh/cc`) — displays argument connections
+   - `SyncConnectionWidget` (`src/sync.hh/cc`) — displays sync belts between Gear and members
+   - `LocationWidget` (`src/location.cc`) — manages position/scale animation for a Location
 
 3. **Platform Frontends** - OS-specific window management
    - Windows: `src/win32_window.cc`
@@ -41,10 +49,20 @@ Automat is a C++ application for semi-autonomous game automation with a layered 
 
 ### Key Components
 
-- **Location** (`src/location.hh`) - Central object storage and interaction API
-- **Machine** (`src/base.hh`) - Combines multiple objects into a single unit
+- **Location** (`src/location.hh`) - Owns an Object and tracks its position/scale within a Machine
+- **Machine** (`src/base.hh`) - Container for Locations; provides canvas, drop target, connection routing
+- **ToyStore** (`src/toy.hh`) - Maps `(owner, atom)` keys to Toy widgets; lives on `RootWidget`
+- **Argument** (`src/argument.hh`) - Typed connection between Objects; `ArgumentOf` is its ToyMaker
+- **Syncable** (`src/sync.hh`) - Sync interface allowing Objects to act as one via a shared Gear
 - **Custom Build System** - Python-based build system in `run_py/`
 - **Extensions** - Python modules in `src/*.py` that extend the build system
+
+### VM→UI Communication
+
+Objects (multi-threaded) notify Toys (UI-thread) via `wake_counter`:
+- Object bumps `wake_counter.fetch_add(1, relaxed)` on state change
+- `ToyStore::WakeUpdatedToys()` scans each frame, comparing counters and calling `WakeAnimation()`
+- Toy pulls latest state in `Tick()` by locking the Object
 
 ## Project Structure
 
@@ -76,7 +94,7 @@ Automat is a C++ application for semi-autonomous game automation with a layered 
 ### Code Style
 
 - Modern C++ (C++26) with custom extensions
-- Uses custom smart pointers and containers
+- Uses custom smart pointers (`Ptr<T>`, `WeakPtr<T>`, `NestedPtr<T>`) and containers (`Vec<T>`)
 - Files use `#pragma maf` directives for build system integration
 - Static linking preferred for single-binary distribution
 - **Build Variant Detection**: Include `src/build_variant.hh` to access compile-time build variant constants:

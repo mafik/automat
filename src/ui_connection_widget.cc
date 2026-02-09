@@ -641,16 +641,8 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() {
 }
 
 ConnectionWidget* ConnectionWidget::FindOrNull(Object& obj, Argument& arg) {
-  for (auto& connection_widget : root_widget->connection_widgets) {
-    if (connection_widget->start_weak.GetUnsafe() != &arg) {
-      continue;
-    }
-    if (connection_widget->start_weak.OwnerUnsafe<Object>() != &obj) {
-      continue;
-    }
-    return connection_widget.get();
-  }
-  return nullptr;
+  auto arg_of = arg.Of(obj);
+  return root_widget->toys.FindOrNull(arg_of);
 }
 
 }  // namespace automat::ui

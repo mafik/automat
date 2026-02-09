@@ -22,6 +22,7 @@
 #include "object.hh"
 #include "pointer.hh"
 #include "prototypes.hh"
+#include "sync.hh"
 #include "time.hh"
 #include "touchpad.hh"
 #include "ui_connection_widget.hh"
@@ -105,24 +106,34 @@ void RootWidget::ZoomWarning::Draw(SkCanvas& canvas) const {
 
 static SkColor background_color = SkColorSetRGB(0x80, 0x80, 0x80);
 
-static void UpdateConnectionWidgets(RootWidget& root_widget) {
+static void UpdateArgWidgets(RootWidget& root_widget) {
   if (root_machine == nullptr) {
     return;
   }
   for (auto& loc : root_machine->locations) {
-    if (loc->object) {
-      loc->object->Args([&](Argument& arg) {
-        // Check if this argument already has a widget.
-        if (ConnectionWidget::FindOrNull(*loc->object, arg)) {
+    if (!loc->object) continue;
+    auto& loc_widget = root_widget.toys.FindOrMake(*loc, root_machine.Get());
+    loc->object->Args([&](Argument& arg) {
+      Toy* w = nullptr;
+      if (auto* syncable = dynamic_cast<Syncable*>(&arg)) {
+        // if (!syncable->end) return;
+        auto member_of = SyncMemberOf{*loc->object, *syncable};
+        if (root_widget.toys.FindOrNull(member_of)) {
           return;
         }
-        // Create a new widget.
-        auto& loc_widget = root_widget.toys.FindOrMake(*loc, root_machine.Get());
-        auto toy = arg.Of(*loc->object).MakeToy(&loc_widget);
-        loc_widget.overlays.push_back(toy.get());
-        root_widget.connection_widgets.emplace_back(static_cast<ConnectionWidget*>(toy.release()));
-      });
-    }
+        w = &root_widget.toys.FindOrMake(member_of, &loc_widget);
+      } else {
+        auto arg_of = arg.Of(*loc->object);
+        if (root_widget.toys.FindOrNull(arg_of)) {
+          return;
+        }
+        w = &root_widget.toys.FindOrMake(arg_of, &loc_widget);
+      }
+      if (std::find(loc_widget.overlays.begin(), loc_widget.overlays.end(), w) ==
+          loc_widget.overlays.end()) {
+        loc_widget.overlays.push_back(w);
+      }
+    });
   }
 }
 
@@ -295,7 +306,7 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
     }
   }
 
-  UpdateConnectionWidgets(*this);
+  UpdateArgWidgets(*this);
 
   return phase;
 }
@@ -557,7 +568,7 @@ void RootWidget::DropLocation(Ptr<Location>&& location) {
 }
 
 void RootWidget::FillChildren(Vec<Widget*>& out_children) {
-  out_children.reserve(3 + pointers.size() + connection_widgets.size());
+  out_children.reserve(3 + pointers.size());
 
   for (auto& child : children) {
     out_children.push_back(child.get());

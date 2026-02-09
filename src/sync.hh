@@ -150,4 +150,28 @@ Ptr<Gear> FindGearOrMake(NestedPtr<Syncable>& source);
 
 Ptr<Gear> FindGearOrNull(NestedPtr<Syncable>&);
 
+// Widget that draws one belt connection from a Gear to a synced member.
+struct SyncConnectionWidget : Toy {
+  Rect bounds;
+  SkPath end_shape;
+  Vec2 end{};
+
+  SyncConnectionWidget(ui::Widget* parent, Object& object, Syncable& syncable);
+
+  SkPath Shape() const override;
+  animation::Phase Tick(time::Timer& t) override;
+  void Draw(SkCanvas& canvas) const override;
+  Optional<Rect> TextureBounds() const override;
+};
+
+// ToyMaker for belt widgets that connect a Syncable to a Gear.
+struct SyncMemberOf {
+  using Toy = SyncConnectionWidget;
+  Object& object;
+  Syncable& syncable;
+  ReferenceCounted& GetOwner() { return object; }
+  Atom& GetAtom() { return syncable; }
+  std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
+};
+
 }  // namespace automat

@@ -62,13 +62,11 @@ Location::~Location() {
     other->update_observers.erase(this);
   }
   CancelScheduledAt(*this);
-  if (root_widget) {
-    for (int i = 0; i < root_widget->connection_widgets.size(); ++i) {
-      if (root_widget->connection_widgets[i]->StartLocation() == this) {
-        root_widget->connection_widgets.erase(root_widget->connection_widgets.begin() + i);
-        --i;
-      }
-    }
+  if (root_widget && object) {
+    object->Args([&](Argument& arg) {
+      auto arg_of = arg.Of(*object);
+      root_widget->toys.container.erase(ToyStore::MakeKey(arg_of));
+    });
   }
 }
 
@@ -420,20 +418,26 @@ std::unique_ptr<Action> LocationWidget::FindAction(ui::Pointer& p, ui::ActionTri
 }
 
 void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const {
-  // We don't have backlinks to connection widgets so we have to iterate over all connection widgets
-  // in root_widget and check if they're connected to this location.
-  for (auto& w : ui::root_widget->connection_widgets) {
-    if (w->start_weak.OwnerUnsafe<Object>() ==
-        object.Get()) {  // updates all outgoing connection widgets
-      if (moved && !value_changed) {
-        w->FromMoved();
-      } else {
-        w->WakeAnimation();
-        if (w->state) {
-          w->state->stabilized = false;
-        }
+  if (!ui::root_widget || !object) return;
+  // Outgoing: iterate this object's args and look up each in ToyStore
+  object->Args([&](Argument& arg) {
+    auto arg_of = arg.Of(*object);
+    auto* w = ui::root_widget->toys.FindOrNull(arg_of);
+    if (!w) return;
+    if (moved && !value_changed) {
+      w->FromMoved();
+    } else {
+      w->WakeAnimation();
+      if (w->state) {
+        w->state->stabilized = false;
       }
-    } else if (w->EndLocation() == this) {
+    }
+  });
+  // Incoming: iterate all ToyStore entries to find ConnectionWidgets pointing to this location
+  for (auto& [key, toy] : ui::root_widget->toys.container) {
+    auto* w = dynamic_cast<ui::ConnectionWidget*>(toy.get());
+    if (!w) continue;
+    if (w->EndLocation() == this) {
       w->WakeAnimation();
     }
   }

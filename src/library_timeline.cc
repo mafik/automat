@@ -2454,7 +2454,7 @@ static void WakeRunButton(Timeline& timeline) {
 }
 
 void Timeline::Running::OnCancel() {
-  auto& t = GetTimeline();
+  auto& t = Timeline();
   if (t.state == kPlaying) {
     TimelineCancelScheduled(t);
     t.state = kPaused;
@@ -2467,7 +2467,7 @@ void Timeline::Running::OnCancel() {
 
 void Timeline::Run::OnRun(std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("Timeline");
-  auto& t = GetTimeline();
+  auto& t = Timeline();
   if (t.state != kPaused) {
     return;
   }

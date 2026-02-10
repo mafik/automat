@@ -1101,7 +1101,7 @@ void TesseractOCR::Atoms(const std::function<void(Atom&)>& cb) {
 
 void TesseractOCR::Run::OnRun(std::unique_ptr<RunTask>&) {
   ZoneScopedN("TesseractOCR");
-  auto& t = GetTesseractOCR();
+  auto& t = TesseractOCR();
   auto image_obj = image_arg.ObjectOrNull(t);
   auto text_obj = text_arg.ObjectOrNull(t);
 
@@ -1152,7 +1152,7 @@ void TesseractOCR::Run::OnRun(std::unique_ptr<RunTask>&) {
     monitor.cancel_this = this;
     monitor.progress_callback2 = [](tesseract::ETEXT_DESC* etext, int left, int right, int top,
                                     int bottom) {
-      auto self = (TesseractOCR*)etext->cancel_this;
+      auto self = (struct TesseractOCR*)etext->cancel_this;
       if (self->status_mutex.try_lock()) {
         self->status_rect = Rect(left, bottom, right, top);
         self->status_progress_ratio = etext->progress / 100.0f;

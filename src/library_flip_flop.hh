@@ -3,6 +3,7 @@
 #pragma once
 
 #include "base.hh"
+#include "parent_ref.hh"
 #include "widget.hh"
 
 namespace automat::library {
@@ -13,21 +14,15 @@ struct FlipFlop : Object {
   struct Flip : Runnable {
     void OnRun(std::unique_ptr<RunTask>&) override;
 
-    FlipFlop& GetFlipFlop() const {
-      return *reinterpret_cast<FlipFlop*>(reinterpret_cast<intptr_t>(this) -
-                                          offsetof(FlipFlop, flip));
-    }
+    PARENT_REF(FlipFlop, flip)
   } flip;
 
   struct State : OnOff {
-    bool IsOn() const override { return GetFlipFlop().current_state; }
+    bool IsOn() const override { return FlipFlop().current_state; }
     void OnTurnOn() override;
     void OnTurnOff() override;
 
-    FlipFlop& GetFlipFlop() const {
-      return *reinterpret_cast<FlipFlop*>(reinterpret_cast<intptr_t>(this) -
-                                          offsetof(FlipFlop, on_off));
-    }
+    PARENT_REF(FlipFlop, on_off)
   } on_off;
 
   FlipFlop();

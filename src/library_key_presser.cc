@@ -222,7 +222,7 @@ void KeyPresser::SetKey(ui::AnsiKey k) {
 
 void KeyPresser::State::OnTurnOn() {
   audio::Play(embedded::assets_SFX_key_down_wav);
-  auto& kp = GetKeyPresser();
+  auto& kp = KeyPresser();
   if (kp.key_pressed) {
     return;
   }
@@ -233,7 +233,7 @@ void KeyPresser::State::OnTurnOn() {
 
 void KeyPresser::State::OnTurnOff() {
   audio::Play(embedded::assets_SFX_key_up_wav);
-  auto& kp = GetKeyPresser();
+  auto& kp = KeyPresser();
   if (!kp.key_pressed) {
     return;
   }
@@ -242,9 +242,9 @@ void KeyPresser::State::OnTurnOff() {
   kp.WakeToys();
 }
 
-void KeyPresser::State::OnSync() { GetKeyPresser().monitoring.TurnOn(); }
+void KeyPresser::State::OnSync() { KeyPresser().monitoring.TurnOn(); }
 
-void KeyPresser::State::OnUnsync() { GetKeyPresser().monitoring.TurnOff(); }
+void KeyPresser::State::OnUnsync() { KeyPresser().monitoring.TurnOff(); }
 
 void KeyPresser::SerializeState(ObjectSerializer& writer) const {
   writer.Key("key");
@@ -288,17 +288,17 @@ void KeyPresser::KeyloggerKeyUp(ui::Key key_up) {
 
 void KeyPresser::KeyloggerOnRelease(const ui::Keylogging&) { keylogging = nullptr; }
 
-bool KeyPresser::Monitoring::IsOn() const { return GetKeyPresser().keylogging != nullptr; };
+bool KeyPresser::Monitoring::IsOn() const { return KeyPresser().keylogging != nullptr; };
 
 void KeyPresser::Monitoring::OnTurnOn() {
-  auto& key_presser = GetKeyPresser();
+  auto& key_presser = KeyPresser();
   if (key_presser.keylogging == nullptr) {
     ui::root_widget->window->BeginLogging(&key_presser, &key_presser.keylogging, nullptr, nullptr);
   }
 }
 
 void KeyPresser::Monitoring::OnTurnOff() {
-  auto& key_presser = GetKeyPresser();
+  auto& key_presser = KeyPresser();
   if (key_presser.keylogging) {
     key_presser.keylogging->Release();
   }

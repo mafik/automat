@@ -79,10 +79,10 @@ void HotKey::Atoms(const std::function<void(Atom&)>& cb) {
   cb(next_arg);
 }
 
-bool HotKey::Enabled::IsOn() const { return GetHotKey().hotkey != nullptr; }
+bool HotKey::Enabled::IsOn() const { return HotKey().hotkey != nullptr; }
 
 void HotKey::Enabled::OnTurnOn() {
-  auto& hk = GetHotKey();
+  auto& hk = HotKey();
   if (hk.hotkey) {  // just a sanity check, we should never get On multiple times in a row
     hk.hotkey->Release();
   }
@@ -99,7 +99,7 @@ void HotKey::Enabled::OnTurnOn() {
 }
 
 void HotKey::Enabled::OnTurnOff() {
-  auto& hk = GetHotKey();
+  auto& hk = HotKey();
   if (hk.hotkey) {
     hk.hotkey->Release();
     hk.WakeToys();

@@ -7,6 +7,7 @@
 #include <include/effects/SkRuntimeEffect.h>
 
 #include "base.hh"
+#include "parent_ref.hh"
 
 namespace automat::library::mouse {
 
@@ -76,22 +77,16 @@ struct MouseButtonPresser : Object {
 
     void OnRun(std::unique_ptr<RunTask>&) override;
 
-    MouseButtonPresser& GetMouseButtonPresser() const {
-      return *reinterpret_cast<MouseButtonPresser*>(reinterpret_cast<intptr_t>(this) -
-                                                    offsetof(MouseButtonPresser, click));
-    }
+    PARENT_REF(MouseButtonPresser, click)
   } click;
 
   struct State : OnOff {
     StrView Name() const override { return "State"sv; }
-    bool IsOn() const override { return GetMouseButtonPresser().down; }
+    bool IsOn() const override { return MouseButtonPresser().down; }
     void OnTurnOn() override;
     void OnTurnOff() override;
 
-    MouseButtonPresser& GetMouseButtonPresser() const {
-      return *reinterpret_cast<MouseButtonPresser*>(reinterpret_cast<intptr_t>(this) -
-                                                    offsetof(MouseButtonPresser, state));
-    }
+    PARENT_REF(MouseButtonPresser, state)
   } state;
 
   MouseButtonPresser(ui::PointerButton button);

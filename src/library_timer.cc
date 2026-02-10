@@ -199,7 +199,7 @@ void Timer::OnRun(std::unique_ptr<RunTask>& run_task) {
 }
 
 void Timer::TimerRunning::OnCancel() {
-  auto& timer = GetTimer();
+  auto& timer = Timer();
   if (timer.here) {
     CancelScheduledAt(*timer.here, timer.start_time + timer.duration.value);
   }

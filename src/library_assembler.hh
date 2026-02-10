@@ -11,6 +11,7 @@
 #include "library_instruction.hh"
 #include "machine_code.hh"
 #include "object.hh"
+#include "parent_ref.hh"
 #include "shared_or_weak.hh"
 #include "status.hh"
 
@@ -104,10 +105,7 @@ struct Assembler : Object, Container {
 
     void OnCancel() override;
 
-    Assembler& GetAssembler() const {
-      return *reinterpret_cast<Assembler*>(reinterpret_cast<intptr_t>(this) -
-                                           offsetof(Assembler, running));
-    }
+    PARENT_REF(Assembler, running)
   } running;
 
   Ptr<Object> Clone() const override;

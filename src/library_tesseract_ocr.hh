@@ -6,6 +6,7 @@
 #include <tesseract/baseapi.h>
 
 #include "base.hh"
+#include "parent_ref.hh"
 #include "str.hh"
 
 namespace automat::library {
@@ -17,10 +18,7 @@ struct TesseractOCR : public Object {
   struct Run : Runnable {
     void OnRun(std::unique_ptr<RunTask>&) override;
 
-    TesseractOCR& GetTesseractOCR() const {
-      return *reinterpret_cast<TesseractOCR*>(reinterpret_cast<intptr_t>(this) -
-                                              offsetof(TesseractOCR, run));
-    }
+    PARENT_REF(TesseractOCR, run)
   } run;
 
   // Guards access to the status variables

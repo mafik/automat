@@ -304,7 +304,7 @@ void Assembler::RunMachineCode(library::Instruction* entry_point,
 
 void Assembler::Running::OnCancel() {
   Status status;
-  auto& as = GetAssembler();
+  auto& as = Assembler();
   as.mc_controller->Cancel(status);
   if (!OK(status)) {
     ERROR << "Failed to cancel Assembler: " << status;

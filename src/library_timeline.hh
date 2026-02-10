@@ -6,6 +6,7 @@
 #include <memory>
 
 #include "base.hh"
+#include "parent_ref.hh"
 #include "pointer.hh"
 #include "run_button.hh"
 #include "time.hh"
@@ -104,10 +105,7 @@ struct Timeline : Object, SignalNext, TimerNotificationReceiver {
 
     void OnRun(std::unique_ptr<RunTask>&) override;
 
-    Timeline& GetTimeline() const {
-      return *reinterpret_cast<Timeline*>(reinterpret_cast<intptr_t>(this) -
-                                          offsetof(Timeline, run));
-    }
+    PARENT_REF(Timeline, run)
   } run;
 
   struct Running : LongRunning {
@@ -115,10 +113,7 @@ struct Timeline : Object, SignalNext, TimerNotificationReceiver {
 
     void OnCancel() override;
 
-    Timeline& GetTimeline() const {
-      return *reinterpret_cast<Timeline*>(reinterpret_cast<intptr_t>(this) -
-                                          offsetof(Timeline, running));
-    }
+    PARENT_REF(Timeline, running)
   } running;
 
   Vec<std::unique_ptr<TrackArgument>> tracks;

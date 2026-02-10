@@ -4,6 +4,7 @@
 
 #include "base.hh"
 #include "keyboard.hh"
+#include "parent_ref.hh"
 
 namespace automat::library {
 
@@ -23,10 +24,7 @@ struct HotKey : Object, SignalNext, ui::KeyGrabber {
     void OnTurnOn() override;
     void OnTurnOff() override;
 
-    HotKey& GetHotKey() const {
-      return *reinterpret_cast<HotKey*>(reinterpret_cast<intptr_t>(this) -
-                                        offsetof(HotKey, enabled));
-    }
+    PARENT_REF(HotKey, enabled)
   } enabled;
 
   HotKey();

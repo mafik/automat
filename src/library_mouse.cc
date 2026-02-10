@@ -900,20 +900,20 @@ std::unique_ptr<Object::Toy> MouseButtonPresser::MakeToy(ui::Widget* parent) {
 void MouseButtonPresser::Click::OnRun(std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("MouseButtonPresser");
   audio::Play(embedded::assets_SFX_mouse_down_wav);
-  MouseButtonPresser& presser = GetMouseButtonPresser();
+  auto& presser = MouseButtonPresser();
   SendMouseButtonEvent(presser.button, true);
   SendMouseButtonEvent(presser.button, false);
 }
 
 void MouseButtonPresser::State::OnTurnOn() {
   audio::Play(embedded::assets_SFX_mouse_down_wav);
-  MouseButtonPresser& presser = GetMouseButtonPresser();
+  auto& presser = MouseButtonPresser();
   SendMouseButtonEvent(presser.button, true);
   presser.WakeToys();
 }
 void MouseButtonPresser::State::OnTurnOff() {
   audio::Play(embedded::assets_SFX_mouse_up_wav);
-  MouseButtonPresser& presser = GetMouseButtonPresser();
+  auto& presser = MouseButtonPresser();
   SendMouseButtonEvent(presser.button, false);
   presser.WakeToys();
 }

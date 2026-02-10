@@ -496,7 +496,7 @@ void Window::Atoms(const std::function<void(Atom&)>& cb) {
 
 void Window::Capture::OnRun(std::unique_ptr<RunTask>&) {
   ZoneScopedN("Window");
-  auto& w = GetWindow();
+  auto& w = Window();
 #ifdef __linux__
   {
     auto impl_lock = std::lock_guard(w.impl->mutex);

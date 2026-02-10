@@ -3,6 +3,7 @@
 #pragma once
 
 #include "base.hh"
+#include "parent_ref.hh"
 #include "sync.hh"
 #include "time.hh"
 #include "timer_thread.hh"
@@ -30,11 +31,8 @@ struct Timer : Object, Runnable, TimerNotificationReceiver {
     EndGuard,
   } range = Range::Seconds;
   struct TimerRunning : LongRunning {
-    Timer& GetTimer() const {
-      return *reinterpret_cast<Timer*>(reinterpret_cast<intptr_t>(this) -
-                                       offsetof(Timer, timer_running));
-    }
-    Object* OnFindRunnable() override { return &GetTimer(); }
+    PARENT_REF(Timer, timer_running)
+    Object* OnFindRunnable() override { return &Timer(); }
     void OnCancel() override;
   } timer_running;
 

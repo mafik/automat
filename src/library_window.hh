@@ -4,6 +4,7 @@
 
 #include "base.hh"
 #include "image_provider.hh"
+#include "parent_ref.hh"
 #include "str.hh"
 #include "time.hh"
 
@@ -20,10 +21,7 @@ struct Window : public Object, ImageProvider {
 
     void OnRun(std::unique_ptr<RunTask>&) override;
 
-    Window& GetWindow() const {
-      return *reinterpret_cast<Window*>(reinterpret_cast<intptr_t>(this) -
-                                        offsetof(Window, capture));
-    }
+    PARENT_REF(Window, capture)
   } capture;
 
   struct Impl;

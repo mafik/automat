@@ -4,6 +4,7 @@
 
 #include "base.hh"
 #include "keyboard.hh"
+#include "parent_ref.hh"
 
 namespace automat::library {
 
@@ -18,35 +19,26 @@ struct KeyPresser : Object, ui::Keylogger {
     bool IsOn() const override;
     void OnTurnOn() override;
     void OnTurnOff() override;
-    KeyPresser& GetKeyPresser() const {
-      return *reinterpret_cast<KeyPresser*>(reinterpret_cast<intptr_t>(this) -
-                                            offsetof(KeyPresser, monitoring));
-    }
+    PARENT_REF(KeyPresser, monitoring)
   } monitoring;
 
   struct State : OnOff {
     StrView Name() const override { return "State"sv; }
-    bool IsOn() const override { return GetKeyPresser().key_pressed; }
+    bool IsOn() const override { return KeyPresser().key_pressed; }
     void OnTurnOn() override;
     void OnTurnOff() override;
 
     void OnSync() override;
     void OnUnsync() override;
-    KeyPresser& GetKeyPresser() const {
-      return *reinterpret_cast<KeyPresser*>(reinterpret_cast<intptr_t>(this) -
-                                            offsetof(KeyPresser, state));
-    }
+    PARENT_REF(KeyPresser, state)
   } state;
 
   struct Run : Runnable {
     virtual void OnRun(std::unique_ptr<RunTask>& run_task) override {
-      GetKeyPresser().state.OnTurnOn();
+      KeyPresser().state.OnTurnOn();
     }
 
-    KeyPresser& GetKeyPresser() const {
-      return *reinterpret_cast<KeyPresser*>(reinterpret_cast<intptr_t>(this) -
-                                            offsetof(KeyPresser, run));
-    }
+    PARENT_REF(KeyPresser, run)
   } run;
 
   KeyPresser(ui::AnsiKey = ui::AnsiKey::F);

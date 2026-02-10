@@ -8,6 +8,7 @@
 
 #include "part.hh"
 #include "ptr.hh"
+#include "time.hh"
 #include "widget.hh"
 
 namespace automat::ui {
@@ -86,7 +87,7 @@ struct ToyStore {
 
   // Scan all toys for owners whose generation has changed. Wake those toys.
   // Called once per frame on the UI thread.
-  void WakeUpdatedToys() {
+  void WakeUpdatedToys(time::SteadyPoint last_wake) {
     for (auto& [key, toy] : container) {
       auto& [owner_weak, atom] = key;
       // Safe to read through WeakPtr: memory survives until weak_refs hits 0.
@@ -95,7 +96,7 @@ struct ToyStore {
       uint32_t current = rc->wake_counter.load(std::memory_order_relaxed);
       if (current != toy->observed_notify_counter) {
         toy->observed_notify_counter = current;
-        toy->WakeAnimation();
+        toy->WakeAnimationAt(last_wake);
       }
     }
   }

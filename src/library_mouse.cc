@@ -34,6 +34,7 @@
 #include "global_resources.hh"
 #include "log.hh"
 #include "math.hh"
+#include "root_widget.hh"
 #include "svg.hh"
 #include "textures.hh"
 #include "widget.hh"
@@ -92,9 +93,12 @@ const char* ButtonEnumToName(ui::PointerButton button) {
 struct MakeObjectOption : Option {
   Ptr<Object> proto;
   Dir dir;
-  MakeObjectOption(Ptr<Object> proto, Dir dir = DIR_NONE) : proto(proto), dir(dir) {}
+  TrackedPtr<ui::Widget> icon;
+  MakeObjectOption(Ptr<Object> proto, Dir dir = DIR_NONE) : proto(proto), dir(dir), icon(nullptr) {}
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
-    return proto->MakeToy(parent);
+    auto new_icon = proto->MakeToy(parent);
+    icon = new_icon.get();
+    return new_icon;
   }
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<MakeObjectOption>(proto, dir);
@@ -104,8 +108,10 @@ struct MakeObjectOption : Option {
     // The icon is the right widget type for the given proto, so theoretically it could be
     // reattached to the newly cloned object.
     // This could be even handled by the "Create" method - it could take existing widget to "adopt".
-    auto loc = MAKE_PTR(Location, root_location->AcquireWeakPtr());
-    loc->Create(*proto);
+    auto loc = MAKE_PTR(Location, root_location);
+    auto obj = proto->Clone();
+    pointer.root_widget.toys.FindOrMake(*obj, icon.get());
+    loc->InsertHere(std::move(obj));
     audio::Play(embedded::assets_SFX_toolbar_pick_wav);
     auto action = std::make_unique<DragLocationAction>(pointer, std::move(loc));
     // Resetting the anchor makes the object dragged by the center point

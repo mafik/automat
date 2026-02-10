@@ -167,12 +167,7 @@ struct RootWidget final : Widget, DropTarget {
   Vec<Pointer*> pointers;
   Keyboard keyboard;
 
-  // Child widgets, stored in front-to-back order.
-  //
-  // TODO: move all children into this vector
-  Vec<std::unique_ptr<Widget>> children;
-
-  Vec<Widget*> child_toys;
+  Vec<Widget*> children;
 
   std::mutex mutex;
 };

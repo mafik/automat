@@ -116,13 +116,6 @@ struct Widget : Trackable, OptionsProvider {
   // The time when the Tick was last called. Updated right after Tick.
   mutable time::SteadyPoint last_tick_time;
 
-  // Set to true if the widget should be redrawn (without the need for animation `Tick`).
-  // This may be the case when its children are changed but its animation state is otherwise
-  // unaffected.
-  bool needs_draw = false;
-
-  bool redraw_this_frame = false;
-
   // Force the widget to be redrawn ASAP (without offscreen rendering).
   //
   // This will not call `Tick`. Also call `WakeAnimation` if you want to wake up the animation.
@@ -145,6 +138,16 @@ struct Widget : Trackable, OptionsProvider {
   SkMatrix rendered_matrix;
   bool rendering = false;  // Whether the widget is currently being rendered by the client.
   bool rendering_to_screen = false;  // Whether the current render job is going to be presented.
+
+  // Set to true if the widget should be redrawn (without the need for animation `Tick`).
+  // This may be the case when its children are changed but its animation state is otherwise
+  // unaffected.
+  bool needs_draw = false;
+
+  bool redraw_this_frame = false;
+
+  // Can be used by parent to store some data. Helps in avoiding allocations
+  int index;
 
   RootWidget& FindRootWidget() const;
   ToyStore& ToyStore() const;

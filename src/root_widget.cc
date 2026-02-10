@@ -267,44 +267,52 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
 
   auto canvas_to_window44 = SkM44(CanvasToWindow());
 
-  if (root_machine) {
-    root_machine->local_to_parent = canvas_to_window44;
-  }
-  keyboard.local_to_parent = canvas_to_window44;
-  for (auto& pointer : pointers) {
-    if (auto* widget = pointer->GetWidget()) {
-      widget->local_to_parent = canvas_to_window44;
-    }
-  }
-
-  child_toys.clear();
-  if (root_machine) {
+  {  // Update `children`
+    // Make sure that all Arguments are raised above their endpoints
     // TODO: std maps & sets are slow - use something better here
     //  (ideally something that would avoid allocations)
-    std::multimap<Object*, Toy*> args;
+    std::multimap<Widget*, Widget*> widgets_over;
 
-    // Flatten the Objects Toys in front-to-back order.
-    Vec<Object*> objects_flat;
+    auto GetLocWidget = [&](Object& o) {
+      auto& w = toys.FindOrMake(*o.here, this);
+      w.local_to_parent = canvas_to_window44;
+      w.ToyForObject();
+      return &w;
+    };
+
+    // Temporary storage for children in front-to-back order
+    // Doesn't include Arguments raised through 'widgets_over'
+    Vec<Widget*> children_tmp;
+    children_tmp.reserve(children.size());
+
     auto VisitObject = [&](Object& o) {
-      objects_flat.push_back(&o);
+      auto* start_loc_widget = GetLocWidget(o);
 
       // Make sure that each argument has a toy
       o.Args([&](Argument& arg) {
-        Toy* toy = nullptr;
+        Toy* arg_toy = nullptr;
         if (auto* syncable = dynamic_cast<Syncable*>(&arg)) {
           auto member_of = SyncMemberOf{o, *syncable};
-          toy = &toys.FindOrMake(member_of, this);
+          arg_toy = &toys.FindOrMake(member_of, this);
         } else {
           auto arg_of = arg.Of(o);
-          toy = &toys.FindOrMake(arg_of, this);
+          arg_toy = &toys.FindOrMake(arg_of, this);
         }
-        args.insert(std::make_pair(&o, toy));
+        arg_toy->local_to_parent = canvas_to_window44;
+        children_tmp.push_back(arg_toy);
         auto end = arg.Find(o);
         if (end) {
-          args.insert(std::make_pair(end.Owner<Object>(), toy));
+          auto* end_obj = end.Owner<Object>();
+          auto* end_loc_widget = GetLocWidget(*end_obj);
+          widgets_over.insert(std::make_pair(end_loc_widget, arg_toy));
         }
       });
+
+      children_tmp.push_back(start_loc_widget);
     };
+
+    keyboard.local_to_parent = canvas_to_window44;
+    children_tmp.push_back(&keyboard);
 
     // First flatten Object Toys dragged by pointers
     for (auto p : pointers) {
@@ -312,34 +320,48 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
         if (a == nullptr) continue;
         a->VisitObjects(VisitObject);
       }
+      if (auto widget = p->GetWidget()) {
+        widget->local_to_parent = canvas_to_window44;
+        children_tmp.push_back(widget);
+      }
     }
+
+    children_tmp.push_back(&black_hole);
+    children_tmp.push_back(toolbar.get());
+    children_tmp.push_back(&zoom_warning);
 
     // Then flatten the Object Toys tored by the Machines
     for (auto& loc : root_machine->locations) {
       VisitObject(*loc->object);
     }
 
-    // Finally, serialize the objects_flat into child_toys
-    std::set<Toy*> added;
-    for (auto* o : objects_flat) {
-      auto r = args.equal_range(o);
-      for (auto it = r.first; it != r.second; ++it) {
-        auto* arg_toy = it->second;
-        if (!added.contains(arg_toy)) {
-          child_toys.push_back(arg_toy);
-          arg_toy->local_to_parent = canvas_to_window44;
-          added.insert(arg_toy);
-        }
-      }
-      auto& loc_widget = toys.FindOrMake(*o->here, this);
-      loc_widget.local_to_parent = canvas_to_window44;
-      loc_widget.ToyForObject();
-      child_toys.push_back(&loc_widget);
-    }
-
     // At the very end - add the machine
     // TODO: split Machine & MachineWidget
-    child_toys.push_back(root_machine.Get());
+    root_machine->local_to_parent = canvas_to_window44;
+    children_tmp.push_back(root_machine.Get());
+
+    int n = children_tmp.size();
+    bool added[n];
+    memset(added, 0, n);
+    for (int i = 0; i < n; ++i) {
+      children_tmp[i]->index = i;
+    }
+
+    // Finally, serialize the children_tmp into children, ensuring that `widgets_over` are placed
+    // over their bases.
+    children.clear();
+    for (auto* child : children_tmp) {
+      if (added[child->index]) continue;
+      added[child->index] = true;
+      auto r = widgets_over.equal_range(child);
+      for (auto it = r.first; it != r.second; ++it) {
+        auto* arg_toy = it->second;
+        if (added[arg_toy->index]) continue;
+        added[arg_toy->index] = true;
+        children.push_back(arg_toy);
+      }
+      children.push_back(child);
+    }
   }
 
   return phase;
@@ -608,23 +630,7 @@ void RootWidget::DropLocation(Ptr<Location>&& location) {
 }
 
 void RootWidget::FillChildren(Vec<Widget*>& out_children) {
-  for (auto& child : children) {
-    out_children.push_back(child.get());
-  }
-
-  out_children.push_back(&keyboard);
-
-  for (auto& pointer : pointers) {
-    if (auto widget = pointer->GetWidget()) {
-      out_children.push_back(widget);
-    }
-  }
-  out_children.push_back(&black_hole);
-  if (toolbar) {
-    out_children.push_back(toolbar.get());
-  }
-  out_children.push_back(&zoom_warning);
-  out_children.insert(out_children.end(), child_toys.begin(), child_toys.end());
+  out_children.insert(out_children.end(), children.begin(), children.end());
 }
 
 static void UpdateLocalToParent(RootWidget& root_widget) {

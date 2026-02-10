@@ -9,7 +9,7 @@ namespace automat {
 void ToyMakerMixin::ForEachToyImpl(ReferenceCounted& owner, Atom& atom,
                                    std::function<void(ui::RootWidget&, Toy&)> cb) {
   for (auto* root_widget : ui::root_widgets) {
-    auto it = root_widget->toys.container.find(ToyStore::Key(owner.AcquireWeakPtr(), &atom));
+    auto it = root_widget->toys.container.find(ToyStore::Key(&owner, &atom));
     if (it != root_widget->toys.container.end()) {
       cb(*root_widget, *it->second);
     }

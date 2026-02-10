@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <ankerl/unordered_dense.h>
+
 #include <concepts>
 #include <functional>
-#include <map>
 
 #include "part.hh"
 #include "ptr.hh"
@@ -68,12 +69,13 @@ struct ToyMakerMixin {
 // Each context which can display widgets must maintain their lifetime. This class helps with that.
 // TODO: delete widgets after some time
 struct ToyStore {
-  using Key = std::pair<WeakPtr<ReferenceCounted>, Atom*>;
-  std::map<Key, std::unique_ptr<Toy>> container;
+  using Key = std::pair<ReferenceCounted*, Atom*>;
+  using Map = ankerl::unordered_dense::map<Key, std::unique_ptr<Toy>>;
+  Map container;
 
   template <Part T>
   static Key MakeKey(T& part) {
-    return {WeakPtr<ReferenceCounted>(&part.GetOwner()), &part.GetAtom()};
+    return {&part.GetOwner(), &part.GetAtom()};
   }
 
   template <ToyMaker T>
@@ -89,10 +91,9 @@ struct ToyStore {
   // Called once per frame on the UI thread.
   void WakeUpdatedToys(time::SteadyPoint last_wake) {
     for (auto& [key, toy] : container) {
-      auto& [owner_weak, atom] = key;
-      // Safe to read through WeakPtr: memory survives until weak_refs hits 0.
-      auto* rc = owner_weak.GetUnsafe<ReferenceCounted>();
-      if (rc == nullptr) continue;
+      auto [rc, atom] = key;
+      // Safe to read through `rc`: WeakPtr in the Toy keeps memory alive.
+      // Counter at `wake_counter` is valid even after ~ReferenceCounted.
       uint32_t current = rc->wake_counter.load(std::memory_order_relaxed);
       if (current != toy->observed_notify_counter) {
         toy->observed_notify_counter = current;

@@ -88,11 +88,6 @@ struct ConnectionWidget : Toy {
   Optional<Rect> TextureBounds() const override;
   Vec<Vec2> TextureAnchors() override;
   void FromMoved();
-
-  // TODO: Needs a function that will update the `parent` ptr.
-  // - called in ConnectionDragAction
-  // - called in ~ConnectionDragAction / RootMachine::ConnectAtPoint
-  // - called in
 };
 
 // Now that ConnectionWidget is defined, we can check whether ArgumentOf can make toys
@@ -104,7 +99,7 @@ struct ConnectionWidgetRange {
   const Object* obj;
   const Argument* arg;
 
-  using MapType = std::map<ToyStore::Key, std::unique_ptr<Toy>>;
+  using MapType = ToyStore::Map;
   struct end_iterator {};
 
   struct iterator {

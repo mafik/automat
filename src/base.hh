@@ -49,6 +49,7 @@ struct Error;
 struct Object;
 struct Location;
 struct Machine;
+struct MachineWidget;
 
 // Interface for objects that can run long running jobs.
 //
@@ -159,22 +160,15 @@ struct RunOption : TextOption {
 };
 
 // 2D Canvas holding objects & a spaghetti of connections.
-struct Machine : Object, ui::Widget, ui::DropTarget {
-  Machine(ui::Widget* parent);
+struct Machine : Object {
+  Machine();
   string name = "";
   deque<Ptr<Location>> locations;
-  vector<Location*> front;
+
+  using Toy = MachineWidget;
+  std::unique_ptr<Object::Toy> MakeToy(ui::Widget* parent) override;
 
   Ptr<Location> Extract(Location& location);
-
-  // Calls `callback` for each location in the stack of `base`, including `base` itself.
-  // `base` is always the first callback (highest index). Indexes are returned in
-  // decreasing order.
-  void ForStack(Location& base, std::function<void(Location&, int index)> callback);
-
-  SkPath StackShape(Location& base);
-  Vec<Ptr<Location>> ExtractStack(Location& base);
-  void RaiseStack(Location& base);
 
   // Create a new location on top of all the others.
   Location& CreateEmpty();
@@ -210,21 +204,9 @@ struct Machine : Object, ui::Widget, ui::DropTarget {
 
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 
-  void ConnectAtPoint(Object& start, Argument&, Vec2);
-
-  // Iterate over all nearby objects (within the given radius around start point).
-  //
-  // Return non-null to stop iteration and return from Nearby.
-  void* Nearby(Vec2 center, float radius, std::function<void*(Location&)> callback);
-
-  // Find nearby candidates for autoconnect. Checks both currently dragged objects
-  // and objects within the machine.
-  void NearbyCandidates(Location& here, const Argument& arg, float radius,
-                        std::function<void(Location&, Vec<Vec2AndDir>&)> callback);
-
   string_view Name() const override { return name; }
   Ptr<Object> Clone() const override {
-    auto m = MAKE_PTR(Machine, this->parent);
+    auto m = MAKE_PTR(Machine);
     for (auto& my_it : locations) {
       auto& other_h = m->CreateEmpty();
       other_h.Create(*my_it->object);
@@ -232,43 +214,9 @@ struct Machine : Object, ui::Widget, ui::DropTarget {
     return m;
   }
 
-  void Draw(SkCanvas&) const override;
-  Compositor GetCompositor() const override { return Compositor::QUANTUM_REALM; }
-  ui::DropTarget* AsDropTarget() override { return this; }
-  bool CanDrop(Location&) const override { return true; }
-  SkMatrix DropSnap(const Rect& bounds_local, Vec2 bounds_origin,
-                    Vec2* fixed_point = nullptr) override;
-  void DropLocation(Ptr<Location>&&) override;
-
-  SkPath Shape() const override;
-
   void Relocate(Location* parent) override;
 
   string ToStr() const { return f("Machine({})", name); }
-
-  Location* Front(int i) {
-    if (i < 0 || i >= front.size()) {
-      return nullptr;
-    }
-    return front[i];
-  }
-
-  Location* operator[](int i) {
-    auto h = Front(i);
-    if (h == nullptr) {
-      ERROR << "Component \"" << i << "\" of " << this->name << " is null!";
-    }
-    return h;
-  }
-
-  void AddToFrontPanel(Location& h) {
-    if (std::find(front.begin(), front.end(), &h) == front.end()) {
-      front.push_back(&h);
-    } else {
-      ERROR << "Attempted to add already present " << h.object->Name() << " to " << *this
-            << " front panel";
-    }
-  }
 
   // Report all errors that occured within this machine.
   //
@@ -288,6 +236,39 @@ struct Machine : Object, ui::Widget, ui::DropTarget {
     }
   }
 };
+
+// UI widget for Machine. Handles drawing, drop target, and spatial queries.
+struct MachineWidget : Object::Toy, ui::DropTarget {
+  MachineWidget(ui::Widget* parent, Machine& machine);
+
+  Ptr<Machine> LockMachine() const { return LockOwner<Machine>(); }
+
+  std::string_view Name() const override { return "MachineWidget"; }
+
+  // Widget overrides
+  void Draw(SkCanvas&) const override;
+  SkPath Shape() const override;
+  Compositor GetCompositor() const override { return Compositor::QUANTUM_REALM; }
+
+  // DropTarget overrides
+  ui::DropTarget* AsDropTarget() override { return this; }
+  bool CanDrop(Location&) const override { return true; }
+  SkMatrix DropSnap(const Rect& bounds_local, Vec2 bounds_origin,
+                    Vec2* fixed_point = nullptr) override;
+  void DropLocation(Ptr<Location>&&) override;
+
+  // Spatial queries (these use widget shape data)
+  void ConnectAtPoint(Object& start, Argument&, Vec2);
+  void* Nearby(Vec2 center, float radius, std::function<void*(Location&)> callback);
+  void NearbyCandidates(Location& here, const Argument& arg, float radius,
+                        std::function<void(Location&, Vec<Vec2AndDir>&)> callback);
+  void ForStack(Location& base, std::function<void(Location&, int index)> callback);
+  SkPath StackShape(Location& base);
+  Vec<Ptr<Location>> ExtractStack(Location& base);
+  void RaiseStack(Location& base);
+};
+
+static_assert(ToyMaker<Machine>);
 
 // Interface for objects that can hold other objects within.
 struct Container {

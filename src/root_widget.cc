@@ -330,15 +330,15 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
     children_tmp.push_back(toolbar.get());
     children_tmp.push_back(&zoom_warning);
 
-    // Then flatten the Object Toys tored by the Machines
+    // Then flatten the Object Toys stored by the Machines
     for (auto& loc : root_machine->locations) {
       VisitObject(*loc->object);
     }
 
-    // At the very end - add the machine
-    // TODO: split Machine & MachineWidget
-    root_machine->local_to_parent = canvas_to_window44;
-    children_tmp.push_back(root_machine.Get());
+    // At the very end - add the machine widget
+    auto& machine_widget = toys.FindOrMake(*root_machine, this);
+    machine_widget.local_to_parent = canvas_to_window44;
+    children_tmp.push_back(&machine_widget);
 
     int n = children_tmp.size();
     bool added[n];
@@ -377,7 +377,7 @@ void RootWidget::Draw(SkCanvas& canvas) const {
 
   auto children = Children();
   for (auto* child : ranges::reverse_view{children}) {
-    if (auto* m = dynamic_cast<Machine*>(child)) {
+    if (auto* m = dynamic_cast<MachineWidget*>(child)) {
       DrawChildCached(canvas, *m);
     } else {
       continue;
@@ -390,7 +390,7 @@ void RootWidget::Draw(SkCanvas& canvas) const {
     canvas.restore();
   }
   for (auto* child : ranges::reverse_view{children}) {
-    if (auto* m = dynamic_cast<Machine*>(child)) {
+    if (auto* m = dynamic_cast<MachineWidget*>(child)) {
       continue;
     } else {
       DrawChildCached(canvas, *child);
@@ -594,7 +594,8 @@ SkPath RootWidget::TrashShape() const {
 }
 
 SkMatrix RootWidget::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point) {
-  Rect machine_bounds = root_machine->Shape().getBounds();
+  auto* mw = toys.FindOrNull(*root_machine);
+  Rect machine_bounds = mw ? Rect(mw->Shape().getBounds()) : Rect{};
 
   SkMatrix matrix;
   if (fixed_point) {

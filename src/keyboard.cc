@@ -88,7 +88,9 @@ void Caret::Release() {
 }
 
 SkPath Caret::MakeRootShape() const {
-  SkMatrix text_to_root = TransformBetween(*widget, *root_machine);
+  auto* mw = widget->ToyStore().FindOrNull(*root_machine);
+  if (!mw) return shape;
+  SkMatrix text_to_root = TransformBetween(*widget, *mw);
   return shape.makeTransform(text_to_root);
 }
 

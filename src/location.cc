@@ -73,7 +73,15 @@ Object::Toy& Location::ToyForObject() {
     // Widget hasn't been created yet (before first render).
     // Create it eagerly through ToyStore.
     auto parent = parent_location.lock();
-    auto* parent_widget = parent ? dynamic_cast<ui::Widget*>(parent->object.get()) : nullptr;
+    ui::Widget* parent_widget = nullptr;
+    if (parent) {
+      // First try direct Widget cast (for future Widget-based containers).
+      parent_widget = dynamic_cast<ui::Widget*>(parent->object.get());
+      // If that fails, look up the object's Toy in ToyStore.
+      if (!parent_widget) {
+        parent_widget = ui::root_widget->toys.FindOrNull(*parent->object);
+      }
+    }
     ui::root_widget->toys.FindOrMake(*this, parent_widget);
     // MakeToy was called, widget is now set.
   }
@@ -445,14 +453,15 @@ void LocationWidget::UpdateAutoconnectArgs() {
     return;
   }
   auto& toy = ToyForObject();
-  auto parent_machine = root_machine.get();
+  auto* parent_mw = ToyStore().FindOrNull(*root_machine);
+  if (!parent_mw) return;
   loc->object->Args([&](Argument& arg) {
     float autoconnect_radius = arg.AutoconnectRadius();
     if (autoconnect_radius <= 0) {
       return;
     }
 
-    auto start = toy.ArgStart(arg, parent_machine);
+    auto start = toy.ArgStart(arg, parent_mw);
 
     // Find the current distance & target of this connection
     float old_dist2 = HUGE_VALF;
@@ -462,7 +471,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
       auto* end_loc = end.Owner<Object>()->MyLocation();
       auto& end_toy = end_loc->ToyForObject();
       end_toy.ConnectionPositions(to_positions);
-      auto other_up = TransformBetween(end_toy, *parent_machine);
+      auto other_up = TransformBetween(end_toy, *parent_mw);
       for (auto& to : to_positions) {
         Vec2 to_pos = other_up.mapPoint(to.pos);
         float dist2 = LengthSquared(start.pos - to_pos);
@@ -476,9 +485,9 @@ void LocationWidget::UpdateAutoconnectArgs() {
     // Find the new distance & target
     float new_dist2 = autoconnect_radius * autoconnect_radius;
     Location* new_target = nullptr;
-    parent_machine->NearbyCandidates(
+    parent_mw->NearbyCandidates(
         *loc, arg, autoconnect_radius, [&](Location& other, Vec<Vec2AndDir>& to_points) {
-          auto other_up = TransformBetween(other.ToyForObject(), *parent_machine);
+          auto other_up = TransformBetween(other.ToyForObject(), *parent_mw);
           for (auto& to : to_points) {
             Vec2 to_pos = other_up.mapPoint(to.pos);
             float dist2 = LengthSquared(start.pos - to_pos);
@@ -501,7 +510,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
 
   // Now check other locations & their arguments that might want to connect to this location
 
-  auto here_up = TransformBetween(toy, *parent_machine);
+  auto here_up = TransformBetween(toy, *parent_mw);
   Vec<Vec2AndDir> to_points;
   toy.ConnectionPositions(to_points);
   for (auto& to : to_points) {
@@ -513,7 +522,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
       continue;
     }
     auto& other_widget = other->ToyForObject();
-    auto other_up = TransformBetween(other_widget, *parent_machine);
+    auto other_up = TransformBetween(other_widget, *parent_mw);
     other->object->Args([&](Argument& arg) {
       float autoconnect_radius = arg.AutoconnectRadius();
       if (autoconnect_radius <= 0) {
@@ -539,7 +548,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
         auto* end_loc = end.Owner<Object>()->MyLocation();
         auto& end_toy = end_loc->ToyForObject();
         end_toy.ConnectionPositions(to_positions);
-        auto to_up = TransformBetween(end_toy, *parent_machine);
+        auto to_up = TransformBetween(end_toy, *parent_mw);
         for (auto& to : to_positions) {
           Vec2 to_pos = to_up.mapPoint(to.pos);
           float dist2 = LengthSquared(start.pos - to_pos);

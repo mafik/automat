@@ -97,6 +97,7 @@ struct DeleteOption : TextOption {
     if (Ptr<Location> loc = weak.lock()) {
       if (auto parent_machine = loc->ParentAs<Machine>()) {
         parent_machine->Extract(*loc);
+        audio::Play(embedded::assets_SFX_canvas_pick_wav);
       }
     }
     return nullptr;
@@ -141,8 +142,11 @@ struct MoveLocationOption : TextOption {
     auto parent_location = location->parent_location.Lock();
     auto* machine = parent_location->ThisAs<Machine>();
     if (machine && location->object) {
-      machine->ForEachToy([](ui::RootWidget&, Toy& w) { w.RedrawThisFrame(); });
-      return std::make_unique<DragLocationAction>(pointer, machine->ExtractStack(*location));
+      machine->ForEachToy([](ui::RootWidget&, automat::Toy& w) { w.RedrawThisFrame(); });
+      auto* mw = pointer.root_widget.toys.FindOrNull(*machine);
+      if (mw) {
+        return std::make_unique<DragLocationAction>(pointer, mw->ExtractStack(*location));
+      }
     }
     return nullptr;
   }
@@ -240,14 +244,18 @@ struct SyncAction : Action {
     // TODO: tell objects to hide their fields
     // Check if the pointer is over a compatible Syncable
     if (auto syncable = weak.Lock()) {
-      root_machine->ConnectAtPoint(*syncable.Owner<Object>(), *syncable, sync_widget.end);
+      auto* mw = pointer.root_widget.toys.FindOrNull(*root_machine);
+      if (mw) {
+        mw->ConnectAtPoint(*syncable.Owner<Object>(), *syncable, sync_widget.end);
+      }
     }
   }
   void Update() override {
     if (auto syncable = weak.Lock()) {
       auto* widget = pointer.root_widget.toys.FindOrNull(*syncable.Owner<Object>());
+      auto* mw = pointer.root_widget.toys.FindOrNull(*root_machine);
       auto start_local = widget->AtomShape(syncable.Get()).getBounds().center();
-      auto start = TransformBetween(*widget, *root_machine).mapPoint(start_local);
+      auto start = mw ? TransformBetween(*widget, *mw).mapPoint(start_local) : start_local;
       sync_widget.start = start;
       sync_widget.end = pointer.PositionWithinRootMachine();
       sync_widget.WakeAnimation();

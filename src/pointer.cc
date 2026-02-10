@@ -243,7 +243,9 @@ Vec2 Pointer::PositionWithin(const Widget& widget) const {
   return Vec2(transform_down.mapPoint(pointer_position));
 }
 Vec2 Pointer::PositionWithinRootMachine() const {
-  SkMatrix transform_down = TransformDown(*root_machine);
+  auto* mw = root_widget.toys.FindOrNull(*root_machine);
+  if (!mw) return pointer_position;
+  SkMatrix transform_down = TransformDown(*mw);
   return Vec2(transform_down.mapPoint(pointer_position));
 }
 

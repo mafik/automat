@@ -417,7 +417,7 @@ struct TesseractWidget : Object::Toy, ui::PointerMoveCallback {
       }
 
       if (pointers.size() > 0) {
-        auto pointer_pos = pointers.front()->PositionWithin(*root_machine);
+        auto pointer_pos = pointers.front()->PositionWithinRootMachine();
         iris_target = pointer_pos;
       }
 
@@ -446,7 +446,8 @@ struct TesseractWidget : Object::Toy, ui::PointerMoveCallback {
       {  // animate iris
         Vec2 eye_delta;
         if (iris_target.has_value()) {
-          auto matrix = TransformBetween(*root_machine, *this);
+          auto* mw = ToyStore().FindOrNull(*root_machine);
+          auto matrix = mw ? TransformBetween(*mw, *this) : SkMatrix::I();
           eye_delta = matrix.mapPoint(iris_target->sk) - layout.eye_center;
         } else {
           eye_delta = Vec2(0, 0);

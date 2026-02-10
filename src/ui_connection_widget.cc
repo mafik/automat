@@ -191,22 +191,25 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     canvas.drawTextBlob(text_blob, 0, 0, text_paint);
     canvas.restore();
 
-    root_machine->NearbyCandidates(
-        from, *arg, autoconnect_radius * 2 + 10_cm,
-        [&](Location& candidate, Vec<Vec2AndDir>& to_points) {
-          auto m = TransformBetween(candidate.ToyForObject(), *root_machine);
-          for (auto& to : to_points) {
-            to.pos = m.mapPoint(to.pos);
-          }
-          auto arcline = RouteCable(pos_dir, to_points, &canvas);
-          auto it = ArcLine::Iterator(arcline);
-          float total_length = it.AdvanceToEnd() * anim->radar_alpha;
-          Vec2 end_point = it.Position();
-          float relative_dist = Length(pos_dir.pos - to_points[0].pos) / autoconnect_radius;
-          auto path = arcline.ToPath(false, std::lerp(total_length, 0, relative_dist - 1));
-          canvas.drawPath(path, stroke_paint);
-          canvas.drawCircle(end_point, 1_mm, stroke_paint);
-        });
+    auto* mw = ToyStore().FindOrNull(*root_machine);
+    if (mw) {
+      mw->NearbyCandidates(
+          from, *arg, autoconnect_radius * 2 + 10_cm,
+          [&](Location& candidate, Vec<Vec2AndDir>& to_points) {
+            auto m = TransformBetween(candidate.ToyForObject(), *mw);
+            for (auto& to : to_points) {
+              to.pos = m.mapPoint(to.pos);
+            }
+            auto arcline = RouteCable(pos_dir, to_points, &canvas);
+            auto it = ArcLine::Iterator(arcline);
+            float total_length = it.AdvanceToEnd() * anim->radar_alpha;
+            Vec2 end_point = it.Position();
+            float relative_dist = Length(pos_dir.pos - to_points[0].pos) / autoconnect_radius;
+            auto path = arcline.ToPath(false, std::lerp(total_length, 0, relative_dist - 1));
+            canvas.drawPath(path, stroke_paint);
+            canvas.drawCircle(end_point, 1_mm, stroke_paint);
+          });
+    }
   }
   if (anim->prototype_alpha >= 0.01f && prototype_widget) {
     auto proto_shape = prototype_widget->Shape();
@@ -229,7 +232,8 @@ void ConnectionWidget::FromMoved() {
     if (state->stabilized && !state->stabilized_end.has_value()) {
       auto& object = *arg.Owner<Object>();
       auto& toy = *ToyStore().FindOrNull(object);
-      auto pos_dir = toy.ArgStart(*arg, root_machine.get());
+      auto* mw = ToyStore().FindOrNull(*root_machine);
+      auto pos_dir = toy.ArgStart(*arg, mw);
       state->stabilized_start = pos_dir.pos;
       state->sections.front().pos = pos_dir.pos;
       state->sections.back().pos = pos_dir.pos;
@@ -244,6 +248,7 @@ void ConnectionWidget::FromMoved() {
 // It performs the locking of weak pointers and locates the widgets of connected objects.
 struct ConnectionWidgetLocker {
   ToyStore& toy_store;
+  MachineWidget* machine_widget;
 
   NestedPtr<Argument> start_arg;
   Object::Toy* start_widget;
@@ -255,11 +260,13 @@ struct ConnectionWidgetLocker {
   // Computing everything in initializer avoids zero-initialization
   ConnectionWidgetLocker(ConnectionWidget& w)
       : toy_store(w.ToyStore()),
+        machine_widget(toy_store.FindOrNull(*root_machine)),
         start_arg(w.start_weak.Lock()),
         start_widget(StartObj() ? toy_store.FindOrNull(*StartObj()) : nullptr),
         end_atom(StartObj() ? start_arg->Find(*StartObj()) : NestedPtr<Atom>()),
         end_widget(EndObj() ? toy_store.FindOrNull(*EndObj()) : nullptr),
-        end_transform(end_widget ? TransformBetween(*end_widget, *root_machine) : SkMatrix()) {}
+        end_transform(end_widget && machine_widget ? TransformBetween(*end_widget, *machine_widget)
+                                                   : SkMatrix()) {}
 
   Object* StartObj() const { return start_arg ? start_arg.Owner<Object>() : nullptr; }
   Object* EndObj() const { return end_atom ? end_atom.Owner<Object>() : nullptr; }
@@ -269,7 +276,7 @@ struct ConnectionWidgetLocker {
 // TextureAnchors. Tick uses it for connection animation and TextureAnchors uses it to stretch
 // the texture into most up-to-date position.
 static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
-  w.pos_dir = a.start_widget->ArgStart(*a.start_arg, root_machine.Get());
+  w.pos_dir = a.start_widget->ArgStart(*a.start_arg, a.machine_widget);
 
   w.to_points.clear();
 
@@ -312,8 +319,10 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   }
 
   from_shape = a.start_widget->AtomShape(a.start_arg.Get());
-  auto transform_from_to_machine = TransformBetween(*a.start_widget, *root_machine);
-  from_shape.transform(transform_from_to_machine);
+  if (a.machine_widget) {
+    auto transform_from_to_machine = TransformBetween(*a.start_widget, *a.machine_widget);
+    from_shape.transform(transform_from_to_machine);
+  }
 
   UpdateEndpoints(*this, a);
 
@@ -495,7 +504,7 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
   grab_offset = Vec2(0, 0);
   if (widget.state) {
     // Position within parent machine
-    auto pointer_pos = pointer.PositionWithin(*root_machine);
+    auto pointer_pos = pointer.PositionWithinRootMachine();
     auto mat = widget.state->ConnectorMatrix();
     SkMatrix mat_inv;
     if (mat.invert(&mat_inv)) {
@@ -520,7 +529,10 @@ DragConnectionAction::~DragConnectionAction() {
   } else {
     return;
   }
-  root_machine->ConnectAtPoint(*start, *arg, pos);
+  auto* mw = pointer.root_widget.toys.FindOrNull(*root_machine);
+  if (mw) {
+    mw->ConnectAtPoint(*start, *arg, pos);
+  }
   widget.manual_position.reset();
   widget.WakeAnimation();
 }
@@ -531,7 +543,9 @@ void DragConnectionAction::Update() {
   Location* from = start.Owner<Object>()->MyLocation();
   if (!from) return;
 
-  Vec2 new_position = pointer.PositionWithin(*from->ParentAs<Machine>());
+  auto* parent_mw = pointer.root_widget.toys.FindOrNull(*from->ParentAs<Machine>());
+  if (!parent_mw) return;
+  Vec2 new_position = pointer.PositionWithin(*parent_mw);
   widget.manual_position = new_position - grab_offset * widget.state->connector_scale;
   widget.WakeAnimation();
   pointer.pointer_widget->WakeAnimation();

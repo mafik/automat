@@ -3050,12 +3050,19 @@ struct ConditionCodeWidget : public EnumKnobWidget {
                                      timer.d, 5);
     if (water_level > 0 && !wave.has_value()) {
       wave = Wave1D(30, 0.5, 0.005, 1);
-      root_position = ui::TransformBetween(*this, *root_machine).mapPoint({0, 0});
+      if (auto* _mw = ToyStore().FindOrNull(*root_machine)) {
+        root_position = ui::TransformBetween(*this, *_mw).mapPoint({0, 0});
+      } else {
+        root_position = Vec2{};
+      }
     } else if (water_level == 0 && wave.has_value()) {
       wave.reset();
     }
     if (wave) {
-      Vec2 new_position = ui::TransformBetween(*this, *root_machine).mapPoint({0, 0});
+      Vec2 new_position;
+      if (auto* _mw = ToyStore().FindOrNull(*root_machine)) {
+        new_position = ui::TransformBetween(*this, *_mw).mapPoint({0, 0});
+      }
       auto delta = new_position - *root_position;
       root_position = new_position;
 

@@ -1098,6 +1098,7 @@ void TesseractOCR::Atoms(const std::function<LoopControl(Atom&)>& cb) {
   if (LoopControl::Break == cb(image_arg)) return;
   if (LoopControl::Break == cb(text_arg)) return;
   if (LoopControl::Break == cb(next_arg)) return;
+  if (LoopControl::Break == cb(run)) return;
 }
 
 void TesseractOCR::Run::OnRun(std::unique_ptr<RunTask>&) {

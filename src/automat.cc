@@ -147,7 +147,6 @@ int Main() {
 
   root_location = MAKE_PTR(Location);
   root_machine = root_location->Create<Machine>();
-  root_machine->name = "Root machine";
   StartTimeThread(stop_source.get_token());
 
   InitSystemTray();

@@ -30,8 +30,6 @@ std::unique_ptr<Object::Toy> Machine::MakeToy(ui::Widget* parent) {
 }
 
 void Machine::SerializeState(ObjectSerializer& writer) const {
-  writer.Key("name");
-  writer.String(name);
   if (!locations.empty()) {
     writer.Key("locations");
     writer.StartObject();
@@ -52,9 +50,7 @@ void Machine::SerializeState(ObjectSerializer& writer) const {
 
 bool Machine::DeserializeKey(ObjectDeserializer& d, StrView key) {
   Status status;
-  if (key == "name") {
-    d.Get(name, status);
-  } else if (key == "locations") {
+  if (key == "locations") {
     for (auto& object_name : ObjectView(d, status)) {
       auto* object = d.LookupObject(object_name);
 

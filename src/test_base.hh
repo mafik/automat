@@ -11,8 +11,6 @@ namespace automat {
 struct TestBase : ::testing::Test {
   Location root = Location(nullptr);
   Machine& machine = *root.Create<Machine>();
-
-  TestBase() { machine.name = "Root Machine"; }
 };
 
 }  // namespace automat

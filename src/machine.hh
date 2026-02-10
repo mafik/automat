@@ -11,7 +11,6 @@ struct MachineWidget;
 // 2D Canvas holding objects & a spaghetti of connections.
 struct Machine : Object {
   Machine();
-  string name = "";
   deque<Ptr<Location>> locations;
 
   using Toy = MachineWidget;
@@ -53,7 +52,6 @@ struct Machine : Object {
 
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 
-  string_view Name() const override { return name; }
   Ptr<Object> Clone() const override {
     auto m = MAKE_PTR(Machine);
     for (auto& my_it : locations) {
@@ -65,7 +63,7 @@ struct Machine : Object {
 
   void Relocate(Location* parent) override;
 
-  string ToStr() const { return f("Machine({})", name); }
+  string ToStr() const { return "Machine"; }
 
   // Report all errors that occured within this machine.
   //

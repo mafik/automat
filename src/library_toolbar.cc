@@ -33,7 +33,7 @@ std::unique_ptr<Action> PrototypeButton::FindAction(ui::Pointer& pointer, ui::Ac
   auto obj = proto->Clone();
   // Create a toy parented to this button. Location will reparent & animate it.
   pointer.root_widget.toys.FindOrMake(*obj, this);
-  auto loc = MAKE_PTR(Location, root_location->AcquireWeakPtr());
+  auto loc = MAKE_PTR(Location, root_location);
   loc->InsertHere(std::move(obj));
 
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);

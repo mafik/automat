@@ -163,8 +163,7 @@ string_view InstructionLibrary::Name() const { return "Instruction Library"; }
 
 Ptr<Object> InstructionLibrary::Clone() const { return MAKE_PTR(InstructionLibrary); }
 
-InstructionLibrary::Widget::Widget(ui::Widget* parent, Object& object)
-    : Toy(parent, object) {
+InstructionLibrary::Widget::Widget(ui::Widget* parent, Object& object) : Toy(parent, object) {
   for (int i = 0; i < std::size(x86::kCategories); ++i) {
     if (category_states.size() <= i) {
       category_states.push_back(CategoryState{
@@ -1093,15 +1092,12 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(ui::Pointer& p,
     auto contact_point = p.PositionWithin(*this);
 
     if (kFrontInstructionRect.Contains(contact_point)) {
+      auto obj = instruction_helix.front().instruction->Clone();
+      auto& toy = p.root_widget.toys.FindOrMake(*obj, this);
+      toy.local_to_parent.setTranslate(kFrontInstructionRect.left, kFrontInstructionRect.bottom);
       auto loc = MAKE_PTR(Location, root_location);
-
-      loc->InsertHere(instruction_helix.front().instruction->Clone());
+      loc->InsertHere(std::move(obj));
       audio::Play(embedded::assets_SFX_toolbar_pick_wav);
-      contact_point -= kFrontInstructionRect.BottomLeftCorner();
-      loc->position = p.PositionWithinRootMachine() - contact_point;
-      loc->ToyForObject()
-          .local_to_parent.setTranslate(kFrontInstructionRect.left, kFrontInstructionRect.bottom)
-          .postConcat(SkM44(ui::TransformBetween(*this, *root_machine)));
       return std::make_unique<DragLocationAction>(p, std::move(loc));
     }
 

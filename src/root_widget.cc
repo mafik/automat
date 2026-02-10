@@ -9,6 +9,7 @@
 #include <include/core/SkPictureRecorder.h>
 
 #include <memory>
+#include <ranges>
 
 #include "animation.hh"
 #include "argument.hh"
@@ -352,20 +353,26 @@ void RootWidget::Draw(SkCanvas& canvas) const {
 
   canvas.clear(background_color);
 
-  DrawChildren(canvas);
-
-  if constexpr (false) {  // Outline for the hovered widget
-    auto old_matrix = canvas.getTotalMatrix();
-    for (auto& pointer : pointers) {
-      if (pointer->hover) {
-        SkPaint outline_paint;
-        outline_paint.setStyle(SkPaint::kStroke_Style);
-        auto& hover = *pointer->hover;
-        canvas.setMatrix(TransformUp(hover));
-        canvas.drawPath(hover.Shape(), outline_paint);
-      }
+  auto children = Children();
+  for (auto* child : ranges::reverse_view{children}) {
+    if (auto* m = dynamic_cast<Machine*>(child)) {
+      DrawChildCached(canvas, *m);
+    } else {
+      continue;
     }
-    canvas.setMatrix(old_matrix);
+  }
+  for (auto* child : ranges::reverse_view{children}) {
+    canvas.save();
+    canvas.concat(child->local_to_parent);
+    child->PreDraw(canvas);
+    canvas.restore();
+  }
+  for (auto* child : ranges::reverse_view{children}) {
+    if (auto* m = dynamic_cast<Machine*>(child)) {
+      continue;
+    } else {
+      DrawChildCached(canvas, *child);
+    }
   }
 
   canvas.concat(CanvasToWindow());
@@ -601,8 +608,6 @@ void RootWidget::DropLocation(Ptr<Location>&& location) {
 }
 
 void RootWidget::FillChildren(Vec<Widget*>& out_children) {
-  out_children.reserve(3 + pointers.size());
-
   for (auto& child : children) {
     out_children.push_back(child.get());
   }

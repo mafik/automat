@@ -367,10 +367,6 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
 }
 
 void LocationWidget::PreDraw(SkCanvas& canvas) const {
-  auto loc = LockLocation();
-  if (!loc || loc->object == nullptr) {
-    return;
-  }
   constexpr float kMinElevation = 1_mm;
   constexpr float kElevationRange = 8_mm;
 

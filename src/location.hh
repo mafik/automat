@@ -221,11 +221,6 @@ struct LocationWidget : Toy {
   // Call this when the position of this location changes to update the autoconnect arguments.
   void UpdateAutoconnectArgs();
 
-  // DEPRECATED. Returns the position in parent's coordinates where the connections for this
-  // argument should start.
-  // TODO: replace with Toy::ArgStart
-  Vec2AndDir ArgStart(Argument&);
-
   void OnReparent(ui::Widget& new_parent, SkM44& fix) override;
 };
 

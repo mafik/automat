@@ -168,7 +168,6 @@ static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now
         }
       }
     }
-    assembler.WakeToys();
     assembler.last_state_refresh = now;
   }
   if (assembler.running.IsRunning()) {
@@ -319,17 +318,6 @@ Ptr<Location> Assembler::Extract(Object& descendant) {
     if (reg != &descendant) continue;
     auto loc = MAKE_PTR(Location, root_location);
     loc->InsertHere(reg_objects_idx[i].borrow());
-    auto* reg_widget = ui::root_widget->toys.FindOrNull(*reg);
-    if (reg_widget) {
-      if (auto* assembler_widget = dynamic_cast<AssemblerWidget*>(reg_widget->parent.get())) {
-        assembler_widget->reg_widgets.Erase(reg_widget);
-        if (loc->widget) loc->widget->toy = reg_widget;
-        reg_widget->parent = loc->widget;
-      } else {
-        FATAL << "RegisterWidget's parent is not an AssemblerWidget";
-      }
-    }
-
     audio::Play(embedded::assets_SFX_toolbar_pick_wav);
     WakeToys();
     return loc;
@@ -438,15 +426,19 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
       if (register_widget == nullptr) {
         register_widget = &ToyStore().FindOrMake(*assembler_reg, this);
         register_widget->local_to_parent = SkM44::Translate(0, 10_cm);
+      } else {
+        register_widget->Reparent(*this);
       }
+      reg_widgets_idx[i] = register_widget;
+      reg_widgets.emplace_back(register_widget);
+      register_widget->WakeAnimation();
       register_widget->ValidateHierarchy();
-      reg_widgets_idx[i] = static_cast<RegisterWidget*>(register_widget);
-      reg_widgets.emplace_back(static_cast<RegisterWidget*>(register_widget));
       std::sort(reg_widgets.begin(), reg_widgets.end(), [](auto* a, auto* b) {
         return a->LockRegister()->register_index < b->LockRegister()->register_index;
       });
     }
   }
+
   int n = reg_widgets.size();
   int columns = std::ceil(std::sqrt(n));
   int rows = n ? (n + columns - 1) / columns : 0;
@@ -597,15 +589,6 @@ bool AssemblerWidget::CanDrop(Location& loc) const {
 void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
   if (auto reg = loc->As<Register>()) {
     if (auto my_assembler = LockObject<Assembler>()) {
-      loc->object->ForEachToy([&](ui::RootWidget& root_widget, ui::Widget& reg_widget_generic) {
-        RegisterWidget& reg_widget = static_cast<RegisterWidget&>(reg_widget_generic);
-        if (auto* asm_widget = root_widget.toys.FindOrNull(*my_assembler)) {
-          reg_widget.local_to_parent = SkM44(TransformBetween(reg_widget, *asm_widget));
-          reg_widget.parent = asm_widget->AcquireTrackedPtr();
-          asm_widget->reg_widgets.emplace_back(&reg_widget);
-          reg_widget.RedrawThisFrame();
-        }
-      });
       my_assembler->reg_objects_idx[reg->register_index] = loc->Take().Cast<Register>();
       my_assembler->WakeToys();
     }

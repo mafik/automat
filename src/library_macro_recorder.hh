@@ -8,9 +8,7 @@
 
 namespace automat::library {
 
-struct MacroRecorder : Object,
-                       ui::Keylogger,
-                       ui::Pointer::Logger {
+struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
   struct MyRunnable : Runnable {
     void OnRun(std::unique_ptr<RunTask>&) override;
     PARENT_REF(MacroRecorder, runnable)
@@ -33,7 +31,7 @@ struct MacroRecorder : Object,
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  void Atoms(const std::function<void(Atom&)>& cb) override;
+  void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
 
   LongRunning* AsLongRunning() override { return &long_running; }
   Runnable* AsRunnable() override { return &runnable; }

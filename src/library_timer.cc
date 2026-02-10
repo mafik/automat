@@ -175,11 +175,11 @@ void Timer::Updated(WeakPtr<Object>& updated) {
   }
 }
 
-void Timer::Atoms(const std::function<void(Atom&)>& cb) {
-  cb(runnable);
-  cb(duration);
-  cb(next_arg);
-  cb(*AsLongRunning());
+void Timer::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+  if (LoopControl::Break == cb(runnable)) return;
+  if (LoopControl::Break == cb(duration)) return;
+  if (LoopControl::Break == cb(next_arg)) return;
+  if (LoopControl::Break == cb(*AsLongRunning())) return;
 }
 
 void Timer::AtomName(Atom& atom, Str& out_name) {

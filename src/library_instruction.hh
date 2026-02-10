@@ -73,7 +73,7 @@ struct Instruction : Object, Buffer {
     PARENT_REF(Instruction, runnable)
   } runnable;
 
-  void Atoms(const std::function<void(Atom&)>& cb) override;
+  void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;

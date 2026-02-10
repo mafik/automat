@@ -203,16 +203,16 @@ static Assembler* FindOrCreateAssembler(Object& start) {
   return dynamic_cast<Assembler*>(&assembler_arg.ObjectOrMake(start));
 }
 
-void Instruction::Atoms(const std::function<void(Atom&)>& cb) {
+void Instruction::Atoms(const std::function<LoopControl(Atom&)>& cb) {
   auto opcode = mc_inst.getOpcode();
   if (opcode != X86::JMP_1 && opcode != X86::JMP_4) {
-    cb(next_instruction_arg);
+    if (LoopControl::Break == cb(next_instruction_arg)) return;
   }
-  cb(assembler_arg);
+  if (LoopControl::Break == cb(assembler_arg)) return;
   auto& assembler = LLVM_Assembler::Get();
   auto& info = assembler.mc_instr_info->get(opcode);
   if (info.isBranch()) {
-    cb(jump_arg);
+    if (LoopControl::Break == cb(jump_arg)) return;
   }
 }
 

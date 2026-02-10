@@ -3,6 +3,7 @@
 #pragma once
 
 #include "color.hh"
+#include "control_flow.hh"
 #include "drawable.hh"
 #include "object.hh"
 #include "status.hh"
@@ -76,6 +77,21 @@ struct Argument : Atom {
     Status status;
     CanConnect(start, end, status);
     return OK(status);
+  }
+
+  Atom* CanConnect(Object& start, Object& end) const {
+    if (CanConnect(start, (Atom&)end)) {
+      return &end;
+    }
+    Atom* ret = nullptr;
+    end.Atoms([&](Atom& atom) {
+      if (CanConnect(start, atom)) {
+        ret = &atom;
+        return LoopControl::Break;
+      }
+      return LoopControl::Continue;
+    });
+    return ret;
   }
 
   // This function should register a connection from `start` to the `end` so that subsequent calls

@@ -10,6 +10,7 @@
 #include "../build/generated/embedded.hh"
 #include "automat.hh"
 #include "base.hh"
+#include "control_flow.hh"
 #include "drag_action.hh"
 #include "font.hh"
 #include "format.hh"
@@ -363,6 +364,7 @@ void Object::Toy::VisitOptions(const OptionsVisitor& visitor) const {
               visitor(field_option);
             }
           }
+          return LoopControl::Continue;
         });
       }
     }
@@ -472,7 +474,7 @@ bool Object::Toy::IsIconified() const {
   return automat::IsIconified(static_cast<Object*>(owner.GetUnsafe()));
 }
 
-void Object::Atoms(const std::function<void(Atom&)>& cb) { cb(*this); }
+void Object::Atoms(const std::function<LoopControl(Atom&)>& cb) { cb(*this); }
 
 void Object::AtomName(Atom& atom, Str& out_name) {
   if (&atom == this) {
@@ -487,6 +489,7 @@ void Object::Args(const std::function<void(Argument&)>& cb) {
     if (Argument* arg = dynamic_cast<Argument*>(&atom)) {
       cb(*arg);
     }
+    return LoopControl::Continue;
   });
 }
 
@@ -515,7 +518,9 @@ Atom* Object::AtomFromName(StrView needle) {
     AtomName(atom, atom_name);
     if (atom_name == needle) {
       result = &atom;
+      return LoopControl::Break;
     }
+    return LoopControl::Continue;
   });
   return result;
 }

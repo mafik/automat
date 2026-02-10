@@ -86,7 +86,7 @@ struct Register : Object {
     return make_unique<RegisterWidget>(parent, *this);
   }
 
-  void Atoms(const std::function<void(Atom&)>& cb) override;
+  void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
   void SetText(std::string_view text) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
@@ -109,7 +109,7 @@ struct Assembler : Object, Container {
   } running;
 
   Ptr<Object> Clone() const override;
-  void Atoms(const std::function<void(Atom&)>& cb) override;
+  void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
 
   Assembler();
   ~Assembler();

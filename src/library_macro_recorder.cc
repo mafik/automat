@@ -137,7 +137,9 @@ MacroRecorder::~MacroRecorder() {
   }
 }
 
-void MacroRecorder::Atoms(const std::function<void(Atom&)>& cb) { cb(timeline_arg); }
+void MacroRecorder::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+  if (LoopControl::Break == cb(timeline_arg)) return;
+}
 
 string_view MacroRecorder::Name() const { return "Macro Recorder"sv; }
 Ptr<Object> MacroRecorder::Clone() const { return MAKE_PTR(MacroRecorder, *this); }

@@ -152,7 +152,7 @@ struct Timeline : Object, SignalNext, TimerNotificationReceiver {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  void Atoms(const std::function<void(Atom&)>& cb) override;
+  void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
   LongRunning* AsLongRunning() override { return &running; }
   SignalNext* AsSignalNext() override { return this; }
   void OnTimerNotification(Location&, time::SteadyPoint) override;

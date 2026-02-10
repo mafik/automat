@@ -11,6 +11,7 @@
 #include "action.hh"
 #include "arcline.hh"
 #include "automat.hh"
+#include "control_flow.hh"
 #include "object.hh"
 #include "root_widget.hh"
 #include "time.hh"
@@ -341,7 +342,10 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
     auto& obj = *loc->object;
     if (!loc->widget || !loc->widget->toy) continue;
     HighlightCheck(obj, *loc->widget->toy, obj);
-    obj.Atoms([&](Atom& atom) { HighlightCheck(obj, *loc->widget->toy, atom); });
+    obj.Atoms([&](Atom& atom) {
+      HighlightCheck(obj, *loc->widget->toy, atom);
+      return LoopControl::Continue;
+    });
   }
 
   sort_heap(highlight_target.begin(), highlight_target.end());

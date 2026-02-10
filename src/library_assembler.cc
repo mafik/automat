@@ -207,9 +207,9 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
 
 Ptr<Object> Assembler::Clone() const { return MAKE_PTR(Assembler); }
 
-void Assembler::Atoms(const std::function<void(Atom&)>& cb) {
-  cb(*this);
-  cb(running);
+void Assembler::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+  if (LoopControl::Break == cb(*this)) return;
+  if (LoopControl::Break == cb(running)) return;
 }
 
 void UpdateCode(automat::mc::Controller& controller,
@@ -777,7 +777,9 @@ struct RegisterAssemblerArgument : Argument {
 
 static RegisterAssemblerArgument register_assembler_arg;
 
-void Register::Atoms(const std::function<void(Atom&)>& cb) { cb(register_assembler_arg); }
+void Register::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+  if (LoopControl::Break == cb(register_assembler_arg)) return;
+}
 
 void Register::SetText(std::string_view text) {
   auto assembler = assembler_weak.Lock();

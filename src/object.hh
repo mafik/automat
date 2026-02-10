@@ -8,6 +8,7 @@
 #include <unordered_set>
 
 #include "audio.hh"
+#include "control_flow.hh"
 #include "deserializer.hh"
 #include "ptr.hh"
 #include "string_multimap.hh"
@@ -82,7 +83,7 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
 
   virtual operator OnOff*() { return nullptr; }
 
-  virtual void Atoms(const std::function<void(Atom&)>&);
+  virtual void Atoms(const std::function<LoopControl(Atom&)>&);
 
   virtual void AtomName(Atom&, Str& out_name);
 

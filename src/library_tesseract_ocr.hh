@@ -51,7 +51,7 @@ struct TesseractOCR : public Object {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  void Atoms(const std::function<void(Atom&)>&) override;
+  void Atoms(const std::function<LoopControl(Atom&)>&) override;
   void Updated(WeakPtr<Object>& updated) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
@@ -59,6 +59,9 @@ struct TesseractOCR : public Object {
 
   std::string GetText() const override;
   void SetText(std::string_view text) override;
+
+  Runnable* AsRunnable() override { return &run; }
+  SignalNext* AsSignalNext() override { return &run; }
 };
 
 }  // namespace automat::library

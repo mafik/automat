@@ -36,10 +36,10 @@ struct FlipFlop : Object {
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 
-  void Atoms(const std::function<void(Atom&)>& cb) override {
+  void Atoms(const std::function<LoopControl(Atom&)>& cb) override {
     Object::Atoms(cb);
-    cb(flip);
-    cb(on_off);
+    if (LoopControl::Break == cb(flip)) return;
+    if (LoopControl::Break == cb(on_off)) return;
   }
 
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;

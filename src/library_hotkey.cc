@@ -69,14 +69,19 @@ static const SkRRect kShapeRRect = [] {
 // HotKey Object methods
 
 HotKey::HotKey() {}
-HotKey::HotKey(const HotKey& other) : key(other.key), ctrl(other.ctrl), alt(other.alt), shift(other.shift), windows(other.windows) {}
+HotKey::HotKey(const HotKey& other)
+    : key(other.key),
+      ctrl(other.ctrl),
+      alt(other.alt),
+      shift(other.shift),
+      windows(other.windows) {}
 
 string_view HotKey::Name() const { return "HotKey"; }
 Ptr<Object> HotKey::Clone() const { return MAKE_PTR(HotKey, *this); }
 
-void HotKey::Atoms(const std::function<void(Atom&)>& cb) {
+void HotKey::Atoms(const std::function<LoopControl(Atom&)>& cb) {
   Object::Atoms(cb);
-  cb(next_arg);
+  if (LoopControl::Break == cb(next_arg)) return;
 }
 
 bool HotKey::Enabled::IsOn() const { return HotKey().hotkey != nullptr; }
@@ -185,8 +190,7 @@ struct HotKeyWidget : Object::Toy, ui::CaretOwner {
 
   Ptr<HotKey> LockHotKey() const { return LockObject<HotKey>(); }
 
-  HotKeyWidget(ui::Widget* parent, Object& hotkey_obj)
-      : Object::Toy(parent, hotkey_obj) {
+  HotKeyWidget(ui::Widget* parent, Object& hotkey_obj) : Object::Toy(parent, hotkey_obj) {
     auto hk = LockHotKey();
 
     power_button.reset(new PowerButton(this, &hk->enabled));

@@ -32,7 +32,7 @@ struct HotKey : Object, SignalNext, ui::KeyGrabber {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  void Atoms(const std::function<void(Atom&)>& cb) override;
+  void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
   SignalNext* AsSignalNext() override { return this; }
 
   void ReleaseKeyGrab(ui::KeyGrab&) override;

@@ -10,6 +10,7 @@
 #include <include/effects/SkRuntimeEffect.h>
 #include <include/pathops/SkPathOps.h>
 
+#include "control_flow.hh"
 #include "drag_action.hh"
 #include "embedded.hh"
 #include "global_resources.hh"
@@ -250,7 +251,13 @@ void MachineWidget::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
     auto& obj = *loc->object;
     TryConnect(obj, obj);
     if (connected) return;
-    obj.Atoms([&](Atom& atom) { TryConnect(obj, atom); });
+    obj.Atoms([&](Atom& atom) {
+      TryConnect(obj, atom);
+      if (connected) {
+        return LoopControl::Break;
+      }
+      return LoopControl::Continue;
+    });
   }
 }
 

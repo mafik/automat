@@ -215,9 +215,9 @@ static void SearchWindows(xcb_window_t start, WindowVisitor visitor) {
       continue;
     }
     auto control_flow = visitor(curr.first, curr.second);
-    if (control_flow == ControlFlow::StopSearching) {
+    if (control_flow == ControlFlow::Break) {
       break;
-    } else if (control_flow == ControlFlow::SkipChildren) {
+    } else if (control_flow == ControlFlow::Continue) {
       continue;
     }
     auto query_tree_reply = xcb::query_tree(curr.first);
@@ -402,9 +402,9 @@ struct WindowWidget : Object::Toy, ui::PointerGrabber, ui::KeyGrabber {
           LOG << "Found!";
         }
         found_window = window;
-        return ControlFlow::StopSearching;
+        return ControlFlow::Break;
       }
-      return ControlFlow::VisitChildren;
+      return ControlFlow::Enter;
     });
     if (kDebugWindowPicking) {
       if (found_window != XCB_WINDOW_NONE) {
@@ -489,10 +489,10 @@ std::unique_ptr<Object::Toy> Window::MakeToy(ui::Widget* parent) {
   return std::make_unique<WindowWidget>(parent, *this);
 }
 
-void Window::Atoms(const std::function<void(Atom&)>& cb) {
-  cb(next_arg);
-  cb(capture);
-  cb(image);
+void Window::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+  if (cb(next_arg) == LoopControl::Break) return;
+  if (cb(capture) == LoopControl::Break) return;
+  if (cb(image) == LoopControl::Break) return;
 }
 
 void Window::Capture::OnRun(std::unique_ptr<RunTask>&) {
@@ -669,17 +669,17 @@ void Window::AttachToTitle() {
 #ifdef __linux__
   SearchWindows(xcb::screen->root, [&](xcb_window_t window, xcb_window_t parent) {
     if (window == xcb::screen->root) {
-      return ControlFlow::VisitChildren;
+      return ControlFlow::Enter;
     }
     auto name = xcb::GetPropertyString(window, xcb::atom::WM_NAME);
     if (name != title) {
-      return ControlFlow::SkipChildren;
+      return ControlFlow::Continue;
     }
     if (HasWMState(window)) {
       impl->xcb_window = window;
-      return ControlFlow::StopSearching;
+      return ControlFlow::Break;
     }
-    return ControlFlow::VisitChildren;
+    return ControlFlow::Enter;
   });
 #elif defined(_WIN32)
   // Find window by title

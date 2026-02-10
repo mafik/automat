@@ -3,6 +3,7 @@
 #pragma once
 
 #include "base.hh"
+#include "control_flow.hh"
 #include "image_provider.hh"
 #include "parent_ref.hh"
 #include "str.hh"
@@ -44,7 +45,7 @@ struct Window : public Object {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  void Atoms(const std::function<void(Atom&)>& cb) override;
+  void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
 
   // Called after deserialization. Makes the window object attach its native handle to the window
   // with the current title.

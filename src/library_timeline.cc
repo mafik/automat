@@ -1815,13 +1815,13 @@ std::unique_ptr<Object::Toy> Timeline::MakeToy(ui::Widget* parent) {
   return std::make_unique<TimelineWidget>(parent, *this);
 }
 
-void Timeline::Atoms(const function<void(Atom&)>& cb) {
+void Timeline::Atoms(const function<LoopControl(Atom&)>& cb) {
   for (auto& track_arg : tracks) {
-    cb(*track_arg);
+    if (LoopControl::Break == cb(*track_arg)) return;
   }
-  cb(next_arg);
-  cb(run);
-  cb(running);
+  if (LoopControl::Break == cb(next_arg)) return;
+  if (LoopControl::Break == cb(run)) return;
+  if (LoopControl::Break == cb(running)) return;
 }
 
 struct TrackBaseWidget : Object::Toy {

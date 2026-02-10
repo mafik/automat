@@ -55,8 +55,10 @@ struct ImageArgument : Argument {
   PaintDrawable& Icon() override { return icon; }
 
   void CanConnect(Object& start, Atom& end, Status& status) const override {
-    if (auto* image_provider = dynamic_cast<ImageProvider*>(&end); image_provider == nullptr) {
+    auto* image_provider = dynamic_cast<ImageProvider*>(&end);
+    if (image_provider == nullptr) {
       AppendErrorMessage(status) += "Can only connect to Image Provider";
+      return;
     }
   }
 
@@ -1092,10 +1094,10 @@ std::unique_ptr<Object::Toy> TesseractOCR::MakeToy(ui::Widget* parent) {
   return std::make_unique<TesseractWidget>(parent, *this);
 }
 
-void TesseractOCR::Atoms(const std::function<void(Atom&)>& cb) {
-  cb(image_arg);
-  cb(text_arg);
-  cb(next_arg);
+void TesseractOCR::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+  if (LoopControl::Break == cb(image_arg)) return;
+  if (LoopControl::Break == cb(text_arg)) return;
+  if (LoopControl::Break == cb(next_arg)) return;
 }
 
 void TesseractOCR::Run::OnRun(std::unique_ptr<RunTask>&) {

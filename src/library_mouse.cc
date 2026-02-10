@@ -505,7 +505,9 @@ static void SendMouseButtonEvent(ui::PointerButton button, bool down) {
 string_view MouseButtonEvent::Name() const { return "Mouse Button Event"sv; }
 
 Ptr<Object> MouseButtonEvent::Clone() const { return MAKE_PTR(MouseButtonEvent, button, down); }
-void MouseButtonEvent::Atoms(const std::function<void(Atom&)>& cb) { cb(next_arg); }
+void MouseButtonEvent::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+  if (LoopControl::Break == cb(next_arg)) return;
+}
 void MouseButtonEvent::MyRunnable::OnRun(std::unique_ptr<RunTask>&) {
   auto& event = MouseButtonEvent();
   ZoneScopedN("MouseClick");
@@ -895,9 +897,9 @@ string_view MouseButtonPresser::Name() const { return "Mouse Button Presser"sv; 
 
 Ptr<Object> MouseButtonPresser::Clone() const { return MAKE_PTR(MouseButtonPresser, button); }
 
-void MouseButtonPresser::Atoms(const std::function<void(Atom&)>& cb) {
-  cb(*this);
-  cb(next_arg);
+void MouseButtonPresser::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+  if (LoopControl::Break == cb(*this)) return;
+  if (LoopControl::Break == cb(next_arg)) return;
 }
 
 std::unique_ptr<Object::Toy> MouseButtonPresser::MakeToy(ui::Widget* parent) {

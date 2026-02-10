@@ -280,7 +280,7 @@ void* MachineWidget::Nearby(Vec2 start, float radius, std::function<void*(Locati
 }
 
 void MachineWidget::NearbyCandidates(Location& here, const Argument& arg, float radius,
-                                     std::function<void(Location&, Vec<Vec2AndDir>&)> callback) {
+                                     std::function<void(Object::Toy&, Atom&, Vec<Vec2AndDir>&)> callback) {
   // Check the currently dragged object
   auto& root_widget = *ui::root_widget;
   for (auto* action : root_widget.active_actions) {
@@ -289,12 +289,14 @@ void MachineWidget::NearbyCandidates(Location& here, const Argument& arg, float 
         if (location.get() == &here) {
           continue;
         }
-        if (!arg.CanConnect(*here.object, *location->object)) {
+        Atom* atom = arg.CanConnect(*here.object, *location->object);
+        if (!atom) {
           continue;
         }
+        auto& toy = location->ToyForObject();
         Vec<Vec2AndDir> to_points;
-        location->ToyForObject().ConnectionPositions(to_points);
-        callback(*location, to_points);
+        toy.ConnectionPositions(to_points);
+        callback(toy, *atom, to_points);
       }
     }
   }
@@ -304,12 +306,14 @@ void MachineWidget::NearbyCandidates(Location& here, const Argument& arg, float 
     if (&other == &here) {
       return nullptr;
     }
-    if (!arg.CanConnect(*here.object, *other.object)) {
+    Atom* atom = arg.CanConnect(*here.object, *other.object);
+    if (!atom) {
       return nullptr;
     }
+    auto& toy = other.ToyForObject();
     Vec<Vec2AndDir> to_points;
-    other.ToyForObject().ConnectionPositions(to_points);
-    callback(other, to_points);
+    toy.ConnectionPositions(to_points);
+    callback(toy, *atom, to_points);
     return nullptr;
   });
 }

@@ -464,9 +464,10 @@ void LocationWidget::UpdateAutoconnectArgs() {
     auto start = toy.ArgStart(arg, parent_mw);
 
     // Find the current distance & target of this connection
+    Atom* old_atom = nullptr;
     float old_dist2 = HUGE_VALF;
-    Location* old_target = nullptr;
     if (auto end = arg.Find(*loc->object)) {
+      old_atom = end.Get();
       Vec<Vec2AndDir> to_positions;
       auto* end_loc = end.Owner<Object>()->MyLocation();
       auto& end_toy = end_loc->ToyForObject();
@@ -476,33 +477,35 @@ void LocationWidget::UpdateAutoconnectArgs() {
         Vec2 to_pos = other_up.mapPoint(to.pos);
         float dist2 = LengthSquared(start.pos - to_pos);
         if (dist2 <= old_dist2) {
-          old_target = end_loc;
           old_dist2 = dist2;
         }
       }
     }
 
-    // Find the new distance & target
+    // Find the nearest compatible atom
     float new_dist2 = autoconnect_radius * autoconnect_radius;
-    Location* new_target = nullptr;
+    Object::Toy* new_toy = nullptr;
+    Atom* new_atom = nullptr;
     parent_mw->NearbyCandidates(
-        *loc, arg, autoconnect_radius, [&](Location& other, Vec<Vec2AndDir>& to_points) {
-          auto other_up = TransformBetween(other.ToyForObject(), *parent_mw);
+        *loc, arg, autoconnect_radius,
+        [&](Object::Toy& toy, Atom& atom, Vec<Vec2AndDir>& to_points) {
+          auto other_up = TransformBetween(toy, *parent_mw);
           for (auto& to : to_points) {
             Vec2 to_pos = other_up.mapPoint(to.pos);
             float dist2 = LengthSquared(start.pos - to_pos);
             if (dist2 <= new_dist2) {
               new_dist2 = dist2;
-              new_target = &other;
+              new_toy = &toy;
+              new_atom = &atom;
             }
           }
         });
 
-    if (new_target == old_target) {
+    if (new_atom == old_atom) {
       return;
     }
-    if (new_target) {
-      arg.Connect(*loc->object, new_target->object);
+    if (new_toy) {
+      arg.Connect(*loc->object, NestedPtr<Atom>(new_toy->owner.Lock(), new_atom));
     } else {
       arg.Disconnect(*loc->object);
     }
@@ -528,7 +531,8 @@ void LocationWidget::UpdateAutoconnectArgs() {
       if (autoconnect_radius <= 0) {
         return;
       }
-      if (!arg.CanConnect(*other->object, *loc->object)) {
+      Atom* this_atom = arg.CanConnect(*other->object, *loc->object);
+      if (!this_atom) {
         return;  // `this` location can't be connected to `other`s `arg`
       }
 
@@ -541,9 +545,10 @@ void LocationWidget::UpdateAutoconnectArgs() {
       start.pos = other_up.mapPoint(start.pos);
 
       // Find the current distance & target of this connection
+      Atom* old_atom = nullptr;
       float old_dist2 = HUGE_VALF;
-      Location* old_target = nullptr;
       if (auto end = arg.Find(*other->object)) {
+        old_atom = end.Get();
         Vec<Vec2AndDir> to_positions;
         auto* end_loc = end.Owner<Object>()->MyLocation();
         auto& end_toy = end_loc->ToyForObject();
@@ -553,7 +558,6 @@ void LocationWidget::UpdateAutoconnectArgs() {
           Vec2 to_pos = to_up.mapPoint(to.pos);
           float dist2 = LengthSquared(start.pos - to_pos);
           if (dist2 <= old_dist2) {
-            old_target = end_loc;
             old_dist2 = dist2;
           }
         }
@@ -561,20 +565,20 @@ void LocationWidget::UpdateAutoconnectArgs() {
 
       // Find the new distance & target
       float new_dist2 = std::min(autoconnect_radius * autoconnect_radius, old_dist2);
-      Location* new_target = old_target;
+      Atom* new_atom = old_atom;
       for (auto& to : to_points) {
         float dist2 = LengthSquared(start.pos - to.pos);
         if (dist2 <= new_dist2) {
           new_dist2 = dist2;
-          new_target = loc.get();
+          new_atom = this_atom;
         }
       }
 
-      if (new_target == old_target) {
+      if (new_atom == old_atom) {
         return;
       }
-      if (new_target) {
-        arg.Connect(*other->object, new_target->object);
+      if (new_atom) {
+        arg.Connect(*other->object, NestedPtr<Atom>(loc->object->AcquirePtr(), new_atom));
       } else {
         arg.Disconnect(*other->object);
       }

@@ -195,8 +195,8 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     if (mw) {
       mw->NearbyCandidates(
           from, *arg, autoconnect_radius * 2 + 10_cm,
-          [&](Location& candidate, Vec<Vec2AndDir>& to_points) {
-            auto m = TransformBetween(candidate.ToyForObject(), *mw);
+          [&](Object::Toy& candidate_toy, Atom&, Vec<Vec2AndDir>& to_points) {
+            auto m = TransformBetween(candidate_toy, *mw);
             for (auto& to : to_points) {
               to.pos = m.mapPoint(to.pos);
             }

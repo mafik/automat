@@ -62,12 +62,6 @@ Location::~Location() {
     other->update_observers.erase(this);
   }
   CancelScheduledAt(*this);
-  if (root_widget && object) {
-    object->Args([&](Argument& arg) {
-      auto arg_of = arg.Of(*object);
-      root_widget->toys.container.erase(ToyStore::MakeKey(arg_of));
-    });
-  }
 }
 
 std::unique_ptr<LocationWidget> Location::MakeToy(ui::Widget* parent) {

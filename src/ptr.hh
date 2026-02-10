@@ -137,7 +137,9 @@ struct ReferenceCounted : virtual Atom {
 
   ReferenceCounted() = default;
   ReferenceCounted(const ReferenceCounted&) : owning_refs(1), weak_refs(1) {}
-  virtual ~ReferenceCounted() = default;
+  virtual ~ReferenceCounted() {
+    WakeToys();  // wake the zombie toys
+  }
 
   [[nodiscard]] bool IncrementOwningRefsNonZero() const {
     uint32_t n = owning_refs.load(std::memory_order_relaxed);

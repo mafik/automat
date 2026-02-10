@@ -7,6 +7,7 @@
 
 #include "base.hh"
 #include "machine_code.hh"
+#include "parent_ref.hh"
 #include "textures.hh"
 #include "ui_small_buffer_widget.hh"
 
@@ -62,10 +63,15 @@ extern AssemblerArgument assembler_arg;
 extern JumpArgument jump_arg;
 extern NextInstructionArg next_instruction_arg;
 
-struct Instruction : Object, Runnable, Buffer {
+struct Instruction : Object, Buffer {
   mc::Inst mc_inst;
   NestedWeakPtr<Runnable> jump_target;  // Connection target for jump_arg
   NestedWeakPtr<Object> assembler_weak;
+
+  struct MyRunnable : Runnable {
+    void OnRun(std::unique_ptr<RunTask>&) override;
+    PARENT_REF(Instruction, runnable)
+  } runnable;
 
   void Atoms(const std::function<void(Atom&)>& cb) override;
 
@@ -73,8 +79,8 @@ struct Instruction : Object, Runnable, Buffer {
   Ptr<Object> Clone() const override;
 
   LongRunning* AsLongRunning() override;
-
-  void OnRun(std::unique_ptr<RunTask>&) override;
+  Runnable* AsRunnable() override { return &runnable; }
+  SignalNext* AsSignalNext() override { return &runnable; }
 
   Buffer::Type imm_type = Buffer::Type::Unsigned;
 

@@ -151,7 +151,16 @@ void ScheduleArgumentTargets(Object& source, Argument& arg) {
   }
 
   if (auto next = arg.Find(source)) {
-    dynamic_cast<Runnable*>(next.Get())->ScheduleRun(*next.Owner<Object>());
+    // The target may be the Object itself (with AsRunnable) or a Runnable sub-atom
+    Runnable* runnable = nullptr;
+    if (auto* obj = dynamic_cast<Object*>(next.Get())) {
+      runnable = obj->AsRunnable();
+    } else {
+      runnable = dynamic_cast<Runnable*>(next.Get());
+    }
+    if (runnable) {
+      runnable->ScheduleRun(*next.Owner<Object>());
+    }
   }
 }
 

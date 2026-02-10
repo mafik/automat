@@ -32,17 +32,21 @@ struct TrackBase : Object {
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };
 
-struct OnOffTrack : TrackBase, OnOff {
+struct OnOffTrack : TrackBase {
   time::Duration on_at = time::kDurationGuard;
+  struct MyOnOff : OnOff {
+    bool IsOn() const override;
+    void OnTurnOn() override {}
+    void OnTurnOff() override {}
+    PARENT_REF(OnOffTrack, on_off)
+  } on_off;
   string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
-  bool IsOn() const override;
-  void OnTurnOn() override {}
-  void OnTurnOff() override {}
+  operator OnOff*() override { return &on_off; }
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
@@ -150,6 +154,7 @@ struct Timeline : Object, SignalNext, TimerNotificationReceiver {
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   void Atoms(const std::function<void(Atom&)>& cb) override;
   LongRunning* AsLongRunning() override { return &running; }
+  SignalNext* AsSignalNext() override { return this; }
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   OnOffTrack& AddOnOffTrack(StrView name);
   Vec2Track& AddVec2Track(StrView name);

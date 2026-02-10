@@ -21,7 +21,7 @@ struct TrackedPtr;
 
 // Base class for objects that want synchronous single-threaded reference tracking through
 // TrackedPtr<T>.
-struct Trackable : virtual Atom {
+struct Trackable : Atom {
   TrackedPtrBase* ref_list = nullptr;
 
   virtual ~Trackable();
@@ -121,7 +121,7 @@ struct WeakPtr;
 template <typename T>
 struct Ptr;
 
-struct ReferenceCounted : virtual Atom {
+struct ReferenceCounted : Atom {
   using AtomicCounter = std::atomic<uint32_t>;
 
   mutable AtomicCounter owning_refs = 1;

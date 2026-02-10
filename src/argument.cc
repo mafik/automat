@@ -55,7 +55,7 @@ std::unique_ptr<ArgumentOf::Toy> ArgumentOf::MakeToy(ui::Widget* parent) {
 }
 
 void NextArg::CanConnect(Object& start, Atom& end, Status& status) const {
-  if (!dynamic_cast<SignalNext*>(&start)) {
+  if (!start.AsSignalNext()) {
     AppendErrorMessage(status) += "Next source must be a Runnable";
   }
   if (!dynamic_cast<Runnable*>(&end)) {
@@ -64,7 +64,7 @@ void NextArg::CanConnect(Object& start, Atom& end, Status& status) const {
 }
 
 void NextArg::Connect(Object& start, const NestedPtr<Atom>& end) {
-  SignalNext* start_signal = dynamic_cast<SignalNext*>(&start);
+  SignalNext* start_signal = start.AsSignalNext();
   if (start_signal == nullptr) return;
   if (end) {
     if (Runnable* end_runnable = dynamic_cast<Runnable*>(end.Get())) {
@@ -76,7 +76,7 @@ void NextArg::Connect(Object& start, const NestedPtr<Atom>& end) {
 }
 
 NestedPtr<Atom> NextArg::Find(const Object& start) const {
-  if (auto* start_signal = dynamic_cast<const SignalNext*>(&start)) {
+  if (auto* start_signal = const_cast<Object&>(start).AsSignalNext()) {
     return start_signal->next.Lock();
   } else {
     ERROR_ONCE << start.Name()

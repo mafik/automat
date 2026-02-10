@@ -9,10 +9,7 @@
 
 namespace automat {
 
-// Atom is a virtual(*) base class for most things in Automat.
-//
-// (*) "virtual" - means that even if some object has a complex, diamond-type inheritance, it's
-// always going to have exactly one `Atom` base.
+// Atom is a base class for most things in Automat.
 //
 // Although Atom itself doesn't expose much methods (only the ability to identify the specific
 // type), it's role is that it's a base for many interfaces.

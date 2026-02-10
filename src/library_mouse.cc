@@ -506,9 +506,10 @@ string_view MouseButtonEvent::Name() const { return "Mouse Button Event"sv; }
 
 Ptr<Object> MouseButtonEvent::Clone() const { return MAKE_PTR(MouseButtonEvent, button, down); }
 void MouseButtonEvent::Atoms(const std::function<void(Atom&)>& cb) { cb(next_arg); }
-void MouseButtonEvent::OnRun(std::unique_ptr<RunTask>&) {
+void MouseButtonEvent::MyRunnable::OnRun(std::unique_ptr<RunTask>&) {
+  auto& event = MouseButtonEvent();
   ZoneScopedN("MouseClick");
-  SendMouseButtonEvent(button, down);
+  SendMouseButtonEvent(event.button, event.down);
 }
 audio::Sound& MouseButtonEvent::NextSound() {
   return down ? embedded::assets_SFX_mouse_down_wav : embedded::assets_SFX_mouse_up_wav;

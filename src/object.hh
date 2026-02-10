@@ -24,6 +24,8 @@ struct Argument;
 struct ImageProvider;
 struct OnOff;
 struct LongRunning;
+struct Runnable;
+struct SignalNext;
 struct Syncable;
 struct ObjectSerializer;
 struct ObjectDeserializer;
@@ -73,6 +75,10 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   virtual ImageProvider* AsImageProvider() { return nullptr; }
 
   virtual LongRunning* AsLongRunning() { return nullptr; }
+
+  virtual Runnable* AsRunnable() { return nullptr; }
+
+  virtual SignalNext* AsSignalNext() { return nullptr; }
 
   virtual operator OnOff*() { return nullptr; }
 

@@ -240,10 +240,11 @@ void Instruction::BufferVisit(const BufferVisitor& visitor) {
   visitor(span<char>{});
 }
 
-void Instruction::OnRun(std::unique_ptr<RunTask>& run_task) {
+void Instruction::MyRunnable::OnRun(std::unique_ptr<RunTask>& run_task) {
+  auto& instr = Instruction();
   ZoneScopedN("Instruction");
-  auto assembler = FindOrCreateAssembler(*this);
-  assembler->RunMachineCode(this, std::move(run_task));
+  auto assembler = FindOrCreateAssembler(instr);
+  assembler->RunMachineCode(&instr, std::move(run_task));
 }
 
 LongRunning* Instruction::AsLongRunning() {

@@ -53,7 +53,7 @@ struct ArgumentOf;
 //
 // TODO: think about pointer following
 // TODO: think about multiple targets
-struct Argument : virtual Atom {
+struct Argument : Atom {
   enum class Style { Arrow, Cable, Spotlight, Invisible };
 
   virtual SkColor Tint() const { return "#404040"_color; }

@@ -338,7 +338,7 @@ void Object::Toy::VisitOptions(const OptionsVisitor& visitor) const {
       visitor(del);
       MoveLocationOption move{loc_weak, owner.Copy<Object>()};
       visitor(move);
-      if (auto runnable = loc->As<Runnable>()) {
+      if (auto runnable = loc->object->AsRunnable()) {
         RunOption run{owner.Copy<Object>(), *runnable};
         visitor(run);
       }
@@ -386,7 +386,7 @@ std::unique_ptr<Action> Object::Toy::FindAction(ui::Pointer& p, ui::ActionTrigge
 }
 
 void Object::Updated(WeakPtr<Object>& updated) {
-  if (Runnable* runnable = dynamic_cast<Runnable*>(this)) {
+  if (Runnable* runnable = AsRunnable()) {
     runnable->ScheduleRun(*this);
   }
 }

@@ -176,6 +176,7 @@ void Timer::Updated(WeakPtr<Object>& updated) {
 }
 
 void Timer::Atoms(const std::function<void(Atom&)>& cb) {
+  cb(runnable);
   cb(duration);
   cb(next_arg);
   cb(*AsLongRunning());
@@ -189,13 +190,14 @@ void Timer::AtomName(Atom& atom, Str& out_name) {
   }
 }
 
-void Timer::OnRun(std::unique_ptr<RunTask>& run_task) {
-  auto lock = std::lock_guard(mtx);
+void Timer::MyRunnable::OnRun(std::unique_ptr<RunTask>& run_task) {
+  auto& timer = Timer();
+  auto lock = std::lock_guard(timer.mtx);
   ZoneScopedN("Timer");
-  start_time = time::SteadyClock::now();
-  ScheduleAt(*here, start_time + duration.value);
-  WakeToys();
-  timer_running.BeginLongRunning(std::move(run_task));
+  timer.start_time = time::SteadyClock::now();
+  ScheduleAt(*timer.here, timer.start_time + timer.duration.value);
+  timer.WakeToys();
+  timer.timer_running.BeginLongRunning(std::move(run_task));
 }
 
 void Timer::TimerRunning::OnCancel() {
@@ -250,7 +252,7 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
   if (key == "running") {
     double value = 0;
     d.Get(value, status);
-    timer_running.BeginLongRunning(make_unique<RunTask>(AcquireWeakPtr(), this));
+    timer_running.BeginLongRunning(make_unique<RunTask>(AcquireWeakPtr(), &runnable));
     start_time = time::SteadyNow() - time::FromSeconds(value);
     ScheduleAt(*here, start_time + duration.value);
   } else if (key == "duration_seconds") {
@@ -805,7 +807,7 @@ std::unique_ptr<Action> TimerWidget::FindAction(ui::Pointer& pointer, ui::Action
         if (timer->timer_running.IsRunning()) {
           timer->timer_running.Cancel();
         } else {
-          timer->ScheduleRun(*timer);
+          timer->runnable.ScheduleRun(*timer);
         }
       }
       return nullptr;

@@ -39,7 +39,7 @@ void LongRunning::OnTurnOn() {
     ERROR << "LongRunning::OnFindRunnable didn't return any Object!";
     return;
   }
-  if (auto* runnable = dynamic_cast<Runnable*>(object)) {
+  if (auto* runnable = object->AsRunnable()) {
     runnable->ScheduleRun(*object);
   }
 }

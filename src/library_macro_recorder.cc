@@ -105,7 +105,7 @@ struct TimelineArgument : Argument {
       // Handle connect
       if (auto* timeline = dynamic_cast<Timeline*>(end.Get())) {
         recorder->timeline_connection = end.DynamicCast<Timeline>();
-        if (recorder->IsOn()) {
+        if (recorder->long_running.IsOn()) {
           timeline->BeginRecording();
         }
       }
@@ -155,27 +155,29 @@ static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
   return timeline;
 }
 
-void MacroRecorder::OnRun(std::unique_ptr<RunTask>& run_task) {
+void MacroRecorder::MyRunnable::OnRun(std::unique_ptr<RunTask>& run_task) {
+  auto& mr = MacroRecorder();
   ZoneScopedN("MacroRecorder");
-  if (keylogging == nullptr) {
-    auto timeline = FindOrCreateTimeline(*this);
+  if (mr.keylogging == nullptr) {
+    auto timeline = FindOrCreateTimeline(mr);
     timeline->BeginRecording();
     audio::Play(embedded::assets_SFX_macro_start_wav);
-    root_widget->window->BeginLogging(this, &keylogging, this, &pointer_logging);
+    root_widget->window->BeginLogging(&mr, &mr.keylogging, &mr, &mr.pointer_logging);
   }
-  BeginLongRunning(std::move(run_task));
+  mr.long_running.BeginLongRunning(std::move(run_task));
 }
-void MacroRecorder::OnCancel() {
-  if (auto timeline = FindTimeline(*this)) {
+void MacroRecorder::MyLongRunning::OnCancel() {
+  auto& mr = MacroRecorder();
+  if (auto timeline = FindTimeline(mr)) {
     timeline->StopRecording();
   }
   audio::Play(embedded::assets_SFX_macro_stop_wav);
-  if (keylogging) {
-    keylogging->Release();
+  if (mr.keylogging) {
+    mr.keylogging->Release();
   }
-  if (pointer_logging) {
-    pointer_logging->Release();
-    pointer_logging = nullptr;
+  if (mr.pointer_logging) {
+    mr.pointer_logging->Release();
+    mr.pointer_logging = nullptr;
   }
 }
 
@@ -390,9 +392,9 @@ bool MacroRecorder::DeserializeKey(ObjectDeserializer& d, StrView key) {
     Status status;
     bool value;
     d.Get(value, status);
-    if (OK(status) && IsOn() != value) {
+    if (OK(status) && long_running.IsOn() != value) {
       if (value) {
-        ScheduleRun(*this);
+        runnable.ScheduleRun(*this);
       } else {
         (new CancelTask(AcquireWeakPtr()))->Schedule();
       }
@@ -412,16 +414,16 @@ struct GlassRunButton : ui::PowerButton {
       : ui::PowerButton(parent, on_off, color::kParrotRed, "#eeeeee"_color) {}
   void PointerOver(ui::Pointer& p) override {
     ToggleButton::PointerOver(p);
-    auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
-    if (auto connection_widget = ConnectionWidget::FindOrNull(*macro_recorder, timeline_arg)) {
+    auto& mr = static_cast<MacroRecorder::MyLongRunning*>(target)->MacroRecorder();
+    if (auto connection_widget = ConnectionWidget::FindOrNull(mr, timeline_arg)) {
       connection_widget->animation_state.prototype_alpha_target = 1;
       connection_widget->WakeAnimation();
     }
   }
   void PointerLeave(ui::Pointer& p) override {
     ToggleButton::PointerLeave(p);
-    auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
-    if (auto connection_widget = ConnectionWidget::FindOrNull(*macro_recorder, timeline_arg)) {
+    auto& mr = static_cast<MacroRecorder::MyLongRunning*>(target)->MacroRecorder();
+    if (auto connection_widget = ConnectionWidget::FindOrNull(mr, timeline_arg)) {
       connection_widget->animation_state.prototype_alpha_target = 0;
       connection_widget->WakeAnimation();
     }
@@ -449,7 +451,7 @@ struct MacroRecorderWidget : Object::Toy, ui::PointerMoveCallback {
 
   MacroRecorderWidget(ui::Widget* parent, Object& mr_obj) : Object::Toy(parent, mr_obj) {
     if (auto mr = LockMacroRecorder()) {
-      record_button.reset(new GlassRunButton(this, mr.get()));
+      record_button.reset(new GlassRunButton(this, &mr->long_running));
       record_button->local_to_parent = SkM44::Translate(17.5_mm, 3.2_mm);
       is_recording = mr->keylogging != nullptr;
     }

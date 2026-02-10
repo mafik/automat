@@ -492,6 +492,7 @@ std::unique_ptr<Object::Toy> Window::MakeToy(ui::Widget* parent) {
 void Window::Atoms(const std::function<void(Atom&)>& cb) {
   cb(next_arg);
   cb(capture);
+  cb(image);
 }
 
 void Window::Capture::OnRun(std::unique_ptr<RunTask>&) {
@@ -717,13 +718,5 @@ bool Window::DeserializeKey(ObjectDeserializer& d, StrView key) {
   }
   return true;
 }
-
-// ImageProvider interface implementation
-sk_sp<SkImage> Window::GetImage() {
-  auto lock = std::lock_guard(mutex);
-  return captured_image;
-}
-
-ImageProvider* Window::AsImageProvider() { return this; }
 
 }  // namespace automat::library

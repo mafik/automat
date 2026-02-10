@@ -9,10 +9,19 @@
 namespace automat::library {
 
 struct MacroRecorder : Object,
-                       Runnable,
-                       LongRunning,
                        ui::Keylogger,
                        ui::Pointer::Logger {
+  struct MyRunnable : Runnable {
+    void OnRun(std::unique_ptr<RunTask>&) override;
+    PARENT_REF(MacroRecorder, runnable)
+  } runnable;
+  struct MyLongRunning : LongRunning {
+    Object* OnFindRunnable() override { return &MacroRecorder(); }
+    void OnCancel() override;
+    ~MyLongRunning() { OnLongRunningDestruct(); }
+    PARENT_REF(MacroRecorder, long_running)
+  } long_running;
+
   ui::Keylogging* keylogging = nullptr;
   ui::Pointer::Logging* pointer_logging = nullptr;
   NestedWeakPtr<Timeline> timeline_connection;
@@ -26,9 +35,9 @@ struct MacroRecorder : Object,
 
   void Atoms(const std::function<void(Atom&)>& cb) override;
 
-  void OnRun(std::unique_ptr<RunTask>&) override;
-  void OnCancel() override;
-  LongRunning* AsLongRunning() override { return this; }
+  LongRunning* AsLongRunning() override { return &long_running; }
+  Runnable* AsRunnable() override { return &runnable; }
+  SignalNext* AsSignalNext() override { return &runnable; }
   void KeyloggerKeyDown(ui::Key) override;
   void KeyloggerKeyUp(ui::Key) override;
   void KeyloggerOnRelease(const ui::Keylogging&) override;

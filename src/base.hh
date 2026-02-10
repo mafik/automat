@@ -109,7 +109,7 @@ struct LongRunning : OnOff {
 
 struct Runnable;
 
-struct SignalNext : virtual Atom {
+struct SignalNext {
   NestedWeakPtr<Runnable> next;
 };
 

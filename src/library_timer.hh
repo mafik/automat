@@ -10,9 +10,14 @@
 
 namespace automat::library {
 
-struct Timer : Object, Runnable, TimerNotificationReceiver {
+struct Timer : Object, TimerNotificationReceiver {
   // Guards access to duration & LongRunning members
   std::mutex mtx;
+  struct MyRunnable : Runnable {
+    StrView Name() const override { return "Run"sv; }
+    void OnRun(std::unique_ptr<RunTask>&) override;
+    PARENT_REF(Timer, runnable)
+  } runnable;
   struct MyDuration : Syncable {
     time::Duration value = 10s;
     StrView Name() const override { return "duration"sv; }
@@ -43,8 +48,9 @@ struct Timer : Object, Runnable, TimerNotificationReceiver {
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   void Atoms(const std::function<void(Atom&)>& cb) override;
   void AtomName(Atom&, Str& out_name) override;
-  void OnRun(std::unique_ptr<RunTask>&) override;
   LongRunning* AsLongRunning() override { return &timer_running; }
+  Runnable* AsRunnable() override { return &runnable; }
+  SignalNext* AsSignalNext() override { return &runnable; }
   void Updated(WeakPtr<Object>& updated) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
 

@@ -6,11 +6,10 @@
 #include "image_provider.hh"
 #include "parent_ref.hh"
 #include "str.hh"
-#include "time.hh"
 
 namespace automat::library {
 
-struct Window : public Object, ImageProvider {
+struct Window : public Object {
   std::mutex mutex;
   Str title = "";
   bool run_continuously = true;
@@ -23,6 +22,15 @@ struct Window : public Object, ImageProvider {
 
     PARENT_REF(Window, capture)
   } capture;
+
+  struct MyImage : ImageProvider {
+    sk_sp<SkImage> GetImage() override {
+      auto& w = Window();
+      auto lock = std::lock_guard(w.mutex);
+      return w.captured_image;
+    }
+    PARENT_REF(Window, image);
+  } image;
 
   struct Impl;
   // Private implementation to avoid polluting header with platform-specific defines.
@@ -48,8 +56,7 @@ struct Window : public Object, ImageProvider {
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 
   // ImageProvider interface
-  sk_sp<SkImage> GetImage() override;
-  ImageProvider* AsImageProvider() override;
+  ImageProvider* AsImageProvider() override { return &image; }
 };
 
 }  // namespace automat::library

@@ -9,8 +9,7 @@
 namespace automat {
 
 // Interface for objects that can provide image data
-struct ImageProvider : virtual Atom {
-  virtual ~ImageProvider() = default;
+struct ImageProvider : Atom {
   virtual sk_sp<SkImage> GetImage() = 0;
 };
 

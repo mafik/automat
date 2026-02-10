@@ -55,20 +55,18 @@ struct ImageArgument : Argument {
   PaintDrawable& Icon() override { return icon; }
 
   void CanConnect(Object& start, Atom& end, Status& status) const override {
-    if (auto* obj = dynamic_cast<Object*>(&end)) {
-      if (!obj->AsImageProvider()) {
-        AppendErrorMessage(status) += "Object must provide images";
-      }
+    if (auto* image_provider = dynamic_cast<ImageProvider*>(&end); image_provider == nullptr) {
+      AppendErrorMessage(status) += "Can only connect to Image Provider";
     }
   }
 
   void Connect(Object& start, const NestedPtr<Atom>& end) override {
     auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
     if (tesseract == nullptr) return;
-    auto* end_obj = dynamic_cast<Object*>(end.Get());
-    if (end_obj == nullptr) return;
+    auto* image_provider = dynamic_cast<ImageProvider*>(end.Get());
+    if (image_provider == nullptr) return;
     tesseract->image_provider_weak =
-        NestedWeakPtr<ImageProvider>(end.GetOwnerWeak(), end_obj->AsImageProvider());
+        NestedWeakPtr<ImageProvider>(end.GetOwnerWeak(), image_provider);
   }
 
   NestedPtr<Atom> Find(const Object& start) const override {

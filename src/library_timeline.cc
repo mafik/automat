@@ -2557,7 +2557,7 @@ void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
     } else {
       on_off->TurnOff();
     }
-  } else if (auto runnable = dynamic_cast<Runnable*>(target.object.get())) {
+  } else if (auto runnable = target.object->AsRunnable()) {
     if (on) {
       runnable->ScheduleRun(*target.object);
     } else {
@@ -2584,16 +2584,17 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
   }
 }
 
-bool OnOffTrack::IsOn() const {
-  if (timeline->state == Timeline::kPaused) {
+bool OnOffTrack::MyOnOff::IsOn() const {
+  auto& track = OnOffTrack();
+  if (track.timeline->state == Timeline::kPaused) {
     return false;
   }
   auto now = time::SteadyNow();
-  auto current_offset = timeline->CurrentOffset(now);
+  auto current_offset = track.timeline->CurrentOffset(now);
 
   int i = 0;
-  for (; i < timestamps.size(); ++i) {
-    if (timestamps[i] > current_offset) {
+  for (; i < track.timestamps.size(); ++i) {
+    if (track.timestamps[i] > current_offset) {
       break;
     }
   }

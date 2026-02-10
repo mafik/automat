@@ -25,14 +25,19 @@ struct Mouse : Object {
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 };
 
-struct MouseButtonEvent : Object, Runnable {
+struct MouseButtonEvent : Object {
   ui::PointerButton button;
   bool down;
+  struct MyRunnable : Runnable {
+    void OnRun(std::unique_ptr<RunTask>&) override;
+    PARENT_REF(MouseButtonEvent, runnable)
+  } runnable;
   MouseButtonEvent(ui::PointerButton button, bool down) : button(button), down(down) {}
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   void Atoms(const std::function<void(Atom&)>& cb) override;
-  void OnRun(std::unique_ptr<RunTask>&) override;
+  Runnable* AsRunnable() override { return &runnable; }
+  SignalNext* AsSignalNext() override { return &runnable; }
   audio::Sound& NextSound() override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 

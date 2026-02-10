@@ -564,8 +564,10 @@ void LocationWidget::UpdateAutoconnectArgs() {
       }
 
       // Find the new distance & target
-      float new_dist2 = std::min(autoconnect_radius * autoconnect_radius, old_dist2);
-      Atom* new_atom = old_atom;
+      float radius2 = autoconnect_radius * autoconnect_radius;
+      bool old_is_here = (old_atom == this_atom);
+      float new_dist2 = old_is_here ? radius2 : std::min(radius2, old_dist2);
+      Atom* new_atom = old_is_here ? nullptr : old_atom;
       for (auto& to : to_points) {
         float dist2 = LengthSquared(start.pos - to.pos);
         if (dist2 <= new_dist2) {

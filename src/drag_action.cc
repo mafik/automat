@@ -198,9 +198,6 @@ DragLocationAction::~DragLocationAction() {
   ui::root_widget->WakeAnimation();
 }
 
-bool IsDragged(const Location& location) {
-  return location.widget &&
-         dynamic_cast<const DragLocationWidget*>(location.widget->parent.get()) != nullptr;
-}
+bool IsDragged(const LocationWidget& location) { return location.local_anchor.has_value(); }
 
 }  // namespace automat

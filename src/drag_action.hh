@@ -13,6 +13,7 @@
 namespace automat {
 
 struct Location;
+struct LocationWidget;
 
 namespace ui {
 
@@ -61,6 +62,6 @@ struct DragLocationAction : Action {
   void VisitObjects(std::function<void(Object&)>) override;
 };
 
-bool IsDragged(const Location& location);
+bool IsDragged(const LocationWidget& location);
 
 }  // namespace automat

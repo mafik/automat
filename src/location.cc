@@ -234,7 +234,7 @@ animation::Phase LocationWidget::Tick(time::Timer& timer) {
   loc->InvalidateConnectionWidgets(true, false);
 
   {
-    float target_elevation = IsDragged(*loc) ? 1 : 0;
+    float target_elevation = IsDragged(*this) ? 1 : 0;
     phase |= elevation.SineTowards(target_elevation, timer.d, 0.2);
   }
   if (HasError(*loc->object)) {

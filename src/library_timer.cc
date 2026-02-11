@@ -179,11 +179,11 @@ void Timer::Atoms(const std::function<LoopControl(Atom&)>& cb) {
   if (LoopControl::Break == cb(runnable)) return;
   if (LoopControl::Break == cb(duration)) return;
   if (LoopControl::Break == cb(next_arg)) return;
-  if (LoopControl::Break == cb(*AsLongRunning())) return;
+  if (LoopControl::Break == cb(timer_running)) return;
 }
 
 void Timer::AtomName(Atom& atom, Str& out_name) {
-  if (&atom == AsLongRunning()) {
+  if (&atom == &timer_running) {
     out_name = "Running";
   } else if (&atom == &duration) {
     out_name = "Duration";

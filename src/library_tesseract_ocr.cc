@@ -34,9 +34,9 @@
 #include "log.hh"
 #include "str.hh"
 #include "svg.hh"
+#include "text_widget.hh"
 #include "textures.hh"
 #include "time.hh"
-#include "ui_constants.hh"
 
 using namespace std;
 
@@ -45,14 +45,12 @@ namespace automat::library {
 constexpr bool kDebugEyeShape = false;
 
 struct ImageArgument : Argument {
-  TextDrawable icon;
-
-  ImageArgument() : icon("IMG", ui::kLetterSize, ui::GetFont()) {}
-
   StrView Name() const override { return "Image"sv; }
   float AutoconnectRadius() const override { return 20_cm; }
   Style GetStyle() const override { return Style::Invisible; }
-  PaintDrawable& Icon() override { return icon; }
+  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
+    return std::make_unique<TextWidget>(parent, "IMG");
+  }
 
   void CanConnect(Object& start, Atom& end, Status& status) const override {
     auto* image_provider = dynamic_cast<ImageProvider*>(&end);
@@ -79,12 +77,11 @@ struct ImageArgument : Argument {
 };
 
 struct TextArgument : Argument {
-  TextDrawable icon;
-
-  TextArgument() : icon("T", ui::kLetterSize, ui::GetFont()) {}
-
   StrView Name() const override { return "Text"sv; }
-  PaintDrawable& Icon() override { return icon; }
+
+  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
+    return std::make_unique<TextWidget>(parent, "T");
+  }
 
   void CanConnect(Object& start, Atom& end, Status& status) const override {
     // Any object can receive text

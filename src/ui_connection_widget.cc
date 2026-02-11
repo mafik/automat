@@ -276,7 +276,9 @@ struct ConnectionWidgetLocker {
 // TextureAnchors. Tick uses it for connection animation and TextureAnchors uses it to stretch
 // the texture into most up-to-date position.
 static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
-  w.pos_dir = a.start_widget->ArgStart(*a.start_arg, a.board_widget);
+  if (a.start_widget && a.start_arg.Get()) {
+    w.pos_dir = a.start_widget->ArgStart(*a.start_arg, a.board_widget);
+  }
 
   w.to_points.clear();
 
@@ -325,6 +327,10 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   }
 
   UpdateEndpoints(*this, a);
+
+  if (icon == nullptr && a.start_arg.Get() && style == Argument::Style::Cable) {
+    icon = a.start_arg->MakeIcon(this);
+  }
 
   // Lazy initialization of cable physics state
   if (!state.has_value() && style == Argument::Style::Cable) {
@@ -451,7 +457,7 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
 
   if (state) {
     if (alpha > 0.01f) {
-      DrawOpticalConnector(canvas, *state, arg->Icon());
+      DrawOpticalConnector(canvas, *state, icon.get());
     }
   } else {
     if (style == Argument::Style::Arrow) {

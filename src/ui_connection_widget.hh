@@ -71,6 +71,7 @@ struct ConnectionWidget : Toy {
   float alpha = 0;
   float length = 0;
   mutable std::unique_ptr<ObjectToy> prototype_widget;
+  std::unique_ptr<ui::Widget> icon;
 
   ConnectionWidget(Widget* parent, Object&, Argument&);
 

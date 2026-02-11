@@ -17,7 +17,7 @@
 #include "black_hole.hh"
 #include "drag_action.hh"
 #include "embedded.hh"
-#include "format.hh"
+#include "font.hh"
 #include "loading_animation.hh"
 #include "math.hh"
 #include "object.hh"

@@ -33,6 +33,7 @@
 #include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
+#include "widget.hh"
 
 namespace automat::ui {
 
@@ -861,8 +862,7 @@ void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filte
   }
 }
 
-void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
-                          PaintDrawable& icon) {
+void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state, Widget* icon) {
   float dispenser_scale = state.location.widget->toy->local_to_parent.rc(0, 0);
 
   SkMatrix connector_matrix = state.ConnectorMatrix();
@@ -966,7 +966,7 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
 
   canvas.restore();
 
-  {  // Icon on the metal casing
+  if (icon) {  // Icon on the metal casing
 
     Vec2 icon_offset = connector_matrix.mapPoint(Vec2(0, kCasingHeight / 2));
 
@@ -975,15 +975,19 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
     SkColor adjusted_color = color::AdjustLightness(base_color, state.lightness_pct);
     adjusted_color = color::MixColors(adjusted_color, bright_light, state.lightness_pct / 100);
 
-    SkPaint icon_paint;
-    icon_paint.setColor(adjusted_color);
-    icon_paint.setAntiAlias(true);
-    icon.paint = icon_paint;
+    auto* icon_paint = PaintMixin::Get(icon);
+    if (icon_paint) {
+      SkPaint paint;
+      paint.setColor(adjusted_color);
+      paint.setAntiAlias(true);
+      *icon_paint = paint;
+    }
+
     canvas.save();
     canvas.translate(icon_offset.x, icon_offset.y);
     canvas.scale(state.connector_scale, state.connector_scale);
 
-    icon.onDraw(&canvas);
+    icon->Draw(canvas);
 
     // Draw blur
     if (state.lightness_pct > 1) {
@@ -994,8 +998,11 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
       glow_paint.setMaskFilter(
           SkMaskFilter::MakeBlur(SkBlurStyle::kOuter_SkBlurStyle, sigma, false));
       glow_paint.setBlendMode(SkBlendMode::kScreen);
-      icon.paint = glow_paint;
-      icon.onDraw(&canvas);
+      if (icon_paint) {
+        *icon_paint = glow_paint;
+      }
+
+      icon->Draw(canvas);
     }
     canvas.restore();
   }

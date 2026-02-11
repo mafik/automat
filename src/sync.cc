@@ -206,6 +206,10 @@ animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
   bounds = Rect{};
   auto& toy_store = ToyStore();
 
+  // Check if the object of this connection still exists.
+  auto owner = LockOwner();
+  if (!owner) return animation::Finished;
+
   // Find the gear via the syncable's end pointer
   auto* syncable = dynamic_cast<Syncable*>(atom);
   auto gear = syncable->end.LockAs<Gear>();

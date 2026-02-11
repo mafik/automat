@@ -6,13 +6,8 @@
 
 namespace automat {
 
-struct FlipFlopIcon : PaintDrawable {
-  void onDraw(SkCanvas* canvas) override;
-};
-
 struct OnOff : Syncable {
-  FlipFlopIcon icon;  // TODO: move this elsewhere
-  PaintDrawable& Icon() override;
+  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override;
 
   virtual ~OnOff() { Unsync(); }
 

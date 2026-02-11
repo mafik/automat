@@ -27,7 +27,6 @@
 #include "base.hh"
 #include "color.hh"
 #include "font.hh"
-#include "key_button.hh"
 #include "library_mouse.hh"
 #include "math.hh"
 #include "number_text_field.hh"
@@ -296,11 +295,7 @@ static SkPath GetRecPath() {
 
 static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
 
-TrackArgument::TrackArgument(StrView name) : icon(name, kKeyLetterSize, KeyFont()), name(name) {
-  // interface = this;
-}
-
-PaintDrawable& TrackArgument::Icon() { return icon; }
+TrackArgument::TrackArgument(StrView name) : name(name) {}
 
 void TrackArgument::CanConnect(Object& start, Atom& end, Status& status) const {}
 

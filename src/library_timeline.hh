@@ -9,6 +9,7 @@
 #include "parent_ref.hh"
 #include "pointer.hh"
 #include "run_button.hh"
+#include "text_widget.hh"
 #include "time.hh"
 #include "timer_thread.hh"
 #include "widget.hh"
@@ -84,7 +85,6 @@ struct Float64Track : TrackBase {
 };
 
 struct TrackArgument : InlineArgument {
-  TextDrawable icon;
   Ptr<TrackBase> track;
   Str name;
 
@@ -92,7 +92,10 @@ struct TrackArgument : InlineArgument {
 
   SkColor Tint() const override { return "#17aeb7"_color; }
   SkColor Light() const override { return "#17aeb7"_color; }
-  PaintDrawable& Icon() override;
+
+  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
+    return std::make_unique<TextWidget>(parent, name);
+  }
   StrView Name() const override { return name; }
 
   void CanConnect(Object& start, Atom& end, Status& status) const override;

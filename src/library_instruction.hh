@@ -48,7 +48,7 @@ struct JumpArgument : Argument {
   JumpArgument();
 
   StrView Name() const override { return "Jump"sv; }
-  PaintDrawable& Icon() override;
+  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override;
   void CanConnect(Object& start, Atom& end, Status& status) const override;
   void OnConnect(Object& start, const NestedPtr<Atom>& end) override;
   NestedPtr<Atom> Find(const Object& start) const override;

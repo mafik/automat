@@ -10,18 +10,15 @@
 #include "root_widget.hh"
 #include "svg.hh"
 #include "ui_connection_widget.hh"
+#include "ui_shape_widget.hh"
 #include "widget.hh"
 
 namespace automat {
 
 NextArg next_arg;
 
-PaintDrawable& Argument::Icon() {
-  static DrawableSkPath default_icon = [] {
-    SkPath path = PathFromSVG(kNextShape);
-    return DrawableSkPath(path);
-  }();
-  return default_icon;
+std::unique_ptr<ui::Widget> Argument::MakeIcon(ui::Widget* parent) {
+  return ui::MakeShapeWidget(parent, kNextShape, "#ffffff"_color);
 }
 
 Object* Argument::ObjectOrNull(Object& start) const {

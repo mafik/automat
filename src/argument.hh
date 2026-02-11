@@ -4,7 +4,6 @@
 
 #include "color.hh"
 #include "control_flow.hh"
-#include "drawable.hh"
 #include "object.hh"
 #include "status.hh"
 #include "units.hh"
@@ -12,8 +11,9 @@
 namespace automat {
 
 namespace ui {
+struct Widget;
 struct ConnectionWidget;
-}
+}  // namespace ui
 
 enum class CableTexture {
   Smooth,
@@ -114,7 +114,7 @@ struct Argument : Atom {
   // This is used by various *OnMake methods to create new object - and for object preview.
   virtual Ptr<Object> Prototype() const { return nullptr; }
 
-  virtual PaintDrawable& Icon();  // TODO: weird - clean this up
+  virtual std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent);
 
   // Use this method if you don't actually care about specific atom that the argument points to -
   // just the target object (that owns that atom).

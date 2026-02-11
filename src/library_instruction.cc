@@ -29,7 +29,6 @@
 #include "argument.hh"
 #include "automat.hh"
 #include "color.hh"
-#include "drawable.hh"
 #include "embedded.hh"
 #include "font.hh"
 #include "hex.hh"
@@ -41,6 +40,7 @@
 #include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
+#include "ui_shape_widget.hh"
 #include "wave1d.hh"
 #include "widget.hh"
 
@@ -89,23 +89,20 @@ RegisterPresentation kRegisters[kGeneralPurposeRegisterCount] = {
     },
 };
 
-static const SkPath kJumpPath = PathFromSVG(
+const char* kJumpPathSVG =
     "m.7-2.7a.5.5 0 000 1 .5.5 0 000-1m-2.6 2a.1.1 0 01-.1-.5l1.2-.3 1.4 0 1.1.6 1 0a.1.1 0 010 "
     ".5l-1.1 0-.7-.3-.5 1.1 1.3-0 .9 1a.1.1 0 01-.4.4l-.7-.8-1.8 0-.9.9-1.1 0a.1.1 0 010-.6l.8 0 "
-    ".9-1 .5-1.3-.7-0z",
-    SVGUnit_Millimeters);
+    ".9-1 .5-1.3-.7-0z";
 
-struct JumpDrawable : PaintDrawable {
-  void onDraw(SkCanvas* canvas) override { canvas->drawPath(kJumpPath, paint); }
-};
-
-static JumpDrawable jump_icon;
+static const SkPath kJumpPath = PathFromSVG(kJumpPathSVG, SVGUnit_Millimeters);
 
 JumpArgument::JumpArgument() {
   // Jump argument configuration
 }
 
-PaintDrawable& JumpArgument::Icon() { return jump_icon; }
+std::unique_ptr<ui::Widget> JumpArgument::MakeIcon(ui::Widget* parent) {
+  return ui::MakeShapeWidget(parent, kJumpPathSVG, "#ff0000"_color);
+}
 
 void JumpArgument::CanConnect(Object& start, Atom& end, Status& status) const {
   if (!dynamic_cast<Runnable*>(&end)) {

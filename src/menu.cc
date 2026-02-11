@@ -12,7 +12,6 @@
 #include "animation.hh"
 #include "color.hh"
 #include "embedded.hh"
-#include "font.hh"
 #include "global_resources.hh"
 #include "log.hh"
 #include "math.hh"
@@ -20,6 +19,7 @@
 #include "root_widget.hh"
 #include "sincos.hh"
 #include "str.hh"
+#include "text_widget.hh"
 #include "textures.hh"
 #include "units.hh"
 #include "vla.hh"
@@ -28,8 +28,6 @@
 namespace automat {
 
 Option::~Option() = default;
-
-std::unique_ptr<ui::Font> kHelsinkiFont = ui::Font::MakeV2(ui::Font::GetHelsinki(), 3_mm);
 
 PersistentImage kSkyBox = PersistentImage::MakeFromAsset(embedded::assets_skybox_webp);
 
@@ -430,39 +428,6 @@ Vec<std::unique_ptr<Option>> OptionsProvider::CloneOptions() const {
 std::unique_ptr<Action> OptionsProvider::OpenMenu(ui::Pointer& pointer) const {
   return std::make_unique<MenuAction>(pointer, CloneOptions());
 }
-
-struct TextWidget : ui::Widget {
-  float width;
-  Str text;
-  TextWidget(ui::Widget* parent, Str text)
-      : ui::Widget(parent), width(kHelsinkiFont->MeasureText(text)), text(text) {}
-  Optional<Rect> TextureBounds() const override {
-    return Rect(0, -kHelsinkiFont->descent, width, -kHelsinkiFont->ascent);
-  }
-  SkPath Shape() const override { return SkPath::Rect(*TextureBounds()); }
-  void Draw(SkCanvas& canvas) const override {
-    if constexpr (false) {  // outline
-      SkPaint outline;
-      outline.setColor(SK_ColorBLACK);
-      outline.setStyle(SkPaint::kStroke_Style);
-      outline.setStrokeWidth(1_mm / kHelsinkiFont->font_scale);
-      kHelsinkiFont->DrawText(canvas, text, outline);
-    }
-    if constexpr (false) {  // shadow
-      canvas.save();
-      SkPaint shadow;
-      shadow.setColor(SK_ColorBLACK);
-      shadow.setMaskFilter(SkMaskFilter::MakeBlur(SkBlurStyle::kNormal_SkBlurStyle,
-                                                  0.5_mm / kHelsinkiFont->font_scale));
-      canvas.translate(0, -0.5_mm);
-      kHelsinkiFont->DrawText(canvas, text, shadow);
-      canvas.restore();
-    }
-    SkPaint paint;
-    paint.setColor(SK_ColorWHITE);
-    kHelsinkiFont->DrawText(canvas, text, paint);
-  }
-};
 
 TextOption::TextOption(Str text) : text(text) {}
 

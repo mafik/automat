@@ -73,7 +73,7 @@ ArcLine RouteCable(Vec2AndDir start, Span<const Vec2AndDir> ends, SkCanvas* debu
 animation::Phase SimulateCablePhysics(time::Timer&, CablePhysicsSimulation&, Vec2AndDir start,
                                       Span<Vec2AndDir> end_candidates);
 
-void DrawOpticalConnector(SkCanvas&, const CablePhysicsSimulation&, PaintDrawable& icon);
+void DrawOpticalConnector(SkCanvas&, const CablePhysicsSimulation&, Widget* icon);
 
 // Draws the given path as a cable and possibly update its length.
 void DrawCable(SkCanvas&, SkPath&, sk_sp<SkColorFilter>&, CableTexture, float start_width,

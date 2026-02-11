@@ -4,10 +4,13 @@
 
 #include "on_off.hh"
 
+#include "svg.hh"
+#include "ui_shape_widget.hh"
+
 namespace automat {
 
-void FlipFlopIcon::onDraw(SkCanvas* canvas) { canvas->drawCircle(0, 0, 1_mm, paint); }
-
-PaintDrawable& OnOff::Icon() { return icon; }
+std::unique_ptr<ui::Widget> OnOff::MakeIcon(ui::Widget* parent) {
+  return ui::MakeShapeWidget(parent, kPowerSVG, 0);
+}
 
 }  // namespace automat

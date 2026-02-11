@@ -75,13 +75,12 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   // Image-like objects can provide image data.
   virtual ImageProvider* AsImageProvider() { return nullptr; }
 
-  virtual LongRunning* AsLongRunning() { return nullptr; }
-
-  virtual Runnable* AsRunnable() { return nullptr; }
-
-  virtual SignalNext* AsSignalNext() { return nullptr; }
-
-  virtual OnOff* AsOnOff() { return nullptr; }
+  // Default implementations iterate Atoms() and dynamic_cast to find the first matching sub-atom.
+  // Override for special cases (e.g., when the Object itself implements the interface).
+  virtual LongRunning* AsLongRunning();
+  virtual Runnable* AsRunnable();
+  virtual SignalNext* AsSignalNext();
+  virtual OnOff* AsOnOff();
 
   // Visits all atoms that are members of this object.
   //

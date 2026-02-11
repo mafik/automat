@@ -36,8 +36,6 @@ struct MouseButtonEvent : Object {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
-  Runnable* AsRunnable() override { return &runnable; }
-  SignalNext* AsSignalNext() override { return &runnable; }
   audio::Sound& NextSound() override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
@@ -102,9 +100,6 @@ struct MouseButtonPresser : Object {
   void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  OnOff* AsOnOff() override { return &state; }
-  Runnable* AsRunnable() override { return &click; }
-  SignalNext* AsSignalNext() override { return &click; }
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

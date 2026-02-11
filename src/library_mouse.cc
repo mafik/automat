@@ -506,6 +506,7 @@ string_view MouseButtonEvent::Name() const { return "Mouse Button Event"sv; }
 
 Ptr<Object> MouseButtonEvent::Clone() const { return MAKE_PTR(MouseButtonEvent, button, down); }
 void MouseButtonEvent::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+  if (LoopControl::Break == cb(runnable)) return;
   if (LoopControl::Break == cb(next_arg)) return;
 }
 void MouseButtonEvent::MyRunnable::OnRun(std::unique_ptr<RunTask>&) {

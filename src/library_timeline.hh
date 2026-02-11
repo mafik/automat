@@ -43,10 +43,11 @@ struct OnOffTrack : TrackBase {
   string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
+  void Atoms(const std::function<LoopControl(Atom&)>& cb) override {
+    if (LoopControl::Break == cb(on_off)) return;
+  }
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
-
-  OnOff* AsOnOff() override { return &on_off; }
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
@@ -153,7 +154,6 @@ struct Timeline : Object, SignalNext, TimerNotificationReceiver {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
-  LongRunning* AsLongRunning() override { return &running; }
   SignalNext* AsSignalNext() override { return this; }
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   OnOffTrack& AddOnOffTrack(StrView name);

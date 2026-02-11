@@ -204,6 +204,7 @@ static Assembler* FindOrCreateAssembler(Object& start) {
 }
 
 void Instruction::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+  if (LoopControl::Break == cb(runnable)) return;
   auto opcode = mc_inst.getOpcode();
   if (opcode != X86::JMP_1 && opcode != X86::JMP_4) {
     if (LoopControl::Break == cb(next_instruction_arg)) return;

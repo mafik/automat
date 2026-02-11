@@ -48,9 +48,6 @@ struct Timer : Object, TimerNotificationReceiver {
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
   void AtomName(Atom&, Str& out_name) override;
-  LongRunning* AsLongRunning() override { return &timer_running; }
-  Runnable* AsRunnable() override { return &runnable; }
-  SignalNext* AsSignalNext() override { return &runnable; }
   void Updated(WeakPtr<Object>& updated) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
 

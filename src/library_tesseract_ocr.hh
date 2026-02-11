@@ -60,8 +60,6 @@ struct TesseractOCR : public Object {
   std::string GetText() const override;
   void SetText(std::string_view text) override;
 
-  Runnable* AsRunnable() override { return &run; }
-  SignalNext* AsSignalNext() override { return &run; }
 };
 
 }  // namespace automat::library

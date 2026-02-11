@@ -79,8 +79,6 @@ struct Instruction : Object, Buffer {
   Ptr<Object> Clone() const override;
 
   LongRunning* AsLongRunning() override;
-  Runnable* AsRunnable() override { return &runnable; }
-  SignalNext* AsSignalNext() override { return &runnable; }
 
   Buffer::Type imm_type = Buffer::Type::Unsigned;
 

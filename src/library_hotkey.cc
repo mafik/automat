@@ -80,6 +80,7 @@ string_view HotKey::Name() const { return "HotKey"; }
 Ptr<Object> HotKey::Clone() const { return MAKE_PTR(HotKey, *this); }
 
 void HotKey::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+  if (LoopControl::Break == cb(enabled)) return;
   if (LoopControl::Break == cb(next_arg)) return;
 }
 

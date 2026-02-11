@@ -33,9 +33,6 @@ struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
 
   void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
 
-  LongRunning* AsLongRunning() override { return &long_running; }
-  Runnable* AsRunnable() override { return &runnable; }
-  SignalNext* AsSignalNext() override { return &runnable; }
   void KeyloggerKeyDown(ui::Key) override;
   void KeyloggerKeyUp(ui::Key) override;
   void KeyloggerOnRelease(const ui::Keylogging&) override;

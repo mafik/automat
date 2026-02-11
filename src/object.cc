@@ -470,6 +470,21 @@ void Object::Atoms(const std::function<LoopControl(Atom&)>& cb) {}
 
 void Object::AtomName(Atom& atom, Str& out_name) { out_name = atom.Name(); }
 
+template <typename T>
+static T* FindAtom(Object& obj) {
+  T* result = nullptr;
+  obj.Atoms([&](Atom& atom) {
+    result = dynamic_cast<T*>(&atom);
+    return result ? LoopControl::Break : LoopControl::Continue;
+  });
+  return result;
+}
+
+LongRunning* Object::AsLongRunning() { return FindAtom<LongRunning>(*this); }
+Runnable* Object::AsRunnable() { return FindAtom<Runnable>(*this); }
+SignalNext* Object::AsSignalNext() { return FindAtom<SignalNext>(*this); }
+OnOff* Object::AsOnOff() { return FindAtom<OnOff>(*this); }
+
 void Object::Args(const std::function<void(Argument&)>& cb) {
   Atoms([&](Atom& atom) {
     if (Argument* arg = dynamic_cast<Argument*>(&atom)) {

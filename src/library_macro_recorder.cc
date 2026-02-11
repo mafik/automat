@@ -138,6 +138,8 @@ MacroRecorder::~MacroRecorder() {
 }
 
 void MacroRecorder::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+  if (LoopControl::Break == cb(runnable)) return;
+  if (LoopControl::Break == cb(long_running)) return;
   if (LoopControl::Break == cb(timeline_arg)) return;
 }
 

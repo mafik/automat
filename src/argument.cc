@@ -4,9 +4,11 @@
 
 #include <cmath>
 
+#include "automat.hh"
 #include "base.hh"
 #include "drag_action.hh"
 #include "log.hh"
+#include "root_widget.hh"
 #include "svg.hh"
 #include "ui_connection_widget.hh"
 #include "widget.hh"
@@ -32,22 +34,29 @@ Object* Argument::ObjectOrNull(Object& start) const {
   return nullptr;
 }
 
-Object& Argument::ObjectOrMake(Object& start) const {
+Object& Argument::ObjectOrMake(Object& start) {
   if (auto* obj = ObjectOrNull(start)) {
     return *obj;
   }
-  // Ask the argument for the prototype for this object.
-  auto prototype = Prototype();
-  Location* here = start.MyLocation();
-  auto machine = here->ParentAs<Machine>();
-  Location& l = machine->Create(*prototype);
-  PositionAhead(*here, *this, l);
-  PositionBelow(l, *here);
-  AnimateGrowFrom(*here,
-                  l);  // this must go before UpdateAutoconnectArgs because of animation_state
-  if (l.widget) l.widget->UpdateAutoconnectArgs();
-  l.WakeToys();
-  return *l.object;
+  auto proto = Prototype();
+  Location* start_loc = start.here;
+  auto machine = start_loc->ParentAs<Machine>();
+  auto& loc = machine->Create(*proto);
+
+  PositionAhead(*start_loc, *this, loc);
+  PositionBelow(loc, *start_loc);
+  Connect(start, loc.object);
+
+  // TODO: fix growth animation
+  // auto& toys = ui::root_widget->toys;
+  // auto& start_loc_toy = toys.FindOrMake(*start_loc, ui::root_widget.get());
+  // auto& start_toy = start_loc_toy.ToyForObject();
+  // auto& toy = toys.FindOrMake(*obj, &start_toy);
+  // AnimateGrowFrom(*start_loc, loc);
+  // l.WakeToys();
+
+  ui::root_widget->WakeAnimation();
+  return *loc.object;
 }
 
 std::unique_ptr<ArgumentOf::Toy> ArgumentOf::MakeToy(ui::Widget* parent) {

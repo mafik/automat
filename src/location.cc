@@ -70,19 +70,7 @@ std::unique_ptr<LocationWidget> Location::MakeToy(ui::Widget* parent) {
 
 Object::Toy& Location::ToyForObject() {
   if (!widget) {
-    // Widget hasn't been created yet (before first render).
-    // Create it eagerly through ToyStore.
-    auto parent = parent_location.lock();
-    ui::Widget* parent_widget = nullptr;
-    if (parent) {
-      // First try direct Widget cast (for future Widget-based containers).
-      parent_widget = dynamic_cast<ui::Widget*>(parent->object.get());
-      // If that fails, look up the object's Toy in ToyStore.
-      if (!parent_widget) {
-        parent_widget = ui::root_widget->toys.FindOrNull(*parent->object);
-      }
-    }
-    ui::root_widget->toys.FindOrMake(*this, parent_widget);
+    ui::root_widget->toys.FindOrMake(*this, ui::root_widget.get());
     // MakeToy was called, widget is now set.
   }
   return widget->ToyForObject();
@@ -174,6 +162,9 @@ Object::Toy& LocationWidget::ToyForObject() {
         toy = &ToyStore().FindOrMake(*loc->object, this);
         loc->scale = toy->GetBaseScale();
         toy->local_to_parent = SkM44(Location::ToMatrix(loc->position, loc->scale, LocalAnchor()));
+        LOG << "Creating a toy for " << loc->object->Name() << " at " << loc->position.ToStrMetric()
+            << ", scale=" << loc->scale;
+        transparency = 1;
       }
     }
   }
@@ -486,20 +477,19 @@ void LocationWidget::UpdateAutoconnectArgs() {
     float new_dist2 = autoconnect_radius * autoconnect_radius;
     Object::Toy* new_toy = nullptr;
     Atom* new_atom = nullptr;
-    parent_mw->NearbyCandidates(
-        *loc, arg, autoconnect_radius,
-        [&](Object::Toy& toy, Atom& atom, Vec<Vec2AndDir>& to_points) {
-          auto other_up = TransformBetween(toy, *parent_mw);
-          for (auto& to : to_points) {
-            Vec2 to_pos = other_up.mapPoint(to.pos);
-            float dist2 = LengthSquared(start.pos - to_pos);
-            if (dist2 <= new_dist2) {
-              new_dist2 = dist2;
-              new_toy = &toy;
-              new_atom = &atom;
-            }
-          }
-        });
+    parent_mw->NearbyCandidates(*loc, arg, autoconnect_radius,
+                                [&](Object::Toy& toy, Atom& atom, Vec<Vec2AndDir>& to_points) {
+                                  auto other_up = TransformBetween(toy, *parent_mw);
+                                  for (auto& to : to_points) {
+                                    Vec2 to_pos = other_up.mapPoint(to.pos);
+                                    float dist2 = LengthSquared(start.pos - to_pos);
+                                    if (dist2 <= new_dist2) {
+                                      new_dist2 = dist2;
+                                      new_toy = &toy;
+                                      new_atom = &atom;
+                                    }
+                                  }
+                                });
 
     if (new_atom == old_atom) {
       return;

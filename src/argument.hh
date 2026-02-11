@@ -119,7 +119,7 @@ struct Argument : Atom {
   // just the target object (that owns that atom).
   //
   // This is the main way of creating new objects through this Argument's Prototype.
-  Object& ObjectOrMake(Object& start) const;
+  Object& ObjectOrMake(Object& start);
 
   ArgumentOf Of(Object& start);
 };

@@ -34,7 +34,7 @@ enum class Flag {
 };
 
 struct AssemblerArgument : Argument {
-  StrView Name() const override { return "assembler"sv; }
+  StrView Name() const override { return "Assembler"sv; }
   float AutoconnectRadius() const override { return INFINITY; }
   SkColor Tint() const override { return "#ff0000"_color; }
   Style GetStyle() const override { return Style::Invisible; }
@@ -47,7 +47,7 @@ struct AssemblerArgument : Argument {
 struct JumpArgument : Argument {
   JumpArgument();
 
-  StrView Name() const override { return "jump"sv; }
+  StrView Name() const override { return "Jump"sv; }
   PaintDrawable& Icon() override;
   void CanConnect(Object& start, Atom& end, Status& status) const override;
   void OnConnect(Object& start, const NestedPtr<Atom>& end) override;

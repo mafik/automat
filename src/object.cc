@@ -577,7 +577,7 @@ void ObjectSerializer::Serialize(Object& start) {
         if (!end) return;
         if (!args_opened) {
           args_opened = true;
-          Key("args");
+          Key("links");
           StartObject();
         }
         Str arg_name;

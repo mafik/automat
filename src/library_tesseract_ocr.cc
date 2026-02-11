@@ -49,7 +49,7 @@ struct ImageArgument : Argument {
 
   ImageArgument() : icon("IMG", ui::kLetterSize, ui::GetFont()) {}
 
-  StrView Name() const override { return "image"sv; }
+  StrView Name() const override { return "Image"sv; }
   float AutoconnectRadius() const override { return 20_cm; }
   Style GetStyle() const override { return Style::Invisible; }
   PaintDrawable& Icon() override { return icon; }
@@ -83,7 +83,7 @@ struct TextArgument : Argument {
 
   TextArgument() : icon("T", ui::kLetterSize, ui::GetFont()) {}
 
-  StrView Name() const override { return "text"sv; }
+  StrView Name() const override { return "Text"sv; }
   PaintDrawable& Icon() override { return icon; }
 
   void CanConnect(Object& start, Atom& end, Status& status) const override {

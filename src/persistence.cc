@@ -107,7 +107,7 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
         for (auto& field : ObjectView(d, status)) {
           if (field == "type") {
             d.Skip();  // Already handled during object creation in first pass
-          } else if (field == "args") {
+          } else if (field == "links") {
             // Deserialize argument connections
             for (auto& arg_name : ObjectView(d, status)) {
               Argument* from_arg = dynamic_cast<Argument*>(object->AtomFromName(arg_name));

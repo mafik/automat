@@ -24,7 +24,8 @@ struct Window : public Object {
     PARENT_REF(Window, capture)
   } capture;
 
-  struct MyImage : ImageProvider {
+  struct CapturedImage : ImageProvider {
+    StrView Name() const override { return "Captured Image"sv; }
     sk_sp<SkImage> GetImage() override {
       auto& w = Window();
       auto lock = std::lock_guard(w.mutex);

@@ -6,14 +6,14 @@
 
 namespace automat {
 
-struct MachineWidget;
+struct BoardWidget;
 
 // 2D Canvas holding objects & a spaghetti of connections.
-struct Machine : Object {
-  Machine();
+struct Board : Object {
+  Board();
   deque<Ptr<Location>> locations;
 
-  using Toy = MachineWidget;
+  using Toy = BoardWidget;
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 
   Ptr<Location> Extract(Location& location);
@@ -27,8 +27,8 @@ struct Machine : Object {
     return h;
   }
 
-  // Adds the given object to the Machine. Returns a pointer to the Location that stores the object.
-  // Existing Location is returned, if the object was already part of the Machine.
+  // Adds the given object to the Board. Returns a pointer to the Location that stores the object.
+  // Existing Location is returned, if the object was already part of the Board.
   Location& Insert(Ptr<Object>&& obj) {
     for (auto& loc : locations) {
       if (loc->object == obj) {
@@ -53,7 +53,7 @@ struct Machine : Object {
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 
   Ptr<Object> Clone() const override {
-    auto m = MAKE_PTR(Machine);
+    auto m = MAKE_PTR(Board);
     for (auto& my_it : locations) {
       auto& other_h = m->CreateEmpty();
       other_h.Create(*my_it->object);
@@ -63,12 +63,12 @@ struct Machine : Object {
 
   void Relocate(Location* parent) override;
 
-  string ToStr() const { return "Machine"; }
+  string ToStr() const { return "Board"; }
 
-  // Report all errors that occured within this machine.
+  // Report all errors that occured within this board.
   //
-  // This function will return all errors held by locations of this machine &
-  // recurse into submachines.
+  // This function will return all errors held by locations of this board &
+  // recurse into sub-boards.
   void Diagnostics(function<void(Location*, Error&)> error_callback) {
     for (auto& location : locations) {
       ManipulateError(*location->object, [&](Error& err) {
@@ -77,20 +77,20 @@ struct Machine : Object {
         }
         error_callback(location.get(), err);
       });
-      if (auto submachine = dynamic_cast<Machine*>(location->object.get())) {
-        submachine->Diagnostics(error_callback);
+      if (auto subboard = dynamic_cast<Board*>(location->object.get())) {
+        subboard->Diagnostics(error_callback);
       }
     }
   }
 };
 
-// UI widget for Machine. Handles drawing, drop target, and spatial queries.
-struct MachineWidget : ObjectToy, ui::DropTarget {
-  MachineWidget(ui::Widget* parent, Machine& machine);
+// UI widget for Board. Handles drawing, drop target, and spatial queries.
+struct BoardWidget : ObjectToy, ui::DropTarget {
+  BoardWidget(ui::Widget* parent, Board& board);
 
-  Ptr<Machine> LockMachine() const { return LockOwner<Machine>(); }
+  Ptr<Board> LockBoard() const { return LockOwner<Board>(); }
 
-  std::string_view Name() const override { return "MachineWidget"; }
+  std::string_view Name() const override { return "BoardWidget"; }
 
   // Widget overrides
   void Draw(SkCanvas&) const override;
@@ -115,6 +115,6 @@ struct MachineWidget : ObjectToy, ui::DropTarget {
   void RaiseStack(Location& base);
 };
 
-static_assert(ToyMaker<Machine>);
+static_assert(ToyMaker<Board>);
 
 }  // namespace automat

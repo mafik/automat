@@ -68,7 +68,7 @@ struct RootWidget final : Widget, DropTarget {
   SkMatrix DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point = nullptr) override;
   void DropLocation(Ptr<Location>&&) override;
 
-  // Return the shape of the trash zone in the corner of the window (in Machine coordinates).
+  // Return the shape of the trash zone in the corner of the window (in Board coordinates).
   SkPath TrashShape() const;
 
   float PxPerMeter() const { return display_pixels_per_meter * zoom; }

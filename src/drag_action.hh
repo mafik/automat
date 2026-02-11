@@ -27,7 +27,7 @@ struct DropTarget {
   virtual SkMatrix DropSnap(const Rect& bounds, Vec2 bounds_origin,
                             Vec2* fixed_point = nullptr) = 0;
 
-  // When a location is being dragged around, its still owned by its original Machine. Only when
+  // When a location is being dragged around, its still owned by its original Board. Only when
   // this method is called, the location may be re-parented into the new drop target.
   // The drop target is responsible for re-parenting the location!
   virtual void DropLocation(Ptr<Location>&&) = 0;
@@ -45,9 +45,9 @@ struct DragLocationWidget : ui::Widget {
 };
 
 struct DragLocationAction : Action {
-  Vec2 last_position;          // root machine coordinates
-  Vec2 current_position;       // root machine coordinates
-  Vec2 last_snapped_position;  // root machine coordinates
+  Vec2 last_position;          // root board coordinates
+  Vec2 current_position;       // root board coordinates
+  Vec2 last_snapped_position;  // root board coordinates
   time::SteadyPoint last_update;
   Vec<Ptr<Location>> locations;
   unique_ptr<DragLocationWidget> widget;

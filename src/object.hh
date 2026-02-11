@@ -48,7 +48,7 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   //
   // Subclasses of Object should have a static `proto` field, holding their own
   // prototype instance. This prototype will be cloned when new objects are
-  // created. See the `Machine::Create` function for details.
+  // created. See the `Board::Create` function for details.
   virtual Ptr<Object> Clone() const = 0;
 
   virtual void Relocate(Location* new_here);
@@ -118,7 +118,7 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   // Clears the error reported by the object itself
   void ClearOwnError();
 
-  // If this object is owned by a Machine, return the Location that's used to store it.
+  // If this object is owned by a Board, return the Location that's used to store it.
   Location* MyLocation();
 };
 

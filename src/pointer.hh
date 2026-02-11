@@ -101,7 +101,7 @@ struct Pointer {
   void UpdatePath();
 
   Vec2 PositionWithin(const Widget&) const;
-  Vec2 PositionWithinRootMachine() const;
+  Vec2 PositionWithinRootBoard() const;
 
   Str ToStr() const;
 

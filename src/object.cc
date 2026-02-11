@@ -96,8 +96,8 @@ struct DeleteOption : TextOption {
   std::unique_ptr<Option> Clone() const override { return std::make_unique<DeleteOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (Ptr<Location> loc = weak.lock()) {
-      if (auto parent_machine = loc->ParentAs<Machine>()) {
-        parent_machine->Extract(*loc);
+      if (auto parent_board = loc->ParentAs<Board>()) {
+        parent_board->Extract(*loc);
         audio::Play(embedded::assets_SFX_canvas_pick_wav);
       }
     }
@@ -141,10 +141,10 @@ struct MoveLocationOption : TextOption {
       }
     }
     auto parent_location = location->parent_location.Lock();
-    auto* machine = parent_location->ThisAs<Machine>();
-    if (machine && location->object) {
-      machine->ForEachToy([](ui::RootWidget&, automat::Toy& w) { w.RedrawThisFrame(); });
-      auto* mw = pointer.root_widget.toys.FindOrNull(*machine);
+    auto* board = parent_location->ThisAs<Board>();
+    if (board && location->object) {
+      board->ForEachToy([](ui::RootWidget&, automat::Toy& w) { w.RedrawThisFrame(); });
+      auto* mw = pointer.root_widget.toys.FindOrNull(*board);
       if (mw) {
         return std::make_unique<DragLocationAction>(pointer, mw->ExtractStack(*location));
       }
@@ -245,7 +245,7 @@ struct SyncAction : Action {
     // TODO: tell objects to hide their fields
     // Check if the pointer is over a compatible Syncable
     if (auto syncable = weak.Lock()) {
-      auto* mw = pointer.root_widget.toys.FindOrNull(*root_machine);
+      auto* mw = pointer.root_widget.toys.FindOrNull(*root_board);
       if (mw) {
         mw->ConnectAtPoint(*syncable.Owner<Object>(), *syncable, sync_widget.end);
       }
@@ -254,11 +254,11 @@ struct SyncAction : Action {
   void Update() override {
     if (auto syncable = weak.Lock()) {
       auto* widget = pointer.root_widget.toys.FindOrNull(*syncable.Owner<Object>());
-      auto* mw = pointer.root_widget.toys.FindOrNull(*root_machine);
+      auto* mw = pointer.root_widget.toys.FindOrNull(*root_board);
       auto start_local = widget->AtomShape(syncable.Get()).getBounds().center();
       auto start = mw ? TransformBetween(*widget, *mw).mapPoint(start_local) : start_local;
       sync_widget.start = start;
-      sync_widget.end = pointer.PositionWithinRootMachine();
+      sync_widget.end = pointer.PositionWithinRootBoard();
       sync_widget.WakeAnimation();
     } else {
       pointer.ReplaceAction(*this, nullptr);
@@ -495,7 +495,7 @@ void Object::Args(const std::function<void(Argument&)>& cb) {
 }
 
 Location* Object::MyLocation() {
-  for (auto& loc : root_machine->locations) {
+  for (auto& loc : root_board->locations) {
     if (loc->object == this) {
       return loc.Get();
     }

@@ -445,7 +445,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
     return;
   }
   auto& toy = ToyForObject();
-  auto* parent_mw = ToyStore().FindOrNull(*root_machine);
+  auto* parent_mw = ToyStore().FindOrNull(*root_board);
   if (!parent_mw) return;
   loc->object->Args([&](Argument& arg) {
     float autoconnect_radius = arg.AutoconnectRadius();
@@ -511,7 +511,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
     to.pos = here_up.mapPoint(to.pos);
   }
 
-  for (auto& other : root_machine->locations) {
+  for (auto& other : root_board->locations) {
     if (other.get() == loc.get()) {
       continue;
     }
@@ -584,7 +584,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
 ///////////////////////////////////////////////////////////////////////////////
 
 void PositionBelow(Location& origin, Location& below) {
-  Machine* m = origin.ParentAs<Machine>();
+  Board* m = origin.ParentAs<Board>();
   Size origin_index = SIZE_MAX;
   Size below_index = SIZE_MAX;
   for (Size i = 0; i < m->locations.size(); i++) {

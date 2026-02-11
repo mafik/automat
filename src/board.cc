@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
-#include "machine.hh"
+#include "board.hh"
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkColor.h>
@@ -24,13 +24,13 @@ using namespace std;
 
 namespace automat {
 
-Machine::Machine() {}
+Board::Board() {}
 
-std::unique_ptr<ObjectToy> Machine::MakeToy(ui::Widget* parent) {
-  return std::make_unique<MachineWidget>(parent, *this);
+std::unique_ptr<ObjectToy> Board::MakeToy(ui::Widget* parent) {
+  return std::make_unique<BoardWidget>(parent, *this);
 }
 
-void Machine::SerializeState(ObjectSerializer& writer) const {
+void Board::SerializeState(ObjectSerializer& writer) const {
   if (!locations.empty()) {
     writer.Key("locations");
     writer.StartObject();
@@ -49,7 +49,7 @@ void Machine::SerializeState(ObjectSerializer& writer) const {
   }
 }
 
-bool Machine::DeserializeKey(ObjectDeserializer& d, StrView key) {
+bool Board::DeserializeKey(ObjectDeserializer& d, StrView key) {
   Status status;
   if (key == "locations") {
     for (auto& object_name : ObjectView(d, status)) {
@@ -83,7 +83,7 @@ bool Machine::DeserializeKey(ObjectDeserializer& d, StrView key) {
   return true;
 }
 
-Ptr<Location> Machine::Extract(Location& location) {
+Ptr<Location> Board::Extract(Location& location) {
   auto it = std::find_if(locations.begin(), locations.end(),
                          [&location](const auto& l) { return l.get() == &location; });
   if (it != locations.end()) {
@@ -95,22 +95,22 @@ Ptr<Location> Machine::Extract(Location& location) {
   return nullptr;
 }
 
-Location& Machine::CreateEmpty() {
+Location& Board::CreateEmpty() {
   auto& it = locations.emplace_front(new Location(here));
   Location* h = it.get();
   return *h;
 }
 
-void Machine::Relocate(Location* parent) {
+void Board::Relocate(Location* parent) {
   Object::Relocate(parent);
   for (auto& it : locations) {
     it->parent_location = here;
   }
 }
 
-MachineWidget::MachineWidget(ui::Widget* parent, Machine& machine) : ObjectToy(parent, machine) {}
+BoardWidget::BoardWidget(ui::Widget* parent, Board& board) : ObjectToy(parent, board) {}
 
-SkPath MachineWidget::Shape() const {
+SkPath BoardWidget::Shape() const {
   SkPath rect = SkPath::Rect(Rect::MakeCenterZero(100_cm, 100_cm));
   auto& root = FindRootWidget();
   auto trash = root.TrashShape();
@@ -154,7 +154,7 @@ SkPaint& GetBackgroundPaint(float px_per_m) {
   return paint;
 }
 
-void MachineWidget::Draw(SkCanvas& canvas) const {
+void BoardWidget::Draw(SkCanvas& canvas) const {
   auto shape = Shape();
   float px_per_m = canvas.getLocalToDeviceAs3x3().mapRadius(1);
   SkPaint background_paint = GetBackgroundPaint(px_per_m);
@@ -166,7 +166,7 @@ void MachineWidget::Draw(SkCanvas& canvas) const {
   DrawChildren(canvas);
 }
 
-SkMatrix MachineWidget::DropSnap(const Rect& rect_ref, Vec2 bounds_origin, Vec2* fixed_point) {
+SkMatrix BoardWidget::DropSnap(const Rect& rect_ref, Vec2 bounds_origin, Vec2* fixed_point) {
   Rect rect = rect_ref;
   SkMatrix matrix;
   Vec2 grid_snap = RoundToMilimeters(bounds_origin) - bounds_origin;
@@ -187,13 +187,13 @@ SkMatrix MachineWidget::DropSnap(const Rect& rect_ref, Vec2 bounds_origin, Vec2*
   return matrix;
 }
 
-void MachineWidget::DropLocation(Ptr<Location>&& l) {
-  auto machine = LockMachine();
-  if (!machine) return;
-  l->parent_location = machine->here;
-  machine->locations.insert(machine->locations.begin(), std::move(l));
+void BoardWidget::DropLocation(Ptr<Location>&& l) {
+  auto board = LockBoard();
+  if (!board) return;
+  l->parent_location = board->here;
+  board->locations.insert(board->locations.begin(), std::move(l));
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
-  Location& dropped = *machine->locations.front();
+  Location& dropped = *board->locations.front();
   dropped.object->ForEachToy([](ui::RootWidget&, automat::Toy& w) { w.RedrawThisFrame(); });
   // Walk over connections that start/end in the dropped location.
   // If the other end of the connection is obscured by another location, raise that obscurer
@@ -211,14 +211,14 @@ void MachineWidget::DropLocation(Ptr<Location>&& l) {
       other = start_loc;
     }
     if (!other) continue;
-    auto other_it = std::find_if(machine->locations.begin(), machine->locations.end(),
+    auto other_it = std::find_if(board->locations.begin(), board->locations.end(),
                                  [&](const Ptr<Location>& loc) { return loc.get() == other; });
-    if (other_it == machine->locations.end()) continue;
-    int other_index = std::distance(machine->locations.begin(), other_it);
+    if (other_it == board->locations.end()) continue;
+    int other_index = std::distance(board->locations.begin(), other_it);
     SkPath other_shape = other->widget->ShapeRigid();
     // Check if any location above `other` obscures it.
     for (int i = other_index - 1; i >= 0; --i) {
-      Location& above = *machine->locations[i];
+      Location& above = *board->locations[i];
       if (&above == &dropped) continue;
       SkPath above_shape = above.widget->ShapeRigid();
       SkPath intersection;
@@ -231,9 +231,9 @@ void MachineWidget::DropLocation(Ptr<Location>&& l) {
   }
 }
 
-void MachineWidget::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
-  auto machine = LockMachine();
-  if (!machine) return;
+void BoardWidget::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
+  auto board = LockBoard();
+  if (!board) return;
   bool connected = false;
   auto TryConnect = [&](Object& end, Atom& atom) {
     if (connected) return;
@@ -242,7 +242,7 @@ void MachineWidget::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
       connected = true;
     }
   };
-  for (auto& loc : machine->locations) {
+  for (auto& loc : board->locations) {
     Vec2 local_point = (point - loc->position) / loc->scale;
     SkPath shape = loc->ToyForObject().Shape();
     if (!shape.contains(local_point.x, local_point.y)) {
@@ -261,11 +261,11 @@ void MachineWidget::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
   }
 }
 
-void* MachineWidget::Nearby(Vec2 start, float radius, std::function<void*(Location&)> callback) {
-  auto machine = LockMachine();
-  if (!machine) return nullptr;
+void* BoardWidget::Nearby(Vec2 start, float radius, std::function<void*(Location&)> callback) {
+  auto board = LockBoard();
+  if (!board) return nullptr;
   float radius2 = radius * radius;
-  for (auto& loc : machine->locations) {
+  for (auto& loc : board->locations) {
     auto dist2 = (loc->object ? loc->ToyForObject().CoarseBounds().rect : Rect{})
                      .MoveBy(loc->position)
                      .DistanceSquared(start);
@@ -279,7 +279,7 @@ void* MachineWidget::Nearby(Vec2 start, float radius, std::function<void*(Locati
   return nullptr;
 }
 
-void MachineWidget::NearbyCandidates(
+void BoardWidget::NearbyCandidates(
     Location& here, const Argument& arg, float radius,
     std::function<void(ObjectToy&, Atom&, Vec<Vec2AndDir>&)> callback) {
   // Check the currently dragged object
@@ -301,7 +301,7 @@ void MachineWidget::NearbyCandidates(
       }
     }
   }
-  // Query nearby objects in the machine
+  // Query nearby objects in the board
   Vec2 center = here.ToyForObject().ArgStart(arg, this).pos;
   Nearby(center, radius, [&](Location& other) -> void* {
     if (&other == &here) {
@@ -319,17 +319,17 @@ void MachineWidget::NearbyCandidates(
   });
 }
 
-void MachineWidget::ForStack(Location& base, std::function<void(Location&, int index)> callback) {
-  auto machine = LockMachine();
-  if (!machine) return;
-  auto base_it = std::find_if(machine->locations.begin(), machine->locations.end(),
+void BoardWidget::ForStack(Location& base, std::function<void(Location&, int index)> callback) {
+  auto board = LockBoard();
+  if (!board) return;
+  auto base_it = std::find_if(board->locations.begin(), board->locations.end(),
                               [&base](const Ptr<Location>& l) { return l.get() == &base; });
-  if (base_it == machine->locations.end()) return;
-  int base_index = std::distance(machine->locations.begin(), base_it);
+  if (base_it == board->locations.end()) return;
+  int base_index = std::distance(board->locations.begin(), base_it);
   SkPath base_shape = base.widget->ShapeRigid();
   callback(base, base_index);
   for (int atop_index = base_index - 1; atop_index >= 0; --atop_index) {
-    Location& atop = *machine->locations[atop_index];
+    Location& atop = *board->locations[atop_index];
     SkPath atop_shape = atop.widget->ShapeRigid();
     SkPath intersection;
     if (Op(atop_shape, base_shape, kIntersect_SkPathOp, &intersection) &&
@@ -340,7 +340,7 @@ void MachineWidget::ForStack(Location& base, std::function<void(Location&, int i
   }
 }
 
-SkPath MachineWidget::StackShape(Location& base) {
+SkPath BoardWidget::StackShape(Location& base) {
   SkPath stack_shape;
   ForStack(base, [&](Location& loc, int) {
     if (&loc != &base) {
@@ -350,9 +350,9 @@ SkPath MachineWidget::StackShape(Location& base) {
   return stack_shape;
 }
 
-Vec<Ptr<Location>> MachineWidget::ExtractStack(Location& base) {
-  auto machine = LockMachine();
-  if (!machine) return {};
+Vec<Ptr<Location>> BoardWidget::ExtractStack(Location& base) {
+  auto board = LockBoard();
+  if (!board) return {};
   Vec<int> stack_indices;
   ForStack(base, [&](Location&, int index) { stack_indices.push_back(index); });
   if (stack_indices.empty()) return {};
@@ -360,8 +360,8 @@ Vec<Ptr<Location>> MachineWidget::ExtractStack(Location& base) {
   Vec<Ptr<Location>> result;
   // Indices are in decreasing order (base is always first/highest), so erasing in order is safe.
   for (int idx : stack_indices) {
-    result.insert(result.begin(), std::move(machine->locations[idx]));
-    machine->locations.erase(machine->locations.begin() + idx);
+    result.insert(result.begin(), std::move(board->locations[idx]));
+    board->locations.erase(board->locations.begin() + idx);
   }
 
   WakeAnimation();
@@ -369,9 +369,9 @@ Vec<Ptr<Location>> MachineWidget::ExtractStack(Location& base) {
   return result;
 }
 
-void MachineWidget::RaiseStack(Location& base) {
-  auto machine = LockMachine();
-  if (!machine) return;
+void BoardWidget::RaiseStack(Location& base) {
+  auto board = LockBoard();
+  if (!board) return;
   Vec<int> stack_indices;
   ForStack(base, [&](Location&, int index) { stack_indices.push_back(index); });
   if (stack_indices.empty()) return;
@@ -379,13 +379,13 @@ void MachineWidget::RaiseStack(Location& base) {
   Vec<Ptr<Location>> stack;
   // Indices are in decreasing order (highest first), so erasing in order is safe.
   for (int idx : stack_indices) {
-    stack.insert(stack.begin(), std::move(machine->locations[idx]));
-    machine->locations.erase(machine->locations.begin() + idx);
+    stack.insert(stack.begin(), std::move(board->locations[idx]));
+    board->locations.erase(board->locations.begin() + idx);
   }
 
   // Re-insert at the front (top of Z-order).
   for (int i = stack.size() - 1; i >= 0; --i) {
-    machine->locations.insert(machine->locations.begin(), std::move(stack[i]));
+    board->locations.insert(board->locations.begin(), std::move(stack[i]));
   }
 }
 

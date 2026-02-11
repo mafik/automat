@@ -23,10 +23,10 @@ In order for this static / dynamic switching to work, the Object class should be
 decoupled from ReferenceCounted. This is a major change that may introduce some
 overhead, but the nature of this overhead depends on how this static / dynamic
 switching happens. Maybe there will be an optimized build of Automat that can
-only execute existing machines - and can't be used interactively (then we can
+only execute existing boards - and can't be used interactively (then we can
 strip memory management code at compile-time - the only cost will be complexity
 of conditionally compiled code). Or maybe the switch will be possible at
-runtime, by flicking some toggle and "freezing" a machine. If that's the case
+runtime, by flicking some toggle and "freezing" a board. If that's the case
 then the switching to static mode could be implemented in a number of ways,
 ranging from duplicating all Object logic into two specialized variants (dynamic
 & static) to sprinkling if-checks throughout all of the code.

@@ -41,7 +41,7 @@ namespace automat::ui {
 static SkPath PointerIBeam(const Keyboard& keyboard) {
   if (keyboard.pointer) {
     float px = 1 / keyboard.root_widget.PxPerMeter();
-    Vec2 pos = keyboard.pointer->PositionWithinRootMachine();
+    Vec2 pos = keyboard.pointer->PositionWithinRootBoard();
     SkRect bounds = SkRect::MakeXYWH(pos.x, pos.y, 0, 0);
     switch (keyboard.pointer->Icon()) {
       case Pointer::IconType::kIconArrow:
@@ -88,7 +88,7 @@ void Caret::Release() {
 }
 
 SkPath Caret::MakeRootShape() const {
-  auto* mw = widget->ToyStore().FindOrNull(*root_machine);
+  auto* mw = widget->ToyStore().FindOrNull(*root_board);
   if (!mw) return shape;
   SkMatrix text_to_root = TransformBetween(*widget, *mw);
   return shape.makeTransform(text_to_root);

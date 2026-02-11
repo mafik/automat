@@ -58,7 +58,7 @@ Usage of stack will be discouraged (due to lack of good visualization), but stil
 
 The end goal of the Assembler object is to be a novice-friendly environment for defining control flow that is still a fast and convenient place for experienced programmers to work in.
 
-Assembler object also has the potential for creating extremely performant Automat machines.
+Assembler object also has the potential for creating extremely performant Automat programs.
 
 ## Discussion
 

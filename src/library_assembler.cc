@@ -594,7 +594,7 @@ void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
   }
 }
 SkMatrix AssemblerWidget::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point) {
-  auto* mw = ToyStore().FindOrNull(*root_machine);
+  auto* mw = ToyStore().FindOrNull(*root_board);
   auto local_to_machine = mw ? TransformBetween(*this, *mw) : SkMatrix::I();
   auto my_rect = kRRect.rect.Outset(-2 * kFlatBorderWidth);
   local_to_machine.mapRect(&my_rect.sk);

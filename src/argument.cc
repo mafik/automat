@@ -39,8 +39,8 @@ Object& Argument::ObjectOrMake(Object& start) {
   }
   auto proto = Prototype();
   Location* start_loc = start.here;
-  auto machine = start_loc->ParentAs<Machine>();
-  auto& loc = machine->Create(*proto);
+  auto board = start_loc->ParentAs<Board>();
+  auto& loc = board->Create(*proto);
 
   PositionAhead(*start_loc, *this, loc);
   PositionBelow(loc, *start_loc);

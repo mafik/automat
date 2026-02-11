@@ -20,7 +20,7 @@
 // (or maybe hazard_ptr + dedicated thread that deletes objects?)
 
 // The references to other objects could either be stored in:
-// A) Machine
+// A) Board
 // B) Location
 // C) Objects themselves
 //

@@ -47,7 +47,7 @@ static ui::DropTarget* FindDropTarget(DragLocationAction& a) {
 }
 
 void DragLocationAction::Update() {
-  current_position = pointer.PositionWithinRootMachine();
+  current_position = pointer.PositionWithinRootBoard();
 
   int n = locations.size();
   Toy* widgets[n];
@@ -165,7 +165,7 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
   }
   ui::root_widget->WakeAnimation();
 
-  last_position = current_position = pointer.PositionWithinRootMachine();
+  last_position = current_position = pointer.PositionWithinRootBoard();
 
   Update();
 }

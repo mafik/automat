@@ -140,8 +140,9 @@ interfaces, but connections can be typed using the `Argument` class, which makes
 it possible to introduce new connection types dynamically, at runtime.
 
 - `src/base.hh` - defines a couple interfaces used by objects to do their work &
-communicate with each other. The most notable here is the *Machine* class (which
-is actually an object type itself) because it's a kind of object that can combine
+communicate with each other.
+
+- `src/board.hh` - defines the *Board* class. It's a kind of object that can combine
 several other objects into a single one.
 
 - `src/location.hh` - *Location* is responsible for storing objects and

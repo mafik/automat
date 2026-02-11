@@ -330,15 +330,15 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
     children_tmp.push_back(toolbar.get());
     children_tmp.push_back(&zoom_warning);
 
-    // Then flatten the Object Toys stored by the Machines
-    for (auto& loc : root_machine->locations) {
+    // Then flatten the Object Toys stored by the Boards
+    for (auto& loc : root_board->locations) {
       VisitObject(*loc->object);
     }
 
-    // At the very end - add the machine widget
-    auto& machine_widget = toys.FindOrMake(*root_machine, this);
-    machine_widget.local_to_parent = canvas_to_window44;
-    children_tmp.push_back(&machine_widget);
+    // At the very end - add the board widget
+    auto& board_widget = toys.FindOrMake(*root_board, this);
+    board_widget.local_to_parent = canvas_to_window44;
+    children_tmp.push_back(&board_widget);
 
     int n = children_tmp.size();
     bool added[n];
@@ -377,7 +377,7 @@ void RootWidget::Draw(SkCanvas& canvas) const {
 
   auto children = Children();
   for (auto* child : ranges::reverse_view{children}) {
-    if (auto* m = dynamic_cast<MachineWidget*>(child)) {
+    if (auto* m = dynamic_cast<BoardWidget*>(child)) {
       DrawChildCached(canvas, *m);
     } else {
       continue;
@@ -390,7 +390,7 @@ void RootWidget::Draw(SkCanvas& canvas) const {
     canvas.restore();
   }
   for (auto* child : ranges::reverse_view{children}) {
-    if (auto* m = dynamic_cast<MachineWidget*>(child)) {
+    if (auto* m = dynamic_cast<BoardWidget*>(child)) {
       continue;
     } else {
       DrawChildCached(canvas, *child);
@@ -594,8 +594,8 @@ SkPath RootWidget::TrashShape() const {
 }
 
 SkMatrix RootWidget::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point) {
-  auto* mw = toys.FindOrNull(*root_machine);
-  Rect machine_bounds = mw ? Rect(mw->Shape().getBounds()) : Rect{};
+  auto* mw = toys.FindOrNull(*root_board);
+  Rect board_bounds = mw ? Rect(mw->Shape().getBounds()) : Rect{};
 
   SkMatrix matrix;
   if (fixed_point) {
@@ -606,11 +606,11 @@ SkMatrix RootWidget::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixe
   {  // Find a snap position outside of the canvas
 
     Rect scaled_object_bounds = matrix.mapRect(bounds.sk);
-    if (machine_bounds.sk.intersects(scaled_object_bounds)) {
-      float move_up = fabsf(machine_bounds.top - scaled_object_bounds.bottom);
-      float move_down = fabsf(scaled_object_bounds.top - machine_bounds.bottom);
-      float move_left = fabsf(machine_bounds.left - scaled_object_bounds.right);
-      float move_right = fabsf(scaled_object_bounds.left - machine_bounds.right);
+    if (board_bounds.sk.intersects(scaled_object_bounds)) {
+      float move_up = fabsf(board_bounds.top - scaled_object_bounds.bottom);
+      float move_down = fabsf(scaled_object_bounds.top - board_bounds.bottom);
+      float move_left = fabsf(board_bounds.left - scaled_object_bounds.right);
+      float move_right = fabsf(scaled_object_bounds.left - board_bounds.right);
       if (move_up < move_down && move_up < move_left && move_up < move_right) {
         matrix.postTranslate(0, move_up);
       } else if (move_down < move_up && move_down < move_left && move_down < move_right) {

@@ -49,8 +49,8 @@ Automat is a C++ application for semi-autonomous automation with a layered archi
 
 ### Key Components
 
-- **Location** (`src/location.hh`) - Owns an Object and tracks its position/scale within a Machine
-- **Machine** (`src/base.hh`) - Container for Locations; provides canvas, drop target, connection routing
+- **Location** (`src/location.hh`) - Owns an Object and tracks its position/scale within a Board
+- **Board** (`src/base.hh`) - Container for Locations; provides canvas, drop target, connection routing
 - **ToyStore** (`src/toy.hh`) - Maps `(owner, atom)` keys to Toy widgets; lives on `RootWidget`
 - **Argument** (`src/argument.hh`) - Typed connection between Objects; `ArgumentOf` is its ToyMaker
 - **Syncable** (`src/sync.hh`) - Sync interface allowing Objects to act as one via a shared Gear

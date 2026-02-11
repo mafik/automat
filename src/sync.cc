@@ -326,7 +326,7 @@ void Syncable::OnConnect(Object& start, const NestedPtr<Atom>& end) {
     auto sync_block = FindGearOrNull(target);
     if (sync_block == nullptr) {
       sync_block = FindGearOrMake(syncable);
-      auto& loc = root_machine->Insert(sync_block);
+      auto& loc = root_board->Insert(sync_block);
       loc.position = (end.Owner<Object>()->here->position + start.here->position) / 2;
       loc.ForEachToy([](ui::RootWidget&, Toy& toy) {
         static_cast<LocationWidget&>(toy).position_vel = Vec2(0, 1);

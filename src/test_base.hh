@@ -10,7 +10,7 @@ namespace automat {
 
 struct TestBase : ::testing::Test {
   Location root = Location(nullptr);
-  Machine& machine = *root.Create<Machine>();
+  Board& board = *root.Create<Board>();
 };
 
 }  // namespace automat

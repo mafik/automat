@@ -178,4 +178,4 @@ struct Container {
 
 }  // namespace automat
 
-#include "machine.hh"
+#include "board.hh"

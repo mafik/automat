@@ -191,7 +191,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     canvas.drawTextBlob(text_blob, 0, 0, text_paint);
     canvas.restore();
 
-    auto* mw = ToyStore().FindOrNull(*root_machine);
+    auto* mw = ToyStore().FindOrNull(*root_board);
     if (mw) {
       mw->NearbyCandidates(
           from, *arg, autoconnect_radius * 2 + 10_cm,
@@ -232,7 +232,7 @@ void ConnectionWidget::FromMoved() {
     if (state->stabilized && !state->stabilized_end.has_value()) {
       auto& object = *arg.Owner<Object>();
       auto& toy = *ToyStore().FindOrNull(object);
-      auto* mw = ToyStore().FindOrNull(*root_machine);
+      auto* mw = ToyStore().FindOrNull(*root_board);
       auto pos_dir = toy.ArgStart(*arg, mw);
       state->stabilized_start = pos_dir.pos;
       state->sections.front().pos = pos_dir.pos;
@@ -248,7 +248,7 @@ void ConnectionWidget::FromMoved() {
 // It performs the locking of weak pointers and locates the widgets of connected objects.
 struct ConnectionWidgetLocker {
   ToyStore& toy_store;
-  MachineWidget* machine_widget;
+  BoardWidget* board_widget;
 
   NestedPtr<Argument> start_arg;
   ObjectToy* start_widget;
@@ -260,13 +260,13 @@ struct ConnectionWidgetLocker {
   // Computing everything in initializer avoids zero-initialization
   ConnectionWidgetLocker(ConnectionWidget& w)
       : toy_store(w.ToyStore()),
-        machine_widget(toy_store.FindOrNull(*root_machine)),
+        board_widget(toy_store.FindOrNull(*root_board)),
         start_arg(w.start_weak.Lock()),
         start_widget(StartObj() ? toy_store.FindOrNull(*StartObj()) : nullptr),
         end_atom(StartObj() ? start_arg->Find(*StartObj()) : NestedPtr<Atom>()),
         end_widget(EndObj() ? toy_store.FindOrNull(*EndObj()) : nullptr),
-        end_transform(end_widget && machine_widget ? TransformBetween(*end_widget, *machine_widget)
-                                                   : SkMatrix()) {}
+        end_transform(end_widget && board_widget ? TransformBetween(*end_widget, *board_widget)
+                                                 : SkMatrix()) {}
 
   Object* StartObj() const { return start_arg ? start_arg.Owner<Object>() : nullptr; }
   Object* EndObj() const { return end_atom ? end_atom.Owner<Object>() : nullptr; }
@@ -276,7 +276,7 @@ struct ConnectionWidgetLocker {
 // TextureAnchors. Tick uses it for connection animation and TextureAnchors uses it to stretch
 // the texture into most up-to-date position.
 static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
-  w.pos_dir = a.start_widget->ArgStart(*a.start_arg, a.machine_widget);
+  w.pos_dir = a.start_widget->ArgStart(*a.start_arg, a.board_widget);
 
   w.to_points.clear();
 
@@ -319,9 +319,9 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   }
 
   from_shape = a.start_widget->AtomShape(a.start_arg.Get());
-  if (a.machine_widget) {
-    auto transform_from_to_machine = TransformBetween(*a.start_widget, *a.machine_widget);
-    from_shape.transform(transform_from_to_machine);
+  if (a.board_widget) {
+    auto transform_from_to_board = TransformBetween(*a.start_widget, *a.board_widget);
+    from_shape.transform(transform_from_to_board);
   }
 
   UpdateEndpoints(*this, a);
@@ -503,8 +503,8 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
 
   grab_offset = Vec2(0, 0);
   if (widget.state) {
-    // Position within parent machine
-    auto pointer_pos = pointer.PositionWithinRootMachine();
+    // Position within parent board
+    auto pointer_pos = pointer.PositionWithinRootBoard();
     auto mat = widget.state->ConnectorMatrix();
     SkMatrix mat_inv;
     if (mat.invert(&mat_inv)) {
@@ -529,7 +529,7 @@ DragConnectionAction::~DragConnectionAction() {
   } else {
     return;
   }
-  auto* mw = pointer.root_widget.toys.FindOrNull(*root_machine);
+  auto* mw = pointer.root_widget.toys.FindOrNull(*root_board);
   if (mw) {
     mw->ConnectAtPoint(*start, *arg, pos);
   }
@@ -543,7 +543,7 @@ void DragConnectionAction::Update() {
   Location* from = start.Owner<Object>()->MyLocation();
   if (!from) return;
 
-  auto* parent_mw = pointer.root_widget.toys.FindOrNull(*from->ParentAs<Machine>());
+  auto* parent_mw = pointer.root_widget.toys.FindOrNull(*from->ParentAs<Board>());
   if (!parent_mw) return;
   Vec2 new_position = pointer.PositionWithin(*parent_mw);
   widget.manual_position = new_position - grab_offset * widget.state->connector_scale;

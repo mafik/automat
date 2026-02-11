@@ -148,7 +148,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
   Vec2 drag_start_pos;
   float drag_start_x_min, drag_start_x_max, drag_start_y_min, drag_start_y_max;
   Rect region_rect;
-  Optional<Vec2> iris_target;  // Where the eye is pointing (machine coords)
+  Optional<Vec2> iris_target;  // Where the eye is pointing (board coords)
   animation::SpringV2<Vec2> iris_dir;
   std::string ocr_text;
   Optional<ui::Pointer::IconOverride> icon_override;
@@ -417,7 +417,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
       }
 
       if (pointers.size() > 0) {
-        auto pointer_pos = pointers.front()->PositionWithinRootMachine();
+        auto pointer_pos = pointers.front()->PositionWithinRootBoard();
         iris_target = pointer_pos;
       }
 
@@ -446,7 +446,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
       {  // animate iris
         Vec2 eye_delta;
         if (iris_target.has_value()) {
-          auto* mw = ToyStore().FindOrNull(*root_machine);
+          auto* mw = ToyStore().FindOrNull(*root_board);
           auto matrix = mw ? TransformBetween(*mw, *this) : SkMatrix::I();
           eye_delta = matrix.mapPoint(iris_target->sk) - layout.eye_center;
         } else {

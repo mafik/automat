@@ -187,9 +187,9 @@ void MacroRecorder::MyLongRunning::OnCancel() {
 
 static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, PointerButton ptr_btn,
                              bool down) {
-  auto machine = macro_recorder.here->ParentAs<Machine>();
-  if (machine == nullptr) {
-    FATAL << "MacroRecorder must be a child of a Machine";
+  auto board = macro_recorder.here->ParentAs<Board>();
+  if (board == nullptr) {
+    FATAL << "MacroRecorder must be a child of a Board";
     return;
   }
   // Find the nearby timeline (or create one)
@@ -202,7 +202,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
   if (kb_key != AnsiKey::Unknown) {
     track_name = Str(ToStr(kb_key));
     make_fn = [&]() -> Location& {
-      Location& l = machine->Create<KeyPresser>();
+      Location& l = board->Create<KeyPresser>();
       auto* kp = l.As<KeyPresser>();
       kp->SetKey(kb_key);
       return l;
@@ -210,7 +210,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
   } else if (ptr_btn != PointerButton::Unknown) {
     track_name = Str(ToStr(ptr_btn));
     make_fn = [&]() -> Location& {
-      Location& l = machine->Create<MouseButtonPresser>();
+      Location& l = board->Create<MouseButtonPresser>();
       auto* mb = l.As<MouseButtonPresser>();
       mb->button = ptr_btn;
       return l;
@@ -351,12 +351,12 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
     auto& new_track = *track_ptr;
     timeline->AddTrack(std::move(track_ptr), track_name);
     track_index = timeline->tracks.size() - 1;
-    auto machine = recorder.here->ParentAs<Machine>();
-    if (machine == nullptr) {
-      FATAL << "MacroRecorder must be a child of a Machine";
+    auto board = recorder.here->ParentAs<Board>();
+    if (board == nullptr) {
+      FATAL << "MacroRecorder must be a child of a Board";
       return;
     }
-    Location& receiver_loc = machine->Create<ReceiverT>();
+    Location& receiver_loc = board->Create<ReceiverT>();
     receiver_loc.Iconify();
     Argument& track_arg = *timeline->tracks.back();
 

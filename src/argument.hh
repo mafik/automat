@@ -49,7 +49,7 @@ struct ArgumentOf;
 // IMPORTANT: Arguments are identified by their ADDRESS in memory (not name!). Don't move them
 // around!
 //
-// Arguments are automatically serialized at the Machine level. It's important that they
+// Arguments are automatically serialized at the Board level. It's important that they
 // use good `Name()`s. They should be short, human-readable & capitalized.
 //
 // TODO: think about pointer following

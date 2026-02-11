@@ -30,7 +30,7 @@ void SaveState(ui::RootWidget& root_widget, Status& status) {
 
   writer.assigned_names.emplace("version");
   writer.assigned_names.emplace("window");
-  writer.Serialize(*root_machine);
+  writer.Serialize(*root_board);
 
   writer.EndObject();
   writer.Flush();
@@ -74,12 +74,12 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
             Str type;
             lookahead.Get(type, status);
             if (OK(status)) {
-              if (type == "Machine") {
-                d.RegisterObject(key, *root_machine);
+              if (type == "Board") {
+                d.RegisterObject(key, *root_board);
               } else {
                 auto proto = prototypes->Find(type);
                 if (proto == nullptr) {
-                  root_machine->ReportError(f("Unknown object type: {}", type));
+                  root_board->ReportError(f("Unknown object type: {}", type));
                 } else {
                   auto object = proto->Clone();
                   d.RegisterObject(key, *object);
@@ -133,7 +133,7 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
   }
 
   // Objects may have been rendered in their incomplete state - re-render them all.
-  for (auto& loc : root_machine->locations) {
+  for (auto& loc : root_board->locations) {
     loc->WakeToys();
   }
 

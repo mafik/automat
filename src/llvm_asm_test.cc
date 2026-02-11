@@ -25,7 +25,7 @@ using namespace automat;
 class MachineCodeControllerTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    root = MAKE_PTR(Machine);
+    root = MAKE_PTR(Board);
     auto ExitCallback = [this](mc::CodePoint code_point) {
       std::unique_lock<std::mutex> lock(mutex);
       exit_instr = *code_point.instruction;  // copy the weak_ptr
@@ -145,7 +145,7 @@ class MachineCodeControllerTest : public ::testing::Test {
   bool exited = false;
   NestedWeakPtr<const mc::Inst> exit_instr = {};
   mc::StopType exit_point = mc::StopType::InstructionBody;
-  Ptr<Machine> root;
+  Ptr<Board> root;
   std::jthread thread;
 };
 

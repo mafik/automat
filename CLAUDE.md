@@ -34,7 +34,7 @@ Automat is a C++ application for semi-autonomous automation with a layered archi
 
 2. **Toys Layer** - UI display widgets, separated from Object logic
    - **`automat::Toy`** (`src/toy.hh`) — base for all display widgets, inherits `ui::Widget`
-   - **`Object::Toy`** (`src/object.hh`) — base for Object-specific widgets (Shape, Draw, ArgStart, etc.)
+   - **`ObjectToy`** (`src/object.hh`) — base for Object-specific widgets (Shape, Draw, ArgStart, etc.)
    - **`ToyStore`** (`src/toy.hh`) — manages Toy lifetimes, keyed by `(WeakPtr<owner>, Atom*)`
    - **`ToyMaker`** concept — any `Part` with a `Toy` type and `MakeToy(Widget*)` method
    - Widget struct definitions typically live in .cc files; headers only declare `MakeToy`

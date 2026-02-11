@@ -195,7 +195,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     if (mw) {
       mw->NearbyCandidates(
           from, *arg, autoconnect_radius * 2 + 10_cm,
-          [&](Object::Toy& candidate_toy, Atom&, Vec<Vec2AndDir>& to_points) {
+          [&](ObjectToy& candidate_toy, Atom&, Vec<Vec2AndDir>& to_points) {
             auto m = TransformBetween(candidate_toy, *mw);
             for (auto& to : to_points) {
               to.pos = m.mapPoint(to.pos);
@@ -251,10 +251,10 @@ struct ConnectionWidgetLocker {
   MachineWidget* machine_widget;
 
   NestedPtr<Argument> start_arg;
-  Object::Toy* start_widget;
+  ObjectToy* start_widget;
 
   NestedPtr<Atom> end_atom;
-  Object::Toy* end_widget;
+  ObjectToy* end_widget;
   SkMatrix end_transform;
 
   // Computing everything in initializer avoids zero-initialization

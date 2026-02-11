@@ -309,7 +309,7 @@ void Pointer::Logging::Release() {
 
 animation::Phase PointerWidget::Tick(time::Timer& timer) {
   struct Highlighted {
-    Object::Toy* widget;
+    ObjectToy* widget;
     Atom* atom;
 
     bool operator<(const Highlighted& other) const {
@@ -328,7 +328,7 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
   };
 
   std::vector<Highlighted> highlight_target;
-  auto HighlightCheck = [&](Object& obj, Object::Toy& widget, Atom& atom) {
+  auto HighlightCheck = [&](Object& obj, ObjectToy& widget, Atom& atom) {
     for (auto& action : pointer.actions) {
       if (action == nullptr) continue;
       if (action->Highlight(obj, atom)) {
@@ -359,7 +359,7 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
 
   auto phase = animation::Finished;
 
-  auto HighlightTick = [&](Object::Toy* obj, Atom* atom, float current, float target) {
+  auto HighlightTick = [&](ObjectToy* obj, Atom* atom, float current, float target) {
     phase |= animation::ExponentialApproach(target, timer.d, 0.1, current);
     if (current > 0.01f) {
       highlight_next.emplace_back(obj, atom, current);

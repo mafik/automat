@@ -13,8 +13,8 @@ using namespace std;
 
 namespace automat::ui {
 
-PowerButton::PowerButton(Widget* parent, OnOff* target, SkColor fg, SkColor bg)
-    : ToggleButton(parent), target(target) {
+PowerButton::PowerButton(Widget* parent, NestedWeakPtr<OnOff> target, SkColor fg, SkColor bg)
+    : ToggleButton(parent), target(std::move(target)) {
   on = make_unique<ColoredButton>(
       this, kPowerSVG,
       ColoredButtonArgs{.fg = bg, .bg = fg, .on_click = [this](ui::Pointer& p) { Activate(p); }});
@@ -24,8 +24,15 @@ PowerButton::PowerButton(Widget* parent, OnOff* target, SkColor fg, SkColor bg)
 }
 
 void PowerButton::Activate(ui::Pointer& p) {
-  target->Toggle();
+  if (auto locked = target.Lock()) {
+    locked->Toggle();
+  }
   WakeAnimation();
 }
-bool PowerButton::Filled() const { return target->IsOn(); }
+bool PowerButton::Filled() const {
+  if (auto locked = target.Lock()) {
+    return locked->IsOn();
+  }
+  return false;
+}
 }  // namespace automat::ui

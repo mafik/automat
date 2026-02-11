@@ -26,7 +26,7 @@ namespace automat {
 
 Machine::Machine() {}
 
-std::unique_ptr<Object::Toy> Machine::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> Machine::MakeToy(ui::Widget* parent) {
   return std::make_unique<MachineWidget>(parent, *this);
 }
 
@@ -108,7 +108,7 @@ void Machine::Relocate(Location* parent) {
   }
 }
 
-MachineWidget::MachineWidget(ui::Widget* parent, Machine& machine) : Object::Toy(parent, machine) {}
+MachineWidget::MachineWidget(ui::Widget* parent, Machine& machine) : ObjectToy(parent, machine) {}
 
 SkPath MachineWidget::Shape() const {
   SkPath rect = SkPath::Rect(Rect::MakeCenterZero(100_cm, 100_cm));
@@ -281,7 +281,7 @@ void* MachineWidget::Nearby(Vec2 start, float radius, std::function<void*(Locati
 
 void MachineWidget::NearbyCandidates(
     Location& here, const Argument& arg, float radius,
-    std::function<void(Object::Toy&, Atom&, Vec<Vec2AndDir>&)> callback) {
+    std::function<void(ObjectToy&, Atom&, Vec<Vec2AndDir>&)> callback) {
   // Check the currently dragged object
   auto& root_widget = *ui::root_widget;
   for (auto* action : root_widget.active_actions) {

@@ -158,8 +158,8 @@ static PersistentImage& RubberNormal() {
   return normal;
 }
 
-struct GearWidget : Object::Toy {
-  GearWidget(Widget* parent, Object& object) : Object::Toy(parent, object) {}
+struct GearWidget : ObjectToy {
+  GearWidget(Widget* parent, Object& object) : ObjectToy(parent, object) {}
 
   SkPath Shape() const override { return SkPath::Circle(0, 0, 1_cm); }
 
@@ -280,7 +280,7 @@ void SyncConnectionWidget::Draw(SkCanvas& canvas) const {
 
 Optional<Rect> SyncConnectionWidget::TextureBounds() const { return bounds; }
 
-std::unique_ptr<Object::Toy> Gear::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> Gear::MakeToy(ui::Widget* parent) {
   return std::make_unique<GearWidget>(parent, *this);
 }
 

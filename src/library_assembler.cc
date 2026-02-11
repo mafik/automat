@@ -137,7 +137,7 @@ struct RegistersMenuOption : TextOption, OptionsProvider {
 };
 
 void AssemblerWidget::VisitOptions(const OptionsVisitor& visitor) const {
-  Object::Toy::VisitOptions(visitor);
+  ObjectToy::VisitOptions(visitor);
   RegistersMenuOption registers_option{owner.Copy<Assembler>()};
   visitor(registers_option);
 }
@@ -369,7 +369,7 @@ bool Assembler::DeserializeKey(ObjectDeserializer& d, StrView key) {
 }
 
 AssemblerWidget::AssemblerWidget(Widget* parent, Assembler& assembler)
-    : Object::Toy(parent, assembler) {}
+    : ObjectToy(parent, assembler) {}
 
 std::string_view AssemblerWidget::Name() const { return "Assembler"; }
 SkPath AssemblerWidget::Shape() const { return SkPath::RRect(kRRect.sk); }
@@ -730,7 +730,7 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
 }
 
 void RegisterWidget::VisitOptions(const OptionsVisitor& visitor) const {
-  Object::Toy::VisitOptions(visitor);
+  ObjectToy::VisitOptions(visitor);
   auto register_obj = LockRegister();
   RegisterMenuOption register_menu_option = {register_obj->assembler_weak,
                                              register_obj->register_index};

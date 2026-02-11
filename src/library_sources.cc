@@ -73,8 +73,8 @@ struct ExtractFilesOption : TextOption {
   Dir PreferredDir() const override { return SW; }
 };
 
-struct SourcesWidget : Object::Toy {
-  SourcesWidget(ui::Widget* parent, Object& sources) : Object::Toy(parent, sources) {}
+struct SourcesWidget : ObjectToy {
+  SourcesWidget(ui::Widget* parent, Object& sources) : ObjectToy(parent, sources) {}
 
   Ptr<Sources> LockSources() const { return LockObject<Sources>(); }
 
@@ -87,7 +87,7 @@ struct SourcesWidget : Object::Toy {
   void Draw(SkCanvas& canvas) const override { SourcesImage().draw(canvas); }
 
   void VisitOptions(const OptionsVisitor& visitor) const override {
-    Object::Toy::VisitOptions(visitor);
+    ObjectToy::VisitOptions(visitor);
     if (auto sources = LockSources()) {
       ExtractFilesOption extract(sources);
       visitor(extract);
@@ -95,7 +95,7 @@ struct SourcesWidget : Object::Toy {
   }
 };
 
-std::unique_ptr<Object::Toy> Sources::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> Sources::MakeToy(ui::Widget* parent) {
   return std::make_unique<SourcesWidget>(parent, *this);
 }
 

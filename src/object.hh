@@ -30,6 +30,7 @@ struct SignalNext;
 struct Syncable;
 struct ObjectSerializer;
 struct ObjectDeserializer;
+struct ObjectToy;
 
 // Objects are interactive pieces of data & behavior.
 //
@@ -103,51 +104,9 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
     return GetText() <=> other.GetText();
   }
 
-  // Provides sensible defaults for most object widgets. Designed to be inherited and tweaked.
-  //
-  // It's rendered as a green box with the name of the object.
-  struct Toy : automat::Toy {
-    Toy(Widget* parent, Object& obj) : automat::Toy(parent, obj, obj) {}
+  using Toy = ObjectToy;
 
-    virtual float Width() const;
-    virtual std::string Text() const { return std::string(Name()); }
-    SkPath Shape() const override;
-    void Draw(SkCanvas&) const override;
-    void VisitOptions(const OptionsVisitor&) const override;
-    std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
-
-    // Reports 1 but if the object is iconified, it checks the CoarseBounds()
-    // and returns a scale that would fit in a 1x1cm square.
-    virtual float GetBaseScale() const;
-
-    // Places where the connections to this widget may terminate.
-    // Local (metric) coordinates.
-    virtual void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const;
-
-    // Returns the start position of the given argument.
-    // If coordinate_space is nullptr, returns local (metric) coordinates.
-    // If coordinate_space is provided, returns coordinates in that widget's space.
-    virtual Vec2AndDir ArgStart(const Argument&, ui::Widget* coordinate_space = nullptr);
-
-    // Describes the area of the widget where the given atom is located.
-    // Local (metric) coordinates.
-    virtual SkPath AtomShape(Atom*) const { return Shape(); }
-
-    // When iconified, prevent children from receiving pointer events.
-    bool AllowChildPointerEvents(ui::Widget&) const override;
-
-    // Shortcut for automat::IsIconified(Object*).
-    bool IsIconified() const;
-
-    template <typename T>
-    Ptr<T> LockObject() const {
-      return LockOwner<T>();
-    }
-  };
-
-  virtual std::unique_ptr<Toy> MakeToy(ui::Widget* parent) {
-    return std::make_unique<Toy>(parent, *this);
-  }
+  virtual std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 
   void InvalidateConnectionWidgets(const Argument* arg = nullptr) const;
 
@@ -162,6 +121,52 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   // If this object is owned by a Machine, return the Location that's used to store it.
   Location* MyLocation();
 };
+
+// Provides sensible defaults for most object widgets. Designed to be inherited and tweaked.
+//
+// It's rendered as a green box with the name of the object.
+struct ObjectToy : Toy {
+  ObjectToy(Widget* parent, Object& obj) : Toy(parent, obj, obj) {}
+
+  virtual float Width() const;
+  virtual std::string Text() const { return std::string(Name()); }
+  SkPath Shape() const override;
+  void Draw(SkCanvas&) const override;
+  void VisitOptions(const OptionsVisitor&) const override;
+  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
+
+  // Reports 1 but if the object is iconified, it checks the CoarseBounds()
+  // and returns a scale that would fit in a 1x1cm square.
+  virtual float GetBaseScale() const;
+
+  // Places where the connections to this widget may terminate.
+  // Local (metric) coordinates.
+  virtual void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const;
+
+  // Returns the start position of the given argument.
+  // If coordinate_space is nullptr, returns local (metric) coordinates.
+  // If coordinate_space is provided, returns coordinates in that widget's space.
+  virtual Vec2AndDir ArgStart(const Argument&, ui::Widget* coordinate_space = nullptr);
+
+  // Describes the area of the widget where the given atom is located.
+  // Local (metric) coordinates.
+  virtual SkPath AtomShape(Atom*) const { return Shape(); }
+
+  // When iconified, prevent children from receiving pointer events.
+  bool AllowChildPointerEvents(ui::Widget&) const override;
+
+  // Shortcut for automat::IsIconified(Object*).
+  bool IsIconified() const;
+
+  template <typename T>
+  Ptr<T> LockObject() const {
+    return LockOwner<T>();
+  }
+};
+
+inline std::unique_ptr<ObjectToy> Object::MakeToy(ui::Widget* parent) {
+  return std::make_unique<ObjectToy>(parent, *this);
+}
 
 static_assert(ToyMaker<Object>);
 

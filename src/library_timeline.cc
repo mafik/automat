@@ -744,7 +744,7 @@ time::Duration Timeline::CurrentOffset(time::SteadyPoint now) const {
   }
 }
 
-struct TimelineWidget : Object::Toy {
+struct TimelineWidget : ObjectToy {
   std::unique_ptr<TimelineRunButton> run_button;
   std::unique_ptr<PrevButton> prev_button;
   std::unique_ptr<NextButton> next_button;
@@ -767,7 +767,7 @@ struct TimelineWidget : Object::Toy {
   time::Duration distance_to_seconds;  // populated on Tick
 
   TimelineWidget(ui::Widget* parent, Object& object)
-      : Object::Toy(parent, object),
+      : ObjectToy(parent, object),
         run_button(new TimelineRunButton(this, static_cast<Timeline&>(object).AcquireWeakPtr())),
         prev_button(new PrevButton(*this)),
         next_button(new NextButton(*this)) {
@@ -1550,7 +1550,7 @@ struct TimelineWidget : Object::Toy {
         }
       }
     }
-    return Object::Toy::ArgStart(arg, coordinate_space);
+    return ObjectToy::ArgStart(arg, coordinate_space);
   }
 };
 
@@ -1808,10 +1808,10 @@ std::unique_ptr<Action> TimelineWidget::FindAction(ui::Pointer& ptr, ui::ActionT
       }
     }
   }
-  return Object::Toy::FindAction(ptr, btn);
+  return ObjectToy::FindAction(ptr, btn);
 }
 
-std::unique_ptr<Object::Toy> Timeline::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> Timeline::MakeToy(ui::Widget* parent) {
   return std::make_unique<TimelineWidget>(parent, *this);
 }
 
@@ -1824,8 +1824,8 @@ void Timeline::Atoms(const function<LoopControl(Atom&)>& cb) {
   if (LoopControl::Break == cb(running)) return;
 }
 
-struct TrackBaseWidget : Object::Toy {
-  using Object::Toy::Toy;
+struct TrackBaseWidget : ObjectToy {
+  using ObjectToy::ObjectToy;
 
   // Many functions within TrackBaseWidget query the same information. This class:
   // - caches these results to avoid repeated lookups &
@@ -1900,7 +1900,7 @@ struct TrackBaseWidget : Object::Toy {
     Context ctx(*this);
     auto* timeline_widget = ctx.GetTimelineWidget();
     if (timeline_widget == nullptr || timeline_widget->drag_zoom_action == nullptr) {
-      return Object::Toy::TextureBounds();
+      return ObjectToy::TextureBounds();
     }
     return nullopt;
   }
@@ -1914,7 +1914,7 @@ struct TrackBaseWidget : Object::Toy {
     if (auto* timeline_widget = ctx.GetTimelineWidget()) {
       return timeline_widget->FindAction(ptr, btn);
     } else {
-      return Object::Toy::FindAction(ptr, btn);
+      return ObjectToy::FindAction(ptr, btn);
     }
   }
 };
@@ -2351,17 +2351,17 @@ struct Float64TrackWidget : TrackBaseWidget {
   }
 };
 
-std::unique_ptr<Object::Toy> OnOffTrack::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> OnOffTrack::MakeToy(ui::Widget* parent) {
   auto ret = std::make_unique<OnOffTrackWidget>(parent, *this);
   return ret;
 }
 
-std::unique_ptr<Object::Toy> Vec2Track::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> Vec2Track::MakeToy(ui::Widget* parent) {
   auto ret = std::make_unique<Vec2TrackWidget>(parent, *this);
   return ret;
 }
 
-std::unique_ptr<Object::Toy> Float64Track::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> Float64Track::MakeToy(ui::Widget* parent) {
   auto ret = std::make_unique<Float64TrackWidget>(parent, *this);
   return ret;
 }

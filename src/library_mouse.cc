@@ -387,8 +387,8 @@ struct MouseScrollMenuOption : Option, OptionsProvider {
   Dir PreferredDir() const override { return E; }
 };
 
-struct MouseWidgetBase : Object::Toy {
-  MouseWidgetBase(ui::Widget* parent, Object& object) : Object::Toy(parent, object) {}
+struct MouseWidgetBase : ObjectToy {
+  MouseWidgetBase(ui::Widget* parent, Object& object) : ObjectToy(parent, object) {}
 
   RRect CoarseBounds() const override { return MouseWidgetCommon::CoarseBounds(); }
 
@@ -407,7 +407,7 @@ struct MouseWidget : MouseWidgetBase {
   }
 
   void VisitOptions(const OptionsVisitor& options_visitor) const override {
-    Object::Toy::VisitOptions(options_visitor);
+    ObjectToy::VisitOptions(options_visitor);
     static MousePresserMenuOption presser_option;
     options_visitor(presser_option);
     static MouseDownMenuOption down_option(true);
@@ -518,7 +518,7 @@ audio::Sound& MouseButtonEvent::NextSound() {
   return down ? embedded::assets_SFX_mouse_down_wav : embedded::assets_SFX_mouse_up_wav;
 }
 
-std::unique_ptr<Object::Toy> MouseButtonEvent::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> MouseButtonEvent::MakeToy(ui::Widget* parent) {
   return std::make_unique<MouseButtonEventWidget>(parent, *this);
 }
 
@@ -574,7 +574,7 @@ struct MouseMoveWidget : MouseWidget {
   void VisitOptions(const OptionsVisitor& options_visitor) const override {
     // Note that we're not calling the MouseWidget's VisitOptions because we don't want to offer
     // other objects from here.
-    Object::Toy::VisitOptions(options_visitor);
+    ObjectToy::VisitOptions(options_visitor);
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -628,7 +628,7 @@ struct MouseMoveWidget : MouseWidget {
   }
 };
 
-std::unique_ptr<Object::Toy> MouseMove::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> MouseMove::MakeToy(ui::Widget* parent) {
   return std::make_unique<MouseMoveWidget>(parent, *this);
 }
 
@@ -801,11 +801,11 @@ struct MouseScrollXWidget : MouseWidgetBase {
   }
 };
 
-std::unique_ptr<Object::Toy> MouseScrollY::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> MouseScrollY::MakeToy(ui::Widget* parent) {
   return std::make_unique<MouseScrollYWidget>(parent, *this);
 }
 
-std::unique_ptr<Object::Toy> MouseScrollX::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> MouseScrollX::MakeToy(ui::Widget* parent) {
   return std::make_unique<MouseScrollXWidget>(parent, *this);
 }
 
@@ -836,7 +836,7 @@ void MouseScrollX::OnRelativeFloat64(double delta) {
   WakeToys();
 }
 
-std::unique_ptr<Object::Toy> Mouse::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> Mouse::MakeToy(ui::Widget* parent) {
   return std::make_unique<MouseWidget>(parent, *this);
 }
 
@@ -904,7 +904,7 @@ void MouseButtonPresser::Atoms(const std::function<LoopControl(Atom&)>& cb) {
   if (LoopControl::Break == cb(state)) return;
 }
 
-std::unique_ptr<Object::Toy> MouseButtonPresser::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> MouseButtonPresser::MakeToy(ui::Widget* parent) {
   return std::make_unique<MouseButtonPresserWidget>(parent, *this);
 }
 

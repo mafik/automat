@@ -163,7 +163,7 @@ string_view InstructionLibrary::Name() const { return "Instruction Library"; }
 
 Ptr<Object> InstructionLibrary::Clone() const { return MAKE_PTR(InstructionLibrary); }
 
-InstructionLibrary::Widget::Widget(ui::Widget* parent, Object& object) : Toy(parent, object) {
+InstructionLibrary::Widget::Widget(ui::Widget* parent, Object& object) : ObjectToy(parent, object) {
   for (int i = 0; i < std::size(x86::kCategories); ++i) {
     if (category_states.size() <= i) {
       category_states.push_back(CategoryState{

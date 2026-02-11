@@ -27,7 +27,7 @@
 
 namespace automat {
 
-void Object::Toy::Draw(SkCanvas& canvas) const {
+void ObjectToy::Draw(SkCanvas& canvas) const {
   SkPath path = Shape();
 
   SkPaint paint;
@@ -69,7 +69,7 @@ void Object::Toy::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-float Object::Toy::Width() const {
+float ObjectToy::Width() const {
   auto text = Text();
   constexpr float kNameMargin = 0.001;
   float width_text = ui::GetFont().MeasureText(text) + 2 * kNameMargin;
@@ -78,7 +78,7 @@ float Object::Toy::Width() const {
   return std::max(width_rounded, kMinWidth);
 }
 
-SkPath Object::Toy::Shape() const {
+SkPath ObjectToy::Shape() const {
   static std::unordered_map<float, SkPath> basic_shapes;
   float width = Width();
   auto it = basic_shapes.find(width);
@@ -331,8 +331,8 @@ struct FieldOption : TextOption, OptionsProvider {
   }
 };
 
-void Object::Toy::VisitOptions(const OptionsVisitor& visitor) const {
-  if (auto* lw = ui::Closest<LocationWidget>(const_cast<Toy&>(*this))) {
+void ObjectToy::VisitOptions(const OptionsVisitor& visitor) const {
+  if (auto* lw = ui::Closest<LocationWidget>(const_cast<ObjectToy&>(*this))) {
     if (auto loc = lw->LockLocation()) {
       auto loc_weak = loc->AcquireWeakPtr();
       DeleteOption del{loc_weak};
@@ -363,7 +363,7 @@ void Object::Toy::VisitOptions(const OptionsVisitor& visitor) const {
   }
 }
 
-std::unique_ptr<Action> Object::Toy::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
+std::unique_ptr<Action> ObjectToy::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
   if (btn == ui::PointerButton::Left) {
     if (auto* lw = Closest<LocationWidget>(*p.hover)) {
       if (auto loc = lw->LockLocation()) {
@@ -416,7 +416,7 @@ void Object::ReportError(std::string_view message, std::source_location location
 
 void Object::ClearOwnError() { automat::ClearError(*this, *this); }
 
-float Object::Toy::GetBaseScale() const {
+float ObjectToy::GetBaseScale() const {
   if (automat::IsIconified(static_cast<Object*>(owner.GetUnsafe()))) {
     auto bounds = CoarseBounds().rect;
     return std::min<float>(1_cm / bounds.Width(), 1_cm / bounds.Height());
@@ -424,7 +424,7 @@ float Object::Toy::GetBaseScale() const {
   return 1;
 }
 
-void Object::Toy::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
+void ObjectToy::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
   // By default just one position on the top of the bounding box.
   auto shape = Shape();
   Rect bounds = shape.getBounds();
@@ -442,7 +442,7 @@ void Object::Toy::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
   });
 }
 
-Vec2AndDir Object::Toy::ArgStart(const Argument& arg, ui::Widget* coordinate_space) {
+Vec2AndDir ObjectToy::ArgStart(const Argument& arg, ui::Widget* coordinate_space) {
   SkPath shape = AtomShape(&const_cast<Argument&>(arg));
   Rect bounds = shape.getBounds();
   Vec2AndDir pos_dir{
@@ -460,9 +460,9 @@ void Object::Relocate(Location* new_here) { here = new_here; }
 
 Object::~Object() { LifetimeObserver::CheckDestroyNotified(*this); }
 
-bool Object::Toy::AllowChildPointerEvents(ui::Widget&) const { return !IsIconified(); }
+bool ObjectToy::AllowChildPointerEvents(ui::Widget&) const { return !IsIconified(); }
 
-bool Object::Toy::IsIconified() const {
+bool ObjectToy::IsIconified() const {
   return automat::IsIconified(static_cast<Object*>(owner.GetUnsafe()));
 }
 

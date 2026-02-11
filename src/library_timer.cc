@@ -474,7 +474,7 @@ const static SkPaint kHandPaint = [] {
   return paint;
 }();
 
-struct TimerWidget : Object::Toy {
+struct TimerWidget : ObjectToy {
   // Animation state
   float start_pusher_depression = 0;
   float left_pusher_depression = 0;
@@ -494,7 +494,7 @@ struct TimerWidget : Object::Toy {
   Ptr<Timer> LockTimer() const { return LockObject<Timer>(); }
 
   TimerWidget(ui::Widget* parent, Object& timer_obj)
-      : Object::Toy(parent, timer_obj), text_field(new ui::NumberTextField(this, kTextWidth)) {
+      : ObjectToy(parent, timer_obj), text_field(new ui::NumberTextField(this, kTextWidth)) {
     text_field->local_to_parent = SkM44::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
     range_dial.velocity = 0;
     range_dial.value = 1;
@@ -516,7 +516,7 @@ struct TimerWidget : Object::Toy {
   }
 
   animation::Phase Tick(time::Timer& timer) override {
-    auto phase = Object::Toy::Tick(timer);
+    auto phase = ObjectToy::Tick(timer);
 
     // Refresh cached Object state
     if (auto t = LockTimer()) {
@@ -849,10 +849,10 @@ std::unique_ptr<Action> TimerWidget::FindAction(ui::Pointer& pointer, ui::Action
       return std::make_unique<DragHandAction>(pointer, *this);
     }
   }
-  return Object::Toy::FindAction(pointer, btn);
+  return ObjectToy::FindAction(pointer, btn);
 }
 
-std::unique_ptr<Object::Toy> Timer::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> Timer::MakeToy(ui::Widget* parent) {
   return std::make_unique<TimerWidget>(parent, *this);
 }
 

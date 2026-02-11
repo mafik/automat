@@ -414,22 +414,26 @@ bool MacroRecorder::DeserializeKey(ObjectDeserializer& d, StrView key) {
 // GlassRunButton
 
 struct GlassRunButton : ui::PowerButton {
-  GlassRunButton(ui::Widget* parent, OnOff* on_off)
-      : ui::PowerButton(parent, on_off, color::kParrotRed, "#eeeeee"_color) {}
+  GlassRunButton(ui::Widget* parent, NestedWeakPtr<OnOff> on_off)
+      : ui::PowerButton(parent, std::move(on_off), color::kParrotRed, "#eeeeee"_color) {}
   void PointerOver(ui::Pointer& p) override {
     ToggleButton::PointerOver(p);
-    auto& mr = static_cast<MacroRecorder::MyLongRunning*>(target)->MacroRecorder();
-    if (auto connection_widget = ConnectionWidget::FindOrNull(mr, timeline_arg)) {
-      connection_widget->animation_state.prototype_alpha_target = 1;
-      connection_widget->WakeAnimation();
+    if (auto locked = target.Lock()) {
+      auto& mr = static_cast<MacroRecorder::MyLongRunning*>(locked.Get())->MacroRecorder();
+      if (auto connection_widget = ConnectionWidget::FindOrNull(mr, timeline_arg)) {
+        connection_widget->animation_state.prototype_alpha_target = 1;
+        connection_widget->WakeAnimation();
+      }
     }
   }
   void PointerLeave(ui::Pointer& p) override {
     ToggleButton::PointerLeave(p);
-    auto& mr = static_cast<MacroRecorder::MyLongRunning*>(target)->MacroRecorder();
-    if (auto connection_widget = ConnectionWidget::FindOrNull(mr, timeline_arg)) {
-      connection_widget->animation_state.prototype_alpha_target = 0;
-      connection_widget->WakeAnimation();
+    if (auto locked = target.Lock()) {
+      auto& mr = static_cast<MacroRecorder::MyLongRunning*>(locked.Get())->MacroRecorder();
+      if (auto connection_widget = ConnectionWidget::FindOrNull(mr, timeline_arg)) {
+        connection_widget->animation_state.prototype_alpha_target = 0;
+        connection_widget->WakeAnimation();
+      }
     }
   }
   StrView Name() const override { return "GlassRunButton"; }
@@ -437,7 +441,7 @@ struct GlassRunButton : ui::PowerButton {
 
 // MacroRecorderWidget
 
-struct MacroRecorderWidget : Object::Toy, ui::PointerMoveCallback {
+struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
   struct AnimationState {
     animation::SpringV2<Vec2> googly_left;
     animation::SpringV2<Vec2> googly_right;
@@ -453,9 +457,10 @@ struct MacroRecorderWidget : Object::Toy, ui::PointerMoveCallback {
 
   Ptr<MacroRecorder> LockMacroRecorder() const { return LockObject<MacroRecorder>(); }
 
-  MacroRecorderWidget(ui::Widget* parent, Object& mr_obj) : Object::Toy(parent, mr_obj) {
+  MacroRecorderWidget(ui::Widget* parent, Object& mr_obj) : ObjectToy(parent, mr_obj) {
     if (auto mr = LockMacroRecorder()) {
-      record_button.reset(new GlassRunButton(this, &mr->long_running));
+      record_button.reset(
+          new GlassRunButton(this, NestedWeakPtr<OnOff>(mr->AcquireWeakPtr(), &mr->long_running)));
       record_button->local_to_parent = SkM44::Translate(17.5_mm, 3.2_mm);
       is_recording = mr->keylogging != nullptr;
     }
@@ -619,11 +624,11 @@ struct MacroRecorderWidget : Object::Toy, ui::PointerMoveCallback {
       }
       return pos_dir;
     }
-    return Toy::ArgStart(arg, coordinate_space);
+    return ObjectToy::ArgStart(arg, coordinate_space);
   }
 };
 
-std::unique_ptr<Object::Toy> MacroRecorder::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> MacroRecorder::MakeToy(ui::Widget* parent) {
   return std::make_unique<MacroRecorderWidget>(parent, *this);
 }
 

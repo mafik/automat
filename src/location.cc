@@ -68,7 +68,7 @@ std::unique_ptr<LocationWidget> Location::MakeToy(ui::Widget* parent) {
   return std::make_unique<LocationWidget>(parent, *this);
 }
 
-Object::Toy& Location::ToyForObject() {
+ObjectToy& Location::ToyForObject() {
   if (!widget) {
     ui::root_widget->toys.FindOrMake(*this, ui::root_widget.get());
     // MakeToy was called, widget is now set.
@@ -157,7 +157,7 @@ LocationWidget::~LocationWidget() {
   }
 }
 
-Object::Toy& LocationWidget::ToyForObject() {
+ObjectToy& LocationWidget::ToyForObject() {
   if (!toy) {
     if (auto loc = LockLocation()) {
       if (loc->object) {
@@ -476,10 +476,10 @@ void LocationWidget::UpdateAutoconnectArgs() {
 
     // Find the nearest compatible atom
     float new_dist2 = autoconnect_radius * autoconnect_radius;
-    Object::Toy* new_toy = nullptr;
+    ObjectToy* new_toy = nullptr;
     Atom* new_atom = nullptr;
     parent_mw->NearbyCandidates(*loc, arg, autoconnect_radius,
-                                [&](Object::Toy& toy, Atom& atom, Vec<Vec2AndDir>& to_points) {
+                                [&](ObjectToy& toy, Atom& atom, Vec<Vec2AndDir>& to_points) {
                                   auto other_up = TransformBetween(toy, *parent_mw);
                                   for (auto& to : to_points) {
                                     Vec2 to_pos = other_up.mapPoint(to.pos);
@@ -606,7 +606,7 @@ void PositionBelow(Location& origin, Location& below) {
   }
 }
 
-Vec2 PositionAhead(Location& origin, const Argument& arg, const Object::Toy& target_widget) {
+Vec2 PositionAhead(Location& origin, const Argument& arg, const ObjectToy& target_widget) {
   auto& origin_toy = origin.ToyForObject();
   auto origin_shape = origin_toy.Shape();           // origin's local coordinates
   Vec2AndDir arg_start = origin_toy.ArgStart(arg);  // origin's local coordinates

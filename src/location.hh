@@ -68,7 +68,7 @@ struct Location : ReferenceCounted, ToyMakerMixin {
 
   // DEPRECATED: VM layer should not refer to UI-managed objects
   // Find (or create if needed) the Widget for this location's object.
-  Object::Toy& ToyForObject();
+  ObjectToy& ToyForObject();
 
   void InvalidateConnectionWidgets(bool moved, bool value_changed) const;
 
@@ -198,7 +198,7 @@ struct LocationWidget : Toy {
   Optional<Vec2> local_anchor;
   Vec2 position_vel = {};
   float scale_vel = 0;
-  Object::Toy* toy = nullptr;  // cached Object Toy
+  ObjectToy* toy = nullptr;  // cached Object Toy
   std::vector<ui::Widget*> overlays;
 
   LocationWidget(ui::Widget* parent, Location& loc);
@@ -206,7 +206,7 @@ struct LocationWidget : Toy {
 
   Ptr<Location> LockLocation() const { return location_weak.Lock(); }
 
-  Object::Toy& ToyForObject();
+  ObjectToy& ToyForObject();
   Vec2 LocalAnchor() const override;
 
   // Widget overrides
@@ -234,7 +234,7 @@ void PositionBelow(Location& origin, Location& below);
 // This uses the arg's position & direction within `origin`.
 //
 // This is a UI function.
-Vec2 PositionAhead(Location& origin, const Argument& arg, const Object::Toy& target_widget);
+Vec2 PositionAhead(Location& origin, const Argument& arg, const ObjectToy& target_widget);
 
 // Similar to the above, but also sets the target's position.
 //

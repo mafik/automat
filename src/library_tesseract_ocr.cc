@@ -130,7 +130,7 @@ Ptr<Object> TesseractOCR::Clone() const {
   return ret;
 }
 
-struct TesseractWidget : Object::Toy, ui::PointerMoveCallback {
+struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
   constexpr static float kSize = 5_cm;
   constexpr static float kRegionStrokeWidth = 1_mm;
   constexpr static float kHandleSize = 3_mm;
@@ -231,7 +231,7 @@ struct TesseractWidget : Object::Toy, ui::PointerMoveCallback {
 
   Ptr<TesseractOCR> LockTesseract() const { return LockObject<TesseractOCR>(); }
 
-  TesseractWidget(ui::Widget* parent, Object& tesseract) : Object::Toy(parent, tesseract) {}
+  TesseractWidget(ui::Widget* parent, Object& tesseract) : ObjectToy(parent, tesseract) {}
 
   constexpr static RRect kBounds = RRect::MakeSimple(Rect::MakeAtZero({kSize, kSize}), 0);
 
@@ -1064,7 +1064,7 @@ struct TesseractWidget : Object::Toy, ui::PointerMoveCallback {
         return std::make_unique<RegionDragAction>(pointer, *this, mode);
       }
     }
-    return Object::Toy::FindAction(pointer, trigger);
+    return ObjectToy::FindAction(pointer, trigger);
   }
 
   Vec2AndDir ArgStart(const Argument& arg, ui::Widget* coordinate_space = nullptr) override {
@@ -1074,7 +1074,7 @@ struct TesseractWidget : Object::Toy, ui::PointerMoveCallback {
     } else if (&arg == &text_arg) {
       pos_dir = Vec2AndDir{layout.border_outer.LeftCenter(), 180_deg};
     } else {
-      return Object::Toy::ArgStart(arg, coordinate_space);
+      return ObjectToy::ArgStart(arg, coordinate_space);
     }
     if (coordinate_space) {
       auto m = TransformBetween(*this, *coordinate_space);
@@ -1090,7 +1090,7 @@ const SkPath TesseractWidget::kEyeShape = PathFromSVG(
     "2.3929 9.8245 3.2222 7.6101 4.6757 5.3956 5.4623 3.5744 5.8813 1.2659 6.0694-2.5645 "
     "6.001-4.5481 5.7701-7.3867 5.1033-9.3703 4.0431-11.5847 2.4955-13.0382 1.2985-13.3888.9308Z");
 
-std::unique_ptr<Object::Toy> TesseractOCR::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> TesseractOCR::MakeToy(ui::Widget* parent) {
   return std::make_unique<TesseractWidget>(parent, *this);
 }
 

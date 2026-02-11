@@ -23,7 +23,7 @@ struct Object;
 // A type of Widget that represents a memory-managed entity.
 //
 // Notable subclasses are:
-// * Object::Toy (+ its subclasses for specific Objects)
+// * ObjectToy (+ its subclasses for specific Objects)
 // * ConnectionWidget
 // * LocationWidget
 struct Toy : ui::Widget {

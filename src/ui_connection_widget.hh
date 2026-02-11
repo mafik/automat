@@ -70,7 +70,7 @@ struct ConnectionWidget : Toy {
   float transparency = 1;
   float alpha = 0;
   float length = 0;
-  mutable std::unique_ptr<Object::Toy> prototype_widget;
+  mutable std::unique_ptr<ObjectToy> prototype_widget;
 
   ConnectionWidget(Widget* parent, Object&, Argument&);
 

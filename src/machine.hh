@@ -14,7 +14,7 @@ struct Machine : Object {
   deque<Ptr<Location>> locations;
 
   using Toy = MachineWidget;
-  std::unique_ptr<Object::Toy> MakeToy(ui::Widget* parent) override;
+  std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 
   Ptr<Location> Extract(Location& location);
 
@@ -85,7 +85,7 @@ struct Machine : Object {
 };
 
 // UI widget for Machine. Handles drawing, drop target, and spatial queries.
-struct MachineWidget : Object::Toy, ui::DropTarget {
+struct MachineWidget : ObjectToy, ui::DropTarget {
   MachineWidget(ui::Widget* parent, Machine& machine);
 
   Ptr<Machine> LockMachine() const { return LockOwner<Machine>(); }
@@ -108,7 +108,7 @@ struct MachineWidget : Object::Toy, ui::DropTarget {
   void ConnectAtPoint(Object& start, Argument&, Vec2);
   void* Nearby(Vec2 center, float radius, std::function<void*(Location&)> callback);
   void NearbyCandidates(Location& here, const Argument& arg, float radius,
-                        std::function<void(Object::Toy&, Atom&, Vec<Vec2AndDir>&)> callback);
+                        std::function<void(ObjectToy&, Atom&, Vec<Vec2AndDir>&)> callback);
   void ForStack(Location& base, std::function<void(Location&, int index)> callback);
   SkPath StackShape(Location& base);
   Vec<Ptr<Location>> ExtractStack(Location& base);

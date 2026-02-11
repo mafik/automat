@@ -3285,7 +3285,7 @@ struct LoopConditionCodeWidget : public EnumKnobWidget {
   }
 };
 
-Instruction::Widget::Widget(ui::Widget* parent, Object& object) : Toy(parent, object) {
+Instruction::Widget::Widget(ui::Widget* parent, Object& object) : ObjectToy(parent, object) {
   auto instruction = LockObject<Instruction>();
   if (instruction->BufferSize() > 0) {
     auto buffer_ptr =
@@ -3675,7 +3675,7 @@ Vec2AndDir Instruction::Widget::ArgStart(const Argument& arg, ui::Widget* coordi
     }
     return pos_dir;
   }
-  return Object::Toy::ArgStart(arg, coordinate_space);
+  return ObjectToy::ArgStart(arg, coordinate_space);
 }
 
 void Instruction::Widget::FillChildren(Vec<ui::Widget*>& children) {
@@ -3891,7 +3891,7 @@ bool Instruction::DeserializeKey(ObjectDeserializer& d, StrView key) {
   return true;
 }
 
-std::unique_ptr<Object::Toy> Instruction::MakeToy(ui::Widget* parent) {
+std::unique_ptr<ObjectToy> Instruction::MakeToy(ui::Widget* parent) {
   return make_unique<Widget>(parent, *this);
 }
 }  // namespace automat::library

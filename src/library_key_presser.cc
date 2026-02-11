@@ -73,6 +73,11 @@ struct DragAndClickAction : Action {
     }
     return nullptr;
   }
+  void VisitObjects(std::function<void(Object&)> visitor) override {
+    if (drag_action) {
+      drag_action->VisitObjects(visitor);
+    }
+  }
 };
 
 struct UseObjectOption : TextOption {

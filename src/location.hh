@@ -229,16 +229,22 @@ static_assert(ToyMaker<Location>);
 
 void PositionBelow(Location& origin, Location& below);
 
-// Place the given `target` location ahead of the `origin`s `arg`.
+// Return position for the given `target_widget` ahead of the `origin`s `arg`.
 //
 // This uses the arg's position & direction within `origin`.
 //
-// This version just returns the recommended position for the target_widget.
+// This is a UI function.
 Vec2 PositionAhead(Location& origin, const Argument& arg, const Object::Toy& target_widget);
 
 // Similar to the above, but also sets the target's position.
+//
+// This is a VM function. It's pretty expensive because it must create a fake Widget for the
+// target toy.
 void PositionAhead(Location& origin, const Argument& arg, Location& target);
 
+// VM function for animating location appearance.
+//
+// Not implemented ATM
 void AnimateGrowFrom(Location& source, Location& grown);
 
 }  // namespace automat

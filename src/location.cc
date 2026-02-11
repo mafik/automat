@@ -163,9 +163,8 @@ Object::Toy& LocationWidget::ToyForObject() {
       if (loc->object) {
         toy = &ToyStore().FindOrMake(*loc->object, this);
         loc->scale = toy->GetBaseScale();
-        toy->local_to_parent = SkM44(Location::ToMatrix(loc->position, loc->scale, LocalAnchor()));
-        LOG << "Creating a toy for " << loc->object->Name() << " at " << loc->position.ToStrMetric()
-            << ", scale=" << loc->scale;
+        toy->local_to_parent =
+            SkM44(Location::ToMatrix(loc->position, loc->scale * 1.2, LocalAnchor()));
         transparency = 1;
       }
     }
@@ -608,9 +607,9 @@ void PositionBelow(Location& origin, Location& below) {
 }
 
 Vec2 PositionAhead(Location& origin, const Argument& arg, const Object::Toy& target_widget) {
-  auto& origin_widget = origin.ToyForObject();
-  auto origin_shape = origin_widget.Shape();           // origin's local coordinates
-  Vec2AndDir arg_start = origin_widget.ArgStart(arg);  // origin's local coordinates
+  auto& origin_toy = origin.ToyForObject();
+  auto origin_shape = origin_toy.Shape();           // origin's local coordinates
+  Vec2AndDir arg_start = origin_toy.ArgStart(arg);  // origin's local coordinates
   Vec2 drop_point;
 
   // Construct a matrix that transforms from the origin's local coordinates to the canvas
@@ -649,20 +648,17 @@ Vec2 PositionAhead(Location& origin, const Argument& arg, const Object::Toy& tar
 }
 
 void PositionAhead(Location& origin, const Argument& arg, Location& target) {
-  target.position = PositionAhead(origin, arg, target.ToyForObject());
+  auto tmp_toy = target.object->MakeToy(nullptr);
+  target.position = PositionAhead(origin, arg, *tmp_toy);
 }
 
 void AnimateGrowFrom(Location& source, Location& grown) {
-  grown.ForEachToy([&](ui::RootWidget& root, Toy& grown_toy) {
-    auto* source_toy = root.toys.FindOrNull(source);
-    if (source_toy == nullptr) return;
-    auto& source_widget = static_cast<LocationWidget&>(*source_toy);
-    auto& grown_widget = static_cast<LocationWidget&>(grown_toy);
-    grown_widget.transparency = 1;
-    grown_widget.ToyForObject().local_to_parent =
-        SkM44(source_widget.ToyForObject().local_to_parent).preScale(0.5, 0.5);
-    grown_widget.WakeAnimation();
-  });
+  // No-op for now. Might implement this eventually.
+  // Objects appearing at their final destination isn't looking that bad actually.
+  //
+  // The plan for this function is to put a WeakPtr in grown, pointing at source - so that
+  // LocationWidget can initialize its position at grown's position, and then animate move towards
+  // its own target position.
 }
 
 void LocationWidget::OnReparent(ui::Widget& new_parent, SkM44& fix) {

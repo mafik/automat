@@ -46,14 +46,6 @@ Object& Argument::ObjectOrMake(Object& start) {
   PositionBelow(loc, *start_loc);
   Connect(start, loc.object);
 
-  // TODO: fix growth animation
-  // auto& toys = ui::root_widget->toys;
-  // auto& start_loc_toy = toys.FindOrMake(*start_loc, ui::root_widget.get());
-  // auto& start_toy = start_loc_toy.ToyForObject();
-  // auto& toy = toys.FindOrMake(*obj, &start_toy);
-  // AnimateGrowFrom(*start_loc, loc);
-  // l.WakeToys();
-
   ui::root_widget->WakeAnimation();
   return *loc.object;
 }

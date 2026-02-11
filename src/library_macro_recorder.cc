@@ -471,6 +471,8 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
       is_recording = mr->keylogging != nullptr;
     }
 
+    record_button->WakeAnimationAt(timer.last);
+
     auto phase = is_recording ? animation::Animating : animation::Finished;
 
     phase |= animation::ExponentialApproach(is_recording ? 1 : 0, timer.d, 0.2,

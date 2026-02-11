@@ -674,29 +674,9 @@ struct TimelineRunButton : ui::ToggleButton {
                           .radius = kPlayButtonRadius,
                           .on_click = [this](ui::Pointer& p) { Activate(p); }});
   }
-  ui::Button* OnWidget() override {
-    auto timeline = timeline_weak.Lock();
-    if (timeline) {
-      auto lock = std::lock_guard(timeline->mutex);
-      if (timeline->state == Timeline::kRecording) {
-        last_on_widget = rec_button.get();
-      } else if (timeline->state == Timeline::kPlaying) {
-        last_on_widget = on.get();
-      }
-    }
-    if (last_on_widget == nullptr) {
-      last_on_widget = on.get();
-    }
-    return last_on_widget;
-  }
-  bool Filled() const override {
-    auto timeline = timeline_weak.Lock();
-    if (timeline) {
-      auto lock = std::lock_guard(timeline->mutex);
-      return timeline->running.IsOn();
-    }
-    return false;
-  }
+  TimelineWidget* GetTimelineWidget() const;
+  ui::Button* OnWidget() override;
+  bool Filled() const override;
   void Activate(ui::Pointer&) {
     auto timeline = timeline_weak.Lock();
     if (!timeline) return;
@@ -759,6 +739,7 @@ struct TimelineWidget : ObjectToy {
   animation::SpringV2<float> splice_wiggle;
   float bridge_wiggle_s = 0;
   bool bridge_snapped = false;
+  Timeline::State state;
 
   time::Duration max_track_length;     // populated on Tick
   time::Duration current_offset_raw;   // populated on Tick
@@ -951,8 +932,12 @@ struct TimelineWidget : ObjectToy {
     if (!timeline) return animation::Finished;
     auto lock = std::lock_guard(timeline->mutex);
 
+    state = timeline->state;
+
+    run_button->WakeAnimationAt(timer.last);
+
     auto phase = animation::Finished;
-    if ((timeline->state == Timeline::kPlaying) || (timeline->state == Timeline::kRecording)) {
+    if ((state == Timeline::kPlaying) || (state == Timeline::kRecording)) {
       phase |= animation::Animating;
     }
     phase |= animation::ExponentialApproach(timeline->zoom, timer.d, 0.1, zoom);
@@ -1553,6 +1538,31 @@ struct TimelineWidget : ObjectToy {
     return ObjectToy::ArgStart(arg, coordinate_space);
   }
 };
+
+TimelineWidget* TimelineRunButton::GetTimelineWidget() const {
+  return dynamic_cast<TimelineWidget*>(parent.get());
+}
+
+bool TimelineRunButton::Filled() const {
+  auto* tw = GetTimelineWidget();
+  if (tw == nullptr) return false;
+  return tw->state != Timeline::State::kPaused;
+}
+
+ui::Button* TimelineRunButton::OnWidget() {
+  auto* tw = GetTimelineWidget();
+  if (tw) {
+    if (tw->state == Timeline::kRecording) {
+      last_on_widget = rec_button.get();
+    } else if (tw->state == Timeline::kPlaying) {
+      last_on_widget = on.get();
+    }
+  }
+  if (last_on_widget == nullptr) {
+    last_on_widget = on.get();
+  }
+  return last_on_widget;
+}
 
 void PrevButton::Activate(ui::Pointer& ptr) {
   Button::Activate(ptr);
@@ -2825,4 +2835,5 @@ SkRRect SideButton::RRect() const {
   SkRect oval = SkRect::MakeXYWH(0, 0, 2 * kSideButtonRadius, 2 * kSideButtonRadius);
   return SkRRect::MakeOval(oval);
 }
+
 }  // namespace automat::library

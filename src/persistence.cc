@@ -74,7 +74,7 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
             Str type;
             lookahead.Get(type, status);
             if (OK(status)) {
-              if (type == "Root machine") {
+              if (type == "Machine") {
                 d.RegisterObject(key, *root_machine);
               } else {
                 auto proto = prototypes->Find(type);

@@ -96,7 +96,9 @@ Ptr<Object> Location::Take() { return std::move(object); }
 Ptr<Object> Location::InsertHere(Ptr<Object>&& object) {
   this->object.Swap(object);
   this->object->Relocate(this);
+  // TODO: VM layer shouldn't mutate UI like that!
   if (widget) widget->toy = nullptr;
+  ui::root_widget->WakeAnimation();
   return object;
 }
 

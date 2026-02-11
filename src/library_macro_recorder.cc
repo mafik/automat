@@ -87,7 +87,7 @@ struct TimelineArgument : Argument {
     }
   }
 
-  void Connect(Object& start, const NestedPtr<Atom>& end) override {
+  void OnConnect(Object& start, const NestedPtr<Atom>& end) override {
     if (auto* recorder = dynamic_cast<MacroRecorder*>(&start)) {
       // Handle disconnect - check old connection before clearing
       if (!end) {

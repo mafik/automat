@@ -4,7 +4,6 @@
 
 #include <cmath>
 
-#include "automat.hh"
 #include "base.hh"
 #include "drag_action.hh"
 #include "log.hh"
@@ -72,7 +71,7 @@ void NextArg::CanConnect(Object& start, Atom& end, Status& status) const {
   }
 }
 
-void NextArg::Connect(Object& start, const NestedPtr<Atom>& end) {
+void NextArg::OnConnect(Object& start, const NestedPtr<Atom>& end) {
   SignalNext* start_signal = start.AsSignalNext();
   if (start_signal == nullptr) return;
   if (end) {

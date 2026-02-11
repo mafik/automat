@@ -316,8 +316,8 @@ void Syncable::CanConnect(Object& start, Atom& end, Status& status) const {
   AppendErrorMessage(status) += "Can only connect to similar parts";
 }
 
-void Syncable::Connect(Object& start, const NestedPtr<Atom>& end) {
-  InlineArgument::Connect(start, end);
+void Syncable::OnConnect(Object& start, const NestedPtr<Atom>& end) {
+  InlineArgument::OnConnect(start, end);
 
   auto* target_syncable = dynamic_cast<Syncable*>(end.Get());
   if (target_syncable) {

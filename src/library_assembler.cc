@@ -756,7 +756,7 @@ struct RegisterAssemblerArgument : Argument {
     }
   }
 
-  void Connect(Object& start, const NestedPtr<Atom>& end) override {
+  void OnConnect(Object& start, const NestedPtr<Atom>& end) override {
     if (auto* reg = dynamic_cast<Register*>(&start)) {
       if (end) {
         if (auto* assembler = dynamic_cast<Assembler*>(end.Get())) {

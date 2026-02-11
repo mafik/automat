@@ -113,7 +113,7 @@ void JumpArgument::CanConnect(Object& start, Atom& end, Status& status) const {
   }
 }
 
-void JumpArgument::Connect(Object& start, const NestedPtr<Atom>& end) {
+void JumpArgument::OnConnect(Object& start, const NestedPtr<Atom>& end) {
   if (auto* inst = dynamic_cast<Instruction*>(&start)) {
     if (end) {
       if (auto* runnable = dynamic_cast<Runnable*>(end.Get())) {
@@ -140,8 +140,8 @@ NestedPtr<Atom> JumpArgument::Find(const Object& start) const {
 
 JumpArgument jump_arg;
 
-void NextInstructionArg::Connect(Object& start, const NestedPtr<Atom>& end) {
-  NextArg::Connect(start, end);
+void NextInstructionArg::OnConnect(Object& start, const NestedPtr<Atom>& end) {
+  NextArg::OnConnect(start, end);
   if (auto* inst = dynamic_cast<Instruction*>(&start)) {
     // Notify assembler of change
     if (auto* assembler = dynamic_cast<Assembler*>(assembler_arg.ObjectOrNull(*inst))) {
@@ -158,7 +158,7 @@ void AssemblerArgument::CanConnect(Object& start, Atom& end, Status& status) con
   }
 }
 
-void AssemblerArgument::Connect(Object& start, const NestedPtr<Atom>& end) {
+void AssemblerArgument::OnConnect(Object& start, const NestedPtr<Atom>& end) {
   auto* instruction = dynamic_cast<Instruction*>(&start);
   if (instruction == nullptr) return;
 

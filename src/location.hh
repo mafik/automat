@@ -66,6 +66,7 @@ struct Location : ReferenceCounted, ToyMakerMixin {
   explicit Location(WeakPtr<Location> parent_location = {});
   ~Location();
 
+  // DEPRECATED: VM layer should not refer to UI-managed objects
   // Find (or create if needed) the Widget for this location's object.
   Object::Toy& ToyForObject();
 

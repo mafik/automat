@@ -279,8 +279,9 @@ void* MachineWidget::Nearby(Vec2 start, float radius, std::function<void*(Locati
   return nullptr;
 }
 
-void MachineWidget::NearbyCandidates(Location& here, const Argument& arg, float radius,
-                                     std::function<void(Object::Toy&, Atom&, Vec<Vec2AndDir>&)> callback) {
+void MachineWidget::NearbyCandidates(
+    Location& here, const Argument& arg, float radius,
+    std::function<void(Object::Toy&, Atom&, Vec<Vec2AndDir>&)> callback) {
   // Check the currently dragged object
   auto& root_widget = *ui::root_widget;
   for (auto* action : root_widget.active_actions) {

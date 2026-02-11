@@ -99,7 +99,12 @@ struct Argument : Atom {
   //
   // When `end` is nullptr, this disconnects the existing connection. The implementation can check
   // the current connection value before clearing it (e.g., to call cleanup methods).
-  virtual void Connect(Object& start, const NestedPtr<Atom>& end) = 0;
+  virtual void OnConnect(Object& start, const NestedPtr<Atom>& end) = 0;
+
+  void Connect(Object& start, const NestedPtr<Atom>& end) {
+    OnConnect(start, end);
+    start.WakeToys();
+  }
 
   void Disconnect(Object& start) { Connect(start, {}); }
 
@@ -140,7 +145,7 @@ inline ArgumentOf Argument::Of(Object& start) { return ArgumentOf(start, *this);
 struct InlineArgument : Argument {
   NestedWeakPtr<Atom> end;
 
-  void Connect(Object&, const NestedPtr<Atom>& end) override { this->end = end; }
+  void OnConnect(Object&, const NestedPtr<Atom>& end) override { this->end = end; }
 
   NestedPtr<Atom> Find(const Object&) const override { return end.Lock(); };
 };
@@ -149,7 +154,7 @@ struct NextArg : Argument {
   StrView Name() const override { return "Next"sv; }
   Style GetStyle() const override { return Style::Cable; }
   void CanConnect(Object& start, Atom& end, Status&) const override;
-  void Connect(Object& start, const NestedPtr<Atom>& end) override;
+  void OnConnect(Object& start, const NestedPtr<Atom>& end) override;
   NestedPtr<Atom> Find(const Object& start) const override;
 };
 

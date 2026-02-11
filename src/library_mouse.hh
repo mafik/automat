@@ -102,7 +102,7 @@ struct MouseButtonPresser : Object {
   void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  operator OnOff*() override { return &state; }
+  OnOff* AsOnOff() override { return &state; }
   Runnable* AsRunnable() override { return &click; }
   SignalNext* AsSignalNext() override { return &click; }
 

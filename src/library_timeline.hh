@@ -46,7 +46,7 @@ struct OnOffTrack : TrackBase {
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
-  operator OnOff*() override { return &on_off; }
+  OnOff* AsOnOff() override { return &on_off; }
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

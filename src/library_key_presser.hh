@@ -55,7 +55,7 @@ void Atoms(const std::function<LoopControl(Atom&)>& cb) override {
   if (LoopControl::Break == cb(run)) return;
 }
 
-operator OnOff*() override { return &state; }
+OnOff* AsOnOff() override { return &state; }
 
 void SerializeState(ObjectSerializer& writer) const override;
 bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

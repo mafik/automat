@@ -29,7 +29,7 @@ struct FlipFlop : Object {
   ~FlipFlop();
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  operator OnOff*() override { return &on_off; }
+  OnOff* AsOnOff() override { return &on_off; }
 
   void SetKey(ui::AnsiKey);
 

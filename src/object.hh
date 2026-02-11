@@ -81,7 +81,7 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
 
   virtual SignalNext* AsSignalNext() { return nullptr; }
 
-  virtual operator OnOff*() { return nullptr; }
+  virtual OnOff* AsOnOff() { return nullptr; }
 
   // Visits all atoms that are members of this object.
   //

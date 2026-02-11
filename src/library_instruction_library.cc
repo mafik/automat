@@ -1176,7 +1176,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(ui::Pointer& p,
       }
     }
   }
-  return Toy::FindAction(p, btn);
+  return ObjectToy::FindAction(p, btn);
 }
 
 }  // namespace automat::library

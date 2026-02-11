@@ -898,8 +898,9 @@ string_view MouseButtonPresser::Name() const { return "Mouse Button Presser"sv; 
 Ptr<Object> MouseButtonPresser::Clone() const { return MAKE_PTR(MouseButtonPresser, button); }
 
 void MouseButtonPresser::Atoms(const std::function<LoopControl(Atom&)>& cb) {
-  if (LoopControl::Break == cb(*this)) return;
   if (LoopControl::Break == cb(next_arg)) return;
+  if (LoopControl::Break == cb(click)) return;
+  if (LoopControl::Break == cb(state)) return;
 }
 
 std::unique_ptr<Object::Toy> MouseButtonPresser::MakeToy(ui::Widget* parent) {

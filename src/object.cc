@@ -354,15 +354,7 @@ void Object::Toy::VisitOptions(const OptionsVisitor& visitor) const {
         obj->Atoms([&](Atom& atom) {
           if (auto* syncable = dynamic_cast<Syncable*>(&atom)) {
             FieldOption field_option{NestedWeakPtr<Syncable>(owner.Copy<Object>(), syncable)};
-            Str atom_name;
-            obj->AtomName(*syncable, atom_name);
-            // Sometimes it's convenient for an object to expose some options more directly (without
-            // nested menus). We do this when the object uses some part without giving it a name.
-            if (atom_name.empty()) {
-              field_option.VisitOptions(visitor);
-            } else {
-              visitor(field_option);
-            }
+            visitor(field_option);
           }
           return LoopControl::Continue;
         });
@@ -474,15 +466,9 @@ bool Object::Toy::IsIconified() const {
   return automat::IsIconified(static_cast<Object*>(owner.GetUnsafe()));
 }
 
-void Object::Atoms(const std::function<LoopControl(Atom&)>& cb) { cb(*this); }
+void Object::Atoms(const std::function<LoopControl(Atom&)>& cb) {}
 
-void Object::AtomName(Atom& atom, Str& out_name) {
-  if (&atom == this) {
-    out_name = "";
-  } else {
-    out_name = atom.Name();
-  }
-}
+void Object::AtomName(Atom& atom, Str& out_name) { out_name = atom.Name(); }
 
 void Object::Args(const std::function<void(Argument&)>& cb) {
   Atoms([&](Atom& atom) {
@@ -546,12 +532,11 @@ Str& ObjectSerializer::ResolveName(Object& object, StrView hint) {
 
 Str ObjectSerializer::ResolveName(Object& object, Atom* atom, StrView hint) {
   Str ret = ResolveName(object, hint);
-  if (atom) {
+  if (atom && atom != &object) {
+    ret += ".";
     Str atom_name;
     object.AtomName(*atom, atom_name);
-    if (!atom_name.empty()) {
-      ret += "." + atom_name;
-    }
+    ret += atom_name;
   }
   return ret;
 }

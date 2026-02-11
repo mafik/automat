@@ -83,6 +83,10 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
 
   virtual operator OnOff*() { return nullptr; }
 
+  // Visits all atoms that are members of this object.
+  //
+  // Lifetime of atoms is the same as this object. Atoms should never be deleted as it may create
+  // dangling references.
   virtual void Atoms(const std::function<LoopControl(Atom&)>&);
 
   virtual void AtomName(Atom&, Str& out_name);

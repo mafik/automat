@@ -208,7 +208,6 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
 Ptr<Object> Assembler::Clone() const { return MAKE_PTR(Assembler); }
 
 void Assembler::Atoms(const std::function<LoopControl(Atom&)>& cb) {
-  if (LoopControl::Break == cb(*this)) return;
   if (LoopControl::Break == cb(running)) return;
 }
 

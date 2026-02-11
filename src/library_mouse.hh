@@ -103,6 +103,8 @@ struct MouseButtonPresser : Object {
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
   operator OnOff*() override { return &state; }
+  Runnable* AsRunnable() override { return &click; }
+  SignalNext* AsSignalNext() override { return &click; }
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

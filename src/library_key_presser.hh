@@ -53,15 +53,6 @@ void SetKey(ui::AnsiKey);
 void Atoms(const std::function<LoopControl(Atom&)>& cb) override {
   if (LoopControl::Break == cb(monitoring)) return;
   if (LoopControl::Break == cb(run)) return;
-  if (LoopControl::Break == cb(*this)) return;
-}
-
-void AtomName(Atom& atom, Str& out_name) override {
-  if (&atom == this) {
-    out_name = "";
-    return;
-  }
-  return Object::AtomName(atom, out_name);
 }
 
 operator OnOff*() override { return &state; }

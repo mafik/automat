@@ -37,7 +37,6 @@ struct FlipFlop : Object {
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 
   void Atoms(const std::function<LoopControl(Atom&)>& cb) override {
-    Object::Atoms(cb);
     if (LoopControl::Break == cb(flip)) return;
     if (LoopControl::Break == cb(on_off)) return;
   }

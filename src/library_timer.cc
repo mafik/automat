@@ -187,6 +187,8 @@ void Timer::AtomName(Atom& atom, Str& out_name) {
     out_name = "Running";
   } else if (&atom == &duration) {
     out_name = "Duration";
+  } else {
+    Object::AtomName(atom, out_name);
   }
 }
 

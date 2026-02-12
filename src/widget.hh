@@ -146,6 +146,10 @@ struct Widget : Trackable, OptionsProvider {
 
   bool redraw_this_frame = false;
 
+  // Set to true when the widget's Tick returns Phase::Expired.
+  // The parent should remove it from its children list on the next frame.
+  bool expired = false;
+
   // Can be used by parent to store some data. Helps in avoiding allocations
   int index;
 

@@ -188,6 +188,7 @@ SkPath LocationWidget::Shape() const {
 }
 
 SkPath LocationWidget::ShapeRigid() const {
+  if (!toy) return SkPath();
   auto toy_shape = toy->ShapeRigid();
   toy_shape.transform(toy->local_to_parent.asM33());
   return toy_shape;
@@ -197,9 +198,8 @@ void LocationWidget::FillChildren(Vec<Widget*>& children) {
   for (auto* overlay : overlays) {
     children.push_back(overlay);
   }
-  auto loc = LockLocation();
-  if (loc && loc->object) {
-    children.push_back(&ToyForObject());
+  if (toy) {
+    children.push_back(toy.Get());
   }
 }
 
@@ -208,7 +208,15 @@ Optional<Rect> LocationWidget::TextureBounds() const { return nullopt; }
 animation::Phase LocationWidget::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
   auto loc = LockLocation();
-  if (!loc) return phase;
+
+  if (!loc) {
+    // Location is dead — fade out and eventually expire
+    phase |= animation::ExponentialApproach(1, timer.d, 0.1, transparency);
+    if (transparency > 0.99) {
+      return animation::Expired;
+    }
+    return animation::Animating;
+  }
 
   phase |= animation::ExponentialApproach(0, timer.d, 0.1, transparency);
 
@@ -251,9 +259,6 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
   Rect bounds = Rect(my_shape.getBounds());
   toy->local_to_parent.asM33().mapRect(&bounds.sk);
 
-  auto loc = LockLocation();
-  if (!loc) return;
-
   bool using_layer = false;
   if (transparency > 0.01) {
     using_layer = true;
@@ -288,6 +293,14 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
   auto& font = ui::GetFont();
 
   DrawChildren(canvas);
+
+  auto loc = LockLocation();
+  if (!loc) {
+    if (using_layer) {
+      canvas.restore();
+    }
+    return;
+  }
 
   HasError(*loc->object, [&](Error& error) {
     constexpr float b = 0.00025;
@@ -364,7 +377,7 @@ void LocationWidget::PreDraw(SkCanvas& canvas) const {
   constexpr float kMinElevation = 1_mm;
   constexpr float kElevationRange = 8_mm;
 
-  if (!toy->pack_frame_texture_bounds) {
+  if (!toy || !toy->pack_frame_texture_bounds) {
     return;  // no shadow for non-cached widgets
   }
   auto& rw = FindRootWidget();

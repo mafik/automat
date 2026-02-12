@@ -14,16 +14,24 @@ struct RootWidget;
 
 namespace automat::animation {
 
-enum class Phase : bool {
-  Finished = false,  // default value, when initialized with {}
-  Animating = true,
+enum class Phase : uint8_t {
+  Finished = 0,   // default value, when initialized with {}
+  Animating = 1,  // widget is still animating
+  Expired = 2,    // widget should be removed from the tree
 };
 
 using enum Phase;
 
-inline Str ToStr(Phase p) { return p == Animating ? "Animating" : "Finished"; }
+inline Str ToStr(Phase p) {
+  switch (p) {
+    case Finished: return "Finished";
+    case Animating: return "Animating";
+    case Expired: return "Expired";
+  }
+  return "Unknown";
+}
 
-inline Phase operator||(Phase a, Phase b) { return Phase(bool(a) || bool(b)); }
+inline Phase operator||(Phase a, Phase b) { return std::max(a, b); }
 inline Phase& operator|=(Phase& a, Phase b) { return a = a || b; }
 
 // TODO: delete almost everything from this file (and replace with "LowLevel*Towards" functions)

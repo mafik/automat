@@ -845,7 +845,13 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         auto animation_phase = widget->Tick(root_widget->timer);
         root_widget->timer.d = true_d;
         widget->last_tick_time = now;
-        if (animation_phase == animation::Finished) {
+        if (animation_phase == animation::Expired) {
+          widget->expired = true;
+          if (widget->parent) {
+            widget->parent->WakeAnimationAt(now);
+          }
+          widget->wake_time = time::SteadyPoint::max();
+        } else if (animation_phase == animation::Finished) {
           widget->wake_time = time::SteadyPoint::max();
         } else {
           widget->wake_time = now;

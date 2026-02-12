@@ -18,6 +18,7 @@
 #include "drag_action.hh"
 #include "embedded.hh"
 #include "font.hh"
+#include "lcs.hh"
 #include "loading_animation.hh"
 #include "math.hh"
 #include "object.hh"
@@ -267,6 +268,9 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
 
   auto canvas_to_window44 = SkM44(CanvasToWindow());
 
+  // Remove expired widgets from the old children list
+  std::erase_if(children, [](Widget* w) { return w->expired; });
+
   {  // Update `children`
     // Make sure that all Arguments are raised above their endpoints
     // TODO: std maps & sets are slow - use something better here
@@ -340,27 +344,79 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
     board_widget.local_to_parent = canvas_to_window44;
     children_tmp.push_back(&board_widget);
 
-    int n = children_tmp.size();
-    bool added[n];
-    memset(added, 0, n);
-    for (int i = 0; i < n; ++i) {
-      children_tmp[i]->index = i;
+    // We'll "rename" some collections:
+    // old_children - children after the last Tick (- expired ones)
+    // new_children - children obtained from the VM during this Tick
+    // children - result of this Tick (new_children + zombies from old_children)
+    Vec<Widget*> old_children;
+    std::swap(children, old_children);
+
+    // Assign the children sequential indexes and find the total number of unique children
+    for (auto* old_child : old_children) {
+      old_child->index = -1;
     }
+    int n = 0;
+    for (; n < children_tmp.size(); ++n) {
+      children_tmp[n]->index = n;
+    }
+    for (auto* old_child : old_children) {
+      if (old_child->index == -1) {
+        old_child->index = n++;
+      }
+    }
+    bool in_new[n], in_old[n], passed[n];
+    memset(in_new, 0, n);
+    memset(in_old, 0, n);
+    memset(passed, 0, n);
 
     // Finally, serialize the children_tmp into children, ensuring that `widgets_over` are placed
     // over their bases.
-    children.clear();
+    Vec<Widget*> new_children;
+    new_children.reserve(children_tmp.size());
     for (auto* child : children_tmp) {
-      if (added[child->index]) continue;
-      added[child->index] = true;
+      if (in_new[child->index]) continue;
+      in_new[child->index] = true;
       auto r = widgets_over.equal_range(child);
       for (auto it = r.first; it != r.second; ++it) {
         auto* arg_toy = it->second;
-        if (added[arg_toy->index]) continue;
-        added[arg_toy->index] = true;
-        children.push_back(arg_toy);
+        if (in_new[arg_toy->index]) continue;
+        in_new[arg_toy->index] = true;
+        new_children.push_back(arg_toy);
       }
-      children.push_back(child);
+      new_children.push_back(child);
+    }
+
+    for (auto* w : old_children) {
+      in_old[w->index] = true;
+    }
+
+    // Final step - merge new_children & old_children
+    // Result is mostly new_children + unique elements from old_children inserted as late as
+    // possible.
+    children.reserve(n);
+    int i_old = 0;
+    // "for new"
+    for (auto* new_child : new_children) {
+      int idx_new = new_child->index;
+      if (in_old[idx_new] && in_new[idx_new]) {
+        // "for old"
+        for (; i_old < old_children.size(); ++i_old) {
+          int idx_old = old_children[i_old]->index;
+          if (in_new[idx_old]) {
+            if (idx_old == idx_new) {
+              ++i_old;
+              break;
+            } else {
+              // prevent "for old" from running for this idx
+              in_new[idx_old] = false;
+            }
+          } else {
+            // widget unique to old_children - we can add it right away
+            children.push_back(old_children[i_old]);
+          }
+        }
+      }
+      children.push_back(new_child);
     }
   }
 

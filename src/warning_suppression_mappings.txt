@@ -1,5 +1,7 @@
 [deprecated-declarations]
 src:*/build/*/PREFIX/include/*
+src:*\\build\\*\\PREFIX\\include\\*
 
 [invalid-offsetof]
 src:*/src/library_*
+src:*\\src\\library_*

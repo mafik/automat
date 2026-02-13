@@ -123,7 +123,7 @@ if __name__ == '__main__':
   slaves = [
     # maf's linux pc
     Slave(
-      ssh_host='vr',
+      ssh_host='maf@vr',
       repo_dir='~/Pulpit/automat-release',
       out_binary='automat',
       out_name='automat_linux_64bit'),

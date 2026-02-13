@@ -5,7 +5,7 @@ Description=Release a new version of the Automat
 Type=oneshot
 ExecStart=%Y/release.py --pull_and_restart
 LoadCredential=GITHUB_TOKEN:/etc/credstore/GITHUB_TOKEN
-WorkingDirectory=%Y/../
+WorkingDirectory=%Y
 
 [Install]
 WantedBy=release.timer

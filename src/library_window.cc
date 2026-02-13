@@ -570,16 +570,16 @@ void Window::Capture::OnRun(std::unique_ptr<RunTask>&) {
   {
     HWND hwnd;
     {
-      auto lock = std::lock_guard(mutex);
-      hwnd = impl->hwnd;
+      auto lock = std::lock_guard(w.mutex);
+      hwnd = w.impl->hwnd;
     }
     if (hwnd == nullptr) {
-      ReportError("No window selected");
+      w.ReportError("No window selected");
       return;
     }
 
     if (!IsWindow(hwnd)) {
-      ReportError("Invalid window selected");
+      w.ReportError("Invalid window selected");
       return;
     }
 
@@ -643,9 +643,9 @@ void Window::Capture::OnRun(std::unique_ptr<RunTask>&) {
         SkImageInfo::Make(width, height, kBGRA_8888_SkColorType, SkAlphaType::kPremul_SkAlphaType);
     auto result = SkImages::RasterFromData(image_info, pixels, width * 4);
     {
-      auto lock = std::lock_guard(mutex);
-      captured_image = std::move(result);
-      capture_time = time::SecondsSinceEpoch();
+      auto lock = std::lock_guard(w.mutex);
+      w.captured_image = std::move(result);
+      w.capture_time = time::SecondsSinceEpoch();
     }
   }
 #endif

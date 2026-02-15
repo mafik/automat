@@ -111,11 +111,11 @@ void JumpArgument::CanConnect(Object& start, Object& end_obj, Interface& end_ifa
   }
 }
 
-void JumpArgument::OnConnect(Object& start, const NestedPtr<Interface>& end) {
+void JumpArgument::OnConnect(Object& start, Object* end_obj, Interface* end_iface) {
   if (auto* inst = dynamic_cast<Instruction*>(&start)) {
-    if (end) {
-      if (auto* runnable = dynamic_cast<Runnable*>(end.Get())) {
-        inst->jump_target = NestedWeakPtr<Runnable>(end.GetOwnerWeak(), runnable);
+    if (end_obj) {
+      if (auto* runnable = dynamic_cast<Runnable*>(end_iface)) {
+        inst->jump_target = NestedWeakPtr<Runnable>(end_obj->AcquireWeakPtr(), runnable);
       }
     } else {
       inst->jump_target = {};
@@ -138,8 +138,8 @@ NestedPtr<Interface> JumpArgument::Find(const Object& start) const {
 
 JumpArgument jump_arg;
 
-void NextInstructionArg::OnConnect(Object& start, const NestedPtr<Interface>& end) {
-  NextArg::OnConnect(start, end);
+void NextInstructionArg::OnConnect(Object& start, Object* end_obj, Interface* end_iface) {
+  NextArg::OnConnect(start, end_obj, end_iface);
   if (auto* inst = dynamic_cast<Instruction*>(&start)) {
     // Notify assembler of change
     if (auto* assembler = dynamic_cast<Assembler*>(assembler_arg.ObjectOrNull(*inst))) {
@@ -157,7 +157,7 @@ void AssemblerArgument::CanConnect(Object& start, Object& end_obj, Interface& en
   }
 }
 
-void AssemblerArgument::OnConnect(Object& start, const NestedPtr<Interface>& end) {
+void AssemblerArgument::OnConnect(Object& start, Object* end_obj, Interface* end_iface) {
   auto* instruction = dynamic_cast<Instruction*>(&start);
   if (instruction == nullptr) return;
 
@@ -173,7 +173,7 @@ void AssemblerArgument::OnConnect(Object& start, const NestedPtr<Interface>& end
     }
   }
 
-  auto* assembler = dynamic_cast<Assembler*>(end.Get());
+  auto* assembler = dynamic_cast<Assembler*>(end_obj);
   if (assembler == nullptr) {
     instruction->assembler_weak.Reset();
   } else {

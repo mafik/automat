@@ -41,7 +41,7 @@ Object& Argument::ObjectOrMake(Object& start) {
 
   PositionAhead(*start_loc, *this, loc);
   PositionBelow(loc, *start_loc);
-  Connect(start, NestedPtr(loc.object, &Object::toplevel_interface));
+  Connect(start, *loc.object, Object::toplevel_interface);
 
   ui::root_widget->WakeAnimation();
   return *loc.object;
@@ -61,12 +61,12 @@ void NextArg::CanConnect(Object& start, Object& end_obj, Interface& end_iface,
   }
 }
 
-void NextArg::OnConnect(Object& start, const NestedPtr<Interface>& end) {
+void NextArg::OnConnect(Object& start, Object* end_obj, Interface* end_iface) {
   SignalNext* start_signal = start.AsSignalNext();
   if (start_signal == nullptr) return;
-  if (end) {
-    if (Runnable* end_runnable = dynamic_cast<Runnable*>(end.Get())) {
-      start_signal->next = NestedWeakPtr<Runnable>(end.GetOwnerWeak(), end_runnable);
+  if (end_obj) {
+    if (Runnable* end_runnable = dynamic_cast<Runnable*>(end_iface)) {
+      start_signal->next = NestedWeakPtr<Runnable>(end_obj->AcquireWeakPtr(), end_runnable);
     }
   } else {
     start_signal->next = {};

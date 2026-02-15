@@ -41,7 +41,7 @@ struct AssemblerArgument : Argument {
   Ptr<Object> Prototype() const override;
   void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
                   Status& status) const override;
-  void OnConnect(Object& start, const NestedPtr<Interface>& end) override;
+  void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override;
   NestedPtr<Interface> Find(const Object& start) const override;
 };
 
@@ -52,13 +52,13 @@ struct JumpArgument : Argument {
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override;
   void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
                   Status& status) const override;
-  void OnConnect(Object& start, const NestedPtr<Interface>& end) override;
+  void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override;
   NestedPtr<Interface> Find(const Object& start) const override;
 };
 
 // Same as NextArg - but calls UpdateMachineCode when it's reconnected
 struct NextInstructionArg : NextArg {
-  void OnConnect(Object& start, const NestedPtr<Interface>& end) override;
+  void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override;
 };
 
 extern AssemblerArgument assembler_arg;

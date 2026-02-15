@@ -98,16 +98,19 @@ struct Argument : Interface {
   // This function should register a connection from `start` to the `end` so that subsequent calls
   // to `Find` will return `end`.
   //
-  // When `end` is nullptr, this disconnects the existing connection. The implementation can check
-  // the current connection value before clearing it (e.g., to call cleanup methods).
-  virtual void OnConnect(Object& start, const NestedPtr<Interface>& end) = 0;
+  // When `end_obj` is nullptr, this disconnects the existing connection. The implementation can
+  // check the current connection value before clearing it (e.g., to call cleanup methods).
+  virtual void OnConnect(Object& start, Object* end_obj, Interface* end_iface) = 0;
 
-  void Connect(Object& start, const NestedPtr<Interface>& end) {
-    OnConnect(start, end);
+  void Connect(Object& start, Object& end_obj, Interface& end_iface) {
+    OnConnect(start, &end_obj, &end_iface);
     start.WakeToys();
   }
 
-  void Disconnect(Object& start) { Connect(start, {}); }
+  void Disconnect(Object& start) {
+    OnConnect(start, nullptr, nullptr);
+    start.WakeToys();
+  }
 
   virtual NestedPtr<Interface> Find(const Object& start) const = 0;
 
@@ -146,7 +149,13 @@ inline ArgumentOf Argument::Of(Object& start) { return ArgumentOf(start, *this);
 struct InlineArgument : Argument {
   NestedWeakPtr<Interface> end;
 
-  void OnConnect(Object&, const NestedPtr<Interface>& end) override { this->end = end; }
+  void OnConnect(Object&, Object* end_obj, Interface* end_iface) override {
+    if (end_obj) {
+      this->end = NestedWeakPtr<Interface>(end_obj->AcquireWeakPtr(), end_iface);
+    } else {
+      this->end = {};
+    }
+  }
 
   NestedPtr<Interface> Find(const Object&) const override { return end.Lock(); };
 };
@@ -155,7 +164,7 @@ struct NextArg : Argument {
   StrView Name() const override { return "Next"sv; }
   Style GetStyle() const override { return Style::Cable; }
   void CanConnect(Object& start, Object& end_obj, Interface& end_iface, Status&) const override;
-  void OnConnect(Object& start, const NestedPtr<Interface>& end) override;
+  void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override;
   NestedPtr<Interface> Find(const Object& start) const override;
 };
 

@@ -238,7 +238,7 @@ void BoardWidget::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
   auto TryConnect = [&](Object& end_obj, Interface& end_iface) {
     if (connected) return;
     if (arg.CanConnect(start, end_obj, end_iface)) {
-      arg.Connect(start, NestedPtr<Interface>(end_obj.AcquirePtr(), &end_iface));
+      arg.Connect(start, end_obj, end_iface);
       connected = true;
     }
   };

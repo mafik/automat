@@ -756,10 +756,10 @@ struct RegisterAssemblerArgument : Argument {
     }
   }
 
-  void OnConnect(Object& start, const NestedPtr<Interface>& end) override {
+  void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override {
     if (auto* reg = dynamic_cast<Register*>(&start)) {
-      if (end) {
-        if (auto* assembler = dynamic_cast<Assembler*>(end.Get())) {
+      if (end_obj) {
+        if (auto* assembler = dynamic_cast<Assembler*>(end_obj)) {
           reg->assembler_weak = assembler->AcquireWeakPtr();
         }
       } else {

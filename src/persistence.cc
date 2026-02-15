@@ -116,7 +116,7 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
                 d.Get(to_name, status);
                 auto to_iface = d.LookupInterface(to_name);
                 if (to_iface) {
-                  from_arg->Connect(*object, to_iface);
+                  from_arg->Connect(*object, *to_iface.Owner<Object>(), *to_iface);
                 }
               } else {
                 d.Skip();

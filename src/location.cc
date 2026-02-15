@@ -513,7 +513,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
       return;
     }
     if (new_toy) {
-      arg.Connect(*loc->object, NestedPtr<Interface>(new_toy->owner.Lock(), new_iface));
+      arg.Connect(*loc->object, *new_toy->LockOwner<Object>(), *new_iface);
     } else {
       arg.Disconnect(*loc->object);
     }
@@ -588,7 +588,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
         return;
       }
       if (new_iface) {
-        arg.Connect(*other->object, NestedPtr<Interface>(loc->object->AcquirePtr(), new_iface));
+        arg.Connect(*other->object, *loc->object, *new_iface);
       } else {
         arg.Disconnect(*other->object);
       }

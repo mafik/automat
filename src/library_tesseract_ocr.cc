@@ -61,13 +61,13 @@ struct ImageArgument : Argument {
     }
   }
 
-  void OnConnect(Object& start, const NestedPtr<Interface>& end) override {
+  void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override {
     auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
     if (tesseract == nullptr) return;
-    auto* image_provider = dynamic_cast<ImageProvider*>(end.Get());
+    auto* image_provider = dynamic_cast<ImageProvider*>(end_iface);
     if (image_provider == nullptr) return;
     tesseract->image_provider_weak =
-        NestedWeakPtr<ImageProvider>(end.GetOwnerWeak(), image_provider);
+        NestedWeakPtr<ImageProvider>(end_obj->AcquireWeakPtr(), image_provider);
   }
 
   NestedPtr<Interface> Find(const Object& start) const override {
@@ -89,10 +89,9 @@ struct TextArgument : Argument {
     // Any object can receive text
   }
 
-  void OnConnect(Object& start, const NestedPtr<Interface>& end) override {
+  void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override {
     auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
     if (tesseract == nullptr) return;
-    auto* end_obj = dynamic_cast<Object*>(end.Get());
     if (end_obj == nullptr) return;
     tesseract->text_weak = end_obj->AcquireWeakPtr();
   }

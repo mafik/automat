@@ -90,8 +90,7 @@ void Gear::AddSource(NestedPtr<Syncable>& source) {
   auto old_sync_block = source->end.LockAs<Gear>();
   bool was_source = source->source;
   if (old_sync_block.Get() != this) {
-    source->Connect(*source.Owner<Object>(),
-                    NestedPtr<Interface>(AcquirePtr(), &Object::toplevel_interface));
+    source->Connect(*source.Owner<Object>(), *this, Object::toplevel_interface);
     if (old_sync_block) {
       while (!old_sync_block->members.empty()) {
         // stealing all of the members from the old gear
@@ -323,18 +322,20 @@ void Syncable::CanConnect(Object& start, Object& end_obj, Interface& end_iface,
   AppendErrorMessage(status) += "Can only connect to similar parts";
 }
 
-void Syncable::OnConnect(Object& start, const NestedPtr<Interface>& end) {
-  InlineArgument::OnConnect(start, end);
+void Syncable::OnConnect(Object& start, Object* end_obj, Interface* end_iface) {
+  InlineArgument::OnConnect(start, end_obj, end_iface);
 
-  auto* target_syncable = dynamic_cast<Syncable*>(end.Get());
+  if (!end_obj) return;
+
+  auto* target_syncable = dynamic_cast<Syncable*>(end_iface);
   if (target_syncable) {
     NestedPtr<Syncable> syncable{start.AcquirePtr(), this};
-    NestedPtr<Syncable> target{end.GetOwnerPtr(), target_syncable};
+    NestedPtr<Syncable> target{end_obj->AcquirePtr(), target_syncable};
     auto sync_block = FindGearOrNull(target);
     if (sync_block == nullptr) {
       sync_block = FindGearOrMake(syncable);
       auto& loc = root_board->Insert(sync_block);
-      loc.position = (end.Owner<Object>()->here->position + start.here->position) / 2;
+      loc.position = (end_obj->here->position + start.here->position) / 2;
       loc.ForEachToy([](ui::RootWidget&, Toy& toy) {
         static_cast<LocationWidget&>(toy).position_vel = Vec2(0, 1);
       });
@@ -343,7 +344,7 @@ void Syncable::OnConnect(Object& start, const NestedPtr<Interface>& end) {
     sync_block->FullSync(target);
     return;
   }
-  auto* gear = dynamic_cast<Gear*>(end.Get());
+  auto* gear = dynamic_cast<Gear*>(end_iface);
   if (gear) {
     NestedPtr<Syncable> syncable{start.AcquirePtr(), this};
     gear->FullSync(syncable);

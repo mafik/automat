@@ -29,7 +29,7 @@ struct ArgumentOf;
 // - finally - they control how a connection appears on screen - although this role
 //   may be moved into Toy in the future...
 //
-// In order to use an Argument, object needs to return it as one of its `Parts()`.
+// In order to use an Argument, object needs to return it as one of its `Interfaces()`.
 // This however does NOT mean that the Argument must be a member of the object.
 // It's possible for Argument to exist outside, and be shared among many objects.
 // It just needs to know how to store the connection information. See NextArg as an
@@ -39,8 +39,8 @@ struct ArgumentOf;
 // For convenience, Arguments that live within Objects can derive from InlineArgument.
 // It provides storage for the connection and default implementations for Connect & Find.
 //
-// Arguments - like other parts may function as either members of Objects - or as their base class.
-// The latter is a good fit if the Object's main purpose overlaps with some relation between
+// Arguments - like other interfaces may function as either members of Objects - or as their base
+// class. The latter is a good fit if the Object's main purpose overlaps with some relation between
 // objects.
 //
 // Lastly, Arguments provide some helper utilities for lookup of related objects.
@@ -54,7 +54,7 @@ struct ArgumentOf;
 //
 // TODO: think about pointer following
 // TODO: think about multiple targets
-struct Argument : Atom {
+struct Argument : Interface {
   enum class Style { Arrow, Cable, Spotlight, Invisible };
 
   virtual SkColor Tint() const { return "#404040"_color; }
@@ -69,24 +69,25 @@ struct Argument : Atom {
 
   virtual ~Argument() = default;
 
-  virtual void CanConnect(Object& start, Atom& end, Status& status) const {
+  virtual void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+                          Status& status) const {
     AppendErrorMessage(status) += "Argument::CanConnect should be overridden";
   }
 
-  bool CanConnect(Object& start, Atom& end) const {
+  bool CanConnect(Object& start, Object& end_obj, Interface& end_iface) const {
     Status status;
-    CanConnect(start, end, status);
+    CanConnect(start, end_obj, end_iface, status);
     return OK(status);
   }
 
-  Atom* CanConnect(Object& start, Object& end) const {
-    if (CanConnect(start, (Atom&)end)) {
-      return &end;
+  Interface* CanConnect(Object& start, Object& end_obj) const {
+    if (CanConnect(start, end_obj, Object::toplevel_interface)) {
+      return &Object::toplevel_interface;
     }
-    Atom* ret = nullptr;
-    end.Atoms([&](Atom& atom) {
-      if (CanConnect(start, atom)) {
-        ret = &atom;
+    Interface* ret = nullptr;
+    end_obj.Interfaces([&](Interface& iface) {
+      if (CanConnect(start, end_obj, iface)) {
+        ret = &iface;
         return LoopControl::Break;
       }
       return LoopControl::Continue;
@@ -99,16 +100,16 @@ struct Argument : Atom {
   //
   // When `end` is nullptr, this disconnects the existing connection. The implementation can check
   // the current connection value before clearing it (e.g., to call cleanup methods).
-  virtual void OnConnect(Object& start, const NestedPtr<Atom>& end) = 0;
+  virtual void OnConnect(Object& start, const NestedPtr<Interface>& end) = 0;
 
-  void Connect(Object& start, const NestedPtr<Atom>& end) {
+  void Connect(Object& start, const NestedPtr<Interface>& end) {
     OnConnect(start, end);
     start.WakeToys();
   }
 
   void Disconnect(Object& start) { Connect(start, {}); }
 
-  virtual NestedPtr<Atom> Find(const Object& start) const = 0;
+  virtual NestedPtr<Interface> Find(const Object& start) const = 0;
 
   // Returns the prototype object for this argument, or nullptr if there is no prototype.
   // This is used by various *OnMake methods to create new object - and for object preview.
@@ -116,12 +117,12 @@ struct Argument : Atom {
 
   virtual std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent);
 
-  // Use this method if you don't actually care about specific atom that the argument points to -
-  // just the target object (that owns that atom).
+  // Use this method if you don't actually care about specific interface that the argument points
+  // to - just the target object (that owns that interface).
   Object* ObjectOrNull(Object& start) const;
 
-  // Use this method if you don't actually care about specific atom that the argument points to -
-  // just the target object (that owns that atom).
+  // Use this method if you don't actually care about specific interface that the argument points
+  // to - just the target object (that owns that interface).
   //
   // This is the main way of creating new objects through this Argument's Prototype.
   Object& ObjectOrMake(Object& start);
@@ -136,26 +137,26 @@ struct ArgumentOf {
   ArgumentOf(Object& object, Argument& arg) : object(object), arg(arg) {}
 
   ReferenceCounted& GetOwner() { return object; }
-  Atom& GetAtom() { return arg; }
+  Interface& GetInterface() { return arg; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 };
 
 inline ArgumentOf Argument::Of(Object& start) { return ArgumentOf(start, *this); }
 
 struct InlineArgument : Argument {
-  NestedWeakPtr<Atom> end;
+  NestedWeakPtr<Interface> end;
 
-  void OnConnect(Object&, const NestedPtr<Atom>& end) override { this->end = end; }
+  void OnConnect(Object&, const NestedPtr<Interface>& end) override { this->end = end; }
 
-  NestedPtr<Atom> Find(const Object&) const override { return end.Lock(); };
+  NestedPtr<Interface> Find(const Object&) const override { return end.Lock(); };
 };
 
 struct NextArg : Argument {
   StrView Name() const override { return "Next"sv; }
   Style GetStyle() const override { return Style::Cable; }
-  void CanConnect(Object& start, Atom& end, Status&) const override;
-  void OnConnect(Object& start, const NestedPtr<Atom>& end) override;
-  NestedPtr<Atom> Find(const Object& start) const override;
+  void CanConnect(Object& start, Object& end_obj, Interface& end_iface, Status&) const override;
+  void OnConnect(Object& start, const NestedPtr<Interface>& end) override;
+  NestedPtr<Interface> Find(const Object& start) const override;
 };
 
 extern NextArg next_arg;

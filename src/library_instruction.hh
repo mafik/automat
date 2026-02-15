@@ -39,9 +39,10 @@ struct AssemblerArgument : Argument {
   SkColor Tint() const override { return "#ff0000"_color; }
   Style GetStyle() const override { return Style::Invisible; }
   Ptr<Object> Prototype() const override;
-  void CanConnect(Object& start, Atom& end, Status& status) const override;
-  void OnConnect(Object& start, const NestedPtr<Atom>& end) override;
-  NestedPtr<Atom> Find(const Object& start) const override;
+  void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+                  Status& status) const override;
+  void OnConnect(Object& start, const NestedPtr<Interface>& end) override;
+  NestedPtr<Interface> Find(const Object& start) const override;
 };
 
 struct JumpArgument : Argument {
@@ -49,14 +50,15 @@ struct JumpArgument : Argument {
 
   StrView Name() const override { return "Jump"sv; }
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override;
-  void CanConnect(Object& start, Atom& end, Status& status) const override;
-  void OnConnect(Object& start, const NestedPtr<Atom>& end) override;
-  NestedPtr<Atom> Find(const Object& start) const override;
+  void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+                  Status& status) const override;
+  void OnConnect(Object& start, const NestedPtr<Interface>& end) override;
+  NestedPtr<Interface> Find(const Object& start) const override;
 };
 
 // Same as NextArg - but calls UpdateMachineCode when it's reconnected
 struct NextInstructionArg : NextArg {
-  void OnConnect(Object& start, const NestedPtr<Atom>& end) override;
+  void OnConnect(Object& start, const NestedPtr<Interface>& end) override;
 };
 
 extern AssemblerArgument assembler_arg;
@@ -66,14 +68,14 @@ extern NextInstructionArg next_instruction_arg;
 struct Instruction : Object, Buffer {
   mc::Inst mc_inst;
   NestedWeakPtr<Runnable> jump_target;  // Connection target for jump_arg
-  NestedWeakPtr<Object> assembler_weak;
+  WeakPtr<Object> assembler_weak;
 
   struct MyRunnable : Runnable {
     void OnRun(std::unique_ptr<RunTask>&) override;
     PARENT_REF(Instruction, runnable)
   } runnable;
 
-  void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
+  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;

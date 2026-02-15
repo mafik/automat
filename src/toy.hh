@@ -28,11 +28,11 @@ struct Object;
 // * LocationWidget
 struct Toy : ui::Widget {
   WeakPtr<ReferenceCounted> owner;
-  Atom* atom;
+  Interface* iface;
   uint32_t observed_notify_counter = 0;  // UI-thread only — last seen notify_counter
 
-  Toy(ui::Widget* parent, ReferenceCounted& owner, Atom& atom)
-      : Widget(parent), owner(owner.AcquireWeakPtr()), atom(&atom) {}
+  Toy(ui::Widget* parent, ReferenceCounted& owner, Interface& iface)
+      : Widget(parent), owner(owner.AcquireWeakPtr()), iface(&iface) {}
 
   template <typename T = ReferenceCounted>
   Ptr<T> LockOwner() const {
@@ -53,13 +53,13 @@ concept ToyMaker = requires(T t) {
 
 // Mixin class for ToyMakers. Provides some utilities for working with Toys.
 struct ToyMakerMixin {
-  static void ForEachToyImpl(ReferenceCounted& owner, Atom& atom,
+  static void ForEachToyImpl(ReferenceCounted& owner, Interface& iface,
                              std::function<void(ui::RootWidget&, Toy&)> cb);
 
   // DEPRECATED: This is not thread-safe. Update this Object's local state & call WakeToys instead.
   template <ToyMaker Self>
   void ForEachToy(this Self& self, std::function<void(ui::RootWidget&, typename Self::Toy&)> cb) {
-    ForEachToyImpl(self.GetOwner(), self.GetAtom(), [&](ui::RootWidget& root, automat::Toy& toy) {
+    ForEachToyImpl(self.GetOwner(), self.GetInterface(), [&](ui::RootWidget& root, automat::Toy& toy) {
       cb(root, static_cast<Self::Toy&>(toy));
     });
   }
@@ -69,13 +69,13 @@ struct ToyMakerMixin {
 // Each context which can display widgets must maintain their lifetime. This class helps with that.
 // TODO: delete widgets after some time
 struct ToyStore {
-  using Key = std::pair<ReferenceCounted*, Atom*>;
+  using Key = std::pair<ReferenceCounted*, Interface*>;
   using Map = ankerl::unordered_dense::map<Key, std::unique_ptr<Toy>>;
   Map container;
 
   template <Part T>
   static Key MakeKey(T& part) {
-    return {&part.GetOwner(), &part.GetAtom()};
+    return {&part.GetOwner(), &part.GetInterface()};
   }
 
   template <ToyMaker T>
@@ -91,7 +91,7 @@ struct ToyStore {
   // Called once per frame on the UI thread.
   void WakeUpdatedToys(time::SteadyPoint last_wake) {
     for (auto& [key, toy] : container) {
-      auto [rc, atom] = key;
+      auto [rc, iface] = key;
       // Safe to read through `rc`: WeakPtr in the Toy keeps memory alive.
       // Counter at `wake_counter` is valid even after ~ReferenceCounted.
       uint32_t current = rc->wake_counter.load(std::memory_order_relaxed);

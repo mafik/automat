@@ -310,29 +310,29 @@ void Pointer::Logging::Release() {
 animation::Phase PointerWidget::Tick(time::Timer& timer) {
   struct Highlighted {
     ObjectToy* widget;
-    Atom* atom;
+    Interface* iface;
 
     bool operator<(const Highlighted& other) const {
       if (widget == other.widget) {
-        return atom < other.atom;
+        return iface < other.iface;
       }
       return widget < other.widget;
     }
 
     auto operator<=>(const HighlightState& other) const {
       if (widget == other.widget) {
-        return atom <=> other.atom;
+        return iface <=> other.iface;
       }
       return widget <=> other.widget;
     }
   };
 
   std::vector<Highlighted> highlight_target;
-  auto HighlightCheck = [&](Object& obj, ObjectToy& widget, Atom& atom) {
+  auto HighlightCheck = [&](Object& obj, ObjectToy& widget, Interface& iface) {
     for (auto& action : pointer.actions) {
       if (action == nullptr) continue;
-      if (action->Highlight(obj, atom)) {
-        highlight_target.emplace_back(&widget, &atom);
+      if (action->Highlight(obj, iface)) {
+        highlight_target.emplace_back(&widget, &iface);
         std::push_heap(highlight_target.begin(), highlight_target.end());
       }
     }
@@ -341,9 +341,9 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
   for (auto& loc : root_board->locations) {
     auto& obj = *loc->object;
     if (!loc->widget || !loc->widget->toy) continue;
-    HighlightCheck(obj, *loc->widget->toy, obj);
-    obj.Atoms([&](Atom& atom) {
-      HighlightCheck(obj, *loc->widget->toy, atom);
+    HighlightCheck(obj, *loc->widget->toy, Object::toplevel_interface);
+    obj.Interfaces([&](Interface& iface) {
+      HighlightCheck(obj, *loc->widget->toy, iface);
       return LoopControl::Continue;
     });
   }
@@ -359,10 +359,10 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
 
   auto phase = animation::Finished;
 
-  auto HighlightTick = [&](ObjectToy* obj, Atom* atom, float current, float target) {
+  auto HighlightTick = [&](ObjectToy* obj, Interface* iface, float current, float target) {
     phase |= animation::ExponentialApproach(target, timer.d, 0.1, current);
     if (current > 0.01f) {
-      highlight_next.emplace_back(obj, atom, current);
+      highlight_next.emplace_back(obj, iface, current);
       phase = animation::Animating;
     }
   };
@@ -371,17 +371,17 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
     while (true) {
       if (*target_it < *current_it) {
         // Fade in (new)
-        HighlightTick(std::move(target_it->widget), target_it->atom, 0, 1);
+        HighlightTick(std::move(target_it->widget), target_it->iface, 0, 1);
         ++target_it;
         if (!TargetValid()) break;
       } else if (*target_it > *current_it) {
         // Fade out
-        HighlightTick(std::move(current_it->widget), current_it->atom, current_it->highlight, 0);
+        HighlightTick(std::move(current_it->widget), current_it->iface, current_it->highlight, 0);
         ++current_it;
         if (!CurrentValid()) break;
       } else {
         // Fade in (old)
-        HighlightTick(std::move(target_it->widget), target_it->atom, current_it->highlight, 1);
+        HighlightTick(std::move(target_it->widget), target_it->iface, current_it->highlight, 1);
         ++target_it;
         ++current_it;
         if (!TargetValid()) break;
@@ -392,13 +392,13 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
 
   while (TargetValid()) {
     // Fade in (new)
-    HighlightTick(std::move(target_it->widget), target_it->atom, 0, 1);
+    HighlightTick(std::move(target_it->widget), target_it->iface, 0, 1);
     ++target_it;
   }
 
   while (CurrentValid()) {
     // Fade out
-    HighlightTick(std::move(current_it->widget), current_it->atom, current_it->highlight, 0);
+    HighlightTick(std::move(current_it->widget), current_it->iface, current_it->highlight, 0);
     ++current_it;
   }
 
@@ -427,7 +427,7 @@ SkPath Outset(const SkPath& path, float distance) {
 
 void PointerWidget::Draw(SkCanvas& canvas) const {
   for (auto& state : highlight_current) {
-    auto shape = state.widget->AtomShape(state.atom);
+    auto shape = state.widget->InterfaceShape(state.iface);
     SkPath outset_shape = Outset(shape, 2.5_mm * state.highlight);
     outset_shape.setIsVolatile(true);
     canvas.save();

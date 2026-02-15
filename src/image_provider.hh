@@ -4,12 +4,12 @@
 
 #include <include/core/SkImage.h>
 
-#include "atom.hh"
+#include "interface.hh"
 
 namespace automat {
 
 // Interface for objects that can provide image data
-struct ImageProvider : Atom {
+struct ImageProvider : Interface {
   virtual sk_sp<SkImage> GetImage() = 0;
 };
 

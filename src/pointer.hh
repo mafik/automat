@@ -173,7 +173,7 @@ struct PointerWidget : Widget {
 
   struct HighlightState {
     ObjectToy* widget;
-    Atom* atom;
+    Interface* iface;
     float highlight;
   };
 

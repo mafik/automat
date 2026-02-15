@@ -28,7 +28,7 @@ struct DragConnectionAction : Action {
   DragConnectionAction(Pointer&, ConnectionWidget&);
   ~DragConnectionAction() override;
   void Update() override;
-  bool Highlight(Object&, Atom&) const override;
+  bool Highlight(Object&, Interface&) const override;
 };
 
 // ConnectionWidget can function in three different modes, depending on how the argument is set to

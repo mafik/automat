@@ -81,13 +81,14 @@ struct TimelineArgument : Argument {
     return prototypes->Find<Timeline>()->AcquirePtr<Object>();
   }
 
-  void CanConnect(Object& start, Atom& end, Status& status) const override {
-    if (!dynamic_cast<Timeline*>(&end)) {
+  void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+                  Status& status) const override {
+    if ((&end_iface != &Object::toplevel_interface) || !dynamic_cast<Timeline*>(&end_obj)) {
       AppendErrorMessage(status) += "Must connect to a Timeline";
     }
   }
 
-  void OnConnect(Object& start, const NestedPtr<Atom>& end) override {
+  void OnConnect(Object& start, const NestedPtr<Interface>& end) override {
     if (auto* recorder = dynamic_cast<MacroRecorder*>(&start)) {
       // Handle disconnect - check old connection before clearing
       if (!end) {
@@ -104,7 +105,7 @@ struct TimelineArgument : Argument {
 
       // Handle connect
       if (auto* timeline = dynamic_cast<Timeline*>(end.Get())) {
-        recorder->timeline_connection = end.DynamicCast<Timeline>();
+        recorder->timeline_connection = timeline->AcquireWeakPtr();
         if (recorder->long_running.IsOn()) {
           timeline->BeginRecording();
         }
@@ -112,9 +113,10 @@ struct TimelineArgument : Argument {
     }
   }
 
-  NestedPtr<Atom> Find(const Object& start) const override {
+  NestedPtr<Interface> Find(const Object& start) const override {
     if (auto* recorder = dynamic_cast<const MacroRecorder*>(&start)) {
-      return recorder->timeline_connection.Lock();
+      return NestedPtr<Interface>(recorder->timeline_connection.Lock(),
+                                  &Object::toplevel_interface);
     }
     return {};
   }
@@ -137,7 +139,7 @@ MacroRecorder::~MacroRecorder() {
   }
 }
 
-void MacroRecorder::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+void MacroRecorder::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
   if (LoopControl::Break == cb(runnable)) return;
   if (LoopControl::Break == cb(long_running)) return;
   if (LoopControl::Break == cb(timeline_arg)) return;
@@ -244,7 +246,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
 
     PositionAhead(*timeline->here, track_arg, on_off_loc);
     AnimateGrowFrom(*macro_recorder.here, on_off_loc);
-    track_arg.Connect(*timeline, on_off_loc.object);
+    track_arg.Connect(*timeline, NestedPtr(on_off_loc.object, &Object::toplevel_interface));
   }
 
   // Append the current timestamp to that track
@@ -362,7 +364,7 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
 
     PositionAhead(*timeline->here, track_arg, receiver_loc);
     AnimateGrowFrom(*recorder.here, receiver_loc);
-    track_arg.Connect(*timeline, receiver_loc.object);
+    track_arg.Connect(*timeline, NestedPtr(receiver_loc.object, &Object::toplevel_interface));
   }
 
   auto* track = dynamic_cast<TrackT*>(timeline->tracks[track_index]->track.Get());

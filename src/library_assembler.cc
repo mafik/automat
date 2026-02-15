@@ -207,7 +207,7 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
 
 Ptr<Object> Assembler::Clone() const { return MAKE_PTR(Assembler); }
 
-void Assembler::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+void Assembler::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
   if (LoopControl::Break == cb(running)) return;
 }
 
@@ -749,13 +749,14 @@ struct RegisterAssemblerArgument : Argument {
   SkColor Tint() const override { return "#ff0000"_color; }
   Style GetStyle() const override { return Style::Spotlight; }
 
-  void CanConnect(Object& start, Atom& end, Status& status) const override {
-    if (!dynamic_cast<Assembler*>(&end)) {
+  void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+                  Status& status) const override {
+    if ((&end_iface != &Object::toplevel_interface) || !dynamic_cast<Assembler*>(&end_obj)) {
       AppendErrorMessage(status) += "Must connect to an Assembler";
     }
   }
 
-  void OnConnect(Object& start, const NestedPtr<Atom>& end) override {
+  void OnConnect(Object& start, const NestedPtr<Interface>& end) override {
     if (auto* reg = dynamic_cast<Register*>(&start)) {
       if (end) {
         if (auto* assembler = dynamic_cast<Assembler*>(end.Get())) {
@@ -767,16 +768,16 @@ struct RegisterAssemblerArgument : Argument {
     }
   }
 
-  NestedPtr<Atom> Find(const Object& start) const override {
+  NestedPtr<Interface> Find(const Object& start) const override {
     auto* reg = dynamic_cast<const Register*>(&start);
     if (reg == nullptr) return {};
-    return reg->assembler_weak.Lock();
+    return NestedPtr(reg->assembler_weak.Lock(), &Object::toplevel_interface);
   }
 };
 
 static RegisterAssemblerArgument register_assembler_arg;
 
-void Register::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+void Register::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
   if (LoopControl::Break == cb(register_assembler_arg)) return;
 }
 

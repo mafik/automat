@@ -7,7 +7,7 @@
 #include <compare>
 #include <memory>  // IWYU pragma: keep
 
-#include "atom.hh"
+#include "format.hh"
 
 namespace automat {
 
@@ -21,10 +21,15 @@ struct TrackedPtr;
 
 // Base class for objects that want synchronous single-threaded reference tracking through
 // TrackedPtr<T>.
-struct Trackable : Atom {
+struct Trackable {
   TrackedPtrBase* ref_list = nullptr;
 
   virtual ~Trackable();
+
+  virtual StrView Name() const {
+    const std::type_info& info = typeid(*this);
+    return CleanTypeName(info.name());
+  }
 
   template <typename Self>
   auto AcquireTrackedPtr(this Self& self) -> TrackedPtr<Self> {
@@ -121,7 +126,7 @@ struct WeakPtr;
 template <typename T>
 struct Ptr;
 
-struct ReferenceCounted : Atom {
+struct ReferenceCounted {
   using AtomicCounter = std::atomic<uint32_t>;
 
   mutable AtomicCounter owning_refs = 1;
@@ -139,6 +144,11 @@ struct ReferenceCounted : Atom {
   ReferenceCounted(const ReferenceCounted&) : owning_refs(1), weak_refs(1) {}
   virtual ~ReferenceCounted() {
     WakeToys();  // wake the zombie toys
+  }
+
+  virtual StrView Name() const {
+    const std::type_info& info = typeid(*this);
+    return CleanTypeName(info.name());
   }
 
   [[nodiscard]] bool IncrementOwningRefsNonZero() const {

@@ -175,20 +175,20 @@ void Timer::Updated(WeakPtr<Object>& updated) {
   }
 }
 
-void Timer::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+void Timer::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
   if (LoopControl::Break == cb(runnable)) return;
   if (LoopControl::Break == cb(duration)) return;
   if (LoopControl::Break == cb(next_arg)) return;
   if (LoopControl::Break == cb(timer_running)) return;
 }
 
-void Timer::AtomName(Atom& atom, Str& out_name) {
-  if (&atom == &timer_running) {
+void Timer::InterfaceName(Interface& iface, Str& out_name) {
+  if (&iface == &timer_running) {
     out_name = "Running";
-  } else if (&atom == &duration) {
+  } else if (&iface == &duration) {
     out_name = "Duration";
   } else {
-    Object::AtomName(atom, out_name);
+    Object::InterfaceName(iface, out_name);
   }
 }
 
@@ -657,9 +657,9 @@ struct TimerWidget : ObjectToy {
 
   void FillChildren(Vec<Widget*>& children) override { children.push_back(text_field.get()); }
 
-  SkPath AtomShape(Atom* atom) const override {
+  SkPath InterfaceShape(Interface* iface) const override {
     if (auto timer = LockTimer()) {
-      if (atom == &timer->duration) {
+      if (iface == &timer->duration) {
         auto transform = SkMatrix::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
         return text_field->Shape().makeTransform(transform);
       }

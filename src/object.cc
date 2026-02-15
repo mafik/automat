@@ -184,7 +184,7 @@ struct DeiconifyOption : TextOption {
 static Str SyncableName(NestedWeakPtr<Syncable>& weak) {
   if (auto ptr = weak.Lock()) {
     Str name;
-    ptr.Owner<Object>()->AtomName(*ptr.Get(), name);
+    ptr.Owner<Object>()->InterfaceName(*ptr.Get(), name);
     return name;
   }
   return "Field of a deleted object";
@@ -255,7 +255,7 @@ struct SyncAction : Action {
     if (auto syncable = weak.Lock()) {
       auto* widget = pointer.root_widget.toys.FindOrNull(*syncable.Owner<Object>());
       auto* mw = pointer.root_widget.toys.FindOrNull(*root_board);
-      auto start_local = widget->AtomShape(syncable.Get()).getBounds().center();
+      auto start_local = widget->InterfaceShape(syncable.Get()).getBounds().center();
       auto start = mw ? TransformBetween(*widget, *mw).mapPoint(start_local) : start_local;
       sync_widget.start = start;
       sync_widget.end = pointer.PositionWithinRootBoard();
@@ -265,10 +265,10 @@ struct SyncAction : Action {
     }
     pointer.pointer_widget->WakeAnimation();
   }
-  bool Highlight(Object& end_obj, Atom& end_atom) const override {
+  bool Highlight(Object& end_obj, Interface& end_iface) const override {
     auto ptr = weak.Lock();
     Object& start = *ptr.Owner<Object>();
-    return ptr->Argument::CanConnect(start, end_atom);
+    return ptr->Argument::CanConnect(start, end_obj, end_iface);
   }
   ui::Widget* Widget() override { return &sync_widget; }
 };
@@ -351,8 +351,8 @@ void ObjectToy::VisitOptions(const OptionsVisitor& visitor) const {
         visitor(iconify);
       }
       if (auto obj = LockOwner<Object>()) {
-        obj->Atoms([&](Atom& atom) {
-          if (auto* syncable = dynamic_cast<Syncable*>(&atom)) {
+        obj->Interfaces([&](Interface& iface) {
+          if (auto* syncable = dynamic_cast<Syncable*>(&iface)) {
             FieldOption field_option{NestedWeakPtr<Syncable>(owner.Copy<Object>(), syncable)};
             visitor(field_option);
           }
@@ -443,7 +443,7 @@ void ObjectToy::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
 }
 
 Vec2AndDir ObjectToy::ArgStart(const Argument& arg, ui::Widget* coordinate_space) {
-  SkPath shape = AtomShape(&const_cast<Argument&>(arg));
+  SkPath shape = InterfaceShape(&const_cast<Argument&>(arg));
   Rect bounds = shape.getBounds();
   Vec2AndDir pos_dir{
       .pos = bounds.BottomCenter(),
@@ -466,28 +466,28 @@ bool ObjectToy::IsIconified() const {
   return automat::IsIconified(static_cast<Object*>(owner.GetUnsafe()));
 }
 
-void Object::Atoms(const std::function<LoopControl(Atom&)>& cb) {}
+void Object::Interfaces(const std::function<LoopControl(Interface&)>& cb) {}
 
-void Object::AtomName(Atom& atom, Str& out_name) { out_name = atom.Name(); }
+void Object::InterfaceName(Interface& iface, Str& out_name) { out_name = iface.Name(); }
 
 template <typename T>
-static T* FindAtom(Object& obj) {
+static T* FindInterface(Object& obj) {
   T* result = nullptr;
-  obj.Atoms([&](Atom& atom) {
-    result = dynamic_cast<T*>(&atom);
+  obj.Interfaces([&](Interface& iface) {
+    result = dynamic_cast<T*>(&iface);
     return result ? LoopControl::Break : LoopControl::Continue;
   });
   return result;
 }
 
-LongRunning* Object::AsLongRunning() { return FindAtom<LongRunning>(*this); }
-Runnable* Object::AsRunnable() { return FindAtom<Runnable>(*this); }
-SignalNext* Object::AsSignalNext() { return FindAtom<SignalNext>(*this); }
-OnOff* Object::AsOnOff() { return FindAtom<OnOff>(*this); }
+LongRunning* Object::AsLongRunning() { return FindInterface<LongRunning>(*this); }
+Runnable* Object::AsRunnable() { return FindInterface<Runnable>(*this); }
+SignalNext* Object::AsSignalNext() { return FindInterface<SignalNext>(*this); }
+OnOff* Object::AsOnOff() { return FindInterface<OnOff>(*this); }
 
 void Object::Args(const std::function<void(Argument&)>& cb) {
-  Atoms([&](Atom& atom) {
-    if (Argument* arg = dynamic_cast<Argument*>(&atom)) {
+  Interfaces([&](Interface& iface) {
+    if (Argument* arg = dynamic_cast<Argument*>(&iface)) {
       cb(*arg);
     }
     return LoopControl::Continue;
@@ -503,6 +503,8 @@ Location* Object::MyLocation() {
   return here;
 }
 
+Interface Object::toplevel_interface;
+
 void Object::InvalidateConnectionWidgets(const Argument* arg) const {
   for (auto& w : ui::ConnectionWidgetRange(this, arg)) {
     w.WakeAnimation();
@@ -512,13 +514,13 @@ void Object::InvalidateConnectionWidgets(const Argument* arg) const {
   }
 }
 
-Atom* Object::AtomFromName(StrView needle) {
-  Atom* result = nullptr;
-  Atoms([&](Atom& atom) {
-    Str atom_name;
-    AtomName(atom, atom_name);
-    if (atom_name == needle) {
-      result = &atom;
+Interface* Object::InterfaceFromName(StrView needle) {
+  Interface* result = nullptr;
+  Interfaces([&](Interface& iface) {
+    Str iface_name;
+    InterfaceName(iface, iface_name);
+    if (iface_name == needle) {
+      result = &iface;
       return LoopControl::Break;
     }
     return LoopControl::Continue;
@@ -545,13 +547,13 @@ Str& ObjectSerializer::ResolveName(Object& object, StrView hint) {
   return it->second;
 }
 
-Str ObjectSerializer::ResolveName(Object& object, Atom* atom, StrView hint) {
+Str ObjectSerializer::ResolveName(Object& object, Interface* iface, StrView hint) {
   Str ret = ResolveName(object, hint);
-  if (atom && atom != &object) {
+  if (iface && iface != &Object::toplevel_interface) {
     ret += ".";
-    Str atom_name;
-    object.AtomName(*atom, atom_name);
-    ret += atom_name;
+    Str iface_name;
+    object.InterfaceName(*iface, iface_name);
+    ret += iface_name;
   }
   return ret;
 }
@@ -581,7 +583,7 @@ void ObjectSerializer::Serialize(Object& start) {
           StartObject();
         }
         Str arg_name;
-        o->AtomName(arg, arg_name);
+        o->InterfaceName(arg, arg_name);
         Key(arg_name);
         auto to_name = ResolveName(*end.Owner<Object>(), end.Get());
         String(to_name);
@@ -607,25 +609,25 @@ Object* ObjectDeserializer::LookupObject(StrView name) {
   return to_it->second.Get();
 }
 
-NestedPtr<Atom> ObjectDeserializer::LookupAtom(StrView name) {
+NestedPtr<Interface> ObjectDeserializer::LookupInterface(StrView name) {
   auto dot_pos = name.find('.');
-  Str to_name, to_atom;
+  Str to_name, to_iface;
   if (dot_pos != Str::npos) {
     to_name = name.substr(0, dot_pos);
-    to_atom = name.substr(dot_pos + 1);
+    to_iface = name.substr(dot_pos + 1);
   } else {
     to_name = name;
-    to_atom = "";
+    to_iface = "";
   }
   auto* to = LookupObject(to_name);
   if (to == nullptr) {
     return {};
   }
-  if (to_atom.empty()) {
-    return NestedPtr<Atom>(to->AcquirePtr(), to);
+  if (to_iface.empty()) {
+    return NestedPtr<Interface>(to->AcquirePtr(), &Object::toplevel_interface);
   } else {
-    auto* atom = to->AtomFromName(to_atom);
-    return NestedPtr<Atom>(to->AcquirePtr(), atom);
+    auto* iface = to->InterfaceFromName(to_iface);
+    return NestedPtr<Interface>(to->AcquirePtr(), iface);
   }
 }
 

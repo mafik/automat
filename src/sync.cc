@@ -90,7 +90,8 @@ void Gear::AddSource(NestedPtr<Syncable>& source) {
   auto old_sync_block = source->end.LockAs<Gear>();
   bool was_source = source->source;
   if (old_sync_block.Get() != this) {
-    source->Connect(*source.Owner<Object>(), AcquirePtr());
+    source->Connect(*source.Owner<Object>(),
+                    NestedPtr<Interface>(AcquirePtr(), &Object::toplevel_interface));
     if (old_sync_block) {
       while (!old_sync_block->members.empty()) {
         // stealing all of the members from the old gear
@@ -98,7 +99,8 @@ void Gear::AddSource(NestedPtr<Syncable>& source) {
         old_sync_block->members.pop_back();
 
         // redirecting the members "sync" to this gear
-        members.back().weak.Lock()->end = NestedWeakPtr<Atom>(AcquireWeakPtr<Object>(), this);
+        members.back().weak.Lock()->end =
+            NestedWeakPtr<Interface>(AcquireWeakPtr<Object>(), &Object::toplevel_interface);
       }
     } else {
       bool found = false;
@@ -211,7 +213,7 @@ animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
   if (!owner) return animation::Finished;
 
   // Find the gear via the syncable's end pointer
-  auto* syncable = dynamic_cast<Syncable*>(atom);
+  auto* syncable = dynamic_cast<Syncable*>(iface);
   auto gear = syncable->end.LockAs<Gear>();
   if (!gear) return animation::Finished;
 
@@ -225,7 +227,7 @@ animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
   auto* owner_widget = toy_store.FindOrNull(*owner_obj);
   if (!owner_widget) return animation::Finished;
 
-  end_shape = owner_widget->AtomShape(syncable);
+  end_shape = owner_widget->InterfaceShape(syncable);
   end_shape.transform(TransformBetween(*owner_widget, *gear_widget));
   auto end_bounds = end_shape.getBounds();
   end = end_bounds.center();
@@ -292,8 +294,9 @@ std::unique_ptr<SyncConnectionWidget> SyncMemberOf::MakeToy(ui::Widget* parent) 
   return std::make_unique<SyncConnectionWidget>(parent, object, syncable);
 }
 
-void Syncable::CanConnect(Object& start, Atom& end, Status& status) const {
-  if (auto* other = dynamic_cast<Syncable*>(&end)) {
+void Syncable::CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+                          Status& status) const {
+  if (auto* other = dynamic_cast<Syncable*>(&end_iface)) {
     if (CanSync(*other)) {
       return;
     } else {
@@ -302,7 +305,7 @@ void Syncable::CanConnect(Object& start, Atom& end, Status& status) const {
       msg += typeid(this).name();
     }
   }
-  if (auto gear = dynamic_cast<Gear*>(&end)) {
+  if (auto gear = dynamic_cast<Gear*>(&end_obj)) {
     auto lock = std::shared_lock(gear->mutex);
     if (gear->members.empty()) {
       return;
@@ -320,7 +323,7 @@ void Syncable::CanConnect(Object& start, Atom& end, Status& status) const {
   AppendErrorMessage(status) += "Can only connect to similar parts";
 }
 
-void Syncable::OnConnect(Object& start, const NestedPtr<Atom>& end) {
+void Syncable::OnConnect(Object& start, const NestedPtr<Interface>& end) {
   InlineArgument::OnConnect(start, end);
 
   auto* target_syncable = dynamic_cast<Syncable*>(end.Get());
@@ -370,7 +373,7 @@ bool Gear::DeserializeKey(ObjectDeserializer& d, StrView key) {
         status.Reset();
       }
       if (!is_sink) continue;
-      NestedPtr<Atom> target = d.LookupAtom(member_name);
+      NestedPtr<Interface> target = d.LookupInterface(member_name);
       if (auto syncable = target.DynamicCast<Syncable>()) {
         AddSink(syncable);
         AddSource(syncable);

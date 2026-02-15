@@ -7,7 +7,7 @@
 namespace automat {
 
 struct Object;
-struct Atom;
+struct Interface;
 
 namespace ui {
 struct Pointer;
@@ -34,7 +34,9 @@ struct Action {
   virtual void Update() = 0;
 
   // Return true to highlight the given part of some object.
-  virtual bool Highlight(Object&, Atom&) const { return false; }
+  virtual bool Highlight(Object& highlighted_obj, Interface& highlighted_iface) const {
+    return false;
+  }
 
   virtual ui::Widget* Widget() { return nullptr; }
 

@@ -235,10 +235,10 @@ void BoardWidget::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
   auto board = LockBoard();
   if (!board) return;
   bool connected = false;
-  auto TryConnect = [&](Object& end, Atom& atom) {
+  auto TryConnect = [&](Object& end_obj, Interface& end_iface) {
     if (connected) return;
-    if (arg.CanConnect(start, atom)) {
-      arg.Connect(start, NestedPtr<Atom>(end.AcquirePtr(), &atom));
+    if (arg.CanConnect(start, end_obj, end_iface)) {
+      arg.Connect(start, NestedPtr<Interface>(end_obj.AcquirePtr(), &end_iface));
       connected = true;
     }
   };
@@ -249,10 +249,10 @@ void BoardWidget::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
       continue;
     }
     auto& obj = *loc->object;
-    TryConnect(obj, obj);
+    TryConnect(obj, Object::toplevel_interface);
     if (connected) return;
-    obj.Atoms([&](Atom& atom) {
-      TryConnect(obj, atom);
+    obj.Interfaces([&](Interface& iface) {
+      TryConnect(obj, iface);
       if (connected) {
         return LoopControl::Break;
       }
@@ -281,7 +281,7 @@ void* BoardWidget::Nearby(Vec2 start, float radius, std::function<void*(Location
 
 void BoardWidget::NearbyCandidates(
     Location& here, const Argument& arg, float radius,
-    std::function<void(ObjectToy&, Atom&, Vec<Vec2AndDir>&)> callback) {
+    std::function<void(ObjectToy&, Interface&, Vec<Vec2AndDir>&)> callback) {
   // Check the currently dragged object
   auto& root_widget = *ui::root_widget;
   for (auto* action : root_widget.active_actions) {
@@ -290,14 +290,14 @@ void BoardWidget::NearbyCandidates(
         if (location.get() == &here) {
           continue;
         }
-        Atom* atom = arg.CanConnect(*here.object, *location->object);
-        if (!atom) {
+        Interface* iface = arg.CanConnect(*here.object, *location->object);
+        if (!iface) {
           continue;
         }
         auto& toy = location->ToyForObject();
         Vec<Vec2AndDir> to_points;
         toy.ConnectionPositions(to_points);
-        callback(toy, *atom, to_points);
+        callback(toy, *iface, to_points);
       }
     }
   }
@@ -307,14 +307,14 @@ void BoardWidget::NearbyCandidates(
     if (&other == &here) {
       return nullptr;
     }
-    Atom* atom = arg.CanConnect(*here.object, *other.object);
-    if (!atom) {
+    Interface* iface = arg.CanConnect(*here.object, *other.object);
+    if (!iface) {
       return nullptr;
     }
     auto& toy = other.ToyForObject();
     Vec<Vec2AndDir> to_points;
     toy.ConnectionPositions(to_points);
-    callback(toy, *atom, to_points);
+    callback(toy, *iface, to_points);
     return nullptr;
   });
 }

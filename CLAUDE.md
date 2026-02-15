@@ -18,6 +18,7 @@
 ### Important Notes
 
 - **To test builds**: Use `python run.py "link automat" --variant=release` to verify compilation without running
+- **PipeWire build errors**: If PipeWire fails with "missing libcap.so" after system package updates, delete the stale PipeWire build directory (e.g. `rm -rf build/release/PipeWire`) and rebuild
 - **Avoid running automat directly**: The `python run.py automat` command runs automat indefinitely and must be manually stopped
 
 ## Architecture Overview

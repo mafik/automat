@@ -52,15 +52,16 @@ struct ImageArgument : Argument {
     return std::make_unique<TextWidget>(parent, "IMG");
   }
 
-  void CanConnect(Object& start, Atom& end, Status& status) const override {
-    auto* image_provider = dynamic_cast<ImageProvider*>(&end);
+  void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+                  Status& status) const override {
+    auto* image_provider = dynamic_cast<ImageProvider*>(&end_iface);
     if (image_provider == nullptr) {
       AppendErrorMessage(status) += "Can only connect to Image Provider";
       return;
     }
   }
 
-  void OnConnect(Object& start, const NestedPtr<Atom>& end) override {
+  void OnConnect(Object& start, const NestedPtr<Interface>& end) override {
     auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
     if (tesseract == nullptr) return;
     auto* image_provider = dynamic_cast<ImageProvider*>(end.Get());
@@ -69,7 +70,7 @@ struct ImageArgument : Argument {
         NestedWeakPtr<ImageProvider>(end.GetOwnerWeak(), image_provider);
   }
 
-  NestedPtr<Atom> Find(const Object& start) const override {
+  NestedPtr<Interface> Find(const Object& start) const override {
     auto* tesseract = dynamic_cast<const TesseractOCR*>(&start);
     if (tesseract == nullptr) return {};
     return tesseract->image_provider_weak.Lock();
@@ -83,22 +84,23 @@ struct TextArgument : Argument {
     return std::make_unique<TextWidget>(parent, "T");
   }
 
-  void CanConnect(Object& start, Atom& end, Status& status) const override {
+  void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+                  Status& status) const override {
     // Any object can receive text
   }
 
-  void OnConnect(Object& start, const NestedPtr<Atom>& end) override {
+  void OnConnect(Object& start, const NestedPtr<Interface>& end) override {
     auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
     if (tesseract == nullptr) return;
     auto* end_obj = dynamic_cast<Object*>(end.Get());
     if (end_obj == nullptr) return;
-    tesseract->text_weak = NestedWeakPtr<Object>(end.GetOwnerWeak(), end_obj);
+    tesseract->text_weak = end_obj->AcquireWeakPtr();
   }
 
-  NestedPtr<Atom> Find(const Object& start) const override {
+  NestedPtr<Interface> Find(const Object& start) const override {
     auto* tesseract = dynamic_cast<const TesseractOCR*>(&start);
     if (tesseract == nullptr) return {};
-    return tesseract->text_weak.Lock();
+    return NestedPtr(tesseract->text_weak.Lock(), &Object::toplevel_interface);
   }
 };
 
@@ -1091,7 +1093,7 @@ std::unique_ptr<ObjectToy> TesseractOCR::MakeToy(ui::Widget* parent) {
   return std::make_unique<TesseractWidget>(parent, *this);
 }
 
-void TesseractOCR::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+void TesseractOCR::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
   if (LoopControl::Break == cb(image_arg)) return;
   if (LoopControl::Break == cb(text_arg)) return;
   if (LoopControl::Break == cb(next_arg)) return;

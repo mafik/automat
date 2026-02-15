@@ -50,7 +50,7 @@ std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
 void SetKey(ui::AnsiKey);
 
-void Atoms(const std::function<LoopControl(Atom&)>& cb) override {
+void Interfaces(const std::function<LoopControl(Interface&)>& cb) override {
   if (LoopControl::Break == cb(monitoring)) return;
   if (LoopControl::Break == cb(run)) return;
 }

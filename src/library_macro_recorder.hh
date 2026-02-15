@@ -22,7 +22,7 @@ struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
 
   ui::Keylogging* keylogging = nullptr;
   ui::Pointer::Logging* pointer_logging = nullptr;
-  NestedWeakPtr<Timeline> timeline_connection;
+  WeakPtr<Timeline> timeline_connection;
 
   MacroRecorder();
   MacroRecorder(const MacroRecorder&);
@@ -31,7 +31,7 @@ struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
+  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
 
   void KeyloggerKeyDown(ui::Key) override;
   void KeyloggerKeyUp(ui::Key) override;

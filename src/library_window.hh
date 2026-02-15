@@ -46,7 +46,7 @@ struct Window : public Object {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
+  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
 
   // Called after deserialization. Makes the window object attach its native handle to the window
   // with the current title.

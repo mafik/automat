@@ -46,8 +46,8 @@ struct Timer : Object, TimerNotificationReceiver {
   StrView Name() const override { return "Timer"; }
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
-  void AtomName(Atom&, Str& out_name) override;
+  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
+  void InterfaceName(Interface&, Str& out_name) override;
   void Updated(WeakPtr<Object>& updated) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
 

@@ -93,9 +93,9 @@ struct Syncable : InlineArgument {
     }
   }
 
-  void CanConnect(Object& start, Atom& end, Status&) const override;
+  void CanConnect(Object& start, Object& end_obj, Interface& end_iface, Status&) const override;
 
-  void OnConnect(Object&, const NestedPtr<Atom>& end) override;
+  void OnConnect(Object&, const NestedPtr<Interface>& end) override;
 
   Style GetStyle() const override { return Style::Invisible; }
 
@@ -170,7 +170,7 @@ struct SyncMemberOf {
   Object& object;
   Syncable& syncable;
   ReferenceCounted& GetOwner() { return object; }
-  Atom& GetAtom() { return syncable; }
+  Interface& GetInterface() { return syncable; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 };
 

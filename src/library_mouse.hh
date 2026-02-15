@@ -35,7 +35,7 @@ struct MouseButtonEvent : Object {
   MouseButtonEvent(ui::PointerButton button, bool down) : button(button), down(down) {}
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
+  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
   audio::Sound& NextSound() override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
@@ -97,7 +97,7 @@ struct MouseButtonPresser : Object {
   ~MouseButtonPresser() override;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
+  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
 

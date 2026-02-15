@@ -44,7 +44,7 @@ struct OnOffTrack : TrackBase {
   string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  void Atoms(const std::function<LoopControl(Atom&)>& cb) override {
+  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override {
     if (LoopControl::Break == cb(on_off)) return;
   }
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
@@ -98,7 +98,8 @@ struct TrackArgument : InlineArgument {
   }
   StrView Name() const override { return name; }
 
-  void CanConnect(Object& start, Atom& end, Status& status) const override;
+  void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+                  Status& status) const override;
 };
 
 // Currently Timeline pauses at end which is consistent with standard media player behavour.
@@ -156,7 +157,7 @@ struct Timeline : Object, SignalNext, TimerNotificationReceiver {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  void Atoms(const std::function<LoopControl(Atom&)>& cb) override;
+  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
   SignalNext* AsSignalNext() override { return this; }
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   OnOffTrack& AddOnOffTrack(StrView name);

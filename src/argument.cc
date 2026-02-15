@@ -41,7 +41,7 @@ Object& Argument::ObjectOrMake(Object& start) {
 
   PositionAhead(*start_loc, *this, loc);
   PositionBelow(loc, *start_loc);
-  Connect(start, loc.object);
+  Connect(start, NestedPtr(loc.object, &Object::toplevel_interface));
 
   ui::root_widget->WakeAnimation();
   return *loc.object;
@@ -51,16 +51,17 @@ std::unique_ptr<ArgumentOf::Toy> ArgumentOf::MakeToy(ui::Widget* parent) {
   return std::make_unique<ui::ConnectionWidget>(parent, object, arg);
 }
 
-void NextArg::CanConnect(Object& start, Atom& end, Status& status) const {
+void NextArg::CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+                         Status& status) const {
   if (!start.AsSignalNext()) {
     AppendErrorMessage(status) += "Next source must be a Runnable";
   }
-  if (!dynamic_cast<Runnable*>(&end)) {
+  if (!dynamic_cast<Runnable*>(&end_iface)) {
     AppendErrorMessage(status) += "Next target must be a Runnable";
   }
 }
 
-void NextArg::OnConnect(Object& start, const NestedPtr<Atom>& end) {
+void NextArg::OnConnect(Object& start, const NestedPtr<Interface>& end) {
   SignalNext* start_signal = start.AsSignalNext();
   if (start_signal == nullptr) return;
   if (end) {
@@ -72,7 +73,7 @@ void NextArg::OnConnect(Object& start, const NestedPtr<Atom>& end) {
   }
 }
 
-NestedPtr<Atom> NextArg::Find(const Object& start) const {
+NestedPtr<Interface> NextArg::Find(const Object& start) const {
   if (auto* start_signal = const_cast<Object&>(start).AsSignalNext()) {
     return start_signal->next.Lock();
   } else {

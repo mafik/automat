@@ -104,13 +104,14 @@ std::unique_ptr<ui::Widget> JumpArgument::MakeIcon(ui::Widget* parent) {
   return ui::MakeShapeWidget(parent, kJumpPathSVG, "#ff0000"_color);
 }
 
-void JumpArgument::CanConnect(Object& start, Atom& end, Status& status) const {
-  if (!dynamic_cast<Runnable*>(&end)) {
+void JumpArgument::CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+                              Status& status) const {
+  if (!dynamic_cast<Runnable*>(&end_iface)) {
     AppendErrorMessage(status) += "Jump target must be a Runnable";
   }
 }
 
-void JumpArgument::OnConnect(Object& start, const NestedPtr<Atom>& end) {
+void JumpArgument::OnConnect(Object& start, const NestedPtr<Interface>& end) {
   if (auto* inst = dynamic_cast<Instruction*>(&start)) {
     if (end) {
       if (auto* runnable = dynamic_cast<Runnable*>(end.Get())) {
@@ -126,7 +127,7 @@ void JumpArgument::OnConnect(Object& start, const NestedPtr<Atom>& end) {
   }
 }
 
-NestedPtr<Atom> JumpArgument::Find(const Object& start) const {
+NestedPtr<Interface> JumpArgument::Find(const Object& start) const {
   if (auto* inst = dynamic_cast<const Instruction*>(&start)) {
     if (auto locked = inst->jump_target.Lock()) {
       return NestedPtr<Syncable>(locked.GetOwnerWeak().Lock(), locked.Get());
@@ -137,7 +138,7 @@ NestedPtr<Atom> JumpArgument::Find(const Object& start) const {
 
 JumpArgument jump_arg;
 
-void NextInstructionArg::OnConnect(Object& start, const NestedPtr<Atom>& end) {
+void NextInstructionArg::OnConnect(Object& start, const NestedPtr<Interface>& end) {
   NextArg::OnConnect(start, end);
   if (auto* inst = dynamic_cast<Instruction*>(&start)) {
     // Notify assembler of change
@@ -149,13 +150,14 @@ void NextInstructionArg::OnConnect(Object& start, const NestedPtr<Atom>& end) {
 
 NextInstructionArg next_instruction_arg;
 
-void AssemblerArgument::CanConnect(Object& start, Atom& end, Status& status) const {
-  if (!dynamic_cast<Assembler*>(&end)) {
+void AssemblerArgument::CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+                                   Status& status) const {
+  if ((&end_iface != &Object::toplevel_interface) || !dynamic_cast<Assembler*>(&end_obj)) {
     AppendErrorMessage(status) += "Must connect to an Assembler";
   }
 }
 
-void AssemblerArgument::OnConnect(Object& start, const NestedPtr<Atom>& end) {
+void AssemblerArgument::OnConnect(Object& start, const NestedPtr<Interface>& end) {
   auto* instruction = dynamic_cast<Instruction*>(&start);
   if (instruction == nullptr) return;
 
@@ -175,17 +177,17 @@ void AssemblerArgument::OnConnect(Object& start, const NestedPtr<Atom>& end) {
   if (assembler == nullptr) {
     instruction->assembler_weak.Reset();
   } else {
-    instruction->assembler_weak = NestedPtr<Object>(assembler->AcquirePtr());
+    instruction->assembler_weak = assembler->AcquireWeakPtr();
     assembler->instructions_weak.emplace_back(instruction->AcquirePtr());
     assembler->UpdateMachineCode();
   }
 }
 
-NestedPtr<Atom> AssemblerArgument::Find(const Object& start) const {
+NestedPtr<Interface> AssemblerArgument::Find(const Object& start) const {
   if (auto* instruction = dynamic_cast<const Instruction*>(&start)) {
-    return instruction->assembler_weak.Lock();
+    return NestedPtr(instruction->assembler_weak.Lock(), &Object::toplevel_interface);
   }
-  return NestedPtr<Atom>();
+  return NestedPtr<Interface>();
 }
 
 Ptr<Object> AssemblerArgument::Prototype() const { return MAKE_PTR(Assembler); }
@@ -200,7 +202,7 @@ static Assembler* FindOrCreateAssembler(Object& start) {
   return dynamic_cast<Assembler*>(&assembler_arg.ObjectOrMake(start));
 }
 
-void Instruction::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+void Instruction::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
   if (LoopControl::Break == cb(runnable)) return;
   auto opcode = mc_inst.getOpcode();
   if (opcode != X86::JMP_1 && opcode != X86::JMP_4) {

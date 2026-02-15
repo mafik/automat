@@ -489,7 +489,7 @@ std::unique_ptr<ObjectToy> Window::MakeToy(ui::Widget* parent) {
   return std::make_unique<WindowWidget>(parent, *this);
 }
 
-void Window::Atoms(const std::function<LoopControl(Atom&)>& cb) {
+void Window::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
   if (cb(next_arg) == LoopControl::Break) return;
   if (cb(capture) == LoopControl::Break) return;
   if (cb(image) == LoopControl::Break) return;

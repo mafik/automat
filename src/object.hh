@@ -40,7 +40,6 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   Location* here = nullptr;
 
   ReferenceCounted& GetOwner() { return *this; }
-  Atom& GetAtom() { return *this; }
 
   Object() = default;
 
@@ -56,10 +55,10 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   // Release the memory occupied by this object.
   virtual ~Object();
 
-  // # Atoms & Serialization
+  // # Interfaces & Serialization
   //
   // Objects serialize themselves to the "value" property within the location objects
-  // - Each atom my want to emit multiple properties
+  // - Each interface may want to emit multiple properties
 
   virtual void SerializeState(ObjectSerializer& writer) const;
 
@@ -76,24 +75,24 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   // Image-like objects can provide image data.
   virtual ImageProvider* AsImageProvider() { return nullptr; }
 
-  // Default implementations iterate Atoms() and dynamic_cast to find the first matching sub-atom.
+  // Default implementations iterate Interfaces() and dynamic_cast to find the first match.
   // Override for special cases (e.g., when the Object itself implements the interface).
   virtual LongRunning* AsLongRunning();
   virtual Runnable* AsRunnable();
   virtual SignalNext* AsSignalNext();
   virtual OnOff* AsOnOff();
 
-  // Visits all atoms that are members of this object.
+  // Visits all interfaces that are members of this object.
   //
-  // Lifetime of atoms is the same as this object. Atoms should never be deleted as it may create
-  // dangling references.
-  virtual void Atoms(const std::function<LoopControl(Atom&)>&);
+  // Lifetime of interfaces is the same as this object. Interfaces should never be deleted as it
+  // may create dangling references.
+  virtual void Interfaces(const std::function<LoopControl(Interface&)>&);
 
-  virtual void AtomName(Atom&, Str& out_name);
+  virtual void InterfaceName(Interface&, Str& out_name);
 
-  virtual Atom* AtomFromName(StrView name);
+  virtual Interface* InterfaceFromName(StrView name);
 
-  // Wrapper around Atoms() that only reports Arguments
+  // Wrapper around Interfaces() that only reports Arguments
   void Args(const std::function<void(Argument&)>&);
 
   virtual void Updated(WeakPtr<Object>& updated);
@@ -120,13 +119,18 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
 
   // If this object is owned by a Board, return the Location that's used to store it.
   Location* MyLocation();
+
+  // Empty interface - used for refering to top-level objects.
+  static Interface toplevel_interface;
+
+  Interface& GetInterface() { return toplevel_interface; }
 };
 
 // Provides sensible defaults for most object widgets. Designed to be inherited and tweaked.
 //
 // It's rendered as a green box with the name of the object.
 struct ObjectToy : Toy {
-  ObjectToy(Widget* parent, Object& obj) : Toy(parent, obj, obj) {}
+  ObjectToy(Widget* parent, Object& obj) : Toy(parent, obj, Object::toplevel_interface) {}
 
   virtual float Width() const;
   virtual std::string Text() const { return std::string(Name()); }
@@ -148,9 +152,9 @@ struct ObjectToy : Toy {
   // If coordinate_space is provided, returns coordinates in that widget's space.
   virtual Vec2AndDir ArgStart(const Argument&, ui::Widget* coordinate_space = nullptr);
 
-  // Describes the area of the widget where the given atom is located.
+  // Describes the area of the widget where the given interface is located.
   // Local (metric) coordinates.
-  virtual SkPath AtomShape(Atom*) const { return Shape(); }
+  virtual SkPath InterfaceShape(Interface*) const { return Shape(); }
 
   // When iconified, prevent children from receiving pointer events.
   bool AllowChildPointerEvents(ui::Widget&) const override;
@@ -178,7 +182,7 @@ struct ObjectSerializer : Serializer {
   std::vector<Object*> serialization_queue;
 
   Str& ResolveName(Object&, StrView hint = ""sv);
-  Str ResolveName(Object&, Atom*, StrView hint = ""sv);
+  Str ResolveName(Object&, Interface*, StrView hint = ""sv);
   void Serialize(Object&);
 };
 
@@ -190,7 +194,7 @@ struct ObjectDeserializer : Deserializer {
   void RegisterObject(StrView name, Object& object);
 
   Object* LookupObject(StrView name);
-  NestedPtr<Atom> LookupAtom(StrView name);
+  NestedPtr<Interface> LookupInterface(StrView name);
 };
 
 }  // namespace automat

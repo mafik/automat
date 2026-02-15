@@ -43,7 +43,7 @@ struct TesseractOCR : public Object {
   float y_max_ratio = 0.75f;
 
   NestedWeakPtr<ImageProvider> image_provider_weak;
-  NestedWeakPtr<Object> text_weak;
+  WeakPtr<Object> text_weak;
 
   TesseractOCR();
 
@@ -51,7 +51,7 @@ struct TesseractOCR : public Object {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  void Atoms(const std::function<LoopControl(Atom&)>&) override;
+  void Interfaces(const std::function<LoopControl(Interface&)>&) override;
   void Updated(WeakPtr<Object>& updated) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
@@ -59,7 +59,6 @@ struct TesseractOCR : public Object {
 
   std::string GetText() const override;
   void SetText(std::string_view text) override;
-
 };
 
 }  // namespace automat::library

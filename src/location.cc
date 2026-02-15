@@ -50,6 +50,8 @@ constexpr float kFrameCornerRadius = 0.001;
 // Location
 ///////////////////////////////////////////////////////////////////////////////
 
+Interface Location::toplevel_interface;
+
 Location::Location(WeakPtr<Location> parent_location)
     : parent_location(std::move(parent_location)) {}
 
@@ -141,7 +143,9 @@ void Location::FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_
 ///////////////////////////////////////////////////////////////////////////////
 
 LocationWidget::LocationWidget(ui::Widget* parent, Location& loc)
-    : Toy(parent, loc, loc), elevation(0), location_weak(loc.AcquireWeakPtr()) {
+    : Toy(parent, loc, Location::toplevel_interface),
+      elevation(0),
+      location_weak(loc.AcquireWeakPtr()) {
   loc.widget = this;
   local_to_parent = SkM44(root_widget->CanvasToWindow());
   if (auto* obj_toy = ToyStore().FindOrNull(*loc.object)) {
@@ -469,10 +473,10 @@ void LocationWidget::UpdateAutoconnectArgs() {
     auto start = toy.ArgStart(arg, parent_mw);
 
     // Find the current distance & target of this connection
-    Atom* old_atom = nullptr;
+    Interface* old_iface = nullptr;
     float old_dist2 = HUGE_VALF;
     if (auto end = arg.Find(*loc->object)) {
-      old_atom = end.Get();
+      old_iface = end.Get();
       Vec<Vec2AndDir> to_positions;
       auto* end_loc = end.Owner<Object>()->MyLocation();
       auto& end_toy = end_loc->ToyForObject();
@@ -487,12 +491,12 @@ void LocationWidget::UpdateAutoconnectArgs() {
       }
     }
 
-    // Find the nearest compatible atom
+    // Find the nearest compatible interface
     float new_dist2 = autoconnect_radius * autoconnect_radius;
     ObjectToy* new_toy = nullptr;
-    Atom* new_atom = nullptr;
+    Interface* new_iface = nullptr;
     parent_mw->NearbyCandidates(*loc, arg, autoconnect_radius,
-                                [&](ObjectToy& toy, Atom& atom, Vec<Vec2AndDir>& to_points) {
+                                [&](ObjectToy& toy, Interface& iface, Vec<Vec2AndDir>& to_points) {
                                   auto other_up = TransformBetween(toy, *parent_mw);
                                   for (auto& to : to_points) {
                                     Vec2 to_pos = other_up.mapPoint(to.pos);
@@ -500,16 +504,16 @@ void LocationWidget::UpdateAutoconnectArgs() {
                                     if (dist2 <= new_dist2) {
                                       new_dist2 = dist2;
                                       new_toy = &toy;
-                                      new_atom = &atom;
+                                      new_iface = &iface;
                                     }
                                   }
                                 });
 
-    if (new_atom == old_atom) {
+    if (new_iface == old_iface) {
       return;
     }
     if (new_toy) {
-      arg.Connect(*loc->object, NestedPtr<Atom>(new_toy->owner.Lock(), new_atom));
+      arg.Connect(*loc->object, NestedPtr<Interface>(new_toy->owner.Lock(), new_iface));
     } else {
       arg.Disconnect(*loc->object);
     }
@@ -535,8 +539,8 @@ void LocationWidget::UpdateAutoconnectArgs() {
       if (autoconnect_radius <= 0) {
         return;
       }
-      Atom* this_atom = arg.CanConnect(*other->object, *loc->object);
-      if (!this_atom) {
+      Interface* this_iface = arg.CanConnect(*other->object, *loc->object);
+      if (!this_iface) {
         return;  // `this` location can't be connected to `other`s `arg`
       }
 
@@ -549,10 +553,10 @@ void LocationWidget::UpdateAutoconnectArgs() {
       start.pos = other_up.mapPoint(start.pos);
 
       // Find the current distance & target of this connection
-      Atom* old_atom = nullptr;
+      Interface* old_iface = nullptr;
       float old_dist2 = HUGE_VALF;
       if (auto end = arg.Find(*other->object)) {
-        old_atom = end.Get();
+        old_iface = end.Get();
         Vec<Vec2AndDir> to_positions;
         auto* end_loc = end.Owner<Object>()->MyLocation();
         auto& end_toy = end_loc->ToyForObject();
@@ -569,22 +573,22 @@ void LocationWidget::UpdateAutoconnectArgs() {
 
       // Find the new distance & target
       float radius2 = autoconnect_radius * autoconnect_radius;
-      bool old_is_here = (old_atom == this_atom);
+      bool old_is_here = (old_iface == this_iface);
       float new_dist2 = old_is_here ? radius2 : std::min(radius2, old_dist2);
-      Atom* new_atom = old_is_here ? nullptr : old_atom;
+      Interface* new_iface = old_is_here ? nullptr : old_iface;
       for (auto& to : to_points) {
         float dist2 = LengthSquared(start.pos - to.pos);
         if (dist2 <= new_dist2) {
           new_dist2 = dist2;
-          new_atom = this_atom;
+          new_iface = this_iface;
         }
       }
 
-      if (new_atom == old_atom) {
+      if (new_iface == old_iface) {
         return;
       }
-      if (new_atom) {
-        arg.Connect(*other->object, NestedPtr<Atom>(loc->object->AcquirePtr(), new_atom));
+      if (new_iface) {
+        arg.Connect(*other->object, NestedPtr<Interface>(loc->object->AcquirePtr(), new_iface));
       } else {
         arg.Disconnect(*other->object);
       }

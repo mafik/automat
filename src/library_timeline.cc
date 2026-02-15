@@ -297,7 +297,8 @@ static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
 
 TrackArgument::TrackArgument(StrView name) : name(name) {}
 
-void TrackArgument::CanConnect(Object& start, Atom& end, Status& status) const {}
+void TrackArgument::CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+                               Status& status) const {}
 
 Timeline::Timeline()
     : state(kPaused), timeline_length(0), paused{.playback_offset = 0s}, zoom(10) {}
@@ -1820,7 +1821,7 @@ std::unique_ptr<ObjectToy> Timeline::MakeToy(ui::Widget* parent) {
   return std::make_unique<TimelineWidget>(parent, *this);
 }
 
-void Timeline::Atoms(const function<LoopControl(Atom&)>& cb) {
+void Timeline::Interfaces(const function<LoopControl(Interface&)>& cb) {
   for (auto& track_arg : tracks) {
     if (LoopControl::Break == cb(*track_arg)) return;
   }

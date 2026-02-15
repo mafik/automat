@@ -90,7 +90,7 @@ void Gear::AddSource(NestedPtr<Syncable>& source) {
   auto old_sync_block = source->end.LockAs<Gear>();
   bool was_source = source->source;
   if (old_sync_block.Get() != this) {
-    source->Connect(*source.Owner<Object>(), *this, Object::toplevel_interface);
+    source->Connect(*source.Owner<Object>(), *this);
     if (old_sync_block) {
       while (!old_sync_block->members.empty()) {
         // stealing all of the members from the old gear

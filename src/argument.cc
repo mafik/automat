@@ -41,7 +41,7 @@ Object& Argument::ObjectOrMake(Object& start) {
 
   PositionAhead(*start_loc, *this, loc);
   PositionBelow(loc, *start_loc);
-  Connect(start, *loc.object, Object::toplevel_interface);
+  Connect(start, *loc.object);
 
   ui::root_widget->WakeAnimation();
   return *loc.object;

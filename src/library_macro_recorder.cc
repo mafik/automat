@@ -246,7 +246,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
 
     PositionAhead(*timeline->here, track_arg, on_off_loc);
     AnimateGrowFrom(*macro_recorder.here, on_off_loc);
-    track_arg.Connect(*timeline, *on_off_loc.object, Object::toplevel_interface);
+    track_arg.Connect(*timeline, *on_off_loc.object);
   }
 
   // Append the current timestamp to that track
@@ -364,7 +364,7 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
 
     PositionAhead(*timeline->here, track_arg, receiver_loc);
     AnimateGrowFrom(*recorder.here, receiver_loc);
-    track_arg.Connect(*timeline, *receiver_loc.object, Object::toplevel_interface);
+    track_arg.Connect(*timeline, *receiver_loc.object);
   }
 
   auto* track = dynamic_cast<TrackT*>(timeline->tracks[track_index]->track.Get());

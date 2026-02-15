@@ -107,6 +107,10 @@ struct Argument : Interface {
     start.WakeToys();
   }
 
+  void Connect(Object& start, Object& end_obj) {
+    Connect(start, end_obj, Object::toplevel_interface);
+  }
+
   void Disconnect(Object& start) {
     OnConnect(start, nullptr, nullptr);
     start.WakeToys();

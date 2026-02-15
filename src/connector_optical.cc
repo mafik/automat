@@ -24,6 +24,7 @@
 #include "../build/generated/embedded.hh"
 #include "arcline.hh"
 #include "argument.hh"
+#include "casting.hh"
 #include "color.hh"
 #include "font.hh"
 #include "log.hh"
@@ -360,8 +361,8 @@ animation::Phase SimulateCablePhysics(time::Timer& timer, CablePhysicsSimulation
 
   animation::Phase phase = animation::Finished;
   float dt = timer.d;
-  OnOff* arg_on_off = dynamic_cast<OnOff*>(&state.arg);
-  if (arg_on_off && arg_on_off->IsOn()) {
+  OnOff* arg_on_off = dyn_cast<OnOff>(&state.arg);
+  if (arg_on_off && arg_on_off->IsOn(*state.location.object)) {
     state.lightness_pct = 100;
   } else {
     phase |= animation::ExponentialApproach(0, timer.d, 0.1, state.lightness_pct);
@@ -888,7 +889,7 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
   p.setIsVolatile(true);
 
   // Draw the cable
-  auto color_filter = color::MakeTintFilter(state.arg.Tint(), NAN);
+  auto color_filter = color::MakeTintFilter(state.arg.tint, NAN);
   DrawCable(canvas, p, color_filter, CableTexture::Braided,
             state.cable_width * state.connector_scale, state.cable_width * dispenser_scale,
             &state.approx_length);
@@ -970,8 +971,8 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
 
     Vec2 icon_offset = connector_matrix.mapPoint(Vec2(0, kCasingHeight / 2));
 
-    SkColor base_color = color::AdjustLightness(state.arg.Tint(), 30);
-    SkColor bright_light = color::AdjustLightness(state.arg.Light(), 50);
+    SkColor base_color = color::AdjustLightness(state.arg.tint, 30);
+    SkColor bright_light = color::AdjustLightness(state.arg.light, 50);
     SkColor adjusted_color = color::AdjustLightness(base_color, state.lightness_pct);
     adjusted_color = color::MixColors(adjusted_color, bright_light, state.lightness_pct / 100);
 
@@ -992,7 +993,7 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
     // Draw blur
     if (state.lightness_pct > 1) {
       SkPaint glow_paint;
-      glow_paint.setColor(state.arg.Light());
+      glow_paint.setColor(state.arg.light);
       glow_paint.setAlphaf(state.lightness_pct / 100);
       float sigma = canvas.getLocalToDeviceAs3x3().mapRadius(0.5_mm);
       glow_paint.setMaskFilter(

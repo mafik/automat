@@ -28,6 +28,7 @@
 #include "animation.hh"
 #include "argument.hh"
 #include "automat.hh"
+#include "casting.hh"
 #include "color.hh"
 #include "embedded.hh"
 #include "font.hh"
@@ -96,103 +97,109 @@ const char* kJumpPathSVG =
 
 static const SkPath kJumpPath = PathFromSVG(kJumpPathSVG, SVGUnit_Millimeters);
 
-JumpArgument::JumpArgument() {
-  // Jump argument configuration
-}
-
-std::unique_ptr<ui::Widget> JumpArgument::MakeIcon(ui::Widget* parent) {
-  return ui::MakeShapeWidget(parent, kJumpPathSVG, "#ff0000"_color);
-}
-
-void JumpArgument::CanConnect(Object& start, Object& end_obj, Interface* end_iface,
-                              Status& status) const {
-  if (!dynamic_cast<Runnable*>(end_iface)) {
-    AppendErrorMessage(status) += "Jump target must be a Runnable";
-  }
-}
-
-void JumpArgument::OnConnect(Object& start, Object* end_obj, Interface* end_iface) {
-  if (auto* inst = dynamic_cast<Instruction*>(&start)) {
+Argument jump_arg = [] {
+  Argument a("Jump"sv);
+  a.make_icon = [](const Argument&, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
+    return ui::MakeShapeWidget(parent, kJumpPathSVG, "#ff0000"_color);
+  };
+  a.can_connect = [](const Argument&, Object&, Object&, Interface* end_iface, Status& status) {
+    if (!dyn_cast_if_present<Runnable>(end_iface)) {
+      AppendErrorMessage(status) += "Jump target must be a Runnable";
+    }
+  };
+  a.on_connect = [](const Argument&, Object& start, Object* end_obj, Interface* end_iface) {
+    auto* inst = dynamic_cast<Instruction*>(&start);
+    if (!inst) return;
     if (end_obj) {
-      if (auto* runnable = dynamic_cast<Runnable*>(end_iface)) {
-        inst->jump_target = NestedWeakPtr<Runnable>(end_obj->AcquireWeakPtr(), runnable);
+      if (auto* r = dyn_cast_if_present<Runnable>(end_iface)) {
+        inst->jump_target = NestedWeakPtr<Runnable>(end_obj->AcquireWeakPtr(), r);
       }
     } else {
       inst->jump_target = {};
     }
-    // Notify assembler of change
     if (auto* assembler = dynamic_cast<Assembler*>(assembler_arg.ObjectOrNull(*inst))) {
       assembler->UpdateMachineCode();
     }
-  }
-}
-
-NestedPtr<Interface> JumpArgument::Find(const Object& start) const {
-  if (auto* inst = dynamic_cast<const Instruction*>(&start)) {
+  };
+  a.find = [](const Argument&, const Object& start) -> NestedPtr<Interface> {
+    auto* inst = dynamic_cast<const Instruction*>(&start);
+    if (!inst) return {};
     if (auto locked = inst->jump_target.Lock()) {
       return NestedPtr<Syncable>(locked.GetOwnerWeak().Lock(), locked.Get());
     }
-  }
-  return {};
-}
+    return {};
+  };
+  return a;
+}();
 
-JumpArgument jump_arg;
-
-void NextInstructionArg::OnConnect(Object& start, Object* end_obj, Interface* end_iface) {
-  NextArg::OnConnect(start, end_obj, end_iface);
-  if (auto* inst = dynamic_cast<Instruction*>(&start)) {
-    // Notify assembler of change
-    if (auto* assembler = dynamic_cast<Assembler*>(assembler_arg.ObjectOrNull(*inst))) {
-      assembler->UpdateMachineCode();
+NextArg next_instruction_arg = [] {
+  NextArg a("Next"sv, +[](Instruction& obj) -> NextState& { return obj.next_state; });
+  // Custom on_connect that also notifies the assembler after the base NextArg connect
+  a.on_connect = +[](const Argument& arg, Object& start, Object* end_obj, Interface* end_iface) {
+    // Perform the standard NextArg connection logic
+    auto& next_arg = static_cast<const NextArg&>(arg);
+    auto& state = next_arg.get_next_state(start);
+    if (end_obj) {
+      if (auto* end_runnable = dyn_cast_if_present<Runnable>(end_iface)) {
+        state.next = NestedWeakPtr<Runnable>(end_obj->AcquireWeakPtr(), end_runnable);
+      }
+    } else {
+      state.next = {};
     }
-  }
-}
+    // Also notify the assembler
+    if (auto* inst = dynamic_cast<Instruction*>(&start)) {
+      if (auto* assembler = dynamic_cast<Assembler*>(assembler_arg.ObjectOrNull(*inst))) {
+        assembler->UpdateMachineCode();
+      }
+    }
+  };
+  return a;
+}();
 
-NextInstructionArg next_instruction_arg;
+Argument assembler_arg = [] {
+  Argument a("Assembler"sv);
+  a.autoconnect_radius = INFINITY;
+  a.tint = "#ff0000"_color;
+  a.style = Argument::Style::Invisible;
+  a.prototype = []() -> Ptr<Object> { return MAKE_PTR(Assembler); };
+  a.can_connect = [](const Argument&, Object&, Object& end_obj, Interface* end_iface,
+                     Status& status) {
+    if (end_iface != nullptr || !dynamic_cast<Assembler*>(&end_obj)) {
+      AppendErrorMessage(status) += "Must connect to an Assembler";
+    }
+  };
+  a.on_connect = [](const Argument&, Object& start, Object* end_obj, Interface* end_iface) {
+    auto* instruction = dynamic_cast<Instruction*>(&start);
+    if (instruction == nullptr) return;
 
-void AssemblerArgument::CanConnect(Object& start, Object& end_obj, Interface* end_iface,
-                                   Status& status) const {
-  if (end_iface != nullptr || !dynamic_cast<Assembler*>(&end_obj)) {
-    AppendErrorMessage(status) += "Must connect to an Assembler";
-  }
-}
-
-void AssemblerArgument::OnConnect(Object& start, Object* end_obj, Interface* end_iface) {
-  auto* instruction = dynamic_cast<Instruction*>(&start);
-  if (instruction == nullptr) return;
-
-  if (auto old_assembler_obj = instruction->assembler_weak.Lock()) {
-    if (auto old_assembler = dynamic_cast<Assembler*>(old_assembler_obj.Get())) {
-      for (int i = 0; i < old_assembler->instructions_weak.size(); ++i) {
-        auto& old_instr = old_assembler->instructions_weak[i];
-        if (old_instr.GetUnsafe() == instruction) {
-          old_assembler->instructions_weak.erase(old_assembler->instructions_weak.begin() + i);
-          break;
+    if (auto old_assembler_obj = instruction->assembler_weak.Lock()) {
+      if (auto old_assembler = dynamic_cast<Assembler*>(old_assembler_obj.Get())) {
+        for (int i = 0; i < old_assembler->instructions_weak.size(); ++i) {
+          auto& old_instr = old_assembler->instructions_weak[i];
+          if (old_instr.GetUnsafe() == instruction) {
+            old_assembler->instructions_weak.erase(old_assembler->instructions_weak.begin() + i);
+            break;
+          }
         }
       }
     }
-  }
 
-  auto* assembler = dynamic_cast<Assembler*>(end_obj);
-  if (assembler == nullptr) {
-    instruction->assembler_weak.Reset();
-  } else {
-    instruction->assembler_weak = assembler->AcquireWeakPtr();
-    assembler->instructions_weak.emplace_back(instruction->AcquirePtr());
-    assembler->UpdateMachineCode();
-  }
-}
-
-NestedPtr<Interface> AssemblerArgument::Find(const Object& start) const {
-  if (auto* instruction = dynamic_cast<const Instruction*>(&start)) {
+    auto* assembler = dynamic_cast<Assembler*>(end_obj);
+    if (assembler == nullptr) {
+      instruction->assembler_weak.Reset();
+    } else {
+      instruction->assembler_weak = assembler->AcquireWeakPtr();
+      assembler->instructions_weak.emplace_back(instruction->AcquirePtr());
+      assembler->UpdateMachineCode();
+    }
+  };
+  a.find = [](const Argument&, const Object& start) -> NestedPtr<Interface> {
+    auto* instruction = dynamic_cast<const Instruction*>(&start);
+    if (!instruction) return {};
     return NestedPtr<Interface>(instruction->assembler_weak.Lock(), nullptr);
-  }
-  return NestedPtr<Interface>();
-}
-
-Ptr<Object> AssemblerArgument::Prototype() const { return MAKE_PTR(Assembler); }
-
-AssemblerArgument assembler_arg;
+  };
+  return a;
+}();
 
 static Assembler* FindAssembler(Object& start) {
   return dynamic_cast<Assembler*>(assembler_arg.ObjectOrNull(start));
@@ -240,12 +247,13 @@ void Instruction::BufferVisit(const BufferVisitor& visitor) {
   visitor(span<char>{});
 }
 
-void Instruction::MyRunnable::OnRun(std::unique_ptr<RunTask>& run_task) {
-  auto& instr = Instruction();
-  ZoneScopedN("Instruction");
-  auto assembler = FindOrCreateAssembler(instr);
-  assembler->RunMachineCode(&instr, std::move(run_task));
-}
+Runnable Instruction::runnable(
+    "Run"sv, +[](Instruction& obj) -> SyncState& { return obj.runnable_sync; },
+    +[](const Runnable&, Instruction& instr, std::unique_ptr<RunTask>& run_task) {
+      ZoneScopedN("Instruction");
+      auto assembler = FindOrCreateAssembler(instr);
+      assembler->RunMachineCode(&instr, std::move(run_task));
+    });
 
 LongRunning* Instruction::AsLongRunning() {
   if (auto* as = FindAssembler(*this)) {

@@ -128,13 +128,13 @@ static const char* RangeName(Timer::Range range) {
 
 static void SetDuration(Timer& timer, Duration new_duration) {
   auto lock = std::lock_guard(timer.mtx);
-  if (timer.timer_running.IsRunning()) {
+  if (Timer::timer_running.IsRunning(timer)) {
     if (auto h = timer.here) {
-      RescheduleAt(*h, timer.start_time + timer.duration.value, timer.start_time + new_duration);
+      RescheduleAt(*h, timer.start_time + timer.duration_value, timer.start_time + new_duration);
     }
   }
 
-  timer.duration.value = new_duration;
+  timer.duration_value = new_duration;
   timer.WakeToys();
 }
 
@@ -142,7 +142,7 @@ static void PropagateDurationOutwards(Timer& timer) {
   if (auto h = timer.here) {
     // auto duration_obj = timer.duration_arg.GetLocation(*h);
     // if (duration_obj.ok && duration_obj.location) {
-    //   duration_obj.location->SetNumber(timer.duration.value * TickCount(timer.range) /
+    //   duration_obj.location->SetNumber(timer.duration_value * TickCount(timer.range) /
     //                                    time::FloatDuration(RangeDuration(timer.range)));
     // }
   }
@@ -152,11 +152,43 @@ static void PropagateDurationOutwards(Timer& timer) {
 // Timer (Object)
 // ============================================================================
 
+Runnable Timer::runnable(
+    "Run"sv, +[](Timer& obj) -> SyncState& { return obj.runnable_sync; },
+    +[](const Runnable&, Timer& timer, std::unique_ptr<RunTask>& run_task) {
+      auto lock = std::lock_guard(timer.mtx);
+      ZoneScopedN("Timer");
+      timer.start_time = time::SteadyClock::now();
+      ScheduleAt(*timer.here, timer.start_time + timer.duration_value);
+      timer.WakeToys();
+      Timer::timer_running.BeginLongRunning(timer, std::move(run_task));
+    });
+
+Syncable Timer::duration = [] {
+  Syncable s("duration"sv, +[](Timer& obj) -> SyncState& { return obj.duration_sync; });
+  s.tint = "#6e4521"_color;
+  s.can_sync = [](const Syncable&, const Syncable& other) -> bool {
+    return &other == &Timer::duration;
+  };
+  return s;
+}();
+
+NextArg Timer::next("Next"sv, +[](Timer& obj) -> NextState& { return obj.next_state; });
+
+LongRunning Timer::timer_running(
+    "Running"sv, +[](Timer& obj) -> SyncState& { return obj.running_sync; },
+    +[](Timer& obj) -> std::unique_ptr<RunTask>& { return obj.long_running_task; },
+    +[](const LongRunning&, Timer& timer) {
+      if (timer.here) {
+        CancelScheduledAt(*timer.here, timer.start_time + timer.duration_value);
+      }
+      timer.WakeToys();
+    });
+
 Timer::Timer() {}
 
 Timer::Timer(const Timer& other) : Timer() {
   range = other.range;
-  duration.value = other.duration.value;
+  duration_value = other.duration_value;
 }
 
 Ptr<Object> Timer::Clone() const { return MAKE_PTR(Timer, *this); }
@@ -178,7 +210,7 @@ void Timer::Updated(WeakPtr<Object>& updated) {
 void Timer::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
   if (LoopControl::Break == cb(runnable)) return;
   if (LoopControl::Break == cb(duration)) return;
-  if (LoopControl::Break == cb(next_arg)) return;
+  if (LoopControl::Break == cb(next)) return;
   if (LoopControl::Break == cb(timer_running)) return;
 }
 
@@ -190,24 +222,6 @@ void Timer::InterfaceName(Interface& iface, Str& out_name) {
   } else {
     Object::InterfaceName(iface, out_name);
   }
-}
-
-void Timer::MyRunnable::OnRun(std::unique_ptr<RunTask>& run_task) {
-  auto& timer = Timer();
-  auto lock = std::lock_guard(timer.mtx);
-  ZoneScopedN("Timer");
-  timer.start_time = time::SteadyClock::now();
-  ScheduleAt(*timer.here, timer.start_time + timer.duration.value);
-  timer.WakeToys();
-  timer.timer_running.BeginLongRunning(std::move(run_task));
-}
-
-void Timer::TimerRunning::OnCancel() {
-  auto& timer = Timer();
-  if (timer.here) {
-    CancelScheduledAt(*timer.here, timer.start_time + timer.duration.value);
-  }
-  timer.WakeToys();
 }
 
 StrView ToStr(Timer::Range r) {
@@ -243,8 +257,8 @@ void Timer::SerializeState(ObjectSerializer& writer) const {
   auto range_str = ToStr(range);
   writer.String(range_str.data(), range_str.size());
   writer.Key("duration_seconds");
-  writer.Double(time::ToSeconds(duration.value));
-  if (this->timer_running.IsRunning()) {
+  writer.Double(time::ToSeconds(duration_value));
+  if (Timer::timer_running.IsRunning(*this)) {
     writer.Key("running");
     writer.Double(time::ToSeconds(time::SteadyNow() - start_time));
   }
@@ -254,16 +268,16 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
   if (key == "running") {
     double value = 0;
     d.Get(value, status);
-    timer_running.BeginLongRunning(make_unique<RunTask>(AcquireWeakPtr(), &runnable));
+    timer_running.BeginLongRunning(*this, make_unique<RunTask>(AcquireWeakPtr(), &runnable));
     start_time = time::SteadyNow() - time::FromSeconds(value);
-    ScheduleAt(*here, start_time + duration.value);
+    ScheduleAt(*here, start_time + duration_value);
   } else if (key == "duration_seconds") {
     double value;
     d.Get(value, status);
     if (OK(status)) {
-      duration.value = time::FromSeconds(value);
-      if (this->timer_running.IsRunning()) {
-        ScheduleAt(*here, start_time + duration.value);
+      duration_value = time::FromSeconds(value);
+      if (Timer::timer_running.IsRunning(*this)) {
+        ScheduleAt(*here, start_time + duration_value);
       }
     }
   } else if (key == "range") {
@@ -503,8 +517,8 @@ struct TimerWidget : ObjectToy {
     if (auto timer = LockTimer()) {
       text_field->argument = NestedWeakPtr<Argument>(timer->AcquireWeakPtr(), &timer->duration);
       range = timer->range;
-      duration_value = timer->duration.value;
-      is_running = timer->timer_running.IsRunning();
+      duration_value = timer->duration_value;
+      is_running = Timer::timer_running.IsRunning(*timer);
       start_time = timer->start_time;
       UpdateTextField();
     }
@@ -522,8 +536,8 @@ struct TimerWidget : ObjectToy {
     if (auto t = LockTimer()) {
       auto lock = std::lock_guard(t->mtx);
       range = t->range;
-      duration_value = t->duration.value;
-      is_running = t->timer_running.IsRunning();
+      duration_value = t->duration_value;
+      is_running = Timer::timer_running.IsRunning(*t);
       start_time = t->start_time;
     }
     UpdateTextField();
@@ -806,8 +820,8 @@ std::unique_ptr<Action> TimerWidget::FindAction(ui::Pointer& pointer, ui::Action
       start_pusher_depression = 1;
       WakeAnimation();
       if (auto timer = LockTimer()) {
-        if (timer->timer_running.IsRunning()) {
-          timer->timer_running.Cancel();
+        if (Timer::timer_running.IsRunning(*timer)) {
+          Timer::timer_running.Cancel(*timer);
         } else {
           timer->runnable.ScheduleRun(*timer);
         }
@@ -822,7 +836,7 @@ std::unique_ptr<Action> TimerWidget::FindAction(ui::Pointer& pointer, ui::Action
         timer->range = Timer::Range(((int)timer->range + (int)Timer::Range::EndGuard - 1) %
                                     (int)Timer::Range::EndGuard);
         range = timer->range;
-        duration_value = timer->duration.value;
+        duration_value = timer->duration_value;
         UpdateTextField();
         PropagateDurationOutwards(*timer);
       }
@@ -834,7 +848,7 @@ std::unique_ptr<Action> TimerWidget::FindAction(ui::Pointer& pointer, ui::Action
       if (auto timer = LockTimer()) {
         timer->range = Timer::Range(((int)timer->range + 1) % (int)Timer::Range::EndGuard);
         range = timer->range;
-        duration_value = timer->duration.value;
+        duration_value = timer->duration_value;
         UpdateTextField();
         PropagateDurationOutwards(*timer);
       }

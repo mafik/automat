@@ -48,8 +48,8 @@ struct Task {
 };
 
 struct RunTask : Task {
-  Runnable* runnable;
-  RunTask(WeakPtr<Object> target, Runnable* runnable) : Task(target), runnable(runnable) {}
+  const Runnable* runnable;
+  RunTask(WeakPtr<Object> target, const Runnable* runnable) : Task(target), runnable(runnable) {}
   std::string Format() override;
   void OnExecute(std::unique_ptr<Task>& self) override;
 

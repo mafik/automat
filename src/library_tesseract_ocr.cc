@@ -26,6 +26,7 @@
 #include "animation.hh"
 #include "argument.hh"
 #include "automat.hh"
+#include "casting.hh"
 #include "color.hh"
 #include "connector_optical.hh"
 #include "embedded.hh"
@@ -44,69 +45,63 @@ namespace automat::library {
 
 constexpr bool kDebugEyeShape = false;
 
-struct ImageArgument : Argument {
-  StrView Name() const override { return "Image"sv; }
-  float AutoconnectRadius() const override { return 20_cm; }
-  Style GetStyle() const override { return Style::Invisible; }
-  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
+static Argument image_arg = [] {
+  Argument a("Image"sv);
+  a.autoconnect_radius = 20_cm;
+  a.style = Argument::Style::Invisible;
+  a.make_icon = [](const Argument&, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
     return std::make_unique<TextWidget>(parent, "IMG");
-  }
-
-  void CanConnect(Object& start, Object& end_obj, Interface* end_iface,
-                  Status& status) const override {
-    auto* image_provider = dynamic_cast<ImageProvider*>(end_iface);
-    if (image_provider == nullptr) {
+  };
+  a.can_connect = [](const Argument&, Object&, Object&, Interface* end_iface, Status& status) {
+    if (!dyn_cast_if_present<ImageProvider>(end_iface)) {
       AppendErrorMessage(status) += "Can only connect to Image Provider";
-      return;
     }
-  }
-
-  void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override {
+  };
+  a.on_connect = [](const Argument&, Object& start, Object* end_obj, Interface* end_iface) {
     auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
     if (tesseract == nullptr) return;
-    auto* image_provider = dynamic_cast<ImageProvider*>(end_iface);
-    if (image_provider == nullptr) return;
-    tesseract->image_provider_weak =
-        NestedWeakPtr<ImageProvider>(end_obj->AcquireWeakPtr(), image_provider);
-  }
-
-  NestedPtr<Interface> Find(const Object& start) const override {
+    auto* ip = dyn_cast_if_present<ImageProvider>(end_iface);
+    if (ip == nullptr) return;
+    tesseract->image_provider_weak = NestedWeakPtr<ImageProvider>(end_obj->AcquireWeakPtr(), ip);
+  };
+  a.find = [](const Argument&, const Object& start) -> NestedPtr<Interface> {
     auto* tesseract = dynamic_cast<const TesseractOCR*>(&start);
     if (tesseract == nullptr) return {};
     return tesseract->image_provider_weak.Lock();
-  }
-};
+  };
+  return a;
+}();
 
-struct TextArgument : Argument {
-  StrView Name() const override { return "Text"sv; }
-
-  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
+static Argument text_arg = [] {
+  Argument a("Text"sv);
+  a.make_icon = [](const Argument&, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
     return std::make_unique<TextWidget>(parent, "T");
-  }
-
-  void CanConnect(Object& start, Object& end_obj, Interface* end_iface,
-                  Status& status) const override {
-    // Any object can receive text
-  }
-
-  void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override {
+  };
+  a.can_connect = [](const Argument&, Object&, Object&, Interface*, Status&) {};
+  a.on_connect = [](const Argument&, Object& start, Object* end_obj, Interface*) {
     auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
     if (tesseract == nullptr) return;
     if (end_obj == nullptr) return;
     tesseract->text_weak = end_obj->AcquireWeakPtr();
-  }
-
-  NestedPtr<Interface> Find(const Object& start) const override {
+  };
+  a.find = [](const Argument&, const Object& start) -> NestedPtr<Interface> {
     auto* tesseract = dynamic_cast<const TesseractOCR*>(&start);
     if (tesseract == nullptr) return {};
     return NestedPtr<Interface>(tesseract->text_weak.Lock(), nullptr);
-  }
-};
-
-static ImageArgument image_arg;
-static TextArgument text_arg;
+  };
+  return a;
+}();
 
 struct TesseractWidget;
+
+static void TesseractOCR_OnRun(const Runnable&, TesseractOCR& self, std::unique_ptr<RunTask>&);
+
+Runnable TesseractOCR::run("Run"sv,
+                            +[](TesseractOCR& obj) -> SyncState& { return obj.run_sync; },
+                            TesseractOCR_OnRun);
+
+NextArg TesseractOCR::next("Next"sv,
+                            +[](TesseractOCR& obj) -> NextState& { return obj.next_state; });
 
 TesseractOCR::TesseractOCR() {
   auto eng_traineddata = embedded::assets_eng_traineddata.content;
@@ -403,7 +398,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
         if (image_obj) {
           auto image_provider = image_obj->AsImageProvider();
           if (image_provider) {
-            new_image = image_provider->GetImage();
+            new_image = image_provider->GetImage(*image_obj);
             iris_target = image_obj->MyLocation()->position;
           }
         }
@@ -1095,13 +1090,12 @@ std::unique_ptr<ObjectToy> TesseractOCR::MakeToy(ui::Widget* parent) {
 void TesseractOCR::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
   if (LoopControl::Break == cb(image_arg)) return;
   if (LoopControl::Break == cb(text_arg)) return;
-  if (LoopControl::Break == cb(next_arg)) return;
+  if (LoopControl::Break == cb(next)) return;
   if (LoopControl::Break == cb(run)) return;
 }
 
-void TesseractOCR::Run::OnRun(std::unique_ptr<RunTask>&) {
+static void TesseractOCR_OnRun(const Runnable&, TesseractOCR& t, std::unique_ptr<RunTask>&) {
   ZoneScopedN("TesseractOCR");
-  auto& t = TesseractOCR();
   auto image_obj = image_arg.ObjectOrNull(t);
   auto text_obj = text_arg.ObjectOrNull(t);
 
@@ -1116,7 +1110,7 @@ void TesseractOCR::Run::OnRun(std::unique_ptr<RunTask>&) {
     return;
   }
 
-  auto image = image_provider->GetImage();
+  auto image = image_provider->GetImage(*image_obj);
   if (!image) {
     t.ReportError("No image available from source");
     return;
@@ -1149,7 +1143,7 @@ void TesseractOCR::Run::OnRun(std::unique_ptr<RunTask>&) {
     t.tesseract.SetRectangle(ocr_left, ocr_top, ocr_width, ocr_height);
 
     tesseract::ETEXT_DESC monitor;
-    monitor.cancel_this = this;
+    monitor.cancel_this = &t;
     monitor.progress_callback2 = [](tesseract::ETEXT_DESC* etext, int left, int right, int top,
                                     int bottom) {
       auto self = (struct TesseractOCR*)etext->cancel_this;

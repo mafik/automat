@@ -463,7 +463,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
   auto* parent_mw = ToyStore().FindOrNull(*root_board);
   if (!parent_mw) return;
   loc->object->Args([&](Argument& arg) {
-    float autoconnect_radius = arg.AutoconnectRadius();
+    float autoconnect_radius = arg.autoconnect_radius;
     if (autoconnect_radius <= 0) {
       return;
     }
@@ -539,7 +539,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
     auto& other_widget = other->ToyForObject();
     auto other_up = TransformBetween(other_widget, *parent_mw);
     other->object->Args([&](Argument& arg) {
-      float autoconnect_radius = arg.AutoconnectRadius();
+      float autoconnect_radius = arg.autoconnect_radius;
       if (autoconnect_radius <= 0) {
         return;
       }

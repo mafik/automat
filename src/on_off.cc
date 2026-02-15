@@ -1,4 +1,3 @@
-#pragma once
 // SPDX-FileCopyrightText: Copyright 2026 Automat Authors
 // SPDX-License-Identifier: MIT
 
@@ -9,8 +8,15 @@
 
 namespace automat {
 
-std::unique_ptr<ui::Widget> OnOff::MakeIcon(ui::Widget* parent) {
+static std::unique_ptr<ui::Widget> OnOff_MakeIcon(const Argument&, ui::Widget* parent) {
   return ui::MakeShapeWidget(parent, kPowerSVG, 0);
+}
+
+OnOff::OnOff(StrView name, Kind kind) : Syncable(name, kind) {
+  can_sync = [](const Syncable&, const Syncable& other) -> bool {
+    return other.kind >= Interface::kOnOff && other.kind <= Interface::kLastOnOff;
+  };
+  make_icon = OnOff_MakeIcon;
 }
 
 }  // namespace automat

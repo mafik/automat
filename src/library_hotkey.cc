@@ -29,6 +29,35 @@ using namespace automat::ui;
 
 namespace automat::library {
 
+// --- Static interface definitions ---
+
+NextArg HotKey::next("Next"sv, +[](HotKey& obj) -> NextState& { return obj.next_state; });
+
+OnOff HotKey::enabled(
+    "Enabled"sv, +[](HotKey& obj) -> SyncState& { return obj.enabled_sync; },
+    +[](const OnOff&, const HotKey& obj) -> bool { return obj.hotkey != nullptr; },
+    +[](const OnOff&, HotKey& hk) {
+      if (hk.hotkey) {
+        hk.hotkey->Release();
+      }
+      hk.hotkey = &root_widget->keyboard.RequestKeyGrab(hk, hk.key, hk.ctrl, hk.alt, hk.shift,
+                                                        hk.windows, [&](Status& status) {
+                                                          if (!OK(status)) {
+                                                            if (hk.hotkey) {
+                                                              hk.hotkey->Release();
+                                                            }
+                                                            ERROR << status;
+                                                          }
+                                                        });
+      hk.WakeToys();
+    },
+    +[](const OnOff&, HotKey& hk) {
+      if (hk.hotkey) {
+        hk.hotkey->Release();
+        hk.WakeToys();
+      }
+    });
+
 static constexpr float kCtrlKeyWidth = kBaseKeyWidth * 1.5;
 static constexpr float kSuperKeyWidth = kCtrlKeyWidth;
 static constexpr float kAltKeyWidth = kCtrlKeyWidth;
@@ -80,35 +109,8 @@ string_view HotKey::Name() const { return "HotKey"; }
 Ptr<Object> HotKey::Clone() const { return MAKE_PTR(HotKey, *this); }
 
 void HotKey::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
+  if (LoopControl::Break == cb(next)) return;
   if (LoopControl::Break == cb(enabled)) return;
-  if (LoopControl::Break == cb(next_arg)) return;
-}
-
-bool HotKey::Enabled::IsOn() const { return HotKey().hotkey != nullptr; }
-
-void HotKey::Enabled::OnTurnOn() {
-  auto& hk = HotKey();
-  if (hk.hotkey) {  // just a sanity check, we should never get On multiple times in a row
-    hk.hotkey->Release();
-  }
-  hk.hotkey = &root_widget->keyboard.RequestKeyGrab(hk, hk.key, hk.ctrl, hk.alt, hk.shift,
-                                                    hk.windows, [&](Status& status) {
-                                                      if (!OK(status)) {
-                                                        if (hk.hotkey) {
-                                                          hk.hotkey->Release();
-                                                        }
-                                                        ERROR << status;
-                                                      }
-                                                    });
-  hk.WakeToys();
-}
-
-void HotKey::Enabled::OnTurnOff() {
-  auto& hk = HotKey();
-  if (hk.hotkey) {
-    hk.hotkey->Release();
-    hk.WakeToys();
-  }
 }
 
 void HotKey::KeyGrabberKeyDown(ui::KeyGrab&) { ScheduleNext(*this); }
@@ -128,18 +130,18 @@ void HotKey::SerializeState(ObjectSerializer& writer) const {
   writer.Key("windows");
   writer.Bool(windows);
   writer.Key("enabled");
-  writer.Bool(enabled.IsOn());
+  writer.Bool(enabled.IsOn(*this));
 }
 
 bool HotKey::DeserializeKey(ObjectDeserializer& d, StrView keyName) {
   Status status;
-  bool was_on = enabled.IsOn();
+  bool was_on = enabled.IsOn(*this);
 
   // Helper lambda to temporarily disable hotkey, change setting, then re-enable if needed
   auto ModifySetting = [&](auto&& setter) {
-    if (was_on) enabled.OnTurnOff();
+    if (was_on) enabled.on_turn_off(enabled, *this);
     setter();
-    if (was_on) enabled.OnTurnOn();
+    if (was_on) enabled.on_turn_on(enabled, *this);
   };
 
   if (keyName == "key") {
@@ -160,9 +162,9 @@ bool HotKey::DeserializeKey(ObjectDeserializer& d, StrView keyName) {
     bool should_be_on = false;
     d.Get(should_be_on, status);
     if (should_be_on && !was_on) {
-      enabled.OnTurnOn();
+      enabled.on_turn_on(enabled, *this);
     } else if (!should_be_on && was_on) {
-      enabled.OnTurnOff();
+      enabled.on_turn_off(enabled, *this);
     }
   } else {
     return false;
@@ -194,7 +196,7 @@ struct HotKeyWidget : ObjectToy, ui::CaretOwner {
     auto hk = LockHotKey();
 
     power_button.reset(
-        new PowerButton(this, NestedWeakPtr<OnOff>(hk->AcquireWeakPtr(), &hk->enabled)));
+        new PowerButton(this, NestedWeakPtr<OnOff>(hk->AcquireWeakPtr(), &HotKey::enabled)));
     ctrl_button.reset(new KeyButton(this, "Ctrl", KeyColor(hk->ctrl), kCtrlKeyWidth));
     alt_button.reset(new KeyButton(this, "Alt", KeyColor(hk->alt), kAltKeyWidth));
     shift_button.reset(new KeyButton(this, "Shift", KeyColor(hk->shift), kShiftKeyWidth));
@@ -226,52 +228,52 @@ struct HotKeyWidget : ObjectToy, ui::CaretOwner {
 
     ctrl_button->activate = [this](ui::Pointer&) {
       if (auto hk = LockHotKey()) {
-        bool on = hk->enabled.IsOn();
+        bool on = HotKey::enabled.IsOn(*hk);
         if (on) {
-          hk->enabled.OnTurnOff();
+          HotKey::enabled.on_turn_off(HotKey::enabled, *hk);
         }
         hk->ctrl = !hk->ctrl;
         if (on) {
-          hk->enabled.OnTurnOn();
+          HotKey::enabled.on_turn_on(HotKey::enabled, *hk);
         }
         ctrl_button->fg = KeyColor(hk->ctrl);
       }
     };
     alt_button->activate = [this](ui::Pointer&) {
       if (auto hk = LockHotKey()) {
-        bool on = hk->enabled.IsOn();
+        bool on = HotKey::enabled.IsOn(*hk);
         if (on) {
-          hk->enabled.OnTurnOff();
+          HotKey::enabled.on_turn_off(HotKey::enabled, *hk);
         }
         hk->alt = !hk->alt;
         if (on) {
-          hk->enabled.OnTurnOn();
+          HotKey::enabled.on_turn_on(HotKey::enabled, *hk);
         }
         alt_button->fg = KeyColor(hk->alt);
       }
     };
     shift_button->activate = [this](ui::Pointer&) {
       if (auto hk = LockHotKey()) {
-        bool on = hk->enabled.IsOn();
+        bool on = HotKey::enabled.IsOn(*hk);
         if (on) {
-          hk->enabled.OnTurnOff();
+          HotKey::enabled.on_turn_off(HotKey::enabled, *hk);
         }
         hk->shift = !hk->shift;
         if (on) {
-          hk->enabled.OnTurnOn();
+          HotKey::enabled.on_turn_on(HotKey::enabled, *hk);
         }
         shift_button->fg = KeyColor(hk->shift);
       }
     };
     windows_button->activate = [this](ui::Pointer&) {
       if (auto hk = LockHotKey()) {
-        bool on = hk->enabled.IsOn();
+        bool on = HotKey::enabled.IsOn(*hk);
         if (on) {
-          hk->enabled.OnTurnOff();
+          HotKey::enabled.on_turn_off(HotKey::enabled, *hk);
         }
         hk->windows = !hk->windows;
         if (on) {
-          hk->enabled.OnTurnOn();
+          HotKey::enabled.on_turn_on(HotKey::enabled, *hk);
         }
         windows_button->fg = KeyColor(hk->windows);
       }
@@ -412,15 +414,15 @@ struct HotKeyWidget : ObjectToy, ui::CaretOwner {
   // CaretOwner - called when the new HotKey is selected by the user
   void KeyDown(ui::Caret&, ui::Key key) override {
     if (auto hk = LockHotKey()) {
-      bool on = hk->enabled.IsOn();
+      bool on = HotKey::enabled.IsOn(*hk);
       if (on) {
-        hk->enabled.OnTurnOff();
+        HotKey::enabled.on_turn_off(HotKey::enabled, *hk);
       }
       hotkey_selector->Release();
       hk->key = key.physical;
       shortcut_button->SetLabel(ToStr(key.physical));
       if (on) {
-        hk->enabled.OnTurnOn();
+        HotKey::enabled.on_turn_on(HotKey::enabled, *hk);
       }
     }
   }

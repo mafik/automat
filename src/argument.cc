@@ -5,6 +5,7 @@
 #include <cmath>
 
 #include "base.hh"
+#include "casting.hh"
 #include "drag_action.hh"
 #include "log.hh"
 #include "root_widget.hh"
@@ -15,10 +16,8 @@
 
 namespace automat {
 
-NextArg next_arg;
-
-std::unique_ptr<ui::Widget> Argument::MakeIcon(ui::Widget* parent) {
-  return ui::MakeShapeWidget(parent, kNextShape, "#ffffff"_color);
+std::unique_ptr<ui::Widget> Argument::MakeIcon(ui::Widget* parent) const {
+  return make_icon(*this, parent);
 }
 
 Object* Argument::ObjectOrNull(Object& start) const {
@@ -30,11 +29,11 @@ Object* Argument::ObjectOrNull(Object& start) const {
   return nullptr;
 }
 
-Object& Argument::ObjectOrMake(Object& start) {
+Object& Argument::ObjectOrMake(Object& start) const {
   if (auto* obj = ObjectOrNull(start)) {
     return *obj;
   }
-  auto proto = Prototype();
+  auto proto = prototype();
   Location* start_loc = start.here;
   auto board = start_loc->ParentAs<Board>();
   auto& loc = board->Create(*proto);
@@ -51,36 +50,35 @@ std::unique_ptr<ArgumentOf::Toy> ArgumentOf::MakeToy(ui::Widget* parent) {
   return std::make_unique<ui::ConnectionWidget>(parent, object, arg);
 }
 
-void NextArg::CanConnect(Object& start, Object& end_obj, Interface* end_iface,
-                         Status& status) const {
-  if (!start.AsSignalNext()) {
-    AppendErrorMessage(status) += "Next source must be a Runnable";
-  }
-  if (!dynamic_cast<Runnable*>(end_iface)) {
-    AppendErrorMessage(status) += "Next target must be a Runnable";
-  }
-}
+// --- NextArg implementation ---
 
-void NextArg::OnConnect(Object& start, Object* end_obj, Interface* end_iface) {
-  SignalNext* start_signal = start.AsSignalNext();
-  if (start_signal == nullptr) return;
-  if (end_obj) {
-    if (Runnable* end_runnable = dynamic_cast<Runnable*>(end_iface)) {
-      start_signal->next = NestedWeakPtr<Runnable>(end_obj->AcquireWeakPtr(), end_runnable);
+NextArg::NextArg(StrView name) : Argument(name, Interface::kNextArg) {
+  style = Style::Cable;
+  can_connect = [](const Argument&, Object& start, Object& end_obj, Interface* end_iface,
+                   Status& status) {
+    if (!dyn_cast_if_present<Runnable>(end_iface)) {
+      AppendErrorMessage(status) += "Next target must be a Runnable";
     }
-  } else {
-    start_signal->next = {};
-  }
-}
-
-NestedPtr<Interface> NextArg::Find(const Object& start) const {
-  if (auto* start_signal = const_cast<Object&>(start).AsSignalNext()) {
-    return start_signal->next.Lock();
-  } else {
-    ERROR_ONCE << start.Name()
-               << " is not a SignalNext - and can't be used as a source for NextArg";
-  }
-  return {};
+  };
+  on_connect = [](const Argument& arg, Object& start, Object* end_obj, Interface* end_iface) {
+    auto& next_arg = static_cast<const NextArg&>(arg);
+    auto& state = next_arg.get_next_state(start);
+    if (end_obj) {
+      if (Runnable* end_runnable = dyn_cast_if_present<Runnable>(end_iface)) {
+        state.next = NestedWeakPtr<Runnable>(end_obj->AcquireWeakPtr(), end_runnable);
+      }
+    } else {
+      state.next = {};
+    }
+  };
+  find = [](const Argument& arg, const Object& start) -> NestedPtr<Interface> {
+    auto& next_arg = static_cast<const NextArg&>(arg);
+    auto& state = next_arg.get_next_state(const_cast<Object&>(start));
+    return state.next.Lock();
+  };
+  make_icon = [](const Argument&, ui::Widget* parent) {
+    return ui::MakeShapeWidget(parent, kNextShape, "#ffffff"_color);
+  };
 }
 
 }  // namespace automat

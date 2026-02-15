@@ -11,7 +11,6 @@
 #include "library_instruction.hh"
 #include "machine_code.hh"
 #include "object.hh"
-#include "parent_ref.hh"
 #include "shared_or_weak.hh"
 #include "status.hh"
 
@@ -100,13 +99,9 @@ struct Assembler : Object, Container {
   using PrologueFn = uintptr_t (*)(void*);
   using Toy = AssemblerWidget;
 
-  struct Running : LongRunning {
-    StrView Name() const override { return "Running"sv; }
-
-    void OnCancel() override;
-
-    PARENT_REF(Assembler, running)
-  } running;
+  std::unique_ptr<RunTask> long_running_task;
+  SyncState running_sync;
+  static LongRunning running;
 
   Ptr<Object> Clone() const override;
   void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;

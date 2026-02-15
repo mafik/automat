@@ -10,6 +10,7 @@
 #include "../build/generated/embedded.hh"
 #include "automat.hh"
 #include "base.hh"
+#include "casting.hh"
 #include "control_flow.hh"
 #include "drag_action.hh"
 #include "font.hh"
@@ -196,7 +197,7 @@ struct TurnOnOption : TextOption {
   std::unique_ptr<Option> Clone() const override { return std::make_unique<TurnOnOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto ptr = weak.Lock()) {
-      ptr->TurnOn();
+      ptr->TurnOn(*ptr.Owner<Object>());
     }
     return nullptr;
   }
@@ -208,7 +209,7 @@ struct TurnOffOption : TextOption {
   std::unique_ptr<Option> Clone() const override { return std::make_unique<TurnOffOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto ptr = weak.Lock()) {
-      ptr->TurnOff();
+      ptr->TurnOff(*ptr.Owner<Object>());
     }
     return nullptr;
   }
@@ -292,7 +293,7 @@ struct UnsyncOption : TextOption {
   std::unique_ptr<Option> Clone() const override { return std::make_unique<UnsyncOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto syncable = weak.Lock()) {
-      syncable->Unsync();
+      syncable->Unsync(*syncable.Owner<Object>());
     }
     return nullptr;
   }
@@ -312,8 +313,9 @@ struct FieldOption : TextOption, OptionsProvider {
   }
   void VisitOptions(const OptionsVisitor& visitor) const override {
     if (auto syncable = syncable_weak.Lock()) {
-      if (auto* on_off = dynamic_cast<OnOff*>(syncable.Get())) {
-        if (on_off->IsOn()) {
+      auto* obj = syncable.Owner<Object>();
+      if (auto* on_off = dyn_cast<OnOff>(syncable.Get())) {
+        if (on_off->IsOn(*obj)) {
           TurnOffOption turn_off(NestedWeakPtr<OnOff>(syncable_weak.GetOwnerWeak(), on_off));
           visitor(turn_off);
         } else {
@@ -323,7 +325,8 @@ struct FieldOption : TextOption, OptionsProvider {
       }
       SyncOption sync(syncable);
       visitor(sync);
-      if (!syncable->end.IsExpired()) {
+      auto& state = syncable->get_sync_state(*obj);
+      if (!state.end.IsExpired()) {
         UnsyncOption unsync(syncable);
         visitor(unsync);
       }
@@ -352,7 +355,7 @@ void ObjectToy::VisitOptions(const OptionsVisitor& visitor) const {
       }
       if (auto obj = LockOwner<Object>()) {
         obj->Interfaces([&](Interface& iface) {
-          if (auto* syncable = dynamic_cast<Syncable*>(&iface)) {
+          if (auto* syncable = dyn_cast<Syncable>(&iface)) {
             FieldOption field_option{NestedWeakPtr<Syncable>(owner.Copy<Object>(), syncable)};
             visitor(field_option);
           }
@@ -474,7 +477,7 @@ template <typename T>
 static T* FindInterface(Object& obj) {
   T* result = nullptr;
   obj.Interfaces([&](Interface& iface) {
-    result = dynamic_cast<T*>(&iface);
+    result = dyn_cast<T>(&iface);
     return result ? LoopControl::Break : LoopControl::Continue;
   });
   return result;
@@ -482,12 +485,11 @@ static T* FindInterface(Object& obj) {
 
 LongRunning* Object::AsLongRunning() { return FindInterface<LongRunning>(*this); }
 Runnable* Object::AsRunnable() { return FindInterface<Runnable>(*this); }
-SignalNext* Object::AsSignalNext() { return FindInterface<SignalNext>(*this); }
 OnOff* Object::AsOnOff() { return FindInterface<OnOff>(*this); }
 
 void Object::Args(const std::function<void(Argument&)>& cb) {
   Interfaces([&](Interface& iface) {
-    if (Argument* arg = dynamic_cast<Argument*>(&iface)) {
+    if (Argument* arg = dyn_cast<Argument>(&iface)) {
       cb(*arg);
     }
     return LoopControl::Continue;

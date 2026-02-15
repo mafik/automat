@@ -150,7 +150,7 @@ Assembler::Assembler() {
   }
 }
 
-Assembler::~Assembler() {}
+Assembler::~Assembler() { running.OnLongRunningDestruct(*this); }
 
 static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now) {
   if (assembler.mc_controller == nullptr) {
@@ -170,7 +170,7 @@ static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now
     }
     assembler.last_state_refresh = now;
   }
-  if (assembler.running.IsRunning()) {
+  if (Assembler::running.IsRunning(assembler)) {
     return animation::Animating;
   } else {
     return animation::Finished;
@@ -230,7 +230,8 @@ void UpdateCode(automat::mc::Controller& controller,
     if (loc) {
       auto FindInstruction = [obj_raw, &instructions, n](const automat::Argument& arg) -> int {
         if (auto target = arg.Find(*obj_raw)) {
-          if (auto* to_inst = dynamic_cast<automat::library::Instruction*>(target.Get())) {
+          if (auto* to_inst =
+                  dynamic_cast<automat::library::Instruction*>(target.Owner<Object>())) {
             // Find the instruction in our sorted list
             for (int j = 0; j < n; ++j) {
               if (instructions[j].get() == to_inst) {
@@ -241,7 +242,7 @@ void UpdateCode(automat::mc::Controller& controller,
         }
         return -1;
       };
-      next = FindInstruction(next_arg);
+      next = FindInstruction(library::next_instruction_arg);
       jump = FindInstruction(library::jump_arg);
     }
     program[i].next = next;
@@ -288,9 +289,21 @@ void Assembler::UpdateMachineCode() {
   }
 }
 
+LongRunning Assembler::running(
+    "Running"sv, +[](Assembler& obj) -> SyncState& { return obj.running_sync; },
+    +[](Assembler& obj) -> std::unique_ptr<RunTask>& { return obj.long_running_task; },
+    +[](const LongRunning&, Assembler& as) {
+      Status status;
+      as.mc_controller->Cancel(status);
+      if (!OK(status)) {
+        ERROR << "Failed to cancel Assembler: " << status;
+        return;
+      }
+    });
+
 void Assembler::RunMachineCode(library::Instruction* entry_point,
                                std::unique_ptr<RunTask>&& run_task) {
-  running.BeginLongRunning(std::move(run_task));
+  Assembler::running.BeginLongRunning(*this, std::move(run_task));
 
   Status status;
   auto inst = entry_point->ToMC();
@@ -298,16 +311,6 @@ void Assembler::RunMachineCode(library::Instruction* entry_point,
   mc_controller->Execute(inst, status);
   if (!OK(status)) {
     ERROR << "Failed to execute Assembler: " << status;
-  }
-}
-
-void Assembler::Running::OnCancel() {
-  Status status;
-  auto& as = Assembler();
-  as.mc_controller->Cancel(status);
-  if (!OK(status)) {
-    ERROR << "Failed to cancel Assembler: " << status;
-    return;
   }
 }
 
@@ -742,40 +745,35 @@ Register::Register(WeakPtr<Assembler> assembler_weak, int register_index)
 
 Ptr<Object> Register::Clone() const { return MAKE_PTR(Register, assembler_weak, register_index); }
 
-struct RegisterAssemblerArgument : Argument {
-  StrView Name() const override { return "Reg's Assembler"sv; }
-
-  float AutoconnectRadius() const override { return INFINITY; }
-  SkColor Tint() const override { return "#ff0000"_color; }
-  Style GetStyle() const override { return Style::Spotlight; }
-
-  void CanConnect(Object& start, Object& end_obj, Interface* end_iface,
-                  Status& status) const override {
+static Argument register_assembler_arg = [] {
+  Argument a("Reg's Assembler"sv);
+  a.autoconnect_radius = INFINITY;
+  a.tint = "#ff0000"_color;
+  a.style = Argument::Style::Spotlight;
+  a.can_connect = [](const Argument&, Object&, Object& end_obj, Interface* end_iface,
+                     Status& status) {
     if (end_iface != nullptr || !dynamic_cast<Assembler*>(&end_obj)) {
       AppendErrorMessage(status) += "Must connect to an Assembler";
     }
-  }
-
-  void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override {
-    if (auto* reg = dynamic_cast<Register*>(&start)) {
-      if (end_obj) {
-        if (auto* assembler = dynamic_cast<Assembler*>(end_obj)) {
-          reg->assembler_weak = assembler->AcquireWeakPtr();
-        }
-      } else {
-        reg->assembler_weak = {};
+  };
+  a.on_connect = [](const Argument&, Object& start, Object* end_obj, Interface*) {
+    auto* reg = dynamic_cast<Register*>(&start);
+    if (!reg) return;
+    if (end_obj) {
+      if (auto* assembler = dynamic_cast<Assembler*>(end_obj)) {
+        reg->assembler_weak = assembler->AcquireWeakPtr();
       }
+    } else {
+      reg->assembler_weak = {};
     }
-  }
-
-  NestedPtr<Interface> Find(const Object& start) const override {
+  };
+  a.find = [](const Argument&, const Object& start) -> NestedPtr<Interface> {
     auto* reg = dynamic_cast<const Register*>(&start);
-    if (reg == nullptr) return {};
+    if (!reg) return {};
     return NestedPtr<Interface>(reg->assembler_weak.Lock(), nullptr);
-  }
-};
-
-static RegisterAssemblerArgument register_assembler_arg;
+  };
+  return a;
+}();
 
 void Register::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
   if (LoopControl::Break == cb(register_assembler_arg)) return;

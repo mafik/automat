@@ -41,9 +41,28 @@ Rect FlipFlopRect() {
   return Rect::MakeCornerZero(FlipFlopColor().width(), FlipFlopColor().height());
 }
 
+Runnable FlipFlop::flip(
+    "Flip"sv, +[](FlipFlop& obj) -> SyncState& { return obj.flip_sync; },
+    +[](const Runnable&, FlipFlop& self, std::unique_ptr<RunTask>&) {
+      ZoneScopedN("FlipFlop");
+      FlipFlop::on_off.Toggle(self);
+    });
+
+OnOff FlipFlop::on_off(
+    "State"sv, +[](FlipFlop& obj) -> SyncState& { return obj.on_off_sync; },
+    +[](const OnOff&, const FlipFlop& obj) -> bool { return obj.current_state; },
+    +[](const OnOff&, FlipFlop& self) {
+      self.current_state = true;
+      self.WakeToys();
+    },
+    +[](const OnOff&, FlipFlop& self) {
+      self.current_state = false;
+      self.WakeToys();
+    });
+
 FlipFlop::FlipFlop() {}
 
-FlipFlop::~FlipFlop() { on_off.Unsync(); }
+FlipFlop::~FlipFlop() { on_off.Unsync(*this); }
 
 string_view FlipFlop::Name() const { return "Flip-Flop"; }
 
@@ -51,23 +70,6 @@ Ptr<Object> FlipFlop::Clone() const {
   auto ret = MAKE_PTR(FlipFlop);
   ret->current_state = current_state;
   return ret;
-}
-
-void FlipFlop::Flip::OnRun(std::unique_ptr<RunTask>& task) {
-  ZoneScopedN("FlipFlop");
-  FlipFlop().on_off.Toggle();
-}
-
-void FlipFlop::State::OnTurnOn() {
-  auto& flip_flop = FlipFlop();
-  flip_flop.current_state = true;
-  flip_flop.WakeToys();
-}
-
-void FlipFlop::State::OnTurnOff() {
-  auto& flip_flop = FlipFlop();
-  flip_flop.current_state = false;
-  flip_flop.WakeToys();
 }
 
 void FlipFlop::SerializeState(ObjectSerializer& writer) const {
@@ -122,7 +124,7 @@ struct FlipFlopButton : ui::ToggleButton {
     static_cast<YingYangButton*>(this->off.get())->on_click =
         static_cast<YingYangButton*>(this->on.get())->on_click = [this](ui::Pointer&) {
           if (auto flip_flop_ptr = this->flip_flop.Lock()) {
-            flip_flop_ptr->on_off.Toggle();
+            FlipFlop::on_off.Toggle(*flip_flop_ptr);
           }
         };
   }

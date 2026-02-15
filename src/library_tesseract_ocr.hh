@@ -6,7 +6,6 @@
 #include <tesseract/baseapi.h>
 
 #include "base.hh"
-#include "parent_ref.hh"
 #include "str.hh"
 
 namespace automat::library {
@@ -15,11 +14,10 @@ struct TesseractOCR : public Object {
   mutable std::mutex mutex;
   Str ocr_text = "";
 
-  struct Run : Runnable {
-    void OnRun(std::unique_ptr<RunTask>&) override;
-
-    PARENT_REF(TesseractOCR, run)
-  } run;
+  SyncState run_sync;
+  NextState next_state;
+  static Runnable run;
+  static NextArg next;
 
   // Guards access to the status variables
   std::mutex status_mutex;

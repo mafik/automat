@@ -14,6 +14,7 @@
 #include "animation.hh"
 #include "argument.hh"
 #include "automat.hh"
+#include "casting.hh"
 #include "black_hole.hh"
 #include "drag_action.hh"
 #include "embedded.hh"
@@ -295,7 +296,7 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
       // Make sure that each argument has a toy
       o.Args([&](Argument& arg) {
         Toy* arg_toy = nullptr;
-        if (auto* syncable = dynamic_cast<Syncable*>(&arg)) {
+        if (auto* syncable = dyn_cast<Syncable>(&arg)) {
           auto member_of = SyncMemberOf{o, *syncable};
           arg_toy = &toys.FindOrMake(member_of, this);
         } else {

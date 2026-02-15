@@ -4,11 +4,10 @@
 
 #include "base.hh"
 #include "keyboard.hh"
-#include "parent_ref.hh"
 
 namespace automat::library {
 
-struct HotKey : Object, SignalNext, ui::KeyGrabber {
+struct HotKey : Object, ui::KeyGrabber {
   ui::AnsiKey key = ui::AnsiKey::F11;
   bool ctrl = true;
   bool alt = false;
@@ -18,14 +17,10 @@ struct HotKey : Object, SignalNext, ui::KeyGrabber {
   // This is used to get hotkey events
   ui::KeyGrab* hotkey = nullptr;
 
-  struct Enabled : OnOff {
-    StrView Name() const override { return "Enabled"sv; }
-    bool IsOn() const override;
-    void OnTurnOn() override;
-    void OnTurnOff() override;
-
-    PARENT_REF(HotKey, enabled)
-  } enabled;
+  SyncState enabled_sync;
+  NextState next_state;
+  static OnOff enabled;
+  static NextArg next;
 
   HotKey();
   HotKey(const HotKey&);
@@ -33,7 +28,6 @@ struct HotKey : Object, SignalNext, ui::KeyGrabber {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
-  SignalNext* AsSignalNext() override { return this; }
 
   void ReleaseKeyGrab(ui::KeyGrab&) override;
   void KeyGrabberKeyDown(ui::KeyGrab&) override;

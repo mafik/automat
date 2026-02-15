@@ -6,7 +6,6 @@
 #include <memory>
 
 #include "base.hh"
-#include "parent_ref.hh"
 #include "pointer.hh"
 #include "run_button.hh"
 #include "text_widget.hh"
@@ -35,12 +34,10 @@ struct TrackBase : Object {
 
 struct OnOffTrack : TrackBase {
   time::Duration on_at = time::kDurationGuard;
-  struct MyOnOff : OnOff {
-    bool IsOn() const override;
-    void OnTurnOn() override {}
-    void OnTurnOff() override {}
-    PARENT_REF(OnOffTrack, on_off)
-  } on_off;
+
+  SyncState on_off_sync;
+  static OnOff on_off;
+
   string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
@@ -84,46 +81,29 @@ struct Float64Track : TrackBase {
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };
 
-struct TrackArgument : InlineArgument {
+struct TrackArgument : Argument {
   Ptr<TrackBase> track;
-  Str name;
+  NestedWeakPtr<Interface> end;
 
   TrackArgument(StrView name);
-
-  SkColor Tint() const override { return "#17aeb7"_color; }
-  SkColor Light() const override { return "#17aeb7"_color; }
-
-  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
-    return std::make_unique<TextWidget>(parent, name);
-  }
-  StrView Name() const override { return name; }
-
-  void CanConnect(Object& start, Object& end_obj, Interface* end_iface,
-                  Status& status) const override;
 };
 
 // Currently Timeline pauses at end which is consistent with standard media player behavour.
 // This is fine for MVP but in the future, timeline should keep playing (stuck at the end).
 // The user should be able to connect the "next" connection to the "jump to start" so that it loops
 // (or stops).
-struct Timeline : Object, SignalNext, TimerNotificationReceiver {
+struct Timeline : Object, TimerNotificationReceiver {
   std::mutex mutex;
 
-  struct Run : Runnable {
-    StrView Name() const override { return "Run"sv; }
+  std::unique_ptr<RunTask> long_running_task;
 
-    void OnRun(std::unique_ptr<RunTask>&) override;
+  SyncState run_sync;
+  SyncState running_sync;
+  NextState next_state;
 
-    PARENT_REF(Timeline, run)
-  } run;
-
-  struct Running : LongRunning {
-    StrView Name() const override { return "Running"sv; }
-
-    void OnCancel() override;
-
-    PARENT_REF(Timeline, running)
-  } running;
+  static Runnable run;
+  static LongRunning running;
+  static NextArg next;
 
   Vec<std::unique_ptr<TrackArgument>> tracks;
 
@@ -158,7 +138,6 @@ struct Timeline : Object, SignalNext, TimerNotificationReceiver {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
-  SignalNext* AsSignalNext() override { return this; }
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   OnOffTrack& AddOnOffTrack(StrView name);
   Vec2Track& AddVec2Track(StrView name);

@@ -11,6 +11,7 @@
 #include "animation.hh"
 #include "argument.hh"
 #include "automat.hh"
+#include "casting.hh"
 #include "embedded.hh"
 #include "global_resources.hh"
 #include "log.hh"
@@ -23,15 +24,87 @@
 
 namespace automat {
 
-void Syncable::Unsync() {
-  auto gear = end.LockAs<Gear>();
+// --- Syncable constructor ---
+
+Syncable::Syncable(StrView name, Kind kind) : Argument(name, kind) {
+  style = Style::Invisible;
+  can_connect = [](const Argument& arg, Object& start, Object& end_obj, Interface* end_iface,
+                   Status& status) {
+    auto& syncable = static_cast<const Syncable&>(arg);
+    if (auto* other = dyn_cast_if_present<Syncable>(end_iface)) {
+      if (syncable.can_sync && syncable.can_sync(syncable, *other)) {
+        return;
+      } else {
+        AppendErrorMessage(status) += "Can only connect to compatible Syncable";
+      }
+    }
+    if (auto gear = dynamic_cast<Gear*>(&end_obj)) {
+      auto lock = std::shared_lock(gear->mutex);
+      if (gear->members.empty()) {
+        return;
+      } else {
+        auto member = gear->members.front().weak.Lock();
+        if (member && syncable.can_sync && syncable.can_sync(syncable, *member)) {
+          return;
+        } else {
+          AppendErrorMessage(status) += "Wrong type of Gear";
+        }
+      }
+    }
+    AppendErrorMessage(status) += "Can only connect to similar parts";
+  };
+  on_connect = [](const Argument& arg, Object& start, Object* end_obj, Interface* end_iface) {
+    auto& syncable = const_cast<Syncable&>(static_cast<const Syncable&>(arg));
+    auto& state = syncable.get_sync_state(start);
+
+    if (end_obj) {
+      state.end = NestedWeakPtr<Interface>(end_obj->AcquireWeakPtr(), end_iface);
+    } else {
+      state.end = {};
+    }
+
+    if (!end_obj) return;
+
+    auto* target_syncable = dyn_cast_if_present<Syncable>(end_iface);
+    if (target_syncable) {
+      auto sync_block = FindGearOrNull(*end_obj, *target_syncable);
+      if (sync_block == nullptr) {
+        sync_block = FindGearOrMake(start, syncable);
+        auto& loc = root_board->Insert(sync_block);
+        loc.position = (end_obj->here->position + start.here->position) / 2;
+        loc.ForEachToy([](ui::RootWidget&, Toy& toy) {
+          static_cast<LocationWidget&>(toy).position_vel = Vec2(0, 1);
+        });
+      }
+      sync_block->FullSync(start, syncable);
+      sync_block->FullSync(*end_obj, *target_syncable);
+      return;
+    }
+    auto* gear = dynamic_cast<Gear*>(end_obj);
+    if (gear) {
+      gear->FullSync(start, syncable);
+    }
+  };
+  find = [](const Argument& arg, const Object& start) -> NestedPtr<Interface> {
+    auto& syncable = static_cast<const Syncable&>(arg);
+    auto& state = syncable.get_sync_state(const_cast<Object&>(start));
+    return state.end.Lock();
+  };
+}
+
+// --- Syncable::Unsync ---
+
+void SyncState::Unsync(Object& self, Syncable& syncable) {
+  auto gear = end.OwnerLockAs<Gear>();
   if (!gear) return;
   auto lock = std::unique_lock(gear->mutex);
 
   auto& members = gear->members;
-  for (int i = 0; i < members.size(); ++i) {
-    auto* member = members[i].weak.GetUnsafe();
-    if (member == this) {
+  for (int i = 0; i < (int)members.size(); ++i) {
+    // Compare both the interface pointer and the owner
+    auto* member_iface = members[i].weak.GetUnsafe();
+    auto* member_owner = members[i].weak.template OwnerUnsafe<Object>();
+    if (member_iface == &syncable && member_owner == &self) {
       members.erase(members.begin() + i);
       break;
     }
@@ -39,91 +112,113 @@ void Syncable::Unsync() {
 
   source = false;
   end.Reset();
-  OnUnsync();
+  if (syncable.on_unsync) syncable.on_unsync(syncable, self);
 }
 
-Ptr<Gear> FindGearOrMake(NestedPtr<Syncable>& source) {
-  auto sync_block = source->end.OwnerLockAs<Gear>();
+void Syncable::Unsync(Object& self) {
+  auto& state = get_sync_state(self);
+  state.Unsync(self, *this);
+}
+
+// --- FindGearOrMake / FindGearOrNull ---
+
+Ptr<Gear> FindGearOrMake(Object& source_obj, Syncable& source) {
+  auto& state = source.get_sync_state(source_obj);
+  auto sync_block = state.end.OwnerLockAs<Gear>();
   if (!sync_block) {
     sync_block = MAKE_PTR(Gear);
-    sync_block->AddSource(source);
+    sync_block->AddSource(source_obj, source);
   }
   return sync_block;
 }
 
-Ptr<Gear> FindGearOrNull(NestedPtr<Syncable>& source) {
-  auto sync_block = source->end.OwnerLockAs<Gear>();
+Ptr<Gear> FindGearOrNull(Object& source_obj, Syncable& source) {
+  auto& state = source.get_sync_state(source_obj);
+  auto sync_block = state.end.OwnerLockAs<Gear>();
   if (!sync_block) {
     return nullptr;
   }
   return sync_block;
 }
 
+// --- Gear methods ---
+
 Gear::~Gear() {
   auto lock = std::unique_lock(mutex);
   while (!members.empty()) {
-    if (auto member = members.back().weak.Lock()) {
-      if (member->source) {
-        member->source = false;
-        member->end.Reset();
-        member->OnUnsync();
+    auto& back = members.back();
+    if (auto locked = back.weak.Lock()) {
+      auto* syncable = locked.Get();
+      auto* owner = locked.Owner<Object>();
+      auto& state = syncable->get_sync_state(*owner);
+      if (state.source) {
+        state.source = false;
+        state.end.Reset();
+        if (syncable->on_unsync) syncable->on_unsync(*syncable, *owner);
       }
     }
     members.pop_back();
   }
 }
 
-// Tells that this Syncable will receive notifications (receive-only sync)
-void Gear::AddSink(NestedPtr<Syncable>& sink) {
+void Gear::AddSink(Object& obj, Syncable& syncable) {
   auto guard = std::unique_lock(mutex);
-  for (int i = 0; i < members.size(); ++i) {
-    if (members[i].weak == sink) {
+  NestedWeakPtr<Syncable> weak(obj.AcquireWeakPtr(), &syncable);
+  for (int i = 0; i < (int)members.size(); ++i) {
+    if (members[i].weak == weak) {
       members[i].sink = true;
       return;
     }
   }
-  members.emplace_back(sink, true);
+  members.emplace_back(std::move(weak), true);
 }
 
-// Tells that this Syncable is the source of activity / notifications (notify-only sync)
-void Gear::AddSource(NestedPtr<Syncable>& source) {
-  auto old_sync_block = source->end.LockAs<Gear>();
-  bool was_source = source->source;
+void Gear::AddSource(Object& obj, Syncable& syncable) {
+  auto& state = syncable.get_sync_state(obj);
+  auto old_sync_block = state.end.OwnerLockAs<Gear>();
+  bool was_source = state.source;
   if (old_sync_block.Get() != this) {
-    source->Connect(*source.Owner<Object>(), *this);
+    syncable.Connect(obj, *this);
     if (old_sync_block) {
       while (!old_sync_block->members.empty()) {
         // stealing all of the members from the old gear
         members.emplace_back(old_sync_block->members.back());
         old_sync_block->members.pop_back();
 
-        // redirecting the members "sync" to this gear
-        members.back().weak.Lock()->end =
-            NestedWeakPtr<Interface>(AcquireWeakPtr<Object>(), nullptr);
+        // redirecting the members' sync state to this gear
+        if (auto locked = members.back().weak.Lock()) {
+          auto* member_syncable = locked.Get();
+          auto* member_owner = locked.Owner<Object>();
+          auto& member_state = member_syncable->get_sync_state(*member_owner);
+          member_state.end = NestedWeakPtr<Interface>(AcquireWeakPtr<Object>(), nullptr);
+        }
       }
     } else {
+      NestedWeakPtr<Syncable> weak(obj.AcquireWeakPtr(), &syncable);
       bool found = false;
-      for (int i = 0; i < members.size(); ++i) {
-        if (members[i].weak == source) {
+      for (int i = 0; i < (int)members.size(); ++i) {
+        if (members[i].weak == weak) {
           found = true;
           break;
         }
       }
       if (!found) {
-        members.emplace_back(source, false);
+        members.emplace_back(std::move(weak), false);
       }
     }
   }
   if (!was_source) {
-    source->source = true;
-    source->OnSync();
+    state.source = true;
+    if (syncable.on_sync) syncable.on_sync(syncable, obj);
   }
 }
 
-void Gear::FullSync(NestedPtr<Syncable>& syncable) {
-  AddSink(syncable);
-  AddSource(syncable);
+void Gear::FullSync(Object& obj, Syncable& syncable) {
+  AddSink(obj, syncable);
+  AddSource(obj, syncable);
 }
+
+// --- Gear rendering ---
 
 constexpr float kPrimaryGearRadius = 9_mm;
 constexpr float kSecondaryGearRadius = 6_mm;
@@ -208,12 +303,13 @@ animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
   auto& toy_store = ToyStore();
 
   // Check if the object of this connection still exists.
-  auto owner = LockOwner();
-  if (!owner) return animation::Finished;
+  auto owner_obj = LockOwner<Object>();
+  if (!owner_obj) return animation::Finished;
 
-  // Find the gear via the syncable's end pointer
-  auto* syncable = dynamic_cast<Syncable*>(iface);
-  auto gear = syncable->end.LockAs<Gear>();
+  // Find the gear via the syncable's sync state
+  auto* syncable = static_cast<Syncable*>(iface);
+  auto& state = syncable->get_sync_state(*owner_obj);
+  auto gear = state.end.OwnerLockAs<Gear>();
   if (!gear) return animation::Finished;
 
   // Find the gear widget
@@ -221,8 +317,6 @@ animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
   if (!gear_widget) return animation::Finished;
 
   // Find the owner object widget
-  auto owner_obj = LockOwner<Object>();
-  if (!owner_obj) return animation::Finished;
   auto* owner_widget = toy_store.FindOrNull(*owner_obj);
   if (!owner_widget) return animation::Finished;
 
@@ -293,63 +387,7 @@ std::unique_ptr<SyncConnectionWidget> SyncMemberOf::MakeToy(ui::Widget* parent) 
   return std::make_unique<SyncConnectionWidget>(parent, object, syncable);
 }
 
-void Syncable::CanConnect(Object& start, Object& end_obj, Interface* end_iface,
-                          Status& status) const {
-  if (auto* other = dynamic_cast<Syncable*>(end_iface)) {
-    if (CanSync(*other)) {
-      return;
-    } else {
-      auto& msg = AppendErrorMessage(status);
-      msg += "Can only connect to ";
-      msg += typeid(this).name();
-    }
-  }
-  if (auto gear = dynamic_cast<Gear*>(&end_obj)) {
-    auto lock = std::shared_lock(gear->mutex);
-    if (gear->members.empty()) {
-      return;
-    } else {
-      auto member = gear->members.front().weak.Lock();
-      if (CanSync(*member)) {
-        return;
-      } else {
-        auto& msg = AppendErrorMessage(status);
-        msg += "Wrong type of Gear ";
-        msg += typeid(this).name();
-      }
-    }
-  }
-  AppendErrorMessage(status) += "Can only connect to similar parts";
-}
-
-void Syncable::OnConnect(Object& start, Object* end_obj, Interface* end_iface) {
-  InlineArgument::OnConnect(start, end_obj, end_iface);
-
-  if (!end_obj) return;
-
-  auto* target_syncable = dynamic_cast<Syncable*>(end_iface);
-  if (target_syncable) {
-    NestedPtr<Syncable> syncable{start.AcquirePtr(), this};
-    NestedPtr<Syncable> target{end_obj->AcquirePtr(), target_syncable};
-    auto sync_block = FindGearOrNull(target);
-    if (sync_block == nullptr) {
-      sync_block = FindGearOrMake(syncable);
-      auto& loc = root_board->Insert(sync_block);
-      loc.position = (end_obj->here->position + start.here->position) / 2;
-      loc.ForEachToy([](ui::RootWidget&, Toy& toy) {
-        static_cast<LocationWidget&>(toy).position_vel = Vec2(0, 1);
-      });
-    }
-    sync_block->FullSync(syncable);
-    sync_block->FullSync(target);
-    return;
-  }
-  auto* gear = dynamic_cast<Gear*>(end_iface);
-  if (gear) {
-    NestedPtr<Syncable> syncable{start.AcquirePtr(), this};
-    gear->FullSync(syncable);
-  }
-}
+// --- Gear serialization ---
 
 void Gear::SerializeState(ObjectSerializer& writer) const {
   writer.Key("members");
@@ -375,9 +413,10 @@ bool Gear::DeserializeKey(ObjectDeserializer& d, StrView key) {
       }
       if (!is_sink) continue;
       NestedPtr<Interface> target = d.LookupInterface(member_name);
-      if (auto syncable = target.DynamicCast<Syncable>()) {
-        AddSink(syncable);
-        AddSource(syncable);
+      if (auto* syncable = dyn_cast_if_present<Syncable>(target.Get())) {
+        auto* owner = target.Owner<Object>();
+        AddSink(*owner, *syncable);
+        AddSource(*owner, *syncable);
       }
     }
     return true;

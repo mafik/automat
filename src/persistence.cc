@@ -8,6 +8,7 @@
 
 #include "argument.hh"
 #include "automat.hh"
+#include "casting.hh"
 #include "root_widget.hh"
 #include "status.hh"
 #include "virtual_fs.hh"
@@ -110,7 +111,7 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
           } else if (field == "links") {
             // Deserialize argument connections
             for (auto& arg_name : ObjectView(d, status)) {
-              Argument* from_arg = dynamic_cast<Argument*>(object->InterfaceFromName(arg_name));
+              Argument* from_arg = dyn_cast_if_present<Argument>(object->InterfaceFromName(arg_name));
               if (from_arg) {
                 Str to_name;
                 d.Get(to_name, status);

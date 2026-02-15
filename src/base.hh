@@ -51,107 +51,104 @@ struct Location;
 
 // Interface for objects that can run long running jobs.
 //
-// Destructors of derived classes should call OnLongRunningDestruct() to ensure that the long
-// running job is cancelled. This must be done by the derived class because ~LongRunning shouldn't
-// invoke abstract virtual functions (because derived class data has already been destroyed).
+// Object destructors should call OnLongRunningDestruct(self) to ensure that the long
+// running job is cancelled.
 struct LongRunning : OnOff {
-  std::unique_ptr<RunTask> long_running_task;
+  static bool classof(const Interface* i) { return i->kind == Interface::kLongRunning; }
 
-  virtual ~LongRunning() {
-    if (IsRunning()) {
-      ERROR << "Instance of the LongRunning interface didn't call OnLongRunningDestruct()";
-    }
+  // Function pointer for cancellation behavior.
+  void (*on_cancel)(const LongRunning&, Object&) = nullptr;
+
+  // Function pointer to access the per-Object task storage.
+  std::unique_ptr<RunTask>& (*get_task)(Object&) = nullptr;
+
+  LongRunning(StrView name);
+
+  template <typename T>
+  LongRunning(StrView name, SyncState& (*get)(T&),
+              std::unique_ptr<RunTask>& (*get_task_fn)(T&),
+              void (*on_cancel_fn)(const LongRunning&, T&) = nullptr)
+      : LongRunning(name) {
+    get_sync_state = reinterpret_cast<SyncState& (*)(Object&)>(get);
+    get_task = reinterpret_cast<std::unique_ptr<RunTask>& (*)(Object&)>(get_task_fn);
+    on_cancel = reinterpret_cast<void (*)(const LongRunning&, Object&)>(on_cancel_fn);
   }
 
-  void OnLongRunningDestruct() {
-    if (IsRunning()) {
-      Cancel();
+  void OnLongRunningDestruct(Object& self) const {
+    if (IsRunning(self)) {
+      Cancel(self);
     }
   }
-
-  // Implement this to implement cancellation of long running jobs.
-  //
-  // May be called from arbitrary thread.
-  virtual void OnCancel() = 0;
-
-  // Override this to find the object that's supposed to be executed
-  virtual Object* OnFindRunnable() { return dynamic_cast<Object*>(this); }
 
   // Call this to cancel the long running job.
-  void Cancel() {
-    if (long_running_task == nullptr) {
+  void Cancel(Object& self) const {
+    auto& task = get_task(self);
+    if (task == nullptr) {
       ERROR << "LongRunning::Cancel called without a long_running_task";
+      return;
     }
-    OnCancel();
-    long_running_task.reset();
-    NotifyTurnedOff();
+    if (on_cancel) on_cancel(*this, self);
+    task.reset();
+    NotifyTurnedOff(self);
   }
 
-  bool IsRunning() const { return long_running_task != nullptr; }
+  bool IsRunning(const Object& self) const {
+    return get_task ? get_task(const_cast<Object&>(self)) != nullptr : false;
+  }
 
   // Called from arbitrary thread by the object when it finishes execution.
-  //
-  // After this call, the object is free to release the memory related to this LongRunning instance
-  // because its not going to be used again.
-  void Done(Object& object);
+  void Done(Object& self) const;
 
-  void BeginLongRunning(std::unique_ptr<RunTask>&& task) {
-    long_running_task = std::move(task);
-    NotifyTurnedOn();
+  void BeginLongRunning(Object& self, std::unique_ptr<RunTask>&& task) const {
+    get_task(self) = std::move(task);
+    NotifyTurnedOn(self);
   }
-
-  bool IsOn() const override { return IsRunning(); }
-
- protected:
-  void OnTurnOn() override;
-  void OnTurnOff() override { Cancel(); }
 };
 
 struct Runnable;
 
-struct SignalNext {
-  NestedWeakPtr<Runnable> next;
-};
+struct Runnable : Syncable {
+  static bool classof(const Interface* i) { return i->kind == Interface::kRunnable; }
 
-struct Runnable : Syncable, SignalNext {
-  // Derived classes should override this method to implement their behavior.
-  //
-  // If an object must use the CPU for some computation it can stay busy as long as it needs to.
-  // However if it's doing something in the background (like waiting for external resource) then it
-  // should call BeginLongRunning with the run_task. Once it's done it should call Done.
-  //
-  // The RunTask is being passed here to make it possible to "steal" the task from the scheduler and
-  // pass it to BeginLongRunning.
-  virtual void OnRun(std::unique_ptr<RunTask>& run_task) = 0;
+  // Function pointer for run behavior.
+  void (*on_run)(const Runnable&, Object&, std::unique_ptr<RunTask>&) = nullptr;
+
+  Runnable(StrView name);
+
+  template <typename T>
+  Runnable(StrView name, SyncState& (*get)(T&),
+           void (*on_run_fn)(const Runnable&, T&, std::unique_ptr<RunTask>&))
+      : Runnable(name) {
+    get_sync_state = reinterpret_cast<SyncState& (*)(Object&)>(get);
+    on_run = reinterpret_cast<void (*)(const Runnable&, Object&, std::unique_ptr<RunTask>&)>(
+        on_run_fn);
+  }
 
   // Call this to run this + all synchronized Runnables
-  void Run(std::unique_ptr<RunTask>& run_task) {
-    ForwardDo([&](Runnable& r) { r.OnRun(run_task); });
+  void Run(Object& self, std::unique_ptr<RunTask>& run_task) const {
+    ForwardDo<Runnable>(self, [&](Object& o, const Runnable& iface) {
+      if (iface.on_run) iface.on_run(iface, o, run_task);
+    });
   }
 
-  // Call this if this Runnable has been extrenally executed. It'll run all of the synchronized
+  // Call this if this Runnable has been externally executed. It'll run all of the synchronized
   // Runnables.
-  void NotifyRun(std::unique_ptr<RunTask>& run_task) {
-    ForwardNotify([&](Runnable& r) { r.OnRun(run_task); });
+  void NotifyRun(Object& self, std::unique_ptr<RunTask>& run_task) const {
+    ForwardNotify<Runnable>(self, [&](Object& o, const Runnable& iface) {
+      if (iface.on_run) iface.on_run(iface, o, run_task);
+    });
   }
 
-  // Enqueue this Runnable to be executed at the earliest opportunity. It may be executed on another
-  // thread.
-  //
-  // Since this Runnable may be part of some Object (and that Object may be deleted while a Task
-  // waits for execution), the scheduled Task will take a weak reference to the Object. If the
-  // Object goes away, this Runnable will not be executed.
-  void ScheduleRun(Object& self) { (new RunTask(self.AcquireWeakPtr(), this))->Schedule(); }
-
-  bool CanSync(const Syncable& other) const override {
-    return dynamic_cast<const Runnable*>(&other) != nullptr;
+  // Enqueue this Runnable to be executed at the earliest opportunity.
+  void ScheduleRun(Object& self) const {
+    (new RunTask(self.AcquireWeakPtr(), this))->Schedule();
   }
 };
 
 struct RunOption : TextOption {
   WeakPtr<Object> weak;
-  Runnable* runnable;
-  RunOption(WeakPtr<Object> object, Runnable& runnable);
+  const Runnable* runnable;
+  RunOption(WeakPtr<Object> object, const Runnable& runnable);
   std::unique_ptr<Option> Clone() const override;
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override;
   Dir PreferredDir() const override { return S; }
@@ -163,18 +160,6 @@ struct Container {
   // created) Location.
   virtual Ptr<Location> Extract(Object& descendant) = 0;
 };
-
-// Types of objects that sholud work nicely with data updates:
-//
-// - stateful functions (e.g. X + Y => Z)      Solution: function adds itself to
-// the observers list, gets activated up by NotifyUpdated, recalculates its
-// value & (maybe) calls NotifyUpdated on itself (or its output object)
-// - bi-directional functions (X + 1 = Z)      Solution: same as above but the
-// function activation must include direction (!)
-// - lazy functions                            Solution: NotifyUpdated traverses
-// all lazy nodes & activates their observers
-//
-// Complexity: O(connections + observers)
 
 }  // namespace automat
 

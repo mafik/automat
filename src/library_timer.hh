@@ -3,7 +3,6 @@
 #pragma once
 
 #include "base.hh"
-#include "parent_ref.hh"
 #include "sync.hh"
 #include "time.hh"
 #include "timer_thread.hh"
@@ -13,20 +12,21 @@ namespace automat::library {
 struct Timer : Object, TimerNotificationReceiver {
   // Guards access to duration & LongRunning members
   std::mutex mtx;
-  struct MyRunnable : Runnable {
-    StrView Name() const override { return "Run"sv; }
-    void OnRun(std::unique_ptr<RunTask>&) override;
-    PARENT_REF(Timer, runnable)
-  } runnable;
-  struct MyDuration : Syncable {
-    time::Duration value = 10s;
-    StrView Name() const override { return "duration"sv; }
-    SkColor Tint() const override { return "#6e4521"_color; }
-    bool CanSync(const Syncable& other) const override {
-      return dynamic_cast<const MyDuration*>(&other) != nullptr;
-    }
-  } duration;
+
+  time::Duration duration_value = 10s;
   time::SteadyPoint start_time;
+  std::unique_ptr<RunTask> long_running_task;
+
+  SyncState runnable_sync;
+  SyncState duration_sync;
+  SyncState running_sync;
+  NextState next_state;
+
+  static Runnable runnable;
+  static Syncable duration;
+  static LongRunning timer_running;
+  static NextArg next;
+
   enum class Range : char {
     Milliseconds,  // 0 - 1000 ms
     Seconds,       // 0 - 60 s
@@ -35,11 +35,6 @@ struct Timer : Object, TimerNotificationReceiver {
     Days,          // 0 - 7 d
     EndGuard,
   } range = Range::Seconds;
-  struct TimerRunning : LongRunning {
-    PARENT_REF(Timer, timer_running)
-    Object* OnFindRunnable() override { return &Timer(); }
-    void OnCancel() override;
-  } timer_running;
 
   Timer();
   Timer(const Timer&);

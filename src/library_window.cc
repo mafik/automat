@@ -153,6 +153,20 @@ struct Window::Impl {
   Impl() {}
 };
 
+static void WindowCaptureOnRun(const Runnable&, Window& self, std::unique_ptr<RunTask>&);
+
+Runnable Window::capture("Capture"sv,
+                          +[](Window& obj) -> SyncState& { return obj.capture_sync; },
+                          WindowCaptureOnRun);
+
+NextArg Window::next("Next"sv, +[](Window& obj) -> NextState& { return obj.next_state; });
+
+ImageProvider Window::image(
+    "Captured Image"sv, +[](const ImageProvider&, Window& w) -> sk_sp<SkImage> {
+      auto lock = std::lock_guard(w.mutex);
+      return w.captured_image;
+    });
+
 Window::Window() { impl = std::make_unique<Impl>(); }
 
 Ptr<Object> Window::Clone() const {
@@ -490,14 +504,13 @@ std::unique_ptr<ObjectToy> Window::MakeToy(ui::Widget* parent) {
 }
 
 void Window::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
-  if (cb(next_arg) == LoopControl::Break) return;
+  if (cb(next) == LoopControl::Break) return;
   if (cb(capture) == LoopControl::Break) return;
   if (cb(image) == LoopControl::Break) return;
 }
 
-void Window::Capture::OnRun(std::unique_ptr<RunTask>&) {
+static void WindowCaptureOnRun(const Runnable&, Window& w, std::unique_ptr<RunTask>&) {
   ZoneScopedN("Window");
-  auto& w = Window();
 #ifdef __linux__
   {
     auto impl_lock = std::lock_guard(w.impl->mutex);

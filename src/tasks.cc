@@ -10,6 +10,7 @@
 #include "automat.hh"
 #include "base.hh"
 #include "blockingconcurrentqueue.hh"
+#include "casting.hh"
 #include "thread_name.hh"
 #include "ui_connection_widget.hh"
 
@@ -138,7 +139,14 @@ std::string Task::Format() { return "Task()"; }
 
 std::string RunTask::Format() { return f("RunTask({})", Name(target)); }
 
-void ScheduleNext(Object& source) { ScheduleArgumentTargets(source, next_arg); }
+void ScheduleNext(Object& source) {
+  source.Interfaces([&](Interface& iface) {
+    if (auto* next = dyn_cast<NextArg>(&iface)) {
+      ScheduleArgumentTargets(source, *next);
+    }
+    return LoopControl::Continue;
+  });
+}
 
 void ScheduleArgumentTargets(Object& source, Argument& arg) {
   // audio::Play(source.object->NextSound());
@@ -151,12 +159,12 @@ void ScheduleArgumentTargets(Object& source, Argument& arg) {
   }
 
   if (auto next = arg.Find(source)) {
-    // The target may be the Object itself (with AsRunnable) or a Runnable sub-atom
+    // The target may be the Object itself (with AsRunnable) or a Runnable sub-interface.
     Runnable* runnable = nullptr;
-    if (auto* obj = dynamic_cast<Object*>(next.Get())) {
+    if (auto* r = dyn_cast_if_present<Runnable>(next.Get())) {
+      runnable = r;
+    } else if (auto* obj = next.Owner<Object>()) {
       runnable = obj->AsRunnable();
-    } else {
-      runnable = dynamic_cast<Runnable*>(next.Get());
     }
     if (runnable) {
       runnable->ScheduleRun(*next.Owner<Object>());
@@ -168,12 +176,14 @@ void RunTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("RunTask");
   if (auto s = target.lock()) {
     LongRunning* long_running = s->AsLongRunning();
-    if (long_running && long_running->IsRunning()) {
+    if (long_running && long_running->IsRunning(*s)) {
       return;
     }
     // Cast the `self` to RunTask for the OnRun invocation
     std::unique_ptr<RunTask> self_as_run_task((RunTask*)self.release());
-    runnable->OnRun(self_as_run_task);
+    if (runnable->on_run) {
+      runnable->on_run(*runnable, *s, self_as_run_task);
+    }
     // If OnRun didn't "steal" the ownership then we have to return it back.
     self.reset(self_as_run_task.release());
 
@@ -195,7 +205,7 @@ void CancelTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("CancelTask");
   if (auto s = target.lock()) {
     if (LongRunning* long_running = s->AsLongRunning()) {
-      long_running->Cancel();
+      long_running->Cancel(*s);
     }
   }
 }

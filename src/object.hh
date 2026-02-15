@@ -26,7 +26,6 @@ struct ImageProvider;
 struct OnOff;
 struct LongRunning;
 struct Runnable;
-struct SignalNext;
 struct Syncable;
 struct ObjectSerializer;
 struct ObjectDeserializer;
@@ -79,7 +78,6 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   // Override for special cases (e.g., when the Object itself implements the interface).
   virtual LongRunning* AsLongRunning();
   virtual Runnable* AsRunnable();
-  virtual SignalNext* AsSignalNext();
   virtual OnOff* AsOnOff();
 
   // Visits all interfaces that are members of this object.

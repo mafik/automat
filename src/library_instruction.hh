@@ -7,7 +7,6 @@
 
 #include "base.hh"
 #include "machine_code.hh"
-#include "parent_ref.hh"
 #include "textures.hh"
 #include "ui_small_buffer_widget.hh"
 
@@ -33,47 +32,18 @@ enum class Flag {
   SF,
 };
 
-struct AssemblerArgument : Argument {
-  StrView Name() const override { return "Assembler"sv; }
-  float AutoconnectRadius() const override { return INFINITY; }
-  SkColor Tint() const override { return "#ff0000"_color; }
-  Style GetStyle() const override { return Style::Invisible; }
-  Ptr<Object> Prototype() const override;
-  void CanConnect(Object& start, Object& end_obj, Interface* end_iface,
-                  Status& status) const override;
-  void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override;
-  NestedPtr<Interface> Find(const Object& start) const override;
-};
-
-struct JumpArgument : Argument {
-  JumpArgument();
-
-  StrView Name() const override { return "Jump"sv; }
-  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override;
-  void CanConnect(Object& start, Object& end_obj, Interface* end_iface,
-                  Status& status) const override;
-  void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override;
-  NestedPtr<Interface> Find(const Object& start) const override;
-};
-
-// Same as NextArg - but calls UpdateMachineCode when it's reconnected
-struct NextInstructionArg : NextArg {
-  void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override;
-};
-
-extern AssemblerArgument assembler_arg;
-extern JumpArgument jump_arg;
-extern NextInstructionArg next_instruction_arg;
+extern Argument assembler_arg;
+extern Argument jump_arg;
+extern NextArg next_instruction_arg;
 
 struct Instruction : Object, Buffer {
   mc::Inst mc_inst;
   NestedWeakPtr<Runnable> jump_target;  // Connection target for jump_arg
   WeakPtr<Object> assembler_weak;
 
-  struct MyRunnable : Runnable {
-    void OnRun(std::unique_ptr<RunTask>&) override;
-    PARENT_REF(Instruction, runnable)
-  } runnable;
+  SyncState runnable_sync;
+  NextState next_state;
+  static Runnable runnable;
 
   void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
 

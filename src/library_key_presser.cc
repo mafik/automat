@@ -9,6 +9,7 @@
 #include <tracy/Tracy.hpp>
 
 #include "../build/generated/embedded.hh"
+#include "audio.hh"
 #include "key_button.hh"
 #include "keyboard.hh"
 #include "menu.hh"
@@ -23,6 +24,51 @@ using namespace std;
 using namespace automat;
 
 namespace automat::library {
+
+// --- Static interface definitions ---
+
+OnOff KeyPresser::monitoring(
+    "Monitoring"sv, +[](KeyPresser& obj) -> SyncState& { return obj.monitoring_sync; },
+    +[](const OnOff&, const KeyPresser& obj) -> bool { return obj.keylogging != nullptr; },
+    +[](const OnOff&, KeyPresser& kp) {
+      if (kp.keylogging == nullptr) {
+        ui::root_widget->window->BeginLogging(&kp, &kp.keylogging, nullptr, nullptr);
+      }
+    },
+    +[](const OnOff&, KeyPresser& kp) {
+      if (kp.keylogging) {
+        kp.keylogging->Release();
+      }
+    });
+
+OnOff KeyPresser::state = [] {
+  OnOff o(
+      "State"sv, +[](KeyPresser& obj) -> SyncState& { return obj.state_sync; },
+      +[](const OnOff&, const KeyPresser& obj) -> bool { return obj.key_pressed; },
+      +[](const OnOff&, KeyPresser& kp) {
+        audio::Play(embedded::assets_SFX_key_down_wav);
+        if (kp.key_pressed) return;
+        kp.key_pressed = true;
+        SendKeyEvent(kp.key, true);
+        kp.WakeToys();
+      },
+      +[](const OnOff&, KeyPresser& kp) {
+        audio::Play(embedded::assets_SFX_key_up_wav);
+        if (!kp.key_pressed) return;
+        kp.key_pressed = false;
+        SendKeyEvent(kp.key, false);
+        kp.WakeToys();
+      });
+  o.on_sync = [](const Syncable&, Object& self) { KeyPresser::monitoring.TurnOn(self); };
+  o.on_unsync = [](const Syncable&, Object& self) { KeyPresser::monitoring.TurnOff(self); };
+  return o;
+}();
+
+Runnable KeyPresser::run(
+    "Run"sv, +[](KeyPresser& obj) -> SyncState& { return obj.run_sync; },
+    +[](const Runnable&, KeyPresser& self, std::unique_ptr<RunTask>&) {
+      KeyPresser::state.on_turn_on(KeyPresser::state, self);
+    });
 
 constexpr static char kHandShapeSVG[] =
     "M9 19.9C7.9 20.1 7.9 19.2 8.4 18.6 7.9 17.1 5.9 16.3 5.3 14.8 3.7 11.4.7 10.2 1.1 9.3 1.2 8.9 "
@@ -225,32 +271,6 @@ void KeyPresser::SetKey(ui::AnsiKey k) {
   });
 }
 
-void KeyPresser::State::OnTurnOn() {
-  audio::Play(embedded::assets_SFX_key_down_wav);
-  auto& kp = KeyPresser();
-  if (kp.key_pressed) {
-    return;
-  }
-  kp.key_pressed = true;
-  SendKeyEvent(kp.key, true);
-  kp.WakeToys();
-}
-
-void KeyPresser::State::OnTurnOff() {
-  audio::Play(embedded::assets_SFX_key_up_wav);
-  auto& kp = KeyPresser();
-  if (!kp.key_pressed) {
-    return;
-  }
-  kp.key_pressed = false;
-  SendKeyEvent(kp.key, false);
-  kp.WakeToys();
-}
-
-void KeyPresser::State::OnSync() { KeyPresser().monitoring.TurnOn(); }
-
-void KeyPresser::State::OnUnsync() { KeyPresser().monitoring.TurnOff(); }
-
 void KeyPresser::SerializeState(ObjectSerializer& writer) const {
   writer.Key("key");
   auto key_name = ToStr(this->key);
@@ -280,33 +300,17 @@ KeyPresser::~KeyPresser() {
 void KeyPresser::KeyloggerKeyDown(ui::Key key_down) {
   if (this->key != key_down.physical) return;
   key_pressed = true;
-  state.NotifyTurnedOn();
+  state.NotifyTurnedOn(*this);
   WakeToys();
 }
 
 void KeyPresser::KeyloggerKeyUp(ui::Key key_up) {
   if (this->key != key_up.physical) return;
   key_pressed = false;
-  state.NotifyTurnedOff();
+  state.NotifyTurnedOff(*this);
   WakeToys();
 }
 
 void KeyPresser::KeyloggerOnRelease(const ui::Keylogging&) { keylogging = nullptr; }
-
-bool KeyPresser::Monitoring::IsOn() const { return KeyPresser().keylogging != nullptr; };
-
-void KeyPresser::Monitoring::OnTurnOn() {
-  auto& key_presser = KeyPresser();
-  if (key_presser.keylogging == nullptr) {
-    ui::root_widget->window->BeginLogging(&key_presser, &key_presser.keylogging, nullptr, nullptr);
-  }
-}
-
-void KeyPresser::Monitoring::OnTurnOff() {
-  auto& key_presser = KeyPresser();
-  if (key_presser.keylogging) {
-    key_presser.keylogging->Release();
-  }
-}
 
 }  // namespace automat::library

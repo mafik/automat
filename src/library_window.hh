@@ -5,7 +5,6 @@
 #include "base.hh"
 #include "control_flow.hh"
 #include "image_provider.hh"
-#include "parent_ref.hh"
 #include "str.hh"
 
 namespace automat::library {
@@ -16,23 +15,12 @@ struct Window : public Object {
   bool run_continuously = true;
   sk_sp<SkImage> captured_image;  // Captured window image
 
-  struct Capture : Runnable {
-    StrView Name() const override { return "Capture"sv; }
+  SyncState capture_sync;
+  NextState next_state;
+  static Runnable capture;
+  static NextArg next;
 
-    void OnRun(std::unique_ptr<RunTask>&) override;
-
-    PARENT_REF(Window, capture)
-  } capture;
-
-  struct CapturedImage : ImageProvider {
-    StrView Name() const override { return "Captured Image"sv; }
-    sk_sp<SkImage> GetImage() override {
-      auto& w = Window();
-      auto lock = std::lock_guard(w.mutex);
-      return w.captured_image;
-    }
-    PARENT_REF(Window, image);
-  } image;
+  static ImageProvider image;
 
   struct Impl;
   // Private implementation to avoid polluting header with platform-specific defines.

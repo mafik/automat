@@ -9,16 +9,11 @@
 namespace automat::library {
 
 struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
-  struct MyRunnable : Runnable {
-    void OnRun(std::unique_ptr<RunTask>&) override;
-    PARENT_REF(MacroRecorder, runnable)
-  } runnable;
-  struct MyLongRunning : LongRunning {
-    Object* OnFindRunnable() override { return &MacroRecorder(); }
-    void OnCancel() override;
-    ~MyLongRunning() { OnLongRunningDestruct(); }
-    PARENT_REF(MacroRecorder, long_running)
-  } long_running;
+  std::unique_ptr<RunTask> long_running_task;
+  SyncState runnable_sync;
+  SyncState long_running_sync;
+  static Runnable runnable;
+  static LongRunning long_running;
 
   ui::Keylogging* keylogging = nullptr;
   ui::Pointer::Logging* pointer_logging = nullptr;

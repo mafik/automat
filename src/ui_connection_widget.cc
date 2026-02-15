@@ -19,6 +19,7 @@
 #include "audio.hh"
 #include "automat.hh"
 #include "base.hh"
+#include "casting.hh"
 #include "connector_optical.hh"
 #include "font.hh"
 #include "location.hh"
@@ -119,7 +120,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
   auto anim = &animation_state;
   if (anim->radar_alpha >= 0.01f) {
     SkPaint radius_paint;
-    SkColor tint = arg->Tint();
+    SkColor tint = arg->tint;
     SkColor colors[] = {SkColorSetA(tint, 0), SkColorSetA(tint, (int)(anim->radar_alpha * 96)),
                         SK_ColorTRANSPARENT};
     float pos[] = {0, 1, 1};
@@ -130,7 +131,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     radius_paint.setShader(SkGradientShader::MakeSweep(0, 0, colors, pos, 3, SkTileMode::kClamp, 0,
                                                        60, 0, &local_matrix));
     // TODO: switch to drawArc instead
-    float autoconnect_radius = arg->AutoconnectRadius();
+    float autoconnect_radius = arg->autoconnect_radius;
     SkRect oval = Rect::MakeCenter(pos_dir.pos, autoconnect_radius * 2, autoconnect_radius * 2);
 
     float crt_width =
@@ -296,7 +297,7 @@ static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
     }
   }
 
-  if (w.start_weak.GetUnsafe() == &next_arg) {
+  if (isa<NextArg>(w.start_weak.GetUnsafe())) {
     while (w.to_points.size() > 1) {
       // from the last two, pick the one which is closer to pointing down (-pi/2)
       float delta_1 = fabs((w.to_points[w.to_points.size() - 1].dir + 90_deg).ToRadians());
@@ -315,7 +316,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   if (!a.start_arg) {
     return animation::Finished;
   }
-  style = a.start_arg->GetStyle();
+  style = a.start_arg->style;
   if (style == Argument::Style::Invisible || style == Argument::Style::Spotlight) {
     return animation::Finished;
   }
@@ -417,7 +418,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     phase |= cable_width.Tick(timer);
   }
 
-  if (a.start_arg->AutoconnectRadius() > 0) {
+  if (a.start_arg->autoconnect_radius > 0) {
     auto& anim = animation_state;
     phase |= animation::LinearApproach(anim.radar_alpha_target, timer.d, 2.f, anim.radar_alpha);
     if (anim.radar_alpha >= 0.01f) {
@@ -432,7 +433,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     phase |= animation::LinearApproach(prototype_alpha_target, timer.d, 2.f, anim.prototype_alpha);
     if (anim.prototype_alpha > 0) {
       if (!prototype_widget) {
-        auto proto = a.start_arg->Prototype();
+        auto proto = a.start_arg->prototype();
         prototype_widget = proto->MakeToy(this);
       }
       phase |= prototype_widget->Tick(timer);
@@ -475,7 +476,7 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
       if (cable_width > 0.01_mm) {
         if (alpha > 0.01f) {
           auto arcline = RouteCable(pos_dir, to_points, &canvas);
-          auto color = SkColorSetA(arg->Tint(), 255 * cable_width.value / 2_mm);
+          auto color = SkColorSetA(arg->tint, 255 * cable_width.value / 2_mm);
           auto color_filter = color::MakeTintFilter(color, 30);
           auto path = arcline.ToPath(false);
           DrawCable(canvas, path, color_filter, CableTexture::Smooth, cable_width, cable_width);

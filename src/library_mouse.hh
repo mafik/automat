@@ -7,7 +7,6 @@
 #include <include/effects/SkRuntimeEffect.h>
 
 #include "base.hh"
-#include "parent_ref.hh"
 
 namespace automat::library::mouse {
 
@@ -28,10 +27,12 @@ struct Mouse : Object {
 struct MouseButtonEvent : Object {
   ui::PointerButton button;
   bool down;
-  struct MyRunnable : Runnable {
-    void OnRun(std::unique_ptr<RunTask>&) override;
-    PARENT_REF(MouseButtonEvent, runnable)
-  } runnable;
+
+  SyncState runnable_sync;
+  NextState next_state;
+  static Runnable runnable_iface;
+  static NextArg next;
+
   MouseButtonEvent(ui::PointerButton button, bool down) : button(button), down(down) {}
   string_view Name() const override;
   Ptr<Object> Clone() const override;
@@ -75,22 +76,13 @@ struct MouseButtonPresser : Object {
   ui::PointerButton button;
   bool down = false;
 
-  struct Click : Runnable {
-    StrView Name() const override { return "Click"sv; }
+  SyncState click_sync;
+  SyncState state_sync;
+  NextState next_state;
 
-    void OnRun(std::unique_ptr<RunTask>&) override;
-
-    PARENT_REF(MouseButtonPresser, click)
-  } click;
-
-  struct State : OnOff {
-    StrView Name() const override { return "State"sv; }
-    bool IsOn() const override { return MouseButtonPresser().down; }
-    void OnTurnOn() override;
-    void OnTurnOff() override;
-
-    PARENT_REF(MouseButtonPresser, state)
-  } state;
+  static Runnable click;
+  static OnOff state;
+  static NextArg next;
 
   MouseButtonPresser(ui::PointerButton button);
   MouseButtonPresser();
@@ -99,7 +91,6 @@ struct MouseButtonPresser : Object {
   Ptr<Object> Clone() const override;
   void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

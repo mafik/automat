@@ -25,13 +25,13 @@ PowerButton::PowerButton(Widget* parent, NestedWeakPtr<OnOff> target, SkColor fg
 
 void PowerButton::Activate(ui::Pointer& p) {
   if (auto locked = target.Lock()) {
-    locked->Toggle();
+    locked->Toggle(*locked.Owner<Object>());
   }
   WakeAnimation();
 }
 bool PowerButton::Filled() const {
   if (auto locked = target.Lock()) {
-    return locked->IsOn();
+    return locked->IsOn(*locked.Owner<Object>());
   }
   return false;
 }

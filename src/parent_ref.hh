@@ -6,11 +6,11 @@
 //
 // Avoids 8B pointer to the parent using offsetof.
 #define PARENT_REF(PARENT_T, FIELD)                                                     \
-  struct PARENT_T& PARENT_T() {                                                         \
+  struct PARENT_T& ParentRef() {                                                        \
     return *reinterpret_cast<struct PARENT_T*>(reinterpret_cast<intptr_t>(this) -       \
                                                offsetof(struct PARENT_T, FIELD));       \
   }                                                                                     \
-  const struct PARENT_T& PARENT_T() const {                                             \
+  const struct PARENT_T& ParentRef() const {                                            \
     return *reinterpret_cast<const struct PARENT_T*>(reinterpret_cast<intptr_t>(this) - \
                                                      offsetof(struct PARENT_T, FIELD)); \
   }

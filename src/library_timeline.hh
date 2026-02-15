@@ -98,7 +98,7 @@ struct TrackArgument : InlineArgument {
   }
   StrView Name() const override { return name; }
 
-  void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+  void CanConnect(Object& start, Object& end_obj, Interface* end_iface,
                   Status& status) const override;
 };
 

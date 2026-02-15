@@ -99,7 +99,7 @@ void Gear::AddSource(NestedPtr<Syncable>& source) {
 
         // redirecting the members "sync" to this gear
         members.back().weak.Lock()->end =
-            NestedWeakPtr<Interface>(AcquireWeakPtr<Object>(), &Object::toplevel_interface);
+            NestedWeakPtr<Interface>(AcquireWeakPtr<Object>(), nullptr);
       }
     } else {
       bool found = false;
@@ -199,7 +199,7 @@ struct GearWidget : ObjectToy {
 };
 
 SyncConnectionWidget::SyncConnectionWidget(Widget* parent, Object& object, Syncable& syncable)
-    : Toy(parent, object, syncable) {}
+    : Toy(parent, object, &syncable) {}
 
 SkPath SyncConnectionWidget::Shape() const { return SkPath(); }
 
@@ -293,9 +293,9 @@ std::unique_ptr<SyncConnectionWidget> SyncMemberOf::MakeToy(ui::Widget* parent) 
   return std::make_unique<SyncConnectionWidget>(parent, object, syncable);
 }
 
-void Syncable::CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+void Syncable::CanConnect(Object& start, Object& end_obj, Interface* end_iface,
                           Status& status) const {
-  if (auto* other = dynamic_cast<Syncable*>(&end_iface)) {
+  if (auto* other = dynamic_cast<Syncable*>(end_iface)) {
     if (CanSync(*other)) {
       return;
     } else {

@@ -235,10 +235,14 @@ void BoardWidget::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
   auto board = LockBoard();
   if (!board) return;
   bool connected = false;
-  auto TryConnect = [&](Object& end_obj, Interface& end_iface) {
+  auto TryConnect = [&](Object& end_obj, Interface* end_iface) {
     if (connected) return;
     if (arg.CanConnect(start, end_obj, end_iface)) {
-      arg.Connect(start, end_obj, end_iface);
+      if (end_iface) {
+        arg.Connect(start, end_obj, *end_iface);
+      } else {
+        arg.Connect(start, end_obj);
+      }
       connected = true;
     }
   };
@@ -249,10 +253,10 @@ void BoardWidget::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
       continue;
     }
     auto& obj = *loc->object;
-    TryConnect(obj, Object::toplevel_interface);
+    TryConnect(obj, nullptr);
     if (connected) return;
     obj.Interfaces([&](Interface& iface) {
-      TryConnect(obj, iface);
+      TryConnect(obj, &iface);
       if (connected) {
         return LoopControl::Break;
       }
@@ -281,7 +285,7 @@ void* BoardWidget::Nearby(Vec2 start, float radius, std::function<void*(Location
 
 void BoardWidget::NearbyCandidates(
     Location& here, const Argument& arg, float radius,
-    std::function<void(ObjectToy&, Interface&, Vec<Vec2AndDir>&)> callback) {
+    std::function<void(ObjectToy&, Interface*, Vec<Vec2AndDir>&)> callback) {
   // Check the currently dragged object
   auto& root_widget = *ui::root_widget;
   for (auto* action : root_widget.active_actions) {
@@ -290,7 +294,7 @@ void BoardWidget::NearbyCandidates(
         if (location.get() == &here) {
           continue;
         }
-        Interface* iface = arg.CanConnect(*here.object, *location->object);
+        auto iface = arg.CanConnect(*here.object, *location->object);
         if (!iface) {
           continue;
         }
@@ -307,7 +311,7 @@ void BoardWidget::NearbyCandidates(
     if (&other == &here) {
       return nullptr;
     }
-    Interface* iface = arg.CanConnect(*here.object, *other.object);
+    auto iface = arg.CanConnect(*here.object, *other.object);
     if (!iface) {
       return nullptr;
     }

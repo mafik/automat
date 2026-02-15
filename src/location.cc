@@ -50,8 +50,6 @@ constexpr float kFrameCornerRadius = 0.001;
 // Location
 ///////////////////////////////////////////////////////////////////////////////
 
-Interface Location::toplevel_interface;
-
 Location::Location(WeakPtr<Location> parent_location)
     : parent_location(std::move(parent_location)) {}
 
@@ -143,7 +141,7 @@ void Location::FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_
 ///////////////////////////////////////////////////////////////////////////////
 
 LocationWidget::LocationWidget(ui::Widget* parent, Location& loc)
-    : Toy(parent, loc, Location::toplevel_interface),
+    : Toy(parent, loc, nullptr),
       elevation(0),
       location_weak(loc.AcquireWeakPtr()) {
   loc.widget = this;
@@ -473,7 +471,8 @@ void LocationWidget::UpdateAutoconnectArgs() {
     auto start = toy.ArgStart(arg, parent_mw);
 
     // Find the current distance & target of this connection
-    Interface* old_iface = nullptr;
+    // Use optional to distinguish "no connection" from "top-level connection" (nullptr)
+    std::optional<Interface*> old_iface;
     float old_dist2 = HUGE_VALF;
     if (auto end = arg.Find(*loc->object)) {
       old_iface = end.Get();
@@ -494,9 +493,9 @@ void LocationWidget::UpdateAutoconnectArgs() {
     // Find the nearest compatible interface
     float new_dist2 = autoconnect_radius * autoconnect_radius;
     ObjectToy* new_toy = nullptr;
-    Interface* new_iface = nullptr;
+    std::optional<Interface*> new_iface;
     parent_mw->NearbyCandidates(*loc, arg, autoconnect_radius,
-                                [&](ObjectToy& toy, Interface& iface, Vec<Vec2AndDir>& to_points) {
+                                [&](ObjectToy& toy, Interface* iface, Vec<Vec2AndDir>& to_points) {
                                   auto other_up = TransformBetween(toy, *parent_mw);
                                   for (auto& to : to_points) {
                                     Vec2 to_pos = other_up.mapPoint(to.pos);
@@ -504,7 +503,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
                                     if (dist2 <= new_dist2) {
                                       new_dist2 = dist2;
                                       new_toy = &toy;
-                                      new_iface = &iface;
+                                      new_iface = iface;
                                     }
                                   }
                                 });
@@ -512,8 +511,13 @@ void LocationWidget::UpdateAutoconnectArgs() {
     if (new_iface == old_iface) {
       return;
     }
-    if (new_toy) {
-      arg.Connect(*loc->object, *new_toy->LockOwner<Object>(), *new_iface);
+    if (new_toy && new_iface) {
+      auto end_obj = new_toy->LockOwner<Object>();
+      if (*new_iface) {
+        arg.Connect(*loc->object, *end_obj, **new_iface);
+      } else {
+        arg.Connect(*loc->object, *end_obj);
+      }
     } else {
       arg.Disconnect(*loc->object);
     }
@@ -539,10 +543,11 @@ void LocationWidget::UpdateAutoconnectArgs() {
       if (autoconnect_radius <= 0) {
         return;
       }
-      Interface* this_iface = arg.CanConnect(*other->object, *loc->object);
-      if (!this_iface) {
+      auto this_iface_opt = arg.CanConnect(*other->object, *loc->object);
+      if (!this_iface_opt) {
         return;  // `this` location can't be connected to `other`s `arg`
       }
+      Interface* this_iface = *this_iface_opt;
 
       // Wake the animation loop of the ConnectionWidget
       if (auto connection_widget = ConnectionWidget::FindOrNull(*other->object, arg)) {
@@ -553,7 +558,8 @@ void LocationWidget::UpdateAutoconnectArgs() {
       start.pos = other_up.mapPoint(start.pos);
 
       // Find the current distance & target of this connection
-      Interface* old_iface = nullptr;
+      // Use optional to distinguish "no connection" from "top-level connection" (nullptr)
+      std::optional<Interface*> old_iface;
       float old_dist2 = HUGE_VALF;
       if (auto end = arg.Find(*other->object)) {
         old_iface = end.Get();
@@ -573,9 +579,9 @@ void LocationWidget::UpdateAutoconnectArgs() {
 
       // Find the new distance & target
       float radius2 = autoconnect_radius * autoconnect_radius;
-      bool old_is_here = (old_iface == this_iface);
+      bool old_is_here = old_iface.has_value() && *old_iface == this_iface;
       float new_dist2 = old_is_here ? radius2 : std::min(radius2, old_dist2);
-      Interface* new_iface = old_is_here ? nullptr : old_iface;
+      std::optional<Interface*> new_iface = old_is_here ? std::nullopt : old_iface;
       for (auto& to : to_points) {
         float dist2 = LengthSquared(start.pos - to.pos);
         if (dist2 <= new_dist2) {
@@ -588,7 +594,11 @@ void LocationWidget::UpdateAutoconnectArgs() {
         return;
       }
       if (new_iface) {
-        arg.Connect(*other->object, *loc->object, *new_iface);
+        if (*new_iface) {
+          arg.Connect(*other->object, *loc->object, **new_iface);
+        } else {
+          arg.Connect(*other->object, *loc->object);
+        }
       } else {
         arg.Disconnect(*other->object);
       }

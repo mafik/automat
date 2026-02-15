@@ -51,12 +51,12 @@ std::unique_ptr<ArgumentOf::Toy> ArgumentOf::MakeToy(ui::Widget* parent) {
   return std::make_unique<ui::ConnectionWidget>(parent, object, arg);
 }
 
-void NextArg::CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+void NextArg::CanConnect(Object& start, Object& end_obj, Interface* end_iface,
                          Status& status) const {
   if (!start.AsSignalNext()) {
     AppendErrorMessage(status) += "Next source must be a Runnable";
   }
-  if (!dynamic_cast<Runnable*>(&end_iface)) {
+  if (!dynamic_cast<Runnable*>(end_iface)) {
     AppendErrorMessage(status) += "Next target must be a Runnable";
   }
 }

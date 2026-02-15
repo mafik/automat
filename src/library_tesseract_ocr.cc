@@ -52,9 +52,9 @@ struct ImageArgument : Argument {
     return std::make_unique<TextWidget>(parent, "IMG");
   }
 
-  void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+  void CanConnect(Object& start, Object& end_obj, Interface* end_iface,
                   Status& status) const override {
-    auto* image_provider = dynamic_cast<ImageProvider*>(&end_iface);
+    auto* image_provider = dynamic_cast<ImageProvider*>(end_iface);
     if (image_provider == nullptr) {
       AppendErrorMessage(status) += "Can only connect to Image Provider";
       return;
@@ -84,7 +84,7 @@ struct TextArgument : Argument {
     return std::make_unique<TextWidget>(parent, "T");
   }
 
-  void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+  void CanConnect(Object& start, Object& end_obj, Interface* end_iface,
                   Status& status) const override {
     // Any object can receive text
   }
@@ -99,7 +99,7 @@ struct TextArgument : Argument {
   NestedPtr<Interface> Find(const Object& start) const override {
     auto* tesseract = dynamic_cast<const TesseractOCR*>(&start);
     if (tesseract == nullptr) return {};
-    return NestedPtr(tesseract->text_weak.Lock(), &Object::toplevel_interface);
+    return NestedPtr<Interface>(tesseract->text_weak.Lock(), nullptr);
   }
 };
 

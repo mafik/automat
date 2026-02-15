@@ -81,9 +81,9 @@ struct TimelineArgument : Argument {
     return prototypes->Find<Timeline>()->AcquirePtr<Object>();
   }
 
-  void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+  void CanConnect(Object& start, Object& end_obj, Interface* end_iface,
                   Status& status) const override {
-    if ((&end_iface != &Object::toplevel_interface) || !dynamic_cast<Timeline*>(&end_obj)) {
+    if (end_iface != nullptr || !dynamic_cast<Timeline*>(&end_obj)) {
       AppendErrorMessage(status) += "Must connect to a Timeline";
     }
   }
@@ -115,8 +115,7 @@ struct TimelineArgument : Argument {
 
   NestedPtr<Interface> Find(const Object& start) const override {
     if (auto* recorder = dynamic_cast<const MacroRecorder*>(&start)) {
-      return NestedPtr<Interface>(recorder->timeline_connection.Lock(),
-                                  &Object::toplevel_interface);
+      return NestedPtr<Interface>(recorder->timeline_connection.Lock(), nullptr);
     }
     return {};
   }

@@ -34,7 +34,7 @@ struct Action {
   virtual void Update() = 0;
 
   // Return true to highlight the given part of some object.
-  virtual bool Highlight(Object& highlighted_obj, Interface& highlighted_iface) const {
+  virtual bool Highlight(Object& highlighted_obj, Interface* highlighted_iface) const {
     return false;
   }
 

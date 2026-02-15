@@ -104,9 +104,9 @@ std::unique_ptr<ui::Widget> JumpArgument::MakeIcon(ui::Widget* parent) {
   return ui::MakeShapeWidget(parent, kJumpPathSVG, "#ff0000"_color);
 }
 
-void JumpArgument::CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+void JumpArgument::CanConnect(Object& start, Object& end_obj, Interface* end_iface,
                               Status& status) const {
-  if (!dynamic_cast<Runnable*>(&end_iface)) {
+  if (!dynamic_cast<Runnable*>(end_iface)) {
     AppendErrorMessage(status) += "Jump target must be a Runnable";
   }
 }
@@ -150,9 +150,9 @@ void NextInstructionArg::OnConnect(Object& start, Object* end_obj, Interface* en
 
 NextInstructionArg next_instruction_arg;
 
-void AssemblerArgument::CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+void AssemblerArgument::CanConnect(Object& start, Object& end_obj, Interface* end_iface,
                                    Status& status) const {
-  if ((&end_iface != &Object::toplevel_interface) || !dynamic_cast<Assembler*>(&end_obj)) {
+  if (end_iface != nullptr || !dynamic_cast<Assembler*>(&end_obj)) {
     AppendErrorMessage(status) += "Must connect to an Assembler";
   }
 }
@@ -185,7 +185,7 @@ void AssemblerArgument::OnConnect(Object& start, Object* end_obj, Interface* end
 
 NestedPtr<Interface> AssemblerArgument::Find(const Object& start) const {
   if (auto* instruction = dynamic_cast<const Instruction*>(&start)) {
-    return NestedPtr(instruction->assembler_weak.Lock(), &Object::toplevel_interface);
+    return NestedPtr<Interface>(instruction->assembler_weak.Lock(), nullptr);
   }
   return NestedPtr<Interface>();
 }

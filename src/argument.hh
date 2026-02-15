@@ -69,24 +69,27 @@ struct Argument : Interface {
 
   virtual ~Argument() = default;
 
-  virtual void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+  // `end_iface` is nullptr for top-level object connections.
+  virtual void CanConnect(Object& start, Object& end_obj, Interface* end_iface,
                           Status& status) const {
     AppendErrorMessage(status) += "Argument::CanConnect should be overridden";
   }
 
-  bool CanConnect(Object& start, Object& end_obj, Interface& end_iface) const {
+  bool CanConnect(Object& start, Object& end_obj, Interface* end_iface) const {
     Status status;
     CanConnect(start, end_obj, end_iface, status);
     return OK(status);
   }
 
-  Interface* CanConnect(Object& start, Object& end_obj) const {
-    if (CanConnect(start, end_obj, Object::toplevel_interface)) {
-      return &Object::toplevel_interface;
+  // Try connecting to the top-level object first, then each sub-interface.
+  // Returns the first compatible interface (or nullptr for top-level), or nullopt if none.
+  std::optional<Interface*> CanConnect(Object& start, Object& end_obj) const {
+    if (CanConnect(start, end_obj, nullptr)) {
+      return nullptr;
     }
-    Interface* ret = nullptr;
+    std::optional<Interface*> ret;
     end_obj.Interfaces([&](Interface& iface) {
-      if (CanConnect(start, end_obj, iface)) {
+      if (CanConnect(start, end_obj, &iface)) {
         ret = &iface;
         return LoopControl::Break;
       }
@@ -108,7 +111,8 @@ struct Argument : Interface {
   }
 
   void Connect(Object& start, Object& end_obj) {
-    Connect(start, end_obj, Object::toplevel_interface);
+    OnConnect(start, &end_obj, nullptr);
+    start.WakeToys();
   }
 
   void Disconnect(Object& start) {
@@ -144,7 +148,7 @@ struct ArgumentOf {
   ArgumentOf(Object& object, Argument& arg) : object(object), arg(arg) {}
 
   ReferenceCounted& GetOwner() { return object; }
-  Interface& GetInterface() { return arg; }
+  Interface* GetInterface() { return &arg; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 };
 
@@ -167,7 +171,7 @@ struct InlineArgument : Argument {
 struct NextArg : Argument {
   StrView Name() const override { return "Next"sv; }
   Style GetStyle() const override { return Style::Cable; }
-  void CanConnect(Object& start, Object& end_obj, Interface& end_iface, Status&) const override;
+  void CanConnect(Object& start, Object& end_obj, Interface* end_iface, Status&) const override;
   void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override;
   NestedPtr<Interface> Find(const Object& start) const override;
 };

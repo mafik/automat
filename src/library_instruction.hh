@@ -39,7 +39,7 @@ struct AssemblerArgument : Argument {
   SkColor Tint() const override { return "#ff0000"_color; }
   Style GetStyle() const override { return Style::Invisible; }
   Ptr<Object> Prototype() const override;
-  void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+  void CanConnect(Object& start, Object& end_obj, Interface* end_iface,
                   Status& status) const override;
   void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override;
   NestedPtr<Interface> Find(const Object& start) const override;
@@ -50,7 +50,7 @@ struct JumpArgument : Argument {
 
   StrView Name() const override { return "Jump"sv; }
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override;
-  void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+  void CanConnect(Object& start, Object& end_obj, Interface* end_iface,
                   Status& status) const override;
   void OnConnect(Object& start, Object* end_obj, Interface* end_iface) override;
   NestedPtr<Interface> Find(const Object& start) const override;

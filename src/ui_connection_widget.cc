@@ -58,7 +58,7 @@ Location* ConnectionWidget::EndLocation() const {
 }
 
 ConnectionWidget::ConnectionWidget(Widget* parent, Object& start, Argument& arg)
-    : Toy(parent, start, arg), start_weak(start.AcquireWeakPtr(), &arg) {}
+    : Toy(parent, start, &arg), start_weak(start.AcquireWeakPtr(), &arg) {}
 
 SkPath ConnectionWidget::Shape() const {
   if (state && transparency < 0.99f) {
@@ -195,7 +195,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     if (mw) {
       mw->NearbyCandidates(
           from, *arg, autoconnect_radius * 2 + 10_cm,
-          [&](ObjectToy& candidate_toy, Interface&, Vec<Vec2AndDir>& to_points) {
+          [&](ObjectToy& candidate_toy, Interface*, Vec<Vec2AndDir>& to_points) {
             auto m = TransformBetween(candidate_toy, *mw);
             for (auto& to : to_points) {
               to.pos = m.mapPoint(to.pos);
@@ -557,7 +557,7 @@ void DragConnectionAction::Update() {
   pointer.pointer_widget->WakeAnimation();
 }
 
-bool DragConnectionAction::Highlight(Object& obj, Interface& iface) const {
+bool DragConnectionAction::Highlight(Object& obj, Interface* iface) const {
   auto start = widget.start_weak.Lock();
   return start->CanConnect(*start.Owner<Object>(), obj, iface);
 }

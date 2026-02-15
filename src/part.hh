@@ -16,7 +16,7 @@ namespace automat {
 template <typename T>
 concept Part = requires(T t) {
   { t.GetOwner() } -> std::convertible_to<ReferenceCounted&>;
-  { t.GetInterface() } -> std::same_as<Interface&>;
+  { t.GetInterface() } -> std::same_as<Interface*>;
 };
 
 }  // namespace automat

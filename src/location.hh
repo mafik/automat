@@ -35,8 +35,6 @@ struct LocationWidget;
 // Implementations of this interface would typically extend it with
 // container-specific functions.
 struct Location : ReferenceCounted, ToyMakerMixin {
-  static Interface toplevel_interface;
-
   WeakPtr<Location> parent_location;
   using Toy = LocationWidget;
 
@@ -53,7 +51,7 @@ struct Location : ReferenceCounted, ToyMakerMixin {
 
   // ToyMaker concept
   ReferenceCounted& GetOwner() { return *this; }
-  Interface& GetInterface() { return toplevel_interface; }
+  Interface* GetInterface() { return nullptr; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 
   // Obtain a matrix representation of the given transform.

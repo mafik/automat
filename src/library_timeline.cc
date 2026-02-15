@@ -297,7 +297,7 @@ static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
 
 TrackArgument::TrackArgument(StrView name) : name(name) {}
 
-void TrackArgument::CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+void TrackArgument::CanConnect(Object& start, Object& end_obj, Interface* end_iface,
                                Status& status) const {}
 
 Timeline::Timeline()

@@ -31,8 +31,8 @@ struct Toy : ui::Widget {
   Interface* iface;
   uint32_t observed_notify_counter = 0;  // UI-thread only — last seen notify_counter
 
-  Toy(ui::Widget* parent, ReferenceCounted& owner, Interface& iface)
-      : Widget(parent), owner(owner.AcquireWeakPtr()), iface(&iface) {}
+  Toy(ui::Widget* parent, ReferenceCounted& owner, Interface* iface)
+      : Widget(parent), owner(owner.AcquireWeakPtr()), iface(iface) {}
 
   template <typename T = ReferenceCounted>
   Ptr<T> LockOwner() const {
@@ -53,7 +53,7 @@ concept ToyMaker = requires(T t) {
 
 // Mixin class for ToyMakers. Provides some utilities for working with Toys.
 struct ToyMakerMixin {
-  static void ForEachToyImpl(ReferenceCounted& owner, Interface& iface,
+  static void ForEachToyImpl(ReferenceCounted& owner, Interface* iface,
                              std::function<void(ui::RootWidget&, Toy&)> cb);
 
   // DEPRECATED: This is not thread-safe. Update this Object's local state & call WakeToys instead.
@@ -75,7 +75,7 @@ struct ToyStore {
 
   template <Part T>
   static Key MakeKey(T& part) {
-    return {&part.GetOwner(), &part.GetInterface()};
+    return {&part.GetOwner(), part.GetInterface()};
   }
 
   template <ToyMaker T>

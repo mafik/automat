@@ -265,7 +265,7 @@ struct SyncAction : Action {
     }
     pointer.pointer_widget->WakeAnimation();
   }
-  bool Highlight(Object& end_obj, Interface& end_iface) const override {
+  bool Highlight(Object& end_obj, Interface* end_iface) const override {
     auto ptr = weak.Lock();
     Object& start = *ptr.Owner<Object>();
     return ptr->Argument::CanConnect(start, end_obj, end_iface);
@@ -503,7 +503,6 @@ Location* Object::MyLocation() {
   return here;
 }
 
-Interface Object::toplevel_interface;
 
 void Object::InvalidateConnectionWidgets(const Argument* arg) const {
   for (auto& w : ui::ConnectionWidgetRange(this, arg)) {
@@ -549,7 +548,7 @@ Str& ObjectSerializer::ResolveName(Object& object, StrView hint) {
 
 Str ObjectSerializer::ResolveName(Object& object, Interface* iface, StrView hint) {
   Str ret = ResolveName(object, hint);
-  if (iface && iface != &Object::toplevel_interface) {
+  if (iface) {
     ret += ".";
     Str iface_name;
     object.InterfaceName(*iface, iface_name);
@@ -623,12 +622,8 @@ NestedPtr<Interface> ObjectDeserializer::LookupInterface(StrView name) {
   if (to == nullptr) {
     return {};
   }
-  if (to_iface.empty()) {
-    return NestedPtr<Interface>(to->AcquirePtr(), &Object::toplevel_interface);
-  } else {
-    auto* iface = to->InterfaceFromName(to_iface);
-    return NestedPtr<Interface>(to->AcquirePtr(), iface);
-  }
+  Interface* iface = to_iface.empty() ? nullptr : to->InterfaceFromName(to_iface);
+  return NestedPtr<Interface>(to->AcquirePtr(), iface);
 }
 
 }  // namespace automat

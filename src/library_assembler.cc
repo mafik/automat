@@ -749,9 +749,9 @@ struct RegisterAssemblerArgument : Argument {
   SkColor Tint() const override { return "#ff0000"_color; }
   Style GetStyle() const override { return Style::Spotlight; }
 
-  void CanConnect(Object& start, Object& end_obj, Interface& end_iface,
+  void CanConnect(Object& start, Object& end_obj, Interface* end_iface,
                   Status& status) const override {
-    if ((&end_iface != &Object::toplevel_interface) || !dynamic_cast<Assembler*>(&end_obj)) {
+    if (end_iface != nullptr || !dynamic_cast<Assembler*>(&end_obj)) {
       AppendErrorMessage(status) += "Must connect to an Assembler";
     }
   }
@@ -771,7 +771,7 @@ struct RegisterAssemblerArgument : Argument {
   NestedPtr<Interface> Find(const Object& start) const override {
     auto* reg = dynamic_cast<const Register*>(&start);
     if (reg == nullptr) return {};
-    return NestedPtr(reg->assembler_weak.Lock(), &Object::toplevel_interface);
+    return NestedPtr<Interface>(reg->assembler_weak.Lock(), nullptr);
   }
 };
 

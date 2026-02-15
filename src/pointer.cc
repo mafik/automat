@@ -328,11 +328,11 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
   };
 
   std::vector<Highlighted> highlight_target;
-  auto HighlightCheck = [&](Object& obj, ObjectToy& widget, Interface& iface) {
+  auto HighlightCheck = [&](Object& obj, ObjectToy& widget, Interface* iface) {
     for (auto& action : pointer.actions) {
       if (action == nullptr) continue;
       if (action->Highlight(obj, iface)) {
-        highlight_target.emplace_back(&widget, &iface);
+        highlight_target.emplace_back(&widget, iface);
         std::push_heap(highlight_target.begin(), highlight_target.end());
       }
     }
@@ -341,9 +341,9 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
   for (auto& loc : root_board->locations) {
     auto& obj = *loc->object;
     if (!loc->widget || !loc->widget->toy) continue;
-    HighlightCheck(obj, *loc->widget->toy, Object::toplevel_interface);
+    HighlightCheck(obj, *loc->widget->toy, nullptr);
     obj.Interfaces([&](Interface& iface) {
-      HighlightCheck(obj, *loc->widget->toy, iface);
+      HighlightCheck(obj, *loc->widget->toy, &iface);
       return LoopControl::Continue;
     });
   }

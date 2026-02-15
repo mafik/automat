@@ -120,17 +120,14 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   // If this object is owned by a Board, return the Location that's used to store it.
   Location* MyLocation();
 
-  // Empty interface - used for refering to top-level objects.
-  static Interface toplevel_interface;
-
-  Interface& GetInterface() { return toplevel_interface; }
+  Interface* GetInterface() { return nullptr; }
 };
 
 // Provides sensible defaults for most object widgets. Designed to be inherited and tweaked.
 //
 // It's rendered as a green box with the name of the object.
 struct ObjectToy : Toy {
-  ObjectToy(Widget* parent, Object& obj) : Toy(parent, obj, Object::toplevel_interface) {}
+  ObjectToy(Widget* parent, Object& obj) : Toy(parent, obj, nullptr) {}
 
   virtual float Width() const;
   virtual std::string Text() const { return std::string(Name()); }

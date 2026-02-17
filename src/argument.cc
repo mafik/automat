@@ -17,66 +17,62 @@
 namespace automat {
 
 std::unique_ptr<ui::Widget> Argument::MakeIcon(ui::Widget* parent) const {
-  return make_icon(*this, parent);
+  return table->make_icon(*this, parent);
 }
 
-Object* Argument::ObjectOrNull(Object& start) const {
-  if (auto found = Find(start)) {
-    if (auto* obj = found.Owner<Object>()) {
-      return obj;
+Object* Argument::ObjectOrNull() const {
+  if (auto found = Find()) {
+    if (auto* o = found.Owner<Object>()) {
+      return o;
     }
   }
   return nullptr;
 }
 
-Object& Argument::ObjectOrMake(Object& start) const {
-  if (auto* obj = ObjectOrNull(start)) {
-    return *obj;
+Object& Argument::ObjectOrMake() const {
+  if (auto* o = ObjectOrNull()) {
+    return *o;
   }
-  auto proto = prototype();
-  Location* start_loc = start.here;
+  auto proto = table->prototype();
+  Location* start_loc = obj->here;
   auto board = start_loc->ParentAs<Board>();
   auto& loc = board->Create(*proto);
 
-  PositionAhead(*start_loc, *this, loc);
+  PositionAhead(*start_loc, *table, loc);
   PositionBelow(loc, *start_loc);
-  Connect(start, *loc.object);
+  Connect(*loc.object);
 
   ui::root_widget->WakeAnimation();
   return *loc.object;
 }
 
-std::unique_ptr<ArgumentOf::Toy> ArgumentOf::MakeToy(ui::Widget* parent) {
-  return std::make_unique<ui::ConnectionWidget>(parent, object, arg);
+std::unique_ptr<Argument::Toy> Argument::MakeToy(ui::Widget* parent) {
+  return std::make_unique<ui::ConnectionWidget>(parent, *obj, *table);
 }
 
 // --- NextArg implementation ---
 
-NextArg::NextArg(StrView name) : Argument(name, Interface::kNextArg) {
+NextArg::Table::Table(StrView name) : Argument::Table(name, Interface::kNextArg) {
   style = Style::Cable;
-  can_connect = [](const Argument&, Object& start, Object& end_obj, Interface* end_iface,
-                   Status& status) {
-    if (!dyn_cast_if_present<Runnable>(end_iface)) {
+  can_connect = [](Argument, Interface end, Status& status) {
+    if (!dyn_cast_if_present<Runnable::Table>(end.table_ptr)) {
       AppendErrorMessage(status) += "Next target must be a Runnable";
     }
   };
-  on_connect = [](const Argument& arg, Object& start, Object* end_obj, Interface* end_iface) {
-    auto& next_arg = static_cast<const NextArg&>(arg);
-    auto& state = next_arg.get_next_state(start);
-    if (end_obj) {
-      if (Runnable* end_runnable = dyn_cast_if_present<Runnable>(end_iface)) {
-        state.next = NestedWeakPtr<Runnable>(end_obj->AcquireWeakPtr(), end_runnable);
+  on_connect = [](Argument self, Interface end) {
+    auto& st = *static_cast<NextArg&>(self).state;
+    if (end) {
+      if (Runnable::Table* end_runnable = dyn_cast_if_present<Runnable::Table>(end.table_ptr)) {
+        st.next = NestedWeakPtr<Interface::Table>(end.obj->AcquireWeakPtr(), end_runnable);
       }
     } else {
-      state.next = {};
+      st.next = {};
     }
   };
-  find = [](const Argument& arg, const Object& start) -> NestedPtr<Interface> {
-    auto& next_arg = static_cast<const NextArg&>(arg);
-    auto& state = next_arg.get_next_state(const_cast<Object&>(start));
-    return state.next.Lock();
+  find = [](Argument self) -> NestedPtr<Interface::Table> {
+    return static_cast<NextArg&>(self).state->next.Lock();
   };
-  make_icon = [](const Argument&, ui::Widget* parent) {
+  make_icon = [](Argument, ui::Widget* parent) {
     return ui::MakeShapeWidget(parent, kNextShape, "#ffffff"_color);
   };
 }

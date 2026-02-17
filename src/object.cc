@@ -15,6 +15,7 @@
 #include "drag_action.hh"
 #include "font.hh"
 #include "format.hh"
+#include "image_provider.hh"
 #include "location.hh"
 #include "menu.hh"
 #include "object_iconified.hh"
@@ -182,7 +183,7 @@ struct DeiconifyOption : TextOption {
   Dir PreferredDir() const override { return NE; }
 };
 
-static Str SyncableName(NestedWeakPtr<Syncable>& weak) {
+static Str SyncableName(NestedWeakPtr<Syncable::Table>& weak) {
   if (auto ptr = weak.Lock()) {
     Str name;
     ptr.Owner<Object>()->InterfaceName(*ptr.Get(), name);
@@ -192,24 +193,24 @@ static Str SyncableName(NestedWeakPtr<Syncable>& weak) {
 }
 
 struct TurnOnOption : TextOption {
-  NestedWeakPtr<OnOff> weak;
-  TurnOnOption(NestedWeakPtr<OnOff> weak) : TextOption("Turn on"), weak(weak) {}
+  NestedWeakPtr<OnOff::Table> weak;
+  TurnOnOption(NestedWeakPtr<OnOff::Table> weak) : TextOption("Turn on"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<TurnOnOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto ptr = weak.Lock()) {
-      ptr->TurnOn(*ptr.Owner<Object>());
+      OnOff(ptr.Owner<Object>(), ptr.Get()).TurnOn();
     }
     return nullptr;
   }
 };
 
 struct TurnOffOption : TextOption {
-  NestedWeakPtr<OnOff> weak;
-  TurnOffOption(NestedWeakPtr<OnOff> weak) : TextOption("Turn off"), weak(weak) {}
+  NestedWeakPtr<OnOff::Table> weak;
+  TurnOffOption(NestedWeakPtr<OnOff::Table> weak) : TextOption("Turn off"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<TurnOffOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto ptr = weak.Lock()) {
-      ptr->TurnOff(*ptr.Owner<Object>());
+      OnOff(ptr.Owner<Object>(), ptr.Get()).TurnOff();
     }
     return nullptr;
   }
@@ -231,10 +232,10 @@ struct SyncWidget : ui::Widget {
 };
 
 struct SyncAction : Action {
-  NestedWeakPtr<Syncable> weak;
+  NestedWeakPtr<Syncable::Table> weak;
   TrackedPtr<Toy> toy;
   SyncWidget sync_widget;
-  SyncAction(ui::Pointer& pointer, NestedWeakPtr<Syncable> weak, Toy* toy)
+  SyncAction(ui::Pointer& pointer, NestedWeakPtr<Syncable::Table> weak, Toy* toy)
       : Action(pointer),
         weak(weak),
         toy(toy->AcquireTrackedPtr()),
@@ -248,7 +249,7 @@ struct SyncAction : Action {
     if (auto syncable = weak.Lock()) {
       auto* mw = pointer.root_widget.toys.FindOrNull(*root_board);
       if (mw) {
-        mw->ConnectAtPoint(*syncable.Owner<Object>(), *syncable, sync_widget.end);
+        mw->ConnectAtPoint(*syncable.Owner<Object>(), *syncable.Get(), sync_widget.end);
       }
     }
   }
@@ -266,17 +267,17 @@ struct SyncAction : Action {
     }
     pointer.pointer_widget->WakeAnimation();
   }
-  bool Highlight(Object& end_obj, Interface* end_iface) const override {
+  bool Highlight(Interface end) const override {
     auto ptr = weak.Lock();
     Object& start = *ptr.Owner<Object>();
-    return ptr->Argument::CanConnect(start, end_obj, end_iface);
+    return Argument(start, *ptr).CanConnect(end);
   }
   ui::Widget* Widget() override { return &sync_widget; }
 };
 
 struct SyncOption : TextOption {
-  NestedWeakPtr<Syncable> weak;
-  SyncOption(NestedWeakPtr<Syncable> weak) : TextOption("Sync"), weak(weak) {}
+  NestedWeakPtr<Syncable::Table> weak;
+  SyncOption(NestedWeakPtr<Syncable::Table> weak) : TextOption("Sync"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<SyncOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto syncable = weak.Lock()) {
@@ -288,20 +289,20 @@ struct SyncOption : TextOption {
 };
 
 struct UnsyncOption : TextOption {
-  NestedWeakPtr<Syncable> weak;
-  UnsyncOption(NestedWeakPtr<Syncable> weak) : TextOption("Unsync"), weak(weak) {}
+  NestedWeakPtr<Syncable::Table> weak;
+  UnsyncOption(NestedWeakPtr<Syncable::Table> weak) : TextOption("Unsync"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<UnsyncOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto syncable = weak.Lock()) {
-      syncable->Unsync(*syncable.Owner<Object>());
+      Syncable(syncable.Owner<Object>(), syncable.Get()).Unsync();
     }
     return nullptr;
   }
 };
 
 struct FieldOption : TextOption, OptionsProvider {
-  NestedWeakPtr<Syncable> syncable_weak;
-  FieldOption(NestedWeakPtr<Syncable> weak) : TextOption(SyncableName(weak)), syncable_weak(weak) {}
+  NestedWeakPtr<Syncable::Table> syncable_weak;
+  FieldOption(NestedWeakPtr<Syncable::Table> weak) : TextOption(SyncableName(weak)), syncable_weak(weak) {}
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<FieldOption>(syncable_weak);
   }
@@ -314,18 +315,18 @@ struct FieldOption : TextOption, OptionsProvider {
   void VisitOptions(const OptionsVisitor& visitor) const override {
     if (auto syncable = syncable_weak.Lock()) {
       auto* obj = syncable.Owner<Object>();
-      if (auto* on_off = dyn_cast<OnOff>(syncable.Get())) {
-        if (on_off->IsOn(*obj)) {
-          TurnOffOption turn_off(NestedWeakPtr<OnOff>(syncable_weak.GetOwnerWeak(), on_off));
+      if (auto* on_off = dyn_cast<OnOff::Table>(syncable.Get())) {
+        if (OnOff(*obj, *on_off).IsOn()) {
+          TurnOffOption turn_off(NestedWeakPtr<OnOff::Table>(syncable_weak.GetOwnerWeak(), static_cast<OnOff::Table*>(on_off)));
           visitor(turn_off);
         } else {
-          TurnOnOption turn_on(NestedWeakPtr<OnOff>(syncable_weak.GetOwnerWeak(), on_off));
+          TurnOnOption turn_on(NestedWeakPtr<OnOff::Table>(syncable_weak.GetOwnerWeak(), static_cast<OnOff::Table*>(on_off)));
           visitor(turn_on);
         }
       }
       SyncOption sync(syncable);
       visitor(sync);
-      auto& state = syncable->get_sync_state(*obj);
+      auto& state = *Syncable(*obj, *syncable.Get()).state;
       if (!state.end.IsExpired()) {
         UnsyncOption unsync(syncable);
         visitor(unsync);
@@ -342,7 +343,7 @@ void ObjectToy::VisitOptions(const OptionsVisitor& visitor) const {
       visitor(del);
       MoveLocationOption move{loc_weak, owner.Copy<Object>()};
       visitor(move);
-      if (auto runnable = loc->object->AsRunnable()) {
+      if (auto* runnable = static_cast<Runnable::Table*>(loc->object->AsRunnable())) {
         RunOption run{owner.Copy<Object>(), *runnable};
         visitor(run);
       }
@@ -354,9 +355,9 @@ void ObjectToy::VisitOptions(const OptionsVisitor& visitor) const {
         visitor(iconify);
       }
       if (auto obj = LockOwner<Object>()) {
-        obj->Interfaces([&](Interface& iface) {
-          if (auto* syncable = dyn_cast<Syncable>(&iface)) {
-            FieldOption field_option{NestedWeakPtr<Syncable>(owner.Copy<Object>(), syncable)};
+        obj->Interfaces([&](Interface::Table& iface) {
+          if (auto* syncable = dyn_cast<Syncable::Table>(&iface)) {
+            FieldOption field_option{NestedWeakPtr<Syncable::Table>(owner.Copy<Object>(), syncable)};
             visitor(field_option);
           }
           return LoopControl::Continue;
@@ -383,8 +384,8 @@ std::unique_ptr<Action> ObjectToy::FindAction(ui::Pointer& p, ui::ActionTrigger 
 }
 
 void Object::Updated(WeakPtr<Object>& updated) {
-  if (Runnable* runnable = AsRunnable()) {
-    runnable->ScheduleRun(*this);
+  if (auto* runnable = static_cast<Runnable::Table*>(AsRunnable())) {
+    Runnable(*this, *runnable).ScheduleRun();
   }
 }
 
@@ -445,8 +446,8 @@ void ObjectToy::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
   });
 }
 
-Vec2AndDir ObjectToy::ArgStart(const Argument& arg, ui::Widget* coordinate_space) {
-  SkPath shape = InterfaceShape(&const_cast<Argument&>(arg));
+Vec2AndDir ObjectToy::ArgStart(const Interface::Table& arg, ui::Widget* coordinate_space) {
+  SkPath shape = InterfaceShape(const_cast<Interface::Table*>(&arg));
   Rect bounds = shape.getBounds();
   Vec2AndDir pos_dir{
       .pos = bounds.BottomCenter(),
@@ -469,28 +470,29 @@ bool ObjectToy::IsIconified() const {
   return automat::IsIconified(static_cast<Object*>(owner.GetUnsafe()));
 }
 
-void Object::Interfaces(const std::function<LoopControl(Interface&)>& cb) {}
+void Object::Interfaces(const std::function<LoopControl(Interface::Table&)>& cb) {}
 
-void Object::InterfaceName(Interface& iface, Str& out_name) { out_name = iface.Name(); }
+void Object::InterfaceName(Interface::Table& iface, Str& out_name) { out_name = iface.name; }
 
 template <typename T>
 static T* FindInterface(Object& obj) {
   T* result = nullptr;
-  obj.Interfaces([&](Interface& iface) {
+  obj.Interfaces([&](Interface::Table& iface) {
     result = dyn_cast<T>(&iface);
     return result ? LoopControl::Break : LoopControl::Continue;
   });
   return result;
 }
 
-LongRunning* Object::AsLongRunning() { return FindInterface<LongRunning>(*this); }
-Runnable* Object::AsRunnable() { return FindInterface<Runnable>(*this); }
-OnOff* Object::AsOnOff() { return FindInterface<OnOff>(*this); }
+Interface::Table* Object::AsLongRunning() { return FindInterface<LongRunning::Table>(*this); }
+Interface::Table* Object::AsRunnable() { return FindInterface<Runnable::Table>(*this); }
+Interface::Table* Object::AsOnOff() { return FindInterface<OnOff::Table>(*this); }
+Interface::Table* Object::AsImageProvider() { return FindInterface<ImageProvider::Table>(*this); }
 
-void Object::Args(const std::function<void(Argument&)>& cb) {
-  Interfaces([&](Interface& iface) {
-    if (Argument* arg = dyn_cast<Argument>(&iface)) {
-      cb(*arg);
+void Object::Args(const std::function<void(Interface::Table&)>& cb) {
+  Interfaces([&](Interface::Table& iface) {
+    if (dyn_cast<Argument::Table>(&iface)) {
+      cb(iface);
     }
     return LoopControl::Continue;
   });
@@ -506,7 +508,7 @@ Location* Object::MyLocation() {
 }
 
 
-void Object::InvalidateConnectionWidgets(const Argument* arg) const {
+void Object::InvalidateConnectionWidgets(const Interface::Table* arg) const {
   for (auto& w : ui::ConnectionWidgetRange(this, arg)) {
     w.WakeAnimation();
     if (w.state) {
@@ -515,9 +517,9 @@ void Object::InvalidateConnectionWidgets(const Argument* arg) const {
   }
 }
 
-Interface* Object::InterfaceFromName(StrView needle) {
-  Interface* result = nullptr;
-  Interfaces([&](Interface& iface) {
+Interface::Table* Object::InterfaceFromName(StrView needle) {
+  Interface::Table* result = nullptr;
+  Interfaces([&](Interface::Table& iface) {
     Str iface_name;
     InterfaceName(iface, iface_name);
     if (iface_name == needle) {
@@ -548,7 +550,7 @@ Str& ObjectSerializer::ResolveName(Object& object, StrView hint) {
   return it->second;
 }
 
-Str ObjectSerializer::ResolveName(Object& object, Interface* iface, StrView hint) {
+Str ObjectSerializer::ResolveName(Object& object, Interface::Table* iface, StrView hint) {
   Str ret = ResolveName(object, hint);
   if (iface) {
     ret += ".";
@@ -575,8 +577,9 @@ void ObjectSerializer::Serialize(Object& start) {
     {  // Serialize object parts
       // ATM we only serialize Args
       bool args_opened = false;  // used to lazily call StartObject
-      o->Args([&](Argument& arg) {
-        auto end = arg.Find(*o);
+      o->Args([&](Interface::Table& iface) {
+        auto& arg = static_cast<Argument::Table&>(iface);
+        auto end = Argument(*o, arg).Find();
         if (!end) return;
         if (!args_opened) {
           args_opened = true;
@@ -610,7 +613,7 @@ Object* ObjectDeserializer::LookupObject(StrView name) {
   return to_it->second.Get();
 }
 
-NestedPtr<Interface> ObjectDeserializer::LookupInterface(StrView name) {
+NestedPtr<Interface::Table> ObjectDeserializer::LookupInterface(StrView name) {
   auto dot_pos = name.find('.');
   Str to_name, to_iface;
   if (dot_pos != Str::npos) {
@@ -624,8 +627,8 @@ NestedPtr<Interface> ObjectDeserializer::LookupInterface(StrView name) {
   if (to == nullptr) {
     return {};
   }
-  Interface* iface = to_iface.empty() ? nullptr : to->InterfaceFromName(to_iface);
-  return NestedPtr<Interface>(to->AcquirePtr(), iface);
+  Interface::Table* iface = to_iface.empty() ? nullptr : to->InterfaceFromName(to_iface);
+  return NestedPtr<Interface::Table>(to->AcquirePtr(), iface);
 }
 
 }  // namespace automat

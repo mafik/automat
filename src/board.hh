@@ -105,10 +105,10 @@ struct BoardWidget : ObjectToy, ui::DropTarget {
   void DropLocation(Ptr<Location>&&) override;
 
   // Spatial queries (these use widget shape data)
-  void ConnectAtPoint(Object& start, Argument&, Vec2);
+  void ConnectAtPoint(Object& start, Argument::Table&, Vec2);
   void* Nearby(Vec2 center, float radius, std::function<void*(Location&)> callback);
-  void NearbyCandidates(Location& here, const Argument& arg, float radius,
-                        std::function<void(ObjectToy&, Interface*, Vec<Vec2AndDir>&)> callback);
+  void NearbyCandidates(Location& here, Argument::Table& arg, float radius,
+                        std::function<void(ObjectToy&, Interface::Table*, Vec<Vec2AndDir>&)> callback);
   void ForStack(Location& base, std::function<void(Location&, int index)> callback);
   SkPath StackShape(Location& base);
   Vec<Ptr<Location>> ExtractStack(Location& base);

@@ -77,6 +77,15 @@ struct Register : Object {
   WeakPtr<Assembler> assembler_weak;
   int register_index;
 
+  struct AssemblerArgImpl : Argument {
+    using Parent = Register;
+    static constexpr StrView kName = "Reg's Assembler"sv;
+    static constexpr int Offset() { return offsetof(Register, assembler_arg); }
+
+    static void Configure(Argument::Table&);
+  };
+  [[no_unique_address]] Argument::Def<AssemblerArgImpl> assembler_arg;
+
   Register(WeakPtr<Assembler> assembler_weak, int register_index);
 
   Ptr<Object> Clone() const override;
@@ -85,7 +94,7 @@ struct Register : Object {
     return make_unique<RegisterWidget>(parent, *this);
   }
 
-  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
+  INTERFACES(assembler_arg)
   void SetText(std::string_view text) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
@@ -99,15 +108,19 @@ struct Assembler : Object, Container {
   using PrologueFn = uintptr_t (*)(void*);
   using Toy = AssemblerWidget;
 
-  std::unique_ptr<RunTask> long_running_task;
-  SyncState running_sync;
-  static LongRunning running;
+  struct RunningImpl : LongRunning {
+    using Parent = Assembler;
+    static constexpr StrView kName = "Running"sv;
+    static constexpr int Offset() { return offsetof(Assembler, running); }
+
+    void OnCancel();
+  };
+  LongRunning::Def<RunningImpl> running;
 
   Ptr<Object> Clone() const override;
-  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
+  INTERFACES(running)
 
   Assembler();
-  ~Assembler();
 
   void ExitCallback(mc::CodePoint code_point);
 

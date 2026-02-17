@@ -10,25 +10,39 @@ namespace automat::library {
 struct FlipFlop : Object {
   bool current_state = false;
 
-  SyncState flip_sync;
-  static Runnable flip;
+  struct Flip : Runnable {
+    using Parent = FlipFlop;
+    static constexpr StrView kName = "Flip"sv;
+    static constexpr int Offset() { return offsetof(FlipFlop, flip); }
+    void OnRun(std::unique_ptr<RunTask>&);
+  };
+  Runnable::Def<Flip> flip;
 
-  SyncState on_off_sync;
-  static OnOff on_off;
+  struct Enabled : OnOff {
+    using Parent = FlipFlop;
+    static constexpr StrView kName = "State"sv;
+    static constexpr int Offset() { return offsetof(FlipFlop, enabled); }
+    bool IsOn() const { return self().current_state; }
+    void OnTurnOn() {
+      self().current_state = true;
+      self().WakeToys();
+    }
+    void OnTurnOff() {
+      self().current_state = false;
+      self().WakeToys();
+    }
+  };
+  OnOff::Def<Enabled> enabled;
 
-  FlipFlop();
-  ~FlipFlop();
+  INTERFACES(flip, enabled)
+
+  FlipFlop() = default;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   void SetKey(ui::AnsiKey);
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
-
-  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override {
-    if (LoopControl::Break == cb(flip)) return;
-    if (LoopControl::Break == cb(on_off)) return;
-  }
 
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 };

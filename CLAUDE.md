@@ -94,6 +94,7 @@ Objects (multi-threaded) notify Toys (UI-thread) via `wake_counter`:
 
 ### Code Style
 
+- **Pragmatic types**: What matters is design intent, memory layout, division of responsibilities, and arrangement of computation in time (static vs runtime, flow of control). Types are tools that make these readable — not a formal sport. Prefer simple constructors taking concrete types over template/concept gymnastics. Avoid SFINAE, requires-clauses, and type traits unless they solve a real problem — not a hypothetical one.
 - Modern C++ (C++26) with custom extensions
 - Uses custom smart pointers (`Ptr<T>`, `WeakPtr<T>`, `NestedPtr<T>`) and containers (`Vec<T>`)
 - Files use `#pragma maf` directives for build system integration

@@ -3,21 +3,16 @@
 #pragma once
 
 #include "color.hh"
+#include "on_off.hh"
 #include "ptr.hh"
 #include "ui_button.hh"
-
-namespace automat {
-
-struct OnOff;
-
-}  // namespace automat
 
 namespace automat::ui {
 
 struct PowerButton : ToggleButton {
-  NestedWeakPtr<OnOff> target;
+  NestedWeakPtr<OnOff::Table> target;
 
-  PowerButton(Widget* parent, NestedWeakPtr<OnOff> target, SkColor fg = "#fa2305"_color,
+  PowerButton(Widget* parent, NestedWeakPtr<OnOff::Table> target, SkColor fg = "#fa2305"_color,
               SkColor bg = SK_ColorWHITE);
 
   void Activate(ui::Pointer& p);

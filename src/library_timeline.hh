@@ -35,15 +35,21 @@ struct TrackBase : Object {
 struct OnOffTrack : TrackBase {
   time::Duration on_at = time::kDurationGuard;
 
-  SyncState on_off_sync;
-  static OnOff on_off;
+  struct OnOffImpl : OnOff {
+    using Parent = OnOffTrack;
+    static constexpr StrView kName = "On/Off"sv;
+    static constexpr int Offset() { return offsetof(OnOffTrack, on_off); }
+
+    bool IsOn() const;
+    void OnTurnOn() {}
+    void OnTurnOff() {}
+  };
+  OnOff::Def<OnOffImpl> on_off;
 
   string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override {
-    if (LoopControl::Break == cb(on_off)) return;
-  }
+  INTERFACES(on_off)
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -81,9 +87,9 @@ struct Float64Track : TrackBase {
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };
 
-struct TrackArgument : Argument {
+struct TrackArgument : Argument::Table {
   Ptr<TrackBase> track;
-  NestedWeakPtr<Interface> end;
+  NestedWeakPtr<Interface::Table> end;
 
   TrackArgument(StrView name);
 };
@@ -95,15 +101,30 @@ struct TrackArgument : Argument {
 struct Timeline : Object, TimerNotificationReceiver {
   std::mutex mutex;
 
-  std::unique_ptr<RunTask> long_running_task;
+  struct Run : Runnable {
+    using Parent = Timeline;
+    static constexpr StrView kName = "Run"sv;
+    static constexpr int Offset() { return offsetof(Timeline, run); }
 
-  SyncState run_sync;
-  SyncState running_sync;
-  NextState next_state;
+    void OnRun(std::unique_ptr<RunTask>&);
+  };
+  Runnable::Def<Run> run;
 
-  static Runnable run;
-  static LongRunning running;
-  static NextArg next;
+  struct Running : LongRunning {
+    using Parent = Timeline;
+    static constexpr StrView kName = "Running"sv;
+    static constexpr int Offset() { return offsetof(Timeline, running); }
+
+    void OnCancel();
+  };
+  LongRunning::Def<Running> running;
+
+  struct NextImpl : NextArg {
+    using Parent = Timeline;
+    static constexpr StrView kName = "Next"sv;
+    static constexpr int Offset() { return offsetof(Timeline, next); }
+  };
+  NextArg::Def<NextImpl> next;
 
   Vec<std::unique_ptr<TrackArgument>> tracks;
 
@@ -137,7 +158,7 @@ struct Timeline : Object, TimerNotificationReceiver {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
+  void Interfaces(const std::function<LoopControl(Interface::Table&)>& cb) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   OnOffTrack& AddOnOffTrack(StrView name);
   Vec2Track& AddVec2Track(StrView name);

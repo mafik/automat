@@ -28,15 +28,26 @@ struct MouseButtonEvent : Object {
   ui::PointerButton button;
   bool down;
 
-  SyncState runnable_sync;
-  NextState next_state;
-  static Runnable runnable_iface;
-  static NextArg next;
+  struct Run : Runnable {
+    using Parent = MouseButtonEvent;
+    static constexpr StrView kName = "Run"sv;
+    static constexpr int Offset() { return offsetof(MouseButtonEvent, run); }
+
+    void OnRun(std::unique_ptr<RunTask>&);
+  };
+  Runnable::Def<Run> run;
+
+  struct Next : NextArg {
+    using Parent = MouseButtonEvent;
+    static constexpr StrView kName = "Next"sv;
+    static constexpr int Offset() { return offsetof(MouseButtonEvent, next); }
+  };
+  NextArg::Def<Next> next;
 
   MouseButtonEvent(ui::PointerButton button, bool down) : button(button), down(down) {}
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
+  INTERFACES(run, next)
   audio::Sound& NextSound() override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
@@ -76,20 +87,39 @@ struct MouseButtonPresser : Object {
   ui::PointerButton button;
   bool down = false;
 
-  SyncState click_sync;
-  SyncState state_sync;
-  NextState next_state;
+  struct Click : Runnable {
+    using Parent = MouseButtonPresser;
+    static constexpr StrView kName = "Click"sv;
+    static constexpr int Offset() { return offsetof(MouseButtonPresser, click); }
 
-  static Runnable click;
-  static OnOff state;
-  static NextArg next;
+    void OnRun(std::unique_ptr<RunTask>&);
+  };
+  Runnable::Def<Click> click;
+
+  struct State : OnOff {
+    using Parent = MouseButtonPresser;
+    static constexpr StrView kName = "State"sv;
+    static constexpr int Offset() { return offsetof(MouseButtonPresser, state); }
+
+    bool IsOn() const { return self().down; }
+    void OnTurnOn();
+    void OnTurnOff();
+  };
+  OnOff::Def<State> state;
+
+  struct NextImpl : NextArg {
+    using Parent = MouseButtonPresser;
+    static constexpr StrView kName = "Next"sv;
+    static constexpr int Offset() { return offsetof(MouseButtonPresser, next); }
+  };
+  NextArg::Def<NextImpl> next;
 
   MouseButtonPresser(ui::PointerButton button);
   MouseButtonPresser();
   ~MouseButtonPresser() override;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
+  INTERFACES(next, click, state)
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
   void SerializeState(ObjectSerializer& writer) const override;

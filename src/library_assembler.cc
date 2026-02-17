@@ -150,8 +150,6 @@ Assembler::Assembler() {
   }
 }
 
-Assembler::~Assembler() { running.OnLongRunningDestruct(*this); }
-
 static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now) {
   if (assembler.mc_controller == nullptr) {
     return animation::Finished;
@@ -170,7 +168,7 @@ static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now
     }
     assembler.last_state_refresh = now;
   }
-  if (Assembler::running.IsRunning(assembler)) {
+  if (assembler.running->IsRunning()) {
     return animation::Animating;
   } else {
     return animation::Finished;
@@ -178,7 +176,7 @@ static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now
 }
 
 void Assembler::ExitCallback(mc::CodePoint code_point) {
-  running.Done(*this);
+  running->Done();
   RefreshState(*this, time::SteadyNow());
   Instruction* exit_inst = nullptr;
   if (code_point.instruction) {
@@ -196,7 +194,7 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
       ScheduleNext(*exit_inst);
     } else if (code_point.stop_type == mc::StopType::Jump) {
       // LOG << "Exiting through " << exit_inst->ToAsmStr() << "->jump";
-      ScheduleArgumentTargets(*exit_inst, jump_arg);
+      ScheduleArgumentTargets(*exit_inst, exit_inst->jump_arg.GetTable());
     } else {
       ERROR << "Exiting through " << exit_inst->ToAsmStr() << "->instruction body (?!)";
     }
@@ -207,8 +205,13 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
 
 Ptr<Object> Assembler::Clone() const { return MAKE_PTR(Assembler); }
 
-void Assembler::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
-  if (LoopControl::Break == cb(running)) return;
+void Assembler::RunningImpl::OnCancel() {
+  Status status;
+  self().mc_controller->Cancel(status);
+  if (!OK(status)) {
+    ERROR << "Failed to cancel Assembler: " << status;
+    return;
+  }
 }
 
 void UpdateCode(automat::mc::Controller& controller,
@@ -228,8 +231,9 @@ void UpdateCode(automat::mc::Controller& controller,
     int next = -1;
     int jump = -1;
     if (loc) {
-      auto FindInstruction = [obj_raw, &instructions, n](const automat::Argument& arg) -> int {
-        if (auto target = arg.Find(*obj_raw)) {
+      auto FindInstruction = [obj_raw, &instructions,
+                              n](automat::Argument::Table& arg) -> int {
+        if (auto target = automat::Argument(*obj_raw, arg).Find()) {
           if (auto* to_inst =
                   dynamic_cast<automat::library::Instruction*>(target.Owner<Object>())) {
             // Find the instruction in our sorted list
@@ -242,8 +246,8 @@ void UpdateCode(automat::mc::Controller& controller,
         }
         return -1;
       };
-      next = FindInstruction(library::next_instruction_arg);
-      jump = FindInstruction(library::jump_arg);
+      next = FindInstruction(obj_raw->next.GetTable());
+      jump = FindInstruction(obj_raw->jump_arg.GetTable());
     }
     program[i].next = next;
     program[i].jump = jump;
@@ -289,21 +293,9 @@ void Assembler::UpdateMachineCode() {
   }
 }
 
-LongRunning Assembler::running(
-    "Running"sv, +[](Assembler& obj) -> SyncState& { return obj.running_sync; },
-    +[](Assembler& obj) -> std::unique_ptr<RunTask>& { return obj.long_running_task; },
-    +[](const LongRunning&, Assembler& as) {
-      Status status;
-      as.mc_controller->Cancel(status);
-      if (!OK(status)) {
-        ERROR << "Failed to cancel Assembler: " << status;
-        return;
-      }
-    });
-
 void Assembler::RunMachineCode(library::Instruction* entry_point,
                                std::unique_ptr<RunTask>&& run_task) {
-  Assembler::running.BeginLongRunning(*this, std::move(run_task));
+  running->BeginLongRunning(std::move(run_task));
 
   Status status;
   auto inst = entry_point->ToMC();
@@ -745,38 +737,29 @@ Register::Register(WeakPtr<Assembler> assembler_weak, int register_index)
 
 Ptr<Object> Register::Clone() const { return MAKE_PTR(Register, assembler_weak, register_index); }
 
-static Argument register_assembler_arg = [] {
-  Argument a("Reg's Assembler"sv);
-  a.autoconnect_radius = INFINITY;
-  a.tint = "#ff0000"_color;
-  a.style = Argument::Style::Spotlight;
-  a.can_connect = [](const Argument&, Object&, Object& end_obj, Interface* end_iface,
-                     Status& status) {
-    if (end_iface != nullptr || !dynamic_cast<Assembler*>(&end_obj)) {
+void Register::AssemblerArgImpl::Configure(Argument::Table& t) {
+  t.autoconnect_radius = INFINITY;
+  t.tint = "#ff0000"_color;
+  t.style = Argument::Style::Spotlight;
+  t.can_connect = [](Argument, Interface end, Status& status) {
+    if (end.table_ptr!= nullptr || !dynamic_cast<Assembler*>(end.obj)) {
       AppendErrorMessage(status) += "Must connect to an Assembler";
     }
   };
-  a.on_connect = [](const Argument&, Object& start, Object* end_obj, Interface*) {
-    auto* reg = dynamic_cast<Register*>(&start);
-    if (!reg) return;
-    if (end_obj) {
-      if (auto* assembler = dynamic_cast<Assembler*>(end_obj)) {
-        reg->assembler_weak = assembler->AcquireWeakPtr();
+  t.on_connect = [](Argument self, Interface end) {
+    auto& reg = static_cast<Register&>(*self.obj);
+    if (end) {
+      if (auto* assembler = dynamic_cast<Assembler*>(end.obj)) {
+        reg.assembler_weak = assembler->AcquireWeakPtr();
       }
     } else {
-      reg->assembler_weak = {};
+      reg.assembler_weak = {};
     }
   };
-  a.find = [](const Argument&, const Object& start) -> NestedPtr<Interface> {
-    auto* reg = dynamic_cast<const Register*>(&start);
-    if (!reg) return {};
-    return NestedPtr<Interface>(reg->assembler_weak.Lock(), nullptr);
+  t.find = [](Argument self) -> NestedPtr<Interface::Table> {
+    auto& reg = static_cast<const Register&>(*self.obj);
+    return NestedPtr<Interface::Table>(reg.assembler_weak.Lock(), nullptr);
   };
-  return a;
-}();
-
-void Register::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
-  if (LoopControl::Break == cb(register_assembler_arg)) return;
 }
 
 void Register::SetText(std::string_view text) {

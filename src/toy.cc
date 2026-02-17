@@ -6,7 +6,7 @@
 
 namespace automat {
 
-void ToyMakerMixin::ForEachToyImpl(ReferenceCounted& owner, Interface* iface,
+void ToyMakerMixin::ForEachToyImpl(ReferenceCounted& owner, Interface::Table* iface,
                                    std::function<void(ui::RootWidget&, Toy&)> cb) {
   for (auto* root_widget : ui::root_widgets) {
     auto it = root_widget->toys.container.find(ToyStore::Key(&owner, iface));

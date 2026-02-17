@@ -361,8 +361,8 @@ animation::Phase SimulateCablePhysics(time::Timer& timer, CablePhysicsSimulation
 
   animation::Phase phase = animation::Finished;
   float dt = timer.d;
-  OnOff* arg_on_off = dyn_cast<OnOff>(&state.arg);
-  if (arg_on_off && arg_on_off->IsOn(*state.location.object)) {
+  OnOff::Table* arg_on_off = dyn_cast<OnOff::Table>(&state.arg);
+  if (arg_on_off && OnOff(*state.location.object, *arg_on_off).IsOn()) {
     state.lightness_pct = 100;
   } else {
     phase |= animation::ExponentialApproach(0, timer.d, 0.1, state.lightness_pct);
@@ -1303,7 +1303,7 @@ void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shap
   canvas.restore();
 }
 
-CablePhysicsSimulation::CablePhysicsSimulation(Location& loc, Argument& arg, Vec2AndDir start)
+CablePhysicsSimulation::CablePhysicsSimulation(Location& loc, Argument::Table& arg, Vec2AndDir start)
     : dispenser_v(0), location(loc), arg(arg) {
   sections.emplace_back(CableSection{
       .pos = start.pos,

@@ -28,7 +28,7 @@ struct DragConnectionAction : Action {
   DragConnectionAction(Pointer&, ConnectionWidget&);
   ~DragConnectionAction() override;
   void Update() override;
-  bool Highlight(Object&, Interface*) const override;
+  bool Highlight(Interface) const override;
 };
 
 // ConnectionWidget can function in three different modes, depending on how the argument is set to
@@ -39,7 +39,7 @@ struct DragConnectionAction : Action {
 //
 // TODO: separate the state of these three modes better
 struct ConnectionWidget : Toy {
-  NestedWeakPtr<Argument> start_weak;
+  NestedWeakPtr<Argument::Table> start_weak;
 
   struct AnimationState {
     float radar_alpha = 0;
@@ -49,8 +49,8 @@ struct ConnectionWidget : Toy {
     double time_seconds = 0;
   };
 
-  static ConnectionWidget* FindOrNull(Object&, Argument&);
-  static ConnectionWidget* FindOrNull(const NestedWeakPtr<Argument>& ptr) {
+  static ConnectionWidget* FindOrNull(Object&, Argument::Table&);
+  static ConnectionWidget* FindOrNull(const NestedWeakPtr<Argument::Table>& ptr) {
     return FindOrNull(*ptr.OwnerUnsafe<Object>(), *ptr.GetUnsafe());
   }
 
@@ -61,7 +61,7 @@ struct ConnectionWidget : Toy {
   Optional<Vec2> manual_position;  // position of the plug (bottom center)
 
   // Updated in `Tick()`
-  Argument::Style style;
+  Argument::Table::Style style;
   Vec2AndDir pos_dir;  // position of connection start
   SkPath from_shape;   // board coords
   SkPath to_shape;     // board coords
@@ -73,7 +73,7 @@ struct ConnectionWidget : Toy {
   mutable std::unique_ptr<ObjectToy> prototype_widget;
   std::unique_ptr<ui::Widget> icon;
 
-  ConnectionWidget(Widget* parent, Object&, Argument&);
+  ConnectionWidget(Widget* parent, Object&, Argument::Table&);
 
   // Helper to get the Location and Argument from start_weak
   Location* StartLocation() const;  // TODO: remove
@@ -91,25 +91,25 @@ struct ConnectionWidget : Toy {
   void FromMoved();
 };
 
-// Now that ConnectionWidget is defined, we can check whether ArgumentOf can make toys
-static_assert(ToyMaker<ArgumentOf>);
+// Now that ConnectionWidget is defined, we can check whether Argument can make toys
+static_assert(ToyMaker<Argument>);
 
 void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shape);
 
 struct ConnectionWidgetRange {
   const Object* obj;
-  const Argument* arg;
+  const Interface::Table* arg;
 
   using MapType = ToyStore::Map;
   struct end_iterator {};
 
   struct iterator {
     const Object* obj;
-    const Argument* arg;
+    const Interface::Table* arg;
     MapType::iterator it;
     MapType::iterator end_it;
 
-    iterator(const Object* obj, const Argument* arg, MapType::iterator it, MapType::iterator end_it)
+    iterator(const Object* obj, const Interface::Table* arg, MapType::iterator it, MapType::iterator end_it)
         : obj(obj), arg(arg), it(it), end_it(end_it) {
       Advance();
     }
@@ -136,7 +136,7 @@ struct ConnectionWidgetRange {
     ConnectionWidget& operator*() const { return static_cast<ConnectionWidget&>(*it->second); }
   };
 
-  ConnectionWidgetRange(const Object* obj, const Argument* arg) : obj(obj), arg(arg) {}
+  ConnectionWidgetRange(const Object* obj, const Interface::Table* arg) : obj(obj), arg(arg) {}
 
   iterator begin() const {
     auto& container = ui::root_widget->toys.container;

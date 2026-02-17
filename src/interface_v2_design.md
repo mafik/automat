@@ -289,6 +289,19 @@ The `static_cast<ImplT&>(iface)` is valid because:
 Each template instantiation gets its own unique static `table` with stable address.
 Works as ToyStore key, serialization ID, etc.
 
+### DefBase — shared Def infrastructure
+
+All `Def<ImplT>` types inherit `DefBase`, which provides:
+
+- **`Bind()`** — reconstructs the Bound type from the Def's address using `Impl::Offset()`
+- **`operator->`** — arrow proxy for calling Bound methods directly: `def->Toggle()`.
+  Returns a transient proxy whose own `operator->` yields a `Bound*`.
+- **`operator Table&`** — implicit conversion to the static Table reference
+- **`operator==`** — compares with `Table*` for identity checks
+
+The arrow operator is the **preferred way** for client code to call interface methods
+through a Def member:
+
 ### INTERFACES macro
 
 ```cpp
@@ -336,8 +349,20 @@ No separate SyncState, no static definition in .cc, no get_sync_state lambda.
 
 ### Solves Issue 2 (verbose usage)
 Impl methods access the parent via `self()` — no explicit arguments needed.
-Call sites use the bound type directly: `OnOff(self, table).Toggle()`.
-The top-level names (`OnOff`, `Runnable`, etc.) are the primary API.
+
+**Calling interface methods** — three layers, from preferred to internal-only:
+
+1. **Through the Def member** (preferred): `on_off->Toggle()`, `on_off->IsOn()`.
+   `DefBase::operator->` returns an arrow proxy that constructs the Bound type
+   transiently. This is the primary way client code should call interface methods.
+
+2. **Through a Bound type** (when no Def member is available): `OnOff(obj, table).Toggle()`.
+   Use this when you have an `(Object&, Table&)` pair but no Def reference — e.g.
+   in generic code iterating interfaces, or inside sync forwarding lambdas.
+
+3. **Through a Table object** (interface infrastructure only): `table.IsOn(obj)`.
+   Table-level methods are raw function-pointer dispatch with no sync forwarding.
+   Only Bound type implementations should call these — never client code.
 
 ### Solves Issue 3 (state destruction)
 `Def<ImplT>::~Def()` navigates to the parent Object using `state_off` (which is
@@ -486,6 +511,11 @@ struct FlipFlop : Object {
   // No explicit destructor needed — Def handles cleanup
   // ...
 };
+
+// Usage:
+FlipFlop ff;
+ff.on_off->Toggle();          // preferred — through Def member
+bool on = ff.on_off->IsOn();  // preferred
 ```
 
 No .cc static definitions needed. No manual Interfaces() override.

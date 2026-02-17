@@ -47,7 +47,7 @@ Location* ConnectionWidget::EndLocation() const {
   if (auto locked = start_weak.Lock()) {
     if (auto* arg = locked.Get()) {
       if (auto* start_obj = locked.Owner<Object>()) {
-        if (auto found = arg->Find(*start_obj)) {
+        if (auto found = Argument(*start_obj, *arg).Find()) {
           if (auto* obj = found.Owner<Object>()) {
             return obj->MyLocation();
           }
@@ -58,7 +58,7 @@ Location* ConnectionWidget::EndLocation() const {
   return nullptr;
 }
 
-ConnectionWidget::ConnectionWidget(Widget* parent, Object& start, Argument& arg)
+ConnectionWidget::ConnectionWidget(Widget* parent, Object& start, Argument::Table& arg)
     : Toy(parent, start, &arg), start_weak(start.AcquireWeakPtr(), &arg) {}
 
 SkPath ConnectionWidget::Shape() const {
@@ -95,7 +95,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     }
 
     {  // Ray from the source to the target
-      auto source_object = arg->ObjectOrNull(object);
+      auto source_object = Argument(object, *arg).ObjectOrNull();
       if (source_object) {
         Vec2 source = source_object->MyLocation()->position;
         Vec2 diff = target - source;
@@ -159,7 +159,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
                    kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
 
     auto& font = GetFont();
-    auto name = arg->Name();
+    auto name = arg->name;
     SkRSXform transforms[name.size()];
     for (size_t i = 0; i < name.size(); ++i) {
       float i_fract = (i + 1.f) / (name.size() + 1.f);
@@ -196,7 +196,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     if (mw) {
       mw->NearbyCandidates(
           from, *arg, autoconnect_radius * 2 + 10_cm,
-          [&](ObjectToy& candidate_toy, Interface*, Vec<Vec2AndDir>& to_points) {
+          [&](ObjectToy& candidate_toy, Interface::Table*, Vec<Vec2AndDir>& to_points) {
             auto m = TransformBetween(candidate_toy, *mw);
             for (auto& to : to_points) {
               to.pos = m.mapPoint(to.pos);
@@ -251,10 +251,10 @@ struct ConnectionWidgetLocker {
   ToyStore& toy_store;
   BoardWidget* board_widget;
 
-  NestedPtr<Argument> start_arg;
+  NestedPtr<Argument::Table> start_arg;
   ObjectToy* start_widget;
 
-  NestedPtr<Interface> end_iface;
+  NestedPtr<Interface::Table> end_iface;
   ObjectToy* end_widget;
   SkMatrix end_transform;
 
@@ -264,7 +264,7 @@ struct ConnectionWidgetLocker {
         board_widget(toy_store.FindOrNull(*root_board)),
         start_arg(w.start_weak.Lock()),
         start_widget(StartObj() ? toy_store.FindOrNull(*StartObj()) : nullptr),
-        end_iface(StartObj() ? start_arg->Find(*StartObj()) : NestedPtr<Interface>()),
+        end_iface(StartObj() ? Argument(*StartObj(), *start_arg).Find() : NestedPtr<Interface::Table>()),
         end_widget(EndObj() ? toy_store.FindOrNull(*EndObj()) : nullptr),
         end_transform(end_widget && board_widget ? TransformBetween(*end_widget, *board_widget)
                                                  : SkMatrix()) {}
@@ -297,7 +297,7 @@ static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
     }
   }
 
-  if (isa<NextArg>(w.start_weak.GetUnsafe())) {
+  if (isa<NextArg::Table>(w.start_weak.GetUnsafe())) {
     while (w.to_points.size() > 1) {
       // from the last two, pick the one which is closer to pointing down (-pi/2)
       float delta_1 = fabs((w.to_points[w.to_points.size() - 1].dir + 90_deg).ToRadians());
@@ -330,7 +330,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   UpdateEndpoints(*this, a);
 
   if (icon == nullptr && a.start_arg.Get() && style == Argument::Style::Cable) {
-    icon = a.start_arg->MakeIcon(this);
+    icon = Argument(*a.StartObj(), *a.start_arg).MakeIcon(this);
   }
 
   // Lazy initialization of cable physics state
@@ -506,7 +506,7 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
   auto* start = arg.Owner<Object>();
 
   // Disconnect existing connection
-  arg->Disconnect(*start);
+  Argument(*start, *arg).Disconnect();
 
   grab_offset = Vec2(0, 0);
   if (widget.state) {
@@ -558,9 +558,9 @@ void DragConnectionAction::Update() {
   pointer.pointer_widget->WakeAnimation();
 }
 
-bool DragConnectionAction::Highlight(Object& obj, Interface* iface) const {
+bool DragConnectionAction::Highlight(Interface end) const {
   auto start = widget.start_weak.Lock();
-  return start->CanConnect(*start.Owner<Object>(), obj, iface);
+  return Argument(start.Owner<Object>(), start.Get()).CanConnect(end);
 }
 
 Optional<Rect> ConnectionWidget::TextureBounds() const {
@@ -603,9 +603,9 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() {
   return anchors;
 }
 
-ConnectionWidget* ConnectionWidget::FindOrNull(Object& obj, Argument& arg) {
-  auto arg_of = arg.Of(obj);
-  return root_widget->toys.FindOrNull(arg_of);
+ConnectionWidget* ConnectionWidget::FindOrNull(Object& obj, Argument::Table& arg) {
+  auto bound = Argument(obj, arg);
+  return root_widget->toys.FindOrNull(bound);
 }
 
 }  // namespace automat::ui

@@ -431,9 +431,10 @@ std::unique_ptr<Action> LocationWidget::FindAction(ui::Pointer& p, ui::ActionTri
 void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const {
   if (!ui::root_widget || !object) return;
   // Outgoing: iterate this object's args and look up each in ToyStore
-  object->Args([&](Argument& arg) {
-    auto arg_of = arg.Of(*object);
-    auto* w = ui::root_widget->toys.FindOrNull(arg_of);
+  object->Args([&](Interface::Table& _iface) {
+    auto& arg = static_cast<Argument::Table&>(_iface);
+    auto bound = Argument(*object, arg);
+    auto* w = ui::root_widget->toys.FindOrNull(bound);
     if (!w) return;
     if (moved && !value_changed) {
       w->FromMoved();
@@ -462,19 +463,21 @@ void LocationWidget::UpdateAutoconnectArgs() {
   auto& toy = ToyForObject();
   auto* parent_mw = ToyStore().FindOrNull(*root_board);
   if (!parent_mw) return;
-  loc->object->Args([&](Argument& arg) {
+  loc->object->Args([&](Interface::Table& _iface) {
+    auto& arg = static_cast<Argument::Table&>(_iface);
     float autoconnect_radius = arg.autoconnect_radius;
     if (autoconnect_radius <= 0) {
       return;
     }
 
+    Argument bound(*loc->object, arg);
     auto start = toy.ArgStart(arg, parent_mw);
 
     // Find the current distance & target of this connection
     // Use optional to distinguish "no connection" from "top-level connection" (nullptr)
-    std::optional<Interface*> old_iface;
+    std::optional<Interface::Table*> old_iface;
     float old_dist2 = HUGE_VALF;
-    if (auto end = arg.Find(*loc->object)) {
+    if (auto end = bound.Find()) {
       old_iface = end.Get();
       Vec<Vec2AndDir> to_positions;
       auto* end_loc = end.Owner<Object>()->MyLocation();
@@ -493,9 +496,9 @@ void LocationWidget::UpdateAutoconnectArgs() {
     // Find the nearest compatible interface
     float new_dist2 = autoconnect_radius * autoconnect_radius;
     ObjectToy* new_toy = nullptr;
-    std::optional<Interface*> new_iface;
+    std::optional<Interface::Table*> new_iface;
     parent_mw->NearbyCandidates(*loc, arg, autoconnect_radius,
-                                [&](ObjectToy& toy, Interface* iface, Vec<Vec2AndDir>& to_points) {
+                                [&](ObjectToy& toy, Interface::Table* iface, Vec<Vec2AndDir>& to_points) {
                                   auto other_up = TransformBetween(toy, *parent_mw);
                                   for (auto& to : to_points) {
                                     Vec2 to_pos = other_up.mapPoint(to.pos);
@@ -513,13 +516,9 @@ void LocationWidget::UpdateAutoconnectArgs() {
     }
     if (new_toy && new_iface) {
       auto end_obj = new_toy->LockOwner<Object>();
-      if (*new_iface) {
-        arg.Connect(*loc->object, *end_obj, **new_iface);
-      } else {
-        arg.Connect(*loc->object, *end_obj);
-      }
+      bound.Connect(Interface(end_obj.Get(), *new_iface));
     } else {
-      arg.Disconnect(*loc->object);
+      bound.Disconnect();
     }
   });
 
@@ -538,16 +537,18 @@ void LocationWidget::UpdateAutoconnectArgs() {
     }
     auto& other_widget = other->ToyForObject();
     auto other_up = TransformBetween(other_widget, *parent_mw);
-    other->object->Args([&](Argument& arg) {
+    other->object->Args([&](Interface::Table& _iface) {
+      auto& arg = static_cast<Argument::Table&>(_iface);
       float autoconnect_radius = arg.autoconnect_radius;
       if (autoconnect_radius <= 0) {
         return;
       }
-      auto this_iface_opt = arg.CanConnect(*other->object, *loc->object);
+      Argument bound(*other->object, arg);
+      auto this_iface_opt = bound.CanConnect(*loc->object);
       if (!this_iface_opt) {
         return;  // `this` location can't be connected to `other`s `arg`
       }
-      Interface* this_iface = *this_iface_opt;
+      Interface::Table* this_iface = *this_iface_opt;
 
       // Wake the animation loop of the ConnectionWidget
       if (auto connection_widget = ConnectionWidget::FindOrNull(*other->object, arg)) {
@@ -559,9 +560,9 @@ void LocationWidget::UpdateAutoconnectArgs() {
 
       // Find the current distance & target of this connection
       // Use optional to distinguish "no connection" from "top-level connection" (nullptr)
-      std::optional<Interface*> old_iface;
+      std::optional<Interface::Table*> old_iface;
       float old_dist2 = HUGE_VALF;
-      if (auto end = arg.Find(*other->object)) {
+      if (auto end = bound.Find()) {
         old_iface = end.Get();
         Vec<Vec2AndDir> to_positions;
         auto* end_loc = end.Owner<Object>()->MyLocation();
@@ -581,7 +582,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
       float radius2 = autoconnect_radius * autoconnect_radius;
       bool old_is_here = old_iface.has_value() && *old_iface == this_iface;
       float new_dist2 = old_is_here ? radius2 : std::min(radius2, old_dist2);
-      std::optional<Interface*> new_iface = old_is_here ? std::nullopt : old_iface;
+      std::optional<Interface::Table*> new_iface = old_is_here ? std::nullopt : old_iface;
       for (auto& to : to_points) {
         float dist2 = LengthSquared(start.pos - to.pos);
         if (dist2 <= new_dist2) {
@@ -594,13 +595,9 @@ void LocationWidget::UpdateAutoconnectArgs() {
         return;
       }
       if (new_iface) {
-        if (*new_iface) {
-          arg.Connect(*other->object, *loc->object, **new_iface);
-        } else {
-          arg.Connect(*other->object, *loc->object);
-        }
+        bound.Connect(Interface(loc->object.Get(), *new_iface));
       } else {
-        arg.Disconnect(*other->object);
+        bound.Disconnect();
       }
     });
   }
@@ -633,7 +630,7 @@ void PositionBelow(Location& origin, Location& below) {
   }
 }
 
-Vec2 PositionAhead(Location& origin, const Argument& arg, const ObjectToy& target_widget) {
+Vec2 PositionAhead(Location& origin, const Argument::Table& arg, const ObjectToy& target_widget) {
   auto& origin_toy = origin.ToyForObject();
   auto origin_shape = origin_toy.Shape();           // origin's local coordinates
   Vec2AndDir arg_start = origin_toy.ArgStart(arg);  // origin's local coordinates
@@ -674,7 +671,7 @@ Vec2 PositionAhead(Location& origin, const Argument& arg, const ObjectToy& targe
   return Round((drop_point - best_connector_pos) * 1000) / 1000;
 }
 
-void PositionAhead(Location& origin, const Argument& arg, Location& target) {
+void PositionAhead(Location& origin, const Argument::Table& arg, Location& target) {
   auto tmp_toy = target.object->MakeToy(nullptr);
   target.position = PositionAhead(origin, arg, *tmp_toy);
 }

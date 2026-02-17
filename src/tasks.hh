@@ -13,9 +13,7 @@
 
 namespace automat {
 
-struct Runnable;
 struct Location;
-struct Argument;
 struct Task;
 
 void StartWorkerThreads(std::stop_token);
@@ -29,7 +27,7 @@ void JoinWorkerThreads();
 
 // Schedules all of the Locations pointed by the "next" argument from the "source" Location.
 void ScheduleNext(Object& source);
-void ScheduleArgumentTargets(Object& source, Argument&);
+void ScheduleArgumentTargets(Object& source, Interface::Table&);
 
 struct Task {
   WeakPtr<Object> target;
@@ -48,8 +46,9 @@ struct Task {
 };
 
 struct RunTask : Task {
-  const Runnable* runnable;
-  RunTask(WeakPtr<Object> target, const Runnable* runnable) : Task(target), runnable(runnable) {}
+  Interface::Table* runnable;
+  RunTask(WeakPtr<Object> target, Interface::Table* runnable)
+      : Task(target), runnable(runnable) {}
   std::string Format() override;
   void OnExecute(std::unique_ptr<Task>& self) override;
 

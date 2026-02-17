@@ -32,25 +32,50 @@ enum class Flag {
   SF,
 };
 
-extern Argument assembler_arg;
-extern Argument jump_arg;
-extern NextArg next_instruction_arg;
-
 struct Instruction : Object, Buffer {
   mc::Inst mc_inst;
-  NestedWeakPtr<Runnable> jump_target;  // Connection target for jump_arg
+  NestedWeakPtr<Runnable::Table> jump_target;  // Connection target for jump_arg
   WeakPtr<Object> assembler_weak;
 
-  SyncState runnable_sync;
-  NextState next_state;
-  static Runnable runnable;
+  struct Run : Runnable {
+    using Parent = Instruction;
+    static constexpr StrView kName = "Run"sv;
+    static constexpr int Offset() { return offsetof(Instruction, run); }
 
-  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
+    void OnRun(std::unique_ptr<RunTask>&);
+  };
+  Runnable::Def<Run> run;
+
+  struct NextImpl : NextArg {
+    using Parent = Instruction;
+    static constexpr StrView kName = "Next"sv;
+    static constexpr int Offset() { return offsetof(Instruction, next); }
+    static void Configure(NextArg::Table&);
+  };
+  NextArg::Def<NextImpl> next;
+
+  struct AssemblerArgImpl : Argument {
+    using Parent = Instruction;
+    static constexpr StrView kName = "Assembler"sv;
+    static constexpr int Offset() { return offsetof(Instruction, assembler_arg); }
+    static void Configure(Argument::Table&);
+  };
+  [[no_unique_address]] Argument::Def<AssemblerArgImpl> assembler_arg;
+
+  struct JumpArgImpl : Argument {
+    using Parent = Instruction;
+    static constexpr StrView kName = "Jump"sv;
+    static constexpr int Offset() { return offsetof(Instruction, jump_arg); }
+    static void Configure(Argument::Table&);
+  };
+  [[no_unique_address]] Argument::Def<JumpArgImpl> jump_arg;
+
+  void Interfaces(const std::function<LoopControl(Interface::Table&)>& cb) override;
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
 
-  LongRunning* AsLongRunning() override;
+  Interface::Table* AsLongRunning() override;
 
   Buffer::Type imm_type = Buffer::Type::Unsigned;
 
@@ -123,7 +148,7 @@ struct Instruction : Object, Buffer {
     SkPath Shape() const override;
     animation::Phase Tick(time::Timer&) override;
     void Draw(SkCanvas&) const override;
-    Vec2AndDir ArgStart(const Argument&, ui::Widget* coordinate_space = nullptr) override;
+    Vec2AndDir ArgStart(const Interface::Table&, ui::Widget* coordinate_space = nullptr) override;
     void FillChildren(Vec<ui::Widget*>& children) override;
   };
 

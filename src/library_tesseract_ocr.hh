@@ -6,6 +6,7 @@
 #include <tesseract/baseapi.h>
 
 #include "base.hh"
+#include "image_provider.hh"
 #include "str.hh"
 
 namespace automat::library {
@@ -14,10 +15,21 @@ struct TesseractOCR : public Object {
   mutable std::mutex mutex;
   Str ocr_text = "";
 
-  SyncState run_sync;
-  NextState next_state;
-  static Runnable run;
-  static NextArg next;
+  struct RunImpl : Runnable {
+    using Parent = TesseractOCR;
+    static constexpr StrView kName = "Run"sv;
+    static constexpr int Offset() { return offsetof(TesseractOCR, run); }
+
+    void OnRun(std::unique_ptr<RunTask>&);
+  };
+  Runnable::Def<RunImpl> run;
+
+  struct NextImpl : NextArg {
+    using Parent = TesseractOCR;
+    static constexpr StrView kName = "Next"sv;
+    static constexpr int Offset() { return offsetof(TesseractOCR, next); }
+  };
+  NextArg::Def<NextImpl> next;
 
   // Guards access to the status variables
   std::mutex status_mutex;
@@ -40,8 +52,26 @@ struct TesseractOCR : public Object {
   float y_min_ratio = 0.25f;
   float y_max_ratio = 0.75f;
 
-  NestedWeakPtr<ImageProvider> image_provider_weak;
+  NestedWeakPtr<ImageProvider::Table> image_provider_weak;
   WeakPtr<Object> text_weak;
+
+  struct ImageArgImpl : Argument {
+    using Parent = TesseractOCR;
+    static constexpr StrView kName = "Image"sv;
+    static constexpr int Offset() { return offsetof(TesseractOCR, image); }
+
+    static void Configure(Argument::Table&);
+  };
+  [[no_unique_address]] Argument::Def<ImageArgImpl> image;
+
+  struct TextArgImpl : Argument {
+    using Parent = TesseractOCR;
+    static constexpr StrView kName = "Text"sv;
+    static constexpr int Offset() { return offsetof(TesseractOCR, text); }
+
+    static void Configure(Argument::Table&);
+  };
+  [[no_unique_address]] Argument::Def<TextArgImpl> text;
 
   TesseractOCR();
 
@@ -49,7 +79,7 @@ struct TesseractOCR : public Object {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  void Interfaces(const std::function<LoopControl(Interface&)>&) override;
+  INTERFACES(image, text, next, run)
   void Updated(WeakPtr<Object>& updated) override;
 
   void SerializeState(ObjectSerializer& writer) const override;

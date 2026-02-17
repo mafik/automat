@@ -41,28 +41,10 @@ Rect FlipFlopRect() {
   return Rect::MakeCornerZero(FlipFlopColor().width(), FlipFlopColor().height());
 }
 
-Runnable FlipFlop::flip(
-    "Flip"sv, +[](FlipFlop& obj) -> SyncState& { return obj.flip_sync; },
-    +[](const Runnable&, FlipFlop& self, std::unique_ptr<RunTask>&) {
-      ZoneScopedN("FlipFlop");
-      FlipFlop::on_off.Toggle(self);
-    });
-
-OnOff FlipFlop::on_off(
-    "State"sv, +[](FlipFlop& obj) -> SyncState& { return obj.on_off_sync; },
-    +[](const OnOff&, const FlipFlop& obj) -> bool { return obj.current_state; },
-    +[](const OnOff&, FlipFlop& self) {
-      self.current_state = true;
-      self.WakeToys();
-    },
-    +[](const OnOff&, FlipFlop& self) {
-      self.current_state = false;
-      self.WakeToys();
-    });
-
-FlipFlop::FlipFlop() {}
-
-FlipFlop::~FlipFlop() { on_off.Unsync(*this); }
+void FlipFlop::Flip::OnRun(unique_ptr<RunTask>&) {
+  ZoneScopedN("FlipFlop");
+  self().enabled->Toggle();
+}
 
 string_view FlipFlop::Name() const { return "Flip-Flop"; }
 
@@ -124,7 +106,7 @@ struct FlipFlopButton : ui::ToggleButton {
     static_cast<YingYangButton*>(this->off.get())->on_click =
         static_cast<YingYangButton*>(this->on.get())->on_click = [this](ui::Pointer&) {
           if (auto flip_flop_ptr = this->flip_flop.Lock()) {
-            FlipFlop::on_off.Toggle(*flip_flop_ptr);
+            flip_flop_ptr->enabled->Toggle();
           }
         };
   }

@@ -49,106 +49,149 @@ struct Error;
 struct Object;
 struct Location;
 
-// Interface for objects that can run long running jobs.
-//
-// Object destructors should call OnLongRunningDestruct(self) to ensure that the long
-// running job is cancelled.
 struct LongRunning : OnOff {
-  static bool classof(const Interface* i) { return i->kind == Interface::kLongRunning; }
+  struct State : OnOff::State {
+    std::unique_ptr<RunTask> task;
+  };
 
-  // Function pointer for cancellation behavior.
-  void (*on_cancel)(const LongRunning&, Object&) = nullptr;
+  struct Table : OnOff::Table {
+    static bool classof(const Interface::Table* i) { return i->kind == Interface::kLongRunning; }
 
-  // Function pointer to access the per-Object task storage.
-  std::unique_ptr<RunTask>& (*get_task)(Object&) = nullptr;
+    void (*on_cancel)(LongRunning) = nullptr;
 
-  LongRunning(StrView name);
+    Table(StrView name);
+  };
 
-  template <typename T>
-  LongRunning(StrView name, SyncState& (*get)(T&),
-              std::unique_ptr<RunTask>& (*get_task_fn)(T&),
-              void (*on_cancel_fn)(const LongRunning&, T&) = nullptr)
-      : LongRunning(name) {
-    get_sync_state = reinterpret_cast<SyncState& (*)(Object&)>(get);
-    get_task = reinterpret_cast<std::unique_ptr<RunTask>& (*)(Object&)>(get_task_fn);
-    on_cancel = reinterpret_cast<void (*)(const LongRunning&, Object&)>(on_cancel_fn);
+  INTERFACE_BOUND(LongRunning, OnOff)
+
+  bool IsRunning() const { return state->task != nullptr; }
+
+  void BeginLongRunning(std::unique_ptr<RunTask>&& task) const {
+    state->task = std::move(task);
+    NotifyTurnedOn();
   }
 
-  void OnLongRunningDestruct(Object& self) const {
-    if (IsRunning(self)) {
-      Cancel(self);
-    }
-  }
-
-  // Call this to cancel the long running job.
-  void Cancel(Object& self) const {
-    auto& task = get_task(self);
-    if (task == nullptr) {
-      ERROR << "LongRunning::Cancel called without a long_running_task";
-      return;
-    }
-    if (on_cancel) on_cancel(*this, self);
-    task.reset();
-    NotifyTurnedOff(self);
-  }
-
-  bool IsRunning(const Object& self) const {
-    return get_task ? get_task(const_cast<Object&>(self)) != nullptr : false;
-  }
+  void Cancel() const;
 
   // Called from arbitrary thread by the object when it finishes execution.
-  void Done(Object& self) const;
+  void Done() const;
 
-  void BeginLongRunning(Object& self, std::unique_ptr<RunTask>&& task) const {
-    get_task(self) = std::move(task);
-    NotifyTurnedOn(self);
-  }
+  // ImplT must provide:
+  //   using Parent = SomeObject;
+  //   static constexpr StrView kName = "..."sv;
+  //   static constexpr int Offset();  // offsetof(Parent, def_member)
+  //   Optionally: void OnCancel();
+  template <typename ImplT>
+  struct Def : State, Interface::DefBase {
+    using Impl = ImplT;
+    using Bound = LongRunning;
+
+    static Table& GetTable() {
+      static Table tbl = [] {
+        Table t(ImplT::kName);
+        t.state_off = ImplT::Offset();
+        if constexpr (requires { ImplT::OnCancel; }) {
+          t.on_cancel = +[](LongRunning self) {
+            static_cast<ImplT&>(self).OnCancel();
+          };
+        }
+        if constexpr (requires { ImplT::OnSync; }) {
+          t.on_sync = +[](Syncable self) {
+            static_cast<ImplT&>(self).OnSync();
+          };
+        }
+        if constexpr (requires { ImplT::OnUnsync; }) {
+          t.on_unsync = +[](Syncable self) {
+            static_cast<ImplT&>(self).OnUnsync();
+          };
+        }
+        return t;
+      }();
+      return tbl;
+    }
+
+    ~Def() {
+      if (task) {
+        Bind().Cancel();
+      }
+      if (source || !end.IsExpired()) {
+        Bind().Unsync();
+      }
+    }
+  };
 };
 
 struct Runnable;
 
 struct Runnable : Syncable {
-  static bool classof(const Interface* i) { return i->kind == Interface::kRunnable; }
+  struct Table : Syncable::Table {
+    static bool classof(const Interface::Table* i) { return i->kind == Interface::kRunnable; }
 
-  // Function pointer for run behavior.
-  void (*on_run)(const Runnable&, Object&, std::unique_ptr<RunTask>&) = nullptr;
+    void (*on_run)(Runnable, std::unique_ptr<RunTask>&) = nullptr;
 
-  Runnable(StrView name);
+    Table(StrView name);
+  };
 
-  template <typename T>
-  Runnable(StrView name, SyncState& (*get)(T&),
-           void (*on_run_fn)(const Runnable&, T&, std::unique_ptr<RunTask>&))
-      : Runnable(name) {
-    get_sync_state = reinterpret_cast<SyncState& (*)(Object&)>(get);
-    on_run = reinterpret_cast<void (*)(const Runnable&, Object&, std::unique_ptr<RunTask>&)>(
-        on_run_fn);
-  }
+  INTERFACE_BOUND(Runnable, Syncable)
 
-  // Call this to run this + all synchronized Runnables
-  void Run(Object& self, std::unique_ptr<RunTask>& run_task) const {
-    ForwardDo<Runnable>(self, [&](Object& o, const Runnable& iface) {
-      if (iface.on_run) iface.on_run(iface, o, run_task);
+  void Run(std::unique_ptr<RunTask>& run_task) const {
+    ForwardDo([&](Runnable other) {
+      if (other.table->on_run) other.table->on_run(other, run_task);
     });
   }
 
-  // Call this if this Runnable has been externally executed. It'll run all of the synchronized
-  // Runnables.
-  void NotifyRun(Object& self, std::unique_ptr<RunTask>& run_task) const {
-    ForwardNotify<Runnable>(self, [&](Object& o, const Runnable& iface) {
-      if (iface.on_run) iface.on_run(iface, o, run_task);
+  void ScheduleRun() const { (new RunTask(obj->AcquireWeakPtr(), table_ptr))->Schedule(); }
+
+  void NotifyRun(std::unique_ptr<RunTask>& run_task) const {
+    ForwardNotify([&](Runnable other) {
+      if (other.table->on_run) other.table->on_run(other, run_task);
     });
   }
 
-  // Enqueue this Runnable to be executed at the earliest opportunity.
-  void ScheduleRun(Object& self) const {
-    (new RunTask(self.AcquireWeakPtr(), this))->Schedule();
-  }
+  // ImplT must provide:
+  //   using Parent = SomeObject;
+  //   static constexpr StrView kName = "..."sv;
+  //   static constexpr int Offset();  // offsetof(Parent, def_member)
+  //   void OnRun(std::unique_ptr<RunTask>&);
+  template <typename ImplT>
+  struct Def : Syncable::State, Interface::DefBase {
+    using Impl = ImplT;
+    using Bound = Runnable;
+
+    static Table& GetTable() {
+      static Table tbl = [] {
+        Table t(ImplT::kName);
+        t.state_off = ImplT::Offset();
+        t.on_run = +[](Runnable self, std::unique_ptr<RunTask>& task) {
+          static_cast<ImplT&>(self).OnRun(task);
+        };
+        if constexpr (requires { ImplT::OnSync; }) {
+          t.on_sync = +[](Syncable self) {
+            static_cast<ImplT&>(self).OnSync();
+          };
+        }
+        if constexpr (requires { ImplT::OnUnsync; }) {
+          t.on_unsync = +[](Syncable self) {
+            static_cast<ImplT&>(self).OnUnsync();
+          };
+        }
+        return t;
+      }();
+      return tbl;
+    }
+
+    ~Def() {
+      if (source || !end.IsExpired()) {
+        Bind().Unsync();
+      }
+    }
+  };
 };
 
 struct RunOption : TextOption {
   WeakPtr<Object> weak;
-  const Runnable* runnable;
-  RunOption(WeakPtr<Object> object, const Runnable& runnable);
+  Runnable::Table* runnable;
+  RunOption(WeakPtr<Object> object, Runnable::Table& runnable);
   std::unique_ptr<Option> Clone() const override;
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override;
   Dir PreferredDir() const override { return S; }

@@ -45,63 +45,50 @@ namespace automat::library {
 
 constexpr bool kDebugEyeShape = false;
 
-static Argument image_arg = [] {
-  Argument a("Image"sv);
-  a.autoconnect_radius = 20_cm;
-  a.style = Argument::Style::Invisible;
-  a.make_icon = [](const Argument&, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
+void TesseractOCR::ImageArgImpl::Configure(Argument::Table& t) {
+  t.autoconnect_radius = 20_cm;
+  t.style = Argument::Style::Invisible;
+  t.make_icon = [](Argument, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
     return std::make_unique<TextWidget>(parent, "IMG");
   };
-  a.can_connect = [](const Argument&, Object&, Object&, Interface* end_iface, Status& status) {
-    if (!dyn_cast_if_present<ImageProvider>(end_iface)) {
+  t.can_connect = [](Argument, Interface end, Status& status) {
+    if (!dyn_cast_if_present<ImageProvider::Table>(end.table_ptr)) {
       AppendErrorMessage(status) += "Can only connect to Image Provider";
     }
   };
-  a.on_connect = [](const Argument&, Object& start, Object* end_obj, Interface* end_iface) {
-    auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
-    if (tesseract == nullptr) return;
-    auto* ip = dyn_cast_if_present<ImageProvider>(end_iface);
+  t.on_connect = [](Argument self, Interface end) {
+    auto& ocr = static_cast<TesseractOCR&>(*self.obj);
+    auto* ip = dyn_cast_if_present<ImageProvider::Table>(end.table_ptr);
     if (ip == nullptr) return;
-    tesseract->image_provider_weak = NestedWeakPtr<ImageProvider>(end_obj->AcquireWeakPtr(), ip);
+    ocr.image_provider_weak =
+        NestedWeakPtr<ImageProvider::Table>(end.obj->AcquireWeakPtr(), ip);
   };
-  a.find = [](const Argument&, const Object& start) -> NestedPtr<Interface> {
-    auto* tesseract = dynamic_cast<const TesseractOCR*>(&start);
-    if (tesseract == nullptr) return {};
-    return tesseract->image_provider_weak.Lock();
+  t.find = [](Argument self) -> NestedPtr<Interface::Table> {
+    auto& ocr = static_cast<const TesseractOCR&>(*self.obj);
+    return ocr.image_provider_weak.Lock();
   };
-  return a;
-}();
+}
 
-static Argument text_arg = [] {
-  Argument a("Text"sv);
-  a.make_icon = [](const Argument&, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
+void TesseractOCR::TextArgImpl::Configure(Argument::Table& t) {
+  t.make_icon = [](Argument, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
     return std::make_unique<TextWidget>(parent, "T");
   };
-  a.can_connect = [](const Argument&, Object&, Object&, Interface*, Status&) {};
-  a.on_connect = [](const Argument&, Object& start, Object* end_obj, Interface*) {
-    auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
-    if (tesseract == nullptr) return;
-    if (end_obj == nullptr) return;
-    tesseract->text_weak = end_obj->AcquireWeakPtr();
+  t.can_connect = [](Argument, Interface, Status&) {};
+  t.on_connect = [](Argument self, Interface end) {
+    auto& ocr = static_cast<TesseractOCR&>(*self.obj);
+    if (!end) return;
+    ocr.text_weak = end.obj->AcquireWeakPtr();
   };
-  a.find = [](const Argument&, const Object& start) -> NestedPtr<Interface> {
-    auto* tesseract = dynamic_cast<const TesseractOCR*>(&start);
-    if (tesseract == nullptr) return {};
-    return NestedPtr<Interface>(tesseract->text_weak.Lock(), nullptr);
+  t.find = [](Argument self) -> NestedPtr<Interface::Table> {
+    auto& ocr = static_cast<const TesseractOCR&>(*self.obj);
+    return NestedPtr<Interface::Table>(ocr.text_weak.Lock(), nullptr);
   };
-  return a;
-}();
+}
+
+static auto& image_arg = Argument::Def<TesseractOCR::ImageArgImpl>::GetTable();
+static auto& text_arg = Argument::Def<TesseractOCR::TextArgImpl>::GetTable();
 
 struct TesseractWidget;
-
-static void TesseractOCR_OnRun(const Runnable&, TesseractOCR& self, std::unique_ptr<RunTask>&);
-
-Runnable TesseractOCR::run("Run"sv,
-                            +[](TesseractOCR& obj) -> SyncState& { return obj.run_sync; },
-                            TesseractOCR_OnRun);
-
-NextArg TesseractOCR::next("Next"sv,
-                            +[](TesseractOCR& obj) -> NextState& { return obj.next_state; });
 
 TesseractOCR::TesseractOCR() {
   auto eng_traineddata = embedded::assets_eng_traineddata.content;
@@ -394,11 +381,10 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
       iris_target.reset();
       {  // Update `source_image`
         sk_sp<SkImage> new_image = nullptr;
-        auto image_obj = image_arg.ObjectOrNull(*tesseract);
+        auto image_obj = Argument(*tesseract, image_arg).ObjectOrNull();
         if (image_obj) {
-          auto image_provider = image_obj->AsImageProvider();
-          if (image_provider) {
-            new_image = image_provider->GetImage(*image_obj);
+          if (auto* ip_tbl = static_cast<ImageProvider::Table*>(image_obj->AsImageProvider())) {
+            new_image = ImageProvider(*image_obj, *ip_tbl).GetImage();
             iris_target = image_obj->MyLocation()->position;
           }
         }
@@ -1060,7 +1046,8 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
     return ObjectToy::FindAction(pointer, trigger);
   }
 
-  Vec2AndDir ArgStart(const Argument& arg, ui::Widget* coordinate_space = nullptr) override {
+  Vec2AndDir ArgStart(const Interface::Table& arg,
+                      ui::Widget* coordinate_space = nullptr) override {
     Vec2AndDir pos_dir;
     if (&arg == &image_arg) {
       pos_dir = Vec2AndDir{layout.eye_center, 90_deg};
@@ -1087,30 +1074,24 @@ std::unique_ptr<ObjectToy> TesseractOCR::MakeToy(ui::Widget* parent) {
   return std::make_unique<TesseractWidget>(parent, *this);
 }
 
-void TesseractOCR::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
-  if (LoopControl::Break == cb(image_arg)) return;
-  if (LoopControl::Break == cb(text_arg)) return;
-  if (LoopControl::Break == cb(next)) return;
-  if (LoopControl::Break == cb(run)) return;
-}
-
-static void TesseractOCR_OnRun(const Runnable&, TesseractOCR& t, std::unique_ptr<RunTask>&) {
+void TesseractOCR::RunImpl::OnRun(std::unique_ptr<RunTask>&) {
+  auto& t = self();
   ZoneScopedN("TesseractOCR");
-  auto image_obj = image_arg.ObjectOrNull(t);
-  auto text_obj = text_arg.ObjectOrNull(t);
+  auto image_obj = Argument(t, image_arg).ObjectOrNull();
+  auto text_obj = Argument(t, text_arg).ObjectOrNull();
 
   if (!image_obj) {
     t.ReportError("No image source connected");
     return;
   }
 
-  auto image_provider = image_obj->AsImageProvider();
-  if (!image_provider) {
+  auto* ip_tbl = static_cast<ImageProvider::Table*>(image_obj->AsImageProvider());
+  if (!ip_tbl) {
     t.ReportError("Connected object doesn't provide images");
     return;
   }
 
-  auto image = image_provider->GetImage(*image_obj);
+  auto image = ImageProvider(*image_obj, *ip_tbl).GetImage();
   if (!image) {
     t.ReportError("No image available from source");
     return;

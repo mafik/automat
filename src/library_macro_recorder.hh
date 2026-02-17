@@ -9,15 +9,36 @@
 namespace automat::library {
 
 struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
-  std::unique_ptr<RunTask> long_running_task;
-  SyncState runnable_sync;
-  SyncState long_running_sync;
-  static Runnable runnable;
-  static LongRunning long_running;
+  struct RunImpl : Runnable {
+    using Parent = MacroRecorder;
+    static constexpr StrView kName = "Run"sv;
+    static constexpr int Offset() { return offsetof(MacroRecorder, runnable); }
+
+    void OnRun(std::unique_ptr<RunTask>& run_task);
+  };
+  Runnable::Def<RunImpl> runnable;
+
+  struct LongRunningImpl : LongRunning {
+    using Parent = MacroRecorder;
+    static constexpr StrView kName = "Running"sv;
+    static constexpr int Offset() { return offsetof(MacroRecorder, long_running); }
+
+    void OnCancel();
+  };
+  LongRunning::Def<LongRunningImpl> long_running;
 
   ui::Keylogging* keylogging = nullptr;
   ui::Pointer::Logging* pointer_logging = nullptr;
   WeakPtr<Timeline> timeline_connection;
+
+  struct TimelineArgImpl : Argument {
+    using Parent = MacroRecorder;
+    static constexpr StrView kName = "Timeline"sv;
+    static constexpr int Offset() { return offsetof(MacroRecorder, timeline); }
+
+    static void Configure(Argument::Table&);
+  };
+  [[no_unique_address]] Argument::Def<TimelineArgImpl> timeline;
 
   MacroRecorder();
   MacroRecorder(const MacroRecorder&);
@@ -26,7 +47,7 @@ struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
+  INTERFACES(runnable, long_running, timeline)
 
   void KeyloggerKeyDown(ui::Key) override;
   void KeyloggerKeyUp(ui::Key) override;

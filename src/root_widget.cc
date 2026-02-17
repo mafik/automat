@@ -294,18 +294,19 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
       auto* start_loc_widget = GetLocWidget(o);
 
       // Make sure that each argument has a toy
-      o.Args([&](Argument& arg) {
+      o.Args([&](Interface::Table& _iface) {
+        auto& arg = static_cast<Argument::Table&>(_iface);
         Toy* arg_toy = nullptr;
-        if (auto* syncable = dyn_cast<Syncable>(&arg)) {
+        if (auto* syncable = dyn_cast<Syncable::Table>(&arg)) {
           auto member_of = SyncMemberOf{o, *syncable};
           arg_toy = &toys.FindOrMake(member_of, this);
         } else {
-          auto arg_of = arg.Of(o);
-          arg_toy = &toys.FindOrMake(arg_of, this);
+          auto bound = Argument(o, arg);
+          arg_toy = &toys.FindOrMake(bound, this);
         }
         arg_toy->local_to_parent = canvas_to_window44;
         children_tmp.push_back(arg_toy);
-        auto end = arg.Find(o);
+        auto end = Argument(o, arg).Find();
         if (end) {
           auto* end_obj = end.Owner<Object>();
           auto* end_loc_widget = GetLocWidget(*end_obj);

@@ -51,7 +51,7 @@ struct Location : ReferenceCounted, ToyMakerMixin {
 
   // ToyMaker concept
   ReferenceCounted& GetOwner() { return *this; }
-  Interface* GetInterface() { return nullptr; }
+  Interface::Table* GetInterface() { return nullptr; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 
   // Obtain a matrix representation of the given transform.
@@ -234,13 +234,13 @@ void PositionBelow(Location& origin, Location& below);
 // This uses the arg's position & direction within `origin`.
 //
 // This is a UI function.
-Vec2 PositionAhead(Location& origin, const Argument& arg, const ObjectToy& target_widget);
+Vec2 PositionAhead(Location& origin, const Argument::Table& arg, const ObjectToy& target_widget);
 
 // Similar to the above, but also sets the target's position.
 //
 // This is a VM function. It's pretty expensive because it must create a fake Widget for the
 // target toy.
-void PositionAhead(Location& origin, const Argument& arg, Location& target);
+void PositionAhead(Location& origin, const Argument::Table& arg, Location& target);
 
 // VM function for animating location appearance.
 //

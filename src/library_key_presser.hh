@@ -13,13 +13,37 @@ struct KeyPresser : Object, ui::Keylogger {
   ui::Keylogging* keylogging = nullptr;
   bool key_pressed = false;
 
-  SyncState monitoring_sync;
-  SyncState state_sync;
-  SyncState run_sync;
+  struct Monitoring : OnOff {
+    using Parent = KeyPresser;
+    static constexpr StrView kName = "Monitoring"sv;
+    static constexpr int Offset() { return offsetof(KeyPresser, monitoring); }
 
-  static OnOff monitoring;
-  static OnOff state;
-  static Runnable run;
+    bool IsOn() const { return self().keylogging != nullptr; }
+    void OnTurnOn();
+    void OnTurnOff();
+  };
+  OnOff::Def<Monitoring> monitoring;
+
+  struct State : OnOff {
+    using Parent = KeyPresser;
+    static constexpr StrView kName = "State"sv;
+    static constexpr int Offset() { return offsetof(KeyPresser, state); }
+
+    bool IsOn() const { return self().key_pressed; }
+    void OnTurnOn();
+    void OnTurnOff();
+    void OnSync();
+    void OnUnsync();
+  };
+  OnOff::Def<State> state;
+
+  struct RunImpl : Runnable {
+    using Parent = KeyPresser;
+    static constexpr StrView kName = "Run"sv;
+    static constexpr int Offset() { return offsetof(KeyPresser, run); }
+    void OnRun(std::unique_ptr<RunTask>&);
+  };
+  Runnable::Def<RunImpl> run;
 
   KeyPresser(ui::AnsiKey = ui::AnsiKey::F);
   ~KeyPresser() override;
@@ -30,11 +54,7 @@ struct KeyPresser : Object, ui::Keylogger {
 
   void SetKey(ui::AnsiKey);
 
-  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override {
-    if (LoopControl::Break == cb(state)) return;
-    if (LoopControl::Break == cb(monitoring)) return;
-    if (LoopControl::Break == cb(run)) return;
-  }
+  INTERFACES(state, monitoring, run)
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

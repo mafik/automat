@@ -17,17 +17,30 @@ struct HotKey : Object, ui::KeyGrabber {
   // This is used to get hotkey events
   ui::KeyGrab* hotkey = nullptr;
 
-  SyncState enabled_sync;
-  NextState next_state;
-  static OnOff enabled;
-  static NextArg next;
+  struct Enabled : OnOff {
+    using Parent = HotKey;
+    static constexpr StrView kName = "Enabled"sv;
+    static constexpr int Offset() { return offsetof(HotKey, enabled); }
+
+    bool IsOn() const { return self().hotkey != nullptr; }
+    void OnTurnOn();
+    void OnTurnOff();
+  };
+  OnOff::Def<Enabled> enabled;
+
+  struct Next : NextArg {
+    using Parent = HotKey;
+    static constexpr StrView kName = "Next"sv;
+    static constexpr int Offset() { return offsetof(HotKey, next); }
+  };
+  NextArg::Def<Next> next;
 
   HotKey();
   HotKey(const HotKey&);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
+  INTERFACES(next, enabled)
 
   void ReleaseKeyGrab(ui::KeyGrab&) override;
   void KeyGrabberKeyDown(ui::KeyGrab&) override;

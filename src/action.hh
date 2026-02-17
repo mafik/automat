@@ -4,10 +4,11 @@
 
 #include <functional>
 
+#include "interface.hh"
+
 namespace automat {
 
 struct Object;
-struct Interface;
 
 namespace ui {
 struct Pointer;
@@ -34,9 +35,7 @@ struct Action {
   virtual void Update() = 0;
 
   // Return true to highlight the given part of some object.
-  virtual bool Highlight(Object& highlighted_obj, Interface* highlighted_iface) const {
-    return false;
-  }
+  virtual bool Highlight(Interface highlighted) const { return false; }
 
   virtual ui::Widget* Widget() { return nullptr; }
 

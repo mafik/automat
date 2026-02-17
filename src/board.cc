@@ -231,18 +231,15 @@ void BoardWidget::DropLocation(Ptr<Location>&& l) {
   }
 }
 
-void BoardWidget::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
+void BoardWidget::ConnectAtPoint(Object& start, Argument::Table& arg, Vec2 point) {
   auto board = LockBoard();
   if (!board) return;
+  Argument bound(start, arg);
   bool connected = false;
-  auto TryConnect = [&](Object& end_obj, Interface* end_iface) {
+  auto TryConnect = [&](Interface end) {
     if (connected) return;
-    if (arg.CanConnect(start, end_obj, end_iface)) {
-      if (end_iface) {
-        arg.Connect(start, end_obj, *end_iface);
-      } else {
-        arg.Connect(start, end_obj);
-      }
+    if (bound.CanConnect(end)) {
+      bound.Connect(end);
       connected = true;
     }
   };
@@ -253,10 +250,10 @@ void BoardWidget::ConnectAtPoint(Object& start, Argument& arg, Vec2 point) {
       continue;
     }
     auto& obj = *loc->object;
-    TryConnect(obj, nullptr);
+    TryConnect(Interface(obj));
     if (connected) return;
-    obj.Interfaces([&](Interface& iface) {
-      TryConnect(obj, &iface);
+    obj.Interfaces([&](Interface::Table& iface) {
+      TryConnect(Interface(obj, iface));
       if (connected) {
         return LoopControl::Break;
       }
@@ -284,8 +281,9 @@ void* BoardWidget::Nearby(Vec2 start, float radius, std::function<void*(Location
 }
 
 void BoardWidget::NearbyCandidates(
-    Location& here, const Argument& arg, float radius,
-    std::function<void(ObjectToy&, Interface*, Vec<Vec2AndDir>&)> callback) {
+    Location& here, Argument::Table& arg, float radius,
+    std::function<void(ObjectToy&, Interface::Table*, Vec<Vec2AndDir>&)> callback) {
+  Argument bound(*here.object, arg);
   // Check the currently dragged object
   auto& root_widget = *ui::root_widget;
   for (auto* action : root_widget.active_actions) {
@@ -294,7 +292,7 @@ void BoardWidget::NearbyCandidates(
         if (location.get() == &here) {
           continue;
         }
-        auto iface = arg.CanConnect(*here.object, *location->object);
+        auto iface = bound.CanConnect(*location->object);
         if (!iface) {
           continue;
         }
@@ -311,7 +309,7 @@ void BoardWidget::NearbyCandidates(
     if (&other == &here) {
       return nullptr;
     }
-    auto iface = arg.CanConnect(*here.object, *other.object);
+    auto iface = bound.CanConnect(*other.object);
     if (!iface) {
       return nullptr;
     }

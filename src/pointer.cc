@@ -310,7 +310,7 @@ void Pointer::Logging::Release() {
 animation::Phase PointerWidget::Tick(time::Timer& timer) {
   struct Highlighted {
     ObjectToy* widget;
-    Interface* iface;
+    Interface::Table* iface;
 
     bool operator<(const Highlighted& other) const {
       if (widget == other.widget) {
@@ -328,10 +328,10 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
   };
 
   std::vector<Highlighted> highlight_target;
-  auto HighlightCheck = [&](Object& obj, ObjectToy& widget, Interface* iface) {
+  auto HighlightCheck = [&](Object& obj, ObjectToy& widget, Interface::Table* iface) {
     for (auto& action : pointer.actions) {
       if (action == nullptr) continue;
-      if (action->Highlight(obj, iface)) {
+      if (action->Highlight(Interface(&obj, iface))) {
         highlight_target.emplace_back(&widget, iface);
         std::push_heap(highlight_target.begin(), highlight_target.end());
       }
@@ -342,7 +342,7 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
     auto& obj = *loc->object;
     if (!loc->widget || !loc->widget->toy) continue;
     HighlightCheck(obj, *loc->widget->toy, nullptr);
-    obj.Interfaces([&](Interface& iface) {
+    obj.Interfaces([&](Interface::Table& iface) {
       HighlightCheck(obj, *loc->widget->toy, &iface);
       return LoopControl::Continue;
     });
@@ -359,7 +359,7 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
 
   auto phase = animation::Finished;
 
-  auto HighlightTick = [&](ObjectToy* obj, Interface* iface, float current, float target) {
+  auto HighlightTick = [&](ObjectToy* obj, Interface::Table* iface, float current, float target) {
     phase |= animation::ExponentialApproach(target, timer.d, 0.1, current);
     if (current > 0.01f) {
       highlight_next.emplace_back(obj, iface, current);

@@ -140,17 +140,17 @@ std::string Task::Format() { return "Task()"; }
 std::string RunTask::Format() { return f("RunTask({})", Name(target)); }
 
 void ScheduleNext(Object& source) {
-  source.Interfaces([&](Interface& iface) {
-    if (auto* next = dyn_cast<NextArg>(&iface)) {
-      ScheduleArgumentTargets(source, *next);
+  source.Interfaces([&](Interface::Table& iface) {
+    if (auto* next = dyn_cast<NextArg::Table>(&iface)) {
+      ScheduleArgumentTargets(source, static_cast<Interface::Table&>(*next));
     }
     return LoopControl::Continue;
   });
 }
 
-void ScheduleArgumentTargets(Object& source, Argument& arg) {
+void ScheduleArgumentTargets(Object& source, Interface::Table& arg) {
   // audio::Play(source.object->NextSound());
-  for (auto& w : ui::ConnectionWidgetRange(&source, &arg)) {
+  for (auto& w : ui::ConnectionWidgetRange(&source, static_cast<const Argument::Table*>(&arg))) {
     if (w.state) {
       w.state->stabilized = false;
       w.state->lightness_pct = 100;
@@ -158,16 +158,16 @@ void ScheduleArgumentTargets(Object& source, Argument& arg) {
     w.WakeAnimation();
   }
 
-  if (auto next = arg.Find(source)) {
+  if (auto next = Argument(source, static_cast<Argument::Table&>(arg)).Find()) {
     // The target may be the Object itself (with AsRunnable) or a Runnable sub-interface.
-    Runnable* runnable = nullptr;
-    if (auto* r = dyn_cast_if_present<Runnable>(next.Get())) {
+    Runnable::Table* runnable = nullptr;
+    if (auto* r = dyn_cast_if_present<Runnable::Table>(next.Get())) {
       runnable = r;
     } else if (auto* obj = next.Owner<Object>()) {
-      runnable = obj->AsRunnable();
+      runnable = static_cast<Runnable::Table*>(obj->AsRunnable());
     }
     if (runnable) {
-      runnable->ScheduleRun(*next.Owner<Object>());
+      Runnable(*next.Owner<Object>(), *runnable).ScheduleRun();
     }
   }
 }
@@ -175,14 +175,15 @@ void ScheduleArgumentTargets(Object& source, Argument& arg) {
 void RunTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("RunTask");
   if (auto s = target.lock()) {
-    LongRunning* long_running = s->AsLongRunning();
-    if (long_running && long_running->IsRunning(*s)) {
+    if (auto* lr_table = static_cast<LongRunning::Table*>(s->AsLongRunning());
+        lr_table && LongRunning(*s, *lr_table).IsRunning()) {
       return;
     }
+    auto* r = static_cast<Runnable::Table*>(runnable);
     // Cast the `self` to RunTask for the OnRun invocation
     std::unique_ptr<RunTask> self_as_run_task((RunTask*)self.release());
-    if (runnable->on_run) {
-      runnable->on_run(*runnable, *s, self_as_run_task);
+    if (r->on_run) {
+      r->on_run(Runnable(*s, *r), self_as_run_task);
     }
     // If OnRun didn't "steal" the ownership then we have to return it back.
     self.reset(self_as_run_task.release());
@@ -204,8 +205,8 @@ std::string CancelTask::Format() { return f("CancelTask({})", Name(target)); }
 void CancelTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("CancelTask");
   if (auto s = target.lock()) {
-    if (LongRunning* long_running = s->AsLongRunning()) {
-      long_running->Cancel(*s);
+    if (auto* lr_table = static_cast<LongRunning::Table*>(s->AsLongRunning())) {
+      LongRunning(*s, *lr_table).Cancel();
     }
   }
 }

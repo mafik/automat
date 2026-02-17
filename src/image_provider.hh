@@ -12,22 +12,45 @@ struct Object;
 
 // Interface for objects that can provide image data
 struct ImageProvider : Interface {
-  static bool classof(const Interface* i) { return i->kind == Interface::kImageProvider; }
+  struct Table : Interface::Table {
+    static bool classof(const Interface::Table* i) { return i->kind == Interface::kImageProvider; }
 
-  // Function pointer for getting the image.
-  sk_sp<SkImage> (*get_image)(const ImageProvider&, Object&) = nullptr;
+    // Function pointer for getting the image.
+    sk_sp<SkImage> (*get_image)(ImageProvider) = nullptr;
 
-  ImageProvider(StrView name) : Interface(Interface::kImageProvider, name) {}
+    Table(StrView name) : Interface::Table(Interface::kImageProvider, name) {}
+  };
 
-  template <typename T>
-  ImageProvider(StrView name, sk_sp<SkImage> (*get_image_fn)(const ImageProvider&, T&))
-      : ImageProvider(name) {
-    get_image = reinterpret_cast<sk_sp<SkImage> (*)(const ImageProvider&, Object&)>(get_image_fn);
+  struct State {};
+
+  INTERFACE_BOUND(ImageProvider, Interface)
+
+  sk_sp<SkImage> GetImage() const {
+    return table->get_image ? table->get_image(*this) : nullptr;
   }
 
-  sk_sp<SkImage> GetImage(Object& self) const {
-    return get_image ? get_image(*this, self) : nullptr;
-  }
+  // ImplT must provide:
+  //   using Parent = SomeObject;
+  //   static constexpr StrView kName = "..."sv;
+  //   static constexpr int Offset();  // offsetof(Parent, def_member)
+  //   sk_sp<SkImage> GetImage();
+  template <typename ImplT>
+  struct Def : Interface::DefBase {
+    using Impl = ImplT;
+    using Bound = ImageProvider;
+
+    static Table& GetTable() {
+      static Table tbl = []{
+        Table t(ImplT::kName);
+        t.get_image = +[](ImageProvider self) -> sk_sp<SkImage> {
+          return static_cast<ImplT&>(self).GetImage();
+        };
+        t.state_off = ImplT::Offset();
+        return t;
+      }();
+      return tbl;
+    }
+  };
 };
 
 }  // namespace automat

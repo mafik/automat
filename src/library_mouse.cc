@@ -503,23 +503,13 @@ static void SendMouseButtonEvent(ui::PointerButton button, bool down) {
 #endif
 }
 
-Runnable MouseButtonEvent::runnable_iface(
-    "Run"sv, +[](MouseButtonEvent& obj) -> SyncState& { return obj.runnable_sync; },
-    +[](const Runnable&, MouseButtonEvent& event, std::unique_ptr<RunTask>&) {
-      ZoneScopedN("MouseClick");
-      SendMouseButtonEvent(event.button, event.down);
-    });
-
-NextArg MouseButtonEvent::next("Next"sv,
-                                +[](MouseButtonEvent& obj) -> NextState& { return obj.next_state; });
-
+void MouseButtonEvent::Run::OnRun(std::unique_ptr<RunTask>&) {
+  ZoneScopedN("MouseClick");
+  SendMouseButtonEvent(self().button, self().down);
+}
 string_view MouseButtonEvent::Name() const { return "Mouse Button Event"sv; }
 
 Ptr<Object> MouseButtonEvent::Clone() const { return MAKE_PTR(MouseButtonEvent, button, down); }
-void MouseButtonEvent::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
-  if (LoopControl::Break == cb(runnable_iface)) return;
-  if (LoopControl::Break == cb(next)) return;
-}
 audio::Sound& MouseButtonEvent::NextSound() {
   return down ? embedded::assets_SFX_mouse_down_wav : embedded::assets_SFX_mouse_up_wav;
 }
@@ -858,7 +848,7 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
     SkPath mouse_shape = krita::mouse::Shape();
 
     button = object.button;
-    presser_widget.is_on = MouseButtonPresser::state.IsOn(object);
+    presser_widget.is_on = object.state->IsOn();
 
     auto mask = MouseWidgetCommon::ButtonShape(button);
     Rect bounds = mask.getBounds();
@@ -881,7 +871,7 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
     {
       Ptr<MouseButtonPresser> object = LockObject<MouseButtonPresser>();
       button = object->button;
-      presser_widget.is_on = MouseButtonPresser::state.IsOn(*object);
+      presser_widget.is_on = object->state->IsOn();
     }
     return MouseWidgetCommon::Tick(timer, *this, button, std::nullopt, &presser_widget);
   }
@@ -898,43 +888,32 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
 };
 
 MouseButtonPresser::MouseButtonPresser(ui::PointerButton button) : button(button) {}
-Runnable MouseButtonPresser::click(
-    "Click"sv, +[](MouseButtonPresser& obj) -> SyncState& { return obj.click_sync; },
-    +[](const Runnable&, MouseButtonPresser& presser, std::unique_ptr<RunTask>&) {
-      ZoneScopedN("MouseButtonPresser");
-      audio::Play(embedded::assets_SFX_mouse_down_wav);
-      SendMouseButtonEvent(presser.button, true);
-      SendMouseButtonEvent(presser.button, false);
-    });
 
-NextArg MouseButtonPresser::next(
-    "Next"sv, +[](MouseButtonPresser& obj) -> NextState& { return obj.next_state; });
+void MouseButtonPresser::Click::OnRun(std::unique_ptr<RunTask>&) {
+  ZoneScopedN("MouseButtonPresser");
+  audio::Play(embedded::assets_SFX_mouse_down_wav);
+  SendMouseButtonEvent(self().button, true);
+  SendMouseButtonEvent(self().button, false);
+}
 
-OnOff MouseButtonPresser::state(
-    "State"sv, +[](MouseButtonPresser& obj) -> SyncState& { return obj.state_sync; },
-    +[](const OnOff&, const MouseButtonPresser& obj) -> bool { return obj.down; },
-    +[](const OnOff&, MouseButtonPresser& presser) {
-      audio::Play(embedded::assets_SFX_mouse_down_wav);
-      SendMouseButtonEvent(presser.button, true);
-      presser.WakeToys();
-    },
-    +[](const OnOff&, MouseButtonPresser& presser) {
-      audio::Play(embedded::assets_SFX_mouse_up_wav);
-      SendMouseButtonEvent(presser.button, false);
-      presser.WakeToys();
-    });
+void MouseButtonPresser::State::OnTurnOn() {
+  auto& presser = self();
+  audio::Play(embedded::assets_SFX_mouse_down_wav);
+  SendMouseButtonEvent(presser.button, true);
+  presser.WakeToys();
+}
+void MouseButtonPresser::State::OnTurnOff() {
+  auto& presser = self();
+  audio::Play(embedded::assets_SFX_mouse_up_wav);
+  SendMouseButtonEvent(presser.button, false);
+  presser.WakeToys();
+}
 
 MouseButtonPresser::MouseButtonPresser() : button(ui::PointerButton::Unknown) {}
 
 string_view MouseButtonPresser::Name() const { return "Mouse Button Presser"sv; }
 
 Ptr<Object> MouseButtonPresser::Clone() const { return MAKE_PTR(MouseButtonPresser, button); }
-
-void MouseButtonPresser::Interfaces(const std::function<LoopControl(Interface&)>& cb) {
-  if (LoopControl::Break == cb(next)) return;
-  if (LoopControl::Break == cb(click)) return;
-  if (LoopControl::Break == cb(state)) return;
-}
 
 std::unique_ptr<ObjectToy> MouseButtonPresser::MakeToy(ui::Widget* parent) {
   return std::make_unique<MouseButtonPresserWidget>(parent, *this);
@@ -960,8 +939,8 @@ bool MouseButtonPresser::DeserializeKey(ObjectDeserializer& d, StrView key) {
 }
 
 MouseButtonPresser::~MouseButtonPresser() {
-  if (state.IsOn(*this)) {
-    state.on_turn_off(state, *this);
+  if (state->IsOn()) {
+    state->TurnOff();
   }
 }
 

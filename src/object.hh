@@ -21,12 +21,6 @@ struct Connection;
 struct Location;
 struct Pointer;
 struct Container;
-struct Argument;
-struct ImageProvider;
-struct OnOff;
-struct LongRunning;
-struct Runnable;
-struct Syncable;
 struct ObjectSerializer;
 struct ObjectDeserializer;
 struct ObjectToy;
@@ -71,27 +65,25 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
 
   virtual Container* AsContainer() { return nullptr; }
 
-  // Image-like objects can provide image data.
-  virtual ImageProvider* AsImageProvider() { return nullptr; }
-
   // Default implementations iterate Interfaces() and dynamic_cast to find the first match.
   // Override for special cases (e.g., when the Object itself implements the interface).
-  virtual LongRunning* AsLongRunning();
-  virtual Runnable* AsRunnable();
-  virtual OnOff* AsOnOff();
+  virtual Interface::Table* AsImageProvider();
+  virtual Interface::Table* AsLongRunning();
+  virtual Interface::Table* AsRunnable();
+  virtual Interface::Table* AsOnOff();
 
   // Visits all interfaces that are members of this object.
   //
   // Lifetime of interfaces is the same as this object. Interfaces should never be deleted as it
   // may create dangling references.
-  virtual void Interfaces(const std::function<LoopControl(Interface&)>&);
+  virtual void Interfaces(const std::function<LoopControl(Interface::Table&)>&);
 
-  virtual void InterfaceName(Interface&, Str& out_name);
+  virtual void InterfaceName(Interface::Table&, Str& out_name);
 
-  virtual Interface* InterfaceFromName(StrView name);
+  virtual Interface::Table* InterfaceFromName(StrView name);
 
-  // Wrapper around Interfaces() that only reports Arguments
-  void Args(const std::function<void(Argument&)>&);
+  // Wrapper around Interfaces() that only reports Argument::Table types
+  void Args(const std::function<void(Interface::Table&)>&);
 
   virtual void Updated(WeakPtr<Object>& updated);
 
@@ -105,7 +97,7 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
 
   virtual std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 
-  void InvalidateConnectionWidgets(const Argument* arg = nullptr) const;
+  void InvalidateConnectionWidgets(const Interface::Table* arg = nullptr) const;
 
   // Used to report errors within this object. If an error was caused by some other
   // "error reporter", take a look at ReportError in error.hh.
@@ -118,7 +110,7 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   // If this object is owned by a Board, return the Location that's used to store it.
   Location* MyLocation();
 
-  Interface* GetInterface() { return nullptr; }
+  Interface::Table* GetInterface() { return nullptr; }
 };
 
 // Provides sensible defaults for most object widgets. Designed to be inherited and tweaked.
@@ -145,11 +137,11 @@ struct ObjectToy : Toy {
   // Returns the start position of the given argument.
   // If coordinate_space is nullptr, returns local (metric) coordinates.
   // If coordinate_space is provided, returns coordinates in that widget's space.
-  virtual Vec2AndDir ArgStart(const Argument&, ui::Widget* coordinate_space = nullptr);
+  virtual Vec2AndDir ArgStart(const Interface::Table&, ui::Widget* coordinate_space = nullptr);
 
   // Describes the area of the widget where the given interface is located.
   // Local (metric) coordinates.
-  virtual SkPath InterfaceShape(Interface*) const { return Shape(); }
+  virtual SkPath InterfaceShape(Interface::Table*) const { return Shape(); }
 
   // When iconified, prevent children from receiving pointer events.
   bool AllowChildPointerEvents(ui::Widget&) const override;
@@ -177,7 +169,7 @@ struct ObjectSerializer : Serializer {
   std::vector<Object*> serialization_queue;
 
   Str& ResolveName(Object&, StrView hint = ""sv);
-  Str ResolveName(Object&, Interface*, StrView hint = ""sv);
+  Str ResolveName(Object&, Interface::Table*, StrView hint = ""sv);
   void Serialize(Object&);
 };
 
@@ -189,7 +181,7 @@ struct ObjectDeserializer : Deserializer {
   void RegisterObject(StrView name, Object& object);
 
   Object* LookupObject(StrView name);
-  NestedPtr<Interface> LookupInterface(StrView name);
+  NestedPtr<Interface::Table> LookupInterface(StrView name);
 };
 
 }  // namespace automat

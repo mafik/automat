@@ -48,7 +48,7 @@ struct CablePhysicsSimulation {
   animation::SpringV2<float> connector_scale = 1;
 
   Location& location;
-  Argument& arg;
+  Argument::Table& arg;
 
   animation::Spring<float> steel_insert_hidden;
   bool hidden = false;
@@ -56,7 +56,7 @@ struct CablePhysicsSimulation {
   float cable_width = 2_mm;
   float lightness_pct = 0;
 
-  CablePhysicsSimulation(Location&, Argument& arg, Vec2AndDir start);
+  CablePhysicsSimulation(Location&, Argument::Table& arg, Vec2AndDir start);
   ~CablePhysicsSimulation();
 
   Vec2 PlugTopCenter() const;

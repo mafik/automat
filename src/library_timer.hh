@@ -3,6 +3,7 @@
 #pragma once
 
 #include "base.hh"
+#include "color.hh"
 #include "sync.hh"
 #include "time.hh"
 #include "timer_thread.hh"
@@ -15,17 +16,43 @@ struct Timer : Object, TimerNotificationReceiver {
 
   time::Duration duration_value = 10s;
   time::SteadyPoint start_time;
-  std::unique_ptr<RunTask> long_running_task;
 
-  SyncState runnable_sync;
-  SyncState duration_sync;
-  SyncState running_sync;
-  NextState next_state;
+  struct DurationImpl : Syncable {
+    using Parent = Timer;
+    static constexpr StrView kName = "Duration"sv;
+    static constexpr SkColor kTint = "#6e4521"_color;
+    static constexpr int Offset() { return offsetof(Timer, duration); }
 
-  static Runnable runnable;
-  static Syncable duration;
-  static LongRunning timer_running;
-  static NextArg next;
+    bool CanSync(Syncable other) {
+      return other.table == &Syncable::Def<DurationImpl>::GetTable();
+    }
+  };
+  Syncable::Def<DurationImpl> duration;
+
+  struct Run : Runnable {
+    using Parent = Timer;
+    static constexpr StrView kName = "Run"sv;
+    static constexpr int Offset() { return offsetof(Timer, run); }
+
+    void OnRun(std::unique_ptr<RunTask>&);
+  };
+  Runnable::Def<Run> run;
+
+  struct Running : LongRunning {
+    using Parent = Timer;
+    static constexpr StrView kName = "Running"sv;
+    static constexpr int Offset() { return offsetof(Timer, running); }
+
+    void OnCancel();
+  };
+  LongRunning::Def<Running> running;
+
+  struct Next : NextArg {
+    using Parent = Timer;
+    static constexpr StrView kName = "Next"sv;
+    static constexpr int Offset() { return offsetof(Timer, next); }
+  };
+  NextArg::Def<Next> next;
 
   enum class Range : char {
     Milliseconds,  // 0 - 1000 ms
@@ -41,8 +68,7 @@ struct Timer : Object, TimerNotificationReceiver {
   StrView Name() const override { return "Timer"; }
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
-  void InterfaceName(Interface&, Str& out_name) override;
+  INTERFACES(run, duration, next, running)
   void Updated(WeakPtr<Object>& updated) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
 

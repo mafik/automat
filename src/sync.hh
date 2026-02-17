@@ -10,19 +10,87 @@
 
 namespace automat {
 
-struct Syncable;
+struct Gear;
 
-// Per-instance state for a Syncable interface.
-// Each Object that exposes a Syncable interface stores one SyncState per Syncable.
-struct SyncState {
-  NestedWeakPtr<Interface> end;
-  bool source = false;
+struct Syncable : Argument {
+  struct Table : Argument::Table {
+    static bool classof(const Interface::Table* i) {
+      return i->kind >= Interface::kSyncable && i->kind <= Interface::kLastArgument;
+    }
 
-  void Unsync(Object& self, Syncable&);
+    bool (*can_sync)(Syncable, Syncable other) = nullptr;
+    void (*on_sync)(Syncable) = nullptr;
+    void (*on_unsync)(Syncable) = nullptr;
 
-  ~SyncState() {
-    // TODO: call Unsync somehow...
-  }
+    Table(StrView name, Kind kind = Interface::kSyncable);
+  };
+
+  struct State {
+    NestedWeakPtr<Interface::Table> end;
+    bool source = false;
+
+    // Remember to call this before this state is destroyed!
+    //
+    // Note: DO NOT REMOVE - interfaces that don't go through Def-based table definition must call
+    // this directly in object destructors.
+    void Unsync(Object& self, Syncable::Table& syncable);
+  };
+
+  INTERFACE_BOUND(Syncable, Argument)
+
+  // ForwardDo distributes a command to all synced implementations.
+  template <typename T, typename F>
+  void ForwardDo(this T self, F&& lambda);
+
+  // ForwardNotify distributes a notification to OTHER synced implementations (not self).
+  template <typename T, typename F>
+  void ForwardNotify(this T self, F&& lambda);
+
+  void Unsync();
+
+  // v2-style definition: per-instance SyncState, static Table auto-generated from ImplT.
+  //
+  // ImplT must provide:
+  //   using Parent = SomeObject;
+  //   static constexpr StrView kName = "..."sv;
+  //   static constexpr int Offset();  // offsetof(Parent, def_member)
+  //   Optionally: static bool CanSync(const Syncable::Table&, const Syncable::Table&);
+  //   Optionally: static void OnSync(const Syncable::Table&, Parent&);
+  //   Optionally: static void OnUnsync(const Syncable::Table&, Parent&);
+  template <typename ImplT>
+  struct Def : State, DefBase {
+    using Impl = ImplT;
+    using Bound = Syncable;
+
+    static Table& GetTable() {
+      static Table tbl = [] {
+        Table t(ImplT::kName);
+        t.state_off = ImplT::Offset();
+        if constexpr (requires { ImplT::kTint; }) {
+          t.tint = ImplT::kTint;
+        }
+        if constexpr (requires { ImplT::CanSync; }) {
+          t.can_sync = +[](Syncable a, Syncable b) -> bool {
+            return static_cast<ImplT&>(a).CanSync(b);
+          };
+        }
+        if constexpr (requires { ImplT::OnSync; }) {
+          t.on_sync = +[](Syncable self) { static_cast<ImplT&>(self).OnSync(); };
+        }
+        if constexpr (requires { ImplT::OnUnsync; }) {
+          t.on_unsync = +[](Syncable self) { static_cast<ImplT&>(self).OnUnsync(); };
+        }
+        return t;
+      }();
+      return tbl;
+    }
+
+    ~Def() {
+      if (source || !end.IsExpired()) {
+        Bind().Unsync();
+      }
+    }
+  };
 };
 
 // Gear-shaped object that can make multiple interfaces act as one.
@@ -30,7 +98,7 @@ struct Gear : Object {
   std::shared_mutex mutex;
 
   struct Member {
-    NestedWeakPtr<Syncable> weak;
+    NestedWeakPtr<Syncable::Table> weak;
     bool sink;
   };
 
@@ -41,19 +109,14 @@ struct Gear : Object {
   Ptr<Object> Clone() const override { return MAKE_PTR(Gear); }
 
   // Make sure that this member will receive sync notifications from the Sources in this SyncGroup.
-  //
-  // Under the hood it adds the given member to the `members` list.
-  void AddSink(Object& obj, Syncable& syncable);
+  void AddSink(Object& obj, Syncable::Table& syncable);
 
   // Make sure that the sync notifications from this Syncable will be propagated to Sinks of this
   // Gear.
-  //
-  // This will set Syncable.sync_block to this Gear. Any existing Gear will be merged as
-  // well.
-  void AddSource(Object& obj, Syncable& syncable);
+  void AddSource(Object& obj, Syncable::Table& syncable);
 
   // AddSink & AddSource together.
-  void FullSync(Object& obj, Syncable& syncable);
+  void FullSync(Object& obj, Syncable::Table& syncable);
 
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
@@ -62,105 +125,47 @@ struct Gear : Object {
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };
 
-// Some objects within Automat may provide Syncables that can be "synced". A synced Syncable
-// allows several objects that follow some Syncable to act as one.
-//
-// Syncable should be subclassed as a specific abstract Syncable (like OnOff) before it's
-// used by Objects within Automat.
-//
-// For each command-like method a specific abstract Syncable should provide an entry point, whose
-// name starts with "on_". It's intended to be overridden by a concrete implementation.
-//
-// In addition to that, each specific abstract Syncable (SAS) should also provide two methods to
-// call the command:
-// - as a command - these methods should follow verb-like names, like "TurnOn", "Increment".
-//   A "Do" prefix may be used if a good verb is not available. This method should use the
-//   "ForwardDo" helper to forward the call to all synced Syncable implementations.
-// - as a notification - these methods should start with "Notify". This method should use the
-//   "ForwardNotify" helper to forward the call to _other_ synced Syncable implementations.
-//
-// The distinction between "Do" commands and "Notify" notifications allows Syncables that track
-// external state to interoperate with other Automat objects without sending redundant commands to
-// their externally tracked objects.
-//
-// IMPORTANT: To actually make this work, the "On" entry points should not be used directly (only
-// through the "ForwardDo" & "ForwardNotify" wrappers). Whenever the "On" entry point us used
-// directly, it's not going to be propagated to the other synced implementations.
-struct Syncable : Argument {
-  static bool classof(const Interface* i) {
-    return i->kind >= Interface::kSyncable && i->kind <= Interface::kLastArgument;
+template <typename T, typename F>
+void Syncable::ForwardDo(this T self, F&& lambda) {
+  auto& st = *self.state;
+  if (!st.source) {
+    lambda(self);
+  } else if (auto gear = st.end.template OwnerLockAs<Gear>()) {
+    auto lock = std::shared_lock(gear->mutex);
+    for (auto& member : gear->members) {
+      if (!member.sink) continue;
+      auto locked = member.weak.Lock();
+      if (!locked) continue;
+      T other_iface(*locked.template Owner<Object>(),
+                    *static_cast<typename T::Table*>(locked.Get()));
+      lambda(other_iface);
+    }
+  } else {
+    lambda(self);
   }
+}
 
-  // Function pointer for sync behavior.
-  // get_sync_state returns the SyncState for THIS Syncable on a given Object.
-  SyncState& (*get_sync_state)(Object&) = nullptr;
-
-  // Checks whether this Syncable can be synchronized with `other`.
-  bool (*can_sync)(const Syncable&, const Syncable& other) = nullptr;
-
-  // Called when Syncable becomes a source - it should start monitoring its updates and call the
-  // Notify methods.
-  void (*on_sync)(const Syncable&, Object&) = nullptr;
-
-  // Called when Syncable stops being a source - it may stop monitoring its underlying state. No
-  // need to call Notify methods any more.
-  void (*on_unsync)(const Syncable&, Object&) = nullptr;
-
-  Syncable(StrView name, Kind kind = Interface::kSyncable);
-
-  template <typename T>
-  Syncable(StrView name, SyncState& (*get)(T&), Kind kind = Interface::kSyncable)
-      : Syncable(name, kind) {
-    get_sync_state = reinterpret_cast<SyncState& (*)(Object&)>(get);
-  }
-
-  // ForwardDo distributes a command to all synced implementations.
-  // Lambda receives (Object& target, const SyncableT& target_iface).
-  template <typename SyncableT, typename F>
-  void ForwardDo(Object& self, F&& lambda) const {
-    auto& state = get_sync_state(self);
-    if (!state.source) {
-      lambda(self, static_cast<const SyncableT&>(*this));
-    } else if (auto gear = state.end.OwnerLockAs<Gear>()) {
-      auto lock = std::shared_lock(gear->mutex);
-      for (auto& member : gear->members) {
-        if (!member.sink) continue;
-        auto locked = member.weak.Lock();
-        if (!locked) continue;
-        auto* other_iface = static_cast<const SyncableT*>(locked.Get());
-        lambda(*locked.Owner<Object>(), *other_iface);
-      }
-    } else {
-      lambda(self, static_cast<const SyncableT&>(*this));
+template <typename T, typename F>
+void Syncable::ForwardNotify(this T self, F&& lambda) {
+  auto& st = *self.state;
+  if (!st.source) return;
+  if (auto gear = st.end.template OwnerLockAs<Gear>()) {
+    auto lock = std::shared_lock(gear->mutex);
+    for (auto& member : gear->members) {
+      auto locked = member.weak.Lock();
+      if (!locked) continue;
+      // Skip self
+      if (locked.Get() == self.table_ptr && locked.template Owner<Object>() == self.obj) continue;
+      T other_iface(*locked.template Owner<Object>(),
+                    *static_cast<typename T::Table*>(locked.Get()));
+      lambda(other_iface);
     }
   }
+}
 
-  // ForwardNotify distributes a notification to OTHER synced implementations (not self).
-  template <typename SyncableT, typename F>
-  void ForwardNotify(Object& self, F&& lambda) const {
-    auto& state = get_sync_state(self);
-    if (!state.source) return;
-    if (auto gear = state.end.OwnerLockAs<Gear>()) {
-      auto lock = std::shared_lock(gear->mutex);
-      for (auto& member : gear->members) {
-        auto locked = member.weak.Lock();
-        if (!locked) continue;
-        // Skip self
-        if (locked.Get() == this && locked.Owner<Object>() == &self) continue;
-        auto* other_iface = static_cast<const SyncableT*>(locked.Get());
-        lambda(*locked.Owner<Object>(), *other_iface);
-      }
-    }
-  }
-
-  void Unsync(Object& self);
-};
-
-// Returns a reference to the existing or a new Gear. This Syncable is initialized as a sync
-// source.
-Ptr<Gear> FindGearOrMake(Object& source_obj, Syncable& source);
-
-Ptr<Gear> FindGearOrNull(Object& source_obj, Syncable& source);
+// Returns a reference to the existing or a new Gear.
+Ptr<Gear> FindGearOrMake(Object& source_obj, Syncable::Table& source);
+Ptr<Gear> FindGearOrNull(Object& source_obj, Syncable::Table& source);
 
 // Widget that draws one belt connection from a Gear to a synced member.
 struct SyncConnectionWidget : Toy {
@@ -168,7 +173,7 @@ struct SyncConnectionWidget : Toy {
   SkPath end_shape;
   Vec2 end{};
 
-  SyncConnectionWidget(ui::Widget* parent, Object& object, Syncable& syncable);
+  SyncConnectionWidget(ui::Widget* parent, Object& object, Syncable::Table& syncable);
 
   SkPath Shape() const override;
   animation::Phase Tick(time::Timer& t) override;
@@ -180,9 +185,9 @@ struct SyncConnectionWidget : Toy {
 struct SyncMemberOf {
   using Toy = SyncConnectionWidget;
   Object& object;
-  Syncable& syncable;
+  Syncable::Table& syncable;
   ReferenceCounted& GetOwner() { return object; }
-  Interface* GetInterface() { return &syncable; }
+  Interface::Table* GetInterface() { return &syncable; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 };
 

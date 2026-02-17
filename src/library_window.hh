@@ -15,12 +15,30 @@ struct Window : public Object {
   bool run_continuously = true;
   sk_sp<SkImage> captured_image;  // Captured window image
 
-  SyncState capture_sync;
-  NextState next_state;
-  static Runnable capture;
-  static NextArg next;
+  struct CaptureImpl : Runnable {
+    using Parent = Window;
+    static constexpr StrView kName = "Capture"sv;
+    static constexpr int Offset() { return offsetof(Window, capture); }
 
-  static ImageProvider image;
+    void OnRun(std::unique_ptr<RunTask>&);
+  };
+  Runnable::Def<CaptureImpl> capture;
+
+  struct NextImpl : NextArg {
+    using Parent = Window;
+    static constexpr StrView kName = "Next"sv;
+    static constexpr int Offset() { return offsetof(Window, next); }
+  };
+  NextArg::Def<NextImpl> next;
+
+  struct ImageImpl : ImageProvider {
+    using Parent = Window;
+    static constexpr StrView kName = "Captured Image"sv;
+    static constexpr int Offset() { return offsetof(Window, image_provider); }
+
+    sk_sp<SkImage> GetImage();
+  };
+  [[no_unique_address]] ImageProvider::Def<ImageImpl> image_provider;
 
   struct Impl;
   // Private implementation to avoid polluting header with platform-specific defines.
@@ -34,7 +52,7 @@ struct Window : public Object {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  void Interfaces(const std::function<LoopControl(Interface&)>& cb) override;
+  INTERFACES(capture, next, image_provider);
 
   // Called after deserialization. Makes the window object attach its native handle to the window
   // with the current title.
@@ -45,8 +63,6 @@ struct Window : public Object {
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 
-  // ImageProvider interface
-  ImageProvider* AsImageProvider() override { return &image; }
 };
 
 }  // namespace automat::library

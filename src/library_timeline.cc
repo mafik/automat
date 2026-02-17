@@ -295,29 +295,29 @@ static SkPath GetRecPath() {
 
 static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
 
-TrackArgument::TrackArgument(StrView name) : Argument(name) {
+TrackArgument::TrackArgument(StrView name) : Argument::Table(name) {
   tint = "#17aeb7"_color;
   light = "#17aeb7"_color;
-  can_connect = [](const Argument&, Object&, Object&, Interface*, Status&) {};
-  on_connect = [](const Argument& arg, Object& start, Object* end_obj, Interface* end_iface) {
-    auto& self = const_cast<TrackArgument&>(static_cast<const TrackArgument&>(arg));
-    if (end_obj) {
-      self.end = NestedWeakPtr<Interface>(end_obj->AcquireWeakPtr(), end_iface);
+  can_connect = [](Argument, Interface, Status&) {};
+  on_connect = [](Argument self, Interface end) {
+    auto& track = static_cast<TrackArgument&>(*self.table);
+    if (end) {
+      track.end = NestedWeakPtr<Interface::Table>(end.obj->AcquireWeakPtr(), end.table_ptr);
     } else {
-      self.end = {};
+      track.end = {};
     }
   };
-  find = [](const Argument& arg, const Object&) -> NestedPtr<Interface> {
-    auto& self = static_cast<const TrackArgument&>(arg);
-    return self.end.Lock();
+  find = [](Argument self) -> NestedPtr<Interface::Table> {
+    auto& track = static_cast<const TrackArgument&>(*self.table);
+    return track.end.Lock();
   };
-  make_icon = [](const Argument& arg, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
-    return std::make_unique<TextWidget>(parent, Str(arg.Name()));
+  make_icon = [](Argument self, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
+    return std::make_unique<TextWidget>(parent, Str(self.Name()));
   };
 }
 
-static bool OnOffTrackIsOn(const OnOff&, const Object& obj) {
-  auto& track = static_cast<const OnOffTrack&>(obj);
+bool OnOffTrack::OnOffImpl::IsOn() const {
+  auto& track = self();
   if (track.timeline->state == Timeline::kPaused) {
     return false;
   }
@@ -333,27 +333,11 @@ static bool OnOffTrackIsOn(const OnOff&, const Object& obj) {
   return i % 2 == 0;
 }
 
-OnOff OnOffTrack::on_off = [] {
-  OnOff o("On/Off"sv);
-  o.is_on = OnOffTrackIsOn;
-  o.get_sync_state = [](Object& obj) -> SyncState& {
-    return static_cast<OnOffTrack&>(obj).on_off_sync;
-  };
-  return o;
-}();
+static void TimelineOnRun(Timeline& self, std::unique_ptr<RunTask>& run_task);
+static void TimelineOnCancel(Timeline& self);
 
-static void TimelineOnRun(const Runnable&, Timeline& self, std::unique_ptr<RunTask>& run_task);
-static void TimelineOnCancel(const LongRunning&, Timeline& self);
-
-NextArg Timeline::next("Next"sv, +[](Timeline& obj) -> NextState& { return obj.next_state; });
-
-Runnable Timeline::run("Run"sv,
-                        +[](Timeline& obj) -> SyncState& { return obj.run_sync; }, TimelineOnRun);
-
-LongRunning Timeline::running(
-    "Running"sv, +[](Timeline& obj) -> SyncState& { return obj.running_sync; },
-    +[](Timeline& obj) -> std::unique_ptr<RunTask>& { return obj.long_running_task; },
-    TimelineOnCancel);
+void Timeline::Run::OnRun(std::unique_ptr<RunTask>& run_task) { TimelineOnRun(self(), run_task); }
+void Timeline::Running::OnCancel() { TimelineOnCancel(self()); }
 
 Timeline::Timeline()
     : state(kPaused), timeline_length(0), paused{.playback_offset = 0s}, zoom(10) {}
@@ -460,7 +444,7 @@ static void TimelineUpdateOutputs(Timeline& t, time::SteadyPoint started_at,
                                   time::SteadyPoint now) {
   for (auto& track : t.tracks) {
     t.InvalidateConnectionWidgets(track.get());
-    auto* object = track->ObjectOrNull(t);
+    auto* object = Argument(t, *track).ObjectOrNull();
     if (object == nullptr) continue;
     auto* location = object->MyLocation();
     if (location == nullptr) continue;
@@ -734,10 +718,10 @@ struct TimelineRunButton : ui::ToggleButton {
     auto lock = std::lock_guard(timeline->mutex);
     switch (timeline->state) {
       case Timeline::kPlaying:
-        Timeline::running.Cancel(*timeline);
+        timeline->running->Cancel();
         break;
       case Timeline::kPaused:
-        Timeline::run.ScheduleRun(*timeline);
+        timeline->run->ScheduleRun();
         break;
       case Timeline::kRecording:
         timeline->StopRecording();
@@ -1567,7 +1551,8 @@ struct TimelineWidget : ObjectToy {
     }
   }
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
-  Vec2AndDir ArgStart(const Argument& arg, ui::Widget* coordinate_space = nullptr) override {
+  Vec2AndDir ArgStart(const Interface::Table& arg,
+                      ui::Widget* coordinate_space = nullptr) override {
     auto timeline = LockObject<Timeline>();
     if (timeline) {
       auto lock = std::lock_guard(timeline->mutex);
@@ -1876,13 +1861,13 @@ std::unique_ptr<ObjectToy> Timeline::MakeToy(ui::Widget* parent) {
   return std::make_unique<TimelineWidget>(parent, *this);
 }
 
-void Timeline::Interfaces(const function<LoopControl(Interface&)>& cb) {
+void Timeline::Interfaces(const function<LoopControl(Interface::Table&)>& cb) {
   for (auto& track_arg : tracks) {
     if (LoopControl::Break == cb(*track_arg)) return;
   }
-  if (LoopControl::Break == cb(next)) return;
-  if (LoopControl::Break == cb(run)) return;
-  if (LoopControl::Break == cb(running)) return;
+  if (LoopControl::Break == cb(NextArg::Def<NextImpl>::GetTable())) return;
+  if (LoopControl::Break == cb(Runnable::Def<Run>::GetTable())) return;
+  if (LoopControl::Break == cb(LongRunning::Def<Running>::GetTable())) return;
 }
 
 struct TrackBaseWidget : ObjectToy {
@@ -2514,7 +2499,7 @@ static void WakeRunButton(Timeline& timeline) {
   });
 }
 
-static void TimelineOnCancel(const LongRunning&, Timeline& t) {
+static void TimelineOnCancel(Timeline& t) {
   if (t.state == Timeline::kPlaying) {
     TimelineCancelScheduled(t);
     t.state = Timeline::kPaused;
@@ -2525,7 +2510,7 @@ static void TimelineOnCancel(const LongRunning&, Timeline& t) {
   }
 }
 
-static void TimelineOnRun(const Runnable&, Timeline& t, std::unique_ptr<RunTask>& run_task) {
+static void TimelineOnRun(Timeline& t, std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("Timeline");
   if (t.state != Timeline::kPaused) {
     return;
@@ -2540,7 +2525,7 @@ static void TimelineOnRun(const Runnable&, Timeline& t, std::unique_ptr<RunTask>
   TimelineScheduleNextAfter(t, now);
   WakeRunButton(t);
   t.WakeToys();
-  Timeline::running.BeginLongRunning(t, std::move(run_task));
+  t.running->BeginLongRunning(std::move(run_task));
 }
 
 void Timeline::BeginRecording() {
@@ -2610,19 +2595,21 @@ void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
   if (timeline->state != Timeline::kPlaying) {
     on = false;
   }
-  if (auto on_off = target.object->AsOnOff()) {
+  if (auto on_off = static_cast<OnOff::Table*>(target.object->AsOnOff())) {
     if (on) {
-      on_off->TurnOn(*target.object);
+      OnOff(*target.object, *on_off).TurnOn();
     } else {
-      on_off->TurnOff(*target.object);
+      OnOff(*target.object, *on_off).TurnOff();
     }
-  } else if (auto runnable = target.object->AsRunnable()) {
+  } else if (auto runnable = static_cast<Runnable::Table*>(target.object->AsRunnable())) {
     if (on) {
-      runnable->ScheduleRun(*target.object);
+      Runnable(*target.object, *runnable).ScheduleRun();
     } else {
-      if (auto long_running = target.object->AsLongRunning();
-          long_running->IsRunning(*target.object)) {
-        long_running->Cancel(*target.object);
+      if (auto* lr_table = static_cast<LongRunning::Table*>(target.object->AsLongRunning())) {
+        LongRunning lr(*target.object, *lr_table);
+        if (lr.IsRunning()) {
+          lr.Cancel();
+        }
       }
     }
   } else {
@@ -2635,7 +2622,7 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
   if (now >= end_at) {
     state = kPaused;
     paused = {.playback_offset = MaxTrackLength()};
-    Timeline::running.Done(*this);
+    running->Done();
     WakeRunButton(*this);
   }
   TimelineUpdateOutputs(*this, playing.started_at, now);
@@ -2643,8 +2630,6 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
     TimelineScheduleNextAfter(*this, now);
   }
 }
-
-// OnOffTrack::IsOn is implemented by OnOffTrackIsOn (function pointer on the static on_off).
 
 void TrackBase::SerializeState(ObjectSerializer& writer) const {
   writer.Key("timestamps");
@@ -2847,7 +2832,7 @@ bool Timeline::DeserializeKey(ObjectDeserializer& d, StrView key) {
     // We're not updating the outputs because they should be deserialized in a proper state
     // TimelineUpdateOutputs(l, *this, playing.started_at, now);
     TimelineScheduleNextAfter(*this, now);
-    Timeline::running.BeginLongRunning(*this, std::make_unique<RunTask>(AcquireWeakPtr(), &run));
+    running->BeginLongRunning(std::make_unique<RunTask>(AcquireWeakPtr(), &run.GetTable()));
   } else if (key == "recording") {
     state = kRecording;
     double value = 0;

@@ -4,14 +4,11 @@
 
 #include <include/core/SkRRect.h>
 
+#include "argument.hh"
 #include "keyboard.hh"
 #include "pointer.hh"
 #include "ui_constants.hh"
 #include "widget.hh"
-
-namespace automat {
-struct Argument;
-}  // namespace automat
 
 namespace automat::ui {
 
@@ -29,7 +26,7 @@ using TextVisitor = std::function<bool(std::string&)>;
 
 struct TextFieldBase : Widget, CaretOwner {
   std::unordered_map<Caret*, CaretPosition> caret_positions;
-  NestedWeakPtr<Argument> argument;
+  NestedWeakPtr<Argument::Table> argument;
   Optional<Pointer::IconOverride> ibeam_icon;
 
   TextFieldBase(ui::Widget* parent) : Widget(parent) {}

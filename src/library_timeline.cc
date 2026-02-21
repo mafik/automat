@@ -923,9 +923,9 @@ struct TimelineWidget : ObjectToy {
   void PullTimelineState(Timeline& timeline_locked, time::SteadyPoint now) {
     // update current_offset
     current_offset_raw = timeline_locked.CurrentOffset(now);
+    max_track_length = timeline_locked.MaxTrackLength();
     current_offset = clamp<time::Duration>(current_offset_raw + time::FromSeconds(bridge_wiggle_s),
                                            0s, max_track_length);
-    max_track_length = timeline_locked.MaxTrackLength();
     if (max_track_length == 0s) {
       current_pos_ratio = 1;
     } else {

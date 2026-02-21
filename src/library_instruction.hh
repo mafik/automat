@@ -60,7 +60,7 @@ struct Instruction : Object, Buffer {
     static constexpr int Offset() { return offsetof(Instruction, assembler_arg); }
     static void Configure(Argument::Table&);
   };
-  [[no_unique_address]] Argument::Def<AssemblerArgImpl> assembler_arg;
+  NO_UNIQUE_ADDRESS Argument::Def<AssemblerArgImpl> assembler_arg;
 
   struct JumpArgImpl : Argument {
     using Parent = Instruction;
@@ -68,7 +68,7 @@ struct Instruction : Object, Buffer {
     static constexpr int Offset() { return offsetof(Instruction, jump_arg); }
     static void Configure(Argument::Table&);
   };
-  [[no_unique_address]] Argument::Def<JumpArgImpl> jump_arg;
+  NO_UNIQUE_ADDRESS Argument::Def<JumpArgImpl> jump_arg;
 
   void Interfaces(const std::function<LoopControl(Interface::Table&)>& cb) override;
 

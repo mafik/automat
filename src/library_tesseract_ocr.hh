@@ -62,7 +62,7 @@ struct TesseractOCR : public Object {
 
     static void Configure(Argument::Table&);
   };
-  [[no_unique_address]] Argument::Def<ImageArgImpl> image;
+  NO_UNIQUE_ADDRESS Argument::Def<ImageArgImpl> image;
 
   struct TextArgImpl : Argument {
     using Parent = TesseractOCR;
@@ -71,7 +71,7 @@ struct TesseractOCR : public Object {
 
     static void Configure(Argument::Table&);
   };
-  [[no_unique_address]] Argument::Def<TextArgImpl> text;
+  NO_UNIQUE_ADDRESS Argument::Def<TextArgImpl> text;
 
   TesseractOCR();
 

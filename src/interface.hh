@@ -108,8 +108,6 @@ struct Interface {
     }
   };
 
-  // --- Bound type (v2) ---
-  // Lightweight pair constructed on-the-fly to bind an Object to a Table.
   Object* obj = nullptr;
   Table* table_ptr = nullptr;
 
@@ -161,33 +159,37 @@ void VisitInterfaces(const std::function<LoopControl(Interface::Table&)>& cb, Ts
 
 }  // namespace automat
 
+#if defined(_MSC_VER)
+#define NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
+#else
+#define NO_UNIQUE_ADDRESS [[no_unique_address]]
+#endif
+
 // INTERFACE_BOUND(Type, Base) — generates constructors, TableRef, and StateRef for bound types.
 // Requires Table and State to be declared before use. Types without meaningful state should
 // define `struct State {};` so the macro compiles. StateRef exists but is unused — zero cost.
-#define INTERFACE_BOUND(Type, Base)                                                              \
-  Type() = default;                                                                              \
-  Type(Object& obj, Table& t) : Base(obj, t) {}                                                 \
-  Type(Object* obj, Table* t) : Base(obj, t) {}                                                 \
-  struct TableRef {                                                                              \
-    Table* operator->() const {                                                                  \
-      auto* p = reinterpret_cast<const Type*>(                                                   \
-          reinterpret_cast<intptr_t>(this) - offsetof(Type, table));                              \
-      return static_cast<Table*>(p->table_ptr);                                                  \
-    }                                                                                            \
-    Table& operator*() const { return *operator->(); }                                           \
-    operator Table*() const { return operator->(); }                                             \
-  };                                                                                             \
-  [[no_unique_address]] TableRef table;                                                          \
-  struct StateRef {                                                                              \
-    State* operator->() const {                                                                  \
-      auto* p = reinterpret_cast<const Type*>(                                                   \
-          reinterpret_cast<intptr_t>(this) - offsetof(Type, state));                              \
-      auto* addr = reinterpret_cast<char*>(p->obj) + p->table_ptr->state_off;                    \
-      return reinterpret_cast<State*>(addr);                                                     \
-    }                                                                                            \
-    State& operator*() const { return *operator->(); }                                           \
-  };                                                                                             \
-  [[no_unique_address]] StateRef state;
+#define INTERFACE_BOUND(Type, Base)                                                                \
+  Type() = default;                                                                                \
+  Type(Object& obj, Table& t) : Base(obj, t) {}                                                    \
+  Type(Object* obj, Table* t) : Base(obj, t) {}                                                    \
+  struct TableRef {                                                                                \
+    Table* operator->() const {                                                                    \
+      auto* p =                                                                                    \
+          reinterpret_cast<const Type*>(reinterpret_cast<intptr_t>(this) - offsetof(Type, table)); \
+      return static_cast<Table*>(p->table_ptr);                                                    \
+    }                                                                                              \
+    Table& operator*() const { return *operator->(); }                                             \
+    operator Table*() const { return operator->(); }                                               \
+  } table NO_UNIQUE_ADDRESS;                                                                       \
+  struct StateRef {                                                                                \
+    State* operator->() const {                                                                    \
+      auto* p =                                                                                    \
+          reinterpret_cast<const Type*>(reinterpret_cast<intptr_t>(this) - offsetof(Type, state)); \
+      auto* addr = reinterpret_cast<char*>(p->obj) + p->table_ptr->state_off;                      \
+      return reinterpret_cast<State*>(addr);                                                       \
+    }                                                                                              \
+    State& operator*() const { return *operator->(); }                                             \
+  } state NO_UNIQUE_ADDRESS;
 
 // INTERFACES macro: generates the Interfaces() override from a list of member names.
 // Each member can be either an old-style static Interface::Table subclass or a new-style Def<>.

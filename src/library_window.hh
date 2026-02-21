@@ -3,7 +3,6 @@
 #pragma once
 
 #include "base.hh"
-#include "control_flow.hh"
 #include "image_provider.hh"
 #include "str.hh"
 
@@ -38,7 +37,7 @@ struct Window : public Object {
 
     sk_sp<SkImage> GetImage();
   };
-  [[no_unique_address]] ImageProvider::Def<ImageImpl> image_provider;
+  NO_UNIQUE_ADDRESS ImageProvider::Def<ImageImpl> image_provider;
 
   struct Impl;
   // Private implementation to avoid polluting header with platform-specific defines.
@@ -62,7 +61,6 @@ struct Window : public Object {
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
-
 };
 
 }  // namespace automat::library

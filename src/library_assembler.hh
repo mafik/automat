@@ -84,7 +84,7 @@ struct Register : Object {
 
     static void Configure(Argument::Table&);
   };
-  [[no_unique_address]] Argument::Def<AssemblerArgImpl> assembler_arg;
+  NO_UNIQUE_ADDRESS Argument::Def<AssemblerArgImpl> assembler_arg;
 
   Register(WeakPtr<Assembler> assembler_weak, int register_index);
 

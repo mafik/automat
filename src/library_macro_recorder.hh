@@ -38,7 +38,7 @@ struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
 
     static void Configure(Argument::Table&);
   };
-  [[no_unique_address]] Argument::Def<TimelineArgImpl> timeline;
+  NO_UNIQUE_ADDRESS Argument::Def<TimelineArgImpl> timeline;
 
   MacroRecorder();
   MacroRecorder(const MacroRecorder&);

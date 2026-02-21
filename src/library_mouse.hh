@@ -101,7 +101,7 @@ struct MouseButtonPresser : Object {
     static constexpr StrView kName = "State"sv;
     static constexpr int Offset() { return offsetof(MouseButtonPresser, state); }
 
-    bool IsOn() const { return self().down; }
+    bool IsOn() const { return object().down; }
     void OnTurnOn();
     void OnTurnOff();
   };

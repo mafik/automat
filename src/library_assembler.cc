@@ -207,7 +207,7 @@ Ptr<Object> Assembler::Clone() const { return MAKE_PTR(Assembler); }
 
 void Assembler::RunningImpl::OnCancel() {
   Status status;
-  self().mc_controller->Cancel(status);
+  object().mc_controller->Cancel(status);
   if (!OK(status)) {
     ERROR << "Failed to cancel Assembler: " << status;
     return;
@@ -742,14 +742,14 @@ void Register::AssemblerArgImpl::Configure(Argument::Table& t) {
   t.tint = "#ff0000"_color;
   t.style = Argument::Style::Spotlight;
   t.can_connect = [](Argument, Interface end, Status& status) {
-    if (end.table_ptr!= nullptr || !dynamic_cast<Assembler*>(end.obj)) {
+    if (end.table_ptr!= nullptr || !dynamic_cast<Assembler*>(end.object_ptr)) {
       AppendErrorMessage(status) += "Must connect to an Assembler";
     }
   };
   t.on_connect = [](Argument self, Interface end) {
-    auto& reg = static_cast<Register&>(*self.obj);
+    auto& reg = static_cast<Register&>(*self.object_ptr);
     if (end) {
-      if (auto* assembler = dynamic_cast<Assembler*>(end.obj)) {
+      if (auto* assembler = dynamic_cast<Assembler*>(end.object_ptr)) {
         reg.assembler_weak = assembler->AcquireWeakPtr();
       }
     } else {
@@ -757,7 +757,7 @@ void Register::AssemblerArgImpl::Configure(Argument::Table& t) {
     }
   };
   t.find = [](Argument self) -> NestedPtr<Interface::Table> {
-    auto& reg = static_cast<const Register&>(*self.obj);
+    auto& reg = static_cast<const Register&>(*self.object_ptr);
     return NestedPtr<Interface::Table>(reg.assembler_weak.Lock(), nullptr);
   };
 }

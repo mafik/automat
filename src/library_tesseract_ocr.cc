@@ -57,14 +57,14 @@ void TesseractOCR::ImageArgImpl::Configure(Argument::Table& t) {
     }
   };
   t.on_connect = [](Argument self, Interface end) {
-    auto& ocr = static_cast<TesseractOCR&>(*self.obj);
+    auto& ocr = static_cast<TesseractOCR&>(*self.object_ptr);
     auto* ip = dyn_cast_if_present<ImageProvider::Table>(end.table_ptr);
     if (ip == nullptr) return;
     ocr.image_provider_weak =
-        NestedWeakPtr<ImageProvider::Table>(end.obj->AcquireWeakPtr(), ip);
+        NestedWeakPtr<ImageProvider::Table>(end.object_ptr->AcquireWeakPtr(), ip);
   };
   t.find = [](Argument self) -> NestedPtr<Interface::Table> {
-    auto& ocr = static_cast<const TesseractOCR&>(*self.obj);
+    auto& ocr = static_cast<const TesseractOCR&>(*self.object_ptr);
     return ocr.image_provider_weak.Lock();
   };
 }
@@ -75,12 +75,12 @@ void TesseractOCR::TextArgImpl::Configure(Argument::Table& t) {
   };
   t.can_connect = [](Argument, Interface, Status&) {};
   t.on_connect = [](Argument self, Interface end) {
-    auto& ocr = static_cast<TesseractOCR&>(*self.obj);
+    auto& ocr = static_cast<TesseractOCR&>(*self.object_ptr);
     if (!end) return;
-    ocr.text_weak = end.obj->AcquireWeakPtr();
+    ocr.text_weak = end.object_ptr->AcquireWeakPtr();
   };
   t.find = [](Argument self) -> NestedPtr<Interface::Table> {
-    auto& ocr = static_cast<const TesseractOCR&>(*self.obj);
+    auto& ocr = static_cast<const TesseractOCR&>(*self.object_ptr);
     return NestedPtr<Interface::Table>(ocr.text_weak.Lock(), nullptr);
   };
 }
@@ -1075,7 +1075,7 @@ std::unique_ptr<ObjectToy> TesseractOCR::MakeToy(ui::Widget* parent) {
 }
 
 void TesseractOCR::RunImpl::OnRun(std::unique_ptr<RunTask>&) {
-  auto& t = self();
+  auto& t = object();
   ZoneScopedN("TesseractOCR");
   auto image_obj = Argument(t, image_arg).ObjectOrNull();
   auto text_obj = Argument(t, text_arg).ObjectOrNull();

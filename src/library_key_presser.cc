@@ -26,20 +26,20 @@ using namespace automat;
 namespace automat::library {
 
 void KeyPresser::Monitoring::OnTurnOn() {
-  auto& kp = self();
+  auto& kp = object();
   if (kp.keylogging == nullptr) {
     ui::root_widget->window->BeginLogging(&kp, &kp.keylogging, nullptr, nullptr);
   }
 }
 void KeyPresser::Monitoring::OnTurnOff() {
-  auto& kp = self();
+  auto& kp = object();
   if (kp.keylogging) {
     kp.keylogging->Release();
   }
 }
 
 void KeyPresser::State::OnTurnOn() {
-  auto& kp = self();
+  auto& kp = object();
   audio::Play(embedded::assets_SFX_key_down_wav);
   if (kp.key_pressed) return;
   kp.key_pressed = true;
@@ -47,7 +47,7 @@ void KeyPresser::State::OnTurnOn() {
   kp.WakeToys();
 }
 void KeyPresser::State::OnTurnOff() {
-  auto& kp = self();
+  auto& kp = object();
   audio::Play(embedded::assets_SFX_key_up_wav);
   if (!kp.key_pressed) return;
   kp.key_pressed = false;
@@ -55,11 +55,11 @@ void KeyPresser::State::OnTurnOff() {
   kp.WakeToys();
 }
 
-void KeyPresser::State::OnSync() { self().monitoring->TurnOn(); }
-void KeyPresser::State::OnUnsync() { self().monitoring->TurnOff(); }
+void KeyPresser::State::OnSync() { object().monitoring->TurnOn(); }
+void KeyPresser::State::OnUnsync() { object().monitoring->TurnOff(); }
 
 void KeyPresser::RunImpl::OnRun(std::unique_ptr<RunTask>&) {
-  self().state->TurnOn();
+  object().state->TurnOn();
 }
 
 constexpr static char kHandShapeSVG[] =

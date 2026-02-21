@@ -30,7 +30,7 @@ using namespace automat::ui;
 namespace automat::library {
 
 void HotKey::Enabled::OnTurnOn() {
-  auto& hk = self();
+  auto& hk = object();
   if (hk.hotkey) {
     hk.hotkey->Release();
   }
@@ -47,7 +47,7 @@ void HotKey::Enabled::OnTurnOn() {
 }
 
 void HotKey::Enabled::OnTurnOff() {
-  auto& hk = self();
+  auto& hk = object();
   if (hk.hotkey) {
     hk.hotkey->Release();
     hk.WakeToys();

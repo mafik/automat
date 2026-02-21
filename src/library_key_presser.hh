@@ -18,7 +18,7 @@ struct KeyPresser : Object, ui::Keylogger {
     static constexpr StrView kName = "Monitoring"sv;
     static constexpr int Offset() { return offsetof(KeyPresser, monitoring); }
 
-    bool IsOn() const { return self().keylogging != nullptr; }
+    bool IsOn() const { return object().keylogging != nullptr; }
     void OnTurnOn();
     void OnTurnOff();
   };
@@ -29,7 +29,7 @@ struct KeyPresser : Object, ui::Keylogger {
     static constexpr StrView kName = "State"sv;
     static constexpr int Offset() { return offsetof(KeyPresser, state); }
 
-    bool IsOn() const { return self().key_pressed; }
+    bool IsOn() const { return object().key_pressed; }
     void OnTurnOn();
     void OnTurnOff();
     void OnSync();

@@ -154,7 +154,7 @@ struct Window::Impl {
 };
 
 sk_sp<SkImage> Window::ImageImpl::GetImage() {
-  auto& w = self();
+  auto& w = object();
   auto lock = std::lock_guard(w.mutex);
   return w.captured_image;
 }
@@ -496,7 +496,7 @@ std::unique_ptr<ObjectToy> Window::MakeToy(ui::Widget* parent) {
 }
 
 void Window::CaptureImpl::OnRun(std::unique_ptr<RunTask>&) {
-  auto& w = self();
+  auto& w = object();
   ZoneScopedN("Window");
 #ifdef __linux__
   {

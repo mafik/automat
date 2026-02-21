@@ -34,7 +34,7 @@ Object& Argument::ObjectOrMake() const {
     return *o;
   }
   auto proto = table->prototype();
-  Location* start_loc = obj->here;
+  Location* start_loc = object_ptr->here;
   auto board = start_loc->ParentAs<Board>();
   auto& loc = board->Create(*proto);
 
@@ -47,7 +47,7 @@ Object& Argument::ObjectOrMake() const {
 }
 
 std::unique_ptr<Argument::Toy> Argument::MakeToy(ui::Widget* parent) {
-  return std::make_unique<ui::ConnectionWidget>(parent, *obj, *table);
+  return std::make_unique<ui::ConnectionWidget>(parent, *object_ptr, *table);
 }
 
 // --- NextArg implementation ---
@@ -63,7 +63,7 @@ NextArg::Table::Table(StrView name) : Argument::Table(name, Interface::kNextArg)
     auto& st = *static_cast<NextArg&>(self).state;
     if (end) {
       if (Runnable::Table* end_runnable = dyn_cast_if_present<Runnable::Table>(end.table_ptr)) {
-        st.next = NestedWeakPtr<Interface::Table>(end.obj->AcquireWeakPtr(), end_runnable);
+        st.next = NestedWeakPtr<Interface::Table>(end.object_ptr->AcquireWeakPtr(), end_runnable);
       }
     } else {
       st.next = {};

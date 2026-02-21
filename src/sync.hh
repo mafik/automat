@@ -155,7 +155,7 @@ void Syncable::ForwardNotify(this T self, F&& lambda) {
       auto locked = member.weak.Lock();
       if (!locked) continue;
       // Skip self
-      if (locked.Get() == self.table_ptr && locked.template Owner<Object>() == self.obj) continue;
+      if (locked.Get() == self.table_ptr && locked.template Owner<Object>() == self.object_ptr) continue;
       T other_iface(*locked.template Owner<Object>(),
                     *static_cast<typename T::Table*>(locked.Get()));
       lambda(other_iface);

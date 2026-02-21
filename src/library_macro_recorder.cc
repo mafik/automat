@@ -74,12 +74,12 @@ void MacroRecorder::TimelineArgImpl::Configure(Argument::Table& t) {
   t.style = Argument::Style::Cable;
   t.prototype = []() -> Ptr<Object> { return prototypes->Find<Timeline>()->AcquirePtr<Object>(); };
   t.can_connect = [](Argument, Interface end, Status& status) {
-    if (end.table_ptr!= nullptr || !dynamic_cast<Timeline*>(end.obj)) {
+    if (end.table_ptr!= nullptr || !dynamic_cast<Timeline*>(end.object_ptr)) {
       AppendErrorMessage(status) += "Must connect to a Timeline";
     }
   };
   t.on_connect = [](Argument self, Interface end) {
-    auto& mr = static_cast<MacroRecorder&>(*self.obj);
+    auto& mr = static_cast<MacroRecorder&>(*self.object_ptr);
     if (!end) {
       if (auto old_timeline_ptr = mr.timeline_connection.Lock()) {
         if (auto* old_timeline = dynamic_cast<Timeline*>(old_timeline_ptr.Get())) {
@@ -91,7 +91,7 @@ void MacroRecorder::TimelineArgImpl::Configure(Argument::Table& t) {
       mr.timeline_connection = {};
       return;
     }
-    if (auto* timeline = dynamic_cast<Timeline*>(end.obj)) {
+    if (auto* timeline = dynamic_cast<Timeline*>(end.object_ptr)) {
       mr.timeline_connection = timeline->AcquireWeakPtr();
       if (mr.long_running->IsRunning()) {
         timeline->BeginRecording();
@@ -99,7 +99,7 @@ void MacroRecorder::TimelineArgImpl::Configure(Argument::Table& t) {
     }
   };
   t.find = [](Argument self) -> NestedPtr<Interface::Table> {
-    auto& mr = static_cast<const MacroRecorder&>(*self.obj);
+    auto& mr = static_cast<const MacroRecorder&>(*self.object_ptr);
     return NestedPtr<Interface::Table>(mr.timeline_connection.Lock(), nullptr);
   };
 }
@@ -122,7 +122,7 @@ static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
 // MacroRecorder static interface definitions
 
 void MacroRecorder::RunImpl::OnRun(std::unique_ptr<RunTask>& run_task) {
-  auto& mr = self();
+  auto& mr = object();
   ZoneScopedN("MacroRecorder");
   if (mr.keylogging == nullptr) {
     auto timeline = FindOrCreateTimeline(mr);
@@ -134,7 +134,7 @@ void MacroRecorder::RunImpl::OnRun(std::unique_ptr<RunTask>& run_task) {
 }
 
 void MacroRecorder::LongRunningImpl::OnCancel() {
-  auto& mr = self();
+  auto& mr = object();
   if (auto timeline = FindTimeline(mr)) {
     timeline->StopRecording();
   }

@@ -140,7 +140,7 @@ struct Runnable : Syncable {
     });
   }
 
-  void ScheduleRun() const { (new RunTask(obj->AcquireWeakPtr(), table_ptr))->Schedule(); }
+  void ScheduleRun() const { (new RunTask(object_ptr->AcquireWeakPtr(), table_ptr))->Schedule(); }
 
   void NotifyRun(std::unique_ptr<RunTask>& run_task) const {
     ForwardNotify([&](Runnable other) {

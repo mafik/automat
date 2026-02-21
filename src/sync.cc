@@ -31,19 +31,19 @@ Syncable::Table::Table(StrView name, Kind kind) : Argument::Table(name, kind) {
   can_connect = [](Argument self, Interface end, Status& status) {
     auto& syncable = static_cast<Syncable::Table&>(*self.table);
     if (auto* other = dyn_cast_if_present<Syncable::Table>(end.table_ptr)) {
-      if (syncable.can_sync && syncable.can_sync(Syncable(*self.obj, syncable), Syncable(*end.obj, *other))) {
+      if (syncable.can_sync && syncable.can_sync(Syncable(*self.object_ptr, syncable), Syncable(*end.object_ptr, *other))) {
         return;
       } else {
         AppendErrorMessage(status) += "Can only connect to compatible Syncable";
       }
     }
-    if (auto gear = dynamic_cast<Gear*>(end.obj)) {
+    if (auto gear = dynamic_cast<Gear*>(end.object_ptr)) {
       auto lock = std::shared_lock(gear->mutex);
       if (gear->members.empty()) {
         return;
       } else {
         auto member = gear->members.front().weak.Lock();
-        if (member && syncable.can_sync && syncable.can_sync(Syncable(*self.obj, syncable), Syncable(member.Owner<Object>(), member.Get()))) {
+        if (member && syncable.can_sync && syncable.can_sync(Syncable(*self.object_ptr, syncable), Syncable(member.Owner<Object>(), member.Get()))) {
           return;
         } else {
           AppendErrorMessage(status) += "Wrong type of Gear";
@@ -54,10 +54,10 @@ Syncable::Table::Table(StrView name, Kind kind) : Argument::Table(name, kind) {
   };
   on_connect = [](Argument self, Interface end) {
     auto& syncable = static_cast<Syncable::Table&>(*self.table);
-    auto& st = *Syncable(*self.obj, syncable).state;
+    auto& st = *Syncable(*self.object_ptr, syncable).state;
 
     if (end) {
-      st.end = NestedWeakPtr<Interface::Table>(end.obj->AcquireWeakPtr(), end.table_ptr);
+      st.end = NestedWeakPtr<Interface::Table>(end.object_ptr->AcquireWeakPtr(), end.table_ptr);
     } else {
       st.end = {};
     }
@@ -66,33 +66,33 @@ Syncable::Table::Table(StrView name, Kind kind) : Argument::Table(name, kind) {
 
     auto* target_syncable = dyn_cast_if_present<Syncable::Table>(end.table_ptr);
     if (target_syncable) {
-      auto sync_block = FindGearOrNull(*end.obj, *target_syncable);
+      auto sync_block = FindGearOrNull(*end.object_ptr, *target_syncable);
       if (sync_block == nullptr) {
-        sync_block = FindGearOrMake(*self.obj, syncable);
+        sync_block = FindGearOrMake(*self.object_ptr, syncable);
         auto& loc = root_board->Insert(sync_block);
-        loc.position = (end.obj->here->position + self.obj->here->position) / 2;
+        loc.position = (end.object_ptr->here->position + self.object_ptr->here->position) / 2;
         loc.ForEachToy([](ui::RootWidget&, LocationWidget& toy) {
           toy.position_vel = Vec2(0, 1);
         });
       }
-      sync_block->FullSync(*self.obj, syncable);
-      sync_block->FullSync(*end.obj, *target_syncable);
+      sync_block->FullSync(*self.object_ptr, syncable);
+      sync_block->FullSync(*end.object_ptr, *target_syncable);
       return;
     }
-    auto* gear = dynamic_cast<Gear*>(end.obj);
+    auto* gear = dynamic_cast<Gear*>(end.object_ptr);
     if (gear) {
-      gear->FullSync(*self.obj, syncable);
+      gear->FullSync(*self.object_ptr, syncable);
     }
   };
   find = [](Argument self) -> NestedPtr<Interface::Table> {
     auto& syncable = static_cast<Syncable::Table&>(*self.table);
-    return Syncable(*self.obj, syncable).state->end.Lock();
+    return Syncable(*self.object_ptr, syncable).state->end.Lock();
   };
 }
 
 // --- Syncable::Unsync ---
 
-void Syncable::Unsync() { state->Unsync(*obj, *table); }
+void Syncable::Unsync() { state->Unsync(*object_ptr, *table); }
 
 void Syncable::State::Unsync(Object& self, Syncable::Table& syncable) {
   auto gear = end.OwnerLockAs<Gear>();

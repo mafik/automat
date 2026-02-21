@@ -109,11 +109,11 @@ void Instruction::JumpArgImpl::Configure(Argument::Table& a) {
     }
   };
   a.on_connect = [](Argument self, Interface end) {
-    auto* inst = dynamic_cast<Instruction*>(self.obj);
+    auto* inst = dynamic_cast<Instruction*>(self.object_ptr);
     if (!inst) return;
     if (end) {
       if (auto* r = dyn_cast_if_present<Runnable::Table>(end.table_ptr)) {
-        inst->jump_target = NestedWeakPtr<Runnable::Table>(end.obj->AcquireWeakPtr(), r);
+        inst->jump_target = NestedWeakPtr<Runnable::Table>(end.object_ptr->AcquireWeakPtr(), r);
       }
     } else {
       inst->jump_target = {};
@@ -123,7 +123,7 @@ void Instruction::JumpArgImpl::Configure(Argument::Table& a) {
     }
   };
   a.find = [](Argument self) -> NestedPtr<Interface::Table> {
-    auto* inst = dynamic_cast<const Instruction*>(self.obj);
+    auto* inst = dynamic_cast<const Instruction*>(self.object_ptr);
     if (!inst) return {};
     if (auto locked = inst->jump_target.Lock()) {
       return NestedPtr<Interface::Table>(locked.GetOwnerWeak().Lock(), locked.Get());
@@ -137,12 +137,12 @@ void Instruction::NextImpl::Configure(NextArg::Table& a) {
     auto& st = *static_cast<NextArg&>(self).state;
     if (end) {
       if (auto* end_runnable = dyn_cast_if_present<Runnable::Table>(end.table_ptr)) {
-        st.next = NestedWeakPtr<Interface::Table>(end.obj->AcquireWeakPtr(), end_runnable);
+        st.next = NestedWeakPtr<Interface::Table>(end.object_ptr->AcquireWeakPtr(), end_runnable);
       }
     } else {
       st.next = {};
     }
-    if (auto* inst = dynamic_cast<Instruction*>(self.obj)) {
+    if (auto* inst = dynamic_cast<Instruction*>(self.object_ptr)) {
       if (auto* assembler = FindAssembler(*inst)) {
         assembler->UpdateMachineCode();
       }
@@ -156,12 +156,12 @@ void Instruction::AssemblerArgImpl::Configure(Argument::Table& a) {
   a.style = Argument::Style::Invisible;
   a.prototype = []() -> Ptr<Object> { return MAKE_PTR(Assembler); };
   a.can_connect = [](Argument, Interface end, Status& status) {
-    if (end.table_ptr != nullptr || !dynamic_cast<Assembler*>(end.obj)) {
+    if (end.table_ptr != nullptr || !dynamic_cast<Assembler*>(end.object_ptr)) {
       AppendErrorMessage(status) += "Must connect to an Assembler";
     }
   };
   a.on_connect = [](Argument self, Interface end) {
-    auto* instruction = dynamic_cast<Instruction*>(self.obj);
+    auto* instruction = dynamic_cast<Instruction*>(self.object_ptr);
     if (instruction == nullptr) return;
 
     if (auto old_assembler_obj = instruction->assembler_weak.Lock()) {
@@ -176,7 +176,7 @@ void Instruction::AssemblerArgImpl::Configure(Argument::Table& a) {
       }
     }
 
-    auto* assembler = dynamic_cast<Assembler*>(end.obj);
+    auto* assembler = dynamic_cast<Assembler*>(end.object_ptr);
     if (assembler == nullptr) {
       instruction->assembler_weak.Reset();
     } else {
@@ -186,7 +186,7 @@ void Instruction::AssemblerArgImpl::Configure(Argument::Table& a) {
     }
   };
   a.find = [](Argument self) -> NestedPtr<Interface::Table> {
-    auto* instruction = dynamic_cast<const Instruction*>(self.obj);
+    auto* instruction = dynamic_cast<const Instruction*>(self.object_ptr);
     if (!instruction) return {};
     return NestedPtr<Interface::Table>(instruction->assembler_weak.Lock(), nullptr);
   };
@@ -241,7 +241,7 @@ void Instruction::BufferVisit(const BufferVisitor& visitor) {
 }
 
 void Instruction::Run::OnRun(std::unique_ptr<RunTask>& run_task) {
-  auto& instr = self();
+  auto& instr = object();
   ZoneScopedN("Instruction");
   auto assembler = FindOrCreateAssembler(instr);
   assembler->RunMachineCode(&instr, std::move(run_task));

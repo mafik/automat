@@ -43,7 +43,7 @@ Rect FlipFlopRect() {
 
 void FlipFlop::Flip::OnRun(unique_ptr<RunTask>&) {
   ZoneScopedN("FlipFlop");
-  self().enabled->Toggle();
+  object().enabled->Toggle();
 }
 
 string_view FlipFlop::Name() const { return "Flip-Flop"; }

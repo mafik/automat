@@ -108,24 +108,24 @@ struct Interface {
     }
   };
 
-  Object* obj = nullptr;
+  Object* object_ptr = nullptr;
   Table* table_ptr = nullptr;
 
   Interface() = default;
-  Interface(Object& obj) : obj(&obj) {}
-  Interface(Object& obj, Table& table) : obj(&obj), table_ptr(&table) {}
-  Interface(Object* obj, Table* table) : obj(obj), table_ptr(table) {}
+  Interface(Object& obj) : object_ptr(&obj) {}
+  Interface(Object& obj, Table& table) : object_ptr(&obj), table_ptr(&table) {}
+  Interface(Object* obj, Table* table) : object_ptr(obj), table_ptr(table) {}
 
-  explicit operator bool() const { return obj != nullptr; }
+  explicit operator bool() const { return object_ptr != nullptr; }
 
   StrView Name() const { return table_ptr->name; }
 
   // Typed parent access via deducing this.
   // Subclasses define `using Parent = SomeObject;` and Offset().
-  // Then self() returns a reference to the parent Object subclass.
+  // Then object() returns a reference to the parent Object subclass.
   template <typename T>
-  auto& self(this T& iface) {
-    return static_cast<match_const_t<T, typename T::Parent>&>(*iface.obj);
+  auto& object(this T& iface) {
+    return static_cast<match_const_t<T, typename T::Parent>&>(*iface.object_ptr);
   }
 };
 
@@ -185,7 +185,7 @@ void VisitInterfaces(const std::function<LoopControl(Interface::Table&)>& cb, Ts
     State* operator->() const {                                                                    \
       auto* p =                                                                                    \
           reinterpret_cast<const Type*>(reinterpret_cast<intptr_t>(this) - offsetof(Type, state)); \
-      auto* addr = reinterpret_cast<char*>(p->obj) + p->table_ptr->state_off;                      \
+      auto* addr = reinterpret_cast<char*>(p->object_ptr) + p->table_ptr->state_off;                      \
       return reinterpret_cast<State*>(addr);                                                       \
     }                                                                                              \
     State& operator*() const { return *operator->(); }                                             \

@@ -22,14 +22,14 @@ struct FlipFlop : Object {
     using Parent = FlipFlop;
     static constexpr StrView kName = "State"sv;
     static constexpr int Offset() { return offsetof(FlipFlop, enabled); }
-    bool IsOn() const { return self().current_state; }
+    bool IsOn() const { return object().current_state; }
     void OnTurnOn() {
-      self().current_state = true;
-      self().WakeToys();
+      object().current_state = true;
+      object().WakeToys();
     }
     void OnTurnOff() {
-      self().current_state = false;
-      self().WakeToys();
+      object().current_state = false;
+      object().WakeToys();
     }
   };
   OnOff::Def<Enabled> enabled;

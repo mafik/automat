@@ -65,7 +65,7 @@ struct Argument : Interface {
     void (*can_connect)(Argument, Interface end, Status&) = nullptr;
 
     // Establishes or breaks a connection. A null end means disconnect.
-    // If end.obj is non-null, it's guaranteed to be alive during this call but not afterwards.
+    // If end.object_ptr is non-null, it's guaranteed to be alive during this call but not afterwards.
     // Use WeakPtr/NestedWeakPtr to store the reference.
     void (*on_connect)(Argument, Interface end) = nullptr;
 
@@ -93,7 +93,7 @@ struct Argument : Interface {
   INTERFACE_BOUND(Argument, Interface)
   Argument(Object& obj) : Interface(obj) {}
 
-  ReferenceCounted& GetOwner() { return *obj; }
+  ReferenceCounted& GetOwner() { return *object_ptr; }
   Interface::Table* GetInterface() { return table_ptr; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 
@@ -131,7 +131,7 @@ struct Argument : Interface {
 
   void Connect(Interface end) const {
     if (table->on_connect) table->on_connect(*this, end);
-    obj->WakeToys();
+    object_ptr->WakeToys();
   }
 
   void Disconnect() const {

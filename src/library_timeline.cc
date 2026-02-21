@@ -302,7 +302,7 @@ TrackArgument::TrackArgument(StrView name) : Argument::Table(name) {
   on_connect = [](Argument self, Interface end) {
     auto& track = static_cast<TrackArgument&>(*self.table);
     if (end) {
-      track.end = NestedWeakPtr<Interface::Table>(end.obj->AcquireWeakPtr(), end.table_ptr);
+      track.end = NestedWeakPtr<Interface::Table>(end.object_ptr->AcquireWeakPtr(), end.table_ptr);
     } else {
       track.end = {};
     }
@@ -317,7 +317,7 @@ TrackArgument::TrackArgument(StrView name) : Argument::Table(name) {
 }
 
 bool OnOffTrack::OnOffImpl::IsOn() const {
-  auto& track = self();
+  auto& track = object();
   if (track.timeline->state == Timeline::kPaused) {
     return false;
   }
@@ -336,8 +336,8 @@ bool OnOffTrack::OnOffImpl::IsOn() const {
 static void TimelineOnRun(Timeline& self, std::unique_ptr<RunTask>& run_task);
 static void TimelineOnCancel(Timeline& self);
 
-void Timeline::Run::OnRun(std::unique_ptr<RunTask>& run_task) { TimelineOnRun(self(), run_task); }
-void Timeline::Running::OnCancel() { TimelineOnCancel(self()); }
+void Timeline::Run::OnRun(std::unique_ptr<RunTask>& run_task) { TimelineOnRun(object(), run_task); }
+void Timeline::Running::OnCancel() { TimelineOnCancel(object()); }
 
 Timeline::Timeline()
     : state(kPaused), timeline_length(0), paused{.playback_offset = 0s}, zoom(10) {}

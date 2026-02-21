@@ -16,15 +16,15 @@ Runnable::Table::Table(StrView name) : Syncable::Table(name, Interface::kRunnabl
 
 LongRunning::Table::Table(StrView name) : OnOff::Table(name, Interface::kLongRunning) {
   is_on = [](OnOff self) -> bool {
-    return LongRunning(*self.obj, static_cast<LongRunning::Table&>(*self.table)).IsRunning();
+    return LongRunning(*self.object_ptr, static_cast<LongRunning::Table&>(*self.table)).IsRunning();
   };
   on_turn_on = [](OnOff self) {
-    if (auto* runnable = static_cast<Runnable::Table*>(self.obj->AsRunnable())) {
-      Runnable(*self.obj, *runnable).ScheduleRun();
+    if (auto* runnable = static_cast<Runnable::Table*>(self.object_ptr->AsRunnable())) {
+      Runnable(*self.object_ptr, *runnable).ScheduleRun();
     }
   };
   on_turn_off = [](OnOff self) {
-    LongRunning(*self.obj, static_cast<LongRunning::Table&>(*self.table)).Cancel();
+    LongRunning(*self.object_ptr, static_cast<LongRunning::Table&>(*self.table)).Cancel();
   };
 }
 
@@ -44,7 +44,7 @@ void LongRunning::Done() const {
   if (task == nullptr) {
     FATAL << "LongRunning::Done called while long_running_task == null.";
   }
-  task->DoneRunning(*obj);
+  task->DoneRunning(*object_ptr);
   task.reset();
   NotifyTurnedOff();
 }

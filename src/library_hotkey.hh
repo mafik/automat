@@ -22,7 +22,7 @@ struct HotKey : Object, ui::KeyGrabber {
     static constexpr StrView kName = "Enabled"sv;
     static constexpr int Offset() { return offsetof(HotKey, enabled); }
 
-    bool IsOn() const { return self().hotkey != nullptr; }
+    bool IsOn() const { return object().hotkey != nullptr; }
     void OnTurnOn();
     void OnTurnOff();
   };

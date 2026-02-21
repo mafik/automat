@@ -505,7 +505,7 @@ static void SendMouseButtonEvent(ui::PointerButton button, bool down) {
 
 void MouseButtonEvent::Run::OnRun(std::unique_ptr<RunTask>&) {
   ZoneScopedN("MouseClick");
-  SendMouseButtonEvent(self().button, self().down);
+  SendMouseButtonEvent(object().button, object().down);
 }
 string_view MouseButtonEvent::Name() const { return "Mouse Button Event"sv; }
 
@@ -892,18 +892,18 @@ MouseButtonPresser::MouseButtonPresser(ui::PointerButton button) : button(button
 void MouseButtonPresser::Click::OnRun(std::unique_ptr<RunTask>&) {
   ZoneScopedN("MouseButtonPresser");
   audio::Play(embedded::assets_SFX_mouse_down_wav);
-  SendMouseButtonEvent(self().button, true);
-  SendMouseButtonEvent(self().button, false);
+  SendMouseButtonEvent(object().button, true);
+  SendMouseButtonEvent(object().button, false);
 }
 
 void MouseButtonPresser::State::OnTurnOn() {
-  auto& presser = self();
+  auto& presser = object();
   audio::Play(embedded::assets_SFX_mouse_down_wav);
   SendMouseButtonEvent(presser.button, true);
   presser.WakeToys();
 }
 void MouseButtonPresser::State::OnTurnOff() {
-  auto& presser = self();
+  auto& presser = object();
   audio::Play(embedded::assets_SFX_mouse_up_wav);
   SendMouseButtonEvent(presser.button, false);
   presser.WakeToys();

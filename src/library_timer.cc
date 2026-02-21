@@ -153,7 +153,7 @@ static void PropagateDurationOutwards(Timer& timer) {
 // ============================================================================
 
 void Timer::Run::OnRun(std::unique_ptr<RunTask>& run_task) {
-  auto& timer = self();
+  auto& timer = object();
   auto lock = std::lock_guard(timer.mtx);
   ZoneScopedN("Timer");
   timer.start_time = time::SteadyClock::now();
@@ -163,7 +163,7 @@ void Timer::Run::OnRun(std::unique_ptr<RunTask>& run_task) {
 }
 
 void Timer::Running::OnCancel() {
-  auto& timer = self();
+  auto& timer = object();
   if (timer.here) {
     CancelScheduledAt(*timer.here, timer.start_time + timer.duration_value);
   }

@@ -29,28 +29,26 @@ using namespace automat::ui;
 
 namespace automat::library {
 
-void HotKey::Enabled::OnTurnOn() {
-  auto& hk = object();
-  if (hk.hotkey) {
-    hk.hotkey->Release();
+void HotKey::Enable() {
+  if (hotkey) {
+    hotkey->Release();
   }
-  hk.hotkey = &root_widget->keyboard.RequestKeyGrab(hk, hk.key, hk.ctrl, hk.alt, hk.shift,
-                                                    hk.windows, [&](Status& status) {
-                                                      if (!OK(status)) {
-                                                        if (hk.hotkey) {
-                                                          hk.hotkey->Release();
-                                                        }
-                                                        ERROR << status;
-                                                      }
-                                                    });
-  hk.WakeToys();
+  hotkey = &root_widget->keyboard.RequestKeyGrab(*this, key, ctrl, alt, shift, windows,
+                                                 [&](Status& status) {
+                                                   if (!OK(status)) {
+                                                     if (hotkey) {
+                                                       hotkey->Release();
+                                                     }
+                                                     ERROR << status;
+                                                   }
+                                                 });
+  WakeToys();
 }
 
-void HotKey::Enabled::OnTurnOff() {
-  auto& hk = object();
-  if (hk.hotkey) {
-    hk.hotkey->Release();
-    hk.WakeToys();
+void HotKey::Disable() {
+  if (hotkey) {
+    hotkey->Release();
+    WakeToys();
   }
 }
 
@@ -186,9 +184,8 @@ struct HotKeyWidget : ObjectToy, ui::CaretOwner {
   HotKeyWidget(ui::Widget* parent, Object& hotkey_obj) : ObjectToy(parent, hotkey_obj) {
     auto hk = LockHotKey();
 
-    power_button.reset(
-        new PowerButton(this, NestedWeakPtr<OnOff::Table>(
-                                  hk->AcquireWeakPtr(), &OnOff::Def<HotKey::Enabled>::GetTable())));
+    power_button.reset(new PowerButton(
+        this, NestedWeakPtr<OnOff::Table>(hk->AcquireWeakPtr(), &HotKey::enabled_tbl)));
     ctrl_button.reset(new KeyButton(this, "Ctrl", KeyColor(hk->ctrl), kCtrlKeyWidth));
     alt_button.reset(new KeyButton(this, "Alt", KeyColor(hk->alt), kAltKeyWidth));
     shift_button.reset(new KeyButton(this, "Shift", KeyColor(hk->shift), kShiftKeyWidth));

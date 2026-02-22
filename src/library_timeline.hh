@@ -7,8 +7,6 @@
 
 #include "base.hh"
 #include "pointer.hh"
-#include "run_button.hh"
-#include "text_widget.hh"
 #include "time.hh"
 #include "timer_thread.hh"
 #include "widget.hh"
@@ -35,16 +33,11 @@ struct TrackBase : Object {
 struct OnOffTrack : TrackBase {
   time::Duration on_at = time::kDurationGuard;
 
-  struct OnOffImpl : OnOff {
-    using Parent = OnOffTrack;
-    static constexpr StrView kName = "On/Off"sv;
-    static constexpr int Offset() { return offsetof(OnOffTrack, on_off); }
-
-    bool IsOn() const;
-    void OnTurnOn() {}
-    void OnTurnOff() {}
-  };
-  OnOff::Def<OnOffImpl> on_off;
+  DEF_INTERFACE(OnOffTrack, OnOff, on_off, "On/Off")
+  bool IsOn() const;
+  void OnTurnOn() {}
+  void OnTurnOff() {}
+  DEF_END(on_off);
 
   string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
@@ -101,30 +94,16 @@ struct TrackArgument : Argument::Table {
 struct Timeline : Object, TimerNotificationReceiver {
   std::mutex mutex;
 
-  struct Run : Runnable {
-    using Parent = Timeline;
-    static constexpr StrView kName = "Run"sv;
-    static constexpr int Offset() { return offsetof(Timeline, run); }
+  DEF_INTERFACE(Timeline, Runnable, run, "Run")
+  void OnRun(std::unique_ptr<RunTask>& run_task) { obj->Play(run_task); }
+  DEF_END(run);
 
-    void OnRun(std::unique_ptr<RunTask>&);
-  };
-  Runnable::Def<Run> run;
+  DEF_INTERFACE(Timeline, LongRunning, running, "Running")
+  void OnCancel() { obj->Pause(); }
+  DEF_END(running);
 
-  struct Running : LongRunning {
-    using Parent = Timeline;
-    static constexpr StrView kName = "Running"sv;
-    static constexpr int Offset() { return offsetof(Timeline, running); }
-
-    void OnCancel();
-  };
-  LongRunning::Def<Running> running;
-
-  struct NextImpl : NextArg {
-    using Parent = Timeline;
-    static constexpr StrView kName = "Next"sv;
-    static constexpr int Offset() { return offsetof(Timeline, next); }
-  };
-  NextArg::Def<NextImpl> next;
+  DEF_INTERFACE(Timeline, NextArg, next, "Next")
+  DEF_END(next);
 
   Vec<std::unique_ptr<TrackArgument>> tracks;
 
@@ -156,6 +135,8 @@ struct Timeline : Object, TimerNotificationReceiver {
   Timeline();
   Timeline(const Timeline&);
   string_view Name() const override;
+  void Play(std::unique_ptr<RunTask>&);
+  void Pause();
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   void Interfaces(const std::function<LoopControl(Interface::Table&)>& cb) override;

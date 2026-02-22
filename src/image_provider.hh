@@ -18,7 +18,7 @@ struct ImageProvider : Interface {
     // Function pointer for getting the image.
     sk_sp<SkImage> (*get_image)(ImageProvider) = nullptr;
 
-    Table(StrView name) : Interface::Table(Interface::kImageProvider, name) {}
+    constexpr Table(StrView name) : Interface::Table(Interface::kImageProvider, name) {}
   };
 
   struct State {};
@@ -39,17 +39,19 @@ struct ImageProvider : Interface {
     using Impl = ImplT;
     using Bound = ImageProvider;
 
-    static Table& GetTable() {
-      static Table tbl = []{
-        Table t(ImplT::kName);
-        t.get_image = +[](ImageProvider self) -> sk_sp<SkImage> {
-          return static_cast<ImplT&>(self).GetImage();
-        };
-        t.state_off = ImplT::Offset();
-        return t;
-      }();
-      return tbl;
+    template <typename T>
+    static sk_sp<SkImage> InvokeGetImage(ImageProvider self) {
+      return static_cast<T&>(self).GetImage();
     }
+
+    static constexpr Table MakeTable() {
+      Table t(ImplT::kName);
+      t.state_off = ImplT::Offset();
+      t.get_image = &InvokeGetImage<ImplT>;
+      return t;
+    }
+
+    inline constinit static Table tbl = MakeTable();
   };
 };
 

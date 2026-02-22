@@ -9,40 +9,33 @@
 namespace automat::library {
 
 struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
-  struct RunImpl : Runnable {
-    using Parent = MacroRecorder;
-    static constexpr StrView kName = "Run"sv;
-    static constexpr int Offset() { return offsetof(MacroRecorder, runnable); }
+  DEF_INTERFACE(MacroRecorder, Runnable, runnable, "Run")
+  void OnRun(std::unique_ptr<RunTask>& run_task) { obj->StartRecording(run_task); }
+  DEF_END(runnable);
 
-    void OnRun(std::unique_ptr<RunTask>& run_task);
-  };
-  Runnable::Def<RunImpl> runnable;
-
-  struct LongRunningImpl : LongRunning {
-    using Parent = MacroRecorder;
-    static constexpr StrView kName = "Running"sv;
-    static constexpr int Offset() { return offsetof(MacroRecorder, long_running); }
-
-    void OnCancel();
-  };
-  LongRunning::Def<LongRunningImpl> long_running;
+  DEF_INTERFACE(MacroRecorder, LongRunning, long_running, "Running")
+  void OnCancel() { obj->StopRecording(); }
+  DEF_END(long_running);
 
   ui::Keylogging* keylogging = nullptr;
   ui::Pointer::Logging* pointer_logging = nullptr;
   WeakPtr<Timeline> timeline_connection;
 
-  struct TimelineArgImpl : Argument {
-    using Parent = MacroRecorder;
-    static constexpr StrView kName = "Timeline"sv;
-    static constexpr int Offset() { return offsetof(MacroRecorder, timeline); }
-
-    static void Configure(Argument::Table&);
-  };
-  NO_UNIQUE_ADDRESS Argument::Def<TimelineArgImpl> timeline;
+  DEF_INTERFACE(MacroRecorder, Argument, timeline, "Timeline")
+  static constexpr auto kStyle = Argument::Style::Cable;
+  static constexpr float kAutoconnectRadius = 10_cm;
+  static constexpr SkColor kTint = color::kParrotRed;
+  static Ptr<Object> MakePrototype();
+  void OnCanConnect(Interface end, Status& status);
+  void OnConnect(Interface end);
+  NestedPtr<Interface::Table> OnFind();
+  DEF_END(timeline);
 
   MacroRecorder();
   MacroRecorder(const MacroRecorder&);
   ~MacroRecorder();
+  void StartRecording(std::unique_ptr<RunTask>&);
+  void StopRecording();
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;

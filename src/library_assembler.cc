@@ -194,7 +194,7 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
       ScheduleNext(*exit_inst);
     } else if (code_point.stop_type == mc::StopType::Jump) {
       // LOG << "Exiting through " << exit_inst->ToAsmStr() << "->jump";
-      ScheduleArgumentTargets(*exit_inst, exit_inst->jump_arg.GetTable());
+      ScheduleArgumentTargets(*exit_inst, Instruction::jump_arg_tbl);
     } else {
       ERROR << "Exiting through " << exit_inst->ToAsmStr() << "->instruction body (?!)";
     }
@@ -204,15 +204,6 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
 }
 
 Ptr<Object> Assembler::Clone() const { return MAKE_PTR(Assembler); }
-
-void Assembler::RunningImpl::OnCancel() {
-  Status status;
-  object().mc_controller->Cancel(status);
-  if (!OK(status)) {
-    ERROR << "Failed to cancel Assembler: " << status;
-    return;
-  }
-}
 
 void UpdateCode(automat::mc::Controller& controller,
                 std::vector<Ptr<automat::library::Instruction>>&& instructions, Status& status) {
@@ -231,8 +222,7 @@ void UpdateCode(automat::mc::Controller& controller,
     int next = -1;
     int jump = -1;
     if (loc) {
-      auto FindInstruction = [obj_raw, &instructions,
-                              n](automat::Argument::Table& arg) -> int {
+      auto FindInstruction = [obj_raw, &instructions, n](automat::Argument::Table& arg) -> int {
         if (auto target = automat::Argument(*obj_raw, arg).Find()) {
           if (auto* to_inst =
                   dynamic_cast<automat::library::Instruction*>(target.Owner<Object>())) {
@@ -246,8 +236,8 @@ void UpdateCode(automat::mc::Controller& controller,
         }
         return -1;
       };
-      next = FindInstruction(obj_raw->next.GetTable());
-      jump = FindInstruction(obj_raw->jump_arg.GetTable());
+      next = FindInstruction(Instruction::next_tbl);
+      jump = FindInstruction(Instruction::jump_arg_tbl);
     }
     program[i].next = next;
     program[i].jump = jump;
@@ -737,29 +727,24 @@ Register::Register(WeakPtr<Assembler> assembler_weak, int register_index)
 
 Ptr<Object> Register::Clone() const { return MAKE_PTR(Register, assembler_weak, register_index); }
 
-void Register::AssemblerArgImpl::Configure(Argument::Table& t) {
-  t.autoconnect_radius = INFINITY;
-  t.tint = "#ff0000"_color;
-  t.style = Argument::Style::Spotlight;
-  t.can_connect = [](Argument, Interface end, Status& status) {
-    if (end.table_ptr!= nullptr || !dynamic_cast<Assembler*>(end.object_ptr)) {
-      AppendErrorMessage(status) += "Must connect to an Assembler";
+void Register::assembler_arg_Impl::OnCanConnect(Interface end, Status& status) {
+  if (end.table_ptr != nullptr || !dynamic_cast<Assembler*>(end.object_ptr)) {
+    AppendErrorMessage(status) += "Must connect to an Assembler";
+  }
+}
+
+void Register::assembler_arg_Impl::OnConnect(Interface end) {
+  if (end) {
+    if (auto* assembler = dynamic_cast<Assembler*>(end.object_ptr)) {
+      obj->assembler_weak = assembler->AcquireWeakPtr();
     }
-  };
-  t.on_connect = [](Argument self, Interface end) {
-    auto& reg = static_cast<Register&>(*self.object_ptr);
-    if (end) {
-      if (auto* assembler = dynamic_cast<Assembler*>(end.object_ptr)) {
-        reg.assembler_weak = assembler->AcquireWeakPtr();
-      }
-    } else {
-      reg.assembler_weak = {};
-    }
-  };
-  t.find = [](Argument self) -> NestedPtr<Interface::Table> {
-    auto& reg = static_cast<const Register&>(*self.object_ptr);
-    return NestedPtr<Interface::Table>(reg.assembler_weak.Lock(), nullptr);
-  };
+  } else {
+    obj->assembler_weak = {};
+  }
+}
+
+NestedPtr<Interface::Table> Register::assembler_arg_Impl::OnFind() {
+  return NestedPtr<Interface::Table>(obj->assembler_weak.Lock(), nullptr);
 }
 
 void Register::SetText(std::string_view text) {

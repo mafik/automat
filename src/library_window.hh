@@ -14,30 +14,19 @@ struct Window : public Object {
   bool run_continuously = true;
   sk_sp<SkImage> captured_image;  // Captured window image
 
-  struct CaptureImpl : Runnable {
-    using Parent = Window;
-    static constexpr StrView kName = "Capture"sv;
-    static constexpr int Offset() { return offsetof(Window, capture); }
+  DEF_INTERFACE(Window, Runnable, capture, "Capture")
+  void OnRun(std::unique_ptr<RunTask>&) { obj->Capture(); }
+  DEF_END(capture);
 
-    void OnRun(std::unique_ptr<RunTask>&);
-  };
-  Runnable::Def<CaptureImpl> capture;
+  DEF_INTERFACE(Window, NextArg, next, "Next")
+  DEF_END(next);
 
-  struct NextImpl : NextArg {
-    using Parent = Window;
-    static constexpr StrView kName = "Next"sv;
-    static constexpr int Offset() { return offsetof(Window, next); }
-  };
-  NextArg::Def<NextImpl> next;
-
-  struct ImageImpl : ImageProvider {
-    using Parent = Window;
-    static constexpr StrView kName = "Captured Image"sv;
-    static constexpr int Offset() { return offsetof(Window, image_provider); }
-
-    sk_sp<SkImage> GetImage();
-  };
-  NO_UNIQUE_ADDRESS ImageProvider::Def<ImageImpl> image_provider;
+  DEF_INTERFACE(Window, ImageProvider, image_provider, "Captured Image")
+  sk_sp<SkImage> GetImage() {
+    auto lock = std::lock_guard(obj->mutex);
+    return obj->captured_image;
+  }
+  DEF_END(image_provider);
 
   struct Impl;
   // Private implementation to avoid polluting header with platform-specific defines.
@@ -55,6 +44,7 @@ struct Window : public Object {
 
   // Called after deserialization. Makes the window object attach its native handle to the window
   // with the current title.
+  void Capture();
   void AttachToTitle();
 
   void Relocate(Location* new_here) override;

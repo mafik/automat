@@ -16,7 +16,13 @@ struct OnOff : Syncable {
     void (*on_turn_on)(OnOff) = nullptr;
     void (*on_turn_off)(OnOff) = nullptr;
 
-    Table(StrView name, Kind kind = Interface::kOnOff);
+    static bool DefaultCanSync(Syncable, Syncable other);
+    static std::unique_ptr<ui::Widget> DefaultMakeIcon(Argument, ui::Widget* parent);
+
+    constexpr Table(StrView name, Kind kind = Interface::kOnOff) : Syncable::Table(name, kind) {
+      can_sync = &DefaultCanSync;
+      make_icon = &DefaultMakeIcon;
+    }
   };
 
   struct State : Syncable::State {};
@@ -60,33 +66,43 @@ struct OnOff : Syncable {
     using Impl = ImplT;
     using Bound = OnOff;
 
-    static Table& GetTable() {
-      static Table tbl = [] {
-        Table t(ImplT::kName);
-        t.is_on = +[](OnOff self) -> bool {
-          return static_cast<const ImplT&>(self).IsOn();
-        };
-        t.on_turn_on = +[](OnOff self) {
-          static_cast<ImplT&>(self).OnTurnOn();
-        };
-        t.on_turn_off = +[](OnOff self) {
-          static_cast<ImplT&>(self).OnTurnOff();
-        };
-        t.state_off = ImplT::Offset();
-        if constexpr (requires { ImplT::OnSync; }) {
-          t.on_sync = +[](Syncable self) {
-            static_cast<ImplT&>(self).OnSync();
-          };
-        }
-        if constexpr (requires { ImplT::OnUnsync; }) {
-          t.on_unsync = +[](Syncable self) {
-            static_cast<ImplT&>(self).OnUnsync();
-          };
-        }
-        return t;
-      }();
-      return tbl;
+    template <typename T>
+    static bool InvokeIsOn(OnOff self) {
+      return static_cast<const T&>(self).IsOn();
     }
+    template <typename T>
+    static void InvokeOnTurnOn(OnOff self) {
+      static_cast<T&>(self).OnTurnOn();
+    }
+    template <typename T>
+    static void InvokeOnTurnOff(OnOff self) {
+      static_cast<T&>(self).OnTurnOff();
+    }
+    template <typename T>
+    static void InvokeOnSync(Syncable self) {
+      static_cast<T&>(self).OnSync();
+    }
+    template <typename T>
+    static void InvokeOnUnsync(Syncable self) {
+      static_cast<T&>(self).OnUnsync();
+    }
+
+    static constexpr Table MakeTable() {
+      Table t(ImplT::kName);
+      t.state_off = ImplT::Offset();
+      t.is_on = &InvokeIsOn<ImplT>;
+      t.on_turn_on = &InvokeOnTurnOn<ImplT>;
+      t.on_turn_off = &InvokeOnTurnOff<ImplT>;
+      if constexpr (requires { ImplT::OnSync; })
+        t.on_sync = &InvokeOnSync<ImplT>;
+      if constexpr (requires { ImplT::OnUnsync; })
+        t.on_unsync = &InvokeOnUnsync<ImplT>;
+      if constexpr (requires { ImplT::kTint; })
+        t.tint = ImplT::kTint;
+      return t;
+    }
+
+    inline constinit static Table tbl = MakeTable();
 
     ~Def() {
       if (source || !end.IsExpired()) {

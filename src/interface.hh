@@ -13,11 +13,6 @@ namespace automat {
 
 struct Object;
 
-// Utility: match_const_t<From, To> — propagates const from From to To.
-template <typename From, typename To>
-using match_const_t =
-    std::conditional_t<std::is_const_v<std::remove_reference_t<From>>, const To, To>;
-
 // Interface is the base class for parts of Objects that can be exposed to other Objects.
 //
 // # Architecture (v2)
@@ -74,8 +69,7 @@ struct Interface {
     typename T::Bound Bind(this const T& self) {
       auto* obj = reinterpret_cast<Object*>(reinterpret_cast<char*>(const_cast<T*>(&self)) -
                                             T::Impl::Offset());
-      auto& tbl = T::GetTable();
-      return typename T::Bound(*obj, tbl);
+      return typename T::Bound(*obj, T::tbl);
     }
 
     // Arrow operator for accessing Bound methods: `def->IsOn()`, `def->TurnOn()`, etc.
@@ -90,21 +84,21 @@ struct Interface {
 
     template <typename T>
     operator Table&(this const T&) {
-      return T::GetTable();
+      return T::tbl;
     }
 
     template <typename T>
     friend bool operator==(const Table* lhs, const T& rhs)
       requires std::derived_from<T, DefBase>
     {
-      return lhs == &T::GetTable();
+      return lhs == &T::tbl;
     }
 
     template <typename T>
     friend bool operator==(const T& lhs, const Table* rhs)
       requires std::derived_from<T, DefBase>
     {
-      return &T::GetTable() == rhs;
+      return &T::tbl == rhs;
     }
   };
 
@@ -119,43 +113,7 @@ struct Interface {
   explicit operator bool() const { return object_ptr != nullptr; }
 
   StrView Name() const { return table_ptr->name; }
-
-  // Typed parent access via deducing this.
-  // Subclasses define `using Parent = SomeObject;` and Offset().
-  // Then object() returns a reference to the parent Object subclass.
-  template <typename T>
-  auto& object(this T& iface) {
-    return static_cast<match_const_t<T, typename T::Parent>&>(*iface.object_ptr);
-  }
 };
-
-// Helper to call GetTable() on a Def member reference and yield the Table&.
-// Works for both old-style (Interface::Table subclasses) and new-style (Def<ImplT>) members.
-namespace detail {
-
-// Old-style: the member IS a Table subclass. Just return it.
-template <typename T>
-  requires std::derived_from<T, Interface::Table>
-Interface::Table& GetTableRef(T& member) {
-  return member;
-}
-
-// New-style: the member has a static GetTable() returning a Table subclass reference.
-template <typename T>
-  requires(!std::derived_from<T, Interface::Table> &&
-           requires {
-             { T::GetTable() } -> std::convertible_to<Interface::Table&>;
-           })
-Interface::Table& GetTableRef(T&) {
-  return T::GetTable();
-}
-
-template <typename... Ts>
-void VisitInterfaces(const std::function<LoopControl(Interface::Table&)>& cb, Ts&... members) {
-  (void)((cb(GetTableRef(members)) == LoopControl::Break) || ...);
-}
-
-}  // namespace detail
 
 }  // namespace automat
 
@@ -185,15 +143,55 @@ void VisitInterfaces(const std::function<LoopControl(Interface::Table&)>& cb, Ts
     State* operator->() const {                                                                    \
       auto* p =                                                                                    \
           reinterpret_cast<const Type*>(reinterpret_cast<intptr_t>(this) - offsetof(Type, state)); \
-      auto* addr = reinterpret_cast<char*>(p->object_ptr) + p->table_ptr->state_off;                      \
+      auto* addr = reinterpret_cast<char*>(p->object_ptr) + p->table_ptr->state_off;               \
       return reinterpret_cast<State*>(addr);                                                       \
     }                                                                                              \
     State& operator*() const { return *operator->(); }                                             \
   } state NO_UNIQUE_ADDRESS;
 
+namespace automat::detail {
+template <typename... Ts>
+void VisitInterfaces(const std::function<LoopControl(Interface::Table&)>& cb, Ts&... members) {
+  (void)((cb(members.tbl) == LoopControl::Break) || ...);
+}
+}  // namespace automat::detail
+
 // INTERFACES macro: generates the Interfaces() override from a list of member names.
-// Each member can be either an old-style static Interface::Table subclass or a new-style Def<>.
 #define INTERFACES(...)                                                                          \
   void Interfaces(const std::function<LoopControl(::automat::Interface::Table&)>& cb) override { \
     ::automat::detail::VisitInterfaces(cb, __VA_ARGS__);                                         \
   }
+
+// DEF_INTERFACE(ParentType, InterfaceType, member_name, "Display Name")
+//   ReturnType MethodName(...) { ... }
+// DEF_END(member_name);
+//
+// Expands to:
+//   struct member_name##_Impl : InterfaceType {
+//     using IFaceT = InterfaceType;
+//     static constexpr StrView kName = "Display Name";
+//     static constexpr int Offset() { return offsetof(ParentType, member_name); }
+//     struct ObjRef { ParentType& operator*() const; ParentType* operator->() const; }
+//     NO_UNIQUE_ADDRESS ObjRef obj;
+//     ReturnType MethodName(...) { ... }
+//   };
+//   NO_UNIQUE_ADDRESS InterfaceType::Def<member_name##_Impl> member_name
+#define DEF_INTERFACE(ParentType, InterfaceType, member_name, display_name)        \
+  struct member_name##_Impl : InterfaceType {                                      \
+    using IFaceT = InterfaceType;                                                  \
+    static constexpr StrView kName = display_name;                                 \
+    static constexpr int Offset() { return offsetof(ParentType, member_name); }    \
+    struct ObjRef {                                                                \
+      ParentType& operator*() const {                                              \
+        auto* impl = reinterpret_cast<const member_name##_Impl*>(                  \
+            reinterpret_cast<intptr_t>(this) - offsetof(member_name##_Impl, obj)); \
+        return static_cast<ParentType&>(*impl->object_ptr);                        \
+      }                                                                            \
+      ParentType* operator->() const { return &**this; }                           \
+    } obj NO_UNIQUE_ADDRESS;
+
+#define DEF_END(member_name)                                                         \
+  }                                                                                  \
+  ;                                                                                  \
+  NO_UNIQUE_ADDRESS member_name##_Impl::IFaceT::Def<member_name##_Impl> member_name; \
+  static constexpr auto& member_name##_tbl = decltype(member_name)::tbl

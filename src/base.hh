@@ -59,7 +59,15 @@ struct LongRunning : OnOff {
 
     void (*on_cancel)(LongRunning) = nullptr;
 
-    Table(StrView name);
+    static bool DefaultIsOn(OnOff self);
+    static void DefaultOnTurnOn(OnOff self);
+    static void DefaultOnTurnOff(OnOff self);
+
+    constexpr Table(StrView name) : OnOff::Table(name, Interface::kLongRunning) {
+      is_on = &DefaultIsOn;
+      on_turn_on = &DefaultOnTurnOn;
+      on_turn_off = &DefaultOnTurnOff;
+    }
   };
 
   INTERFACE_BOUND(LongRunning, OnOff)
@@ -86,29 +94,32 @@ struct LongRunning : OnOff {
     using Impl = ImplT;
     using Bound = LongRunning;
 
-    static Table& GetTable() {
-      static Table tbl = [] {
-        Table t(ImplT::kName);
-        t.state_off = ImplT::Offset();
-        if constexpr (requires { ImplT::OnCancel; }) {
-          t.on_cancel = +[](LongRunning self) {
-            static_cast<ImplT&>(self).OnCancel();
-          };
-        }
-        if constexpr (requires { ImplT::OnSync; }) {
-          t.on_sync = +[](Syncable self) {
-            static_cast<ImplT&>(self).OnSync();
-          };
-        }
-        if constexpr (requires { ImplT::OnUnsync; }) {
-          t.on_unsync = +[](Syncable self) {
-            static_cast<ImplT&>(self).OnUnsync();
-          };
-        }
-        return t;
-      }();
-      return tbl;
+    template <typename T>
+    static void InvokeOnCancel(LongRunning self) {
+      static_cast<T&>(self).OnCancel();
     }
+    template <typename T>
+    static void InvokeOnSync(Syncable self) {
+      static_cast<T&>(self).OnSync();
+    }
+    template <typename T>
+    static void InvokeOnUnsync(Syncable self) {
+      static_cast<T&>(self).OnUnsync();
+    }
+
+    static constexpr Table MakeTable() {
+      Table t(ImplT::kName);
+      t.state_off = ImplT::Offset();
+      if constexpr (requires { ImplT::OnCancel; })
+        t.on_cancel = &InvokeOnCancel<ImplT>;
+      if constexpr (requires { ImplT::OnSync; })
+        t.on_sync = &InvokeOnSync<ImplT>;
+      if constexpr (requires { ImplT::OnUnsync; })
+        t.on_unsync = &InvokeOnUnsync<ImplT>;
+      return t;
+    }
+
+    inline constinit static Table tbl = MakeTable();
 
     ~Def() {
       if (task) {
@@ -129,7 +140,11 @@ struct Runnable : Syncable {
 
     void (*on_run)(Runnable, std::unique_ptr<RunTask>&) = nullptr;
 
-    Table(StrView name);
+    static bool DefaultCanSync(Syncable, Syncable other);
+
+    constexpr Table(StrView name) : Syncable::Table(name, Interface::kRunnable) {
+      can_sync = &DefaultCanSync;
+    }
   };
 
   INTERFACE_BOUND(Runnable, Syncable)
@@ -158,27 +173,31 @@ struct Runnable : Syncable {
     using Impl = ImplT;
     using Bound = Runnable;
 
-    static Table& GetTable() {
-      static Table tbl = [] {
-        Table t(ImplT::kName);
-        t.state_off = ImplT::Offset();
-        t.on_run = +[](Runnable self, std::unique_ptr<RunTask>& task) {
-          static_cast<ImplT&>(self).OnRun(task);
-        };
-        if constexpr (requires { ImplT::OnSync; }) {
-          t.on_sync = +[](Syncable self) {
-            static_cast<ImplT&>(self).OnSync();
-          };
-        }
-        if constexpr (requires { ImplT::OnUnsync; }) {
-          t.on_unsync = +[](Syncable self) {
-            static_cast<ImplT&>(self).OnUnsync();
-          };
-        }
-        return t;
-      }();
-      return tbl;
+    template <typename T>
+    static void InvokeOnRun(Runnable self, std::unique_ptr<RunTask>& task) {
+      static_cast<T&>(self).OnRun(task);
     }
+    template <typename T>
+    static void InvokeOnSync(Syncable self) {
+      static_cast<T&>(self).OnSync();
+    }
+    template <typename T>
+    static void InvokeOnUnsync(Syncable self) {
+      static_cast<T&>(self).OnUnsync();
+    }
+
+    static constexpr Table MakeTable() {
+      Table t(ImplT::kName);
+      t.state_off = ImplT::Offset();
+      t.on_run = &InvokeOnRun<ImplT>;
+      if constexpr (requires { ImplT::OnSync; })
+        t.on_sync = &InvokeOnSync<ImplT>;
+      if constexpr (requires { ImplT::OnUnsync; })
+        t.on_unsync = &InvokeOnUnsync<ImplT>;
+      return t;
+    }
+
+    inline constinit static Table tbl = MakeTable();
 
     ~Def() {
       if (source || !end.IsExpired()) {

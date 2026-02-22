@@ -37,6 +37,7 @@
 #include "sincos.hh"
 #include "status.hh"
 #include "svg.hh"
+#include "text_widget.hh"
 #include "textures.hh"
 #include "time.hh"
 #include "ui_button.hh"
@@ -316,8 +317,8 @@ TrackArgument::TrackArgument(StrView name) : Argument::Table(name) {
   };
 }
 
-bool OnOffTrack::OnOffImpl::IsOn() const {
-  auto& track = object();
+bool OnOffTrack::on_off_Impl::IsOn() const {
+  auto& track = *obj;
   if (track.timeline->state == Timeline::kPaused) {
     return false;
   }
@@ -332,12 +333,6 @@ bool OnOffTrack::OnOffImpl::IsOn() const {
   i = i - 1;
   return i % 2 == 0;
 }
-
-static void TimelineOnRun(Timeline& self, std::unique_ptr<RunTask>& run_task);
-static void TimelineOnCancel(Timeline& self);
-
-void Timeline::Run::OnRun(std::unique_ptr<RunTask>& run_task) { TimelineOnRun(object(), run_task); }
-void Timeline::Running::OnCancel() { TimelineOnCancel(object()); }
 
 Timeline::Timeline()
     : state(kPaused), timeline_length(0), paused{.playback_offset = 0s}, zoom(10) {}
@@ -1865,9 +1860,9 @@ void Timeline::Interfaces(const function<LoopControl(Interface::Table&)>& cb) {
   for (auto& track_arg : tracks) {
     if (LoopControl::Break == cb(*track_arg)) return;
   }
-  if (LoopControl::Break == cb(NextArg::Def<NextImpl>::GetTable())) return;
-  if (LoopControl::Break == cb(Runnable::Def<Run>::GetTable())) return;
-  if (LoopControl::Break == cb(LongRunning::Def<Running>::GetTable())) return;
+  if (LoopControl::Break == cb(next_tbl)) return;
+  if (LoopControl::Break == cb(run_tbl)) return;
+  if (LoopControl::Break == cb(running_tbl)) return;
 }
 
 struct TrackBaseWidget : ObjectToy {
@@ -2499,33 +2494,33 @@ static void WakeRunButton(Timeline& timeline) {
   });
 }
 
-static void TimelineOnCancel(Timeline& t) {
-  if (t.state == Timeline::kPlaying) {
-    TimelineCancelScheduled(t);
-    t.state = Timeline::kPaused;
-    t.paused = {.playback_offset = time::SteadyNow() - t.playing.started_at};
-    TimelineUpdateOutputs(t, time::SteadyPoint{},
-                          time::SteadyPoint{} + time::Duration(t.paused.playback_offset));
-    WakeRunButton(t);
+void Timeline::Pause() {
+  if (state == Timeline::kPlaying) {
+    TimelineCancelScheduled(*this);
+    state = Timeline::kPaused;
+    paused = {.playback_offset = time::SteadyNow() - playing.started_at};
+    TimelineUpdateOutputs(*this, time::SteadyPoint{},
+                          time::SteadyPoint{} + time::Duration(paused.playback_offset));
+    WakeRunButton(*this);
   }
 }
 
-static void TimelineOnRun(Timeline& t, std::unique_ptr<RunTask>& run_task) {
+void Timeline::Play(std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("Timeline");
-  if (t.state != Timeline::kPaused) {
+  if (state != Timeline::kPaused) {
     return;
   }
-  if (t.paused.playback_offset >= t.MaxTrackLength()) {
-    t.paused.playback_offset = 0s;
+  if (paused.playback_offset >= MaxTrackLength()) {
+    paused.playback_offset = 0s;
   }
-  t.state = Timeline::kPlaying;
+  state = Timeline::kPlaying;
   time::SteadyPoint now = time::SteadyNow();
-  t.playing = {.started_at = now - time::Duration(t.paused.playback_offset)};
-  TimelineUpdateOutputs(t, t.playing.started_at, now);
-  TimelineScheduleNextAfter(t, now);
-  WakeRunButton(t);
-  t.WakeToys();
-  t.running->BeginLongRunning(std::move(run_task));
+  playing = {.started_at = now - time::Duration(paused.playback_offset)};
+  TimelineUpdateOutputs(*this, playing.started_at, now);
+  TimelineScheduleNextAfter(*this, now);
+  WakeRunButton(*this);
+  WakeToys();
+  running->BeginLongRunning(std::move(run_task));
 }
 
 void Timeline::BeginRecording() {
@@ -2832,7 +2827,7 @@ bool Timeline::DeserializeKey(ObjectDeserializer& d, StrView key) {
     // We're not updating the outputs because they should be deserialized in a proper state
     // TimelineUpdateOutputs(l, *this, playing.started_at, now);
     TimelineScheduleNextAfter(*this, now);
-    running->BeginLongRunning(std::make_unique<RunTask>(AcquireWeakPtr(), &run.GetTable()));
+    running->BeginLongRunning(std::make_unique<RunTask>(AcquireWeakPtr(), &run_tbl));
   } else if (key == "recording") {
     state = kRecording;
     double value = 0;

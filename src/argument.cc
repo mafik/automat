@@ -52,29 +52,30 @@ std::unique_ptr<Argument::Toy> Argument::MakeToy(ui::Widget* parent) {
 
 // --- NextArg implementation ---
 
-NextArg::Table::Table(StrView name) : Argument::Table(name, Interface::kNextArg) {
-  style = Style::Cable;
-  can_connect = [](Argument, Interface end, Status& status) {
-    if (!dyn_cast_if_present<Runnable::Table>(end.table_ptr)) {
-      AppendErrorMessage(status) += "Next target must be a Runnable";
-    }
-  };
-  on_connect = [](Argument self, Interface end) {
-    auto& st = *static_cast<NextArg&>(self).state;
-    if (end) {
-      if (Runnable::Table* end_runnable = dyn_cast_if_present<Runnable::Table>(end.table_ptr)) {
-        st.next = NestedWeakPtr<Interface::Table>(end.object_ptr->AcquireWeakPtr(), end_runnable);
-      }
-    } else {
-      st.next = {};
-    }
-  };
-  find = [](Argument self) -> NestedPtr<Interface::Table> {
-    return static_cast<NextArg&>(self).state->next.Lock();
-  };
-  make_icon = [](Argument, ui::Widget* parent) {
-    return ui::MakeShapeWidget(parent, kNextShape, "#ffffff"_color);
-  };
+void NextArg::Table::DefaultCanConnect(Argument, Interface end, Status& status) {
+  if (!dyn_cast_if_present<Runnable::Table>(end.table_ptr)) {
+    AppendErrorMessage(status) += "Next target must be a Runnable";
+  }
 }
+
+void NextArg::Table::DefaultOnConnect(Argument self, Interface end) {
+  auto& st = *static_cast<NextArg&>(self).state;
+  if (end) {
+    if (Runnable::Table* end_runnable = dyn_cast_if_present<Runnable::Table>(end.table_ptr)) {
+      st.next = NestedWeakPtr<Interface::Table>(end.object_ptr->AcquireWeakPtr(), end_runnable);
+    }
+  } else {
+    st.next = {};
+  }
+}
+
+NestedPtr<Interface::Table> NextArg::Table::DefaultFind(Argument self) {
+  return static_cast<NextArg&>(self).state->next.Lock();
+}
+
+std::unique_ptr<ui::Widget> NextArg::Table::DefaultMakeIcon(Argument, ui::Widget* parent) {
+  return ui::MakeShapeWidget(parent, kNextShape, "#ffffff"_color);
+}
+
 
 }  // namespace automat

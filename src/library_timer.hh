@@ -17,42 +17,23 @@ struct Timer : Object, TimerNotificationReceiver {
   time::Duration duration_value = 10s;
   time::SteadyPoint start_time;
 
-  struct DurationImpl : Syncable {
-    using Parent = Timer;
-    static constexpr StrView kName = "Duration"sv;
+  DEF_INTERFACE(Timer, Syncable, duration, "Duration")
     static constexpr SkColor kTint = "#6e4521"_color;
-    static constexpr int Offset() { return offsetof(Timer, duration); }
-
     bool CanSync(Syncable other) {
-      return other.table == &Syncable::Def<DurationImpl>::GetTable();
+      return other.table == &Syncable::Def<duration_Impl>::tbl;
     }
-  };
-  Syncable::Def<DurationImpl> duration;
+  DEF_END(duration);
 
-  struct Run : Runnable {
-    using Parent = Timer;
-    static constexpr StrView kName = "Run"sv;
-    static constexpr int Offset() { return offsetof(Timer, run); }
+  DEF_INTERFACE(Timer, Runnable, run, "Run")
+    void OnRun(std::unique_ptr<RunTask>& run_task) { obj->StartTimer(run_task); }
+  DEF_END(run);
 
-    void OnRun(std::unique_ptr<RunTask>&);
-  };
-  Runnable::Def<Run> run;
+  DEF_INTERFACE(Timer, LongRunning, running, "Running")
+    void OnCancel() { obj->CancelTimer(); }
+  DEF_END(running);
 
-  struct Running : LongRunning {
-    using Parent = Timer;
-    static constexpr StrView kName = "Running"sv;
-    static constexpr int Offset() { return offsetof(Timer, running); }
-
-    void OnCancel();
-  };
-  LongRunning::Def<Running> running;
-
-  struct Next : NextArg {
-    using Parent = Timer;
-    static constexpr StrView kName = "Next"sv;
-    static constexpr int Offset() { return offsetof(Timer, next); }
-  };
-  NextArg::Def<Next> next;
+  DEF_INTERFACE(Timer, NextArg, next, "Next")
+  DEF_END(next);
 
   enum class Range : char {
     Milliseconds,  // 0 - 1000 ms
@@ -65,6 +46,8 @@ struct Timer : Object, TimerNotificationReceiver {
 
   Timer();
   Timer(const Timer&);
+  void StartTimer(std::unique_ptr<RunTask>&);
+  void CancelTimer();
   StrView Name() const override { return "Timer"; }
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;

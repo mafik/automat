@@ -17,27 +17,20 @@ struct HotKey : Object, ui::KeyGrabber {
   // This is used to get hotkey events
   ui::KeyGrab* hotkey = nullptr;
 
-  struct Enabled : OnOff {
-    using Parent = HotKey;
-    static constexpr StrView kName = "Enabled"sv;
-    static constexpr int Offset() { return offsetof(HotKey, enabled); }
+  DEF_INTERFACE(HotKey, OnOff, enabled, "Enabled")
+  bool IsOn() const { return obj->hotkey != nullptr; }
+  void OnTurnOn() { obj->Enable(); }
+  void OnTurnOff() { obj->Disable(); }
+  DEF_END(enabled);
 
-    bool IsOn() const { return object().hotkey != nullptr; }
-    void OnTurnOn();
-    void OnTurnOff();
-  };
-  OnOff::Def<Enabled> enabled;
-
-  struct Next : NextArg {
-    using Parent = HotKey;
-    static constexpr StrView kName = "Next"sv;
-    static constexpr int Offset() { return offsetof(HotKey, next); }
-  };
-  NextArg::Def<Next> next;
+  DEF_INTERFACE(HotKey, NextArg, next, "Next")
+  DEF_END(next);
 
   HotKey();
   HotKey(const HotKey&);
   string_view Name() const override;
+  void Enable();
+  void Disable();
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   INTERFACES(next, enabled)

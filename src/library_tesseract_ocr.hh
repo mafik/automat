@@ -15,21 +15,12 @@ struct TesseractOCR : public Object {
   mutable std::mutex mutex;
   Str ocr_text = "";
 
-  struct RunImpl : Runnable {
-    using Parent = TesseractOCR;
-    static constexpr StrView kName = "Run"sv;
-    static constexpr int Offset() { return offsetof(TesseractOCR, run); }
+  DEF_INTERFACE(TesseractOCR, Runnable, run, "Run")
+  void OnRun(std::unique_ptr<RunTask>&) { obj->Run(); }
+  DEF_END(run);
 
-    void OnRun(std::unique_ptr<RunTask>&);
-  };
-  Runnable::Def<RunImpl> run;
-
-  struct NextImpl : NextArg {
-    using Parent = TesseractOCR;
-    static constexpr StrView kName = "Next"sv;
-    static constexpr int Offset() { return offsetof(TesseractOCR, next); }
-  };
-  NextArg::Def<NextImpl> next;
+  DEF_INTERFACE(TesseractOCR, NextArg, next, "Next")
+  DEF_END(next);
 
   // Guards access to the status variables
   std::mutex status_mutex;
@@ -55,26 +46,25 @@ struct TesseractOCR : public Object {
   NestedWeakPtr<ImageProvider::Table> image_provider_weak;
   WeakPtr<Object> text_weak;
 
-  struct ImageArgImpl : Argument {
-    using Parent = TesseractOCR;
-    static constexpr StrView kName = "Image"sv;
-    static constexpr int Offset() { return offsetof(TesseractOCR, image); }
+  DEF_INTERFACE(TesseractOCR, Argument, image, "Image")
+  static constexpr auto kStyle = Argument::Style::Invisible;
+  static constexpr float kAutoconnectRadius = 20_cm;
+  void OnCanConnect(Interface end, Status& status);
+  void OnConnect(Interface end);
+  NestedPtr<Interface::Table> OnFind();
+  std::unique_ptr<ui::Widget> OnMakeIcon(ui::Widget* parent);
+  DEF_END(image);
 
-    static void Configure(Argument::Table&);
-  };
-  NO_UNIQUE_ADDRESS Argument::Def<ImageArgImpl> image;
-
-  struct TextArgImpl : Argument {
-    using Parent = TesseractOCR;
-    static constexpr StrView kName = "Text"sv;
-    static constexpr int Offset() { return offsetof(TesseractOCR, text); }
-
-    static void Configure(Argument::Table&);
-  };
-  NO_UNIQUE_ADDRESS Argument::Def<TextArgImpl> text;
+  DEF_INTERFACE(TesseractOCR, Argument, text, "Text")
+  void OnCanConnect(Interface end, Status& status);
+  void OnConnect(Interface end);
+  NestedPtr<Interface::Table> OnFind();
+  std::unique_ptr<ui::Widget> OnMakeIcon(ui::Widget* parent);
+  DEF_END(text);
 
   TesseractOCR();
 
+  void Run();
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;

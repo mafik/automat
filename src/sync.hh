@@ -22,7 +22,17 @@ struct Syncable : Argument {
     void (*on_sync)(Syncable) = nullptr;
     void (*on_unsync)(Syncable) = nullptr;
 
-    Table(StrView name, Kind kind = Interface::kSyncable);
+    static void DefaultCanConnect(Argument self, Interface end, Status& status);
+    static void DefaultOnConnect(Argument self, Interface end);
+    static NestedPtr<Interface::Table> DefaultFind(Argument self);
+
+    constexpr Table(StrView name, Kind kind = Interface::kSyncable)
+        : Argument::Table(name, kind) {
+      style = Style::Invisible;
+      can_connect = &DefaultCanConnect;
+      on_connect = &DefaultOnConnect;
+      find = &DefaultFind;
+    }
   };
 
   struct State {
@@ -62,28 +72,34 @@ struct Syncable : Argument {
     using Impl = ImplT;
     using Bound = Syncable;
 
-    static Table& GetTable() {
-      static Table tbl = [] {
-        Table t(ImplT::kName);
-        t.state_off = ImplT::Offset();
-        if constexpr (requires { ImplT::kTint; }) {
-          t.tint = ImplT::kTint;
-        }
-        if constexpr (requires { ImplT::CanSync; }) {
-          t.can_sync = +[](Syncable a, Syncable b) -> bool {
-            return static_cast<ImplT&>(a).CanSync(b);
-          };
-        }
-        if constexpr (requires { ImplT::OnSync; }) {
-          t.on_sync = +[](Syncable self) { static_cast<ImplT&>(self).OnSync(); };
-        }
-        if constexpr (requires { ImplT::OnUnsync; }) {
-          t.on_unsync = +[](Syncable self) { static_cast<ImplT&>(self).OnUnsync(); };
-        }
-        return t;
-      }();
-      return tbl;
+    template <typename T>
+    static bool InvokeCanSync(Syncable a, Syncable b) {
+      return static_cast<T&>(a).CanSync(b);
     }
+    template <typename T>
+    static void InvokeOnSync(Syncable self) {
+      static_cast<T&>(self).OnSync();
+    }
+    template <typename T>
+    static void InvokeOnUnsync(Syncable self) {
+      static_cast<T&>(self).OnUnsync();
+    }
+
+    static constexpr Table MakeTable() {
+      Table t(ImplT::kName);
+      t.state_off = ImplT::Offset();
+      if constexpr (requires { ImplT::kTint; })
+        t.tint = ImplT::kTint;
+      if constexpr (requires { ImplT::CanSync; })
+        t.can_sync = &InvokeCanSync<ImplT>;
+      if constexpr (requires { ImplT::OnSync; })
+        t.on_sync = &InvokeOnSync<ImplT>;
+      if constexpr (requires { ImplT::OnUnsync; })
+        t.on_unsync = &InvokeOnUnsync<ImplT>;
+      return t;
+    }
+
+    inline constinit static Table tbl = MakeTable();
 
     ~Def() {
       if (source || !end.IsExpired()) {

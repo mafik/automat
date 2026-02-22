@@ -25,41 +25,31 @@ using namespace automat;
 
 namespace automat::library {
 
-void KeyPresser::Monitoring::OnTurnOn() {
-  auto& kp = object();
-  if (kp.keylogging == nullptr) {
-    ui::root_widget->window->BeginLogging(&kp, &kp.keylogging, nullptr, nullptr);
-  }
-}
-void KeyPresser::Monitoring::OnTurnOff() {
-  auto& kp = object();
-  if (kp.keylogging) {
-    kp.keylogging->Release();
+void KeyPresser::StartMonitoring() {
+  if (keylogging == nullptr) {
+    ui::root_widget->window->BeginLogging(this, &keylogging, nullptr, nullptr);
   }
 }
 
-void KeyPresser::State::OnTurnOn() {
-  auto& kp = object();
+void KeyPresser::StopMonitoring() {
+  if (keylogging) {
+    keylogging->Release();
+  }
+}
+
+void KeyPresser::Press() {
   audio::Play(embedded::assets_SFX_key_down_wav);
-  if (kp.key_pressed) return;
-  kp.key_pressed = true;
-  SendKeyEvent(kp.key, true);
-  kp.WakeToys();
+  if (key_pressed) return;
+  key_pressed = true;
+  SendKeyEvent(key, true);
+  WakeToys();
 }
-void KeyPresser::State::OnTurnOff() {
-  auto& kp = object();
+void KeyPresser::Release() {
   audio::Play(embedded::assets_SFX_key_up_wav);
-  if (!kp.key_pressed) return;
-  kp.key_pressed = false;
-  SendKeyEvent(kp.key, false);
-  kp.WakeToys();
-}
-
-void KeyPresser::State::OnSync() { object().monitoring->TurnOn(); }
-void KeyPresser::State::OnUnsync() { object().monitoring->TurnOff(); }
-
-void KeyPresser::RunImpl::OnRun(std::unique_ptr<RunTask>&) {
-  object().state->TurnOn();
+  if (!key_pressed) return;
+  key_pressed = false;
+  SendKeyEvent(key, false);
+  WakeToys();
 }
 
 constexpr static char kHandShapeSVG[] =
@@ -211,8 +201,7 @@ struct KeyPresserWidget : ObjectToy, ui::CaretOwner {
       auto key_presser = LockObject<KeyPresser>();
       return std::make_unique<DragAndClickAction>(
           p, btn, ObjectToy::FindAction(p, btn),
-          std::make_unique<RunOption>(key_presser->AcquireWeakPtr(),
-                                      Runnable::Def<KeyPresser::RunImpl>::GetTable()));
+          std::make_unique<RunOption>(key_presser->AcquireWeakPtr(), KeyPresser::run_tbl));
     } else {
       return std::make_unique<DragAndClickAction>(
           p, btn, ObjectToy::FindAction(p, btn),

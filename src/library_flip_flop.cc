@@ -41,11 +41,6 @@ Rect FlipFlopRect() {
   return Rect::MakeCornerZero(FlipFlopColor().width(), FlipFlopColor().height());
 }
 
-void FlipFlop::Flip::OnRun(unique_ptr<RunTask>&) {
-  ZoneScopedN("FlipFlop");
-  object().enabled->Toggle();
-}
-
 string_view FlipFlop::Name() const { return "Flip-Flop"; }
 
 Ptr<Object> FlipFlop::Clone() const {

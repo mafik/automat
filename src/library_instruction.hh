@@ -37,40 +37,34 @@ struct Instruction : Object, Buffer {
   NestedWeakPtr<Runnable::Table> jump_target;  // Connection target for jump_arg
   WeakPtr<Object> assembler_weak;
 
-  struct Run : Runnable {
-    using Parent = Instruction;
-    static constexpr StrView kName = "Run"sv;
-    static constexpr int Offset() { return offsetof(Instruction, run); }
+  DEF_INTERFACE(Instruction, Runnable, run, "Run")
+  void OnRun(std::unique_ptr<RunTask>& run_task) { obj->Run(run_task); }
+  DEF_END(run);
 
-    void OnRun(std::unique_ptr<RunTask>&);
-  };
-  Runnable::Def<Run> run;
+  DEF_INTERFACE(Instruction, NextArg, next, "Next")
+  void OnConnect(Interface end);
+  DEF_END(next);
 
-  struct NextImpl : NextArg {
-    using Parent = Instruction;
-    static constexpr StrView kName = "Next"sv;
-    static constexpr int Offset() { return offsetof(Instruction, next); }
-    static void Configure(NextArg::Table&);
-  };
-  NextArg::Def<NextImpl> next;
+  DEF_INTERFACE(Instruction, Argument, assembler_arg, "Assembler")
+  static constexpr auto kStyle = Argument::Style::Invisible;
+  static constexpr float kAutoconnectRadius = INFINITY;
+  static constexpr SkColor kTint = "#ff0000"_color;
+  static Ptr<Object> MakePrototype();
+  void OnCanConnect(Interface end, Status& status);
+  void OnConnect(Interface end);
+  NestedPtr<Interface::Table> OnFind();
+  DEF_END(assembler_arg);
 
-  struct AssemblerArgImpl : Argument {
-    using Parent = Instruction;
-    static constexpr StrView kName = "Assembler"sv;
-    static constexpr int Offset() { return offsetof(Instruction, assembler_arg); }
-    static void Configure(Argument::Table&);
-  };
-  NO_UNIQUE_ADDRESS Argument::Def<AssemblerArgImpl> assembler_arg;
-
-  struct JumpArgImpl : Argument {
-    using Parent = Instruction;
-    static constexpr StrView kName = "Jump"sv;
-    static constexpr int Offset() { return offsetof(Instruction, jump_arg); }
-    static void Configure(Argument::Table&);
-  };
-  NO_UNIQUE_ADDRESS Argument::Def<JumpArgImpl> jump_arg;
+  DEF_INTERFACE(Instruction, Argument, jump_arg, "Jump")
+  void OnCanConnect(Interface end, Status& status);
+  void OnConnect(Interface end);
+  NestedPtr<Interface::Table> OnFind();
+  std::unique_ptr<ui::Widget> OnMakeIcon(ui::Widget* parent);
+  DEF_END(jump_arg);
 
   void Interfaces(const std::function<LoopControl(Interface::Table&)>& cb) override;
+
+  void Run(std::unique_ptr<RunTask>&);
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;

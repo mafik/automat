@@ -10,29 +10,21 @@ namespace automat::library {
 struct FlipFlop : Object {
   bool current_state = false;
 
-  struct Flip : Runnable {
-    using Parent = FlipFlop;
-    static constexpr StrView kName = "Flip"sv;
-    static constexpr int Offset() { return offsetof(FlipFlop, flip); }
-    void OnRun(std::unique_ptr<RunTask>&);
-  };
-  Runnable::Def<Flip> flip;
+  DEF_INTERFACE(FlipFlop, Runnable, flip, "Flip")
+    void OnRun(std::unique_ptr<RunTask>&) { obj->enabled->Toggle(); }
+  DEF_END(flip);
 
-  struct Enabled : OnOff {
-    using Parent = FlipFlop;
-    static constexpr StrView kName = "State"sv;
-    static constexpr int Offset() { return offsetof(FlipFlop, enabled); }
-    bool IsOn() const { return object().current_state; }
+  DEF_INTERFACE(FlipFlop, OnOff, enabled, "State")
+    bool IsOn() const { return obj->current_state; }
     void OnTurnOn() {
-      object().current_state = true;
-      object().WakeToys();
+      obj->current_state = true;
+      obj->WakeToys();
     }
     void OnTurnOff() {
-      object().current_state = false;
-      object().WakeToys();
+      obj->current_state = false;
+      obj->WakeToys();
     }
-  };
-  OnOff::Def<Enabled> enabled;
+  DEF_END(enabled);
 
   INTERFACES(flip, enabled)
 

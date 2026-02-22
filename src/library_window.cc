@@ -153,12 +153,6 @@ struct Window::Impl {
   Impl() {}
 };
 
-sk_sp<SkImage> Window::ImageImpl::GetImage() {
-  auto& w = object();
-  auto lock = std::lock_guard(w.mutex);
-  return w.captured_image;
-}
-
 Window::Window() { impl = std::make_unique<Impl>(); }
 
 Ptr<Object> Window::Clone() const {
@@ -495,18 +489,16 @@ std::unique_ptr<ObjectToy> Window::MakeToy(ui::Widget* parent) {
   return std::make_unique<WindowWidget>(parent, *this);
 }
 
-void Window::CaptureImpl::OnRun(std::unique_ptr<RunTask>&) {
-  auto& w = object();
+void Window::Capture() {
   ZoneScopedN("Window");
 #ifdef __linux__
   {
-    auto impl_lock = std::lock_guard(w.impl->mutex);
-    auto& impl = w.impl;
-    w.ClearOwnError();
+    auto impl_lock = std::lock_guard(impl->mutex);
+    ClearOwnError();
     if (impl->xcb_window == XCB_WINDOW_NONE) {
-      w.ReportError("No window selected");
+      ReportError("No window selected");
       return;
-    } else if (HasError(w)) {
+    } else if (HasError(*this)) {
       return;
     }
 
@@ -562,24 +554,24 @@ void Window::CaptureImpl::OnRun(std::unique_ptr<RunTask>&) {
     auto pixmap = SkPixmap(image_info, impl->data.data(), width * 4);
     auto new_image = SkImages::RasterFromPixmapCopy(pixmap);
 
-    auto window_lock = std::lock_guard(w.mutex);
-    w.captured_image = std::move(new_image);
-    w.capture_time = time::SecondsSinceEpoch();
+    auto window_lock = std::lock_guard(mutex);
+    captured_image = std::move(new_image);
+    capture_time = time::SecondsSinceEpoch();
   }
 #elif defined(_WIN32)
   {
     HWND hwnd;
     {
-      auto lock = std::lock_guard(w.mutex);
-      hwnd = w.impl->hwnd;
+      auto lock = std::lock_guard(mutex);
+      hwnd = impl->hwnd;
     }
     if (hwnd == nullptr) {
-      w.ReportError("No window selected");
+      ReportError("No window selected");
       return;
     }
 
     if (!IsWindow(hwnd)) {
-      w.ReportError("Invalid window selected");
+      ReportError("Invalid window selected");
       return;
     }
 
@@ -643,18 +635,18 @@ void Window::CaptureImpl::OnRun(std::unique_ptr<RunTask>&) {
         SkImageInfo::Make(width, height, kBGRA_8888_SkColorType, SkAlphaType::kPremul_SkAlphaType);
     auto result = SkImages::RasterFromData(image_info, pixels, width * 4);
     {
-      auto lock = std::lock_guard(w.mutex);
-      w.captured_image = std::move(result);
-      w.capture_time = time::SecondsSinceEpoch();
+      auto lock = std::lock_guard(mutex);
+      captured_image = std::move(result);
+      capture_time = time::SecondsSinceEpoch();
     }
   }
 #endif
-  w.WakeToys();
+  WakeToys();
 
-  w.here->ScheduleUpdate();
+  here->ScheduleUpdate();
   // Re-schedule execution if continuous run is enabled
-  if (w.run_continuously) {
-    w.capture->ScheduleRun();
+  if (run_continuously) {
+    capture->ScheduleRun();
   }
 }
 

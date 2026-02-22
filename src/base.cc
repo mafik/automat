@@ -8,24 +8,22 @@ using namespace std;
 
 namespace automat {
 
-Runnable::Table::Table(StrView name) : Syncable::Table(name, Interface::kRunnable) {
-  can_sync = [](Syncable, Syncable other) -> bool {
-    return other.table->kind == Interface::kRunnable;
-  };
+bool Runnable::Table::DefaultCanSync(Syncable, Syncable other) {
+  return other.table->kind == Interface::kRunnable;
 }
 
-LongRunning::Table::Table(StrView name) : OnOff::Table(name, Interface::kLongRunning) {
-  is_on = [](OnOff self) -> bool {
-    return LongRunning(*self.object_ptr, static_cast<LongRunning::Table&>(*self.table)).IsRunning();
-  };
-  on_turn_on = [](OnOff self) {
-    if (auto* runnable = static_cast<Runnable::Table*>(self.object_ptr->AsRunnable())) {
-      Runnable(*self.object_ptr, *runnable).ScheduleRun();
-    }
-  };
-  on_turn_off = [](OnOff self) {
-    LongRunning(*self.object_ptr, static_cast<LongRunning::Table&>(*self.table)).Cancel();
-  };
+bool LongRunning::Table::DefaultIsOn(OnOff self) {
+  return LongRunning(*self.object_ptr, static_cast<LongRunning::Table&>(*self.table)).IsRunning();
+}
+
+void LongRunning::Table::DefaultOnTurnOn(OnOff self) {
+  if (auto* runnable = static_cast<Runnable::Table*>(self.object_ptr->AsRunnable())) {
+    Runnable(*self.object_ptr, *runnable).ScheduleRun();
+  }
+}
+
+void LongRunning::Table::DefaultOnTurnOff(OnOff self) {
+  LongRunning(*self.object_ptr, static_cast<LongRunning::Table&>(*self.table)).Cancel();
 }
 
 void LongRunning::Cancel() const {

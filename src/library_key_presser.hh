@@ -13,42 +13,32 @@ struct KeyPresser : Object, ui::Keylogger {
   ui::Keylogging* keylogging = nullptr;
   bool key_pressed = false;
 
-  struct Monitoring : OnOff {
-    using Parent = KeyPresser;
-    static constexpr StrView kName = "Monitoring"sv;
-    static constexpr int Offset() { return offsetof(KeyPresser, monitoring); }
+  DEF_INTERFACE(KeyPresser, OnOff, monitoring, "Monitoring")
+  bool IsOn() const { return obj->keylogging != nullptr; }
+  void OnTurnOn() { obj->StartMonitoring(); }
+  void OnTurnOff() { obj->StopMonitoring(); }
+  DEF_END(monitoring);
 
-    bool IsOn() const { return object().keylogging != nullptr; }
-    void OnTurnOn();
-    void OnTurnOff();
-  };
-  OnOff::Def<Monitoring> monitoring;
+  DEF_INTERFACE(KeyPresser, OnOff, state, "State")
+  bool IsOn() const { return obj->key_pressed; }
+  void OnTurnOn() { obj->Press(); }
+  void OnTurnOff() { obj->Release(); }
+  void OnSync() { obj->monitoring->TurnOn(); }
+  void OnUnsync() { obj->monitoring->TurnOff(); }
+  DEF_END(state);
 
-  struct State : OnOff {
-    using Parent = KeyPresser;
-    static constexpr StrView kName = "State"sv;
-    static constexpr int Offset() { return offsetof(KeyPresser, state); }
-
-    bool IsOn() const { return object().key_pressed; }
-    void OnTurnOn();
-    void OnTurnOff();
-    void OnSync();
-    void OnUnsync();
-  };
-  OnOff::Def<State> state;
-
-  struct RunImpl : Runnable {
-    using Parent = KeyPresser;
-    static constexpr StrView kName = "Run"sv;
-    static constexpr int Offset() { return offsetof(KeyPresser, run); }
-    void OnRun(std::unique_ptr<RunTask>&);
-  };
-  Runnable::Def<RunImpl> run;
+  DEF_INTERFACE(KeyPresser, Runnable, run, "Run")
+  void OnRun(std::unique_ptr<RunTask>&) { obj->state->TurnOn(); }
+  DEF_END(run);
 
   KeyPresser(ui::AnsiKey = ui::AnsiKey::F);
   ~KeyPresser() override;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
+  void StartMonitoring();
+  void StopMonitoring();
+  void Press();
+  void Release();
 
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 

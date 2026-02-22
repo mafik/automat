@@ -8,15 +8,12 @@
 
 namespace automat {
 
-static std::unique_ptr<ui::Widget> OnOff_MakeIcon(Argument, ui::Widget* parent) {
-  return ui::MakeShapeWidget(parent, kPowerSVG, 0);
+bool OnOff::Table::DefaultCanSync(Syncable, Syncable other) {
+  return other.table->kind >= Interface::kOnOff && other.table->kind <= Interface::kLastOnOff;
 }
 
-OnOff::Table::Table(StrView name, Kind kind) : Syncable::Table(name, kind) {
-  can_sync = [](Syncable, Syncable other) -> bool {
-    return other.table->kind >= Interface::kOnOff && other.table->kind <= Interface::kLastOnOff;
-  };
-  make_icon = OnOff_MakeIcon;
+std::unique_ptr<ui::Widget> OnOff::Table::DefaultMakeIcon(Argument, ui::Widget* parent) {
+  return ui::MakeShapeWidget(parent, kPowerSVG, 0);
 }
 
 }  // namespace automat

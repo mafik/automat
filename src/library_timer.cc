@@ -148,26 +148,20 @@ static void PropagateDurationOutwards(Timer& timer) {
   }
 }
 
-// ============================================================================
-// Timer (Object)
-// ============================================================================
-
-void Timer::Run::OnRun(std::unique_ptr<RunTask>& run_task) {
-  auto& timer = object();
-  auto lock = std::lock_guard(timer.mtx);
+void Timer::StartTimer(std::unique_ptr<RunTask>& run_task) {
+  auto lock = std::lock_guard(mtx);
   ZoneScopedN("Timer");
-  timer.start_time = time::SteadyClock::now();
-  ScheduleAt(*timer.here, timer.start_time + timer.duration_value);
-  timer.WakeToys();
-  timer.running->BeginLongRunning(std::move(run_task));
+  start_time = time::SteadyClock::now();
+  ScheduleAt(*here, start_time + duration_value);
+  WakeToys();
+  running->BeginLongRunning(std::move(run_task));
 }
 
-void Timer::Running::OnCancel() {
-  auto& timer = object();
-  if (timer.here) {
-    CancelScheduledAt(*timer.here, timer.start_time + timer.duration_value);
+void Timer::CancelTimer() {
+  if (here) {
+    CancelScheduledAt(*here, start_time + duration_value);
   }
-  timer.WakeToys();
+  WakeToys();
 }
 
 Timer::Timer() {}
@@ -237,7 +231,7 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
   if (key == "running") {
     double value = 0;
     d.Get(value, status);
-    running->BeginLongRunning(make_unique<RunTask>(AcquireWeakPtr(), &Runnable::Def<Run>::GetTable()));
+    running->BeginLongRunning(make_unique<RunTask>(AcquireWeakPtr(), &Timer::run_tbl));
     start_time = time::SteadyNow() - time::FromSeconds(value);
     ScheduleAt(*here, start_time + duration_value);
   } else if (key == "duration_seconds") {
@@ -485,7 +479,7 @@ struct TimerWidget : ObjectToy {
 
     if (auto timer = LockTimer()) {
       text_field->argument =
-          NestedWeakPtr<Argument::Table>(timer->AcquireWeakPtr(), &timer->duration.GetTable());
+          NestedWeakPtr<Argument::Table>(timer->AcquireWeakPtr(), &Timer::duration_tbl);
       range = timer->range;
       duration_value = timer->duration_value;
       is_running = timer->running->IsRunning();

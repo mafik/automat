@@ -50,11 +50,11 @@ Naturally, every object that implements a stateful interface must store the stat
 
 Stateless interfaces still get a state offset, but they're free to use it however they want. It's just a well-known integer within `Interface::Table`.
 
-## Def & Impl
+## DEF_INTERFACE & Impl
 
-Defining interface tables & constructing bound types is quite a bit of boilerplate. It can be avoided using a `Def` struct within the interface. `Def` is a helper that bends the C++ syntax and allows more convenient use of interfaces. It functions as a class member. Every object that "defines" some interface may include its `Def` as one of its members. A Def member serves two functions:
+Defining interface tables & constructing bound types is quite a bit of boilerplate. It can be avoided using a `DEF_INTERFACE` & `DEF_END` macros. Every object that "defines" some interface using these macros gets two benefits:
 
-1. A fancy `->` operator that constructs a temporary binding and forwards the calls there. This allows the `Def` member to be used as if it were the interface itself.
-2. An auto-generated interface table, which is initialized based on the passed Impl type.
+1. Automatically constructed interface table, which is initialized based on functions defined between `DEF_INTERFACE` and `DEF_END` macros.
+2. A zero-cost member with a fancy `->` operator that can be used as if it were the main interface itself (it acts on whatever object it was invoked from).
 
-The Impl type is a struct that contains the implementation of the interface. All of the methods on Impl should follow the `On*` naming convention - to distinguish them from the main interface methods, which may go through dynamic dispatch. Impl types should also derive from the interface's main type. This allows them to use the binding's pointers - so they can access the object, table and state.
+The implementation of the interface (called Impl) should be located between the macros. All of the methods on Impl should follow the `On*` naming convention - to distinguish them from the main interface methods, which may go through dynamic dispatch. All of the Impl methods may access the interface's state (through `state`), parent object (through `obj`) and table (through `table`).

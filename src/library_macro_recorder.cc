@@ -68,50 +68,49 @@ static sk_sp<SkSVGDOM>& SharinganColor() {
   return dom;
 }
 
-void MacroRecorder::TimelineArgImpl::Configure(Argument::Table& t) {
-  t.autoconnect_radius = 10_cm;
-  t.tint = color::kParrotRed;
-  t.style = Argument::Style::Cable;
-  t.prototype = []() -> Ptr<Object> { return prototypes->Find<Timeline>()->AcquirePtr<Object>(); };
-  t.can_connect = [](Argument, Interface end, Status& status) {
-    if (end.table_ptr!= nullptr || !dynamic_cast<Timeline*>(end.object_ptr)) {
-      AppendErrorMessage(status) += "Must connect to a Timeline";
-    }
-  };
-  t.on_connect = [](Argument self, Interface end) {
-    auto& mr = static_cast<MacroRecorder&>(*self.object_ptr);
-    if (!end) {
-      if (auto old_timeline_ptr = mr.timeline_connection.Lock()) {
-        if (auto* old_timeline = dynamic_cast<Timeline*>(old_timeline_ptr.Get())) {
-          if (old_timeline->state == Timeline::State::kRecording) {
-            old_timeline->StopRecording();
-          }
-        }
-      }
-      mr.timeline_connection = {};
-      return;
-    }
-    if (auto* timeline = dynamic_cast<Timeline*>(end.object_ptr)) {
-      mr.timeline_connection = timeline->AcquireWeakPtr();
-      if (mr.long_running->IsRunning()) {
-        timeline->BeginRecording();
-      }
-    }
-  };
-  t.find = [](Argument self) -> NestedPtr<Interface::Table> {
-    auto& mr = static_cast<const MacroRecorder&>(*self.object_ptr);
-    return NestedPtr<Interface::Table>(mr.timeline_connection.Lock(), nullptr);
-  };
+Ptr<Object> MacroRecorder::timeline_Impl::MakePrototype() {
+  return prototypes->Find<Timeline>()->AcquirePtr<Object>();
 }
 
-static auto& timeline_arg = Argument::Def<MacroRecorder::TimelineArgImpl>::GetTable();
+void MacroRecorder::timeline_Impl::OnCanConnect(Interface end, Status& status) {
+  if (end.table_ptr != nullptr || !dynamic_cast<Timeline*>(end.object_ptr)) {
+    AppendErrorMessage(status) += "Must connect to a Timeline";
+  }
+}
+
+void MacroRecorder::timeline_Impl::OnConnect(Interface end) {
+  if (!end) {
+    if (auto old_timeline_ptr = obj->timeline_connection.Lock()) {
+      if (auto* old_timeline = dynamic_cast<Timeline*>(old_timeline_ptr.Get())) {
+        if (old_timeline->state == Timeline::State::kRecording) {
+          old_timeline->StopRecording();
+        }
+      }
+    }
+    obj->timeline_connection = {};
+    return;
+  }
+  if (auto* timeline = dynamic_cast<Timeline*>(end.object_ptr)) {
+    obj->timeline_connection = timeline->AcquireWeakPtr();
+    if (obj->long_running->IsRunning()) {
+      timeline->BeginRecording();
+    }
+  }
+}
+
+NestedPtr<Interface::Table> MacroRecorder::timeline_Impl::OnFind() {
+  return NestedPtr<Interface::Table>(obj->timeline_connection.Lock(), nullptr);
+}
+
+static auto& timeline_arg = MacroRecorder::timeline_tbl;
 
 static Timeline* FindTimeline(MacroRecorder& macro_recorder) {
   return dynamic_cast<Timeline*>(Argument(macro_recorder, timeline_arg).ObjectOrNull());
 }
 
 static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
-  Timeline* timeline = dynamic_cast<Timeline*>(&Argument(macro_recorder, timeline_arg).ObjectOrMake());
+  Timeline* timeline =
+      dynamic_cast<Timeline*>(&Argument(macro_recorder, timeline_arg).ObjectOrMake());
   assert(timeline);
   if (macro_recorder.keylogging && timeline->state != Timeline::State::kRecording) {
     timeline->BeginRecording();
@@ -121,30 +120,28 @@ static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
 
 // MacroRecorder static interface definitions
 
-void MacroRecorder::RunImpl::OnRun(std::unique_ptr<RunTask>& run_task) {
-  auto& mr = object();
+void MacroRecorder::StartRecording(std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("MacroRecorder");
-  if (mr.keylogging == nullptr) {
-    auto timeline = FindOrCreateTimeline(mr);
+  if (keylogging == nullptr) {
+    auto timeline = FindOrCreateTimeline(*this);
     timeline->BeginRecording();
     audio::Play(embedded::assets_SFX_macro_start_wav);
-    root_widget->window->BeginLogging(&mr, &mr.keylogging, &mr, &mr.pointer_logging);
+    root_widget->window->BeginLogging(this, &keylogging, this, &pointer_logging);
   }
-  mr.long_running->BeginLongRunning(std::move(run_task));
+  long_running->BeginLongRunning(std::move(run_task));
 }
 
-void MacroRecorder::LongRunningImpl::OnCancel() {
-  auto& mr = object();
-  if (auto timeline = FindTimeline(mr)) {
+void MacroRecorder::StopRecording() {
+  if (auto timeline = FindTimeline(*this)) {
     timeline->StopRecording();
   }
   audio::Play(embedded::assets_SFX_macro_stop_wav);
-  if (mr.keylogging) {
-    mr.keylogging->Release();
+  if (keylogging) {
+    keylogging->Release();
   }
-  if (mr.pointer_logging) {
-    mr.pointer_logging->Release();
-    mr.pointer_logging = nullptr;
+  if (pointer_logging) {
+    pointer_logging->Release();
+    pointer_logging = nullptr;
   }
 }
 
@@ -441,7 +438,8 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
   MacroRecorderWidget(ui::Widget* parent, Object& mr_obj) : ObjectToy(parent, mr_obj) {
     if (auto mr = LockMacroRecorder()) {
       record_button.reset(new GlassRunButton(
-          this, NestedWeakPtr<OnOff::Table>(mr->AcquireWeakPtr(), &LongRunning::Def<MacroRecorder::LongRunningImpl>::GetTable())));
+          this,
+          NestedWeakPtr<OnOff::Table>(mr->AcquireWeakPtr(), &MacroRecorder::long_running_tbl)));
       record_button->local_to_parent = SkM44::Translate(17.5_mm, 3.2_mm);
       is_recording = mr->keylogging != nullptr;
     }

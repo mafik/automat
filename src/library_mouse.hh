@@ -28,27 +28,19 @@ struct MouseButtonEvent : Object {
   ui::PointerButton button;
   bool down;
 
-  struct Run : Runnable {
-    using Parent = MouseButtonEvent;
-    static constexpr StrView kName = "Run"sv;
-    static constexpr int Offset() { return offsetof(MouseButtonEvent, run); }
+  DEF_INTERFACE(MouseButtonEvent, Runnable, run, "Run")
+  void OnRun(std::unique_ptr<RunTask>&) { obj->Run(); }
+  DEF_END(run);
 
-    void OnRun(std::unique_ptr<RunTask>&);
-  };
-  Runnable::Def<Run> run;
-
-  struct Next : NextArg {
-    using Parent = MouseButtonEvent;
-    static constexpr StrView kName = "Next"sv;
-    static constexpr int Offset() { return offsetof(MouseButtonEvent, next); }
-  };
-  NextArg::Def<Next> next;
+  DEF_INTERFACE(MouseButtonEvent, NextArg, next, "Next")
+  DEF_END(next);
 
   MouseButtonEvent(ui::PointerButton button, bool down) : button(button), down(down) {}
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   INTERFACES(run, next)
   audio::Sound& NextSound() override;
+  void Run();
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
@@ -87,32 +79,18 @@ struct MouseButtonPresser : Object {
   ui::PointerButton button;
   bool down = false;
 
-  struct Click : Runnable {
-    using Parent = MouseButtonPresser;
-    static constexpr StrView kName = "Click"sv;
-    static constexpr int Offset() { return offsetof(MouseButtonPresser, click); }
+  DEF_INTERFACE(MouseButtonPresser, Runnable, click, "Click")
+  void OnRun(std::unique_ptr<RunTask>&) { obj->Click(); }
+  DEF_END(click);
 
-    void OnRun(std::unique_ptr<RunTask>&);
-  };
-  Runnable::Def<Click> click;
+  DEF_INTERFACE(MouseButtonPresser, OnOff, state, "State")
+  bool IsOn() const { return obj->down; }
+  void OnTurnOn() { obj->Press(); }
+  void OnTurnOff() { obj->Release(); }
+  DEF_END(state);
 
-  struct State : OnOff {
-    using Parent = MouseButtonPresser;
-    static constexpr StrView kName = "State"sv;
-    static constexpr int Offset() { return offsetof(MouseButtonPresser, state); }
-
-    bool IsOn() const { return object().down; }
-    void OnTurnOn();
-    void OnTurnOff();
-  };
-  OnOff::Def<State> state;
-
-  struct NextImpl : NextArg {
-    using Parent = MouseButtonPresser;
-    static constexpr StrView kName = "Next"sv;
-    static constexpr int Offset() { return offsetof(MouseButtonPresser, next); }
-  };
-  NextArg::Def<NextImpl> next;
+  DEF_INTERFACE(MouseButtonPresser, NextArg, next, "Next")
+  DEF_END(next);
 
   MouseButtonPresser(ui::PointerButton button);
   MouseButtonPresser();
@@ -120,6 +98,9 @@ struct MouseButtonPresser : Object {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   INTERFACES(next, click, state)
+  void Click();
+  void Press();
+  void Release();
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
   void SerializeState(ObjectSerializer& writer) const override;

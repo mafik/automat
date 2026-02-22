@@ -77,14 +77,14 @@ struct Register : Object {
   WeakPtr<Assembler> assembler_weak;
   int register_index;
 
-  struct AssemblerArgImpl : Argument {
-    using Parent = Register;
-    static constexpr StrView kName = "Reg's Assembler"sv;
-    static constexpr int Offset() { return offsetof(Register, assembler_arg); }
-
-    static void Configure(Argument::Table&);
-  };
-  NO_UNIQUE_ADDRESS Argument::Def<AssemblerArgImpl> assembler_arg;
+  DEF_INTERFACE(Register, Argument, assembler_arg, "Reg's Assembler")
+  static constexpr auto kStyle = Argument::Style::Spotlight;
+  static constexpr float kAutoconnectRadius = INFINITY;
+  static constexpr SkColor kTint = "#ff0000"_color;
+  void OnCanConnect(Interface end, Status& status);
+  void OnConnect(Interface end);
+  NestedPtr<Interface::Table> OnFind();
+  DEF_END(assembler_arg);
 
   Register(WeakPtr<Assembler> assembler_weak, int register_index);
 
@@ -108,14 +108,15 @@ struct Assembler : Object, Container {
   using PrologueFn = uintptr_t (*)(void*);
   using Toy = AssemblerWidget;
 
-  struct RunningImpl : LongRunning {
-    using Parent = Assembler;
-    static constexpr StrView kName = "Running"sv;
-    static constexpr int Offset() { return offsetof(Assembler, running); }
-
-    void OnCancel();
-  };
-  LongRunning::Def<RunningImpl> running;
+  DEF_INTERFACE(Assembler, LongRunning, running, "Running")
+  void OnCancel() {
+    Status status;
+    obj->mc_controller->Cancel(status);
+    if (!OK(status)) {
+      ERROR << "Failed to cancel Assembler: " << status;
+    }
+  }
+  DEF_END(running);
 
   Ptr<Object> Clone() const override;
   INTERFACES(running)

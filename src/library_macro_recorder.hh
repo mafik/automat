@@ -19,16 +19,13 @@ struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
 
   ui::Keylogging* keylogging = nullptr;
   ui::Pointer::Logging* pointer_logging = nullptr;
-  WeakPtr<Timeline> timeline_connection;
 
-  DEF_INTERFACE(MacroRecorder, Argument, timeline, "Timeline")
+  DEF_INTERFACE(MacroRecorder, ObjectArgument<Timeline>, timeline, "Timeline")
   static constexpr auto kStyle = Argument::Style::Cable;
   static constexpr float kAutoconnectRadius = 10_cm;
   static constexpr SkColor kTint = color::kParrotRed;
   static Ptr<Object> MakePrototype();
-  void OnCanConnect(Interface end, Status& status);
   void OnConnect(Interface end);
-  NestedPtr<Interface::Table> OnFind();
   DEF_END(timeline);
 
   MacroRecorder();

@@ -33,6 +33,17 @@ struct Syncable : Argument {
       on_connect = &DefaultOnConnect;
       find = &DefaultFind;
     }
+
+    template <typename ImplT>
+    constexpr void FillFrom() {
+      Argument::Table::FillFrom<ImplT>();
+      if constexpr (requires(ImplT& i, Syncable s) { i.CanSync(s); })
+        can_sync = [](Syncable a, Syncable b) { return static_cast<ImplT&>(a).CanSync(b); };
+      if constexpr (requires(ImplT& i) { i.OnSync(); })
+        on_sync = [](Syncable self) { static_cast<ImplT&>(self).OnSync(); };
+      if constexpr (requires(ImplT& i) { i.OnUnsync(); })
+        on_unsync = [](Syncable self) { static_cast<ImplT&>(self).OnUnsync(); };
+    }
   };
 
   struct State {
@@ -64,38 +75,17 @@ struct Syncable : Argument {
   //   using Parent = SomeObject;
   //   static constexpr StrView kName = "..."sv;
   //   static constexpr int Offset();  // offsetof(Parent, def_member)
-  //   Optionally: static bool CanSync(const Syncable::Table&, const Syncable::Table&);
-  //   Optionally: static void OnSync(const Syncable::Table&, Parent&);
-  //   Optionally: static void OnUnsync(const Syncable::Table&, Parent&);
+  //   Optionally: bool CanSync(Syncable other);
+  //   Optionally: void OnSync();
+  //   Optionally: void OnUnsync();
   template <typename ImplT>
   struct Def : State, DefBase {
     using Impl = ImplT;
     using Bound = Syncable;
 
-    template <typename T>
-    static bool InvokeCanSync(Syncable a, Syncable b) {
-      return static_cast<T&>(a).CanSync(b);
-    }
-    template <typename T>
-    static void InvokeOnSync(Syncable self) {
-      static_cast<T&>(self).OnSync();
-    }
-    template <typename T>
-    static void InvokeOnUnsync(Syncable self) {
-      static_cast<T&>(self).OnUnsync();
-    }
-
     static constexpr Table MakeTable() {
       Table t(ImplT::kName);
-      t.state_off = ImplT::Offset();
-      if constexpr (requires { ImplT::kTint; })
-        t.tint = ImplT::kTint;
-      if constexpr (requires { ImplT::CanSync; })
-        t.can_sync = &InvokeCanSync<ImplT>;
-      if constexpr (requires { ImplT::OnSync; })
-        t.on_sync = &InvokeOnSync<ImplT>;
-      if constexpr (requires { ImplT::OnUnsync; })
-        t.on_unsync = &InvokeOnUnsync<ImplT>;
+      t.FillFrom<ImplT>();
       return t;
     }
 

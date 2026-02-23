@@ -8,6 +8,7 @@
 #include <unordered_set>
 
 #include "audio.hh"
+#include "casting.hh"
 #include "control_flow.hh"
 #include "deserializer.hh"
 #include "ptr.hh"
@@ -65,25 +66,36 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
 
   virtual Container* AsContainer() { return nullptr; }
 
-  // Default implementations iterate Interfaces() and dynamic_cast to find the first match.
-  // Override for special cases (e.g., when the Object itself implements the interface).
-  virtual Interface::Table* AsImageProvider();
-  virtual Interface::Table* AsLongRunning();
-  virtual Interface::Table* AsRunnable();
-  virtual Interface::Table* AsOnOff();
-
   // Visits all interfaces that are members of this object.
   //
   // Lifetime of interfaces is the same as this object. Interfaces should never be deleted as it
   // may create dangling references.
-  virtual void Interfaces(const std::function<LoopControl(Interface::Table&)>&);
+  virtual void Interfaces(const std::function<LoopControl(Interface)>&);
+
+  // Call cb for each interface of type T. cb returns LoopControl to continue or stop early.
+  template <typename T>
+  void Each(const std::function<LoopControl(T)>& cb) {
+    Interfaces([&](Interface iface) {
+      if (auto t = dyn_cast<T>(iface)) {
+        return cb(t);
+      }
+      return LoopControl::Continue;
+    });
+  }
+
+  // Find the first interface of the given type. Returns a null bound type if not found.
+  template <typename T>
+  T As() {
+    T result;
+    Each<T>([&](T t) {
+      result = t;
+      return LoopControl::Break;
+    });
+    return result;
+  }
 
   virtual void InterfaceName(Interface::Table&, Str& out_name);
-
   virtual Interface::Table* InterfaceFromName(StrView name);
-
-  // Wrapper around Interfaces() that only reports Argument::Table types
-  void Args(const std::function<void(Interface::Table&)>&);
 
   virtual void Updated(WeakPtr<Object>& updated);
 

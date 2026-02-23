@@ -140,10 +140,8 @@ std::string Task::Format() { return "Task()"; }
 std::string RunTask::Format() { return f("RunTask({})", Name(target)); }
 
 void ScheduleNext(Object& source) {
-  source.Interfaces([&](Interface::Table& iface) {
-    if (auto* next = dyn_cast<NextArg::Table>(&iface)) {
-      ScheduleArgumentTargets(source, static_cast<Interface::Table&>(*next));
-    }
+  source.Each<NextArg>([&](NextArg next) {
+    ScheduleArgumentTargets(source, *next.table);
     return LoopControl::Continue;
   });
 }
@@ -160,14 +158,14 @@ void ScheduleArgumentTargets(Object& source, Interface::Table& arg) {
 
   if (auto next = Argument(source, static_cast<Argument::Table&>(arg)).Find()) {
     // The target may be the Object itself (with AsRunnable) or a Runnable sub-interface.
-    Runnable::Table* runnable = nullptr;
+    Runnable runnable;
     if (auto* r = dyn_cast_if_present<Runnable::Table>(next.Get())) {
-      runnable = r;
+      runnable = Runnable(next.Owner<Object>(), r);
     } else if (auto* obj = next.Owner<Object>()) {
-      runnable = static_cast<Runnable::Table*>(obj->AsRunnable());
+      runnable = obj->As<Runnable>();
     }
     if (runnable) {
-      Runnable(*next.Owner<Object>(), *runnable).ScheduleRun();
+      runnable.ScheduleRun();
     }
   }
 }
@@ -175,8 +173,7 @@ void ScheduleArgumentTargets(Object& source, Interface::Table& arg) {
 void RunTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("RunTask");
   if (auto s = target.lock()) {
-    if (auto* lr_table = static_cast<LongRunning::Table*>(s->AsLongRunning());
-        lr_table && LongRunning(*s, *lr_table).IsRunning()) {
+    if (auto lr = s->As<LongRunning>(); lr.IsRunning()) {
       return;
     }
     auto* r = static_cast<Runnable::Table*>(runnable);
@@ -205,8 +202,8 @@ std::string CancelTask::Format() { return f("CancelTask({})", Name(target)); }
 void CancelTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("CancelTask");
   if (auto s = target.lock()) {
-    if (auto* lr_table = static_cast<LongRunning::Table*>(s->AsLongRunning())) {
-      LongRunning(*s, *lr_table).Cancel();
+    if (auto lr = s->As<LongRunning>()) {
+      lr.Cancel();
     }
   }
 }

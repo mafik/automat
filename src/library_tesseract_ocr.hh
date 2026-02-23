@@ -43,22 +43,13 @@ struct TesseractOCR : public Object {
   float y_min_ratio = 0.25f;
   float y_max_ratio = 0.75f;
 
-  NestedWeakPtr<ImageProvider::Table> image_provider_weak;
-  WeakPtr<Object> text_weak;
-
-  DEF_INTERFACE(TesseractOCR, Argument, image, "Image")
+  DEF_INTERFACE(TesseractOCR, InterfaceArgument<ImageProvider>, image, "Image")
   static constexpr auto kStyle = Argument::Style::Invisible;
   static constexpr float kAutoconnectRadius = 20_cm;
-  void OnCanConnect(Interface end, Status& status);
-  void OnConnect(Interface end);
-  NestedPtr<Interface::Table> OnFind();
   std::unique_ptr<ui::Widget> OnMakeIcon(ui::Widget* parent);
   DEF_END(image);
 
-  DEF_INTERFACE(TesseractOCR, Argument, text, "Text")
-  void OnCanConnect(Interface end, Status& status);
-  void OnConnect(Interface end);
-  NestedPtr<Interface::Table> OnFind();
+  DEF_INTERFACE(TesseractOCR, ObjectArgument<Object>, text, "Text")
   std::unique_ptr<ui::Widget> OnMakeIcon(ui::Widget* parent);
   DEF_END(text);
 

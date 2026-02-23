@@ -252,8 +252,8 @@ void BoardWidget::ConnectAtPoint(Object& start, Argument::Table& arg, Vec2 point
     auto& obj = *loc->object;
     TryConnect(Interface(obj));
     if (connected) return;
-    obj.Interfaces([&](Interface::Table& iface) {
-      TryConnect(Interface(obj, iface));
+    obj.Interfaces([&](Interface iface) {
+      TryConnect(iface);
       if (connected) {
         return LoopControl::Break;
       }

@@ -6,6 +6,7 @@
 #include <functional>
 #include <type_traits>
 
+#include "casting.hh"
 #include "control_flow.hh"
 #include "str.hh"
 
@@ -44,7 +45,10 @@ struct Interface {
   enum Kind {
     // Argument and its subclasses (range: kArgument..kLastArgument)
     kArgument,
-    kNextArg,      // also an Argument
+    kObjectArgument,
+    kInterfaceArgument,
+    kNextArg,                             // sub-kind of InterfaceArgument
+    kLastInterfaceArgument = kNextArg,
     kSyncable,     // also an Argument (via Syncable)
     kOnOff,        // also a Syncable
     kLongRunning,  // also an OnOff
@@ -62,6 +66,16 @@ struct Interface {
 
     constexpr Table(Kind kind, StrView name, int state_off = 0)
         : kind(kind), state_off(state_off), name(name) {}
+
+    static bool classof(const Table*) { return true; }
+
+    // FillFrom<ImplT>() — canonical compile-time ImplT-driven initialization.
+    // Subtype Tables chain to this via their own FillFrom<ImplT>().
+    // For dynamic (runtime) table initialization, assign function pointers directly instead.
+    template <typename ImplT>
+    constexpr void FillFrom() {
+      state_off = ImplT::Offset();
+    }
   };
 
   struct DefBase {
@@ -88,6 +102,11 @@ struct Interface {
     }
 
     template <typename T>
+    operator typename T::Bound(this const T& self) {
+      return self.Bind();
+    }
+
+    template <typename T>
     friend bool operator==(const Table* lhs, const T& rhs)
       requires std::derived_from<T, DefBase>
     {
@@ -111,6 +130,13 @@ struct Interface {
   Interface(Object* obj, Table* table) : object_ptr(obj), table_ptr(table) {}
 
   explicit operator bool() const { return object_ptr != nullptr; }
+
+  // Cast this interface to a derived bound type. Returns a null bound type if the table doesn't
+  // match.
+  template <typename T>
+  T As() const {
+    return dyn_cast_if_present<T>(*this);
+  }
 
   StrView Name() const { return table_ptr->name; }
 };
@@ -151,15 +177,15 @@ struct Interface {
 
 namespace automat::detail {
 template <typename... Ts>
-void VisitInterfaces(const std::function<LoopControl(Interface::Table&)>& cb, Ts&... members) {
-  (void)((cb(members.tbl) == LoopControl::Break) || ...);
+void VisitInterfaces(const std::function<LoopControl(Interface)>& cb, Ts&... members) {
+  (void)((cb(members.Bind()) == LoopControl::Break) || ...);
 }
 }  // namespace automat::detail
 
 // INTERFACES macro: generates the Interfaces() override from a list of member names.
-#define INTERFACES(...)                                                                          \
-  void Interfaces(const std::function<LoopControl(::automat::Interface::Table&)>& cb) override { \
-    ::automat::detail::VisitInterfaces(cb, __VA_ARGS__);                                         \
+#define INTERFACES(...)                                                                     \
+  void Interfaces(const std::function<LoopControl(::automat::Interface)>& cb) override {  \
+    ::automat::detail::VisitInterfaces(cb, __VA_ARGS__);                                   \
   }
 
 // DEF_INTERFACE(ParentType, InterfaceType, member_name, "Display Name")
@@ -195,3 +221,32 @@ void VisitInterfaces(const std::function<LoopControl(Interface::Table&)>& cb, Ts
   ;                                                                                  \
   NO_UNIQUE_ADDRESS member_name##_Impl::IFaceT::Def<member_name##_Impl> member_name; \
   static constexpr auto& member_name##_tbl = decltype(member_name)::tbl
+
+// dyn_cast / isa support for Interface-derived bound types.
+//
+// Enables: dyn_cast<Syncable>(arg), isa<OnOff>(runnable), etc.
+// Returns a nullable bound type (null on failure, checked via operator bool).
+//
+// The enable_if condition uses a requires-expression, which gracefully fails
+// (returns false) for incomplete types — unlike std::is_base_of_v which would
+// be a hard error. The condition checks that From has table_ptr and that
+// To::Table::classof accepts it, which is true exactly for automat bound types.
+namespace llvm {
+template <typename To, typename From>
+struct CastInfo<To, From,
+                std::enable_if_t<requires(const std::remove_cvref_t<From>& f) {
+                  To::Table::classof(f.table_ptr);
+                }>> {
+  static bool isPossible(const From& f) {
+    return f.table_ptr != nullptr && To::Table::classof(f.table_ptr);
+  }
+  static To doCast(From f) {
+    return To(f.object_ptr, static_cast<typename To::Table*>(f.table_ptr));
+  }
+  static To castFailed() { return To{}; }
+  static To doCastIfPossible(From f) {
+    if (!isPossible(f)) return castFailed();
+    return doCast(f);
+  }
+};
+}  // namespace llvm

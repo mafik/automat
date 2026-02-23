@@ -72,40 +72,29 @@ Ptr<Object> MacroRecorder::timeline_Impl::MakePrototype() {
   return prototypes->Find<Timeline>()->AcquirePtr<Object>();
 }
 
-void MacroRecorder::timeline_Impl::OnCanConnect(Interface end, Status& status) {
-  if (end.table_ptr != nullptr || !dynamic_cast<Timeline*>(end.object_ptr)) {
-    AppendErrorMessage(status) += "Must connect to a Timeline";
-  }
-}
-
 void MacroRecorder::timeline_Impl::OnConnect(Interface end) {
   if (!end) {
-    if (auto old_timeline_ptr = obj->timeline_connection.Lock()) {
-      if (auto* old_timeline = dynamic_cast<Timeline*>(old_timeline_ptr.Get())) {
-        if (old_timeline->state == Timeline::State::kRecording) {
-          old_timeline->StopRecording();
-        }
+    if (auto old_timeline = obj->timeline.target.Lock()) {
+      if (old_timeline->state == Timeline::State::kRecording) {
+        old_timeline->StopRecording();
       }
     }
-    obj->timeline_connection = {};
+    ObjectArgument<Timeline>::Table::DefaultOnConnect(*this, end);
     return;
   }
-  if (auto* timeline = dynamic_cast<Timeline*>(end.object_ptr)) {
-    obj->timeline_connection = timeline->AcquireWeakPtr();
+  ObjectArgument<Timeline>::Table::DefaultOnConnect(*this, end);
+  if (auto timeline = obj->timeline.target.Lock()) {
     if (obj->long_running->IsRunning()) {
       timeline->BeginRecording();
     }
   }
 }
 
-NestedPtr<Interface::Table> MacroRecorder::timeline_Impl::OnFind() {
-  return NestedPtr<Interface::Table>(obj->timeline_connection.Lock(), nullptr);
-}
-
 static auto& timeline_arg = MacroRecorder::timeline_tbl;
 
 static Timeline* FindTimeline(MacroRecorder& macro_recorder) {
-  return dynamic_cast<Timeline*>(Argument(macro_recorder, timeline_arg).ObjectOrNull());
+  if (auto t = macro_recorder.timeline.target.Lock()) return t.Get();
+  return nullptr;
 }
 
 static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {

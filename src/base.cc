@@ -12,20 +12,6 @@ bool Runnable::Table::DefaultCanSync(Syncable, Syncable other) {
   return other.table->kind == Interface::kRunnable;
 }
 
-bool LongRunning::Table::DefaultIsOn(OnOff self) {
-  return LongRunning(*self.object_ptr, static_cast<LongRunning::Table&>(*self.table)).IsRunning();
-}
-
-void LongRunning::Table::DefaultOnTurnOn(OnOff self) {
-  if (auto* runnable = static_cast<Runnable::Table*>(self.object_ptr->AsRunnable())) {
-    Runnable(*self.object_ptr, *runnable).ScheduleRun();
-  }
-}
-
-void LongRunning::Table::DefaultOnTurnOff(OnOff self) {
-  LongRunning(*self.object_ptr, static_cast<LongRunning::Table&>(*self.table)).Cancel();
-}
-
 void LongRunning::Cancel() const {
   auto& task = state->task;
   if (task == nullptr) {
@@ -56,8 +42,7 @@ std::unique_ptr<Option> RunOption::Clone() const {
 }
 std::unique_ptr<Action> RunOption::Activate(ui::Pointer& pointer) const {
   if (auto object = weak.lock()) {
-    if (auto* lr_table = static_cast<LongRunning::Table*>(object->AsLongRunning())) {
-      LongRunning lr(*object, *lr_table);
+    if (auto lr = object->As<LongRunning>()) {
       if (lr.IsRunning()) {
         lr.Cancel();
       } else {

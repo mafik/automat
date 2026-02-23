@@ -342,8 +342,8 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
     auto& obj = *loc->object;
     if (!loc->widget || !loc->widget->toy) continue;
     HighlightCheck(obj, *loc->widget->toy, nullptr);
-    obj.Interfaces([&](Interface::Table& iface) {
-      HighlightCheck(obj, *loc->widget->toy, &iface);
+    obj.Interfaces([&](Interface iface) {
+      HighlightCheck(obj, *loc->widget->toy, iface.table_ptr);
       return LoopControl::Continue;
     });
   }

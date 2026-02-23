@@ -343,8 +343,8 @@ void ObjectToy::VisitOptions(const OptionsVisitor& visitor) const {
       visitor(del);
       MoveLocationOption move{loc_weak, owner.Copy<Object>()};
       visitor(move);
-      if (auto* runnable = static_cast<Runnable::Table*>(loc->object->AsRunnable())) {
-        RunOption run{owner.Copy<Object>(), *runnable};
+      if (auto runnable = loc->object->As<Runnable>()) {
+        RunOption run{owner.Copy<Object>(), *runnable.table};
         visitor(run);
       }
       if (IsIconified()) {
@@ -355,11 +355,10 @@ void ObjectToy::VisitOptions(const OptionsVisitor& visitor) const {
         visitor(iconify);
       }
       if (auto obj = LockOwner<Object>()) {
-        obj->Interfaces([&](Interface::Table& iface) {
-          if (auto* syncable = dyn_cast<Syncable::Table>(&iface)) {
-            FieldOption field_option{NestedWeakPtr<Syncable::Table>(owner.Copy<Object>(), syncable)};
-            visitor(field_option);
-          }
+        obj->Each<Syncable>([&](Syncable syncable) {
+          FieldOption field_option{
+              NestedWeakPtr<Syncable::Table>(owner.Copy<Object>(), syncable.table)};
+          visitor(field_option);
           return LoopControl::Continue;
         });
       }
@@ -384,8 +383,8 @@ std::unique_ptr<Action> ObjectToy::FindAction(ui::Pointer& p, ui::ActionTrigger 
 }
 
 void Object::Updated(WeakPtr<Object>& updated) {
-  if (auto* runnable = static_cast<Runnable::Table*>(AsRunnable())) {
-    Runnable(*this, *runnable).ScheduleRun();
+  if (auto runnable = As<Runnable>()) {
+    runnable.ScheduleRun();
   }
 }
 
@@ -470,33 +469,10 @@ bool ObjectToy::IsIconified() const {
   return automat::IsIconified(static_cast<Object*>(owner.GetUnsafe()));
 }
 
-void Object::Interfaces(const std::function<LoopControl(Interface::Table&)>& cb) {}
+void Object::Interfaces(const std::function<LoopControl(Interface)>& cb) {}
 
 void Object::InterfaceName(Interface::Table& iface, Str& out_name) { out_name = iface.name; }
 
-template <typename T>
-static T* FindInterface(Object& obj) {
-  T* result = nullptr;
-  obj.Interfaces([&](Interface::Table& iface) {
-    result = dyn_cast<T>(&iface);
-    return result ? LoopControl::Break : LoopControl::Continue;
-  });
-  return result;
-}
-
-Interface::Table* Object::AsLongRunning() { return FindInterface<LongRunning::Table>(*this); }
-Interface::Table* Object::AsRunnable() { return FindInterface<Runnable::Table>(*this); }
-Interface::Table* Object::AsOnOff() { return FindInterface<OnOff::Table>(*this); }
-Interface::Table* Object::AsImageProvider() { return FindInterface<ImageProvider::Table>(*this); }
-
-void Object::Args(const std::function<void(Interface::Table&)>& cb) {
-  Interfaces([&](Interface::Table& iface) {
-    if (dyn_cast<Argument::Table>(&iface)) {
-      cb(iface);
-    }
-    return LoopControl::Continue;
-  });
-}
 
 Location* Object::MyLocation() {
   for (auto& loc : root_board->locations) {
@@ -519,11 +495,11 @@ void Object::InvalidateConnectionWidgets(const Interface::Table* arg) const {
 
 Interface::Table* Object::InterfaceFromName(StrView needle) {
   Interface::Table* result = nullptr;
-  Interfaces([&](Interface::Table& iface) {
+  Interfaces([&](Interface iface) {
     Str iface_name;
-    InterfaceName(iface, iface_name);
+    InterfaceName(*iface.table_ptr, iface_name);
     if (iface_name == needle) {
-      result = &iface;
+      result = iface.table_ptr;
       return LoopControl::Break;
     }
     return LoopControl::Continue;
@@ -577,20 +553,20 @@ void ObjectSerializer::Serialize(Object& start) {
     {  // Serialize object parts
       // ATM we only serialize Args
       bool args_opened = false;  // used to lazily call StartObject
-      o->Args([&](Interface::Table& iface) {
-        auto& arg = static_cast<Argument::Table&>(iface);
-        auto end = Argument(*o, arg).Find();
-        if (!end) return;
+      o->Each<Argument>([&](Argument arg) {
+        auto end = arg.Find();
+        if (!end) return LoopControl::Continue;
         if (!args_opened) {
           args_opened = true;
           Key("links");
           StartObject();
         }
         Str arg_name;
-        o->InterfaceName(arg, arg_name);
+        o->InterfaceName(*arg.table, arg_name);
         Key(arg_name);
         auto to_name = ResolveName(*end.Owner<Object>(), end.Get());
         String(to_name);
+        return LoopControl::Continue;
       });
       if (args_opened) {
         args_opened = false;

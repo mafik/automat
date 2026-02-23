@@ -49,91 +49,6 @@ struct Error;
 struct Object;
 struct Location;
 
-struct LongRunning : OnOff {
-  struct State : OnOff::State {
-    std::unique_ptr<RunTask> task;
-  };
-
-  struct Table : OnOff::Table {
-    static bool classof(const Interface::Table* i) { return i->kind == Interface::kLongRunning; }
-
-    void (*on_cancel)(LongRunning) = nullptr;
-
-    static bool DefaultIsOn(OnOff self);
-    static void DefaultOnTurnOn(OnOff self);
-    static void DefaultOnTurnOff(OnOff self);
-
-    constexpr Table(StrView name) : OnOff::Table(name, Interface::kLongRunning) {
-      is_on = &DefaultIsOn;
-      on_turn_on = &DefaultOnTurnOn;
-      on_turn_off = &DefaultOnTurnOff;
-    }
-  };
-
-  INTERFACE_BOUND(LongRunning, OnOff)
-
-  bool IsRunning() const { return state->task != nullptr; }
-
-  void BeginLongRunning(std::unique_ptr<RunTask>&& task) const {
-    state->task = std::move(task);
-    NotifyTurnedOn();
-  }
-
-  void Cancel() const;
-
-  // Called from arbitrary thread by the object when it finishes execution.
-  void Done() const;
-
-  // ImplT must provide:
-  //   using Parent = SomeObject;
-  //   static constexpr StrView kName = "..."sv;
-  //   static constexpr int Offset();  // offsetof(Parent, def_member)
-  //   Optionally: void OnCancel();
-  template <typename ImplT>
-  struct Def : State, Interface::DefBase {
-    using Impl = ImplT;
-    using Bound = LongRunning;
-
-    template <typename T>
-    static void InvokeOnCancel(LongRunning self) {
-      static_cast<T&>(self).OnCancel();
-    }
-    template <typename T>
-    static void InvokeOnSync(Syncable self) {
-      static_cast<T&>(self).OnSync();
-    }
-    template <typename T>
-    static void InvokeOnUnsync(Syncable self) {
-      static_cast<T&>(self).OnUnsync();
-    }
-
-    static constexpr Table MakeTable() {
-      Table t(ImplT::kName);
-      t.state_off = ImplT::Offset();
-      if constexpr (requires { ImplT::OnCancel; })
-        t.on_cancel = &InvokeOnCancel<ImplT>;
-      if constexpr (requires { ImplT::OnSync; })
-        t.on_sync = &InvokeOnSync<ImplT>;
-      if constexpr (requires { ImplT::OnUnsync; })
-        t.on_unsync = &InvokeOnUnsync<ImplT>;
-      return t;
-    }
-
-    inline constinit static Table tbl = MakeTable();
-
-    ~Def() {
-      if (task) {
-        Bind().Cancel();
-      }
-      if (source || !end.IsExpired()) {
-        Bind().Unsync();
-      }
-    }
-  };
-};
-
-struct Runnable;
-
 struct Runnable : Syncable {
   struct Table : Syncable::Table {
     static bool classof(const Interface::Table* i) { return i->kind == Interface::kRunnable; }
@@ -144,6 +59,14 @@ struct Runnable : Syncable {
 
     constexpr Table(StrView name) : Syncable::Table(name, Interface::kRunnable) {
       can_sync = &DefaultCanSync;
+    }
+
+    template <typename ImplT>
+    constexpr void FillFrom() {
+      Syncable::Table::FillFrom<ImplT>();
+      on_run = [](Runnable self, std::unique_ptr<RunTask>& t) {
+        static_cast<ImplT&>(self).OnRun(t);
+      };
     }
   };
 
@@ -164,7 +87,6 @@ struct Runnable : Syncable {
   }
 
   // ImplT must provide:
-  //   using Parent = SomeObject;
   //   static constexpr StrView kName = "..."sv;
   //   static constexpr int Offset();  // offsetof(Parent, def_member)
   //   void OnRun(std::unique_ptr<RunTask>&);
@@ -173,27 +95,9 @@ struct Runnable : Syncable {
     using Impl = ImplT;
     using Bound = Runnable;
 
-    template <typename T>
-    static void InvokeOnRun(Runnable self, std::unique_ptr<RunTask>& task) {
-      static_cast<T&>(self).OnRun(task);
-    }
-    template <typename T>
-    static void InvokeOnSync(Syncable self) {
-      static_cast<T&>(self).OnSync();
-    }
-    template <typename T>
-    static void InvokeOnUnsync(Syncable self) {
-      static_cast<T&>(self).OnUnsync();
-    }
-
     static constexpr Table MakeTable() {
       Table t(ImplT::kName);
-      t.state_off = ImplT::Offset();
-      t.on_run = &InvokeOnRun<ImplT>;
-      if constexpr (requires { ImplT::OnSync; })
-        t.on_sync = &InvokeOnSync<ImplT>;
-      if constexpr (requires { ImplT::OnUnsync; })
-        t.on_unsync = &InvokeOnUnsync<ImplT>;
+      t.FillFrom<ImplT>();
       return t;
     }
 
@@ -206,6 +110,96 @@ struct Runnable : Syncable {
     }
   };
 };
+
+struct LongRunning : OnOff {
+  struct State : OnOff::State {
+    std::unique_ptr<RunTask> task;
+  };
+
+  struct Table : OnOff::Table {
+    static bool classof(const Interface::Table* i) { return i->kind == Interface::kLongRunning; }
+
+    void (*on_cancel)(LongRunning) = nullptr;
+
+    static bool DefaultIsOn(OnOff self) {
+      return LongRunning(*self.object_ptr, static_cast<Table&>(*self.table_ptr)).IsRunning();
+    }
+    static void DefaultOnTurnOn(OnOff self) {
+      if (auto r = self.object_ptr->As<Runnable>()) r.ScheduleRun();
+    }
+    static void DefaultOnTurnOff(OnOff self) {
+      LongRunning(*self.object_ptr, static_cast<Table&>(*self.table_ptr)).Cancel();
+    }
+
+    constexpr Table(StrView name) : OnOff::Table(name, Interface::kLongRunning) {
+      is_on = &DefaultIsOn;
+      on_turn_on = &DefaultOnTurnOn;
+      on_turn_off = &DefaultOnTurnOff;
+    }
+
+    template <typename ImplT>
+    constexpr void FillFrom() {
+      struct FullImpl : ImplT {
+        bool IsOn() const { return this->IsRunning(); }
+        void OnTurnOn() { if (auto r = this->object_ptr->template As<Runnable>()) r.ScheduleRun(); }
+        void OnTurnOff() { this->Cancel(); }
+      };
+      OnOff::Table::FillFrom<FullImpl>();
+      if constexpr (requires(ImplT& i) { i.OnCancel(); })
+        on_cancel = [](LongRunning self) { static_cast<ImplT&>(self).OnCancel(); };
+    }
+  };
+
+  INTERFACE_BOUND(LongRunning, OnOff)
+
+  bool IsRunning() const { return state->task != nullptr; }
+
+  void BeginLongRunning(std::unique_ptr<RunTask>&& task) const {
+    state->task = std::move(task);
+    NotifyTurnedOn();
+  }
+
+  void Cancel() const;
+
+  // Called from arbitrary thread by the object when it finishes execution.
+  void Done() const;
+
+  // ImplT must provide:
+  //   static constexpr StrView kName = "..."sv;
+  //   static constexpr int Offset();  // offsetof(Parent, def_member)
+  //   Optionally: void OnCancel();
+  template <typename ImplT>
+  struct Def : State, Interface::DefBase {
+    using Impl = ImplT;
+    using Bound = LongRunning;
+
+    static constexpr Table MakeTable() {
+      Table t(ImplT::kName);
+      t.FillFrom<ImplT>();
+      return t;
+    }
+
+    inline constinit static Table tbl = MakeTable();
+
+    ~Def() {
+      if (task) {
+        Bind().Cancel();
+      }
+      if (source || !end.IsExpired()) {
+        Bind().Unsync();
+      }
+    }
+  };
+};
+
+// NextArg: InterfaceArgument specialization for Runnable connections.
+// DefaultMakeIcon is specialized for this type in argument.cc.
+template <>
+std::unique_ptr<ui::Widget>
+InterfaceArgument<Runnable, Interface::kNextArg>::Table::DefaultMakeIcon(Argument,
+                                                                          ui::Widget* parent);
+
+using NextArg = InterfaceArgument<Runnable, Interface::kNextArg>;
 
 struct RunOption : TextOption {
   WeakPtr<Object> weak;

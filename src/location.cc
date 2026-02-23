@@ -431,19 +431,19 @@ std::unique_ptr<Action> LocationWidget::FindAction(ui::Pointer& p, ui::ActionTri
 void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const {
   if (!ui::root_widget || !object) return;
   // Outgoing: iterate this object's args and look up each in ToyStore
-  object->Args([&](Interface::Table& _iface) {
-    auto& arg = static_cast<Argument::Table&>(_iface);
-    auto bound = Argument(*object, arg);
-    auto* w = ui::root_widget->toys.FindOrNull(bound);
-    if (!w) return;
-    if (moved && !value_changed) {
-      w->FromMoved();
-    } else {
-      w->WakeAnimation();
-      if (w->state) {
-        w->state->stabilized = false;
+  object->Each<Argument>([&](Argument arg) {
+    auto* w = ui::root_widget->toys.FindOrNull(arg);
+    if (w) {
+      if (moved && !value_changed) {
+        w->FromMoved();
+      } else {
+        w->WakeAnimation();
+        if (w->state) {
+          w->state->stabilized = false;
+        }
       }
     }
+    return LoopControl::Continue;
   });
   // Incoming: iterate all ToyStore entries to find ConnectionWidgets pointing to this location
   for (auto& [key, toy] : ui::root_widget->toys.container) {
@@ -463,21 +463,19 @@ void LocationWidget::UpdateAutoconnectArgs() {
   auto& toy = ToyForObject();
   auto* parent_mw = ToyStore().FindOrNull(*root_board);
   if (!parent_mw) return;
-  loc->object->Args([&](Interface::Table& _iface) {
-    auto& arg = static_cast<Argument::Table&>(_iface);
-    float autoconnect_radius = arg.autoconnect_radius;
+  loc->object->Each<Argument>([&](Argument arg) {
+    float autoconnect_radius = arg.table->autoconnect_radius;
     if (autoconnect_radius <= 0) {
-      return;
+      return LoopControl::Continue;
     }
 
-    Argument bound(*loc->object, arg);
-    auto start = toy.ArgStart(arg, parent_mw);
+    auto start = toy.ArgStart(*arg.table, parent_mw);
 
     // Find the current distance & target of this connection
     // Use optional to distinguish "no connection" from "top-level connection" (nullptr)
     std::optional<Interface::Table*> old_iface;
     float old_dist2 = HUGE_VALF;
-    if (auto end = bound.Find()) {
+    if (auto end = arg.Find()) {
       old_iface = end.Get();
       Vec<Vec2AndDir> to_positions;
       auto* end_loc = end.Owner<Object>()->MyLocation();
@@ -497,7 +495,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
     float new_dist2 = autoconnect_radius * autoconnect_radius;
     ObjectToy* new_toy = nullptr;
     std::optional<Interface::Table*> new_iface;
-    parent_mw->NearbyCandidates(*loc, arg, autoconnect_radius,
+    parent_mw->NearbyCandidates(*loc, *arg.table, autoconnect_radius,
                                 [&](ObjectToy& toy, Interface::Table* iface, Vec<Vec2AndDir>& to_points) {
                                   auto other_up = TransformBetween(toy, *parent_mw);
                                   for (auto& to : to_points) {
@@ -512,14 +510,15 @@ void LocationWidget::UpdateAutoconnectArgs() {
                                 });
 
     if (new_iface == old_iface) {
-      return;
+      return LoopControl::Continue;
     }
     if (new_toy && new_iface) {
       auto end_obj = new_toy->LockOwner<Object>();
-      bound.Connect(Interface(end_obj.Get(), *new_iface));
+      arg.Connect(Interface(end_obj.Get(), *new_iface));
     } else {
-      bound.Disconnect();
+      arg.Disconnect();
     }
+    return LoopControl::Continue;
   });
 
   // Now check other locations & their arguments that might want to connect to this location
@@ -537,32 +536,30 @@ void LocationWidget::UpdateAutoconnectArgs() {
     }
     auto& other_widget = other->ToyForObject();
     auto other_up = TransformBetween(other_widget, *parent_mw);
-    other->object->Args([&](Interface::Table& _iface) {
-      auto& arg = static_cast<Argument::Table&>(_iface);
-      float autoconnect_radius = arg.autoconnect_radius;
+    other->object->Each<Argument>([&](Argument arg) {
+      float autoconnect_radius = arg.table->autoconnect_radius;
       if (autoconnect_radius <= 0) {
-        return;
+        return LoopControl::Continue;
       }
-      Argument bound(*other->object, arg);
-      auto this_iface_opt = bound.CanConnect(*loc->object);
+      auto this_iface_opt = arg.CanConnect(*loc->object);
       if (!this_iface_opt) {
-        return;  // `this` location can't be connected to `other`s `arg`
+        return LoopControl::Continue;  // `this` location can't be connected to `other`s `arg`
       }
       Interface::Table* this_iface = *this_iface_opt;
 
       // Wake the animation loop of the ConnectionWidget
-      if (auto connection_widget = ConnectionWidget::FindOrNull(*other->object, arg)) {
+      if (auto connection_widget = ConnectionWidget::FindOrNull(*arg.object_ptr, *arg.table)) {
         connection_widget->WakeAnimation();
       }
 
-      auto start = other_widget.ArgStart(arg);
+      auto start = other_widget.ArgStart(*arg.table);
       start.pos = other_up.mapPoint(start.pos);
 
       // Find the current distance & target of this connection
       // Use optional to distinguish "no connection" from "top-level connection" (nullptr)
       std::optional<Interface::Table*> old_iface;
       float old_dist2 = HUGE_VALF;
-      if (auto end = bound.Find()) {
+      if (auto end = arg.Find()) {
         old_iface = end.Get();
         Vec<Vec2AndDir> to_positions;
         auto* end_loc = end.Owner<Object>()->MyLocation();
@@ -592,13 +589,14 @@ void LocationWidget::UpdateAutoconnectArgs() {
       }
 
       if (new_iface == old_iface) {
-        return;
+        return LoopControl::Continue;
       }
       if (new_iface) {
-        bound.Connect(Interface(loc->object.Get(), *new_iface));
+        arg.Connect(Interface(loc->object.Get(), *new_iface));
       } else {
-        bound.Disconnect();
+        arg.Disconnect();
       }
+      return LoopControl::Continue;
     });
   }
 }

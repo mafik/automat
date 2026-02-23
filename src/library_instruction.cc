@@ -103,41 +103,15 @@ std::unique_ptr<ui::Widget> Instruction::jump_arg_Impl::OnMakeIcon(ui::Widget* p
   return ui::MakeShapeWidget(parent, kJumpPathSVG, "#ff0000"_color);
 }
 
-void Instruction::jump_arg_Impl::OnCanConnect(Interface end, Status& status) {
-  if (!dyn_cast_if_present<Runnable::Table>(end.table_ptr)) {
-    AppendErrorMessage(status) += "Jump target must be a Runnable";
-  }
-}
-
 void Instruction::jump_arg_Impl::OnConnect(Interface end) {
-  if (end) {
-    if (auto* r = dyn_cast_if_present<Runnable::Table>(end.table_ptr)) {
-      obj->jump_target = NestedWeakPtr<Runnable::Table>(end.object_ptr->AcquireWeakPtr(), r);
-    }
-  } else {
-    obj->jump_target = {};
-  }
+  InterfaceArgument<Runnable>::Table::DefaultOnConnect(*this, end);
   if (auto* assembler = FindAssembler(*obj)) {
     assembler->UpdateMachineCode();
   }
 }
 
-NestedPtr<Interface::Table> Instruction::jump_arg_Impl::OnFind() {
-  if (auto locked = obj->jump_target.Lock()) {
-    return NestedPtr<Interface::Table>(locked.GetOwnerWeak().Lock(), locked.Get());
-  }
-  return {};
-}
-
 void Instruction::next_Impl::OnConnect(Interface end) {
-  auto& st = *static_cast<NextArg&>(*this).state;
-  if (end) {
-    if (auto* end_runnable = dyn_cast_if_present<Runnable::Table>(end.table_ptr)) {
-      st.next = NestedWeakPtr<Interface::Table>(end.object_ptr->AcquireWeakPtr(), end_runnable);
-    }
-  } else {
-    st.next = {};
-  }
+  InterfaceArgument<Runnable, Interface::kNextArg>::Table::DefaultOnConnect(*this, end);
   if (auto* assembler = FindAssembler(*obj)) {
     assembler->UpdateMachineCode();
   }
@@ -186,17 +160,20 @@ static Assembler* FindOrCreateAssembler(Object& start) {
   return dynamic_cast<Assembler*>(&Argument(start, Instruction::assembler_arg_tbl).ObjectOrMake());
 }
 
-void Instruction::Interfaces(const std::function<LoopControl(Interface::Table&)>& cb) {
-  if (LoopControl::Break == cb(run_tbl)) return;
+void Instruction::Interfaces(const std::function<LoopControl(Interface)>& cb) {
+  if (LoopControl::Break == cb(run.Bind())) return;
   auto opcode = mc_inst.getOpcode();
   if (opcode != X86::JMP_1 && opcode != X86::JMP_4) {
-    if (LoopControl::Break == cb(next_tbl)) return;
+    if (LoopControl::Break == cb(next.Bind())) return;
   }
-  if (LoopControl::Break == cb(assembler_arg_tbl)) return;
-  auto& assembler = LLVM_Assembler::Get();
-  auto& info = assembler.mc_instr_info->get(opcode);
+  if (LoopControl::Break == cb(assembler_arg.Bind())) return;
+  auto& assembler_info = LLVM_Assembler::Get();
+  auto& info = assembler_info.mc_instr_info->get(opcode);
   if (info.isBranch()) {
-    if (LoopControl::Break == cb(jump_arg_tbl)) return;
+    if (LoopControl::Break == cb(jump_arg.Bind())) return;
+  }
+  if (auto* as = FindAssembler(*this)) {
+    if (LoopControl::Break == cb(Interface(*as, Assembler::running_tbl))) return;
   }
 }
 
@@ -230,12 +207,6 @@ void Instruction::Run(std::unique_ptr<RunTask>& run_task) {
   assembler->RunMachineCode(this, std::move(run_task));
 }
 
-Interface::Table* Instruction::AsLongRunning() {
-  if (auto* as = FindAssembler(*this)) {
-    return &Assembler::running_tbl;
-  }
-  return nullptr;
-}
 
 static std::string AssemblyText(const mc::Inst& mc_inst) {
   // Nicely formatted assembly:

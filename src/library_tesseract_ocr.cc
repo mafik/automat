@@ -49,36 +49,8 @@ std::unique_ptr<ui::Widget> TesseractOCR::image_Impl::OnMakeIcon(ui::Widget* par
   return std::make_unique<TextWidget>(parent, "IMG");
 }
 
-void TesseractOCR::image_Impl::OnCanConnect(Interface end, Status& status) {
-  if (!dyn_cast_if_present<ImageProvider::Table>(end.table_ptr)) {
-    AppendErrorMessage(status) += "Can only connect to Image Provider";
-  }
-}
-
-void TesseractOCR::image_Impl::OnConnect(Interface end) {
-  auto* ip = dyn_cast_if_present<ImageProvider::Table>(end.table_ptr);
-  if (ip == nullptr) return;
-  obj->image_provider_weak =
-      NestedWeakPtr<ImageProvider::Table>(end.object_ptr->AcquireWeakPtr(), ip);
-}
-
-NestedPtr<Interface::Table> TesseractOCR::image_Impl::OnFind() {
-  return obj->image_provider_weak.Lock();
-}
-
 std::unique_ptr<ui::Widget> TesseractOCR::text_Impl::OnMakeIcon(ui::Widget* parent) {
   return std::make_unique<TextWidget>(parent, "T");
-}
-
-void TesseractOCR::text_Impl::OnCanConnect(Interface end, Status&) {}
-
-void TesseractOCR::text_Impl::OnConnect(Interface end) {
-  if (!end) return;
-  obj->text_weak = end.object_ptr->AcquireWeakPtr();
-}
-
-NestedPtr<Interface::Table> TesseractOCR::text_Impl::OnFind() {
-  return NestedPtr<Interface::Table>(obj->text_weak.Lock(), nullptr);
 }
 
 static auto& image_arg = TesseractOCR::image_tbl;
@@ -379,8 +351,8 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
         sk_sp<SkImage> new_image = nullptr;
         auto image_obj = Argument(*tesseract, image_arg).ObjectOrNull();
         if (image_obj) {
-          if (auto* ip_tbl = static_cast<ImageProvider::Table*>(image_obj->AsImageProvider())) {
-            new_image = ImageProvider(*image_obj, *ip_tbl).GetImage();
+          if (auto ip = image_obj->As<ImageProvider>()) {
+            new_image = ip.GetImage();
             iris_target = image_obj->MyLocation()->position;
           }
         }
@@ -1080,13 +1052,13 @@ void TesseractOCR::Run() {
     return;
   }
 
-  auto* ip_tbl = static_cast<ImageProvider::Table*>(image_obj->AsImageProvider());
-  if (!ip_tbl) {
+  auto ip = image_obj->As<ImageProvider>();
+  if (!ip) {
     ReportError("Connected object doesn't provide images");
     return;
   }
 
-  auto image = ImageProvider(*image_obj, *ip_tbl).GetImage();
+  auto image = ip.GetImage();
   if (!image) {
     ReportError("No image available from source");
     return;

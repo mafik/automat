@@ -34,7 +34,6 @@ enum class Flag {
 
 struct Instruction : Object, Buffer {
   mc::Inst mc_inst;
-  NestedWeakPtr<Runnable::Table> jump_target;  // Connection target for jump_arg
   WeakPtr<Object> assembler_weak;
 
   DEF_INTERFACE(Instruction, Runnable, run, "Run")
@@ -55,21 +54,17 @@ struct Instruction : Object, Buffer {
   NestedPtr<Interface::Table> OnFind();
   DEF_END(assembler_arg);
 
-  DEF_INTERFACE(Instruction, Argument, jump_arg, "Jump")
-  void OnCanConnect(Interface end, Status& status);
+  DEF_INTERFACE(Instruction, InterfaceArgument<Runnable>, jump_arg, "Jump")
   void OnConnect(Interface end);
-  NestedPtr<Interface::Table> OnFind();
   std::unique_ptr<ui::Widget> OnMakeIcon(ui::Widget* parent);
   DEF_END(jump_arg);
 
-  void Interfaces(const std::function<LoopControl(Interface::Table&)>& cb) override;
+  void Interfaces(const std::function<LoopControl(Interface)>& cb) override;
 
   void Run(std::unique_ptr<RunTask>&);
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
-
-  Interface::Table* AsLongRunning() override;
 
   Buffer::Type imm_type = Buffer::Type::Unsigned;
 

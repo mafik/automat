@@ -10,6 +10,7 @@
 #include "log.hh"
 #include "root_widget.hh"
 #include "svg.hh"
+#include "sync.hh"
 #include "ui_connection_widget.hh"
 #include "ui_shape_widget.hh"
 #include "widget.hh"
@@ -50,30 +51,12 @@ std::unique_ptr<Argument::Toy> Argument::MakeToy(ui::Widget* parent) {
   return std::make_unique<ui::ConnectionWidget>(parent, *object_ptr, *table);
 }
 
-// --- NextArg implementation ---
+// --- InterfaceArgument<Runnable, kNextArg> explicit specialization ---
 
-void NextArg::Table::DefaultCanConnect(Argument, Interface end, Status& status) {
-  if (!dyn_cast_if_present<Runnable::Table>(end.table_ptr)) {
-    AppendErrorMessage(status) += "Next target must be a Runnable";
-  }
-}
-
-void NextArg::Table::DefaultOnConnect(Argument self, Interface end) {
-  auto& st = *static_cast<NextArg&>(self).state;
-  if (end) {
-    if (Runnable::Table* end_runnable = dyn_cast_if_present<Runnable::Table>(end.table_ptr)) {
-      st.next = NestedWeakPtr<Interface::Table>(end.object_ptr->AcquireWeakPtr(), end_runnable);
-    }
-  } else {
-    st.next = {};
-  }
-}
-
-NestedPtr<Interface::Table> NextArg::Table::DefaultFind(Argument self) {
-  return static_cast<NextArg&>(self).state->next.Lock();
-}
-
-std::unique_ptr<ui::Widget> NextArg::Table::DefaultMakeIcon(Argument, ui::Widget* parent) {
+template <>
+std::unique_ptr<ui::Widget>
+InterfaceArgument<Runnable, Interface::kNextArg>::Table::DefaultMakeIcon(Argument,
+                                                                          ui::Widget* parent) {
   return ui::MakeShapeWidget(parent, kNextShape, "#ffffff"_color);
 }
 

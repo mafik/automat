@@ -1856,13 +1856,13 @@ std::unique_ptr<ObjectToy> Timeline::MakeToy(ui::Widget* parent) {
   return std::make_unique<TimelineWidget>(parent, *this);
 }
 
-void Timeline::Interfaces(const function<LoopControl(Interface::Table&)>& cb) {
+void Timeline::Interfaces(const function<LoopControl(Interface)>& cb) {
   for (auto& track_arg : tracks) {
-    if (LoopControl::Break == cb(*track_arg)) return;
+    if (LoopControl::Break == cb(Interface(*this, *track_arg))) return;
   }
-  if (LoopControl::Break == cb(next_tbl)) return;
-  if (LoopControl::Break == cb(run_tbl)) return;
-  if (LoopControl::Break == cb(running_tbl)) return;
+  if (LoopControl::Break == cb(next.Bind())) return;
+  if (LoopControl::Break == cb(run.Bind())) return;
+  if (LoopControl::Break == cb(running.Bind())) return;
 }
 
 struct TrackBaseWidget : ObjectToy {
@@ -2590,21 +2590,18 @@ void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
   if (timeline->state != Timeline::kPlaying) {
     on = false;
   }
-  if (auto on_off = static_cast<OnOff::Table*>(target.object->AsOnOff())) {
+  if (auto on_off = target.object->As<OnOff>()) {
     if (on) {
-      OnOff(*target.object, *on_off).TurnOn();
+      on_off.TurnOn();
     } else {
-      OnOff(*target.object, *on_off).TurnOff();
+      on_off.TurnOff();
     }
-  } else if (auto runnable = static_cast<Runnable::Table*>(target.object->AsRunnable())) {
+  } else if (auto runnable = target.object->As<Runnable>()) {
     if (on) {
-      Runnable(*target.object, *runnable).ScheduleRun();
+      runnable.ScheduleRun();
     } else {
-      if (auto* lr_table = static_cast<LongRunning::Table*>(target.object->AsLongRunning())) {
-        LongRunning lr(*target.object, *lr_table);
-        if (lr.IsRunning()) {
-          lr.Cancel();
-        }
+      if (auto lr = target.object->As<LongRunning>(); lr.IsRunning()) {
+        lr.Cancel();
       }
     }
   } else {

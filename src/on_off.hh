@@ -23,6 +23,14 @@ struct OnOff : Syncable {
       can_sync = &DefaultCanSync;
       make_icon = &DefaultMakeIcon;
     }
+
+    template <typename ImplT>
+    constexpr void FillFrom() {
+      Syncable::Table::FillFrom<ImplT>();
+      is_on = [](OnOff self) { return static_cast<const ImplT&>(self).IsOn(); };
+      on_turn_on = [](OnOff self) { static_cast<ImplT&>(self).OnTurnOn(); };
+      on_turn_off = [](OnOff self) { static_cast<ImplT&>(self).OnTurnOff(); };
+    }
   };
 
   struct State : Syncable::State {};
@@ -58,47 +66,17 @@ struct OnOff : Syncable {
   //   using Parent = SomeObject;
   //   static constexpr StrView kName = "..."sv;
   //   static constexpr int Offset();  // offsetof(Parent, def_member)
-  //   static bool IsOn(const Parent&);
-  //   static void OnTurnOn(Parent&);
-  //   static void OnTurnOff(Parent&);
+  //   bool IsOn() const;
+  //   void OnTurnOn();
+  //   void OnTurnOff();
   template <typename ImplT>
   struct Def : State, DefBase {
     using Impl = ImplT;
     using Bound = OnOff;
 
-    template <typename T>
-    static bool InvokeIsOn(OnOff self) {
-      return static_cast<const T&>(self).IsOn();
-    }
-    template <typename T>
-    static void InvokeOnTurnOn(OnOff self) {
-      static_cast<T&>(self).OnTurnOn();
-    }
-    template <typename T>
-    static void InvokeOnTurnOff(OnOff self) {
-      static_cast<T&>(self).OnTurnOff();
-    }
-    template <typename T>
-    static void InvokeOnSync(Syncable self) {
-      static_cast<T&>(self).OnSync();
-    }
-    template <typename T>
-    static void InvokeOnUnsync(Syncable self) {
-      static_cast<T&>(self).OnUnsync();
-    }
-
     static constexpr Table MakeTable() {
       Table t(ImplT::kName);
-      t.state_off = ImplT::Offset();
-      t.is_on = &InvokeIsOn<ImplT>;
-      t.on_turn_on = &InvokeOnTurnOn<ImplT>;
-      t.on_turn_off = &InvokeOnTurnOff<ImplT>;
-      if constexpr (requires { ImplT::OnSync; })
-        t.on_sync = &InvokeOnSync<ImplT>;
-      if constexpr (requires { ImplT::OnUnsync; })
-        t.on_unsync = &InvokeOnUnsync<ImplT>;
-      if constexpr (requires { ImplT::kTint; })
-        t.tint = ImplT::kTint;
+      t.FillFrom<ImplT>();
       return t;
     }
 

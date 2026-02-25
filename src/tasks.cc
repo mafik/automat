@@ -173,7 +173,7 @@ void ScheduleArgumentTargets(Object& source, Interface::Table& arg) {
 void RunTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("RunTask");
   if (auto s = target.lock()) {
-    if (auto lr = s->As<LongRunning>(); lr.IsRunning()) {
+    if (auto lr = s->As<LongRunning>(); lr && lr.IsRunning()) {
       return;
     }
     auto* r = static_cast<Runnable::Table*>(runnable);

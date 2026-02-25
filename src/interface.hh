@@ -130,7 +130,9 @@ struct Interface {
   Interface(Object& obj, Table& table) : object_ptr(&obj), table_ptr(&table) {}
   Interface(Object* obj, Table* table) : object_ptr(obj), table_ptr(table) {}
 
-  explicit operator bool() const { return object_ptr != nullptr; }
+  bool has_object() const { return object_ptr != nullptr; }
+  bool has_table() const { return table_ptr != nullptr; }
+  explicit operator bool() const { return has_object(); }
 
   StrView Name() const { return table_ptr->name; }
 };

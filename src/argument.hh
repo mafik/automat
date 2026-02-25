@@ -66,40 +66,40 @@ struct Argument : Interface {
     void (*can_connect)(Argument, Interface end, Status&) = nullptr;
 
     // Establishes or breaks a connection. A null end means disconnect.
-    // If end.object_ptr is non-null, it's guaranteed to be alive during this call but not afterwards.
-    // Use WeakPtr/NestedWeakPtr to store the reference.
+    // If end.object_ptr is non-null, it's guaranteed to be alive during this call but not
+    // afterwards. Use WeakPtr/NestedWeakPtr to store the reference.
     void (*on_connect)(Argument, Interface end) = nullptr;
 
     // Looks up the destination of this Argument. This should match the last `on_connect`.
-    NestedPtr<Interface::Table> (*find)(Argument) =
-        [](Argument) { return NestedPtr<Interface::Table>(); };
+    NestedPtr<Interface::Table> (*find)(Argument) = [](Argument) {
+      return NestedPtr<Interface::Table>();
+    };
 
     // Prototype for automatically constructed value for this argument. It is used if this Argument
     // is used through one of the *OrMake functions.
     Ptr<Object> (*prototype)() = []() { return Ptr<Object>(nullptr); };
 
-    // Creates a small icon used as a symbol (or label) for this connection. Should be ~1x1cm.
-    std::unique_ptr<ui::Widget> (*make_icon)(Argument, ui::Widget* parent) = nullptr;
+    static std::unique_ptr<ui::Widget> DefaultMakeIcon(Argument, ui::Widget* parent);
 
-    constexpr Table(StrView name, Kind kind = Interface::kArgument) : Interface::Table(kind, name) {}
+    // Creates a small icon used as a symbol (or label) for this connection. Should be ~1x1cm.
+    std::unique_ptr<ui::Widget> (*make_icon)(Argument, ui::Widget* parent) = DefaultMakeIcon;
+
+    constexpr Table(StrView name, Kind kind = Interface::kArgument)
+        : Interface::Table(kind, name) {}
 
     template <typename ImplT>
     constexpr void FillFrom() {
       Interface::Table::FillFrom<ImplT>();
-      if constexpr (requires { ImplT::kStyle; })
-        style = ImplT::kStyle;
+      if constexpr (requires { ImplT::kStyle; }) style = ImplT::kStyle;
       if constexpr (requires { ImplT::kAutoconnectRadius; })
         autoconnect_radius = ImplT::kAutoconnectRadius;
-      if constexpr (requires { ImplT::kTint; })
-        tint = ImplT::kTint;
+      if constexpr (requires { ImplT::kTint; }) tint = ImplT::kTint;
       if constexpr (requires(ImplT& i, Interface e, Status& s) { i.OnCanConnect(e, s); })
         can_connect = [](Argument self, Interface end, Status& s) {
           static_cast<ImplT&>(self).OnCanConnect(end, s);
         };
       if constexpr (requires(ImplT& i, Interface e) { i.OnConnect(e); })
-        on_connect = [](Argument self, Interface end) {
-          static_cast<ImplT&>(self).OnConnect(end);
-        };
+        on_connect = [](Argument self, Interface end) { static_cast<ImplT&>(self).OnConnect(end); };
       if constexpr (requires(ImplT& i) {
                       { i.OnFind() } -> std::same_as<NestedPtr<Interface::Table>>;
                     })
@@ -164,9 +164,7 @@ struct Argument : Interface {
     object_ptr->WakeToys();
   }
 
-  void Disconnect() const {
-    Connect(Interface());
-  }
+  void Disconnect() const { Connect(Interface()); }
 
   NestedPtr<Interface::Table> Find() const { return table->find(*this); }
 
@@ -176,11 +174,6 @@ struct Argument : Interface {
 
   Object& ObjectOrMake() const;
 
-  // v2-style definition: stateless, static Table auto-generated from ImplT.
-  //
-  // ImplT must provide:
-  //   static constexpr StrView kName = "..."sv;
-  //   static constexpr int Offset();  // offsetof(Parent, def_member)
   // ImplT may optionally provide:
   //   static constexpr Style kStyle = ...;
   //   static constexpr float kAutoconnectRadius = ...;
@@ -214,9 +207,7 @@ struct ObjectArgument : Argument {
   };
 
   struct Table : Argument::Table {
-    static bool classof(const Interface::Table* i) {
-      return i->kind == Interface::kObjectArgument;
-    }
+    static bool classof(const Interface::Table* i) { return i->kind == Interface::kObjectArgument; }
 
     static void DefaultCanConnect(Argument, Interface end, Status& status) {
       if (end.table_ptr != nullptr || !dynamic_cast<T*>(end.object_ptr)) {
@@ -225,8 +216,8 @@ struct ObjectArgument : Argument {
     }
 
     static void DefaultOnConnect(Argument self, Interface end) {
-      auto* st = reinterpret_cast<State*>(
-          reinterpret_cast<char*>(self.object_ptr) + self.table_ptr->state_off);
+      auto* st = reinterpret_cast<State*>(reinterpret_cast<char*>(self.object_ptr) +
+                                          self.table_ptr->state_off);
       if (end) {
         if (auto* target = dynamic_cast<T*>(end.object_ptr)) {
           st->target = target->AcquireWeakPtr();
@@ -237,8 +228,8 @@ struct ObjectArgument : Argument {
     }
 
     static NestedPtr<Interface::Table> DefaultFind(Argument self) {
-      auto* st = reinterpret_cast<State*>(
-          reinterpret_cast<char*>(self.object_ptr) + self.table_ptr->state_off);
+      auto* st = reinterpret_cast<State*>(reinterpret_cast<char*>(self.object_ptr) +
+                                          self.table_ptr->state_off);
       return NestedPtr<Interface::Table>(st->target.Lock(), nullptr);
     }
 
@@ -293,8 +284,8 @@ struct InterfaceArgument : Argument {
     }
 
     static void DefaultOnConnect(Argument self, Interface end) {
-      auto* st = reinterpret_cast<State*>(
-          reinterpret_cast<char*>(self.object_ptr) + self.table_ptr->state_off);
+      auto* st = reinterpret_cast<State*>(reinterpret_cast<char*>(self.object_ptr) +
+                                          self.table_ptr->state_off);
       if (end) {
         if (auto* end_table = dyn_cast_if_present<typename T::Table>(end.table_ptr)) {
           st->target =
@@ -306,21 +297,17 @@ struct InterfaceArgument : Argument {
     }
 
     static NestedPtr<Interface::Table> DefaultFind(Argument self) {
-      auto* st = reinterpret_cast<State*>(
-          reinterpret_cast<char*>(self.object_ptr) + self.table_ptr->state_off);
+      auto* st = reinterpret_cast<State*>(reinterpret_cast<char*>(self.object_ptr) +
+                                          self.table_ptr->state_off);
       return st->target.Lock();
     }
-
-    // Only defined for <Runnable, kNextArg>. Defined in argument.cc.
-    static std::unique_ptr<ui::Widget> DefaultMakeIcon(Argument, ui::Widget* parent);
 
     constexpr Table(StrView name) : Argument::Table(name, kKind) {
       style = Style::Cable;
       can_connect = &DefaultCanConnect;
       on_connect = &DefaultOnConnect;
       find = &DefaultFind;
-      if constexpr (kKind == Interface::kNextArg)
-        make_icon = &DefaultMakeIcon;
+      if constexpr (kKind == Interface::kNextArg) make_icon = &DefaultMakeIcon;
     }
   };
 
@@ -342,6 +329,5 @@ struct InterfaceArgument : Argument {
     inline constinit static Table tbl = MakeTable();
   };
 };
-
 
 }  // namespace automat

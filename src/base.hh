@@ -141,7 +141,9 @@ struct LongRunning : OnOff {
     constexpr void FillFrom() {
       struct FullImpl : ImplT {
         bool IsOn() const { return this->IsRunning(); }
-        void OnTurnOn() { if (auto r = this->object_ptr->template As<Runnable>()) r.ScheduleRun(); }
+        void OnTurnOn() {
+          if (auto r = this->object_ptr->template As<Runnable>()) r.ScheduleRun();
+        }
         void OnTurnOff() { this->Cancel(); }
       };
       OnOff::Table::FillFrom<FullImpl>();
@@ -191,13 +193,6 @@ struct LongRunning : OnOff {
     }
   };
 };
-
-// NextArg: InterfaceArgument specialization for Runnable connections.
-// DefaultMakeIcon is specialized for this type in argument.cc.
-template <>
-std::unique_ptr<ui::Widget>
-InterfaceArgument<Runnable, Interface::kNextArg>::Table::DefaultMakeIcon(Argument,
-                                                                          ui::Widget* parent);
 
 using NextArg = InterfaceArgument<Runnable, Interface::kNextArg>;
 

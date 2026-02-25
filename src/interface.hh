@@ -16,16 +16,20 @@ struct Object;
 
 // Interface is the base class for parts of Objects that can be exposed to other Objects.
 //
-// # Architecture (v2)
-//
-// Interface::Table holds the static data (Kind, name, state_off, function pointers).
+// Interface::Table holds the static data (type, name, state offset, function pointers).
 // It is the base class for all interface subtypes (Argument, Syncable, OnOff, etc.).
 // With the static inline pattern, each Table is a class-level static — zero per-instance overhead.
+//
+// Interfaces are identified by the address of their Table but they also provide a tree-shaped
+// hierarchy of types through the `kind` field.
 //
 // Interface itself is a lightweight bound type (Object* + Table*) used for typed access
 // to an object's interface. It is constructed on-the-fly when needed.
 //
-// # Notable subclasses of Table
+// Long-term storage of interface pointers relies on NestedPtr<Interface::Table> &
+// NestedWeakPtr<Interface::Table>. This allows concurrent lifetime management.
+//
+// # Notable interfaces
 //
 // - Argument (argument.hh/cc) - allows objects to link to (interfaces of) other objects
 // - ImageProvider (image_provider.hh) - allows objects to provide image data
@@ -38,16 +42,13 @@ struct Object;
 // Objects expose their interfaces using Object::Interfaces function. Automat infrastructure uses
 // this to automatically populate menus, help with (de)serialization of state, visualize connections
 // between interfaces etc.
-//
-// Interfaces are identified by their memory addresses. With the static inline pattern, each
-// Interface is a class-level static — zero per-instance overhead.
 struct Interface {
   enum Kind {
     // Argument and its subclasses (range: kArgument..kLastArgument)
     kArgument,
     kObjectArgument,
     kInterfaceArgument,
-    kNextArg,                             // sub-kind of InterfaceArgument
+    kNextArg,  // sub-kind of InterfaceArgument
     kLastInterfaceArgument = kNextArg,
     kSyncable,     // also an Argument (via Syncable)
     kOnOff,        // also a Syncable
@@ -183,11 +184,13 @@ void VisitInterfaces(const std::function<LoopControl(Interface)>& cb, Ts&... mem
 }  // namespace automat::detail
 
 // INTERFACES macro: generates the Interfaces() override from a list of member names.
-#define INTERFACES(...)                                                                     \
-  void Interfaces(const std::function<LoopControl(::automat::Interface)>& cb) override {  \
-    ::automat::detail::VisitInterfaces(cb, __VA_ARGS__);                                   \
+#define INTERFACES(...)                                                                  \
+  void Interfaces(const std::function<LoopControl(::automat::Interface)>& cb) override { \
+    ::automat::detail::VisitInterfaces(cb, __VA_ARGS__);                                 \
   }
 
+// Helper for implementing Interfaces within objects. See `Interfaces.md`.
+//
 // DEF_INTERFACE(ParentType, InterfaceType, member_name, "Display Name")
 //   ReturnType MethodName(...) { ... }
 // DEF_END(member_name);
@@ -233,20 +236,18 @@ void VisitInterfaces(const std::function<LoopControl(Interface)>& cb, Ts&... mem
 // To::Table::classof accepts it, which is true exactly for automat bound types.
 namespace llvm {
 template <typename To, typename From>
-struct CastInfo<To, From,
-                std::enable_if_t<requires(const std::remove_cvref_t<From>& f) {
-                  To::Table::classof(f.table_ptr);
-                }>> {
-  static bool isPossible(const From& f) {
-    return f.table_ptr != nullptr && To::Table::classof(f.table_ptr);
-  }
-  static To doCast(From f) {
-    return To(f.object_ptr, static_cast<typename To::Table*>(f.table_ptr));
-  }
-  static To castFailed() { return To{}; }
-  static To doCastIfPossible(From f) {
-    if (!isPossible(f)) return castFailed();
-    return doCast(f);
-  }
-};
+    struct CastInfo < To,
+    From, std::enable_if_t < requires(const std::remove_cvref_t<From>& f) {
+  To::Table::classof(f.table_ptr);
+} >>{static bool isPossible(const From& f){return f.table_ptr != nullptr &&
+                                                  To::Table::classof(f.table_ptr);
+}  // namespace llvm
+static To doCast(From f) { return To(f.object_ptr, static_cast<typename To::Table*>(f.table_ptr)); }
+static To castFailed() { return To{}; }
+static To doCastIfPossible(From f) {
+  if (!isPossible(f)) return castFailed();
+  return doCast(f);
+}
+}
+;
 }  // namespace llvm

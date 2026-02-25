@@ -5,12 +5,9 @@
 #include <cmath>
 
 #include "base.hh"
-#include "casting.hh"
 #include "drag_action.hh"
-#include "log.hh"
 #include "root_widget.hh"
 #include "svg.hh"
-#include "sync.hh"
 #include "ui_connection_widget.hh"
 #include "ui_shape_widget.hh"
 #include "widget.hh"
@@ -51,14 +48,8 @@ std::unique_ptr<Argument::Toy> Argument::MakeToy(ui::Widget* parent) {
   return std::make_unique<ui::ConnectionWidget>(parent, *object_ptr, *table);
 }
 
-// --- InterfaceArgument<Runnable, kNextArg> explicit specialization ---
-
-template <>
-std::unique_ptr<ui::Widget>
-InterfaceArgument<Runnable, Interface::kNextArg>::Table::DefaultMakeIcon(Argument,
-                                                                          ui::Widget* parent) {
+std::unique_ptr<ui::Widget> Argument::Table::DefaultMakeIcon(Argument, ui::Widget* parent) {
   return ui::MakeShapeWidget(parent, kNextShape, "#ffffff"_color);
 }
-
 
 }  // namespace automat

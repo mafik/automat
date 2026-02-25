@@ -21,6 +21,10 @@
 - **PipeWire build errors**: If PipeWire fails with "missing libcap.so" after system package updates, delete the stale PipeWire build directory (e.g. `rm -rf build/release/PipeWire`) and rebuild
 - **Avoid running automat directly**: The `python run.py automat` command runs automat indefinitely and must be manually stopped
 
+### Debugging
+
+When prompted with "gdb debug" run `build/debug/automat` under GDB (`gdb -q -ex "run" -ex "bt full" -ex "quit" build/debug/automat 2>&1`). The user will trigger a crash. Then you should figure out where the crash is coming from and how to fix it. Don't fix it yourself though - just investigate the root cause and recommend some options.
+
 ## Architecture Overview
 
 Automat is a C++ application for semi-autonomous automation with a layered architecture:

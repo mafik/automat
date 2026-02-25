@@ -541,8 +541,8 @@ struct [[clang::trivial_abi]] NestedPtr {
   }
 
   template <typename U>
-  [[nodiscard]] NestedPtr<U> DynamicCast(this auto&& self) {
-    return NestedPtr<U>(Ptr<ReferenceCounted>(self.ptr), dynamic_cast<U*>(self.obj));
+  [[nodiscard]] NestedPtr<U> Cast(this auto&& self) {
+    return NestedPtr<U>(std::move(self.ptr), static_cast<U*>(self.obj));
   }
 
  private:
@@ -609,6 +609,11 @@ struct [[clang::trivial_abi]] NestedWeakPtr {
   template <typename U>
   Ptr<U> OwnerLockAs() const {
     return weak_ptr.LockAs<U>();
+  }
+
+  template <typename U>
+  [[nodiscard]] NestedWeakPtr<U> Cast(this auto&& self) {
+    return NestedWeakPtr<U>(std::move(self.weak_ptr), static_cast<U*>(self.obj));
   }
 
  private:

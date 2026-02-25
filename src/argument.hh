@@ -309,6 +309,10 @@ struct InterfaceArgument : Argument {
     }
   };
 
+  NestedPtr<typename T::Table> FindInterface() const {
+    return Find().template Cast<typename T::Table>();
+  }
+
   template <typename ImplT>
   struct Def : State, Interface::DefBase {
     using Impl = ImplT;

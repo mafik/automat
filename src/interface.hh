@@ -8,6 +8,7 @@
 
 #include "casting.hh"
 #include "control_flow.hh"
+#include "ptr.hh"
 #include "str.hh"
 
 namespace automat {
@@ -130,9 +131,12 @@ struct Interface {
   Interface(Object& obj, Table& table) : object_ptr(&obj), table_ptr(&table) {}
   Interface(Object* obj, Table* table) : object_ptr(obj), table_ptr(table) {}
 
+  operator NestedPtr<Table>();
+  operator NestedWeakPtr<Table>();
+
   bool has_object() const { return object_ptr != nullptr; }
   bool has_table() const { return table_ptr != nullptr; }
-  explicit operator bool() const { return has_object(); }
+  explicit operator bool() const { return has_object() && has_table(); }
 
   StrView Name() const { return table_ptr->name; }
 };
@@ -161,8 +165,12 @@ struct Interface {
     Table& operator*() const { return *operator->(); }                                             \
     operator Table*() const { return operator->(); }                                               \
   } table NO_UNIQUE_ADDRESS;                                                                       \
-  operator NestedPtr<Table>() { return {object_ptr->AcquirePtr(), table}; }                        \
-  operator NestedWeakPtr<Table>() { return {object_ptr->AcquireWeakPtr(), table}; }                \
+  operator NestedPtr<Table>() {                                                                    \
+    return Interface::operator NestedPtr<Interface::Table>().template Cast<Table>();               \
+  }                                                                                                \
+  operator NestedWeakPtr<Table>() {                                                                \
+    return Interface::operator NestedWeakPtr<Interface::Table>().template Cast<Table>();           \
+  }                                                                                                \
   struct StateRef {                                                                                \
     State* operator->() const {                                                                    \
       auto* p =                                                                                    \

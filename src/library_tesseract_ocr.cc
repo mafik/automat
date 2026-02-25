@@ -349,12 +349,11 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
       iris_target.reset();
       {  // Update `source_image`
         sk_sp<SkImage> new_image = nullptr;
-        auto image_obj = Argument(*tesseract, image_arg).ObjectOrNull();
-        if (image_obj) {
-          if (auto ip = image_obj->As<ImageProvider>()) {
-            new_image = ip.GetImage();
-            iris_target = image_obj->MyLocation()->position;
-          }
+        auto ip_ptr = tesseract->image->FindInterface();
+        ImageProvider ip(ip_ptr.Owner<Object>(), ip_ptr.Get());
+        if (ip) {
+          new_image = ip.GetImage();
+          iris_target = ip.object_ptr->MyLocation()->position;
         }
 
         if (status_progress_ratio.has_value()) {
@@ -1044,20 +1043,15 @@ std::unique_ptr<ObjectToy> TesseractOCR::MakeToy(ui::Widget* parent) {
 
 void TesseractOCR::Run() {
   ZoneScopedN("TesseractOCR");
-  auto image_obj = image->ObjectOrNull();
+  auto image_ptr = image->FindInterface();
   auto text_obj = text->ObjectOrNull();
 
-  if (!image_obj) {
+  if (!image_ptr) {
     ReportError("No image source connected");
     return;
   }
 
-  auto ip = image_obj->As<ImageProvider>();
-  if (!ip) {
-    ReportError("Connected object doesn't provide images");
-    return;
-  }
-
+  ImageProvider ip(image_ptr.Owner<Object>(), image_ptr.Get());
   auto image = ip.GetImage();
   if (!image) {
     ReportError("No image available from source");

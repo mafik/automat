@@ -53,14 +53,8 @@ void Syncable::Table::DefaultCanConnect(Argument self, Interface end, Status& st
 }
 
 void Syncable::Table::DefaultOnConnect(Argument self, Interface end) {
-  auto& syncable = static_cast<Syncable::Table&>(*self.table);
-  auto& st = *Syncable(*self.object_ptr, syncable).state;
-
-  if (end) {
-    st.end = NestedWeakPtr<Interface::Table>(end.object_ptr->AcquireWeakPtr(), end.table_ptr);
-  } else {
-    st.end = {};
-  }
+  auto syncable = cast<Syncable>(self);
+  syncable.state->end = end;
 
   if (!end) return;
 
@@ -68,18 +62,18 @@ void Syncable::Table::DefaultOnConnect(Argument self, Interface end) {
   if (target_syncable) {
     auto sync_block = FindGearOrNull(*end.object_ptr, *target_syncable);
     if (sync_block == nullptr) {
-      sync_block = FindGearOrMake(*self.object_ptr, syncable);
+      sync_block = FindGearOrMake(*self.object_ptr, *syncable.table);
       auto& loc = root_board->Insert(sync_block);
       loc.position = (end.object_ptr->here->position + self.object_ptr->here->position) / 2;
       loc.ForEachToy([](ui::RootWidget&, LocationWidget& toy) { toy.position_vel = Vec2(0, 1); });
     }
-    sync_block->FullSync(*self.object_ptr, syncable);
+    sync_block->FullSync(*self.object_ptr, *syncable.table);
     sync_block->FullSync(*end.object_ptr, *target_syncable);
     return;
   }
   auto* gear = dynamic_cast<Gear*>(end.object_ptr);
   if (gear) {
-    gear->FullSync(*self.object_ptr, syncable);
+    gear->FullSync(*self.object_ptr, *syncable.table);
   }
 }
 

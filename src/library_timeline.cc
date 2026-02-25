@@ -302,11 +302,7 @@ TrackArgument::TrackArgument(StrView name) : Argument::Table(name) {
   can_connect = [](Argument, Interface, Status&) {};
   on_connect = [](Argument self, Interface end) {
     auto& track = static_cast<TrackArgument&>(*self.table);
-    if (end) {
-      track.end = NestedWeakPtr<Interface::Table>(end.object_ptr->AcquireWeakPtr(), end.table_ptr);
-    } else {
-      track.end = {};
-    }
+    track.end = end;
   };
   find = [](Argument self) -> NestedPtr<Interface::Table> {
     auto& track = static_cast<const TrackArgument&>(*self.table);
@@ -2596,14 +2592,10 @@ void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
     } else {
       on_off.TurnOff();
     }
-  } else if (auto runnable = target.object->As<Runnable>()) {
-    if (on) {
-      runnable.ScheduleRun();
-    } else {
-      if (auto lr = target.object->As<LongRunning>(); lr.IsRunning()) {
-        lr.Cancel();
-      }
-    }
+  } else if (auto lr = target.object->As<LongRunning>(); lr && lr.IsRunning() && !on) {
+    lr.Cancel();
+  } else if (auto runnable = target.object->As<Runnable>(); runnable && on) {
+    runnable.ScheduleRun();
   } else {
     ERROR << "Target is not runnable!";
   }

@@ -25,9 +25,7 @@ struct ImageProvider : Interface {
 
   INTERFACE_BOUND(ImageProvider, Interface)
 
-  sk_sp<SkImage> GetImage() const {
-    return table->get_image ? table->get_image(*this) : nullptr;
-  }
+  sk_sp<SkImage> GetImage() const { return table->get_image ? table->get_image(*this) : nullptr; }
 
   // ImplT must provide:
   //   using Parent = SomeObject;

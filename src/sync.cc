@@ -288,7 +288,7 @@ struct GearWidget : ObjectToy {
 
 SyncConnectionWidget::SyncConnectionWidget(Widget* parent, Object& object,
                                            Syncable::Table& syncable)
-    : Toy(parent, object, &syncable) {}
+    : ArgumentToy(parent, object, &syncable) {}
 
 SkPath SyncConnectionWidget::Shape() const { return SkPath(); }
 

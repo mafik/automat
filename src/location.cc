@@ -141,9 +141,7 @@ void Location::FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_
 ///////////////////////////////////////////////////////////////////////////////
 
 LocationWidget::LocationWidget(ui::Widget* parent, Location& loc)
-    : Toy(parent, loc, nullptr),
-      elevation(0),
-      location_weak(loc.AcquireWeakPtr()) {
+    : Toy(parent, loc, nullptr), elevation(0), location_weak(loc.AcquireWeakPtr()) {
   loc.widget = this;
   local_to_parent = SkM44(root_widget->CanvasToWindow());
   if (auto* obj_toy = ToyStore().FindOrNull(*loc.object)) {
@@ -433,13 +431,13 @@ void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const
   // Outgoing: iterate this object's args and look up each in ToyStore
   object->Each<Argument>([&](Argument arg) {
     auto* w = ui::root_widget->toys.FindOrNull(arg);
-    if (w) {
+    if (auto* cw = dynamic_cast<ConnectionWidget*>(w)) {
       if (moved && !value_changed) {
-        w->FromMoved();
+        cw->FromMoved();
       } else {
-        w->WakeAnimation();
-        if (w->state) {
-          w->state->stabilized = false;
+        cw->WakeAnimation();
+        if (cw->state) {
+          cw->state->stabilized = false;
         }
       }
     }
@@ -460,8 +458,9 @@ void LocationWidget::UpdateAutoconnectArgs() {
   if (!loc || loc->object == nullptr) {
     return;
   }
+  auto& toys = ToyStore();
   auto& toy = ToyForObject();
-  auto* parent_mw = ToyStore().FindOrNull(*root_board);
+  auto* parent_mw = toys.FindOrNull(*root_board);
   if (!parent_mw) return;
   loc->object->Each<Argument>([&](Argument arg) {
     float autoconnect_radius = arg.table->autoconnect_radius;
@@ -495,19 +494,20 @@ void LocationWidget::UpdateAutoconnectArgs() {
     float new_dist2 = autoconnect_radius * autoconnect_radius;
     ObjectToy* new_toy = nullptr;
     std::optional<Interface::Table*> new_iface;
-    parent_mw->NearbyCandidates(*loc, *arg.table, autoconnect_radius,
-                                [&](ObjectToy& toy, Interface::Table* iface, Vec<Vec2AndDir>& to_points) {
-                                  auto other_up = TransformBetween(toy, *parent_mw);
-                                  for (auto& to : to_points) {
-                                    Vec2 to_pos = other_up.mapPoint(to.pos);
-                                    float dist2 = LengthSquared(start.pos - to_pos);
-                                    if (dist2 <= new_dist2) {
-                                      new_dist2 = dist2;
-                                      new_toy = &toy;
-                                      new_iface = iface;
-                                    }
-                                  }
-                                });
+    parent_mw->NearbyCandidates(
+        *loc, *arg.table, autoconnect_radius,
+        [&](ObjectToy& toy, Interface::Table* iface, Vec<Vec2AndDir>& to_points) {
+          auto other_up = TransformBetween(toy, *parent_mw);
+          for (auto& to : to_points) {
+            Vec2 to_pos = other_up.mapPoint(to.pos);
+            float dist2 = LengthSquared(start.pos - to_pos);
+            if (dist2 <= new_dist2) {
+              new_dist2 = dist2;
+              new_toy = &toy;
+              new_iface = iface;
+            }
+          }
+        });
 
     if (new_iface == old_iface) {
       return LoopControl::Continue;
@@ -547,9 +547,8 @@ void LocationWidget::UpdateAutoconnectArgs() {
       }
       Interface::Table* this_iface = *this_iface_opt;
 
-      // Wake the animation loop of the ConnectionWidget
-      if (auto connection_widget = ConnectionWidget::FindOrNull(*arg.object_ptr, *arg.table)) {
-        connection_widget->WakeAnimation();
+      if (auto arg_widget = toys.FindOrNull(arg)) {
+        arg_widget->WakeAnimation();
       }
 
       auto start = other_widget.ArgStart(*arg.table);

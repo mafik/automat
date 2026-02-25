@@ -175,7 +175,7 @@ Ptr<Gear> FindGearOrMake(Object& source_obj, Syncable::Table& source);
 Ptr<Gear> FindGearOrNull(Object& source_obj, Syncable::Table& source);
 
 // Widget that draws one belt connection from a Gear to a synced member.
-struct SyncConnectionWidget : Toy {
+struct SyncConnectionWidget : ArgumentToy {
   Rect bounds;
   SkPath end_shape;
   Vec2 end{};

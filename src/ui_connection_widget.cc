@@ -61,7 +61,7 @@ Location* ConnectionWidget::EndLocation() const {
 }
 
 ConnectionWidget::ConnectionWidget(Widget* parent, Object& start, Argument::Table& arg)
-    : Toy(parent, start, &arg), start_weak(start.AcquireWeakPtr(), &arg) {}
+    : ArgumentToy(parent, start, &arg), start_weak(start.AcquireWeakPtr(), &arg) {}
 
 SkPath ConnectionWidget::Shape() const {
   if (state && transparency < 0.99f) {
@@ -600,11 +600,6 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() {
     anchors.push_back(*end_pos);
   }
   return anchors;
-}
-
-ConnectionWidget* ConnectionWidget::FindOrNull(Object& obj, Argument::Table& arg) {
-  auto bound = Argument(obj, arg);
-  return root_widget->toys.FindOrNull(bound);
 }
 
 }  // namespace automat::ui

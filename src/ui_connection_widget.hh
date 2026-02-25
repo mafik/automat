@@ -38,7 +38,7 @@ struct DragConnectionAction : Action {
 // - Analytically-routed Cable: a cable that always follows the nicest path
 //
 // TODO: separate the state of these three modes better
-struct ConnectionWidget : Toy {
+struct ConnectionWidget : ArgumentToy {
   NestedWeakPtr<Argument::Table> start_weak;
 
   struct AnimationState {
@@ -48,11 +48,6 @@ struct ConnectionWidget : Toy {
     float prototype_alpha_target = 0;
     double time_seconds = 0;
   };
-
-  static ConnectionWidget* FindOrNull(Object&, Argument::Table&);
-  static ConnectionWidget* FindOrNull(const NestedWeakPtr<Argument::Table>& ptr) {
-    return FindOrNull(*ptr.OwnerUnsafe<Object>(), *ptr.GetUnsafe());
-  }
 
   mutable AnimationState animation_state;
 
@@ -109,7 +104,8 @@ struct ConnectionWidgetRange {
     MapType::iterator it;
     MapType::iterator end_it;
 
-    iterator(const Object* obj, const Interface::Table* arg, MapType::iterator it, MapType::iterator end_it)
+    iterator(const Object* obj, const Interface::Table* arg, MapType::iterator it,
+             MapType::iterator end_it)
         : obj(obj), arg(arg), it(it), end_it(end_it) {
       Advance();
     }

@@ -6,6 +6,7 @@
 
 #include <concepts>
 #include <functional>
+#include <type_traits>
 
 #include "part.hh"
 #include "ptr.hh"
@@ -44,8 +45,8 @@ struct Toy : ui::Widget {
 template <typename T>
 concept ToyMaker = requires(T t) {
   requires Part<T>;
-  typename T::Toy;
-  requires std::derived_from<typename T::Toy, Toy>;
+  typename std::remove_reference_t<T>::Toy;
+  requires std::derived_from<typename std::remove_reference_t<T>::Toy, Toy>;
   {
     t.MakeToy(std::declval<ui::Widget*>() /*parent*/)
   } -> std::convertible_to<std::unique_ptr<Toy>>;
@@ -59,9 +60,9 @@ struct ToyMakerMixin {
   // DEPRECATED: This is not thread-safe. Update this Object's local state & call WakeToys instead.
   template <ToyMaker Self>
   void ForEachToy(this Self& self, std::function<void(ui::RootWidget&, typename Self::Toy&)> cb) {
-    ForEachToyImpl(self.GetOwner(), self.GetInterface(), [&](ui::RootWidget& root, automat::Toy& toy) {
-      cb(root, static_cast<Self::Toy&>(toy));
-    });
+    ForEachToyImpl(
+        self.GetOwner(), self.GetInterface(),
+        [&](ui::RootWidget& root, automat::Toy& toy) { cb(root, static_cast<Self::Toy&>(toy)); });
   }
 };
 
@@ -79,12 +80,12 @@ struct ToyStore {
   }
 
   template <ToyMaker T>
-  T::Toy* FindOrNull(T& maker) const {
+  std::remove_reference_t<T>::Toy* FindOrNull(T&& maker) const {
     auto it = container.find(MakeKey(maker));
     if (it == container.end()) {
       return nullptr;
     }
-    return static_cast<T::Toy*>(it->second.get());
+    return static_cast<std::remove_reference_t<T>::Toy*>(it->second.get());
   }
 
   // Scan all toys for owners whose generation has changed. Wake those toys.

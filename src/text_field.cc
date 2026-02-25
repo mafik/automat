@@ -138,7 +138,9 @@ struct TextSelectAction : Action {
   TextSelectAction(Pointer& pointer, TextFieldBase& text_field)
       : Action(pointer), text_field(text_field) {
     if (text_field.argument) {
-      if (auto* connection_widget = ConnectionWidget::FindOrNull(text_field.argument)) {
+      Argument arg(text_field.argument.OwnerUnsafe<Object>(), text_field.argument.GetUnsafe());
+      if (auto* connection_widget =
+              dynamic_cast<ConnectionWidget*>(pointer.root_widget.toys.FindOrNull(arg))) {
         drag.emplace(pointer, *connection_widget);
       }
     }

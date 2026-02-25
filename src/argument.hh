@@ -21,6 +21,10 @@ enum class CableTexture {
   Braided,
 };
 
+struct ArgumentToy : Toy {
+  using Toy::Toy;
+};
+
 // Arguments are responsible for finding dependencies (input & output) of objects.
 // - they know about the requirements of the target object (CanConnect)
 // - they may automatically create target objects using some prototype (Prototype)
@@ -113,10 +117,10 @@ struct Argument : Interface {
     }
   };
 
-  // Note: the `Toy` alias is inherited by Syncable, OnOff, Runnable, LongRunning and leaks
+  // Note: the `Toy` alias is inherited by derived interface types and leaks
   // into their nested Table scopes. Code inside Table methods should use `automat::Toy` if
   // they need the base Toy type.
-  using Toy = ui::ConnectionWidget;
+  using Toy = ArgumentToy;
   using Style = Table::Style;
 
   struct State {};
@@ -257,6 +261,8 @@ struct ObjectArgument : Argument {
 
     inline constinit static Table tbl = MakeTable();
   };
+
+  using Toy = ui::ConnectionWidget;
 };
 
 // InterfaceArgument<T, kKind> — connects to a specific interface of type T.

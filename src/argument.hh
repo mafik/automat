@@ -210,31 +210,29 @@ struct ObjectArgument : Argument {
     WeakPtr<T> target;
   };
 
+  INTERFACE_BOUND(ObjectArgument, Argument)
+
   struct Table : Argument::Table {
     static bool classof(const Interface::Table* i) { return i->kind == Interface::kObjectArgument; }
 
     static void DefaultCanConnect(Argument, Interface end, Status& status) {
-      if (end.table_ptr != nullptr || !dynamic_cast<T*>(end.object_ptr)) {
+      if (end.has_table() || !dynamic_cast<T*>(end.object_ptr)) {
         AppendErrorMessage(status) += "Wrong connection type";
       }
     }
 
     static void DefaultOnConnect(Argument self, Interface end) {
-      auto* st = reinterpret_cast<State*>(reinterpret_cast<char*>(self.object_ptr) +
-                                          self.table_ptr->state_off);
-      if (end) {
-        if (auto* target = dynamic_cast<T*>(end.object_ptr)) {
-          st->target = target->AcquireWeakPtr();
-        }
+      State& st = *cast<ObjectArgument>(self).state;
+      if (auto* target = dynamic_cast<T*>(end.object_ptr)) {
+        st.target = target->AcquireWeakPtr();
       } else {
-        st->target = {};
+        st.target = {};
       }
     }
 
     static NestedPtr<Interface::Table> DefaultFind(Argument self) {
-      auto* st = reinterpret_cast<State*>(reinterpret_cast<char*>(self.object_ptr) +
-                                          self.table_ptr->state_off);
-      return NestedPtr<Interface::Table>(st->target.Lock(), nullptr);
+      State& st = *cast<ObjectArgument>(self).state;
+      return NestedPtr<Interface::Table>(st.target.Lock(), nullptr);
     }
 
     constexpr Table(StrView name) : Argument::Table(name, Interface::kObjectArgument) {
@@ -243,10 +241,6 @@ struct ObjectArgument : Argument {
       find = &DefaultFind;
     }
   };
-
-  ObjectArgument() = default;
-  ObjectArgument(Object& obj, Table& t) : Argument(obj, t) {}
-  ObjectArgument(Object* obj, Table* t) : Argument(obj, t) {}
 
   template <typename ImplT>
   struct Def : State, Interface::DefBase {
@@ -262,6 +256,13 @@ struct ObjectArgument : Argument {
     inline constinit static Table tbl = MakeTable();
   };
 
+  Ptr<T> FindObject() const {
+    auto nested_ptr = table->find(*this);
+    return nested_ptr.template Owner<T>()->AcquirePtr();
+  }
+
+  WeakPtr<T> FindObjectWeak() const { return state->target; }
+
   using Toy = ui::ConnectionWidget;
 };
 
@@ -273,6 +274,8 @@ struct InterfaceArgument : Argument {
   struct State : Argument::State {
     NestedWeakPtr<typename T::Table> target;
   };
+
+  INTERFACE_BOUND(InterfaceArgument, Argument)
 
   struct Table : Argument::Table {
     static bool classof(const Interface::Table* i) {
@@ -290,22 +293,11 @@ struct InterfaceArgument : Argument {
     }
 
     static void DefaultOnConnect(Argument self, Interface end) {
-      auto* st = reinterpret_cast<State*>(reinterpret_cast<char*>(self.object_ptr) +
-                                          self.table_ptr->state_off);
-      if (end) {
-        if (auto* end_table = dyn_cast_if_present<typename T::Table>(end.table_ptr)) {
-          st->target =
-              NestedWeakPtr<typename T::Table>(end.object_ptr->AcquireWeakPtr(), end_table);
-        }
-      } else {
-        st->target = {};
-      }
+      cast<InterfaceArgument>(self).state->target = dyn_cast_if_present<T>(end);
     }
 
     static NestedPtr<Interface::Table> DefaultFind(Argument self) {
-      auto* st = reinterpret_cast<State*>(reinterpret_cast<char*>(self.object_ptr) +
-                                          self.table_ptr->state_off);
-      return st->target.Lock();
+      return cast<InterfaceArgument>(self).state->target.Lock();
     }
 
     constexpr Table(StrView name) : Argument::Table(name, kKind) {
@@ -316,10 +308,6 @@ struct InterfaceArgument : Argument {
       if constexpr (kKind == Interface::kNextArg) make_icon = &DefaultMakeIcon;
     }
   };
-
-  InterfaceArgument() = default;
-  InterfaceArgument(Object& obj, Table& t) : Argument(obj, t) {}
-  InterfaceArgument(Object* obj, Table* t) : Argument(obj, t) {}
 
   template <typename ImplT>
   struct Def : State, Interface::DefBase {

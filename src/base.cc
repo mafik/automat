@@ -42,12 +42,8 @@ std::unique_ptr<Option> RunOption::Clone() const {
 }
 std::unique_ptr<Action> RunOption::Activate(ui::Pointer& pointer) const {
   if (auto object = weak.lock()) {
-    if (auto lr = object->As<LongRunning>()) {
-      if (lr.IsRunning()) {
-        lr.Cancel();
-      } else {
-        Runnable(*object, *runnable).ScheduleRun();
-      }
+    if (auto lr = object->As<LongRunning>(); lr && lr.IsRunning()) {
+      lr.Cancel();
     } else {
       Runnable(*object, *runnable).ScheduleRun();
     }

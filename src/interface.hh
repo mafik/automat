@@ -161,6 +161,8 @@ struct Interface {
     Table& operator*() const { return *operator->(); }                                             \
     operator Table*() const { return operator->(); }                                               \
   } table NO_UNIQUE_ADDRESS;                                                                       \
+  operator NestedPtr<Table>() { return {object_ptr->AcquirePtr(), table}; }                        \
+  operator NestedWeakPtr<Table>() { return {object_ptr->AcquireWeakPtr(), table}; }                \
   struct StateRef {                                                                                \
     State* operator->() const {                                                                    \
       auto* p =                                                                                    \

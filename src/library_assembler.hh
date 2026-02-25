@@ -74,16 +74,12 @@ struct AssemblerWidget : ObjectToy, ui::DropTarget {
 
 struct Register : Object {
   using Toy = RegisterWidget;
-  WeakPtr<Assembler> assembler_weak;
   int register_index;
 
-  DEF_INTERFACE(Register, Argument, assembler_arg, "Reg's Assembler")
+  DEF_INTERFACE(Register, ObjectArgument<Assembler>, assembler_arg, "Reg's Assembler")
   static constexpr auto kStyle = Argument::Style::Spotlight;
   static constexpr float kAutoconnectRadius = INFINITY;
   static constexpr SkColor kTint = "#ff0000"_color;
-  void OnCanConnect(Interface end, Status& status);
-  void OnConnect(Interface end);
-  NestedPtr<Interface::Table> OnFind();
   DEF_END(assembler_arg);
 
   Register(WeakPtr<Assembler> assembler_weak, int register_index);

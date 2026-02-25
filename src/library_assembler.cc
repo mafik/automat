@@ -635,7 +635,7 @@ animation::Phase RegisterWidget::Tick(time::Timer& timer) {
   animation::Phase phase = animation::Finished;
   if (auto register_obj = LockRegister()) {
     auto register_index = register_obj->register_index;
-    if (auto assembler = register_obj->assembler_weak.lock()) {
+    if (auto assembler = register_obj->assembler_arg->FindObject()) {
       phase = RefreshState(*assembler, timer.now);
       auto reg_value = assembler->state.regs[register_index];
     }
@@ -648,7 +648,7 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
   uint64_t reg_value = 0;
   if (auto register_obj = LockRegister()) {
     register_index = register_obj->register_index;
-    if (auto assembler = register_obj->assembler_weak.lock()) {
+    if (auto assembler = register_obj->assembler_arg->FindObject()) {
       reg_value = assembler->state.regs[register_index];
     }
   }
@@ -717,38 +717,22 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
 void RegisterWidget::VisitOptions(const OptionsVisitor& visitor) const {
   ObjectToy::VisitOptions(visitor);
   auto register_obj = LockRegister();
-  RegisterMenuOption register_menu_option = {register_obj->assembler_weak,
+  RegisterMenuOption register_menu_option = {register_obj->assembler_arg->FindObjectWeak(),
                                              register_obj->register_index};
   register_menu_option.VisitOptions(visitor);
 }
 
 Register::Register(WeakPtr<Assembler> assembler_weak, int register_index)
-    : assembler_weak(assembler_weak), register_index(register_index) {}
-
-Ptr<Object> Register::Clone() const { return MAKE_PTR(Register, assembler_weak, register_index); }
-
-void Register::assembler_arg_Impl::OnCanConnect(Interface end, Status& status) {
-  if (end.table_ptr != nullptr || !dynamic_cast<Assembler*>(end.object_ptr)) {
-    AppendErrorMessage(status) += "Must connect to an Assembler";
-  }
+    : register_index(register_index) {
+  assembler_arg->Connect(Interface{assembler_weak.GetUnsafe(), nullptr});
 }
 
-void Register::assembler_arg_Impl::OnConnect(Interface end) {
-  if (end) {
-    if (auto* assembler = dynamic_cast<Assembler*>(end.object_ptr)) {
-      obj->assembler_weak = assembler->AcquireWeakPtr();
-    }
-  } else {
-    obj->assembler_weak = {};
-  }
-}
-
-NestedPtr<Interface::Table> Register::assembler_arg_Impl::OnFind() {
-  return NestedPtr<Interface::Table>(obj->assembler_weak.Lock(), nullptr);
+Ptr<Object> Register::Clone() const {
+  return MAKE_PTR(Register, assembler_arg->FindObjectWeak(), register_index);
 }
 
 void Register::SetText(std::string_view text) {
-  auto assembler = assembler_weak.Lock();
+  auto assembler = assembler_arg->FindObject();
   if (assembler == nullptr) {
     ReportError("Register is not connected to an assembler");
     return;

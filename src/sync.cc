@@ -27,9 +27,9 @@ namespace automat {
 // --- Syncable::Table DefaultX functions ---
 
 void Syncable::Table::DefaultCanConnect(Argument self, Interface end, Status& status) {
-  auto& syncable = static_cast<Syncable::Table&>(*self.table);
-  if (auto* other = dyn_cast_if_present<Syncable::Table>(end.table_ptr)) {
-    if (syncable.can_sync && syncable.can_sync(Syncable(*self.object_ptr, syncable), Syncable(*end.object_ptr, *other))) {
+  auto self_sync = cast<Syncable>(self);
+  if (auto other_sync = dyn_cast_if_present<Syncable>(end)) {
+    if (self_sync.table->can_sync(self_sync, other_sync)) {
       return;
     } else {
       AppendErrorMessage(status) += "Can only connect to compatible Syncable";
@@ -41,7 +41,8 @@ void Syncable::Table::DefaultCanConnect(Argument self, Interface end, Status& st
       return;
     } else {
       auto member = gear->members.front().weak.Lock();
-      if (member && syncable.can_sync && syncable.can_sync(Syncable(*self.object_ptr, syncable), Syncable(member.Owner<Object>(), member.Get()))) {
+      if (member &&
+          self_sync.table->can_sync(self_sync, Syncable(member.Owner<Object>(), member.Get()))) {
         return;
       } else {
         AppendErrorMessage(status) += "Wrong type of Gear";
@@ -70,9 +71,7 @@ void Syncable::Table::DefaultOnConnect(Argument self, Interface end) {
       sync_block = FindGearOrMake(*self.object_ptr, syncable);
       auto& loc = root_board->Insert(sync_block);
       loc.position = (end.object_ptr->here->position + self.object_ptr->here->position) / 2;
-      loc.ForEachToy([](ui::RootWidget&, LocationWidget& toy) {
-        toy.position_vel = Vec2(0, 1);
-      });
+      loc.ForEachToy([](ui::RootWidget&, LocationWidget& toy) { toy.position_vel = Vec2(0, 1); });
     }
     sync_block->FullSync(*self.object_ptr, syncable);
     sync_block->FullSync(*end.object_ptr, *target_syncable);
@@ -378,8 +377,8 @@ std::unique_ptr<ObjectToy> Gear::MakeToy(ui::Widget* parent) {
   return std::make_unique<GearWidget>(parent, *this);
 }
 
-std::unique_ptr<SyncConnectionWidget> SyncMemberOf::MakeToy(ui::Widget* parent) {
-  return std::make_unique<SyncConnectionWidget>(parent, object, syncable);
+std::unique_ptr<SyncConnectionWidget> Syncable::MakeToy(ui::Widget* parent) {
+  return std::make_unique<SyncConnectionWidget>(parent, *object_ptr, *table);
 }
 
 // --- Gear serialization ---

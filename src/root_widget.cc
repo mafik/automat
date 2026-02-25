@@ -14,12 +14,11 @@
 #include "animation.hh"
 #include "argument.hh"
 #include "automat.hh"
-#include "casting.hh"
 #include "black_hole.hh"
+#include "casting.hh"
 #include "drag_action.hh"
 #include "embedded.hh"
 #include "font.hh"
-#include "lcs.hh"
 #include "loading_animation.hh"
 #include "math.hh"
 #include "object.hh"
@@ -296,9 +295,8 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
       // Make sure that each argument has a toy
       o.Each<Argument>([&](Argument arg) {
         Toy* arg_toy = nullptr;
-        if (auto syncable = arg.As<Syncable>()) {
-          auto member_of = SyncMemberOf{o, *syncable.table};
-          arg_toy = &toys.FindOrMake(member_of, this);
+        if (auto syncable = dyn_cast<Syncable>(arg)) {
+          arg_toy = &toys.FindOrMake(syncable, this);
         } else {
           arg_toy = &toys.FindOrMake(arg, this);
         }

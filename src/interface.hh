@@ -132,13 +132,6 @@ struct Interface {
 
   explicit operator bool() const { return object_ptr != nullptr; }
 
-  // Cast this interface to a derived bound type. Returns a null bound type if the table doesn't
-  // match.
-  template <typename T>
-  T As() const {
-    return dyn_cast_if_present<T>(*this);
-  }
-
   StrView Name() const { return table_ptr->name; }
 };
 

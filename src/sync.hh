@@ -11,6 +11,7 @@
 namespace automat {
 
 struct Gear;
+struct SyncConnectionWidget;
 
 struct Syncable : Argument {
   struct Table : Argument::Table {
@@ -26,8 +27,7 @@ struct Syncable : Argument {
     static void DefaultOnConnect(Argument self, Interface end);
     static NestedPtr<Interface::Table> DefaultFind(Argument self);
 
-    constexpr Table(StrView name, Kind kind = Interface::kSyncable)
-        : Argument::Table(name, kind) {
+    constexpr Table(StrView name, Kind kind = Interface::kSyncable) : Argument::Table(name, kind) {
       style = Style::Invisible;
       can_connect = &DefaultCanConnect;
       on_connect = &DefaultOnConnect;
@@ -69,15 +69,10 @@ struct Syncable : Argument {
 
   void Unsync();
 
-  // v2-style definition: per-instance SyncState, static Table auto-generated from ImplT.
-  //
-  // ImplT must provide:
-  //   using Parent = SomeObject;
-  //   static constexpr StrView kName = "..."sv;
-  //   static constexpr int Offset();  // offsetof(Parent, def_member)
-  //   Optionally: bool CanSync(Syncable other);
-  //   Optionally: void OnSync();
-  //   Optionally: void OnUnsync();
+  // Impl may provide:
+  //   bool CanSync(Syncable other);
+  //   void OnSync();
+  //   void OnUnsync();
   template <typename ImplT>
   struct Def : State, DefBase {
     using Impl = ImplT;
@@ -97,6 +92,11 @@ struct Syncable : Argument {
       }
     }
   };
+
+  using Toy = SyncConnectionWidget;
+  ReferenceCounted& GetOwner() { return *object_ptr; }
+  Interface::Table* GetInterface() { return table_ptr; }
+  std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 };
 
 // Gear-shaped object that can make multiple interfaces act as one.
@@ -161,7 +161,8 @@ void Syncable::ForwardNotify(this T self, F&& lambda) {
       auto locked = member.weak.Lock();
       if (!locked) continue;
       // Skip self
-      if (locked.Get() == self.table_ptr && locked.template Owner<Object>() == self.object_ptr) continue;
+      if (locked.Get() == self.table_ptr && locked.template Owner<Object>() == self.object_ptr)
+        continue;
       T other_iface(*locked.template Owner<Object>(),
                     *static_cast<typename T::Table*>(locked.Get()));
       lambda(other_iface);
@@ -187,14 +188,6 @@ struct SyncConnectionWidget : Toy {
   Optional<Rect> TextureBounds() const override;
 };
 
-// ToyMaker for belt widgets that connect a Syncable to a Gear.
-struct SyncMemberOf {
-  using Toy = SyncConnectionWidget;
-  Object& object;
-  Syncable::Table& syncable;
-  ReferenceCounted& GetOwner() { return object; }
-  Interface::Table* GetInterface() { return &syncable; }
-  std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
-};
+static_assert(ToyMaker<Syncable>);
 
 }  // namespace automat

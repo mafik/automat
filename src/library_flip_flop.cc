@@ -114,10 +114,8 @@ struct FlipFlopButton : ui::ToggleButton {
 };
 
 struct FlipFlopWidget : ObjectToy {
-  struct AnimationState {
-    float light = 0;
-  };
-  AnimationState animation_state;
+  float light = 0;
+  bool current_state = false;
   std::unique_ptr<FlipFlopButton> button;
 
   FlipFlopWidget(ui::Widget* parent, Object& object)
@@ -129,9 +127,12 @@ struct FlipFlopWidget : ObjectToy {
   }
 
   animation::Phase Tick(time::Timer& timer) override {
-    auto current_state = LockObject<FlipFlop>()->current_state;
+    auto ptr = LockObject<FlipFlop>();
+    if (ptr) {
+      current_state = ptr->current_state;
+    }
     button->WakeAnimationAt(wake_time);
-    return animation::LinearApproach(current_state, timer.d, 10, animation_state.light);
+    return animation::LinearApproach(current_state, timer.d, 10, light);
   }
   void Draw(SkCanvas& canvas) const override {
     FlipFlopColor().draw(canvas);
@@ -140,7 +141,7 @@ struct FlipFlopWidget : ObjectToy {
       SkPaint gradient;
       SkPoint center = {kFlipFlopWidth / 2, 2_cm};
       float radius = 0.5_mm;
-      float a = animation_state.light;
+      float a = light;
       SkColor colors[] = {color::MixColors("#725016"_color, "#ff8786"_color, a),
                           color::MixColors("#2b1e07"_color, "#ff3e3e"_color, a)};
       gradient.setShader(SkGradientShader::MakeRadial(center + SkPoint(0, 0.25_mm), radius, colors,

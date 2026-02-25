@@ -73,17 +73,13 @@ Ptr<Object> MacroRecorder::timeline_Impl::MakePrototype() {
 }
 
 void MacroRecorder::timeline_Impl::OnConnect(Interface end) {
-  if (!end) {
-    if (auto old_timeline = obj->timeline.target.Lock()) {
-      if (old_timeline->state == Timeline::State::kRecording) {
-        old_timeline->StopRecording();
-      }
+  if (auto old_timeline = state->target.Lock()) {
+    if (old_timeline->state == Timeline::State::kRecording) {
+      old_timeline->StopRecording();
     }
-    ObjectArgument<Timeline>::Table::DefaultOnConnect(*this, end);
-    return;
   }
   ObjectArgument<Timeline>::Table::DefaultOnConnect(*this, end);
-  if (auto timeline = obj->timeline.target.Lock()) {
+  if (auto timeline = state->target.Lock()) {
     if (obj->long_running->IsRunning()) {
       timeline->BeginRecording();
     }

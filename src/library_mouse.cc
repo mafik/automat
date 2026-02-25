@@ -425,11 +425,19 @@ struct MouseWidget : MouseWidgetBase {
 struct MouseButtonEventWidget : MouseWidgetBase {
   using MouseWidgetBase::MouseWidgetBase;
 
+  ui::PointerButton button;
+  bool down;
+
+  animation::Phase Tick(time::Timer&) override {
+    if (auto object = LockObject<MouseButtonEvent>()) {
+      button = object->button;
+      down = object->down;
+    }
+    return animation::Finished;
+  }
+
   void Draw(SkCanvas& canvas) const override {
     krita::mouse::base.draw(canvas);
-    Ptr<MouseButtonEvent> object = LockObject<MouseButtonEvent>();
-    auto button = object->button;
-    auto down = object->down;
     MouseWidgetCommon::Draw(canvas, button, down, nullptr, false);
   }
 };
@@ -663,15 +671,14 @@ Ptr<Object> MouseScrollX::Clone() const { return MAKE_PTR(MouseScrollX); }
 struct MouseScrollYWidget : MouseWidgetBase {
   MouseScrollYWidget(ui::Widget* parent, Object& obj) : MouseWidgetBase(parent, obj) {}
 
+  SinCos target;
   animation::SpringV2<SinCos> rotation;
 
   animation::Phase Tick(time::Timer& t) override {
-    auto phase = animation::Finished;
-
-    auto target = this->LockObject<MouseScrollY>()->rotation;
-    phase |= rotation.SineTowards(target, t.d, 0.6);
-
-    return phase;
+    if (auto o = LockObject<MouseScrollY>()) {
+      target = o->rotation;
+    }
+    return rotation.SineTowards(target, t.d, 0.6);
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -733,15 +740,14 @@ struct MouseScrollYWidget : MouseWidgetBase {
 struct MouseScrollXWidget : MouseWidgetBase {
   MouseScrollXWidget(ui::Widget* parent, Object& obj) : MouseWidgetBase(parent, obj) {}
 
+  SinCos target;
   animation::SpringV2<SinCos> rotation;
 
   animation::Phase Tick(time::Timer& t) override {
-    auto phase = animation::Finished;
-
-    auto target = this->LockObject<MouseScrollY>()->rotation;
-    phase |= rotation.SineTowards(target, t.d, 0.6);
-
-    return phase;
+    if (auto o = LockObject<MouseScrollY>()) {
+      target = o->rotation;
+    }
+    return rotation.SineTowards(target, t.d, 0.6);
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -868,8 +874,7 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
   SkPath Shape() const override { return shape; }
 
   animation::Phase Tick(time::Timer& timer) override {
-    {
-      Ptr<MouseButtonPresser> object = LockObject<MouseButtonPresser>();
+    if (auto object = LockObject<MouseButtonPresser>()) {
       button = object->button;
       presser_widget.is_on = object->state->IsOn();
     }

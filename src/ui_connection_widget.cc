@@ -44,18 +44,20 @@ Location* ConnectionWidget::StartLocation() const {
 }
 
 Location* ConnectionWidget::EndLocation() const {
-  if (auto locked = start_weak.Lock()) {
-    if (auto* arg = locked.Get()) {
-      if (auto* start_obj = locked.Owner<Object>()) {
-        if (auto found = Argument(*start_obj, *arg).Find()) {
-          if (auto* obj = found.Owner<Object>()) {
-            return obj->MyLocation();
-          }
-        }
-      }
-    }
+  auto start_ptr = start_weak.Lock();
+  auto* start_obj = start_ptr.Owner<Object>();
+  auto* start_tbl = start_ptr.Get();
+  if (start_obj == nullptr || start_tbl == nullptr) {
+    return nullptr;
   }
-  return nullptr;
+  Argument start(*start_obj, *start_tbl);
+  auto end_ptr = start.Find();
+  auto* end_obj = end_ptr.Owner<Object>();
+  if (end_obj) {
+    return end_obj->MyLocation();
+  } else {
+    return nullptr;
+  }
 }
 
 ConnectionWidget::ConnectionWidget(Widget* parent, Object& start, Argument::Table& arg)
@@ -264,13 +266,14 @@ struct ConnectionWidgetLocker {
         board_widget(toy_store.FindOrNull(*root_board)),
         start_arg(w.start_weak.Lock()),
         start_widget(StartObj() ? toy_store.FindOrNull(*StartObj()) : nullptr),
-        end_iface(StartObj() ? Argument(*StartObj(), *start_arg).Find() : NestedPtr<Interface::Table>()),
+        end_iface(StartObj() ? Argument(*StartObj(), *start_arg).Find()
+                             : NestedPtr<Interface::Table>()),
         end_widget(EndObj() ? toy_store.FindOrNull(*EndObj()) : nullptr),
         end_transform(end_widget && board_widget ? TransformBetween(*end_widget, *board_widget)
                                                  : SkMatrix()) {}
 
-  Object* StartObj() const { return start_arg ? start_arg.Owner<Object>() : nullptr; }
-  Object* EndObj() const { return end_iface ? end_iface.Owner<Object>() : nullptr; }
+  Object* StartObj() const { return start_arg.Owner<Object>(); }
+  Object* EndObj() const { return end_iface.Owner<Object>(); }
 };
 
 // Updates ConnectionWidget.pos_dir & ConnectionWidget.to_points. This is shared among Tick &
@@ -283,7 +286,7 @@ static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
 
   w.to_points.clear();
 
-  if (a.end_iface) {
+  if (a.end_widget) {
     a.end_widget->ConnectionPositions(w.to_points);
     for (auto& vec_and_dir : w.to_points) {
       vec_and_dir.pos = a.end_transform.mapPoint(vec_and_dir.pos);
@@ -400,14 +403,10 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   }
 
   if (state) {
-    if (a.end_iface) {
+    if (a.end_widget) {
       state->steel_insert_hidden.target = 1;
-      // phase |= state->connector_scale.SpringTowards(
-      //     to->scale, timer.d, Location::kScaleSpringPeriod, Location::kSpringHalfTime);
     } else {
       state->steel_insert_hidden.target = 0;
-      // phase |= state->connector_scale.SpringTowards(
-      //     from.scale, timer.d, Location::kScaleSpringPeriod, Location::kSpringHalfTime);
     }
     phase |= state->steel_insert_hidden.Tick(timer);
 

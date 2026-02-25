@@ -6,6 +6,7 @@
 
 #include "base.hh"
 #include "drag_action.hh"
+#include "format.hh"
 #include "root_widget.hh"
 #include "svg.hh"
 #include "ui_connection_widget.hh"
@@ -19,10 +20,9 @@ std::unique_ptr<ui::Widget> Argument::MakeIcon(ui::Widget* parent) const {
 }
 
 Object* Argument::ObjectOrNull() const {
-  if (auto found = Find()) {
-    if (auto* o = found.Owner<Object>()) {
-      return o;
-    }
+  auto found = Find();
+  if (auto* o = found.Owner<Object>()) {
+    return o;
   }
   return nullptr;
 }
@@ -38,7 +38,10 @@ Object& Argument::ObjectOrMake() const {
 
   PositionAhead(*start_loc, *table, loc);
   PositionBelow(loc, *start_loc);
+  LOG << "Connecting to " << loc.object->Name();
   Connect(*loc.object);
+  auto target = Find();
+  LOG << "Connected to " << AddrToStr(target.Owner<Object>());
 
   ui::root_widget->WakeAnimation();
   return *loc.object;

@@ -90,16 +90,13 @@ void MacroRecorder::timeline_Impl::OnConnect(Interface end) {
   }
 }
 
-static auto& timeline_arg = MacroRecorder::timeline_tbl;
-
 static Timeline* FindTimeline(MacroRecorder& macro_recorder) {
   if (auto t = macro_recorder.timeline.target.Lock()) return t.Get();
   return nullptr;
 }
 
 static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
-  Timeline* timeline =
-      dynamic_cast<Timeline*>(&Argument(macro_recorder, timeline_arg).ObjectOrMake());
+  Timeline* timeline = static_cast<Timeline*>(&macro_recorder.timeline->ObjectOrMake());
   assert(timeline);
   if (macro_recorder.keylogging && timeline->state != Timeline::State::kRecording) {
     timeline->BeginRecording();
@@ -387,7 +384,7 @@ struct GlassRunButton : ui::PowerButton {
     ToggleButton::PointerOver(p);
     if (auto locked = target.Lock()) {
       auto& mr = static_cast<MacroRecorder&>(*locked.Owner<Object>());
-      if (auto connection_widget = ConnectionWidget::FindOrNull(mr, timeline_arg)) {
+      if (auto connection_widget = ConnectionWidget::FindOrNull(mr, mr.timeline_tbl)) {
         connection_widget->animation_state.prototype_alpha_target = 1;
         connection_widget->WakeAnimation();
       }
@@ -397,7 +394,7 @@ struct GlassRunButton : ui::PowerButton {
     ToggleButton::PointerLeave(p);
     if (auto locked = target.Lock()) {
       auto& mr = static_cast<MacroRecorder&>(*locked.Owner<Object>());
-      if (auto connection_widget = ConnectionWidget::FindOrNull(mr, timeline_arg)) {
+      if (auto connection_widget = ConnectionWidget::FindOrNull(mr, mr.timeline_tbl)) {
         connection_widget->animation_state.prototype_alpha_target = 0;
         connection_widget->WakeAnimation();
       }
@@ -583,7 +580,7 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
   void PointerMove(ui::Pointer&, Vec2 position) override { WakeAnimation(); }
 
   Vec2AndDir ArgStart(const Interface::Table& arg, ui::Widget* coordinate_space) override {
-    if (&arg == &timeline_arg) {
+    if (&arg == &MacroRecorder::timeline_tbl) {
       Vec2AndDir pos_dir{
           .pos = {22_mm, 0},
           .dir = -90_deg,

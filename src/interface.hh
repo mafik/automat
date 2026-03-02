@@ -127,9 +127,12 @@ struct Interface {
   Table* table_ptr = nullptr;
 
   Interface() = default;
+  Interface(std::nullptr_t) {}
   Interface(Object& obj) : object_ptr(&obj) {}
   Interface(Object& obj, Table& table) : object_ptr(&obj), table_ptr(&table) {}
   Interface(Object* obj, Table* table) : object_ptr(obj), table_ptr(table) {}
+
+  auto operator<=>(const Interface&) const = default;
 
   operator NestedPtr<Table>();
   operator NestedWeakPtr<Table>();
@@ -154,6 +157,7 @@ struct Interface {
 // define `struct State {};` so the macro compiles. StateRef exists but is unused — zero cost.
 #define INTERFACE_BOUND(Type, Base)                                                                \
   Type() = default;                                                                                \
+  Type(std::nullptr_t) : Base(nullptr) {}                                                          \
   Type(Object& obj, Table& t) : Base(obj, t) {}                                                    \
   Type(Object* obj, Table* t) : Base(obj, t) {}                                                    \
   struct TableRef {                                                                                \

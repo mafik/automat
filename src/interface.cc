@@ -7,7 +7,13 @@
 
 namespace automat {
 
-Interface::operator NestedPtr<Table>() { return {object_ptr->AcquirePtr(), table_ptr}; }
-Interface::operator NestedWeakPtr<Table>() { return {object_ptr->AcquireWeakPtr(), table_ptr}; }
+Interface::operator NestedPtr<Table>() {
+  if (!object_ptr) return {};
+  return {object_ptr->AcquirePtr(), table_ptr};
+}
+Interface::operator NestedWeakPtr<Table>() {
+  if (!object_ptr) return {};
+  return {object_ptr->AcquireWeakPtr(), table_ptr};
+}
 
 }  // namespace automat

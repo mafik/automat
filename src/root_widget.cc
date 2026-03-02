@@ -269,7 +269,7 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
   auto canvas_to_window44 = SkM44(CanvasToWindow());
 
   // Remove expired widgets from the old children list
-  std::erase_if(children, [](Widget* w) { return w->zombie; });
+  std::erase_if(children, [](Widget* w) { return w->dead; });
 
   {  // Update `children`
     // Make sure that all Arguments are raised above their endpoints

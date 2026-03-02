@@ -25,6 +25,8 @@
 
 When prompted with "gdb debug" run `build/debug/automat` under GDB (`gdb -q -ex "run" -ex "bt full" -ex "quit" build/debug/automat 2>&1`). The user will trigger a crash. Then you should figure out where the crash is coming from and how to fix it. Don't fix it yourself though - just investigate the root cause and recommend some options.
 
+When prompted with just "gdb", run `build/fast/automat` - in the same way as `gdb debug`.
+
 ## Architecture Overview
 
 Automat is a C++ application for semi-autonomous automation with a layered architecture:

@@ -1869,87 +1869,70 @@ struct TrackBaseWidget : ObjectToy {
   // - provides a single place to define lookup logic for code reuse.
   struct Context {
     const TrackBaseWidget& widget;
-    Context(const TrackBaseWidget& widget) : widget(widget) {}
-
     Ptr<TrackBase> track_ptr = nullptr;
-    Ptr<TrackBase>& GetTrackPtr() {
-      if (track_ptr == nullptr) {
-        track_ptr = widget.LockObject<TrackBase>();
+    Timeline* timeline = nullptr;
+    TimelineWidget* timeline_widget = nullptr;
+    time::FloatDuration distance_to_seconds = 100s;
+
+    Context(const TrackBaseWidget& widget) : widget(widget) {
+      track_ptr = widget.LockObject<TrackBase>();
+      if (track_ptr) {
+        timeline = track_ptr->timeline;
       }
-      return track_ptr;
+      if (widget.parent) {
+        timeline_widget = static_cast<TimelineWidget*>(widget.parent.get());
+        distance_to_seconds = timeline_widget->distance_to_seconds;
+      }
     }
 
     template <typename T>
-    T& GetTrack() {
-      return static_cast<T&>(*GetTrackPtr());
-    }
-
-    Timeline* timeline = nullptr;
-    Timeline* GetTimeline() {
-      if (timeline == nullptr) {
-        timeline = GetTrackPtr()->timeline;
-      }
-      return timeline;
-    }
-
-    Optional<TimelineWidget*> timeline_widget = nullopt;
-    TimelineWidget* GetTimelineWidget() {
-      if (!timeline_widget) {
-        timeline_widget = static_cast<TimelineWidget*>(widget.parent.get());
-      }
-      return *timeline_widget;
-    }
-
-    Optional<time::FloatDuration> distance_to_seconds = nullopt;
-    time::FloatDuration& GetDistanceToSeconds() {
-      if (!distance_to_seconds) {
-        if (auto timeline_widget = GetTimelineWidget()) {
-          distance_to_seconds = timeline_widget->distance_to_seconds;
-        } else {
-          distance_to_seconds = 100s;  // 1 cm = 1 second
-        }
-      }
-      return *distance_to_seconds;
+    T* GetTrack() {
+      return track_ptr.Get<T>();
     }
   };
-  SkPath Shape() const override {
+
+  time::FloatDuration distance_to_seconds;
+  Rect shape;
+
+  animation::Phase Tick(time::Timer& timer) override {
     Context ctx(*this);
-    return Shape(ctx);
-  }
-  SkPath Shape(Context& ctx) const {
-    time::FloatDuration distance_to_seconds = ctx.GetDistanceToSeconds();
-    auto* timeline_widget = ctx.GetTimelineWidget();
-    auto* timeline = ctx.GetTimeline();
-    auto lock = std::lock_guard(timeline->mutex);
-    auto& track = ctx.GetTrack<TrackBase>();
-    auto end_time = timeline ? timeline_widget->max_track_length : track.timestamps.back();
-    Rect rect = Rect(0, -kTrackHeight / 2, end_time / distance_to_seconds, kTrackHeight / 2);
-    if (timeline) {
-      // Clip to the width of the timeline window
-      rect.right =
-          min<float>(rect.right, timeline_widget->TimeAtX(kWindowWidth / 2) / distance_to_seconds);
-      rect.left =
-          max<float>(rect.left, timeline_widget->TimeAtX(-kWindowWidth / 2) / distance_to_seconds);
+    distance_to_seconds = ctx.distance_to_seconds;
+
+    auto end_time = time::Duration(1s);
+    if (ctx.track_ptr) {
+      end_time = ctx.track_ptr->timestamps.back();
     }
-    return SkPath::Rect(rect.sk);
+    if (ctx.timeline_widget) {
+      end_time = ctx.timeline_widget->max_track_length;
+    }
+    shape = Rect(0, -kTrackHeight / 2, end_time / distance_to_seconds, kTrackHeight / 2);
+
+    if (ctx.timeline_widget) {
+      // Clip to the width of the timeline window
+      shape.right = min<float>(
+          shape.right, ctx.timeline_widget->TimeAtX(kWindowWidth / 2) / distance_to_seconds);
+      shape.left = max<float>(
+          shape.left, ctx.timeline_widget->TimeAtX(-kWindowWidth / 2) / distance_to_seconds);
+    }
+    return Tick(timer, ctx);
   }
+
+  virtual animation::Phase Tick(time::Timer& timer, Context& ctx) { return animation::Finished; }
+
+  SkPath Shape() const override { return SkPath::Rect(shape.sk); }
+
   Optional<Rect> TextureBounds() const override {
     Context ctx(*this);
-    auto* timeline_widget = ctx.GetTimelineWidget();
-    if (timeline_widget == nullptr || timeline_widget->drag_zoom_action == nullptr) {
-      return ObjectToy::TextureBounds();
+    if (ctx.timeline_widget == nullptr || ctx.timeline_widget->drag_zoom_action == nullptr) {
+      return shape;
     }
     return nullopt;
   }
-  void Draw(SkCanvas& canvas) const override {
-    Context ctx(*this);
-    Draw(canvas, ctx);
-  }
-  void Draw(SkCanvas& canvas, Context& ctx) const { canvas.drawPath(Shape(ctx), kTrackPaint); }
+  void Draw(SkCanvas& canvas) const override { canvas.drawRect(shape.sk, kTrackPaint); }
   std::unique_ptr<Action> FindAction(ui::Pointer& ptr, ui::ActionTrigger btn) override {
     Context ctx(*this);
-    if (auto* timeline_widget = ctx.GetTimelineWidget()) {
-      return timeline_widget->FindAction(ptr, btn);
+    if (ctx.timeline_widget) {
+      return ctx.timeline_widget->FindAction(ptr, btn);
     } else {
       return ObjectToy::FindAction(ptr, btn);
     }
@@ -1958,80 +1941,98 @@ struct TrackBaseWidget : ObjectToy {
 
 struct OnOffTrackWidget : TrackBaseWidget {
   using TrackBaseWidget::TrackBaseWidget;
+
+  // TODO: share this through shared_ptr?
+  Vec<time::Duration> timestamps;
+  time::Duration on_at = time::kDurationGuard;
+  time::Duration on_at_end = 0s;
+  Timeline::State timeline_state = Timeline::kPaused;
+
+  animation::Phase Tick(time::Timer& timer, Context& ctx) override {
+    auto* track = ctx.GetTrack<OnOffTrack>();
+    if (track) {
+      timestamps = track->timestamps;
+      on_at = track->on_at;
+    }
+    if (ctx.timeline) {
+      timeline_state = ctx.timeline->state;
+    }
+    if (ctx.timeline_widget) {
+      on_at_end = ctx.timeline_widget->current_offset;
+    } else {
+      on_at_end = timestamps.back();
+    }
+    return animation::Finished;
+  }
   void Draw(SkCanvas& canvas) const override {
-    Context ctx(*this);
-    auto* timeline_widget = ctx.GetTimelineWidget();
-    auto* timeline = ctx.GetTimeline();
-    auto& track = ctx.GetTrack<OnOffTrack>();
-    auto& timestamps = track.timestamps;
-    TrackBaseWidget::Draw(canvas, ctx);
-    auto shape = Shape(ctx);
-    Rect rect;
-    shape.isRect(&rect.sk);
-    time::FloatDuration distance_to_seconds = ctx.GetDistanceToSeconds();
+    TrackBaseWidget::Draw(canvas);
     auto DrawSegment = [&](time::Duration start_t, time::Duration end_t) {
       float start = start_t / distance_to_seconds;
       float end = end_t / distance_to_seconds;
-      if (end < rect.left || start > rect.right) {
+      if (end < shape.left || start > shape.right) {
         return;
       }
-      start = max(start, rect.left);
-      end = min(end, rect.right);
+      start = max(start, shape.left);
+      end = min(end, shape.right);
       canvas.drawLine({start, 0}, {end, 0}, kOnOffPaint);
     };
     for (int i = 0; i + 1 < timestamps.size(); i += 2) {
       DrawSegment(timestamps[i], timestamps[i + 1]);
     }
-    if (track.on_at != time::kDurationGuard) {
-      switch (timeline->state) {
+    if (on_at != time::kDurationGuard) {
+      switch (timeline_state) {
         case Timeline::kRecording:
-          DrawSegment(track.on_at, timeline_widget->current_offset);
+          DrawSegment(on_at, on_at_end);
           break;
         case Timeline::kPlaying:
         case Timeline::kPaused:
           // segment ends at the right edge of the track
-          DrawSegment(track.on_at, timeline->MaxTrackLength());
+          DrawSegment(on_at, time::Defloat(shape.right * distance_to_seconds));
           break;
       }
     }
   }
 };
 
-static int LowerBound(TrackBase& track, time::Duration t) {
-  auto& timestamps = track.timestamps;
+static int LowerBound(const Vec<time::Duration>& timestamps, time::Duration t) {
   return lower_bound(timestamps.begin(), timestamps.end(), t) - timestamps.begin();
 }
 
-static int UpperBound(TrackBase& track, time::Duration t) {
-  auto& timestamps = track.timestamps;
+static int UpperBound(const Vec<time::Duration>& timestamps, time::Duration t) {
   return upper_bound(timestamps.begin(), timestamps.end(), t) - timestamps.begin();
 }
 
 struct Vec2TrackWidget : TrackBaseWidget {
   using TrackBaseWidget::TrackBaseWidget;
+
+  Vec<time::Duration> timestamps;
+  Vec<Vec2> values;
+  time::Duration current_offset_raw = 0s;
+
+  animation::Phase Tick(time::Timer& timer, Context& ctx) override {
+    if (auto* track = ctx.GetTrack<Vec2Track>()) {
+      timestamps = track->timestamps;
+      values = track->values;
+    }
+    if (ctx.timeline_widget) {
+      current_offset_raw = ctx.timeline_widget->current_offset_raw;
+    }
+    return animation::Finished;
+  }
   void Draw(SkCanvas& canvas) const override {
-    Context ctx(*this);
-    auto& track = ctx.GetTrack<Vec2Track>();
-    auto& timestamps = track.timestamps;
-    auto& values = track.values;
-    auto* timeline_widget = ctx.GetTimelineWidget();
-    auto* timeline = ctx.GetTimeline();
-    TrackBaseWidget::Draw(canvas, ctx);
-    auto shape = Shape(ctx);
-    Rect rect;
-    shape.isRect(&rect.sk);
-    time::FloatDuration s_per_m = timeline_widget->distance_to_seconds;  // s / m
-    auto left_t = time::Defloat(rect.left * s_per_m);
-    auto right_t = time::Defloat(rect.right * s_per_m);
-    auto left_i = LowerBound(track, left_t);
-    auto right_i = UpperBound(track, right_t);
+    TrackBaseWidget::Draw(canvas);
+
+    time::FloatDuration s_per_m = distance_to_seconds;  // s / m
+    auto left_t = time::Defloat(shape.left * s_per_m);
+    auto right_t = time::Defloat(shape.right * s_per_m);
+    auto left_i = LowerBound(timestamps, left_t);
+    auto right_i = UpperBound(timestamps, right_t);
 
     float px_per_meter = canvas.getLocalToDeviceAs3x3().mapVector(1, 0).length();  // [px / m]
     float m_per_px = 1.f / px_per_meter;                                           // [m / px]
     auto pixel_t = time::Defloat(s_per_m * m_per_px);                              // [s / px]
 
     {  // draw horizontal segments
-
       int i = left_i;
       int segments = 0;
       // Draw the timestamps as horizontal lines (segments). Each timestamp is a 1-pixel long
@@ -2074,9 +2075,9 @@ struct Vec2TrackWidget : TrackBaseWidget {
     {  // draw displays
       constexpr float kDisplayHeight = kTrackHeight - kVec2DisplayMargin * 2;
       constexpr float kDisplayMinWidth = kDisplayHeight;
-      auto max_track_length = timeline->MaxTrackLength();
-      auto current_t = timeline_widget->current_offset_raw;
-      int current_i = LowerBound(track, current_t);
+      auto max_track_length = time::Defloat(shape.right * distance_to_seconds);
+      auto current_t = current_offset_raw;
+      int current_i = LowerBound(timestamps, current_t);
       auto display_min_t = time::Defloat(kDisplayMinWidth * s_per_m);
       struct Vec2Display {
         time::Duration start_t, end_t;
@@ -2085,8 +2086,8 @@ struct Vec2TrackWidget : TrackBaseWidget {
       Vec2Display root;
       root.start_t = 0s;
       root.end_t = max_track_length;
-      root.start_i = LowerBound(track, root.start_t);
-      root.end_i = UpperBound(track, root.end_t);
+      root.start_i = LowerBound(timestamps, root.start_t);
+      root.end_i = UpperBound(timestamps, root.end_t);
       // Snap the analysis window to the actual timestamps that exist in the track.
       root.start_t = timestamps[root.start_i];
       root.end_t = timestamps[root.end_i - 1];
@@ -2138,7 +2139,7 @@ struct Vec2TrackWidget : TrackBaseWidget {
           continue;
         }
         // the lowest index that can be moved into the next display
-        int earliest_split_i = UpperBound(track, earliest_split_t);
+        int earliest_split_i = UpperBound(timestamps, earliest_split_t);
         auto initial_gap_t =
             std::min(latest_split_t, timestamps[earliest_split_i]) - earliest_split_t;
 
@@ -2146,7 +2147,7 @@ struct Vec2TrackWidget : TrackBaseWidget {
         time::Duration gap_t = time::kDurationGuard;
 
         // the lowest index that must belong to the next display
-        int latest_split_i = LowerBound(track, latest_split_t) - 1;
+        int latest_split_i = LowerBound(timestamps, latest_split_t) - 1;
         auto final_gap_t = latest_split_t - timestamps[latest_split_i];
         if (earliest_split_i < latest_split_i) {
           gap_i = gap_tree.Query(earliest_split_i, latest_split_i - 1);
@@ -2315,13 +2316,12 @@ struct Float64TrackWidget : TrackBaseWidget {
 
   using TrackBaseWidget::TrackBaseWidget;
 
-  animation::Phase Tick(time::Timer& t) override {
+  animation::Phase Tick(time::Timer& t, Context& ctx) override {
     auto phase = animation::Finished;
-    Context ctx(*this);
-    auto& track = ctx.GetTrack<Float64Track>();
-    auto* timeline_widget = ctx.GetTimelineWidget();
-    auto& timestamps = track.timestamps;
-    auto& values = track.values;
+    auto* track = ctx.GetTrack<Float64Track>();
+    auto* timeline_widget = ctx.timeline_widget;
+    auto& timestamps = track->timestamps;
+    auto& values = track->values;
 
     Vec<double> absolute_values;
     {  // precompute absolute_values
@@ -2334,18 +2334,15 @@ struct Float64TrackWidget : TrackBaseWidget {
     }
 
     time::FloatDuration s_per_m = timeline_widget->distance_to_seconds;  // s / m
-    auto shape = Shape(ctx);
-    Rect shape_rect;
-    shape.isRect(&shape_rect.sk);
-    auto left_t = time::Defloat(shape_rect.left * s_per_m);
-    auto right_t = time::Defloat(shape_rect.right * s_per_m);
-    auto left_i = LowerBound(track, left_t);
-    auto right_i = UpperBound(track, right_t);
+    auto left_t = time::Defloat(shape.left * s_per_m);
+    auto right_t = time::Defloat(shape.right * s_per_m);
+    auto left_i = LowerBound(timestamps, left_t);
+    auto right_i = UpperBound(timestamps, right_t);
 
     SkPathBuilder trail_builder;
     double last_y = left_i > 0 ? absolute_values[left_i - 1] : 0;
     double y_min_target = last_y, y_max_target = last_y;
-    trail_builder.moveTo(shape_rect.left, last_y);
+    trail_builder.moveTo(shape.left, last_y);
     for (int i = left_i; i < right_i; ++i) {
       double x = timestamps[i] / s_per_m;
       trail_builder.lineTo(x, last_y);
@@ -2355,7 +2352,7 @@ struct Float64TrackWidget : TrackBaseWidget {
       trail_builder.lineTo(x, y);
       last_y = y;
     }
-    trail_builder.lineTo(shape_rect.right, last_y);
+    trail_builder.lineTo(shape.right, last_y);
 
     phase |= y_min.SineTowards(y_min_target, t.d, 0.5);
     phase |= y_max.SineTowards(y_max_target, t.d, 0.5);
@@ -2375,9 +2372,7 @@ struct Float64TrackWidget : TrackBaseWidget {
   }
 
   void Draw(SkCanvas& canvas) const override {
-    Context ctx(*this);
-    TrackBaseWidget::Draw(canvas, ctx);
-
+    TrackBaseWidget::Draw(canvas);
     SkPaint trail_paint;
     trail_paint.setColor("#131c64"_color);
     trail_paint.setStyle(SkPaint::kStroke_Style);

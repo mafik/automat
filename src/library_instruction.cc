@@ -28,7 +28,6 @@
 #include "animation.hh"
 #include "argument.hh"
 #include "automat.hh"
-#include "casting.hh"
 #include "color.hh"
 #include "embedded.hh"
 #include "font.hh"
@@ -206,7 +205,6 @@ void Instruction::Run(std::unique_ptr<RunTask>& run_task) {
   auto assembler = FindOrCreateAssembler(*this);
   assembler->RunMachineCode(this, std::move(run_task));
 }
-
 
 static std::string AssemblyText(const mc::Inst& mc_inst) {
   // Nicely formatted assembly:
@@ -3276,7 +3274,10 @@ PersistentImage reverse = PersistentImage::MakeFromAsset(
 
 animation::Phase Instruction::Widget::Tick(time::Timer& timer) {
   auto instruction = this->LockObject<Instruction>();
-  auto& inst = instruction->mc_inst;
+  if (!instruction) {
+    return animation::Finished;
+  }
+  inst = instruction->mc_inst;
 
   tokens = PrintInstruction(inst);
   auto& heavy_font = HeavyFont();
@@ -3390,13 +3391,13 @@ animation::Phase Instruction::Widget::Tick(time::Timer& timer) {
     }
   }
 
+  assembly_text = AssemblyText(inst);
+  machine_text = MachineText(inst);
+
   return animation::Finished;
 }
 
 void Instruction::Widget::Draw(SkCanvas& canvas) const {
-  auto instruction = this->LockObject<Instruction>();
-  auto& inst = instruction->mc_inst;
-
   auto mat = canvas.getLocalToDeviceAs3x3();
   float det = mat.rc(0, 0) * mat.rc(1, 1) - mat.rc(0, 1) * mat.rc(1, 0);
   bool is_flipped = det > 0;
@@ -3455,15 +3456,12 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
   }
 
   auto& subscript_font = SubscriptFont();
-  // Assembly text
-  auto assembly_text = AssemblyText(inst);
   auto& fine_font = FineFont();
   using Widget = Instruction::Widget;
   auto assembly_text_width = fine_font.MeasureText(assembly_text);
   Vec2 assembly_text_offset = Vec2{Widget::kBorderMargin - kFineFontSize / 2,
                                    kHeight - kFineFontSize / 2 - Widget::kBorderMargin};
 
-  auto machine_text = MachineText(inst);
   auto machine_text_width = fine_font.MeasureText(machine_text);
   Vec2 machine_text_offset =
       Vec2{Widget::kWidth - Widget::kBorderMargin + kFineFontSize / 2 - machine_text_width,

@@ -107,6 +107,10 @@ struct Instruction : Object, Buffer {
     llvm::SmallVector<Vec2, 10> token_position;
     llvm::SmallVector<float, 10> string_width_scale;
 
+    mc::Inst inst;
+    Str assembly_text;
+    Str machine_text;
+
     struct Token {
       enum Tag : uint8_t {
         String,

@@ -121,10 +121,9 @@ struct UseObjectOption : TextOption {
 };
 
 struct KeyPresserButton : KeyButton {
-  KeyPresserButton(Widget* parent, StrView label, SkColor color, float width)
-      : KeyButton(parent, label, color, width) {}
+  bool is_pressed = false;
   using KeyButton::KeyButton;
-  float PressRatio() const override;
+  float PressRatio() const override { return is_pressed ? 1 : 0; }
 };
 
 struct KeyPresserWidget : ObjectToy, ui::CaretOwner {
@@ -149,17 +148,17 @@ struct KeyPresserWidget : ObjectToy, ui::CaretOwner {
     };
   }
 
-  animation::Phase Tick(time::Timer&) override {
+  animation::Phase Tick(time::Timer& timer) override {
     shortcut_button->fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
+    if (auto key_presser = LockObject<KeyPresser>()) {
+      shortcut_button->is_pressed = key_presser->key_pressed;
+    }
+    shortcut_button->WakeAnimationAt(timer.now);
     return animation::Finished;
   }
 
   void Draw(SkCanvas& canvas) const override {
-    bool is_pressed = false;
-    {
-      auto key_presser = LockObject<KeyPresser>();
-      is_pressed = key_presser->key_pressed;
-    }
+    bool is_pressed = shortcut_button->is_pressed;
 
     DrawChildren(canvas);
     auto& img = is_pressed ? textures::PressingHandColor() : textures::PointingHandColor();
@@ -226,15 +225,6 @@ struct KeyPresserWidget : ObjectToy, ui::CaretOwner {
 
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
 };
-
-float KeyPresserButton::PressRatio() const {
-  auto key_presser_widget = static_cast<KeyPresserWidget*>(this->parent.Get());
-  auto key_presser = key_presser_widget->LockObject<KeyPresser>();
-  if (key_presser_widget->key_selector || key_presser->key_pressed) {
-    return 1;
-  }
-  return 0;
-}
 
 KeyPresser::KeyPresser(ui::AnsiKey key) : key(key) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }

@@ -52,7 +52,12 @@ struct Button : Widget {
   }
   virtual SkColor ForegroundColor() const { return SK_ColorBLACK; }
   virtual SkColor BackgroundColor() const { return SK_ColorWHITE; }
+
+  // Float between 0 and 1 which indicates how much the button is pressed.
+  //
+  // Values outside of 0..1 are actually ok - for various animated effects.
   virtual float PressRatio() const { return clickable.pointers_pressing ? 1 : 0; }
+
   void FillChildren(Vec<Widget*>& children) override { children.push_back(child.get()); }
   SkRect ChildBounds() const;
   SkPath Shape() const override;

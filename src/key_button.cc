@@ -43,14 +43,7 @@ struct KeyLabelWidget : Widget, LabelMixin {
 KeyButton::KeyButton(Widget* parent, StrView label, SkColor color, float width)
     : Button(parent), width(width), fg(color) {
   child = make_unique<KeyLabelWidget>(this, label);
-  UpdateChildTransform();
-  SkRect child_bounds = ChildBounds();
-  SkRRect key_base = RRect();
-  SkRect key_face =
-      SkRect::MakeLTRB(key_base.rect().left() + kKeySide, key_base.rect().top() + kKeyBottomSide,
-                       key_base.rect().right() - kKeySide, key_base.rect().bottom() - kKeyTopSide);
-  auto offset = key_face.center() - child_bounds.center();
-  child->local_to_parent = SkM44::Translate(offset.x(), offset.y());
+  SetLabel(label);
 }
 
 void KeyButton::Activate(ui::Pointer& pointer) {
@@ -145,7 +138,18 @@ Font& KeyFont() {
 }
 
 void KeyButton::SetLabel(StrView new_label) {
-  dynamic_cast<LabelMixin*>(child.get())->SetLabel(new_label);
+  KeyLabelWidget* label_widget = static_cast<KeyLabelWidget*>(child.get());
+  label_widget->SetLabel(new_label);
+  SkRect child_bounds = ChildBounds();
+  SkRRect key_base = RRect();
+  SkRect key_face =
+      SkRect::MakeLTRB(key_base.rect().left() + kKeySide, key_base.rect().top() + kKeyBottomSide,
+                       key_base.rect().right() - kKeySide, key_base.rect().bottom() - kKeyTopSide);
+  auto offset = key_face.center() - child_bounds.center();
+  float scale_x = min(1.0f, key_face.width() / label_widget->width);
+  float scale_y = min(1.0f, scale_x * 2);
+  label_widget->local_to_parent =
+      SkM44::Translate(offset.x(), offset.y()).preScale(scale_x, scale_y);
 }
 
 }  // namespace automat::library

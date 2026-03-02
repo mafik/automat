@@ -5,6 +5,7 @@
 #include "base.hh"
 #include "image_provider.hh"
 #include "str.hh"
+#include "time.hh"
 
 namespace automat::library {
 
@@ -32,7 +33,7 @@ struct Window : public Object {
   // Private implementation to avoid polluting header with platform-specific defines.
   std::unique_ptr<Impl> impl;
 
-  double capture_time = 0;
+  time::SteadyPoint capture_time = time::kZeroSteady;
 
   Window();
 

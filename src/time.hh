@@ -14,6 +14,7 @@ using std::literals::chrono_literals::operator""h;
 
 namespace automat::time {
 
+// 64-bit nanosecond duration
 using Duration = std::chrono::duration<int64_t, std::ratio<1, 1000000000>>;
 
 constexpr Duration kDurationGuard = Duration(std::numeric_limits<Duration::rep>::min());
@@ -32,8 +33,10 @@ inline Duration Defloat(FloatDuration d) {
 
 constexpr double ToSeconds(FloatDuration d) { return d.count(); }
 constexpr double ToSeconds(Duration d) { return ToSeconds(FloatDuration(d)); }
+constexpr double ToSeconds(SteadyPoint p) { return ToSeconds(p.time_since_epoch()); }
 constexpr Duration FromSeconds(int64_t s) { return Duration(s); }
 constexpr Duration FromSeconds(double s) { return Defloat(FloatDuration(s)); }
+constexpr SteadyPoint SteadyFromSeconds(double s) { return SteadyPoint(FromSeconds(s)); }
 
 constexpr SystemPoint kZero = {};
 constexpr SteadyPoint kZeroSteady = {};
@@ -65,6 +68,7 @@ struct Timer {
     now = time::SteadyNow();
     d = ToSeconds(now - last);
   }
+  Duration Delta() const { return now - last; }
 };
 
 }  // namespace automat::time

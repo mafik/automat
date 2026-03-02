@@ -241,6 +241,7 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
 
   sk_sp<SkImage> captured_image;  // Local copy of the captured bitmap
   SkColor title_bar_color = "#0066ff"_color;
+  time::SteadyPoint capture_time = {};
 
   Ptr<Window> LockWindow() const { return LockObject<Window>(); }
 
@@ -280,22 +281,18 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
   SkPath Shape() const override { return SkPath::RRect(CoarseBounds().sk); }
 
   animation::Phase Tick(time::Timer& timer) override {
-    auto window = LockWindow();
-
-    auto lock = std::unique_lock<std::mutex>(window->mutex, std::defer_lock);
-    {
-      ZoneScopedN("Locking Window");
-      lock.lock();
+    if (auto window = LockWindow()) {
+      auto lock = std::unique_lock<std::mutex>(window->mutex);
+      if (window_name != window->title) {
+        window_name = window->title;
+      }
+      // Copy the captured image from the Window object
+      captured_image = window->captured_image;
+      capture_time = window->capture_time;
     }
-    if (window_name != window->title) {
-      window_name = window->title;
-    }
-    // Copy the captured image from the Window object
-    captured_image = window->captured_image;
 
     // Compute title bar color decay from blue to silver
-    float t =
-        std::clamp<float>((timer.NowSeconds() - window->capture_time - timer.d * 2) / 0.3, 0, 1);
+    float t = std::clamp<float>((timer.now - capture_time - timer.Delta() * 2) / 0.3s, 0, 1);
 
     // Interpolate from blue to red
     SkColor blue = "#0066ff"_color;
@@ -556,7 +553,7 @@ void Window::Capture() {
 
     auto window_lock = std::lock_guard(mutex);
     captured_image = std::move(new_image);
-    capture_time = time::SecondsSinceEpoch();
+    capture_time = time::SteadyNow();
   }
 #elif defined(_WIN32)
   {
@@ -637,7 +634,7 @@ void Window::Capture() {
     {
       auto lock = std::lock_guard(mutex);
       captured_image = std::move(result);
-      capture_time = time::SecondsSinceEpoch();
+      capture_time = time::SteadyNow();
     }
   }
 #endif
@@ -688,7 +685,7 @@ void Window::SerializeState(ObjectSerializer& writer) const {
   writer.Key("run_continuously");
   writer.Bool(run_continuously);
   writer.Key("capture_time");
-  writer.Double(capture_time);
+  writer.Double(time::ToSeconds(capture_time));
 }
 
 bool Window::DeserializeKey(ObjectDeserializer& d, StrView key) {
@@ -701,7 +698,9 @@ bool Window::DeserializeKey(ObjectDeserializer& d, StrView key) {
   } else if (key == "run_continuously") {
     d.Get(run_continuously, status);
   } else if (key == "capture_time") {
-    d.Get(capture_time, status);
+    double capture_time_seconds;
+    d.Get(capture_time_seconds, status);
+    capture_time = time::SteadyFromSeconds(capture_time_seconds);
   } else {
     return false;
   }

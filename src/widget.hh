@@ -146,9 +146,30 @@ struct Widget : Trackable, OptionsProvider {
 
   bool redraw_this_frame = false;
 
-  // Set to true when the widget's Tick returns Phase::Expired.
-  // The parent should remove it from its children list on the next frame.
-  bool expired = false;
+  // Set to true by `MarkDead`.
+  bool dead = false;
+
+  // Due to the concurrent nature of Automat's objects the Widgets only keep a weak reference to the
+  // underlying objects. When these objects are deleted, on the next lock attempt, the widget
+  // obtains nullptr. This is the signal for the widget to mark itself as dead (with `MarkDead`).
+  //
+  // Some (zombie) widgets may choose to not report their death immediately and instead animate
+  // their disappearance. In this case, they should call `MarkDead` when the disappearance animation
+  // finishes. Examples are LocationWidget and ConnectionWidget.
+  void MarkDead(time::SteadyPoint now) {
+    dead = true;
+    if (parent) {
+      parent->OnChildDead(*this, now);
+    }
+  }
+
+  // Used to notify the parent that one of its children has expired. The parent should remove it
+  // from its children list in the response.
+  //
+  // Default implementation only wakes the animation.
+  //
+  // This will typically be called AFTER parent's Tick & DURING the child's Tick.
+  virtual void OnChildDead(Widget& child, time::SteadyPoint now) { WakeAnimationAt(now); }
 
   // Can be used by parent to store some data. Helps in avoiding allocations
   int index;

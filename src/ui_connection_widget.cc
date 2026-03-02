@@ -15,6 +15,7 @@
 #include <optional>
 
 #include "../build/generated/embedded.hh"
+#include "animation.hh"
 #include "argument.hh"
 #include "audio.hh"
 #include "automat.hh"
@@ -317,7 +318,11 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   ConnectionWidgetLocker a(*this);
 
   if (!a.start_arg) {
-    return animation::Finished;
+    auto phase = animation::ExponentialApproach(0, timer.d, 0.1, alpha);
+    if (phase == animation::Finished) {
+      MarkDead(timer.now);
+    }
+    return phase;
   }
   style = a.start_arg->style;
   if (style == Argument::Style::Invisible || style == Argument::Style::Spotlight) {

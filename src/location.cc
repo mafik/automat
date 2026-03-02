@@ -212,10 +212,10 @@ animation::Phase LocationWidget::Tick(time::Timer& timer) {
   if (!loc) {
     // Location is dead — fade out and eventually expire
     phase |= animation::ExponentialApproach(1, timer.d, 0.1, transparency);
-    if (transparency > 0.99) {
-      return animation::Expired;
+    if (phase == animation::Finished) {
+      MarkDead(timer.now);
     }
-    return animation::Animating;
+    return phase;
   }
 
   phase |= animation::ExponentialApproach(0, timer.d, 0.1, transparency);

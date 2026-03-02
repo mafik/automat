@@ -7,9 +7,9 @@
 #include <string>
 #include <vector>
 
+#include "argument.hh"
 #include "object.hh"
 #include "ptr.hh"
-#include "status.hh"
 
 namespace automat {
 
@@ -27,7 +27,7 @@ void JoinWorkerThreads();
 
 // Schedules all of the Locations pointed by the "next" argument from the "source" Location.
 void ScheduleNext(Object& source);
-void ScheduleArgumentTargets(Object& source, Interface::Table&);
+void ScheduleArgumentTargets(Argument);
 
 struct Task {
   WeakPtr<Object> target;
@@ -47,8 +47,7 @@ struct Task {
 
 struct RunTask : Task {
   Interface::Table* runnable;
-  RunTask(WeakPtr<Object> target, Interface::Table* runnable)
-      : Task(target), runnable(runnable) {}
+  RunTask(WeakPtr<Object> target, Interface::Table* runnable) : Task(target), runnable(runnable) {}
   std::string Format() override;
   void OnExecute(std::unique_ptr<Task>& self) override;
 

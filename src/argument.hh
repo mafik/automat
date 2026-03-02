@@ -7,6 +7,7 @@
 #include "control_flow.hh"
 #include "object.hh"
 #include "status.hh"
+#include "time.hh"
 #include "units.hh"
 
 namespace automat {
@@ -123,7 +124,9 @@ struct Argument : Interface {
   using Toy = ArgumentToy;
   using Style = Table::Style;
 
-  struct State {};
+  struct State {
+    time::SteadyPoint last_activity;
+  };
   INTERFACE_BOUND(Argument, Interface)
   Argument(Object& obj) : Interface(obj) {}
 

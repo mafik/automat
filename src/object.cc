@@ -302,7 +302,8 @@ struct UnsyncOption : TextOption {
 
 struct FieldOption : TextOption, OptionsProvider {
   NestedWeakPtr<Syncable::Table> syncable_weak;
-  FieldOption(NestedWeakPtr<Syncable::Table> weak) : TextOption(SyncableName(weak)), syncable_weak(weak) {}
+  FieldOption(NestedWeakPtr<Syncable::Table> weak)
+      : TextOption(SyncableName(weak)), syncable_weak(weak) {}
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<FieldOption>(syncable_weak);
   }
@@ -317,10 +318,12 @@ struct FieldOption : TextOption, OptionsProvider {
       auto* obj = syncable.Owner<Object>();
       if (auto* on_off = dyn_cast<OnOff::Table>(syncable.Get())) {
         if (OnOff(*obj, *on_off).IsOn()) {
-          TurnOffOption turn_off(NestedWeakPtr<OnOff::Table>(syncable_weak.GetOwnerWeak(), static_cast<OnOff::Table*>(on_off)));
+          TurnOffOption turn_off(NestedWeakPtr<OnOff::Table>(syncable_weak.GetOwnerWeak(),
+                                                             static_cast<OnOff::Table*>(on_off)));
           visitor(turn_off);
         } else {
-          TurnOnOption turn_on(NestedWeakPtr<OnOff::Table>(syncable_weak.GetOwnerWeak(), static_cast<OnOff::Table*>(on_off)));
+          TurnOnOption turn_on(NestedWeakPtr<OnOff::Table>(syncable_weak.GetOwnerWeak(),
+                                                           static_cast<OnOff::Table*>(on_off)));
           visitor(turn_on);
         }
       }
@@ -473,7 +476,6 @@ void Object::Interfaces(const std::function<LoopControl(Interface)>& cb) {}
 
 void Object::InterfaceName(Interface::Table& iface, Str& out_name) { out_name = iface.name; }
 
-
 Location* Object::MyLocation() {
   for (auto& loc : root_board->locations) {
     if (loc->object == this) {
@@ -481,16 +483,6 @@ Location* Object::MyLocation() {
     }
   }
   return here;
-}
-
-
-void Object::InvalidateConnectionWidgets(const Interface::Table* arg) const {
-  for (auto& w : ui::ConnectionWidgetRange(this, arg)) {
-    w.WakeAnimation();
-    if (w.state) {
-      w.state->stabilized = false;
-    }
-  }
 }
 
 Interface::Table* Object::InterfaceFromName(StrView needle) {

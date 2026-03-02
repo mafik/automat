@@ -194,7 +194,7 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
       ScheduleNext(*exit_inst);
     } else if (code_point.stop_type == mc::StopType::Jump) {
       // LOG << "Exiting through " << exit_inst->ToAsmStr() << "->jump";
-      ScheduleArgumentTargets(*exit_inst, Instruction::jump_arg_tbl);
+      ScheduleArgumentTargets(exit_inst->jump_arg.Bind());
     } else {
       ERROR << "Exiting through " << exit_inst->ToAsmStr() << "->instruction body (?!)";
     }

@@ -12,6 +12,7 @@
 #include "blockingconcurrentqueue.hh"
 #include "casting.hh"
 #include "thread_name.hh"
+#include "time.hh"
 #include "ui_connection_widget.hh"
 
 namespace automat {
@@ -141,22 +142,17 @@ std::string RunTask::Format() { return f("RunTask({})", Name(target)); }
 
 void ScheduleNext(Object& source) {
   source.Each<NextArg>([&](NextArg next) {
-    ScheduleArgumentTargets(source, *next.table);
+    ScheduleArgumentTargets(next);
     return LoopControl::Continue;
   });
 }
 
-void ScheduleArgumentTargets(Object& source, Interface::Table& arg) {
+void ScheduleArgumentTargets(Argument arg) {
   // audio::Play(source.object->NextSound());
-  for (auto& w : ui::ConnectionWidgetRange(&source, static_cast<const Argument::Table*>(&arg))) {
-    if (w.state) {
-      w.state->stabilized = false;
-      w.state->lightness_pct = 100;
-    }
-    w.WakeAnimation();
-  }
 
-  if (auto next = Argument(source, static_cast<Argument::Table&>(arg)).Find()) {
+  arg.state->last_activity = time::SteadyNow();
+
+  if (auto next = arg.Find()) {
     // The target may be the Object itself (with AsRunnable) or a Runnable sub-interface.
     Runnable runnable;
     if (auto* r = dyn_cast_if_present<Runnable::Table>(next.Get())) {
@@ -168,6 +164,7 @@ void ScheduleArgumentTargets(Object& source, Interface::Table& arg) {
       runnable.ScheduleRun();
     }
   }
+  arg.object_ptr->WakeToys();
 }
 
 void RunTask::OnExecute(std::unique_ptr<Task>& self) {

@@ -1303,7 +1303,8 @@ void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shap
   canvas.restore();
 }
 
-CablePhysicsSimulation::CablePhysicsSimulation(Location& loc, Argument::Table& arg, Vec2AndDir start)
+CablePhysicsSimulation::CablePhysicsSimulation(Location& loc, Argument::Table& arg,
+                                               Vec2AndDir start)
     : dispenser_v(0), location(loc), arg(arg) {
   sections.emplace_back(CableSection{
       .pos = start.pos,

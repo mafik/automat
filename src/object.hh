@@ -109,8 +109,6 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
 
   virtual std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 
-  void InvalidateConnectionWidgets(const Interface::Table* arg = nullptr) const;
-
   // Used to report errors within this object. If an error was caused by some other
   // "error reporter", take a look at ReportError in error.hh.
   void ReportError(std::string_view message,

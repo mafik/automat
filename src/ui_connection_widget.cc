@@ -324,7 +324,9 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     }
     return phase;
   }
-  style = a.start_arg->style;
+  Argument arg(*a.StartObj(), *a.start_arg);
+
+  style = arg.table->style;
   if (style == Argument::Style::Invisible || style == Argument::Style::Spotlight) {
     return animation::Finished;
   }
@@ -414,6 +416,10 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
       state->steel_insert_hidden.target = 0;
     }
     phase |= state->steel_insert_hidden.Tick(timer);
+
+    if (timer.last < arg.state->last_activity) {
+      state->lightness_pct = 100;
+    }
 
     phase |= SimulateCablePhysics(timer, *state, pos_dir, to_points);
   } else if (style != Argument::Style::Arrow) {

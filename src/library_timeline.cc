@@ -434,13 +434,13 @@ void TimelineScheduleNextAfter(Timeline& t, time::SteadyPoint now) {
 static void TimelineUpdateOutputs(Timeline& t, time::SteadyPoint started_at,
                                   time::SteadyPoint now) {
   for (auto& track : t.tracks) {
-    t.InvalidateConnectionWidgets(track.get());
     auto* object = Argument(t, *track).ObjectOrNull();
     if (object == nullptr) continue;
     auto* location = object->MyLocation();
     if (location == nullptr) continue;
     track->track->UpdateOutput(*location, started_at, now);
   }
+  t.WakeToys();
 }
 
 static float BridgeOffsetX(float current_pos_ratio) {

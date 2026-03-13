@@ -6,6 +6,7 @@
 #include <include/core/SkClipOp.h>
 #include <include/core/SkPaint.h>
 
+#include <cstdint>
 #include <mutex>
 
 #include "animation.hh"
@@ -248,16 +249,33 @@ struct GearWidget : ObjectToy {
 
   bool CenteredAtZero() const override { return true; }
 
-  animation::Phase Tick(time::Timer& t) override { return animation::Animating; }
+  uint32_t last_wake_counter = 0;
+  float angular_velocity = 0;
+  float angle = 0;
+  float target_angle = 0;
+
+  animation::Phase Tick(time::Timer& t) override {
+    auto gear = LockOwner<Gear>();
+    auto wake_counter = gear->wake_counter.load(std::memory_order_relaxed);
+    if (wake_counter != last_wake_counter) {
+      last_wake_counter = wake_counter;
+      target_angle += M_PI / 12;  // half tooth
+    }
+    if (angle >= 2 * M_PI) {
+      angle -= 2 * M_PI;
+      target_angle -= 2 * M_PI;
+    }
+
+    return animation::LowLevelSineTowards(target_angle, t.d, 0.6, angle, angular_velocity);
+  }
 
   void Draw(SkCanvas& canvas) const override {
     auto& effect = GearShader();
     auto& color = RubberColor();
     auto& normal = RubberNormal();
 
-    float primary_rotation = time::SteadySaw<20.0>() * M_PI * 2;
     SkRuntimeEffectBuilder builder(effect);
-    builder.uniform("iRotationRad") = primary_rotation;
+    builder.uniform("iRotationRad") = angle;
     SkMatrix px_to_local;
     (void)canvas.getLocalToDeviceAs3x3().invert(&px_to_local);
     builder.uniform("iPixelRadius") = (float)px_to_local.mapRadius(1);
@@ -302,6 +320,8 @@ animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
   // Find the gear widget
   auto* gear_widget = toy_store.FindOrNull(*gear);
   if (!gear_widget) return animation::Finished;
+
+  angle = gear_widget->angle;
 
   // Find the owner object widget
   auto* owner_widget = toy_store.FindOrNull(*owner_obj);
@@ -353,9 +373,8 @@ void SyncConnectionWidget::Draw(SkCanvas& canvas) const {
   auto& color = RubberColor();
   auto& normal = RubberNormal();
 
-  float primary_rotation = time::SteadySaw<20.0>() * M_PI * 2;
   SkRuntimeEffectBuilder builder(effect);
-  builder.uniform("iRotationRad") = primary_rotation;
+  builder.uniform("iRotationRad") = angle;
   SkMatrix px_to_local;
   (void)canvas.getLocalToDeviceAs3x3().invert(&px_to_local);
   builder.uniform("iPixelRadius") = (float)px_to_local.mapRadius(1);
@@ -381,7 +400,7 @@ void SyncConnectionWidget::Draw(SkCanvas& canvas) const {
   canvas.translate(start.x, start.y);
 
   float rot_offset = atan(dir);
-  float secondary_gear_rot = rot_offset * (ratio + 1) + primary_rotation * ratio;
+  float secondary_gear_rot = rot_offset * (ratio + 1) + angle * ratio;
 
   SkPaint secondary_gear_paint;
   builder.uniform("iRotationRad") = -secondary_gear_rot;

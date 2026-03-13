@@ -12,6 +12,7 @@ namespace automat {
 
 struct Gear;
 struct SyncConnectionWidget;
+struct GearWidget;
 
 struct Syncable : Argument {
   struct Table : Argument::Table {
@@ -129,6 +130,8 @@ struct Gear : Object {
   void SerializeState(ObjectSerializer& writer) const override;
 
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
+
+  using Toy = GearWidget;
 };
 
 template <typename T, typename F>
@@ -137,6 +140,7 @@ void Syncable::ForwardDo(this T self, F&& lambda) {
   if (!st.source) {
     lambda(self);
   } else if (auto gear = st.end.template OwnerLockAs<Gear>()) {
+    gear->WakeToys();
     auto lock = std::shared_lock(gear->mutex);
     for (auto& member : gear->members) {
       if (!member.sink) continue;
@@ -156,7 +160,12 @@ void Syncable::ForwardNotify(this T self, F&& lambda) {
   auto& st = *self.state;
   if (!st.source) return;
   if (auto gear = st.end.template OwnerLockAs<Gear>()) {
+    gear->WakeToys();
     auto lock = std::shared_lock(gear->mutex);
+    // How to visualize sync events?
+    //
+    // Option 1: every sync event rotates the gear by one tooth
+    // Option 2: same but also introduce a maximum speed
     for (auto& member : gear->members) {
       auto locked = member.weak.Lock();
       if (!locked) continue;
@@ -180,6 +189,7 @@ struct SyncConnectionWidget : ArgumentToy {
   SkPath end_shape;
   Vec2 end{};
   Vec2 gear_origin{};
+  float angle = 0;
 
   SyncConnectionWidget(ui::Widget* parent, Object& object, Syncable::Table& syncable);
 

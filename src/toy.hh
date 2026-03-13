@@ -8,6 +8,7 @@
 #include <functional>
 #include <type_traits>
 
+#include "interface.hh"
 #include "part.hh"
 #include "ptr.hh"
 #include "time.hh"
@@ -38,6 +39,12 @@ struct Toy : ui::Widget {
   template <typename T = ReferenceCounted>
   Ptr<T> LockOwner() const {
     return owner.Lock().template Cast<T>();
+  }
+
+  template <typename T = Interface>
+  T Bind(Object& owner) const {
+    if (!iface) return nullptr;
+    return T(owner, *static_cast<typename T::Table*>(iface));
   }
 };
 

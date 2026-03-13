@@ -287,7 +287,6 @@ SyncConnectionWidget::SyncConnectionWidget(Widget* parent, Object& object,
 SkPath SyncConnectionWidget::Shape() const { return SkPath(); }
 
 animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
-  bounds = Rect{};
   auto& toy_store = ToyStore();
 
   // Check if the object of this connection still exists.
@@ -295,9 +294,9 @@ animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
   if (!owner_obj) return animation::Finished;
 
   // Find the gear via the syncable's sync state
-  auto* syncable = static_cast<Syncable::Table*>(iface);
-  auto& state = *Syncable(*owner_obj, *syncable).state;
-  auto gear = state.end.OwnerLockAs<Gear>();
+  auto syncable = Bind<Syncable>(*owner_obj);
+  auto& state = syncable.state;
+  auto gear = state->end.OwnerLockAs<Gear>();
   if (!gear) return animation::Finished;
 
   // Find the gear widget
@@ -308,12 +307,17 @@ animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
   auto* owner_widget = toy_store.FindOrNull(*owner_obj);
   if (!owner_widget) return animation::Finished;
 
-  end_shape = owner_widget->InterfaceShape(syncable);
-  end_shape.transform(TransformBetween(*owner_widget, *gear_widget));
-  auto end_bounds = end_shape.getBounds();
-  end = end_bounds.center();
-  bounds = end_bounds;
+  bounds = Rect{};
 
+  end_shape = owner_widget->InterfaceShape(syncable.table_ptr);
+  end_shape.transform(TransformBetween(*owner_widget, *this));
+  bounds = end_shape.getBounds();
+  end = bounds.Center();
+  auto gear_matrix = TransformBetween(*gear_widget, *this);
+  gear_origin = gear_matrix.mapOrigin();
+  auto gear_shape = gear_widget->Shape();
+  gear_shape.transform(gear_matrix);
+  bounds.ExpandToInclude(gear_shape.getBounds());
   return animation::Animating;
 }
 
@@ -339,8 +343,8 @@ void SyncConnectionWidget::Draw(SkCanvas& canvas) const {
   builder.child("iRubberColor") = *color.shader;
   builder.child("iRubberNormal") = *normal.shader;
 
-  auto dir = Normalize(end);
-  auto start = dir * (kPrimaryGearRadius + kSecondaryGearRadius);
+  auto dir = Normalize(end - gear_origin);
+  auto start = dir * (kPrimaryGearRadius + kSecondaryGearRadius) + gear_origin;
 
   float ratio = kPrimaryGearRadius / kSecondaryGearRadius;
 

@@ -179,6 +179,7 @@ struct SyncConnectionWidget : ArgumentToy {
   Rect bounds;
   SkPath end_shape;
   Vec2 end{};
+  Vec2 gear_origin{};
 
   SyncConnectionWidget(ui::Widget* parent, Object& object, Syncable::Table& syncable);
 

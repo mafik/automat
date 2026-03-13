@@ -3,14 +3,14 @@
 // SPDX-FileCopyrightText: Copyright 2026 Automat Authors
 // SPDX-License-Identifier: MIT
 //
-// Metal gear shape with twisting belt
+// Metal gear shape with a rubber belt
 
 uniform float iRotationRad;
 
 uniform float iPixelRadius;
 uniform float iGearCount;
 uniform float iTeethAmplitudeCm;
-uniform float iRadiusCm; // Radius of the "middle line" that goes through zero point of the gear sine wave
+uniform float iRadiusCm;  // Radius of the "middle line" that goes through zero point of the gear sine wave
 
 uniform float iGrooveStartCm;
 uniform float iGrooveMiddleCm;
@@ -34,28 +34,58 @@ const vec3 kMetalLight = vec3(0.65, 0.62, 0.58);
 const vec3 kMetalBright = vec3(0.85, 0.82, 0.78);
 
 float notch(float x, float left, float center, float right) {
-  if (x > right || x < left) return 1;
-  if (x < center)
+    if (x > right || x < left) return 1;
+    if (x < center)
     return smoothstep(center, left, x);
-  return smoothstep(center, right, x);
+    return smoothstep(center, right, x);
 }
 
 float d_smoothstep(float edge0, float edge1, float x) {
-  x = (x - edge0) / (edge1 - edge0);
-  x = min(1, x);
-  x = max(0, x);
-  return 6 * x * (1 - x) * (edge0 - edge1);
+    x = (x - edge0) / (edge1 - edge0);
+    x = min(1, x);
+    x = max(0, x);
+    return 6 * x * (1 - x) * (edge0 - edge1);
 }
 
 float d_notch(float x, float left, float center, float right) {
-  if (x > right || x < left) return 0;
-  if (x < center)
+    if (x > right || x < left) return 0;
+    if (x < center)
     return d_smoothstep(center, left, x);
-  return d_smoothstep(center, right, x);
+    return d_smoothstep(center, right, x);
 }
 
 float linramp(float edge0, float edge1, float x) {
-  return (x - edge0) / (edge1 - edge0);
+    return (x - edge0) / (edge1 - edge0);
+}
+
+mat3 rotX(float angle) {
+    float c = cos(angle);
+    float s = sin(angle);
+    return mat3(
+    1, 0, 0,
+    0, c, -s,
+    0, s, c
+    );
+}
+
+mat3 rotY(float angle) {
+    float c = cos(angle);
+    float s = sin(angle);
+    return mat3(
+    c, 0, s,
+    0, 1, 0,
+    -s, 0, c
+    );
+}
+
+mat3 rotZ(float angle) {
+    float c = cos(angle);
+    float s = sin(angle);
+    return mat3(
+    c, -s, 0,
+    s, c, 0,
+    0, 0, 1
+    );
 }
 
 // Compute gear teeth height and surface gradients for normal computation
@@ -64,53 +94,53 @@ float linramp(float edge0, float edge1, float x) {
 // outerRadius: outer radius of the gear
 // Outputs: h (height), dx (radial gradient), dy (tangential gradient)
 void gearTeethSurface(vec2 uv_circ, float x, float angleRot, float outerRadius,
-  out float h, out vec3 normal, out float alpha) {
-  float r = iRadiusCm + iTeethAmplitudeCm * sin(angleRot);
-  float sdf = min(r - x, x - iHoleRadiusCm);
-  if (sdf <= 0.) {
-    alpha = 0;
-    return;
-  }
+out float h, out vec3 normal, out float alpha) {
+    float r = iRadiusCm + iTeethAmplitudeCm * sin(angleRot);
+    float sdf = min(r - x, x - iHoleRadiusCm);
+    if (sdf <= 0.) {
+        alpha = 0;
+        return;
+    }
 
-  alpha = clamp(sdf / iPixelRadius / 100., 0., 1.);
+    alpha = clamp(sdf / iPixelRadius / 100., 0., 1.);
 
-  float margin = 0.1;
+    float margin = 0.1;
 
-  h = 0.8 + 0.2 * sqrt(max(0., 1. - pow(x / outerRadius, 2.)));
-  float dx = 0.2 * sin(x * M_PI / 2.);
-  float dy = 0.;
+    h = 0.8 + 0.2 * sqrt(max(0., 1. - pow(x / outerRadius, 2.)));
+    float dx = 0.2 * sin(x * M_PI / 2.);
+    float dy = 0.;
 
-  // Gear teeth edge
-  float edge_dist = r - margin - x;
-  if (edge_dist < 0.) {
-    float mul = sqrt(max(0., 1. - pow(edge_dist / margin, 2.)));
-    dx = dx * mul - h * sin(edge_dist / margin * M_PI / 2.);
-    dy = h * -cos(angleRot) * (1. - mul);
-    h *= mul;
-  }
+    // Gear teeth edge
+    float edge_dist = r - margin - x;
+    if (edge_dist < 0.) {
+        float mul = sqrt(max(0., 1. - pow(edge_dist / margin, 2.)));
+        dx = dx * mul - h * sin(edge_dist / margin * M_PI / 2.);
+        dy = h * -cos(angleRot) * (1. - mul);
+        h *= mul;
+    }
 
-  // Hole edge roundness
-  float hole_outer = iHoleRadiusCm + iHoleRoundnessCm;
-  if (x < hole_outer) {
-    float mul = sqrt(max(0., 1. - pow((x - hole_outer) / iHoleRoundnessCm, 2.)));
-    dx = dx * mul + h * sin((x - hole_outer) / iHoleRoundnessCm * M_PI / 2.);
-    h *= mul;
-  }
+    // Hole edge roundness
+    float hole_outer = iHoleRadiusCm + iHoleRoundnessCm;
+    if (x < hole_outer) {
+        float mul = sqrt(max(0., 1. - pow((x - hole_outer) / iHoleRoundnessCm, 2.)));
+        dx = dx * mul + h * sin((x - hole_outer) / iHoleRoundnessCm * M_PI / 2.);
+        h *= mul;
+    }
 
-  // Middle groove
-  if (x > iGrooveStartCm && x < iGrooveEndCm) {
-    float mul = 0.3 + 0.7 * notch(x, iGrooveStartCm, iGrooveMiddleCm, iGrooveEndCm);
-    dx = dx * mul + h * 0.7 * d_notch(x, iGrooveStartCm, iGrooveMiddleCm, iGrooveEndCm);
-    h *= mul;
-  }
+    // Middle groove
+    if (x > iGrooveStartCm && x < iGrooveEndCm) {
+        float mul = 0.3 + 0.7 * notch(x, iGrooveStartCm, iGrooveMiddleCm, iGrooveEndCm);
+        dx = dx * mul + h * 0.7 * d_notch(x, iGrooveStartCm, iGrooveMiddleCm, iGrooveEndCm);
+        h *= mul;
+    }
 
-  h = max(h, 0.0);
+    h = max(h, 0.0);
 
-  normal = vec3(
-      uv_circ.x * dx - uv_circ.y * dy,
-      uv_circ.y * dx + uv_circ.x * dy,
-      sqrt(max(0., 1. - dx * dx)));
-  normal = normalize(normal);
+    normal = vec3(
+    uv_circ.x * dx - uv_circ.y * dy,
+    uv_circ.y * dx + uv_circ.x * dy,
+    sqrt(max(0., 1. - dx * dx)));
+    normal = normalize(normal);
 }
 
 // Apply metal shading with full lighting model
@@ -118,228 +148,138 @@ void gearTeethSurface(vec2 uv_circ, float x, float angleRot, float outerRadius,
 // normal: surface normal
 // Returns: lit metal color
 vec3 metalShade(float h, vec3 normal) {
-  vec3 lightDir = normalize(vec3(0., 0.6, 0.8));
-  vec3 viewDir = vec3(0., 0., 1.);
-  vec3 halfDir = normalize(lightDir + viewDir);
+    vec3 lightDir = normalize(vec3(0., 0.6, 0.8));
+    vec3 viewDir = vec3(0., 0., 1.);
+    vec3 halfDir = normalize(lightDir + viewDir);
 
-  vec3 N = normalize(normal);
-  float NdotL = max(dot(N, lightDir), 0.0);
-  float diffuse = NdotL * 0.6 + 0.4;
-  float NdotH = max(dot(N, halfDir), 0.0);
-  float specular = pow(NdotH, 32.0) * 0.5;
-  float NdotV = max(dot(N, viewDir), 0.0);
-  float rim = pow(1.0 - NdotV, 2.0) * 0.3;
-  float ao = smoothstep(-1., 1.0, h);
+    vec3 N = normalize(normal);
+    float NdotL = max(dot(N, lightDir), 0.0);
+    float diffuse = NdotL * 0.6 + 0.4;
+    float NdotH = max(dot(N, halfDir), 0.0);
+    float specular = pow(NdotH, 32.0) * 0.5;
+    float NdotV = max(dot(N, viewDir), 0.0);
+    float rim = pow(1.0 - NdotV, 2.0) * 0.3;
+    float ao = smoothstep(-1., 1.0, h);
 
-  vec3 baseColor = mix(kMetalDark, kMetalMid, smoothstep(0.0, 0.4, h));
-  baseColor = mix(baseColor, kMetalLight, smoothstep(0.4, 0.8, h));
+    vec3 baseColor = mix(kMetalDark, kMetalMid, smoothstep(0.0, 0.4, h));
+    baseColor = mix(baseColor, kMetalLight, smoothstep(0.4, 0.8, h));
 
-  vec3 color = baseColor * diffuse * ao;
-  color += kMetalBright * specular;
-  color += kMetalLight * rim;
+    vec3 color = baseColor * diffuse * ao;
+    color += kMetalBright * specular;
+    color += kMetalLight * rim;
 
-  return color;
-}
-
-// Twist belt ray intersection
-// Args:
-//  theta - belt twist, from 0 (gear teeth visible from the side) to M_PI / 2 (tape visible)
-//  y - distance from 0
-//  hY - y value where gear teeth end
-//  holeY - y value where gear teeth start
-// Returns: bestFace (0 = tape, 1 = gears, -1 = miss)
-// Outputs: localY (0-1 texture coordinate), bestNormal (surface normal)
-void twistBelt(in float theta, in float y, in float hY, in float holeY, in float hZ,
-  out float localY, out int bestFace, out vec3 bestNormal) {
-  float c = cos(theta); // goes from flat 1 (near gear) to angled 0 (near tape)
-  float s = sin(theta); // goes from angled 0 (near gear) to flat 1 (near tape)
-  float cc = c * c; // goes from flat 1 (near gear) to flat 0 (near tape)
-  float ss = s * s; // goes from flat 0 (near gear) to flat 1 (near tape)
-  float sc = c * s; // goes from flat 0 (near gear) to flat 0 (near tape), with max = 0.5
-
-  float tapeBottom = holeY - holeY * 2 * s;
-  float tapeTop = holeY;
-  if (y >= tapeBottom && y < tapeTop) {
-    bestFace = 0;
-    localY = (y - tapeBottom) / (tapeTop - tapeBottom);
-
-    bestNormal = vec3(0, 0, 1);
-
-    float xAngle = cc * -M_PI / 2;
-
-    // Round the tape edges
-    if (localY < 0.1) {
-      xAngle = mix(-M_PI / 2, xAngle, localY / 0.1);
-    } else if (localY > 0.9) {
-      xAngle = mix(xAngle, M_PI / 2, (localY - 0.9) / 0.1);
-    }
-    bestNormal *= mat3(
-        0, 0, 0,
-        0, cos(xAngle), -sin(xAngle),
-        0, sin(xAngle), cos(xAngle)
-      );
-
-    float yAngle = mix(0, M_PI / 2, -sc);
-    bestNormal *= mat3(
-        cos(yAngle), 0, sin(yAngle),
-        0, 1, 0,
-        -sin(yAngle), 0, cos(yAngle)
-      );
-
-    //bestNormal = normalize(vec3(-sc, cc, ss));
-    return;
-  }
-  float gearBottom = tapeTop;
-  float gearTop = gearBottom + (hY - holeY) * cc;
-  if (y >= gearBottom && y < gearTop) {
-    bestFace = 1;
-    localY = (y - gearBottom) / (gearTop - gearBottom);
-    bestNormal = normalize(vec3(sc, -1 + cc, cc));
-    return;
-  }
-
-  bestFace = -1;
-  bestNormal = vec3(0.0);
-  localY = 0.0;
+    return color;
 }
 
 vec3 rotateVec(vec3 gearNormal, vec3 tapeNormal) {
-  vec3 zAxis = vec3(0, 0, 1);
-  vec3 axis = cross(zAxis, tapeNormal);
-  float c = dot(zAxis, tapeNormal);
-  float s = length(axis);
-  if (s > 0.001) {
-    axis = axis / s;
-    // Rodrigues rotation formula as a matrix
-    mat3 K = mat3(
+    vec3 zAxis = vec3(0, 0, 1);
+    vec3 axis = cross(zAxis, tapeNormal);
+    float c = dot(zAxis, tapeNormal);
+    float s = length(axis);
+    if (s > 0.001) {
+        axis = axis / s;
+        // Rodrigues rotation formula as a matrix
+        mat3 K = mat3(
         0, axis.z, -axis.y,
         -axis.z, 0, axis.x,
         axis.y, -axis.x, 0
-      );
-    mat3 R = mat3(1) + s * K + (1.0 - c) * K * K;
-    gearNormal = R * gearNormal;
-  } else if (c < 0.0) {
-    // tapeNormal is opposite to zAxis, flip
-    gearNormal.z = -gearNormal.z;
-  }
-  return gearNormal;
+        );
+        mat3 R = mat3(1) + s * K + (1.0 - c) * K * K;
+        gearNormal = R * gearNormal;
+    } else if (c < 0.0) {
+        // tapeNormal is opposite to zAxis, flip
+        gearNormal.z = -gearNormal.z;
+    }
+    return gearNormal;
+}
+
+float rrect_sdf(vec2 uv, float w, float h, float r) {
+    vec2 d = abs(uv) - vec2(w - r, h - r);
+    return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r;
 }
 
 vec4 main(vec2 localCoord) {
-  vec2 uv = localCoord * 100.; // scale coordinate system from metric, so that 1cm = 1
+    vec2 uv = localCoord * 100.;  // scale coordinate system from metric, so that 1cm = 1
 
-  vec2 end_pos_cm = iEndPos * 100.;
-  vec2 end_dir = normalize(iEndPos);
+    float x = length(uv);
 
-  float tape = dot(end_dir, uv); // distance along the tape towards iEndPos
-  if (tape > length(end_pos_cm)) {
-    return vec4(0.);
-  }
+    vec2 end_pos_cm = iEndPos * 100.;
+    vec2 end_dir = normalize(iEndPos);
+    float end_dist = length(end_pos_cm);
 
-  float angle;
-  if (tape > 0) {
-    vec2 uv_circ = uv - tape * end_dir;
-    angle = atan(uv_circ.y, uv_circ.x);
-  } else {
-    angle = atan(uv.y, uv.x);
-  }
-  float angleRot = (angle + iRotationRad) * iGearCount;
-  float outerRadius = iRadiusCm + iTeethAmplitudeCm;
+    float tape = dot(end_dir, uv);  // distance along the tape towards iEndPos
+    if (tape > end_dist) {
+        return vec4(0.);
+    }
 
-  // For tape > 0, we're in the twisting region
-  if (tape > 0.) {
-    // Belt cross-section dimensions (in cm)
-    float outer_radius = iRadiusCm + iTeethAmplitudeCm; // Outer radius of gear
-    float belt_width = iHoleRadiusCm; // Belt should be as wide as the hole is wide - looks nice
+    float angle = atan(uv.y, uv.x);
+    float angleRot = (angle + iRotationRad) * iGearCount;
+    float outerRadius = iRadiusCm + iTeethAmplitudeCm;  // Outer radius of gear
 
-    // Twist angle: 0 at tape=0, PI/2 at tape=twist_length
-    float twist_length = 1; // cm - length of the twist transition
-    float theta = (0.5 - cos(clamp(tape / twist_length, 0., 1.) * M_PI) * 0.5) * M_PI / 2.;
+    vec4 result = vec4(0.);
+
+    if (x < outerRadius) {  // circular part of the gear
+        float alpha;
+        float h;
+        vec3 normal;
+        gearTeethSurface(uv / outerRadius, x, angleRot, outerRadius, h, normal, alpha);
+        result = vec4(metalShade(h, normal), 1.0);
+        result *= alpha;
+    }
 
     // y coordinate in the belt's local frame (perpendicular to tape direction)
     float tape_cross = end_dir.y * uv.x - end_dir.x * uv.y;
+    float tape_width = iHoleRadiusCm * 2;
+    float tape_round = tape_width * 0.1;  // Roundness of tape edges
 
-    float localY;
-    int bestFace;
-    vec3 tapeNormal;
+    tape += tape_round;  // Inset tape for roundness
+    float localY = (tape_cross - -iHoleRadiusCm) / tape_width;
 
-    // Try both sides of the belt (positive and negative y)
-    twistBelt(theta, tape_cross, outer_radius, iHoleRadiusCm, belt_width, localY, bestFace, tapeNormal);
+    vec2 tape_uv = vec2(end_dist - tape, tape_cross);
+    float tape_sdf = rrect_sdf(tape_uv, end_dist, iHoleRadiusCm, tape_round);
 
-    if (bestFace < 0) {
-      twistBelt(theta, -tape_cross, outer_radius, iHoleRadiusCm, belt_width, localY, bestFace, tapeNormal);
-      tape = -tape;
-      tapeNormal.y = -tapeNormal.y;
-    }
+    // Rubber belt
+    if (end_dist > 0 && tape_sdf < 0) {
 
-    // No hit - background
-    if (bestFace < 0) {
-      return vec4(0.);
-    }
+        vec3 tapeNormal = vec3(0, 0, 1);
 
-    // Rotate tapeNormal towards end_dir (along the z axis)
-    tapeNormal *= mat3(
-        end_dir.x, -end_dir.y, 0,
+        // Round the tape edges
+        if (localY < 0.1) {
+            tapeNormal *= rotX(mix(-M_PI / 2, 0, localY / 0.1));
+        } else if (localY > 0.9) {
+            tapeNormal *= rotX(mix(0, M_PI / 2, (localY - 0.9) / 0.1));
+        }
+
+        if (tape < iHoleRadiusCm) {
+            tapeNormal *= rotY(mix(-M_PI / 2, 0, tape / iHoleRadiusCm));
+        }
+
+        // Rotate tapeNormal towards end_dir (along the z axis)
+        tapeNormal *= mat3(end_dir.x, -end_dir.y, 0,
         end_dir.y, end_dir.x, 0,
-        0, 0, 1
-      );
+        0, 0, 1);
 
-    vec3 faceColor;
-    float alpha = 1;
+        // Note: iRotationRad is probably missing some scale factor
+        vec2 texCoord = vec2(iRotationRad + tape / iHoleRadiusCm / 2, localY) * 1024 / 4;
+        vec3 rubberColor = iRubberColor.eval(texCoord).rgb;
+        vec3 rubberNormal = iRubberNormal.eval(texCoord).xyz * 2 - 1;
+        rubberNormal = rotateVec(rubberNormal, tapeNormal);
 
-    if (bestFace == 0) {
-      // Wide face (top/bottom) - rubber tape
-      // Note: iRotationRad is probably missing some scale factor
-      vec2 texCoord = vec2(iRotationRad + tape / iHoleRadiusCm / 2, localY) * 1024 / 4;
-      vec3 rubberColor = iRubberColor.eval(texCoord).rgb;
-      vec3 rubberNormal = iRubberNormal.eval(texCoord).xyz * 2 - 1;
-      rubberNormal = rotateVec(rubberNormal, tapeNormal);
+        // Apply rubber shading
+        vec3 lightDir = normalize(vec3(0., 0.6, 0.8));
+        vec3 viewDir = vec3(0., 0., 1.);
+        vec3 halfDir = normalize(lightDir + viewDir);
 
-      // Apply rubber shading
-      vec3 lightDir = normalize(vec3(0., 0.6, 0.8));
-      vec3 viewDir = vec3(0., 0., 1.);
-      vec3 halfDir = normalize(lightDir + viewDir);
+        vec3 N = normalize(rubberNormal);
+        float NdotL = max(dot(N, lightDir), 0.0);
+        float diffuse = NdotL * 0.7 + 0.3;
+        float NdotH = max(dot(N, halfDir), 0.0);
+        float specular = pow(NdotH, 8.0) * 0.15;  // Rubber has low, broad specular
+        float NdotV = max(dot(N, viewDir), 0.0);
+        float rim = pow(1.0 - NdotV, 4.0) * 0.25;  // Subtle rim lighting
 
-      vec3 N = normalize(rubberNormal);
-      float NdotL = max(dot(N, lightDir), 0.0);
-      float diffuse = NdotL * 0.7 + 0.3;
-      float NdotH = max(dot(N, halfDir), 0.0);
-      float specular = pow(NdotH, 8.0) * 0.15; // Rubber has low, broad specular
-      float NdotV = max(dot(N, viewDir), 0.0);
-      float rim = pow(1.0 - NdotV, 4.0) * 0.25; // Subtle rim lighting
-
-      faceColor = rubberColor * diffuse + vec3(specular + rim);
-    } else {
-      // Thin face (sides) - procedural gear teeth pattern
-      // Map localY (0-1) to radial position
-      float radial_x = mix(iHoleRadiusCm, outer_radius, localY);
-
-      // Compute angle-based gear teeth pattern from tape position
-      // float belt_angle = tape * iGearCount / iRadiusCm + iRotationRad * iGearCount;
-      angleRot += tape * iGearCount / iRadiusCm;
-
-      // Get gear teeth height for shading
-      vec3 gearNormal;
-      float h;
-      gearTeethSurface(uv / outerRadius, radial_x, angleRot, outer_radius, h, gearNormal, alpha);
-
-      // Rotate gearNormal by the rotation that takes (0,0,1) to tapeNormal
-      gearNormal = rotateVec(gearNormal, tapeNormal);
-
-      // Apply metal shading with the combined normal
-      faceColor = metalShade(h, gearNormal);
+        float alpha = clamp(-tape_sdf / iPixelRadius / 100., 0., 1.);
+        result = mix(result, vec4(rubberColor * diffuse + vec3(specular + rim), 1.0), alpha);
     }
-
-    return vec4(faceColor, 1.0) * alpha;
-  } else { // circular part of the gear
-    float x = length(uv);
-
-    float alpha;
-    float h;
-    vec3 normal;
-    gearTeethSurface(uv / outerRadius, x, angleRot, outerRadius, h, normal, alpha);
-
-    vec3 color = metalShade(h, normal);
-    return vec4(color, 1.0) * alpha;
-  }
+    return result;
 }

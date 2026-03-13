@@ -185,6 +185,8 @@ struct SyncConnectionWidget : ArgumentToy {
 
   SkPath Shape() const override;
   animation::Phase Tick(time::Timer& t) override;
+  Compositor GetCompositor() const override { return Compositor::ANCHOR_WARP; }
+  Vec<Vec2> TextureAnchors() override;
   void Draw(SkCanvas& canvas) const override;
   Optional<Rect> TextureBounds() const override;
 };

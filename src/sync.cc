@@ -321,6 +321,33 @@ animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
   return animation::Animating;
 }
 
+Vec<Vec2> SyncConnectionWidget::TextureAnchors() {
+  auto& toy_store = ToyStore();
+  auto owner_obj = LockOwner<Object>();
+  if (owner_obj) {
+    auto syncable = Bind<Syncable>(*owner_obj);
+    auto& state = syncable.state;
+    auto gear = state->end.OwnerLockAs<Gear>();
+    if (gear) {
+      auto* gear_widget = toy_store.FindOrNull(*gear);
+      if (gear_widget) {
+        auto gear_matrix = TransformBetween(*gear_widget, *this);
+        gear_origin = gear_matrix.mapOrigin();
+      }
+    }
+    auto* owner_widget = toy_store.FindOrNull(*owner_obj);
+    if (owner_widget) {
+      auto owner_matrix = TransformBetween(*owner_widget, *this);
+      end_shape = owner_widget->InterfaceShape(syncable.table_ptr);
+      end_shape.transform(owner_matrix);
+      end = end_shape.getBounds().center();
+    }
+  }
+  auto dir = Normalize(end - gear_origin);
+  auto start = dir * (kPrimaryGearRadius + kSecondaryGearRadius) + gear_origin;
+  return {start, end};
+}
+
 void SyncConnectionWidget::Draw(SkCanvas& canvas) const {
   auto& effect = GearShader();
   auto& color = RubberColor();

@@ -311,33 +311,30 @@ animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
   auto owner_obj = LockOwner<Object>();
   if (!owner_obj) return animation::Finished;
 
-  // Find the gear via the syncable's sync state
   auto syncable = Bind<Syncable>(*owner_obj);
-  auto& state = syncable.state;
-  auto gear = state->end.OwnerLockAs<Gear>();
-  if (!gear) return animation::Finished;
-
-  // Find the gear widget
-  auto* gear_widget = toy_store.FindOrNull(*gear);
-  if (!gear_widget) return animation::Finished;
-
-  angle = gear_widget->angle;
 
   // Find the owner object widget
   auto* owner_widget = toy_store.FindOrNull(*owner_obj);
   if (!owner_widget) return animation::Finished;
 
-  bounds = Rect{};
+  origin_shape = owner_widget->InterfaceShape(syncable.table_ptr);
+  origin_shape.transform(TransformBetween(*owner_widget, *this));
+  origin = origin_shape.getBounds().center();
 
-  end_shape = owner_widget->InterfaceShape(syncable.table_ptr);
-  end_shape.transform(TransformBetween(*owner_widget, *this));
-  bounds = end_shape.getBounds();
-  end = bounds.Center();
-  auto gear_matrix = TransformBetween(*gear_widget, *this);
-  gear_origin = gear_matrix.mapOrigin();
-  auto gear_shape = gear_widget->Shape();
-  gear_shape.transform(gear_matrix);
-  bounds.ExpandToInclude(gear_shape.getBounds());
+  // Find the gear via the syncable's sync state
+  auto& state = syncable.state;
+  auto gear = state->end.OwnerLockAs<Gear>();
+  if (gear) {
+    // Find the gear widget
+    auto* gear_widget = toy_store.FindOrNull(*gear);
+    if (gear_widget) {
+      angle = gear_widget->angle;
+      auto gear_matrix = TransformBetween(*gear_widget, *this);
+      Vec2 gear_origin = gear_matrix.mapOrigin();
+      auto dir = Normalize(origin - gear_origin);
+      pinion = dir * (kPrimaryGearRadius + kSecondaryGearRadius) + gear_origin;
+    }
+  }
   return animation::Animating;
 }
 
@@ -346,26 +343,29 @@ Vec<Vec2> SyncConnectionWidget::TextureAnchors() {
   auto owner_obj = LockOwner<Object>();
   if (owner_obj) {
     auto syncable = Bind<Syncable>(*owner_obj);
+    auto* owner_widget = toy_store.FindOrNull(*owner_obj);
+    if (owner_widget) {
+      auto owner_matrix = TransformBetween(*owner_widget, *this);
+      origin_shape = owner_widget->InterfaceShape(syncable.table_ptr);
+      origin_shape.transform(owner_matrix);
+      origin = origin_shape.getBounds().center();
+    }
     auto& state = syncable.state;
     auto gear = state->end.OwnerLockAs<Gear>();
     if (gear) {
+      Vec2 gear_origin;
       auto* gear_widget = toy_store.FindOrNull(*gear);
       if (gear_widget) {
         auto gear_matrix = TransformBetween(*gear_widget, *this);
         gear_origin = gear_matrix.mapOrigin();
       }
-    }
-    auto* owner_widget = toy_store.FindOrNull(*owner_obj);
-    if (owner_widget) {
-      auto owner_matrix = TransformBetween(*owner_widget, *this);
-      end_shape = owner_widget->InterfaceShape(syncable.table_ptr);
-      end_shape.transform(owner_matrix);
-      end = end_shape.getBounds().center();
+      auto dir = Normalize(origin - gear_origin);
+      pinion = dir * (kPrimaryGearRadius + kSecondaryGearRadius) + gear_origin;
+    } else {
+      // TODO: pinion held by the mouse
     }
   }
-  auto dir = Normalize(end - gear_origin);
-  auto start = dir * (kPrimaryGearRadius + kSecondaryGearRadius) + gear_origin;
-  return {start, end};
+  return {pinion, origin};
 }
 
 void SyncConnectionWidget::Draw(SkCanvas& canvas) const {
@@ -389,33 +389,37 @@ void SyncConnectionWidget::Draw(SkCanvas& canvas) const {
   builder.child("iRubberColor") = *color.shader;
   builder.child("iRubberNormal") = *normal.shader;
 
-  auto dir = Normalize(end - gear_origin);
-  auto start = dir * (kPrimaryGearRadius + kSecondaryGearRadius) + gear_origin;
+  auto dir = Normalize(origin - pinion);
 
   float ratio = kPrimaryGearRadius / kSecondaryGearRadius;
 
   canvas.save();
-  canvas.clipPath(end_shape, SkClipOp::kDifference);
+  canvas.clipPath(origin_shape, SkClipOp::kDifference);
   canvas.save();
-  canvas.translate(start.x, start.y);
+  canvas.translate(pinion.x, pinion.y);
 
   float rot_offset = atan(dir);
   float secondary_gear_rot = rot_offset * (ratio + 1) + angle * ratio;
 
   SkPaint secondary_gear_paint;
   builder.uniform("iRotationRad") = -secondary_gear_rot;
-  builder.uniform("iEndPos") = end - start;
+  builder.uniform("iEndPos") = origin - pinion;
   secondary_gear_paint.setShader(builder.makeShader());
   secondary_gear_paint.setStyle(SkPaint::kStroke_Style);
   secondary_gear_paint.setStrokeWidth((kSecondaryGearRadius + kTeethAmplitude) * 2.2);
   secondary_gear_paint.setStrokeCap(SkPaint::kSquare_Cap);
-  canvas.drawLine(Vec2(0, 0), end - start, secondary_gear_paint);
+  canvas.drawLine(Vec2(0, 0), origin - pinion, secondary_gear_paint);
 
   canvas.restore();
   canvas.restore();
 }
 
-Optional<Rect> SyncConnectionWidget::TextureBounds() const { return bounds; }
+Optional<Rect> SyncConnectionWidget::TextureBounds() const {
+  constexpr float r = kSecondaryGearRadius + kTeethAmplitude;
+  auto bounds = Rect::MakeCenter(pinion, r * 2, r * 2);
+  bounds.ExpandToInclude(Rect::MakeCenter(origin, 6_mm, 6_mm));
+  return bounds;
+}
 
 std::unique_ptr<ObjectToy> Gear::MakeToy(ui::Widget* parent) {
   return std::make_unique<GearWidget>(parent, *this);

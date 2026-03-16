@@ -216,31 +216,14 @@ struct TurnOffOption : TextOption {
   }
 };
 
-struct SyncWidget : ui::Widget {
-  Vec2 start, end;
-  SyncWidget(ui::Widget* parent) : Widget(parent) {}
-  SkPath Shape() const override { return SkPath(); }
-  Optional<Rect> TextureBounds() const override { return std::nullopt; }
-  animation::Phase Tick(time::Timer&) override { return animation::Finished; }
-  void Draw(SkCanvas& canvas) const override {
-    SkPaint paint;
-    paint.setStyle(SkPaint::kStroke_Style);
-    paint.setStrokeWidth(1_mm);
-    paint.setColor(SK_ColorRED);
-    canvas.drawLine(start.x, start.y, end.x, end.y, paint);
-  }
-};
-
 struct SyncAction : Action {
   NestedWeakPtr<Syncable::Table> weak;
-  TrackedPtr<Toy> toy;
-  SyncWidget sync_widget;
-  SyncAction(ui::Pointer& pointer, NestedWeakPtr<Syncable::Table> weak, Toy* toy)
-      : Action(pointer),
-        weak(weak),
-        toy(toy->AcquireTrackedPtr()),
-        sync_widget(pointer.GetWidget()) {
+  TrackedPtr<SyncConnectionWidget> sync_widget;
+  SyncAction(ui::Pointer& pointer, NestedWeakPtr<Syncable::Table> weak,
+             SyncConnectionWidget& sync_widget)
+      : Action(pointer), weak(weak), sync_widget(sync_widget.AcquireTrackedPtr()) {
     // TODO: invite objects to show their fields that satisfy the Syncable
+
     Update();
   }
   ~SyncAction() {
@@ -249,19 +232,19 @@ struct SyncAction : Action {
     if (auto syncable = weak.Lock()) {
       auto* mw = pointer.root_widget.toys.FindOrNull(*root_board);
       if (mw) {
-        mw->ConnectAtPoint(*syncable.Owner<Object>(), *syncable.Get(), sync_widget.end);
+        mw->ConnectAtPoint(*syncable.Owner<Object>(), *syncable.Get(), sync_widget->pinion);
       }
     }
   }
   void Update() override {
     if (auto syncable = weak.Lock()) {
-      auto* widget = pointer.root_widget.toys.FindOrNull(*syncable.Owner<Object>());
+      auto* origin_widget = pointer.root_widget.toys.FindOrNull(*syncable.Owner<Object>());
       auto* mw = pointer.root_widget.toys.FindOrNull(*root_board);
-      auto start_local = widget->InterfaceShape(syncable.Get()).getBounds().center();
-      auto start = mw ? TransformBetween(*widget, *mw).mapPoint(start_local) : start_local;
-      sync_widget.start = start;
-      sync_widget.end = pointer.PositionWithinRootBoard();
-      sync_widget.WakeAnimation();
+      auto start_local = origin_widget->InterfaceShape(syncable.Get()).getBounds().center();
+      auto start = mw ? TransformBetween(*origin_widget, *mw).mapPoint(start_local) : start_local;
+      sync_widget->origin = start;
+      sync_widget->pinion = pointer.PositionWithinRootBoard();
+      sync_widget->WakeAnimation();
     } else {
       pointer.ReplaceAction(*this, nullptr);
     }
@@ -272,7 +255,7 @@ struct SyncAction : Action {
     Object& start = *ptr.Owner<Object>();
     return Argument(start, *ptr).CanConnect(end);
   }
-  ui::Widget* Widget() override { return &sync_widget; }
+  ui::Widget* Widget() override { return nullptr; }
 };
 
 struct SyncOption : TextOption {
@@ -280,9 +263,11 @@ struct SyncOption : TextOption {
   SyncOption(NestedWeakPtr<Syncable::Table> weak) : TextOption("Sync"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<SyncOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    if (auto syncable = weak.Lock()) {
-      auto widget = pointer.root_widget.toys.FindOrNull(*syncable.Owner<Object>());
-      return std::make_unique<SyncAction>(pointer, syncable, widget);
+    if (auto syncable_ptr = weak.Lock()) {
+      Syncable syncable(syncable_ptr.Owner<Object>(), syncable_ptr.Get());
+      syncable.Unsync();
+      auto& widget = pointer.root_widget.toys.FindOrMake(syncable, &pointer.root_widget);
+      return std::make_unique<SyncAction>(pointer, weak, widget);
     }
     return nullptr;
   }

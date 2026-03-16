@@ -185,10 +185,9 @@ Ptr<Gear> FindGearOrNull(Object& source_obj, Syncable::Table& source);
 
 // Widget that draws one belt connection from a Gear to a synced member.
 struct SyncConnectionWidget : ArgumentToy {
-  Rect bounds;
-  SkPath end_shape;
-  Vec2 end{};
-  Vec2 gear_origin{};
+  SkPath origin_shape;
+  Vec2 origin{};  // where the rubber belt starts
+  Vec2 pinion{};  // where the small gear is located
   float angle = 0;
 
   SyncConnectionWidget(ui::Widget* parent, Object& object, Syncable::Table& syncable);

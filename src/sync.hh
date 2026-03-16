@@ -47,8 +47,8 @@ struct Syncable : Argument {
     }
   };
 
-  struct State {
-    NestedWeakPtr<Interface::Table> end;
+  struct State : Argument::State {
+    WeakPtr<Gear> gear_weak;
     bool source = false;
 
     // Remember to call this before this state is destroyed!
@@ -88,7 +88,7 @@ struct Syncable : Argument {
     inline constinit static Table tbl = MakeTable();
 
     ~Def() {
-      if (source || !end.IsExpired()) {
+      if (source || !gear_weak.IsExpired()) {
         Bind().Unsync();
       }
     }
@@ -139,7 +139,7 @@ void Syncable::ForwardDo(this T self, F&& lambda) {
   auto& st = *self.state;
   if (!st.source) {
     lambda(self);
-  } else if (auto gear = st.end.template OwnerLockAs<Gear>()) {
+  } else if (auto gear = st.gear_weak.Lock()) {
     gear->WakeToys();
     auto lock = std::shared_lock(gear->mutex);
     for (auto& member : gear->members) {
@@ -159,7 +159,7 @@ template <typename T, typename F>
 void Syncable::ForwardNotify(this T self, F&& lambda) {
   auto& st = *self.state;
   if (!st.source) return;
-  if (auto gear = st.end.template OwnerLockAs<Gear>()) {
+  if (auto gear = st.gear_weak.Lock()) {
     gear->WakeToys();
     auto lock = std::shared_lock(gear->mutex);
     // How to visualize sync events?

@@ -315,7 +315,7 @@ struct FieldOption : TextOption, OptionsProvider {
       SyncOption sync(syncable);
       visitor(sync);
       auto& state = *Syncable(*obj, *syncable.Get()).state;
-      if (!state.end.IsExpired()) {
+      if (!state.gear_weak.IsExpired()) {
         UnsyncOption unsync(syncable);
         visitor(unsync);
       }

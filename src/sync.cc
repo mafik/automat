@@ -55,7 +55,8 @@ void Syncable::Table::DefaultCanConnect(Argument self, Interface end, Status& st
 
 void Syncable::Table::DefaultOnConnect(Argument self, Interface end) {
   auto syncable = cast<Syncable>(self);
-  syncable.state->end = end;
+
+  syncable.state->gear_weak = dynamic_cast<Gear*>(end.object_ptr);
 
   if (!end) return;
 
@@ -80,7 +81,8 @@ void Syncable::Table::DefaultOnConnect(Argument self, Interface end) {
 
 NestedPtr<Interface::Table> Syncable::Table::DefaultFind(Argument self) {
   auto& syncable = static_cast<Syncable::Table&>(*self.table);
-  return Syncable(*self.object_ptr, syncable).state->end.Lock();
+  return NestedPtr<Interface::Table>(Syncable(*self.object_ptr, syncable).state->gear_weak.Lock(),
+                                     nullptr);
 }
 
 // --- Syncable::Unsync ---
@@ -88,7 +90,7 @@ NestedPtr<Interface::Table> Syncable::Table::DefaultFind(Argument self) {
 void Syncable::Unsync() { state->Unsync(*object_ptr, *table); }
 
 void Syncable::State::Unsync(Object& self, Syncable::Table& syncable) {
-  auto gear = end.OwnerLockAs<Gear>();
+  auto gear = gear_weak.Lock();
   if (!gear) return;
   auto lock = std::unique_lock(gear->mutex);
 
@@ -104,7 +106,7 @@ void Syncable::State::Unsync(Object& self, Syncable::Table& syncable) {
   }
 
   source = false;
-  end.Reset();
+  gear_weak.Reset();
   if (syncable.on_unsync) syncable.on_unsync(Syncable(self, syncable));
 }
 
@@ -112,7 +114,7 @@ void Syncable::State::Unsync(Object& self, Syncable::Table& syncable) {
 
 Ptr<Gear> FindGearOrMake(Object& source_obj, Syncable::Table& source) {
   auto& state = *Syncable(source_obj, source).state;
-  auto sync_block = state.end.OwnerLockAs<Gear>();
+  auto sync_block = state.gear_weak.Lock();
   if (!sync_block) {
     sync_block = MAKE_PTR(Gear);
     sync_block->AddSource(source_obj, source);
@@ -122,7 +124,7 @@ Ptr<Gear> FindGearOrMake(Object& source_obj, Syncable::Table& source) {
 
 Ptr<Gear> FindGearOrNull(Object& source_obj, Syncable::Table& source) {
   auto& state = *Syncable(source_obj, source).state;
-  auto sync_block = state.end.OwnerLockAs<Gear>();
+  auto sync_block = state.gear_weak.Lock();
   if (!sync_block) {
     return nullptr;
   }
@@ -141,7 +143,7 @@ Gear::~Gear() {
       auto& state = *Syncable(*owner, *syncable).state;
       if (state.source) {
         state.source = false;
-        state.end.Reset();
+        state.gear_weak.Reset();
         if (syncable->on_unsync) syncable->on_unsync(Syncable(*owner, *syncable));
       }
     }
@@ -163,7 +165,7 @@ void Gear::AddSink(Object& obj, Syncable::Table& syncable) {
 
 void Gear::AddSource(Object& obj, Syncable::Table& syncable) {
   auto& state = *Syncable(obj, syncable).state;
-  auto old_sync_block = state.end.OwnerLockAs<Gear>();
+  auto old_sync_block = state.gear_weak.Lock();
   bool was_source = state.source;
   if (old_sync_block.Get() != this) {
     Syncable(obj, syncable).Connect(Interface(*this));
@@ -178,7 +180,7 @@ void Gear::AddSource(Object& obj, Syncable::Table& syncable) {
           auto* member_syncable = locked.Get();
           auto* member_owner = locked.Owner<Object>();
           auto& member_state = *Syncable(*member_owner, *member_syncable).state;
-          member_state.end = NestedWeakPtr<Interface::Table>(AcquireWeakPtr<Object>(), nullptr);
+          member_state.gear_weak = AcquireWeakPtr();
         }
       }
     } else {
@@ -323,7 +325,7 @@ animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
 
   // Find the gear via the syncable's sync state
   auto& state = syncable.state;
-  auto gear = state->end.OwnerLockAs<Gear>();
+  auto gear = state->gear_weak.Lock();
   if (gear) {
     // Find the gear widget
     auto* gear_widget = toy_store.FindOrNull(*gear);
@@ -351,7 +353,7 @@ Vec<Vec2> SyncConnectionWidget::TextureAnchors() {
       origin = origin_shape.getBounds().center();
     }
     auto& state = syncable.state;
-    auto gear = state->end.OwnerLockAs<Gear>();
+    auto gear = state->gear_weak.Lock();
     if (gear) {
       Vec2 gear_origin;
       auto* gear_widget = toy_store.FindOrNull(*gear);

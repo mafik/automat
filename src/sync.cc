@@ -351,10 +351,20 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
       auto dir = Normalize(origin - gear_origin);
       pinion_deflection.InteractiveTargetUpdate(
           pinion, dir * (kPrimaryGearRadius + kSecondaryGearRadius) + gear_origin);
-      // TODO: check if gear & pinion intersect & bounce the pinion!
-      auto delta = gear_origin - pinion;
+
+      // Pinion bouncing off the gear
+      auto effective_pinion = pinion + pinion_deflection;
+      auto delta = gear_origin - effective_pinion;
       auto dist = Length(delta);
-      if (dist < kPrimaryGearRadius + kSecondaryGearRadius) {
+      if (dist > 0 && dist < kPrimaryGearRadius + kSecondaryGearRadius) {
+        auto normal = -delta / dist;  // points from gear to pinion
+        float penetration = kPrimaryGearRadius + kSecondaryGearRadius - dist;
+        pinion_deflection.value += normal * penetration;
+        float v_dot_n = Dot(pinion_deflection.velocity, normal);
+        if (v_dot_n < 0) {
+          pinion_deflection.velocity -= normal * v_dot_n;  // sticky collision
+        }
+        phase |= animation::Animating;
       }
     }
   } else if (is_dragged) {

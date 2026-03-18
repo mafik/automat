@@ -51,6 +51,17 @@ Str ToStr(PointerButton btn) {
   }
 }
 
+Str ToStr(ActionTrigger trigger) {
+  if (trigger.repr >= ActionTrigger::kPointerStart && trigger.repr < ActionTrigger::kPointerEnd) {
+    return "PointerButton::" + ToStr(static_cast<PointerButton>(trigger));
+  } else if (trigger.repr >= ActionTrigger::kAnsiKeyStart &&
+             trigger.repr < ActionTrigger::kAnsiKeyEnd) {
+    return Str("AnsiKey::") + Str(ToStr(static_cast<AnsiKey>(trigger)));
+  } else {
+    return "Invalid ActionTrigger";
+  }
+}
+
 void Widget::Reparent(Widget& new_parent) {
   auto fix = TransformBetween(*parent, new_parent);
   SkM44 fix44(fix);

@@ -86,6 +86,8 @@ struct ActionTrigger {
   }
 };
 
+Str ToStr(ActionTrigger);
+
 // Widgets are things that can be drawn to the SkCanvas. They're sometimes produced by Objects
 // which can't draw themselves otherwise.
 struct Widget : Trackable, OptionsProvider {
@@ -115,6 +117,8 @@ struct Widget : Trackable, OptionsProvider {
   mutable time::SteadyPoint wake_time = time::SteadyPoint::min();
   // The time when the Tick was last called. Updated right after Tick.
   mutable time::SteadyPoint last_tick_time;
+
+  bool IsAnimating() const { return wake_time != time::SteadyPoint::max(); }
 
   // Force the widget to be redrawn ASAP (without offscreen rendering).
   //

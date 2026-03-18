@@ -17,19 +17,19 @@ struct Timer : Object, TimerNotificationReceiver {
   time::Duration duration_value = 10s;
   time::SteadyPoint start_time;
 
-  DEF_INTERFACE(Timer, Syncable, duration, "Duration")
-    static constexpr SkColor kTint = "#6e4521"_color;
-    bool CanSync(Syncable other) {
-      return other.table == &Syncable::Def<duration_Impl>::tbl;
-    }
-  DEF_END(duration);
+  // Disabled until there are more objects that could be
+  // combined with duration (for example some math objects)
+  // DEF_INTERFACE(Timer, Argument, duration, "Duration")
+  // static constexpr SkColor kTint = "#6e4521"_color;
+  // bool CanSync(Syncable other) { return other.table == &Syncable::Def<duration_Impl>::tbl; }
+  // DEF_END(duration);
 
   DEF_INTERFACE(Timer, Runnable, run, "Run")
-    void OnRun(std::unique_ptr<RunTask>& run_task) { obj->StartTimer(run_task); }
+  void OnRun(std::unique_ptr<RunTask>& run_task) { obj->StartTimer(run_task); }
   DEF_END(run);
 
   DEF_INTERFACE(Timer, LongRunning, running, "Running")
-    void OnCancel() { obj->CancelTimer(); }
+  void OnCancel() { obj->CancelTimer(); }
   DEF_END(running);
 
   DEF_INTERFACE(Timer, NextArg, next, "Next")
@@ -51,7 +51,7 @@ struct Timer : Object, TimerNotificationReceiver {
   StrView Name() const override { return "Timer"; }
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  INTERFACES(run, duration, next, running)
+  INTERFACES(run, next, running)
   void Updated(WeakPtr<Object>& updated) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
 

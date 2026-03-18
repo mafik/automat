@@ -478,8 +478,8 @@ struct TimerWidget : ObjectToy {
     hand_degrees.value = 90;
 
     if (auto timer = LockTimer()) {
-      text_field->argument =
-          NestedWeakPtr<Argument::Table>(timer->AcquireWeakPtr(), &Timer::duration_tbl);
+      // text_field->argument =
+      //     NestedWeakPtr<Argument::Table>(timer->AcquireWeakPtr(), &Timer::duration_tbl);
       range = timer->range;
       duration_value = timer->duration_value;
       is_running = timer->running->IsRunning();
@@ -636,12 +636,12 @@ struct TimerWidget : ObjectToy {
   void FillChildren(Vec<Widget*>& children) override { children.push_back(text_field.get()); }
 
   SkPath InterfaceShape(Interface::Table* iface) const override {
-    if (auto timer = LockTimer()) {
-      if (iface == timer->duration) {
-        auto transform = SkMatrix::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
-        return text_field->Shape().makeTransform(transform);
-      }
-    }
+    // if (auto timer = LockTimer()) {
+    //   if (iface == timer->duration) {
+    //     auto transform = SkMatrix::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
+    //     return text_field->Shape().makeTransform(transform);
+    //   }
+    // }
     return Shape();
   }
 

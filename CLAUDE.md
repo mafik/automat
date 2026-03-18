@@ -1,5 +1,7 @@
 ## Common Development Commands
 
+If along the way you execute some command, it doesn't work and then you figure out how to make it work, please record that in CLAUDE.md - this way you'll avoid making the same mistakes over and over.
+
 ### Building and Running
 
 - `python run.py automat` - Build and run the main Automat application. Warning: it runs automat indefinitely and must be manually stopped

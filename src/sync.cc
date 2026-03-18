@@ -304,9 +304,23 @@ SyncConnectionWidget::SyncConnectionWidget(Widget* parent, Object& object,
                                            Syncable::Table& syncable)
     : ArgumentToy(parent, object, &syncable) {}
 
-SkPath SyncConnectionWidget::Shape() const { return SkPath(); }
+SkPath SyncConnectionWidget::Shape() const {
+  return SkPath::Circle(pinion.x, pinion.y, kSecondaryGearRadius + kTeethAmplitude);
+}
+
+std::unique_ptr<Action> SyncConnectionWidget::FindAction(ui::Pointer& pointer,
+                                                         ui::ActionTrigger trigger) {
+  auto owner = LockOwner<Object>();
+  if (!owner) return nullptr;
+  auto syncable = Bind<Syncable>(*owner);
+  if (trigger == ui::PointerButton::Left) {
+    return std::make_unique<SyncAction>(pointer, syncable);
+  }
+  return nullptr;
+}
 
 animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
+  auto phase = animation::Finished;
   auto& toy_store = ToyStore();
 
   // Check if the object of this connection still exists.
@@ -331,43 +345,29 @@ animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
     auto* gear_widget = toy_store.FindOrNull(*gear);
     if (gear_widget) {
       angle = gear_widget->angle;
+      if (gear_widget->IsAnimating()) {
+        phase |= animation::Animating;
+      }
       auto gear_matrix = TransformBetween(*gear_widget, *this);
       Vec2 gear_origin = gear_matrix.mapOrigin();
       auto dir = Normalize(origin - gear_origin);
-      pinion = dir * (kPrimaryGearRadius + kSecondaryGearRadius) + gear_origin;
+      pinion_deflection.InteractiveTargetUpdate(
+          pinion, dir * (kPrimaryGearRadius + kSecondaryGearRadius) + gear_origin);
     }
+  } else if (is_dragged) {
+  } else {
+    pinion_deflection.SmoothTargetUpdate(pinion, origin);
   }
-  return animation::Animating;
+  phase |= pinion_deflection.SpringTowards({}, t.d, 0.3, 0.05);
+  return phase;
 }
 
 Vec<Vec2> SyncConnectionWidget::TextureAnchors() {
-  auto& toy_store = ToyStore();
-  auto owner_obj = LockOwner<Object>();
-  if (owner_obj) {
-    auto syncable = Bind<Syncable>(*owner_obj);
-    auto* owner_widget = toy_store.FindOrNull(*owner_obj);
-    if (owner_widget) {
-      auto owner_matrix = TransformBetween(*owner_widget, *this);
-      origin_shape = owner_widget->InterfaceShape(syncable.table_ptr);
-      origin_shape.transform(owner_matrix);
-      origin = origin_shape.getBounds().center();
-    }
-    auto& state = syncable.state;
-    auto gear = state->gear_weak.Lock();
-    if (gear) {
-      Vec2 gear_origin;
-      auto* gear_widget = toy_store.FindOrNull(*gear);
-      if (gear_widget) {
-        auto gear_matrix = TransformBetween(*gear_widget, *this);
-        gear_origin = gear_matrix.mapOrigin();
-      }
-      auto dir = Normalize(origin - gear_origin);
-      pinion = dir * (kPrimaryGearRadius + kSecondaryGearRadius) + gear_origin;
-    } else {
-      // TODO: pinion held by the mouse
-    }
-  }
-  return {pinion, origin};
+  time::Timer t;
+  t.last = t.now = time::SteadyNow();
+  t.d = 0;
+  Tick(t);
+  return {pinion + pinion_deflection, origin};
 }
 
 void SyncConnectionWidget::Draw(SkCanvas& canvas) const {
@@ -391,26 +391,28 @@ void SyncConnectionWidget::Draw(SkCanvas& canvas) const {
   builder.child("iRubberColor") = *color.shader;
   builder.child("iRubberNormal") = *normal.shader;
 
-  auto dir = Normalize(origin - pinion);
+  auto pinion_effective = pinion + pinion_deflection;
+  auto pinion_to_origin = origin - pinion_effective;
 
   float ratio = kPrimaryGearRadius / kSecondaryGearRadius;
 
   canvas.save();
   canvas.clipPath(origin_shape, SkClipOp::kDifference);
   canvas.save();
-  canvas.translate(pinion.x, pinion.y);
+  canvas.translate(pinion_effective.x, pinion_effective.y);
 
+  auto dir = Normalize(pinion_to_origin);
   float rot_offset = atan(dir);
   float secondary_gear_rot = rot_offset * (ratio + 1) + angle * ratio;
 
   SkPaint secondary_gear_paint;
   builder.uniform("iRotationRad") = -secondary_gear_rot;
-  builder.uniform("iEndPos") = origin - pinion;
+  builder.uniform("iEndPos") = pinion_to_origin;
   secondary_gear_paint.setShader(builder.makeShader());
   secondary_gear_paint.setStyle(SkPaint::kStroke_Style);
   secondary_gear_paint.setStrokeWidth((kSecondaryGearRadius + kTeethAmplitude) * 2.2);
   secondary_gear_paint.setStrokeCap(SkPaint::kSquare_Cap);
-  canvas.drawLine(Vec2(0, 0), origin - pinion, secondary_gear_paint);
+  canvas.drawLine(Vec2(0, 0), pinion_to_origin, secondary_gear_paint);
 
   canvas.restore();
   canvas.restore();
@@ -418,7 +420,7 @@ void SyncConnectionWidget::Draw(SkCanvas& canvas) const {
 
 Optional<Rect> SyncConnectionWidget::TextureBounds() const {
   constexpr float r = kSecondaryGearRadius + kTeethAmplitude;
-  auto bounds = Rect::MakeCenter(pinion, r * 2, r * 2);
+  auto bounds = Rect::MakeCenter(pinion + pinion_deflection, r * 2, r * 2);
   bounds.ExpandToInclude(Rect::MakeCenter(origin, 6_mm, 6_mm));
   return bounds;
 }
@@ -467,5 +469,58 @@ bool Gear::DeserializeKey(ObjectDeserializer& d, StrView key) {
   }
   return false;
 }
+
+SyncAction::SyncAction(ui::Pointer& pointer, Syncable syncable) : Action(pointer) {
+  syncable.Unsync();
+  auto* sync_widget = pointer.root_widget.toys.FindOrNull(syncable);
+  if (sync_widget) {
+    sync_widget->is_dragged = true;
+    sync_widget->pinion_deflection.SmoothTargetUpdate(sync_widget->pinion,
+                                                      pointer.PositionWithinRootBoard());
+    sync_widget->WakeAnimation();
+  }
+  Update();
+  this->weak = NestedWeakPtr<Syncable::Table>(syncable.GetOwner().AcquireWeakPtr(), syncable.table);
+}
+SyncAction::~SyncAction() {
+  // Check if the pointer is over a compatible Syncable
+  if (auto syncable_ptr = weak.Lock()) {
+    Syncable syncable(syncable_ptr.Owner<Object>(), syncable_ptr.Get());
+    auto* sync_widget = pointer.root_widget.toys.FindOrNull(syncable);
+    if (sync_widget) {
+      sync_widget->is_dragged = false;
+      sync_widget->WakeAnimation();
+      auto* bw = pointer.root_widget.toys.FindOrNull(*root_board);
+      if (bw) {
+        bw->ConnectAtPoint(*syncable.object_ptr, *syncable.table, sync_widget->pinion);
+        // TODO: animate towards the true target rather than origin
+        sync_widget->pinion_deflection.SmoothTargetUpdate(sync_widget->pinion, sync_widget->origin);
+      }
+    }
+  }
+}
+void SyncAction::Update() {
+  if (auto syncable_ptr = weak.Lock()) {
+    Syncable syncable(syncable_ptr.Owner<Object>(), syncable_ptr.Get());
+    auto* origin_widget = pointer.root_widget.toys.FindOrNull(*syncable.object_ptr);
+    auto* bw = pointer.root_widget.toys.FindOrNull(*root_board);
+    auto start_local = origin_widget->InterfaceShape(syncable.table_ptr).getBounds().center();
+    auto start = bw ? TransformBetween(*origin_widget, *bw).mapPoint(start_local) : start_local;
+    if (auto* sync_widget = pointer.root_widget.toys.FindOrNull(syncable)) {
+      sync_widget->origin = start;
+      sync_widget->pinion_deflection.InteractiveTargetUpdate(sync_widget->pinion,
+                                                             pointer.PositionWithinRootBoard());
+      sync_widget->WakeAnimation();
+    }
+  } else {
+    pointer.ReplaceAction(*this, nullptr);
+  }
+}
+bool SyncAction::Highlight(Interface end) const {
+  auto ptr = weak.Lock();
+  Object& start = *ptr.Owner<Object>();
+  return Argument(start, *ptr).CanConnect(end);
+}
+ui::Widget* SyncAction::Widget() { return nullptr; }
 
 }  // namespace automat

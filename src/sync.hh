@@ -143,6 +143,7 @@ void Syncable::ForwardDo(this T self, F&& lambda) {
     gear->WakeToys();
     auto lock = std::shared_lock(gear->mutex);
     for (auto& member : gear->members) {
+      member.weak.template OwnerUnsafe<Object>()->WakeToys();
       if (!member.sink) continue;
       auto locked = member.weak.Lock();
       if (!locked) continue;
@@ -167,6 +168,7 @@ void Syncable::ForwardNotify(this T self, F&& lambda) {
     // Option 1: every sync event rotates the gear by one tooth
     // Option 2: same but also introduce a maximum speed
     for (auto& member : gear->members) {
+      member.weak.template OwnerUnsafe<Object>()->WakeToys();
       auto locked = member.weak.Lock();
       if (!locked) continue;
       // Skip self
@@ -186,13 +188,16 @@ Ptr<Gear> FindGearOrNull(Object& source_obj, Syncable::Table& source);
 // Widget that draws one belt connection from a Gear to a synced member.
 struct SyncConnectionWidget : ArgumentToy {
   SkPath origin_shape;
-  Vec2 origin{};  // where the rubber belt starts
-  Vec2 pinion{};  // where the small gear is located
+  Vec2 origin{};                                  // where the rubber belt starts
+  Vec2 pinion{};                                  // where the small gear is located
+  animation::SpringV2<Vec2> pinion_deflection{};  // deflection from the ideal position
   float angle = 0;
+  bool is_dragged = false;
 
   SyncConnectionWidget(ui::Widget* parent, Object& object, Syncable::Table& syncable);
 
   SkPath Shape() const override;
+  std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   animation::Phase Tick(time::Timer& t) override;
   Compositor GetCompositor() const override { return Compositor::ANCHOR_WARP; }
   Vec<Vec2> TextureAnchors() override;
@@ -201,5 +206,14 @@ struct SyncConnectionWidget : ArgumentToy {
 };
 
 static_assert(ToyMaker<Syncable>);
+
+struct SyncAction : Action {
+  NestedWeakPtr<Syncable::Table> weak;
+  SyncAction(ui::Pointer& pointer, Syncable syncable);
+  ~SyncAction();
+  void Update() override;
+  bool Highlight(Interface end) const override;
+  ui::Widget* Widget() override;
+};
 
 }  // namespace automat

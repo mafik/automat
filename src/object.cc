@@ -216,48 +216,6 @@ struct TurnOffOption : TextOption {
   }
 };
 
-struct SyncAction : Action {
-  NestedWeakPtr<Syncable::Table> weak;
-  TrackedPtr<SyncConnectionWidget> sync_widget;
-  SyncAction(ui::Pointer& pointer, NestedWeakPtr<Syncable::Table> weak,
-             SyncConnectionWidget& sync_widget)
-      : Action(pointer), weak(weak), sync_widget(sync_widget.AcquireTrackedPtr()) {
-    // TODO: invite objects to show their fields that satisfy the Syncable
-
-    Update();
-  }
-  ~SyncAction() {
-    // TODO: tell objects to hide their fields
-    // Check if the pointer is over a compatible Syncable
-    if (auto syncable = weak.Lock()) {
-      auto* mw = pointer.root_widget.toys.FindOrNull(*root_board);
-      if (mw) {
-        mw->ConnectAtPoint(*syncable.Owner<Object>(), *syncable.Get(), sync_widget->pinion);
-      }
-    }
-  }
-  void Update() override {
-    if (auto syncable = weak.Lock()) {
-      auto* origin_widget = pointer.root_widget.toys.FindOrNull(*syncable.Owner<Object>());
-      auto* mw = pointer.root_widget.toys.FindOrNull(*root_board);
-      auto start_local = origin_widget->InterfaceShape(syncable.Get()).getBounds().center();
-      auto start = mw ? TransformBetween(*origin_widget, *mw).mapPoint(start_local) : start_local;
-      sync_widget->origin = start;
-      sync_widget->pinion = pointer.PositionWithinRootBoard();
-      sync_widget->WakeAnimation();
-    } else {
-      pointer.ReplaceAction(*this, nullptr);
-    }
-    pointer.pointer_widget->WakeAnimation();
-  }
-  bool Highlight(Interface end) const override {
-    auto ptr = weak.Lock();
-    Object& start = *ptr.Owner<Object>();
-    return Argument(start, *ptr).CanConnect(end);
-  }
-  ui::Widget* Widget() override { return nullptr; }
-};
-
 struct SyncOption : TextOption {
   NestedWeakPtr<Syncable::Table> weak;
   SyncOption(NestedWeakPtr<Syncable::Table> weak) : TextOption("Sync"), weak(weak) {}
@@ -265,9 +223,7 @@ struct SyncOption : TextOption {
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto syncable_ptr = weak.Lock()) {
       Syncable syncable(syncable_ptr.Owner<Object>(), syncable_ptr.Get());
-      syncable.Unsync();
-      auto& widget = pointer.root_widget.toys.FindOrMake(syncable, &pointer.root_widget);
-      return std::make_unique<SyncAction>(pointer, weak, widget);
+      return std::make_unique<SyncAction>(pointer, syncable);
     }
     return nullptr;
   }

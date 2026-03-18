@@ -69,7 +69,7 @@ Phase LowLevelSpringTowards(float target, float delta_time, float period_time, f
   // This section fixes an issue where the animation would keep going if the delta time was too
   // small. If animation is done using double precision, this section can be probably removed.
   float value_change = value - initial_value;
-  if (fabsf(value_change) < 1e-6f && fabsf(velocity) < 1e-3f) {
+  if (fabsf(value_change) < (delta_time * 1e-4f) && fabsf(velocity) < 1e-3f) {
     value = target;
     velocity = 0;
     return Finished;

@@ -191,6 +191,27 @@ struct SpringV2 {
 
   Phase SineTowards(T target, float delta_time, float period_time);
 
+  // If this spring is used to animate a ground-truth 'target' value through simple addition, then
+  // this function can be used to update the target without causing a jump in the animation.
+  //
+  // Important: this only works if spring always animates towards zero!
+  void SmoothTargetUpdate(T& target, T new_target) {
+    value += target - new_target;
+    target = new_target;
+  }
+
+  // Same as `SmoothTargetUpdate` but optimized for reduced latency of interactive updates (e.g.
+  // dragging). If the spring is already locked on target, skips the animation.
+  //
+  // Important: this only works if spring always animates towards zero!
+  void InteractiveTargetUpdate(T& target, T new_target) {
+    if (velocity == T{} && value == T{}) {
+      target = new_target;
+    } else {
+      SmoothTargetUpdate(target, new_target);
+    }
+  }
+
   operator T() const { return value; }
 };
 

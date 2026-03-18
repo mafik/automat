@@ -492,7 +492,7 @@ SyncAction::~SyncAction() {
       sync_widget->WakeAnimation();
       auto* bw = pointer.root_widget.toys.FindOrNull(*root_board);
       if (bw) {
-        bw->ConnectAtPoint(*syncable.object_ptr, *syncable.table, sync_widget->pinion);
+        bw->ConnectAtPoint(syncable, sync_widget->pinion);
         // TODO: animate towards the true target rather than origin
         sync_widget->pinion_deflection.SmoothTargetUpdate(sync_widget->pinion, sync_widget->origin);
       }

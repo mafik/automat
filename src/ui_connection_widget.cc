@@ -534,9 +534,8 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
 }
 
 DragConnectionAction::~DragConnectionAction() {
-  auto arg = widget.start_weak.Lock();
-  if (!arg) return;
-  auto start = arg.GetOwnerWeak().Lock().Cast<Object>();
+  auto arg_ptr = widget.start_weak.Lock();
+  if (!arg_ptr) return;
 
   Vec2 pos;
   if (widget.state) {
@@ -548,7 +547,8 @@ DragConnectionAction::~DragConnectionAction() {
   }
   auto* mw = pointer.root_widget.toys.FindOrNull(*root_board);
   if (mw) {
-    mw->ConnectAtPoint(*start, *arg, pos);
+    Argument arg(arg_ptr.Owner<Object>(), arg_ptr.Get());
+    mw->ConnectAtPoint(arg, pos);
   }
   widget.manual_position.reset();
   widget.WakeAnimation();

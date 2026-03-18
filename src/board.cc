@@ -231,15 +231,14 @@ void BoardWidget::DropLocation(Ptr<Location>&& l) {
   }
 }
 
-void BoardWidget::ConnectAtPoint(Object& start, Argument::Table& arg, Vec2 point) {
+void BoardWidget::ConnectAtPoint(Argument arg, Vec2 point) {
   auto board = LockBoard();
   if (!board) return;
-  Argument bound(start, arg);
   bool connected = false;
   auto TryConnect = [&](Interface end) {
     if (connected) return;
-    if (bound.CanConnect(end)) {
-      bound.Connect(end);
+    if (arg.CanConnect(end)) {
+      arg.Connect(end);
       connected = true;
     }
   };

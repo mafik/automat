@@ -125,7 +125,10 @@ struct Argument : Interface {
   using Style = Table::Style;
 
   struct State {
-    time::SteadyPoint last_activity;
+    std::atomic<uint32_t> last_activity;
+    std::atomic<uint32_t> wake_counter;
+    State() : last_activity(0), wake_counter(0) {}
+    State(const State& other) : last_activity(0), wake_counter(0) {}
   };
   INTERFACE_BOUND(Argument, Interface)
   Argument(Object& obj) : Interface(obj) {}
@@ -180,6 +183,8 @@ struct Argument : Interface {
   Object* ObjectOrNull() const;
 
   Object& ObjectOrMake() const;
+
+  void WakeToys() { state->wake_counter.fetch_add(1, std::memory_order_relaxed); }
 
   // ImplT may optionally provide:
   //   static constexpr Style kStyle = ...;

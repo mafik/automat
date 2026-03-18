@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "tasks.hh"
 
+#include <atomic>
 #include <shared_mutex>
 #include <stop_token>
 #include <tracy/Tracy.hpp>
@@ -150,7 +151,7 @@ void ScheduleNext(Object& source) {
 void ScheduleArgumentTargets(Argument arg) {
   // audio::Play(source.object->NextSound());
 
-  arg.state->last_activity = time::SteadyNow();
+  arg.state->last_activity.fetch_add(1, std::memory_order_relaxed);
 
   if (auto next = arg.Find()) {
     // The target may be the Object itself (with AsRunnable) or a Runnable sub-interface.

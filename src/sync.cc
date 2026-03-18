@@ -300,16 +300,14 @@ struct GearWidget : ObjectToy {
   Optional<Rect> TextureBounds() const override { return Shape().getBounds(); }
 };
 
-SyncConnectionWidget::SyncConnectionWidget(Widget* parent, Object& object,
-                                           Syncable::Table& syncable)
+SyncBelt::SyncBelt(Widget* parent, Object& object, Syncable::Table& syncable)
     : ArgumentToy(parent, object, &syncable) {}
 
-SkPath SyncConnectionWidget::Shape() const {
+SkPath SyncBelt::Shape() const {
   return SkPath::Circle(pinion.x, pinion.y, kSecondaryGearRadius + kTeethAmplitude);
 }
 
-std::unique_ptr<Action> SyncConnectionWidget::FindAction(ui::Pointer& pointer,
-                                                         ui::ActionTrigger trigger) {
+std::unique_ptr<Action> SyncBelt::FindAction(ui::Pointer& pointer, ui::ActionTrigger trigger) {
   auto owner = LockOwner<Object>();
   if (!owner) return nullptr;
   auto syncable = Bind<Syncable>(*owner);
@@ -319,7 +317,7 @@ std::unique_ptr<Action> SyncConnectionWidget::FindAction(ui::Pointer& pointer,
   return nullptr;
 }
 
-animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
+animation::Phase SyncBelt::Tick(time::Timer& t) {
   auto phase = animation::Finished;
   auto& toy_store = ToyStore();
 
@@ -353,6 +351,11 @@ animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
       auto dir = Normalize(origin - gear_origin);
       pinion_deflection.InteractiveTargetUpdate(
           pinion, dir * (kPrimaryGearRadius + kSecondaryGearRadius) + gear_origin);
+      // TODO: check if gear & pinion intersect & bounce the pinion!
+      auto delta = gear_origin - pinion;
+      auto dist = Length(delta);
+      if (dist < kPrimaryGearRadius + kSecondaryGearRadius) {
+      }
     }
   } else if (is_dragged) {
   } else {
@@ -362,7 +365,7 @@ animation::Phase SyncConnectionWidget::Tick(time::Timer& t) {
   return phase;
 }
 
-Vec<Vec2> SyncConnectionWidget::TextureAnchors() {
+Vec<Vec2> SyncBelt::TextureAnchors() {
   time::Timer t;
   t.last = t.now = time::SteadyNow();
   t.d = 0;
@@ -370,7 +373,7 @@ Vec<Vec2> SyncConnectionWidget::TextureAnchors() {
   return {pinion + pinion_deflection, origin};
 }
 
-void SyncConnectionWidget::Draw(SkCanvas& canvas) const {
+void SyncBelt::Draw(SkCanvas& canvas) const {
   auto& effect = GearShader();
   auto& color = RubberColor();
   auto& normal = RubberNormal();
@@ -418,7 +421,7 @@ void SyncConnectionWidget::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-Optional<Rect> SyncConnectionWidget::TextureBounds() const {
+Optional<Rect> SyncBelt::TextureBounds() const {
   constexpr float r = kSecondaryGearRadius + kTeethAmplitude;
   auto bounds = Rect::MakeCenter(pinion + pinion_deflection, r * 2, r * 2);
   bounds.ExpandToInclude(Rect::MakeCenter(origin, 6_mm, 6_mm));
@@ -429,8 +432,8 @@ std::unique_ptr<ObjectToy> Gear::MakeToy(ui::Widget* parent) {
   return std::make_unique<GearWidget>(parent, *this);
 }
 
-std::unique_ptr<SyncConnectionWidget> Syncable::MakeToy(ui::Widget* parent) {
-  return std::make_unique<SyncConnectionWidget>(parent, *object_ptr, *table);
+std::unique_ptr<SyncBelt> Syncable::MakeToy(ui::Widget* parent) {
+  return std::make_unique<SyncBelt>(parent, *object_ptr, *table);
 }
 
 // --- Gear serialization ---

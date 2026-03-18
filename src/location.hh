@@ -70,6 +70,9 @@ struct Location : ReferenceCounted, ToyMakerMixin {
   // Find (or create if needed) the Widget for this location's object.
   ObjectToy& ToyForObject();
 
+  // Call this when the object's shape or position change.
+  //
+  // This will wake the toys of this and all connected locations.
   void InvalidateConnectionWidgets(bool moved, bool value_changed) const;
 
   Ptr<Object> InsertHere(Ptr<Object>&& object);

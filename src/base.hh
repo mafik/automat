@@ -49,49 +49,39 @@ struct Error;
 struct Object;
 struct Location;
 
-struct Runnable : Syncable {
-  struct Table : Syncable::Table {
+struct Runnable : Argument {
+  struct Table : Argument::Table {
     static bool classof(const Interface::Table* i) { return i->kind == Interface::kRunnable; }
 
     void (*on_run)(Runnable, std::unique_ptr<RunTask>&) = nullptr;
 
-    static bool DefaultCanSync(Syncable, Syncable other);
+    // static bool DefaultCanSync(Argument, Argument other);
 
-    constexpr Table(StrView name) : Syncable::Table(name, Interface::kRunnable) {
-      can_sync = &DefaultCanSync;
+    constexpr Table(StrView name) : Argument::Table(name, Interface::kRunnable) {
+      // can_sync = &DefaultCanSync;
     }
 
     template <typename ImplT>
     constexpr void FillFrom() {
-      Syncable::Table::FillFrom<ImplT>();
+      Argument::Table::FillFrom<ImplT>();
       on_run = [](Runnable self, std::unique_ptr<RunTask>& t) {
         static_cast<ImplT&>(self).OnRun(t);
       };
     }
   };
 
-  INTERFACE_BOUND(Runnable, Syncable)
+  INTERFACE_BOUND(Runnable, Argument)
 
-  void Run(std::unique_ptr<RunTask>& run_task) const {
-    ForwardDo([&](Runnable other) {
-      if (other.table->on_run) other.table->on_run(other, run_task);
-    });
-  }
+  void Run(std::unique_ptr<RunTask>& run_task) const { table->on_run(*this, run_task); }
 
   void ScheduleRun() const { (new RunTask(object_ptr->AcquireWeakPtr(), table_ptr))->Schedule(); }
-
-  void NotifyRun(std::unique_ptr<RunTask>& run_task) const {
-    ForwardNotify([&](Runnable other) {
-      if (other.table->on_run) other.table->on_run(other, run_task);
-    });
-  }
 
   // ImplT must provide:
   //   static constexpr StrView kName = "..."sv;
   //   static constexpr int Offset();  // offsetof(Parent, def_member)
   //   void OnRun(std::unique_ptr<RunTask>&);
   template <typename ImplT>
-  struct Def : Syncable::State, Interface::DefBase {
+  struct Def : Argument::State, Interface::DefBase {
     using Impl = ImplT;
     using Bound = Runnable;
 
@@ -103,11 +93,7 @@ struct Runnable : Syncable {
 
     inline constinit static Table tbl = MakeTable();
 
-    ~Def() {
-      if (source || !gear_weak.IsExpired()) {
-        Bind().Unsync();
-      }
-    }
+    ~Def() {}
   };
 };
 

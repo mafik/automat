@@ -11,7 +11,7 @@
 namespace automat {
 
 struct Gear;
-struct SyncConnectionWidget;
+struct SyncBelt;
 struct GearWidget;
 
 struct Syncable : Argument {
@@ -94,7 +94,7 @@ struct Syncable : Argument {
     }
   };
 
-  using Toy = SyncConnectionWidget;
+  using Toy = SyncBelt;
   ReferenceCounted& GetOwner() { return *object_ptr; }
   Interface::Table* GetInterface() { return table_ptr; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
@@ -138,20 +138,21 @@ template <typename T, typename F>
 void Syncable::ForwardDo(this T self, F&& lambda) {
   auto& st = *self.state;
   if (!st.source) {
+    self.WakeToys();
     lambda(self);
   } else if (auto gear = st.gear_weak.Lock()) {
     gear->WakeToys();
     auto lock = std::shared_lock(gear->mutex);
     for (auto& member : gear->members) {
-      member.weak.template OwnerUnsafe<Object>()->WakeToys();
       if (!member.sink) continue;
       auto locked = member.weak.Lock();
       if (!locked) continue;
-      T other_iface(*locked.template Owner<Object>(),
-                    *static_cast<typename T::Table*>(locked.Get()));
-      lambda(other_iface);
+      T other(*locked.template Owner<Object>(), *static_cast<typename T::Table*>(locked.Get()));
+      other.WakeToys();
+      lambda(other);
     }
   } else {
+    self.WakeToys();
     lambda(self);
   }
 }
@@ -160,6 +161,7 @@ template <typename T, typename F>
 void Syncable::ForwardNotify(this T self, F&& lambda) {
   auto& st = *self.state;
   if (!st.source) return;
+  self.WakeToys();
   if (auto gear = st.gear_weak.Lock()) {
     gear->WakeToys();
     auto lock = std::shared_lock(gear->mutex);
@@ -171,12 +173,11 @@ void Syncable::ForwardNotify(this T self, F&& lambda) {
       member.weak.template OwnerUnsafe<Object>()->WakeToys();
       auto locked = member.weak.Lock();
       if (!locked) continue;
+      T other(*locked.template Owner<Object>(), *static_cast<typename T::Table*>(locked.Get()));
       // Skip self
-      if (locked.Get() == self.table_ptr && locked.template Owner<Object>() == self.object_ptr)
-        continue;
-      T other_iface(*locked.template Owner<Object>(),
-                    *static_cast<typename T::Table*>(locked.Get()));
-      lambda(other_iface);
+      if (self == other) continue;
+      lambda(other);
+      other.WakeToys();
     }
   }
 }
@@ -186,7 +187,7 @@ Ptr<Gear> FindGearOrMake(Object& source_obj, Syncable::Table& source);
 Ptr<Gear> FindGearOrNull(Object& source_obj, Syncable::Table& source);
 
 // Widget that draws one belt connection from a Gear to a synced member.
-struct SyncConnectionWidget : ArgumentToy {
+struct SyncBelt : ArgumentToy {
   SkPath origin_shape;
   Vec2 origin{};                                  // where the rubber belt starts
   Vec2 pinion{};                                  // where the small gear is located
@@ -194,7 +195,7 @@ struct SyncConnectionWidget : ArgumentToy {
   float angle = 0;
   bool is_dragged = false;
 
-  SyncConnectionWidget(ui::Widget* parent, Object& object, Syncable::Table& syncable);
+  SyncBelt(ui::Widget* parent, Object& object, Syncable::Table& syncable);
 
   SkPath Shape() const override;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;

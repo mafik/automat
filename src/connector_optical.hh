@@ -6,6 +6,8 @@
 //
 // This type of connector can transmit boolean & event signals.
 
+#include <cstdint>
+
 #include "arcline.hh"
 #include "argument.hh"
 #include "location.hh"
@@ -55,6 +57,7 @@ struct CablePhysicsSimulation {
 
   float cable_width = 2_mm;
   float lightness_pct = 0;
+  uint32_t last_activity = 0;
 
   CablePhysicsSimulation(Location&, Argument::Table& arg, Vec2AndDir start);
   ~CablePhysicsSimulation();

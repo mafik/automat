@@ -8,6 +8,7 @@
 #include <functional>
 #include <type_traits>
 
+#include "format.hh"
 #include "interface.hh"
 #include "part.hh"
 #include "ptr.hh"
@@ -97,18 +98,7 @@ struct ToyStore {
 
   // Scan all toys for owners whose generation has changed. Wake those toys.
   // Called once per frame on the UI thread.
-  void WakeUpdatedToys(time::SteadyPoint last_wake) {
-    for (auto& [key, toy] : container) {
-      auto [rc, iface] = key;
-      // Safe to read through `rc`: WeakPtr in the Toy keeps memory alive.
-      // Counter at `wake_counter` is valid even after ~ReferenceCounted.
-      uint32_t current = rc->wake_counter.load(std::memory_order_relaxed);
-      if (current != toy->observed_notify_counter) {
-        toy->observed_notify_counter = current;
-        toy->WakeAnimationAt(last_wake);
-      }
-    }
-  }
+  void WakeUpdatedToys(time::SteadyPoint last_wake);
 
   template <ToyMaker T>
   T::Toy& FindOrMake(T& maker, ui::Widget* parent) {

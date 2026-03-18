@@ -8,10 +8,6 @@ using namespace std;
 
 namespace automat {
 
-bool Runnable::Table::DefaultCanSync(Syncable, Syncable other) {
-  return other.table->kind == Interface::kRunnable;
-}
-
 void LongRunning::Cancel() const {
   auto& task = state->task;
   if (task == nullptr) {

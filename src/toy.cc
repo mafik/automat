@@ -16,4 +16,28 @@ void ToyMakerMixin::ForEachToyImpl(ReferenceCounted& owner, Interface::Table* if
   }
 }
 
+void ToyStore::WakeUpdatedToys(time::SteadyPoint last_wake) {
+  for (auto& [key, toy] : container) {
+    auto [rc, iface] = key;
+    uint32_t current;
+    if (iface == nullptr) {  // Object toys
+      // Safe to read through `rc`: WeakPtr in the Toy keeps memory alive.
+      // Counter at `wake_counter` is valid even after ~ReferenceCounted.
+      current = rc->wake_counter.load(std::memory_order_relaxed);
+    } else if (auto ptr = rc->AcquirePtr()) {  // True interface toys
+      Interface interface(static_cast<Object&>(*ptr), *iface);
+      if (auto arg = dyn_cast<Argument>(interface)) {
+        current = arg.state->wake_counter.load(std::memory_order_relaxed);
+      } else {
+        continue;  // Not an Argument toy, no wake_counter to check
+      }
+    } else {
+      continue;  // Interface owner has been destroyed
+    }
+    if (current != toy->observed_notify_counter) {
+      toy->observed_notify_counter = current;
+      toy->WakeAnimationAt(last_wake);
+    }
+  }
+}
 }  // namespace automat

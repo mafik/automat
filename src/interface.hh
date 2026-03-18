@@ -51,12 +51,12 @@ struct Interface {
     kInterfaceArgument,
     kNextArg,  // sub-kind of InterfaceArgument
     kLastInterfaceArgument = kNextArg,
+    kRunnable,
     kSyncable,     // also an Argument (via Syncable)
     kOnOff,        // also a Syncable
     kLongRunning,  // also an OnOff
     kLastOnOff = kLongRunning,
-    kRunnable,  // also a Syncable
-    kLastArgument = kRunnable,
+    kLastArgument = kLastOnOff,
     // Standalone interfaces
     kImageProvider,
   };

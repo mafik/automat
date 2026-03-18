@@ -12,6 +12,7 @@
 #include <include/core/SkVertices.h>
 #include <include/effects/SkGradientShader.h>
 
+#include <atomic>
 #include <optional>
 
 #include "../build/generated/embedded.hh"
@@ -417,8 +418,10 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     }
     phase |= state->steel_insert_hidden.Tick(timer);
 
-    if (timer.last < arg.state->last_activity) {
+    uint32_t last_activity = arg.state->last_activity.load(std::memory_order_relaxed);
+    if (state->last_activity != last_activity) {
       state->lightness_pct = 100;
+      state->last_activity = last_activity;
     }
 
     phase |= SimulateCablePhysics(timer, *state, pos_dir, to_points);

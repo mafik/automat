@@ -23,6 +23,7 @@
 #include "automat.hh"
 #include "base.hh"
 #include "color.hh"
+#include "control_flow.hh"
 #include "drag_action.hh"
 #include "embedded.hh"
 #include "font.hh"
@@ -430,25 +431,36 @@ void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const
   if (!ui::root_widget || !object) return;
   // Outgoing: iterate this object's args and look up each in ToyStore
   object->Each<Argument>([&](Argument arg) {
-    auto* w = ui::root_widget->toys.FindOrNull(arg);
-    if (auto* cw = dynamic_cast<ConnectionWidget*>(w)) {
-      if (moved && !value_changed) {
-        cw->FromMoved();
-      } else {
-        cw->WakeAnimation();
-        if (cw->state) {
-          cw->state->stabilized = false;
-        }
-      }
-    }
+    arg.WakeToys();
     return LoopControl::Continue;
   });
+
+  // Old code that properly woke up retracted cables.
+  // object->Each<Argument>([&](Argument arg) {
+  //   auto* w = ui::root_widget->toys.FindOrNull(arg);
+  //   if (auto* cw = dynamic_cast<ConnectionWidget*>(w)) {
+  //     if (moved && !value_changed) {
+  //       cw->FromMoved();
+  //     } else {
+  //       cw->WakeAnimation();
+  //       if (cw->state) {
+  //         cw->state->stabilized = false;
+  //       }
+  //     }
+  //   }
+  //   return LoopControl::Continue;
+  // });
+
   // Incoming: iterate all ToyStore entries to find ConnectionWidgets pointing to this location
-  for (auto& [key, toy] : ui::root_widget->toys.container) {
-    auto* w = dynamic_cast<ui::ConnectionWidget*>(toy.get());
-    if (!w) continue;
-    if (w->EndLocation() == this) {
-      w->WakeAnimation();
+  if (auto board = ParentAs<Board>()) {
+    for (auto& other_loc : board->locations) {
+      if (other_loc.get() == this) continue;
+      other_loc->object->Each<Argument>([&](Argument arg) {
+        if (arg.ObjectOrNull() == object.Get()) {
+          arg.WakeToys();
+        }
+        return LoopControl::Continue;
+      });
     }
   }
 }

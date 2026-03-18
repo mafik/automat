@@ -83,7 +83,6 @@ struct ConnectionWidget : ArgumentToy {
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
   Optional<Rect> TextureBounds() const override;
   Vec<Vec2> TextureAnchors() override;
-  void FromMoved();
 };
 
 // Now that ConnectionWidget is defined, we can check whether Argument can make toys

@@ -229,26 +229,6 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
   }
 }
 
-void ConnectionWidget::FromMoved() {
-  auto arg = start_weak.Lock();
-  if (!arg) return;
-
-  if (state) {
-    if (state->stabilized && !state->stabilized_end.has_value()) {
-      auto& object = *arg.Owner<Object>();
-      auto& toy = *ToyStore().FindOrNull(object);
-      auto* mw = ToyStore().FindOrNull(*root_board);
-      auto pos_dir = toy.ArgStart(*arg, mw);
-      state->stabilized_start = pos_dir.pos;
-      state->sections.front().pos = pos_dir.pos;
-      state->sections.back().pos = pos_dir.pos;
-      return;
-    }
-    state->stabilized = false;
-  }
-  WakeAnimation();
-}
-
 // Helper for methods of ConnectionWidget that need to access the start/end of the connection.
 // It performs the locking of weak pointers and locates the widgets of connected objects.
 struct ConnectionWidgetLocker {
@@ -411,6 +391,18 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   }
 
   if (state) {
+    if (state->stabilized && !state->stabilized_end.has_value()) {
+      auto& toy = *a.start_widget;
+      auto* mw = ToyStore().FindOrNull(*root_board);
+
+      auto pos_dir = this->pos_dir;
+      state->stabilized_start = pos_dir.pos;
+      state->sections.front().pos = pos_dir.pos;
+      state->sections.back().pos = pos_dir.pos;
+    } else {
+      state->stabilized = false;
+    }
+
     if (a.end_widget) {
       state->steel_insert_hidden.target = 1;
     } else {

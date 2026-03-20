@@ -185,9 +185,7 @@ struct DeiconifyOption : TextOption {
 
 static Str SyncableName(NestedWeakPtr<Syncable::Table>& weak) {
   if (auto ptr = weak.Lock()) {
-    Str name;
-    ptr.Owner<Object>()->InterfaceName(*ptr.Get(), name);
-    return name;
+    return Str(ptr->name);
   }
   return "Field of a deleted object";
 }
@@ -415,8 +413,6 @@ bool ObjectToy::IsIconified() const {
 
 void Object::Interfaces(const std::function<LoopControl(Interface)>& cb) {}
 
-void Object::InterfaceName(Interface::Table& iface, Str& out_name) { out_name = iface.name; }
-
 Location* Object::MyLocation() {
   for (auto& loc : root_board->locations) {
     if (loc->object == this) {
@@ -429,9 +425,7 @@ Location* Object::MyLocation() {
 Interface::Table* Object::InterfaceFromName(StrView needle) {
   Interface::Table* result = nullptr;
   Interfaces([&](Interface iface) {
-    Str iface_name;
-    InterfaceName(*iface.table_ptr, iface_name);
-    if (iface_name == needle) {
+    if (iface.Name() == needle) {
       result = iface.table_ptr;
       return LoopControl::Break;
     }
@@ -463,9 +457,7 @@ Str ObjectSerializer::ResolveName(Object& object, Interface::Table* iface, StrVi
   Str ret = ResolveName(object, hint);
   if (iface) {
     ret += ".";
-    Str iface_name;
-    object.InterfaceName(*iface, iface_name);
-    ret += iface_name;
+    ret += iface->name;
   }
   return ret;
 }
@@ -494,8 +486,7 @@ void ObjectSerializer::Serialize(Object& start) {
           Key("links");
           StartObject();
         }
-        Str arg_name;
-        o->InterfaceName(*arg.table, arg_name);
+        Str arg_name(arg.Name());
         Key(arg_name);
         auto to_name = ResolveName(*end.Owner<Object>(), end.Get());
         String(to_name);

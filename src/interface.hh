@@ -144,6 +144,34 @@ struct Interface {
   StrView Name() const { return table_ptr->name; }
 };
 
+// Ref-counted wrapper for bound interface types. Keeps the owner Object alive.
+// Inherits from T so it IS-A T (e.g. Locked<Argument> is an Argument).
+template <typename T>
+struct Locked : T {
+  Locked() = default;
+  ~Locked() { SafeDecrementOwningRefs(this->object_ptr); }
+  Locked(const Locked& o) : T(o) { SafeIncrementOwningRefs(this->object_ptr); }
+  Locked(Locked&& o) : T(o) {
+    o.object_ptr = nullptr;
+    o.table_ptr = nullptr;
+  }
+  Locked& operator=(const Locked&) = delete;
+  Locked& operator=(Locked&&) = delete;
+
+ private:
+  struct AdoptTag {};
+  Locked(T bound, AdoptTag) : T(bound) {}
+
+  template <typename U>
+  friend Locked<U> AdoptLocked(U bound);
+};
+
+// Construct a Locked<T> that adopts an existing owning ref (caller has already incremented).
+template <typename T>
+Locked<T> AdoptLocked(T bound) {
+  return Locked<T>(bound, {});
+}
+
 }  // namespace automat
 
 #if defined(_MSC_VER)

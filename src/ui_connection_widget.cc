@@ -43,11 +43,10 @@ Location* ConnectionWidget::StartLocation() const {
 }
 
 Location* ConnectionWidget::EndLocation() const {
-  auto start_obj = LockOwner<Object>();
-  if (!start_obj || !iface) return nullptr;
-  auto end_ptr = Bind<Argument>(*start_obj).Find();
-  if (auto* end_obj = end_ptr.Owner<Object>()) {
-    return end_obj->MyLocation();
+  if (auto arg = LockBind<Argument>()) {
+    if (auto* end_obj = arg.Find().Owner<Object>()) {
+      return end_obj->MyLocation();
+    }
   }
   return nullptr;
 }
@@ -64,10 +63,9 @@ SkPath ConnectionWidget::Shape() const {
 }
 
 void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
-  auto locked = LockOwner<Object>();
-  if (!locked || !iface) return;
-  Argument arg = Bind<Argument>(*locked);
-  Location* from_ptr = locked->MyLocation();
+  auto arg = LockBind<Argument>();
+  if (!arg) return;
+  Location* from_ptr = arg.object_ptr->MyLocation();
   if (!from_ptr) return;
   Location& from = *from_ptr;
 
@@ -354,24 +352,21 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     }
   }
 
-  if (state) {
-    state->hidden = overlapping;
-  }
-
   bool should_be_hidden = overlapping;
 
   bool start_iconified = IsIconified(a.StartObj());
-  if (start_iconified) {
-    // Hide the connector if the object is iconified
-    if (a.end_iface) {
-      // cable is connected to something - keep it visible
-    } else if (manual_position.has_value()) {
-      // cable is held by the pointer - keep it visible
-    } else {
-      // cable is not connected and not held by the mouse
-      // it can be hidden
-      should_be_hidden = true;
-    }
+  // Hide the disconnected connectors if the object is iconified
+  if (start_iconified && !a.end_iface) {
+    should_be_hidden = true;
+  }
+
+  if (manual_position.has_value()) {
+    // cable is held by the pointer - keep it visible
+    should_be_hidden = false;
+  }
+
+  if (state) {
+    state->hidden = should_be_hidden;
   }
 
   auto phase = animation::LinearApproach(should_be_hidden ? 1 : 0, timer.d, 5, transparency);
@@ -507,10 +502,9 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
       effect(audio::MakeBeginLoopEndEffect(embedded::assets_SFX_cable_start_wav,
                                            embedded::assets_SFX_cable_loop_wav,
                                            embedded::assets_SFX_cable_end_wav)) {
-  auto start = widget.LockOwner<Object>();
-
-  // Disconnect existing connection
-  widget.Bind<Argument>(*start).Disconnect();
+  if (auto arg = widget.LockBind<Argument>()) {
+    arg.Disconnect();  // Disconnect existing connection
+  }
 
   grab_offset = Vec2(0, 0);
   if (widget.state) {
@@ -528,8 +522,8 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
 }
 
 DragConnectionAction::~DragConnectionAction() {
-  auto start = widget.LockOwner<Object>();
-  if (!start) return;
+  auto arg = widget.LockBind<Argument>();
+  if (!arg) return;
 
   Vec2 pos;
   if (widget.state) {
@@ -541,30 +535,24 @@ DragConnectionAction::~DragConnectionAction() {
   }
   auto* mw = pointer.root_widget.toys.FindOrNull(*root_board);
   if (mw) {
-    mw->ConnectAtPoint(widget.Bind<Argument>(*start), pos);
+    mw->ConnectAtPoint(arg, pos);
   }
   widget.manual_position.reset();
   widget.WakeAnimation();
 }
 
 void DragConnectionAction::Update() {
-  auto start = widget.LockOwner<Object>();
-  if (!start) return;
-  Location* from = start->MyLocation();
-  if (!from) return;
-
-  auto* parent_mw = pointer.root_widget.toys.FindOrNull(*from->ParentAs<Board>());
-  if (!parent_mw) return;
-  Vec2 new_position = pointer.PositionWithin(*parent_mw);
+  Vec2 new_position = pointer.PositionWithinRootBoard();
   widget.manual_position = new_position - grab_offset * widget.state->connector_scale;
   widget.WakeAnimation();
   pointer.pointer_widget->WakeAnimation();
 }
 
 bool DragConnectionAction::Highlight(Interface end) const {
-  auto start = widget.LockOwner<Object>();
-  if (!start) return false;
-  return widget.Bind<Argument>(*start).CanConnect(end);
+  if (auto arg = widget.LockBind<Argument>()) {
+    return arg.CanConnect(end);
+  }
+  return false;
 }
 
 Optional<Rect> ConnectionWidget::TextureBounds() const {

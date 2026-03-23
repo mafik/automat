@@ -48,6 +48,19 @@ struct Toy : ui::Widget {
     return T(owner, *static_cast<typename T::Table*>(iface));
   }
 
+  // Alternative to Bind that keeps the owner locked.
+  template <typename T = Interface>
+  Locked<T> LockBind() const {
+    if (auto obj = LockOwner<Object>()) {
+      if (iface) {
+        // transfer ownership into Locked
+        T bound(*obj.Release(), *static_cast<typename T::Table*>(iface));
+        return AdoptLocked(bound);
+      }
+    }
+    return {};
+  }
+
   // Walk the parent chain up to LocationWidget, then return the last Toy before that.
   Toy* BaseToy() const;
 };

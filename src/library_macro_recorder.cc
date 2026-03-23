@@ -160,7 +160,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
   Str track_name;
   Fn<Location&()> make_fn;
   if (kb_key != AnsiKey::Unknown) {
-    track_name = Str(ToStr(kb_key));
+    track_name = ToStr(kb_key);
     make_fn = [&]() -> Location& {
       Location& l = board->Create<KeyPresser>();
       auto* kp = l.As<KeyPresser>();
@@ -168,7 +168,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
       return l;
     };
   } else if (ptr_btn != PointerButton::Unknown) {
-    track_name = Str(ToStr(ptr_btn));
+    track_name = ToStr(ptr_btn);
     make_fn = [&]() -> Location& {
       Location& l = board->Create<MouseButtonPresser>();
       auto* mb = l.As<MouseButtonPresser>();

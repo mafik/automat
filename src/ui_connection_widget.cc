@@ -317,9 +317,10 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     return animation::Finished;
   }
 
-  from_shape = a.start_widget->Shape();
+  auto* start_base_widget = a.start_widget->BaseToy();
+  from_shape = start_base_widget->Shape();
   if (a.board_widget) {
-    auto transform_from_to_board = TransformBetween(*a.start_widget, *a.board_widget);
+    auto transform_from_to_board = TransformBetween(*start_base_widget, *a.board_widget);
     from_shape.transform(transform_from_to_board);
   }
 
@@ -327,6 +328,12 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
 
   if (icon == nullptr && a.start_arg.Get() && style == Argument::Style::Cable) {
     icon = arg.MakeIcon(this);
+    auto m = SkMatrix::RectToRect(icon->Shape().getBounds(), Rect(-4_mm, -4_mm, 4_mm, 4_mm),
+                                  SkMatrix::kCenter_ScaleToFit);
+    // scale is guaranteed to be the same for X & Y
+    float s = 1.0f / std::max(m.getScaleX(), 1.0f);
+    m.postScale(s, s, 0, 0);
+    icon->local_to_parent = SkM44(m);
   }
 
   // Lazy initialization of cable physics state

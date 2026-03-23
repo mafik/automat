@@ -297,7 +297,7 @@ static SkPath GetRecPath() {
 
 static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
 
-TrackBase::TrackBase(StrView name) : arg_table(name) {
+TrackBase::TrackBase(Str name_arg) : name_str(std::move(name_arg)), arg_table(name_str) {
   arg_table.tint = "#17aeb7"_color;
   arg_table.light = "#17aeb7"_color;
   arg_table.can_connect = [](Argument, Interface, Status&) {};
@@ -335,21 +335,21 @@ bool OnOffTrack::on_off_Impl::IsOn() const {
 Timeline::Timeline()
     : state(kPaused), timeline_length(0), paused{.playback_offset = 0s}, zoom(10) {}
 
-OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
-  auto track_ptr = MAKE_PTR(OnOffTrack, name);
+OnOffTrack& Timeline::AddOnOffTrack(Str name) {
+  auto track_ptr = MAKE_PTR(OnOffTrack, std::move(name));
   auto& track = *track_ptr;
   AddTrack(std::move(track_ptr));
   return track;
 }
 
-Vec2Track& Timeline::AddVec2Track(StrView name) {
+Vec2Track& Timeline::AddVec2Track(Str name) {
   auto track_ptr = MAKE_PTR(Vec2Track, name);
   auto& track = *track_ptr;
   AddTrack(std::move(track_ptr));
   return track;
 }
 
-Float64Track& Timeline::AddFloat64Track(StrView name) {
+Float64Track& Timeline::AddFloat64Track(Str name) {
   auto track_ptr = MAKE_PTR(Float64Track, name);
   auto& track = *track_ptr;
   AddTrack(std::move(track_ptr));

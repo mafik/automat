@@ -16,7 +16,9 @@ namespace automat::library {
 struct Timeline;
 
 struct TrackBase : Object {
-  TrackBase(StrView name);
+  Str name_str;
+
+  TrackBase(Str name);
 
   InterfaceArgument<Interface>::State arg_state;
   InterfaceArgument<Interface>::Table arg_table;
@@ -44,7 +46,7 @@ struct OnOffTrack : TrackBase {
   void OnTurnOff() {}
   DEF_END(on_off);
 
-  OnOffTrack(StrView name) : TrackBase(name) {}
+  OnOffTrack(Str name) : TrackBase(name) {}
   string_view Type() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
@@ -61,7 +63,7 @@ struct Vec2Track : TrackBase {
   using ValueT = Vec2;
   Vec<Vec2> values;
 
-  Vec2Track(StrView name) : TrackBase(name) {}
+  Vec2Track(Str name) : TrackBase(name) {}
   string_view Type() const override { return "Vec2 Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Vec2Track, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
@@ -77,7 +79,7 @@ struct Float64Track : TrackBase {
   using ValueT = double;
   Vec<double> values;
 
-  Float64Track(StrView name) : TrackBase(name) {}
+  Float64Track(Str name) : TrackBase(name) {}
   string_view Type() const override { return "Float64 Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Float64Track, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
@@ -142,9 +144,9 @@ struct Timeline : Object, TimerNotificationReceiver {
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   void Interfaces(const std::function<LoopControl(Interface)>& cb) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
-  OnOffTrack& AddOnOffTrack(StrView name);
-  Vec2Track& AddVec2Track(StrView name);
-  Float64Track& AddFloat64Track(StrView name);
+  OnOffTrack& AddOnOffTrack(Str name);
+  Vec2Track& AddVec2Track(Str name);
+  Float64Track& AddFloat64Track(Str name);
 
   void AddTrack(Ptr<TrackBase>&& track);
 

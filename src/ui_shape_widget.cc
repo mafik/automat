@@ -13,8 +13,9 @@ SkPath ShapeWidget::Shape() const { return path; }
 void ShapeWidget::Draw(SkCanvas& canvas) const { canvas.drawPath(path, paint); }
 
 std::unique_ptr<Widget> MakeShapeWidget(ui::Widget* parent, const char* svg_path,
-                                        SkColor fill_color, const SkMatrix* transform) {
-  SkPath path = PathFromSVG(svg_path);
+                                        SkColor fill_color, const SkMatrix* transform,
+                                        SVGUnit unit) {
+  SkPath path = PathFromSVG(svg_path, unit);
   if (transform) {
     path.transform(*transform);
   }

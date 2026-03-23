@@ -986,6 +986,7 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
     canvas.translate(icon_offset.x, icon_offset.y);
     canvas.scale(state.connector_scale, state.connector_scale);
 
+    canvas.concat(icon->local_to_parent);
     icon->Draw(canvas);
 
     // Draw blur

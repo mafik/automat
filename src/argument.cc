@@ -50,7 +50,7 @@ std::unique_ptr<Argument::Toy> Argument::MakeToy(ui::Widget* parent) {
 }
 
 std::unique_ptr<ui::Widget> Argument::Table::DefaultMakeIcon(Argument, ui::Widget* parent) {
-  return ui::MakeShapeWidget(parent, kNextShape, "#ffffff"_color);
+  return ui::MakeShapeWidget(parent, PathFromSVG(kNextShape), "#ffffff"_color);
 }
 
 }  // namespace automat

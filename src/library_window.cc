@@ -180,7 +180,7 @@ struct WindowWidget;
 struct PickButton : theme::xp::TitleButton {
   std::function<void(ui::Pointer&)> on_activate;
   PickButton(ui::Widget* parent) : theme::xp::TitleButton(parent) {
-    child = ui::MakeShapeWidget(this, kPickSVG, "#000000"_color);
+    child = ui::MakeShapeWidget(this, PathFromSVG(kPickSVG), "#000000"_color);
     UpdateChildTransform();
     child->local_to_parent.preTranslate(-0.6_mm, 0.6_mm);
   }

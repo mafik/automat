@@ -99,7 +99,7 @@ static const SkPath kJumpPath = PathFromSVG(kJumpPathSVG, SVGUnit_Millimeters);
 static Assembler* FindAssembler(Object& start);
 
 std::unique_ptr<ui::Widget> Instruction::jump_arg_Impl::OnMakeIcon(ui::Widget* parent) {
-  return ui::MakeShapeWidget(parent, kJumpPathSVG, "#ff0000"_color, nullptr, SVGUnit_Millimeters);
+  return ui::MakeShapeWidget(parent, kJumpPath, "#ff0000"_color);
 }
 
 void Instruction::jump_arg_Impl::OnConnect(Interface end) {

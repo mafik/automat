@@ -655,7 +655,7 @@ struct SideButton : ui::Button {
 
 struct PrevButton : SideButton {
   PrevButton(TimelineWidget& parent) : SideButton(parent) {
-    child = MakeShapeWidget(this, kNextShape, SK_ColorWHITE, &kHorizontalFlip);
+    child = MakeShapeWidget(this, PathFromSVG(kNextShape).makeTransform(kHorizontalFlip), SK_ColorWHITE);
     UpdateChildTransform();
   }
   void Activate(ui::Pointer&) override;
@@ -664,7 +664,7 @@ struct PrevButton : SideButton {
 
 struct NextButton : SideButton {
   NextButton(TimelineWidget& parent) : SideButton(parent) {
-    child = MakeShapeWidget(this, kNextShape, SK_ColorWHITE);
+    child = MakeShapeWidget(this, PathFromSVG(kNextShape), SK_ColorWHITE);
     UpdateChildTransform();
   }
   void Activate(ui::Pointer&) override;
@@ -686,7 +686,7 @@ struct TimelineRunButton : ui::ToggleButton {
                           .radius = kPlayButtonRadius,
                           .on_click = [this](ui::Pointer& p) { Activate(p); }});
     off = std::make_unique<ColoredButton>(
-        this, kPlayShape,
+        this, PathFromSVG(kPlayShape),
         ColoredButtonArgs{.fg = kOrange,
                           .bg = kTimelineButtonBackground,
                           .radius = kPlayButtonRadius,

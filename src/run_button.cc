@@ -16,10 +16,10 @@ namespace automat::ui {
 PowerButton::PowerButton(Widget* parent, NestedWeakPtr<OnOff::Table> target, SkColor fg, SkColor bg)
     : ToggleButton(parent), target(std::move(target)) {
   on = make_unique<ColoredButton>(
-      this, kPowerSVG,
+      this, PathFromSVG(kPowerSVG),
       ColoredButtonArgs{.fg = bg, .bg = fg, .on_click = [this](ui::Pointer& p) { Activate(p); }});
   off = make_unique<ColoredButton>(
-      this, kPowerSVG,
+      this, PathFromSVG(kPowerSVG),
       ColoredButtonArgs{.fg = fg, .bg = bg, .on_click = [this](ui::Pointer& p) { Activate(p); }});
 }
 

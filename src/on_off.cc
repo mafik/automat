@@ -13,7 +13,7 @@ bool OnOff::Table::DefaultCanSync(Syncable, Syncable other) {
 }
 
 std::unique_ptr<ui::Widget> OnOff::Table::DefaultMakeIcon(Argument, ui::Widget* parent) {
-  return ui::MakeShapeWidget(parent, kPowerSVG, 0);
+  return ui::MakeShapeWidget(parent, PathFromSVG(kPowerSVG), 0);
 }
 
 }  // namespace automat

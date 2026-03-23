@@ -88,12 +88,6 @@ struct ColoredButton : Button {
   ColoredButton(ui::Widget* parent, ColoredButtonArgs args = {})
       : Button(parent), fg(args.fg), bg(args.bg), radius(args.radius), on_click(args.on_click) {}
 
-  ColoredButton(ui::Widget* parent, const char* svg_path, ColoredButtonArgs args = {})
-      : ColoredButton(parent, args) {
-    child = MakeShapeWidget(this, svg_path, SK_ColorWHITE);
-    UpdateChildTransform();
-  }
-
   ColoredButton(ui::Widget* parent, SkPath path, ColoredButtonArgs args = {})
       : ColoredButton(parent, args) {
     child = std::make_unique<ShapeWidget>(this, path);

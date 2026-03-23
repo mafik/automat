@@ -38,7 +38,12 @@ class BuildVariant:
     PREFIX = self.PREFIX
 
   def __bool__(self):
-    return self == current
+    v = current
+    while v != None:
+      if v == self:
+        return True
+      v = v.base_variant
+    return False
 
 release = BuildVariant('release')
 fast = BuildVariant('fast')

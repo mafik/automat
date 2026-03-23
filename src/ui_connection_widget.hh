@@ -7,7 +7,6 @@
 #include "audio.hh"
 #include "connector_optical.hh"
 #include "object.hh"
-#include "ptr.hh"
 #include "root_widget.hh"
 #include "widget.hh"
 
@@ -39,8 +38,6 @@ struct DragConnectionAction : Action {
 //
 // TODO: separate the state of these three modes better
 struct ConnectionWidget : ArgumentToy {
-  NestedWeakPtr<Argument::Table> start_weak;
-
   struct AnimationState {
     float radar_alpha = 0;
     float radar_alpha_target = 0;
@@ -57,6 +54,7 @@ struct ConnectionWidget : ArgumentToy {
 
   // Updated in `Tick()`
   Argument::Table::Style style;
+  SkColor tint;
   Vec2AndDir pos_dir;  // position of connection start
   SkPath from_shape;   // board coords
   SkPath to_shape;     // board coords
@@ -70,7 +68,6 @@ struct ConnectionWidget : ArgumentToy {
 
   ConnectionWidget(Widget* parent, Object&, Argument::Table&);
 
-  // Helper to get the Location and Argument from start_weak
   Location* StartLocation() const;  // TODO: remove
   Location* EndLocation() const;    // TODO: remove
 

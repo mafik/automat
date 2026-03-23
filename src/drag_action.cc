@@ -147,17 +147,17 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
   for (auto& [key, toy] : ui::root_widget->toys.container) {
     auto* connection_widget = dynamic_cast<ui::ConnectionWidget*>(toy.get());
     if (!connection_widget) continue;
-    auto arg = connection_widget->start_weak.Lock();
-    if (!arg) continue;
-    auto& start = *arg.Owner<Object>();
+    auto start = connection_widget->LockOwner<Object>();
+    if (!start || !connection_widget->iface) continue;
+    Argument arg = connection_widget->Bind<Argument>(*start);
 
     for (auto& location : locations) {
-      if (&start == location->object.Get()) {
+      if (start.Get() == location->object.Get()) {
         // We grabbed the start object of this connection widget
         connection_widget->animation_state.radar_alpha_target = 1;
       } else {
         // This connection widget can be connected to one of dragged locations
-        if (Argument(start, *arg).CanConnect(*location->object)) {
+        if (arg.CanConnect(*location->object)) {
           connection_widget->animation_state.radar_alpha_target = 1;
         }
       }

@@ -14,11 +14,16 @@
 namespace automat::library {
 
 struct Timeline;
-struct TrackArgument;
 
 struct TrackBase : Object {
+  TrackBase(StrView name);
+
+  InterfaceArgument<Interface>::State arg_state;
+  InterfaceArgument<Interface>::Table arg_table;
+
   Timeline* timeline = nullptr;
   Vec<time::Duration> timestamps;
+  virtual string_view Type() const = 0;
   virtual void Splice(time::Duration current_offset, time::Duration splice_to) = 0;
   virtual void UpdateOutput(Location& target, time::SteadyPoint started_at,
                             time::SteadyPoint now) = 0;
@@ -39,7 +44,8 @@ struct OnOffTrack : TrackBase {
   void OnTurnOff() {}
   DEF_END(on_off);
 
-  string_view Name() const override { return "On/Off Track"; }
+  OnOffTrack(StrView name) : TrackBase(name) {}
+  string_view Type() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   INTERFACES(on_off)
@@ -55,7 +61,8 @@ struct Vec2Track : TrackBase {
   using ValueT = Vec2;
   Vec<Vec2> values;
 
-  string_view Name() const override { return "Vec2 Track"; }
+  Vec2Track(StrView name) : TrackBase(name) {}
+  string_view Type() const override { return "Vec2 Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Vec2Track, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
@@ -70,7 +77,8 @@ struct Float64Track : TrackBase {
   using ValueT = double;
   Vec<double> values;
 
-  string_view Name() const override { return "Float64 Track"; }
+  Float64Track(StrView name) : TrackBase(name) {}
+  string_view Type() const override { return "Float64 Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Float64Track, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
@@ -78,13 +86,6 @@ struct Float64Track : TrackBase {
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
-};
-
-struct TrackArgument : Argument::Table {
-  Ptr<TrackBase> track;
-  NestedWeakPtr<Interface::Table> end;
-
-  TrackArgument(StrView name);
 };
 
 // Currently Timeline pauses at end which is consistent with standard media player behavour.
@@ -105,7 +106,7 @@ struct Timeline : Object, TimerNotificationReceiver {
   DEF_INTERFACE(Timeline, NextArg, next, "Next")
   DEF_END(next);
 
-  Vec<std::unique_ptr<TrackArgument>> tracks;
+  Vec<Ptr<TrackBase>> tracks;
 
   float zoom;  // stores the time in seconds
 
@@ -145,7 +146,7 @@ struct Timeline : Object, TimerNotificationReceiver {
   Vec2Track& AddVec2Track(StrView name);
   Float64Track& AddFloat64Track(StrView name);
 
-  void AddTrack(Ptr<TrackBase>&& track, StrView name);
+  void AddTrack(Ptr<TrackBase>&& track);
 
   void BeginRecording();
   void StopRecording();

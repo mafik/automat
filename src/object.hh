@@ -146,7 +146,9 @@ struct ObjectToy : Toy {
   // Returns the start position of the given argument.
   // If coordinate_space is nullptr, returns local (metric) coordinates.
   // If coordinate_space is provided, returns coordinates in that widget's space.
-  virtual Vec2AndDir ArgStart(const Interface::Table&, ui::Widget* coordinate_space = nullptr);
+  virtual Vec2AndDir ArgStart(const Interface::Table&);
+
+  Vec2AndDir ArgStart(const Interface::Table&, ui::Widget* coordinate_space);
 
   // Describes the area of the widget where the given interface is located.
   // Local (metric) coordinates.

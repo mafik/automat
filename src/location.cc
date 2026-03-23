@@ -429,27 +429,10 @@ std::unique_ptr<Action> LocationWidget::FindAction(ui::Pointer& p, ui::ActionTri
 
 void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const {
   if (!ui::root_widget || !object) return;
-  // Outgoing: iterate this object's args and look up each in ToyStore
   object->Each<Argument>([&](Argument arg) {
     arg.WakeToys();
     return LoopControl::Continue;
   });
-
-  // Old code that properly woke up retracted cables.
-  // object->Each<Argument>([&](Argument arg) {
-  //   auto* w = ui::root_widget->toys.FindOrNull(arg);
-  //   if (auto* cw = dynamic_cast<ConnectionWidget*>(w)) {
-  //     if (moved && !value_changed) {
-  //       cw->FromMoved();
-  //     } else {
-  //       cw->WakeAnimation();
-  //       if (cw->state) {
-  //         cw->state->stabilized = false;
-  //       }
-  //     }
-  //   }
-  //   return LoopControl::Continue;
-  // });
 
   // Incoming: iterate all ToyStore entries to find ConnectionWidgets pointing to this location
   if (auto board = ParentAs<Board>()) {

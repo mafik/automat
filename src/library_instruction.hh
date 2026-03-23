@@ -141,7 +141,7 @@ struct Instruction : Object, Buffer {
     SkPath Shape() const override;
     animation::Phase Tick(time::Timer&) override;
     void Draw(SkCanvas&) const override;
-    Vec2AndDir ArgStart(const Interface::Table&, ui::Widget* coordinate_space = nullptr) override;
+    Vec2AndDir ArgStart(const Interface::Table&) override;
     void FillChildren(Vec<ui::Widget*>& children) override;
   };
 

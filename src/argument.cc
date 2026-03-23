@@ -38,10 +38,8 @@ Object& Argument::ObjectOrMake() const {
 
   PositionAhead(*start_loc, *table, loc);
   PositionBelow(loc, *start_loc);
-  LOG << "Connecting to " << loc.object->Name();
   Connect(*loc.object);
   auto target = Find();
-  LOG << "Connected to " << AddrToStr(target.Owner<Object>());
 
   ui::root_widget->WakeAnimation();
   return *loc.object;

@@ -38,10 +38,6 @@ struct RootWidget;
 
 Str ToStr(Ptr<Widget> widget);
 
-inline Span<Widget*> WidgetPtrSpan(Span<std::unique_ptr<Widget>> vec) {
-  return {reinterpret_cast<Widget**>(vec.data()), vec.size()};
-}
-
 // Transform from the RootWidget coordinates to the local coordinates of the widget.
 SkMatrix TransformDown(const Widget& to);
 // Transform from the local coordinates of the widget to the RootWidget coordinates.

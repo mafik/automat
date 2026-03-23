@@ -180,7 +180,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
     return;
   }
   for (int i = 0; i < timeline->tracks.size(); i++) {
-    if (timeline->tracks[i]->name == track_name) {
+    if (timeline->tracks[i]->arg_table.name == track_name) {
       track_index = i;
       break;
     }
@@ -200,15 +200,14 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
     track_index = timeline->tracks.size() - 1;
     Location& on_off_loc = make_fn();
     on_off_loc.Iconify();
-    Argument::Table& track_arg = *timeline->tracks.back();
-
+    Argument::Table& track_arg = timeline->tracks.back()->arg_table;
     PositionAhead(*timeline->here, track_arg, on_off_loc);
     AnimateGrowFrom(*macro_recorder.here, on_off_loc);
-    Argument(*timeline, track_arg).Connect(Interface(*on_off_loc.object));
+    Argument(*timeline->tracks.back(), track_arg).Connect(Interface(*on_off_loc.object));
   }
 
   // Append the current timestamp to that track
-  OnOffTrack* track = dynamic_cast<OnOffTrack*>(timeline->tracks[track_index]->track.Get());
+  OnOffTrack* track = dynamic_cast<OnOffTrack*>(timeline->tracks[track_index].Get());
   if (track == nullptr) {
     ERROR << "Track is not an OnOffTrack";
     return;
@@ -300,16 +299,15 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
 
   int track_index = -1;
   for (int i = 0; i < timeline->tracks.size(); i++) {
-    if (timeline->tracks[i]->name == track_name) {
+    if (timeline->tracks[i]->arg_table.name == track_name) {
       track_index = i;
       break;
     }
   }
 
   if (track_index == -1) {
-    auto track_ptr = MAKE_PTR(TrackT);
-    auto& new_track = *track_ptr;
-    timeline->AddTrack(std::move(track_ptr), track_name);
+    auto track_ptr = MAKE_PTR(TrackT, track_name);
+    timeline->AddTrack(std::move(track_ptr));
     track_index = timeline->tracks.size() - 1;
     auto board = recorder.here->ParentAs<Board>();
     if (board == nullptr) {
@@ -318,14 +316,14 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
     }
     Location& receiver_loc = board->Create<ReceiverT>();
     receiver_loc.Iconify();
-    Argument::Table& track_arg = *timeline->tracks.back();
+    Argument::Table& track_arg = timeline->tracks.back()->arg_table;
 
     PositionAhead(*timeline->here, track_arg, receiver_loc);
     AnimateGrowFrom(*recorder.here, receiver_loc);
-    Argument(*timeline, track_arg).Connect(Interface(*receiver_loc.object));
+    Argument(*timeline->tracks.back(), track_arg).Connect(Interface(*receiver_loc.object));
   }
 
-  auto* track = dynamic_cast<TrackT*>(timeline->tracks[track_index]->track.Get());
+  auto* track = dynamic_cast<TrackT*>(timeline->tracks[track_index].Get());
   if (track == nullptr) {
     ERROR << "Track is not a " << typeid(TrackT).name();
     return;
@@ -577,19 +575,15 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
 
   void PointerMove(ui::Pointer&, Vec2 position) override { WakeAnimation(); }
 
-  Vec2AndDir ArgStart(const Interface::Table& arg, ui::Widget* coordinate_space) override {
+  Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == &MacroRecorder::timeline_tbl) {
       Vec2AndDir pos_dir{
           .pos = {22_mm, 0},
           .dir = -90_deg,
       };
-      if (coordinate_space) {
-        auto m = TransformBetween(*this, *coordinate_space);
-        pos_dir.pos = m.mapPoint(pos_dir.pos);
-      }
       return pos_dir;
     }
-    return ObjectToy::ArgStart(arg, coordinate_space);
+    return ObjectToy::ArgStart(arg);
   }
 };
 

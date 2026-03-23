@@ -101,8 +101,8 @@ Location& Board::CreateEmpty() {
   return *h;
 }
 
-void Board::Relocate(Location* parent) {
-  Object::Relocate(parent);
+void Board::Relocate(Location* new_here) {
+  Object::Relocate(new_here);
   for (auto& it : locations) {
     it->parent_location = here;
   }

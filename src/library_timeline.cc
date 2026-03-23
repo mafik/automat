@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <memory>
 #include <numbers>
+#include <ranges>
 #include <tracy/Tracy.hpp>
 
 #include "../build/generated/embedded.hh"
@@ -296,21 +297,22 @@ static SkPath GetRecPath() {
 
 static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
 
-TrackArgument::TrackArgument(StrView name) : Argument::Table(name) {
-  tint = "#17aeb7"_color;
-  light = "#17aeb7"_color;
-  can_connect = [](Argument, Interface, Status&) {};
-  on_connect = [](Argument self, Interface end) {
-    auto& track = static_cast<TrackArgument&>(*self.table);
-    track.end = end;
+TrackBase::TrackBase(StrView name) : arg_table(name) {
+  arg_table.tint = "#17aeb7"_color;
+  arg_table.light = "#17aeb7"_color;
+  arg_table.can_connect = [](Argument, Interface, Status&) {};
+  arg_table.on_connect = [](Argument self, Interface end) {
+    auto& track = static_cast<TrackBase&>(*self.object_ptr);
+    track.arg_state.target = end;
   };
-  find = [](Argument self) -> NestedPtr<Interface::Table> {
-    auto& track = static_cast<const TrackArgument&>(*self.table);
-    return track.end.Lock();
+  arg_table.find = [](Argument self) -> NestedPtr<Interface::Table> {
+    auto& track = static_cast<const TrackBase&>(*self.object_ptr);
+    return track.arg_state.target.Lock();
   };
-  make_icon = [](Argument self, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
+  arg_table.make_icon = [](Argument self, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
     return std::make_unique<TextWidget>(parent, Str(self.Name()));
   };
+  arg_table.state_off = offsetof(TrackBase, arg_state);
 }
 
 bool OnOffTrack::on_off_Impl::IsOn() const {
@@ -334,31 +336,29 @@ Timeline::Timeline()
     : state(kPaused), timeline_length(0), paused{.playback_offset = 0s}, zoom(10) {}
 
 OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
-  auto track_ptr = MAKE_PTR(OnOffTrack);
+  auto track_ptr = MAKE_PTR(OnOffTrack, name);
   auto& track = *track_ptr;
-  AddTrack(std::move(track_ptr), name);
+  AddTrack(std::move(track_ptr));
   return track;
 }
 
 Vec2Track& Timeline::AddVec2Track(StrView name) {
-  auto track_ptr = MAKE_PTR(Vec2Track);
+  auto track_ptr = MAKE_PTR(Vec2Track, name);
   auto& track = *track_ptr;
-  AddTrack(std::move(track_ptr), name);
+  AddTrack(std::move(track_ptr));
   return track;
 }
 
 Float64Track& Timeline::AddFloat64Track(StrView name) {
-  auto track_ptr = MAKE_PTR(Float64Track);
+  auto track_ptr = MAKE_PTR(Float64Track, name);
   auto& track = *track_ptr;
-  AddTrack(std::move(track_ptr), name);
+  AddTrack(std::move(track_ptr));
   return track;
 }
 
-void Timeline::AddTrack(Ptr<TrackBase>&& track, StrView name) {
+void Timeline::AddTrack(Ptr<TrackBase>&& track) {
   track->timeline = this;
-  auto arg = make_unique<TrackArgument>(name);
-  arg->track = std::move(track);
-  tracks.emplace_back(std::move(arg));
+  tracks.emplace_back(std::move(track));
   if (auto h = here) {
     h->InvalidateConnectionWidgets(true, true);
   }
@@ -368,7 +368,7 @@ void Timeline::AddTrack(Ptr<TrackBase>&& track, StrView name) {
 Timeline::Timeline(const Timeline& other) : Timeline() {
   tracks.reserve(other.tracks.size());
   for (const auto& track : other.tracks) {
-    AddTrack(track->track->Clone().Cast<TrackBase>(), track->name);
+    AddTrack(track->Clone().Cast<TrackBase>());
   }
   WakeToys();
 }
@@ -390,11 +390,10 @@ time::Duration Timeline::MaxTrackLength() const {
     max_track_length = max(max_track_length, time::SteadyNow() - recording.started_at);
   }
   for (const auto& track : tracks) {
-    auto* track_base = track->track.Get();
-    if (track_base->timestamps.empty()) {
+    if (track->timestamps.empty()) {
       continue;
     }
-    max_track_length = max(max_track_length, track_base->timestamps.back());
+    max_track_length = max(max_track_length, track->timestamps.back());
   }
   return max_track_length;
 }
@@ -416,13 +415,12 @@ void TimelineScheduleNextAfter(Timeline& t, time::SteadyPoint now) {
     return started_at + timestamp > now;
   };
   for (const auto& track : t.tracks) {
-    auto* track_base = track->track.Get();
     int next_update_i =
-        std::upper_bound(track_base->timestamps.begin(), track_base->timestamps.end(), now, cmp) -
-        track_base->timestamps.begin();
-    if (next_update_i < track_base->timestamps.size()) {
+        std::upper_bound(track->timestamps.begin(), track->timestamps.end(), now, cmp) -
+        track->timestamps.begin();
+    if (next_update_i < track->timestamps.size()) {
       auto next_update_point =
-          t.playing.started_at + time::Duration(track_base->timestamps[next_update_i]);
+          t.playing.started_at + time::Duration(track->timestamps[next_update_i]);
       next_update = min(next_update, next_update_point);
     }
   }
@@ -434,11 +432,11 @@ void TimelineScheduleNextAfter(Timeline& t, time::SteadyPoint now) {
 static void TimelineUpdateOutputs(Timeline& t, time::SteadyPoint started_at,
                                   time::SteadyPoint now) {
   for (auto& track : t.tracks) {
-    auto* object = Argument(t, *track).ObjectOrNull();
+    auto* object = Argument(*track, track->arg_table).ObjectOrNull();
     if (object == nullptr) continue;
     auto* location = object->MyLocation();
     if (location == nullptr) continue;
-    track->track->UpdateOutput(*location, started_at, now);
+    track->UpdateOutput(*location, started_at, now);
   }
   t.WakeToys();
 }
@@ -758,7 +756,7 @@ struct TimelineWidget : ObjectToy {
   SpliceAction* splice_action = nullptr;
   DragZoomAction* drag_zoom_action = nullptr;
 
-  Vec<std::unique_ptr<ui::Widget>> track_widgets;
+  Vec<TrackedPtr<ui::Widget>> track_widgets;
 
   float zoom = 10;
   float splice_x = 0;
@@ -794,7 +792,7 @@ struct TimelineWidget : ObjectToy {
     auto track_index = TrackIndexFromY(pos.y);
     if (track_index >= 0 && track_index < timeline_locked.tracks.size()) {
       auto& track = timeline_locked.tracks[track_index];
-      auto& timestamps = track->track->timestamps;
+      auto& timestamps = track->timestamps;
       if (time_at_x == time::kDurationGuard) {
         time_at_x = TimeAtX(pos.x);
       }
@@ -906,8 +904,11 @@ struct TimelineWidget : ObjectToy {
 
   void AddMissingTrackWidgets(Timeline& timeline_locked) {
     auto& tracks = timeline_locked.tracks;
+    auto& toy_store = ToyStore();
     for (size_t i = track_widgets.size(); i < tracks.size(); ++i) {
-      track_widgets.push_back(tracks[i]->track->MakeToy(this));
+      LOG << "Adding track widget for track " << i;
+      auto& track_widget = toy_store.FindOrMake(*tracks[i], this);
+      track_widgets.emplace_back(&track_widget);
     }
   }
 
@@ -1207,8 +1208,9 @@ struct TimelineWidget : ObjectToy {
       }
     }
 
-    DrawChildrenSpan(canvas,
-                     WidgetPtrSpan(const_cast<Vec<std::unique_ptr<ui::Widget>>&>(track_widgets)));
+    for (auto& w : std::ranges::reverse_view{track_widgets}) {
+      DrawChildCached(canvas, *w);
+    }
 
     bool draw_bridge_hairline = true;
 
@@ -1542,27 +1544,23 @@ struct TimelineWidget : ObjectToy {
     }
   }
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
-  Vec2AndDir ArgStart(const Interface::Table& arg,
-                      ui::Widget* coordinate_space = nullptr) override {
+  using ObjectToy::ArgStart;
+  Vec2AndDir ArgStart(const Interface::Table& arg) override {
     auto timeline = LockObject<Timeline>();
     if (timeline) {
       auto lock = std::lock_guard(timeline->mutex);
       for (int i = 0; i < timeline->tracks.size(); ++i) {
-        if (timeline->tracks[i].get() == &arg) {
+        if (&timeline->tracks[i]->arg_table == &arg) {
           Vec2AndDir pos_dir = {
               .pos = {kPlasticWidth / 2, -kRulerHeight - kMarginAroundTracks - kTrackHeight / 2 -
                                              i * (kTrackMargin + kTrackHeight)},
               .dir = 0_deg,
           };
-          if (coordinate_space) {
-            auto m = TransformBetween(*this, *coordinate_space);
-            pos_dir.pos = m.mapPoint(pos_dir.pos);
-          }
           return pos_dir;
         }
       }
     }
-    return ObjectToy::ArgStart(arg, coordinate_space);
+    return ObjectToy::ArgStart(arg);
   }
 };
 
@@ -1769,7 +1767,7 @@ SpliceAction::~SpliceAction() {
       int num_tracks = timeline->tracks.size();
       for (int i = 0; i < num_tracks; ++i) {
         auto& track = timeline->tracks[i];
-        track->track->Splice(current_offset, splice_to);
+        track->Splice(current_offset, splice_to);
       }
       timeline->timeline_length += splice_to - current_offset;
       timeline_widget->AdjustOffset(*timeline, splice_to - current_offset, now);
@@ -1853,8 +1851,8 @@ std::unique_ptr<ObjectToy> Timeline::MakeToy(ui::Widget* parent) {
 }
 
 void Timeline::Interfaces(const function<LoopControl(Interface)>& cb) {
-  for (auto& track_arg : tracks) {
-    if (LoopControl::Break == cb(Interface(*this, *track_arg))) return;
+  for (auto& track : tracks) {
+    if (LoopControl::Break == cb(Interface(*track, track->arg_table))) return;
   }
   if (LoopControl::Break == cb(next.Bind())) return;
   if (LoopControl::Break == cb(run.Bind())) return;
@@ -1915,6 +1913,14 @@ struct TrackBaseWidget : ObjectToy {
           shape.left, ctx.timeline_widget->TimeAtX(-kWindowWidth / 2) / distance_to_seconds);
     }
     return Tick(timer, ctx);
+  }
+
+  Vec2AndDir ArgStart(const Interface::Table& arg) override {
+    Context ctx(*this);
+    if (ctx.timeline_widget) {
+      return ctx.timeline_widget->ArgStart(arg, this);
+    }
+    return ObjectToy::ArgStart(arg);
   }
 
   virtual animation::Phase Tick(time::Timer& timer, Context& ctx) { return animation::Finished; }
@@ -2654,12 +2660,12 @@ void Timeline::SerializeState(ObjectSerializer& writer) const {
   writer.Key("tracks");
   writer.StartObject();
   for (int i = 0; i < tracks.size(); ++i) {
-    writer.Key(tracks[i]->name.data(), tracks[i]->name.size());
+    writer.Key(tracks[i]->Name().data(), tracks[i]->Name().size());
     writer.StartObject();
     writer.Key("type");
-    auto type = tracks[i]->track->Name();
+    auto type = tracks[i]->Type();
     writer.String(type.data(), type.size());
-    tracks[i]->track->SerializeState(writer);
+    tracks[i]->SerializeState(writer);
     writer.EndObject();
   }
   writer.EndObject();

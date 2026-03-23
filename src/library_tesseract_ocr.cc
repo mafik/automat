@@ -1013,19 +1013,14 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
     return ObjectToy::FindAction(pointer, trigger);
   }
 
-  Vec2AndDir ArgStart(const Interface::Table& arg,
-                      ui::Widget* coordinate_space = nullptr) override {
+  Vec2AndDir ArgStart(const Interface::Table& arg) override {
     Vec2AndDir pos_dir;
     if (&arg == &image_arg) {
       pos_dir = Vec2AndDir{layout.eye_center, 90_deg};
     } else if (&arg == &text_arg) {
       pos_dir = Vec2AndDir{layout.border_outer.LeftCenter(), 180_deg};
     } else {
-      return ObjectToy::ArgStart(arg, coordinate_space);
-    }
-    if (coordinate_space) {
-      auto m = TransformBetween(*this, *coordinate_space);
-      pos_dir.pos = m.mapPoint(pos_dir.pos);
+      return ObjectToy::ArgStart(arg);
     }
     return pos_dir;
   }

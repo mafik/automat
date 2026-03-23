@@ -49,28 +49,28 @@ struct Error;
 struct Object;
 struct Location;
 
-struct Runnable : Argument {
-  struct Table : Argument::Table {
+struct Runnable : Interface {
+  struct Table : Interface::Table {
     static bool classof(const Interface::Table* i) { return i->kind == Interface::kRunnable; }
 
     void (*on_run)(Runnable, std::unique_ptr<RunTask>&) = nullptr;
 
-    // static bool DefaultCanSync(Argument, Argument other);
-
-    constexpr Table(StrView name) : Argument::Table(name, Interface::kRunnable) {
+    constexpr Table(StrView name) : Interface::Table(Interface::kRunnable, name) {
       // can_sync = &DefaultCanSync;
     }
 
     template <typename ImplT>
     constexpr void FillFrom() {
-      Argument::Table::FillFrom<ImplT>();
+      Interface::Table::FillFrom<ImplT>();
       on_run = [](Runnable self, std::unique_ptr<RunTask>& t) {
         static_cast<ImplT&>(self).OnRun(t);
       };
     }
   };
 
-  INTERFACE_BOUND(Runnable, Argument)
+  struct State {};
+
+  INTERFACE_BOUND(Runnable, Interface)
 
   void Run(std::unique_ptr<RunTask>& run_task) const { table->on_run(*this, run_task); }
 
@@ -81,7 +81,7 @@ struct Runnable : Argument {
   //   static constexpr int Offset();  // offsetof(Parent, def_member)
   //   void OnRun(std::unique_ptr<RunTask>&);
   template <typename ImplT>
-  struct Def : Argument::State, Interface::DefBase {
+  struct Def : Interface::DefBase {
     using Impl = ImplT;
     using Bound = Runnable;
 

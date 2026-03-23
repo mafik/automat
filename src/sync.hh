@@ -188,7 +188,10 @@ Ptr<Gear> FindGearOrNull(Object& source_obj, Syncable::Table& source);
 
 // Widget that draws one belt connection from a Gear to a synced member.
 struct SyncBelt : ArgumentToy {
+  // Used for clipping the belt to create fake z-order.
+  // TODO: fix z-order & remove this
   SkPath origin_shape;
+  Str label;
   Vec2 origin{};                                  // where the rubber belt starts
   Vec2 pinion{};                                  // where the small gear is located
   animation::SpringV2<Vec2> pinion_deflection{};  // deflection from the ideal position

@@ -312,6 +312,11 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     return animation::Finished;
   }
 
+  if (a.start_widget == nullptr) {
+    LOG << "ConnectionWidget::Tick: start widget not found for object " << a.StartObj()->Name();
+    return animation::Finished;
+  }
+
   from_shape = a.start_widget->InterfaceShape(a.start_arg.Get());
   if (a.board_widget) {
     auto transform_from_to_board = TransformBetween(*a.start_widget, *a.board_widget);
@@ -321,14 +326,12 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   UpdateEndpoints(*this, a);
 
   if (icon == nullptr && a.start_arg.Get() && style == Argument::Style::Cable) {
-    icon = Argument(*a.StartObj(), *a.start_arg).MakeIcon(this);
+    icon = arg.MakeIcon(this);
   }
 
   // Lazy initialization of cable physics state
   if (!state.has_value() && style == Argument::Style::Cable) {
-    if (auto* loc = a.StartObj()->MyLocation()) {
-      state.emplace(*loc, *a.start_arg, pos_dir);
-    }
+    state.emplace(arg, *a.start_widget, pos_dir);
   }
 
   if (a.end_iface) {

@@ -51,13 +51,13 @@ struct Interface {
     kInterfaceArgument,
     kNextArg,  // sub-kind of InterfaceArgument
     kLastInterfaceArgument = kNextArg,
-    kRunnable,
     kSyncable,     // also an Argument (via Syncable)
     kOnOff,        // also a Syncable
     kLongRunning,  // also an OnOff
     kLastOnOff = kLongRunning,
     kLastArgument = kLastOnOff,
     // Standalone interfaces
+    kRunnable,
     kImageProvider,
   };
 
@@ -179,7 +179,7 @@ struct Interface {
     State* operator->() const {                                                                    \
       auto* p =                                                                                    \
           reinterpret_cast<const Type*>(reinterpret_cast<intptr_t>(this) - offsetof(Type, state)); \
-      auto* addr = reinterpret_cast<char*>(p->object_ptr) + p->table_ptr->state_off;               \
+      char* addr = reinterpret_cast<char*>(p->object_ptr) + p->table_ptr->state_off;               \
       return reinterpret_cast<State*>(addr);                                                       \
     }                                                                                              \
     State& operator*() const { return *operator->(); }                                             \

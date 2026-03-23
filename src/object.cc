@@ -387,13 +387,18 @@ void ObjectToy::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
   });
 }
 
-Vec2AndDir ObjectToy::ArgStart(const Interface::Table& arg, ui::Widget* coordinate_space) {
+Vec2AndDir ObjectToy::ArgStart(const Interface::Table& arg) {
   SkPath shape = InterfaceShape(const_cast<Interface::Table*>(&arg));
   Rect bounds = shape.getBounds();
   Vec2AndDir pos_dir{
       .pos = bounds.BottomCenter(),
       .dir = -90_deg,
   };
+  return pos_dir;
+}
+
+Vec2AndDir ObjectToy::ArgStart(const Interface::Table& arg, ui::Widget* coordinate_space) {
+  Vec2AndDir pos_dir = ArgStart(arg);
   if (coordinate_space) {
     auto m = TransformBetween(*this, *coordinate_space);
     pos_dir.pos = m.mapPoint(pos_dir.pos);

@@ -635,16 +635,6 @@ struct TimerWidget : ObjectToy {
 
   void FillChildren(Vec<Widget*>& children) override { children.push_back(text_field.get()); }
 
-  SkPath InterfaceShape(Interface::Table* iface) const override {
-    // if (auto timer = LockTimer()) {
-    //   if (iface == timer->duration) {
-    //     auto transform = SkMatrix::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
-    //     return text_field->Shape().makeTransform(transform);
-    //   }
-    // }
-    return Shape();
-  }
-
   SkPath Shape() const override {
     static SkPath shape = [] {
       SkPathBuilder path_builder;

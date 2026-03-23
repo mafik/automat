@@ -317,7 +317,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     return animation::Finished;
   }
 
-  from_shape = a.start_widget->InterfaceShape(a.start_arg.Get());
+  from_shape = a.start_widget->Shape();
   if (a.board_widget) {
     auto transform_from_to_board = TransformBetween(*a.start_widget, *a.board_widget);
     from_shape.transform(transform_from_to_board);
@@ -335,7 +335,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   }
 
   if (a.end_iface) {
-    to_shape = a.end_widget->InterfaceShape(a.end_iface.Get());
+    to_shape = a.end_widget->Shape();
     to_shape.transform(a.end_transform);
   } else {
     to_shape.reset();

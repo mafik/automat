@@ -150,10 +150,6 @@ struct ObjectToy : Toy {
 
   Vec2AndDir ArgStart(const Interface::Table&, ui::Widget* coordinate_space);
 
-  // Describes the area of the widget where the given interface is located.
-  // Local (metric) coordinates.
-  virtual SkPath InterfaceShape(Interface::Table*) const { return Shape(); }
-
   // When iconified, prevent children from receiving pointer events.
   bool AllowChildPointerEvents(ui::Widget&) const override;
 

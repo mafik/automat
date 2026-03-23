@@ -331,7 +331,7 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
   auto* owner_widget = toy_store.FindOrNull(*owner_obj);
   if (!owner_widget) return animation::Finished;
 
-  origin_shape = owner_widget->InterfaceShape(syncable.table_ptr);
+  origin_shape = owner_widget->Shape();
   origin_shape.transform(TransformBetween(*owner_widget, *this));
   origin = origin_shape.getBounds().center();
 
@@ -517,7 +517,7 @@ void SyncAction::Update() {
     Syncable syncable(syncable_ptr.Owner<Object>(), syncable_ptr.Get());
     auto* origin_widget = pointer.root_widget.toys.FindOrNull(*syncable.object_ptr);
     auto* bw = pointer.root_widget.toys.FindOrNull(*root_board);
-    auto start_local = origin_widget->InterfaceShape(syncable.table_ptr).getBounds().center();
+    auto start_local = origin_widget->Shape().getBounds().center();
     auto start = bw ? TransformBetween(*origin_widget, *bw).mapPoint(start_local) : start_local;
     if (auto* sync_widget = pointer.root_widget.toys.FindOrNull(syncable)) {
       sync_widget->origin = start;

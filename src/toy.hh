@@ -47,6 +47,9 @@ struct Toy : ui::Widget {
     if (!iface) return nullptr;
     return T(owner, *static_cast<typename T::Table*>(iface));
   }
+
+  // Walk the parent chain up to LocationWidget, then return the last Toy before that.
+  Toy* BaseToy() const;
 };
 
 // ToyMaker is a Part that can make toys

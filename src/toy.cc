@@ -2,9 +2,19 @@
 // SPDX-License-Identifier: MIT
 #include "toy.hh"
 
+#include "location.hh"
 #include "root_widget.hh"
 
 namespace automat {
+
+Toy* Toy::BaseToy() const {
+  Widget* base = const_cast<Widget*>((const Widget*)this);
+  for (Widget* w = parent; w; w = w->parent) {
+    if (dynamic_cast<LocationWidget*>(w)) break;
+    base = w;
+  }
+  return static_cast<Toy*>(base);
+}
 
 void ToyMakerMixin::ForEachToyImpl(ReferenceCounted& owner, Interface::Table* iface,
                                    std::function<void(ui::RootWidget&, Toy&)> cb) {

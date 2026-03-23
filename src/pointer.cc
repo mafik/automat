@@ -427,7 +427,7 @@ SkPath Outset(const SkPath& path, float distance) {
 
 void PointerWidget::Draw(SkCanvas& canvas) const {
   for (auto& state : highlight_current) {
-    auto shape = state.widget->InterfaceShape(state.iface);
+    auto shape = state.widget->Shape();
     SkPath outset_shape = Outset(shape, 2.5_mm * state.highlight);
     outset_shape.setIsVolatile(true);
     canvas.save();

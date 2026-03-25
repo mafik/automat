@@ -79,7 +79,6 @@ void RootWidget::ZoomWarning::Draw(SkCanvas& canvas) const {
     auto text = " TOO MUCH ZOOM ";
     float text_width = font->MeasureText(text);
     float text_height = font->letter_height;
-    auto matrix = canvas.getLocalToDeviceAs3x3();
     auto text_rect = SkRect::MakeWH(text_width, text_height);
 
     SkPaint text_paint;

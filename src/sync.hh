@@ -192,6 +192,9 @@ struct SyncBelt : ArgumentToy {
   // TODO: fix z-order & remove this
   SkPath origin_shape;
   Str label;
+  sk_sp<SkShader> label_shader;
+  float label_rotation_ratio = 0;
+  float label_rotation_velocity = 0;
   Vec2 origin{};                                  // where the rubber belt starts
   Vec2 pinion{};                                  // where the small gear is located
   animation::SpringV2<Vec2> pinion_deflection{};  // deflection from the ideal position

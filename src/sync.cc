@@ -5,6 +5,8 @@
 
 #include <include/core/SkClipOp.h>
 #include <include/core/SkPaint.h>
+#include <include/core/SkPictureRecorder.h>
+#include <include/core/SkScalar.h>
 
 #include <cstdint>
 #include <mutex>
@@ -14,6 +16,7 @@
 #include "automat.hh"
 #include "casting.hh"
 #include "embedded.hh"
+#include "font.hh"
 #include "global_resources.hh"
 #include "log.hh"
 #include "math.hh"
@@ -210,8 +213,11 @@ void Gear::FullSync(Object& obj, Syncable::Table& syncable) {
 // --- Gear rendering ---
 
 constexpr float kPrimaryGearRadius = 9_mm;
+constexpr int kPrimaryGearCount = 10;
 constexpr float kSecondaryGearRadius = 6_mm;
+constexpr int kSecondaryGearCount = 6;
 constexpr float kTeethAmplitude = 0.7_mm;
+constexpr float kBeltWidth = 6_mm;
 
 static sk_sp<SkRuntimeEffect>& GearShader() {
   Status status;
@@ -277,10 +283,11 @@ struct GearWidget : ObjectToy {
 
     SkRuntimeEffectBuilder builder(effect);
     builder.uniform("iRotationRad") = angle;
+    builder.uniform("iScrollRatio") = angle / (2 * M_PI) + 0.5;
     SkMatrix px_to_local;
     (void)canvas.getLocalToDeviceAs3x3().invert(&px_to_local);
     builder.uniform("iPixelRadius") = (float)px_to_local.mapRadius(1);
-    builder.uniform("iGearCount") = (float)12;
+    builder.uniform("iGearCount") = (float)kPrimaryGearCount;
     builder.uniform("iTeethAmplitudeCm") = (float)(kTeethAmplitude / 1_cm);
     builder.uniform("iRadiusCm") = (float)(kPrimaryGearRadius / 1_cm);
     builder.uniform("iGrooveStartCm") = (float)0.25;
@@ -321,18 +328,49 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
   auto& toy_store = ToyStore();
 
   // Check if the object of this connection still exists.
-  auto owner_obj = LockOwner<Object>();
-  if (!owner_obj) return animation::Finished;
-
-  auto syncable = Bind<Syncable>(*owner_obj);
+  auto syncable = LockBind<Syncable>();
+  if (!syncable) return animation::Finished;
 
   // Find the owner object widget
-  auto* owner_widget = toy_store.FindOrNull(*owner_obj);
+  auto* owner_widget = toy_store.FindOrNull(*syncable.object_ptr);
   if (!owner_widget) return animation::Finished;
 
   origin_shape = owner_widget->Shape();
   origin_shape.transform(TransformBetween(*owner_widget, *this));
   origin = origin_shape.getBounds().center();
+  if (auto new_label = syncable.Name(); label != new_label) {
+    label = new_label;
+
+    auto typeface = ui::Font::GetPbio();
+    float letter_size = kBeltWidth * 0.6f;
+    float vertical_margin = (kBeltWidth - letter_size) / 2;
+    auto font = ui::Font::MakeV2(typeface, letter_size);
+    float text_width = font->MeasureText(label);
+    float loop_length = 6_cm;
+    auto cull_rect = SkRect::MakeWH(loop_length, kBeltWidth * 2);
+
+    SkPaint text_paint;
+    text_paint.setColor(SK_ColorWHITE);
+
+    SkPictureRecorder recorder;
+    SkCanvas* text_canvas = recorder.beginRecording(loop_length, kBeltWidth);
+
+    text_canvas->save();
+    text_canvas->translate((loop_length - text_width) / 2, vertical_margin);
+    font->DrawText(*text_canvas, label, text_paint);
+    text_canvas->restore();
+
+    text_canvas->rotate(180, loop_length / 2, kBeltWidth);
+
+    text_canvas->save();
+    text_canvas->translate((loop_length - text_width) / 2, vertical_margin);
+    font->DrawText(*text_canvas, label, text_paint);
+    text_canvas->restore();
+
+    auto text_picture = recorder.finishRecordingAsPictureWithCull(cull_rect);
+    label_shader = text_picture->makeShader(SkTileMode::kClamp, SkTileMode::kClamp,
+                                            SkFilterMode::kLinear, nullptr, nullptr);
+  }
 
   // Find the gear via the syncable's sync state
   auto& state = syncable.state;
@@ -370,6 +408,10 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
   } else {
     pinion_deflection.SmoothTargetUpdate(pinion, origin);
   }
+
+  phase |= animation::LowLevelSineTowards(pinion.x <= origin.x ? 0 : 1, t.d, 0.5,
+                                          label_rotation_ratio, label_rotation_velocity);
+
   phase |= pinion_deflection.SpringTowards({}, t.d, 0.3, 0.05);
   return phase;
 }
@@ -392,21 +434,24 @@ void SyncBelt::Draw(SkCanvas& canvas) const {
   SkMatrix px_to_local;
   (void)canvas.getLocalToDeviceAs3x3().invert(&px_to_local);
   builder.uniform("iPixelRadius") = (float)px_to_local.mapRadius(1);
-  builder.uniform("iGearCount") = (float)8;
+  builder.uniform("iGearCount") = (float)kSecondaryGearCount;
   builder.uniform("iTeethAmplitudeCm") = (float)(kTeethAmplitude / 1_cm);
   builder.uniform("iRadiusCm") = (float)(kSecondaryGearRadius / 1_cm);
   builder.uniform("iGrooveStartCm") = (float)10.25;  // no groove
   builder.uniform("iGrooveMiddleCm") = (float)10.35;
   builder.uniform("iGrooveEndCm") = (float)10.85;
-  builder.uniform("iHoleRadiusCm") = (float)(3_mm / 1_cm);
+  builder.uniform("iHoleRadiusCm") = (float)(kBeltWidth / 2 / 1_cm);
   builder.uniform("iHoleRoundnessCm") = 0.1f;
   builder.child("iRubberColor") = *color.shader;
   builder.child("iRubberNormal") = *normal.shader;
+  SkMatrix m;
+  m.setTranslateY(-label_rotation_ratio * kBeltWidth);
+  builder.child("iLabel") = label_shader->makeWithLocalMatrix(m);
 
   auto pinion_effective = pinion + pinion_deflection;
   auto pinion_to_origin = origin - pinion_effective;
 
-  float ratio = kPrimaryGearRadius / kSecondaryGearRadius;
+  float ratio = (float)kPrimaryGearCount / kSecondaryGearCount;
 
   canvas.save();
   canvas.clipPath(origin_shape, SkClipOp::kDifference);
@@ -419,6 +464,7 @@ void SyncBelt::Draw(SkCanvas& canvas) const {
 
   SkPaint secondary_gear_paint;
   builder.uniform("iRotationRad") = -secondary_gear_rot;
+  builder.uniform("iScrollRatio") = SkScalarFraction((angle + rot_offset + M_PI) / (2 * M_PI));
   builder.uniform("iEndPos") = pinion_to_origin;
   secondary_gear_paint.setShader(builder.makeShader());
   secondary_gear_paint.setStyle(SkPaint::kStroke_Style);

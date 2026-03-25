@@ -6,6 +6,7 @@
 // Metal gear shape with a rubber belt
 
 uniform float iRotationRad;
+uniform float iScrollRatio;
 
 uniform float iPixelRadius;
 uniform float iGearCount;
@@ -24,6 +25,7 @@ uniform vec2 iEndPos;
 
 uniform shader iRubberColor;
 uniform shader iRubberNormal;
+uniform shader iLabel;
 
 const float M_PI = 3.14159265358979323846;
 
@@ -260,10 +262,20 @@ vec4 main(vec2 localCoord) {
         0, 0, 1);
 
         // Note: iRotationRad is probably missing some scale factor
-        vec2 texCoord = vec2(iRotationRad + tape / iHoleRadiusCm / 2, localY) * 1024 / 4;
+        float loopLength = 6;
+        float scrollRatio = mod(tape / loopLength - iScrollRatio, 1);
+        vec2 texCoord = vec2(scrollRatio, tape_cross / loopLength) * 1024;
         vec3 rubberColor = iRubberColor.eval(texCoord).rgb;
         vec3 rubberNormal = iRubberNormal.eval(texCoord).xyz * 2 - 1;
         rubberNormal = rotateVec(rubberNormal, tapeNormal);
+
+        // Rubber texture is looping perfectly now, but how to loop the label??
+
+        vec2 labelCoord = vec2(scrollRatio * loopLength, -tape_cross + tape_width / 2) * 0.01;
+        vec4 labelColor = iLabel.eval(labelCoord);
+
+        rubberColor = mix(rubberColor, labelColor.rgb, labelColor.a);
+        // rubberColor.rgb = vec3(scrollRatio);
 
         // Apply rubber shading
         vec3 lightDir = normalize(vec3(0., 0.6, 0.8));

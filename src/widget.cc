@@ -19,6 +19,7 @@
 #include <include/gpu/graphite/Context.h>
 #include <include/gpu/graphite/Surface.h>
 #include <include/pathops/SkPathOps.h>
+#include <llvm/ADT/SmallVector.h>
 
 #include <ranges>
 
@@ -183,10 +184,45 @@ SkMatrix TransformUp(const Widget& from) {
 }
 
 SkMatrix TransformBetween(const Widget& from, const Widget& to) {
-  // TODO: optimize by finding the closest common parent
-  auto up = TransformUp(from);
-  auto down = TransformDown(to);
-  return SkMatrix::Concat(down, up);
+  // Reference implementation: (simple but expensive and less numerically stable)
+  // auto up = TransformUp(from);
+  // auto down = TransformDown(to);
+  // return SkMatrix::Concat(down, up);
+  llvm::SmallVector<Widget*, 8> path_from;
+  for (auto* w : from.Parents()) {
+    path_from.push_back(w);
+  }
+
+  llvm::SmallVector<Widget*, 8> path_to;
+  for (auto* w : to.Parents()) {
+    path_to.push_back(w);
+  }
+
+  int n_shared_ancestors = 0;
+  while (n_shared_ancestors < path_from.size() && n_shared_ancestors < path_to.size()) {
+    auto* anc_from = path_from[path_from.size() - 1 - n_shared_ancestors];
+    auto* anc_to = path_to[path_to.size() - 1 - n_shared_ancestors];
+    // same widget OR same transform
+    // Avoiding different widgets with the same transform improves numerical stability.
+    // This is probably due to multiplying & inverting a matrix not always preserving all the bits.
+    if ((anc_from != anc_to) && (anc_from->local_to_parent != anc_to->local_to_parent)) {
+      break;
+    }
+    ++n_shared_ancestors;
+  }
+
+  auto to_up = SkMatrix::I();
+  for (int i = 0; i < path_to.size() - n_shared_ancestors; ++i) {
+    to_up.postConcat(path_to[i]->local_to_parent.asM33());
+  }
+  SkMatrix between;
+  (void)to_up.invert(&between);
+
+  for (int i = 0; i < path_from.size() - n_shared_ancestors; ++i) {
+    between.postConcat(path_from[i]->local_to_parent.asM33());
+  }
+
+  return between;
 }
 
 Str ToStr(Widget* widget) {

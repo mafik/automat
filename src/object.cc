@@ -408,7 +408,10 @@ Vec2AndDir ObjectToy::ArgStart(const Interface::Table& arg, ui::Widget* coordina
 
 void Object::Relocate(Location* new_here) { here = new_here; }
 
-Object::~Object() { LifetimeObserver::CheckDestroyNotified(*this); }
+Object::~Object() {
+  LifetimeObserver::CheckDestroyNotified(*this);
+  WakeToys();  // wake the zombie toys
+}
 
 bool ObjectToy::AllowChildPointerEvents(ui::Widget&) const { return !IsIconified(); }
 

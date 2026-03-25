@@ -31,11 +31,23 @@ struct ObjectToy;
 // Instances of this class provide their logic.
 // Appearance is delegated to Widgets.
 struct Object : public ReferenceCounted, public ToyMakerMixin {
+  // Incremented when object state changes. UI-side Toys observe this to know when
+  // to wake up and pull fresh state. Readable through WeakPtr without locking
+  // because memory survives until weak_refs hits 0.
+  AtomicCounter wake_counter = 0;
+
+  // Note: 4 bytes of padding here
+
   Location* here = nullptr;
+
+  // Bump the counter to notify Toys that state has changed.
+  void WakeToys() { wake_counter.fetch_add(1, std::memory_order_relaxed); }
 
   Object& GetOwner() { return *this; }
 
   Object() = default;
+
+  Object(const Object&) : ReferenceCounted(), wake_counter(0) {}
 
   // Create a copy of this object.
   //

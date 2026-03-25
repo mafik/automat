@@ -7,6 +7,9 @@
 
 namespace automat {
 
+Toy::Toy(ui::Widget* parent, Object& owner, Interface::Table* iface)
+    : Widget(parent), owner(owner.AcquireWeakPtr()), iface(iface) {}
+
 Toy* Toy::BaseToy() const {
   Widget* base = const_cast<Widget*>((const Widget*)this);
   for (Widget* w = parent; w; w = w->parent) {
@@ -16,7 +19,7 @@ Toy* Toy::BaseToy() const {
   return static_cast<Toy*>(base);
 }
 
-void ToyMakerMixin::ForEachToyImpl(ReferenceCounted& owner, Interface::Table* iface,
+void ToyMakerMixin::ForEachToyImpl(Object& owner, Interface::Table* iface,
                                    std::function<void(ui::RootWidget&, Toy&)> cb) {
   for (auto* root_widget : ui::root_widgets) {
     auto it = root_widget->toys.container.find(ToyStore::Key(&owner, iface));
@@ -32,7 +35,7 @@ void ToyStore::WakeUpdatedToys(time::SteadyPoint last_wake) {
     uint32_t current;
     if (iface == nullptr) {  // Object toys
       // Safe to read through `rc`: WeakPtr in the Toy keeps memory alive.
-      // Counter at `wake_counter` is valid even after ~ReferenceCounted.
+      // Counter at `wake_counter` is valid even after ~Object.
       current = rc->wake_counter.load(std::memory_order_relaxed);
     } else if (auto ptr = rc->AcquirePtr()) {  // True interface toys
       Interface interface(static_cast<Object&>(*ptr), *iface);

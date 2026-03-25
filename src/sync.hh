@@ -95,7 +95,7 @@ struct Syncable : Argument {
   };
 
   using Toy = SyncBelt;
-  ReferenceCounted& GetOwner() { return *object_ptr; }
+  Object& GetOwner() { return *object_ptr; }
   Interface::Table* GetInterface() { return table_ptr; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 };

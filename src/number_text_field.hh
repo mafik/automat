@@ -3,6 +3,7 @@
 #pragma once
 
 #include "base.hh"
+#include "text_field.hh"
 
 namespace automat::ui {
 

@@ -7,7 +7,6 @@
 #include "control_flow.hh"
 #include "object.hh"
 #include "status.hh"
-#include "time.hh"
 #include "units.hh"
 
 namespace automat {
@@ -133,7 +132,7 @@ struct Argument : Interface {
   INTERFACE_BOUND(Argument, Interface)
   Argument(Object& obj) : Interface(obj) {}
 
-  ReferenceCounted& GetOwner() { return *object_ptr; }
+  Object& GetOwner() { return *object_ptr; }
   Interface::Table* GetInterface() { return table_ptr; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 

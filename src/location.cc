@@ -29,6 +29,7 @@
 #include "font.hh"
 #include "format.hh"
 #include "global_resources.hh"
+#include "interface.hh"
 #include "math.hh"
 #include "object_iconified.hh"
 #include "raycast.hh"
@@ -65,8 +66,10 @@ Location::~Location() {
   CancelScheduledAt(*this);
 }
 
-std::unique_ptr<LocationWidget> Location::MakeToy(ui::Widget* parent) {
-  return std::make_unique<LocationWidget>(parent, *this);
+std::unique_ptr<ObjectToy> Location::MakeToy(ui::Widget* parent) {
+  auto toy = std::make_unique<LocationWidget>(parent, *this);
+  widget = toy.get();
+  return toy;
 }
 
 ObjectToy& Location::ToyForObject() {
@@ -74,7 +77,7 @@ ObjectToy& Location::ToyForObject() {
     ui::root_widget->toys.FindOrMake(*this, ui::root_widget.get());
     // MakeToy was called, widget is now set.
   }
-  return widget->ToyForObject();
+  return ui::root_widget->toys.FindOrMake(*object, widget);
 }
 
 Object* Location::Follow() {
@@ -142,7 +145,7 @@ void Location::FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_
 ///////////////////////////////////////////////////////////////////////////////
 
 LocationWidget::LocationWidget(ui::Widget* parent, Location& loc)
-    : Toy(parent, loc, nullptr), elevation(0), location_weak(loc.AcquireWeakPtr()) {
+    : ObjectToy(parent, loc), elevation(0), location_weak(loc.AcquireWeakPtr()) {
   loc.widget = this;
   local_to_parent = SkM44(root_widget->CanvasToWindow());
   if (auto* obj_toy = ToyStore().FindOrNull(*loc.object)) {

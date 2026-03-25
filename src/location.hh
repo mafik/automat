@@ -7,10 +7,10 @@
 #include <unordered_set>
 
 #include "animation.hh"
+#include "interface.hh"
 #include "object.hh"
-#include "run_button.hh"
+#include "ptr.hh"
 #include "tasks.hh"
-#include "text_field.hh"
 #include "time.hh"
 #include "toy.hh"
 #include "widget.hh"
@@ -34,8 +34,9 @@ struct LocationWidget;
 //
 // Implementations of this interface would typically extend it with
 // container-specific functions.
-struct Location : ReferenceCounted, ToyMakerMixin {
+struct Location : Object {
   WeakPtr<Location> parent_location;
+
   using Toy = LocationWidget;
 
   Ptr<Object> object;
@@ -50,9 +51,9 @@ struct Location : ReferenceCounted, ToyMakerMixin {
   LocationWidget* widget = nullptr;
 
   // ToyMaker concept
-  ReferenceCounted& GetOwner() { return *this; }
+  Object& GetOwner() { return *this; }
   Interface::Table* GetInterface() { return nullptr; }
-  std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
+  std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent);
 
   // Obtain a matrix representation of the given transform.
   static SkMatrix ToMatrix(Vec2 position, float scale, Vec2 anchor);
@@ -186,9 +187,16 @@ struct Location : ReferenceCounted, ToyMakerMixin {
     ScheduleUpdate();
   }
   void SetNumber(double number);
+
+  Ptr<Object> Clone() const {
+    auto clone = MAKE_PTR(Location);
+    clone->position = position;
+    clone->scale = scale;
+    return clone;
+  }
 };
 
-struct LocationWidget : Toy {
+struct LocationWidget : ObjectToy {
   constexpr static float kPositionSpringPeriod = 0.2;
   constexpr static float kScaleSpringPeriod = 0.3;
   constexpr static float kSpringHalfTime = kScaleSpringPeriod / 4;

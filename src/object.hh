@@ -33,7 +33,7 @@ struct ObjectToy;
 struct Object : public ReferenceCounted, public ToyMakerMixin {
   Location* here = nullptr;
 
-  ReferenceCounted& GetOwner() { return *this; }
+  Object& GetOwner() { return *this; }
 
   Object() = default;
 

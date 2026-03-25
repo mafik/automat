@@ -8,7 +8,6 @@
 #include <functional>
 #include <type_traits>
 
-#include "format.hh"
 #include "interface.hh"
 #include "part.hh"
 #include "ptr.hh"
@@ -30,14 +29,13 @@ struct Object;
 // * ConnectionWidget
 // * LocationWidget
 struct Toy : ui::Widget {
-  WeakPtr<ReferenceCounted> owner;
+  WeakPtr<Object> owner;
   Interface::Table* iface;
   uint32_t observed_notify_counter = 0;  // UI-thread only — last seen notify_counter
 
-  Toy(ui::Widget* parent, ReferenceCounted& owner, Interface::Table* iface)
-      : Widget(parent), owner(owner.AcquireWeakPtr()), iface(iface) {}
+  Toy(ui::Widget* parent, Object& owner, Interface::Table* iface);
 
-  template <typename T = ReferenceCounted>
+  template <typename T = Object>
   Ptr<T> LockOwner() const {
     return owner.Lock().template Cast<T>();
   }
@@ -78,7 +76,7 @@ concept ToyMaker = requires(T t) {
 
 // Mixin class for ToyMakers. Provides some utilities for working with Toys.
 struct ToyMakerMixin {
-  static void ForEachToyImpl(ReferenceCounted& owner, Interface::Table* iface,
+  static void ForEachToyImpl(Object& owner, Interface::Table* iface,
                              std::function<void(ui::RootWidget&, Toy&)> cb);
 
   // DEPRECATED: This is not thread-safe. Update this Object's local state & call WakeToys instead.
@@ -94,7 +92,7 @@ struct ToyMakerMixin {
 // Each context which can display widgets must maintain their lifetime. This class helps with that.
 // TODO: delete widgets after some time
 struct ToyStore {
-  using Key = std::pair<ReferenceCounted*, Interface::Table*>;
+  using Key = std::pair<Object*, Interface::Table*>;
   using Map = ankerl::unordered_dense::map<Key, std::unique_ptr<Toy>>;
   Map container;
 

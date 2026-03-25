@@ -494,13 +494,13 @@ struct [[clang::trivial_abi]] WeakPtr : PtrBase<T> {
   friend class WeakPtr;
 };
 
-template <typename T>
+template <typename T, typename RC = ReferenceCounted>
 struct [[clang::trivial_abi]] NestedWeakPtr;
 
-template <typename T>
+template <typename T, typename RC = ReferenceCounted>
 struct [[clang::trivial_abi]] NestedPtr {
   NestedPtr() : ptr{}, obj(nullptr) {}
-  NestedPtr(Ptr<ReferenceCounted>&& ptr, T* obj) : ptr(std::move(ptr)), obj(obj) {}
+  NestedPtr(Ptr<RC>&& ptr, T* obj) : ptr(std::move(ptr)), obj(obj) {}
 
   template <typename U>
     requires std::convertible_to<U*, T*>
@@ -521,14 +521,14 @@ struct [[clang::trivial_abi]] NestedPtr {
   T* operator->() const { return obj; }
   explicit operator bool() const { return obj != nullptr; }
 
-  template <typename U = ReferenceCounted>
+  template <typename U = RC>
   U* Owner() const {
     return this->ptr.template Get<U>();
   }
 
-  Ptr<ReferenceCounted> GetOwnerPtr() const { return ptr->AcquirePtr(); }
+  Ptr<RC> GetOwnerPtr() const { return ptr->AcquirePtr(); }
 
-  WeakPtr<ReferenceCounted> GetOwnerWeak() const { return ptr->AcquireWeakPtr(); }
+  WeakPtr<RC> GetOwnerWeak() const { return ptr->AcquireWeakPtr(); }
 
   template <typename U = T>
   U* Get() const {
@@ -546,23 +546,23 @@ struct [[clang::trivial_abi]] NestedPtr {
   }
 
  private:
-  friend class NestedWeakPtr<T>;
-  template <class U>
+  friend class NestedWeakPtr<T, RC>;
+  template <class U, class RC2>
   friend class NestedPtr;
-  Ptr<ReferenceCounted> ptr;
+  Ptr<RC> ptr;
   T* obj;
 };
 
-template <typename T>
+template <typename T, typename RC>
 struct [[clang::trivial_abi]] NestedWeakPtr {
   NestedWeakPtr() : weak_ptr{}, obj(nullptr) {}
   NestedWeakPtr(const NestedPtr<T>& ptr) : weak_ptr(ptr.ptr), obj(ptr.obj) {}
 
   template <typename U>
-    requires std::convertible_to<U*, ReferenceCounted*>
+    requires std::convertible_to<U*, RC*>
   NestedWeakPtr(const WeakPtr<U>& ptr, T* obj) : weak_ptr(ptr), obj(obj) {}
 
-  NestedWeakPtr(WeakPtr<ReferenceCounted>&& ptr, T* obj) : weak_ptr(std::move(ptr)), obj(obj) {}
+  NestedWeakPtr(WeakPtr<RC>&& ptr, T* obj) : weak_ptr(std::move(ptr)), obj(obj) {}
 
   std::strong_ordering operator<=>(const NestedWeakPtr<T>& that) const {
     return this->weak_ptr <=> that.weak_ptr;
@@ -594,7 +594,7 @@ struct [[clang::trivial_abi]] NestedWeakPtr {
     return NestedPtr<U>();
   }
 
-  WeakPtr<ReferenceCounted> GetOwnerWeak() const { return weak_ptr; }
+  WeakPtr<RC> GetOwnerWeak() const { return weak_ptr; }
 
   template <typename U = T>
   U* GetUnsafe() const {
@@ -608,7 +608,7 @@ struct [[clang::trivial_abi]] NestedWeakPtr {
 
   template <typename U>
   Ptr<U> OwnerLockAs() const {
-    return weak_ptr.LockAs<U>();
+    return weak_ptr.template LockAs<U>();
   }
 
   template <typename U>
@@ -617,7 +617,7 @@ struct [[clang::trivial_abi]] NestedWeakPtr {
   }
 
  private:
-  WeakPtr<ReferenceCounted> weak_ptr;
+  WeakPtr<RC> weak_ptr;
   T* obj;
 };
 

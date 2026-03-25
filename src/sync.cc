@@ -67,7 +67,6 @@ void Syncable::Table::DefaultOnConnect(Argument self, Interface end) {
       sync_block = FindGearOrMake(*self.object_ptr, *syncable.table);
       auto& loc = root_board->Insert(sync_block);
       loc.position = (end.object_ptr->here->position + self.object_ptr->here->position) / 2;
-      loc.ForEachToy([](ui::RootWidget&, LocationWidget& toy) { toy.position_vel = Vec2(0, 1); });
     }
     sync_block->FullSync(*self.object_ptr, *syncable.table);
     sync_block->FullSync(*end.object_ptr, *target_syncable);

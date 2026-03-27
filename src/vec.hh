@@ -2,11 +2,16 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <llvm/ADT/SmallVector.h>
+
 #include <vector>
 
 #include "span.hh"
 
 namespace automat {
+
+template <typename T, unsigned N = llvm::CalculateSmallVectorDefaultInlinedElements<T>::value>
+using SmallVec = llvm::SmallVector<T, N>;
 
 template <typename T = char>
 struct Vec : std::vector<T> {

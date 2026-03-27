@@ -188,12 +188,12 @@ SkMatrix TransformBetween(const Widget& from, const Widget& to) {
   // auto up = TransformUp(from);
   // auto down = TransformDown(to);
   // return SkMatrix::Concat(down, up);
-  llvm::SmallVector<Widget*, 8> path_from;
+  SmallVec<Widget*, 8> path_from;
   for (auto* w : from.Parents()) {
     path_from.push_back(w);
   }
 
-  llvm::SmallVector<Widget*, 8> path_to;
+  SmallVec<Widget*, 8> path_to;
   for (auto* w : to.Parents()) {
     path_to.push_back(w);
   }

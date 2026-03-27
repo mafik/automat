@@ -196,6 +196,7 @@ struct SyncBelt : ArgumentToy {
   Vec2 pinion{};                                  // where the small gear is located
   animation::SpringV2<Vec2> pinion_deflection{};  // deflection from the ideal position
   float angle = 0;
+  float scale = 1;
   bool is_dragged = false;
 
   SyncBelt(ui::Widget* parent, Object& object, Syncable::Table& syncable);

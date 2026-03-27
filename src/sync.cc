@@ -385,17 +385,22 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
       }
       auto gear_matrix = TransformBetween(*gear_widget, *this);
       Vec2 gear_origin = gear_matrix.mapOrigin();
+      float new_scale = gear_matrix.mapRadius(1);
+      if (new_scale != scale) {
+        scale = new_scale;
+        phase |= animation::Animating;
+      }
       auto dir = Normalize(origin - gear_origin);
-      pinion_deflection.InteractiveTargetUpdate(
-          pinion, dir * (kPrimaryGearRadius + kSecondaryGearRadius) + gear_origin);
+      float gear_dist = (kPrimaryGearRadius + kSecondaryGearRadius) * scale;
+      pinion_deflection.InteractiveTargetUpdate(pinion, dir * gear_dist + gear_origin);
 
       // Pinion bouncing off the gear
       auto effective_pinion = pinion + pinion_deflection;
       auto delta = gear_origin - effective_pinion;
       auto dist = Length(delta);
-      if (dist > 0 && dist < kPrimaryGearRadius + kSecondaryGearRadius) {
+      if (dist > 0 && dist < gear_dist) {
         auto normal = -delta / dist;  // points from gear to pinion
-        float penetration = kPrimaryGearRadius + kSecondaryGearRadius - dist;
+        float penetration = gear_dist - dist;
         pinion_deflection.value += normal * penetration;
         float v_dot_n = Dot(pinion_deflection.velocity, normal);
         if (v_dot_n < 0) {
@@ -405,6 +410,7 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
       }
     }
   } else if (is_dragged) {
+    phase |= animation::ExponentialApproach(1, t.d, 0.1, scale);
   } else {
     pinion_deflection.SmoothTargetUpdate(pinion, origin);
   }
@@ -435,17 +441,18 @@ void SyncBelt::Draw(SkCanvas& canvas) const {
   (void)canvas.getLocalToDeviceAs3x3().invert(&px_to_local);
   builder.uniform("iPixelRadius") = (float)px_to_local.mapRadius(1);
   builder.uniform("iGearCount") = (float)kSecondaryGearCount;
-  builder.uniform("iTeethAmplitudeCm") = (float)(kTeethAmplitude / 1_cm);
-  builder.uniform("iRadiusCm") = (float)(kSecondaryGearRadius / 1_cm);
+  builder.uniform("iTeethAmplitudeCm") = (float)(kTeethAmplitude / 1_cm * scale);
+  builder.uniform("iRadiusCm") = (float)(kSecondaryGearRadius / 1_cm * scale);
   builder.uniform("iGrooveStartCm") = (float)10.25;  // no groove
   builder.uniform("iGrooveMiddleCm") = (float)10.35;
   builder.uniform("iGrooveEndCm") = (float)10.85;
-  builder.uniform("iHoleRadiusCm") = (float)(kBeltWidth / 2 / 1_cm);
-  builder.uniform("iHoleRoundnessCm") = 0.1f;
+  builder.uniform("iHoleRadiusCm") = (float)(kBeltWidth / 2 / 1_cm * scale);
+  builder.uniform("iHoleRoundnessCm") = 0.1f * scale;
   builder.child("iRubberColor") = *color.shader;
   builder.child("iRubberNormal") = *normal.shader;
   SkMatrix m;
-  m.setTranslateY(-label_rotation_ratio * kBeltWidth);
+  m.setTranslateY(-label_rotation_ratio * kBeltWidth * scale);
+  m.preScale(scale, scale);
   builder.child("iLabel") = label_shader->makeWithLocalMatrix(m);
 
   auto pinion_effective = pinion + pinion_deflection;

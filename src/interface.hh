@@ -55,7 +55,8 @@ struct Interface {
     kOnOff,        // also a Syncable
     kLongRunning,  // also an OnOff
     kLastOnOff = kLongRunning,
-    kLastArgument = kLastOnOff,
+    kLastSyncable = kLastOnOff,
+    kLastArgument = kLastSyncable,
     // Standalone interfaces
     kRunnable,
     kImageProvider,

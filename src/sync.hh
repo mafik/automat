@@ -17,7 +17,7 @@ struct GearWidget;
 struct Syncable : Argument {
   struct Table : Argument::Table {
     static bool classof(const Interface::Table* i) {
-      return i->kind >= Interface::kSyncable && i->kind <= Interface::kLastArgument;
+      return i->kind >= Interface::kSyncable && i->kind <= Interface::kLastSyncable;
     }
 
     bool (*can_sync)(Syncable, Syncable other) = nullptr;
@@ -188,9 +188,6 @@ Ptr<Gear> FindGearOrNull(Object& source_obj, Syncable::Table& source);
 
 // Widget that draws one belt connection from a Gear to a synced member.
 struct SyncBelt : ArgumentToy {
-  // Used for clipping the belt to create fake z-order.
-  // TODO: fix z-order & remove this
-  SkPath origin_shape;
   Str label;
   sk_sp<SkShader> label_shader;
   float label_rotation_ratio = 0;

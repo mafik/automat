@@ -335,7 +335,7 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
   auto* owner_widget = toy_store.FindOrNull(*syncable.object_ptr);
   if (!owner_widget) return animation::Finished;
 
-  origin_shape = owner_widget->Shape();
+  auto origin_shape = owner_widget->Shape();
   origin_shape.transform(TransformBetween(*owner_widget, *this));
   origin = origin_shape.getBounds().center();
   if (auto new_label = syncable.Name(); label != new_label) {
@@ -454,8 +454,6 @@ void SyncBelt::Draw(SkCanvas& canvas) const {
   float ratio = (float)kPrimaryGearCount / kSecondaryGearCount;
 
   canvas.save();
-  canvas.clipPath(origin_shape, SkClipOp::kDifference);
-  canvas.save();
   canvas.translate(pinion_effective.x, pinion_effective.y);
 
   auto dir = Normalize(pinion_to_origin);
@@ -472,7 +470,6 @@ void SyncBelt::Draw(SkCanvas& canvas) const {
   secondary_gear_paint.setStrokeCap(SkPaint::kSquare_Cap);
   canvas.drawLine(Vec2(0, 0), pinion_to_origin, secondary_gear_paint);
 
-  canvas.restore();
   canvas.restore();
 }
 

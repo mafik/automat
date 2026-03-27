@@ -291,11 +291,14 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
     auto VisitObject = [&](Object& o) {
       auto* start_loc_widget = GetLocWidget(o);
 
+      SmallVec<SyncBelt*, 4> sync_belts;
+
       // Make sure that each argument has a toy
       o.Each<Argument>([&](Argument arg) {
         Toy* arg_toy = nullptr;
         if (auto syncable = dyn_cast<Syncable>(arg)) {
-          arg_toy = &toys.FindOrMake(syncable, this);
+          sync_belts.push_back(&toys.FindOrMake(syncable, this));
+          return LoopControl::Continue;
         } else {
           arg_toy = &toys.FindOrMake(arg, this);
         }
@@ -310,6 +313,11 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
       });
 
       children_tmp.push_back(start_loc_widget);
+
+      for (auto* sync_belt : sync_belts) {
+        sync_belt->local_to_parent = canvas_to_window44;
+        children_tmp.push_back(sync_belt);
+      }
     };
 
     keyboard.local_to_parent = canvas_to_window44;

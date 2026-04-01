@@ -36,7 +36,10 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   // because memory survives until weak_refs hits 0.
   AtomicCounter wake_counter = 0;
 
-  // Note: 4 bytes of padding here
+  // Used during initialization & to prevent feedback loops in synchronization.
+  bool inhibit_sync_notifications = false;
+
+  // Note: 3 bytes of padding here
 
   Location* here = nullptr;
 

@@ -83,6 +83,7 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
                   root_board->ReportError(f("Unknown object type: {}", type));
                 } else {
                   auto object = proto->Clone();
+                  object->inhibit_sync_notifications = true;
                   d.RegisterObject(key, *object);
                 }
               }
@@ -111,13 +112,15 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
           } else if (field == "links") {
             // Deserialize argument connections
             for (auto& arg_name : ObjectView(d, status)) {
-              auto* from_arg = dyn_cast_if_present<Argument::Table>(object->InterfaceFromName(arg_name));
+              auto* from_arg =
+                  dyn_cast_if_present<Argument::Table>(object->InterfaceFromName(arg_name));
               if (from_arg) {
                 Str to_name;
                 d.Get(to_name, status);
                 auto to_iface = d.LookupInterface(to_name);
                 if (to_iface) {
-                  Argument(*object, *from_arg).Connect(Interface(to_iface.Owner<Object>(), to_iface.Get()));
+                  Argument(*object, *from_arg)
+                      .Connect(Interface(to_iface.Owner<Object>(), to_iface.Get()));
                 }
               } else {
                 d.Skip();
@@ -131,6 +134,10 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
         d.Skip();
       }
     }
+  }
+
+  for (auto& [key, obj] : d.objects) {
+    obj->inhibit_sync_notifications = false;
   }
 
   // Objects may have been rendered in their incomplete state - re-render them all.

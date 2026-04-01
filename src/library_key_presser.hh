@@ -4,6 +4,7 @@
 
 #include "base.hh"
 #include "keyboard.hh"
+#include "time.hh"
 
 namespace automat::library {
 
@@ -11,6 +12,8 @@ struct KeyPresser : Object, ui::Keylogger {
   ui::AnsiKey key = ui::AnsiKey::F;
 
   ui::Keylogging* keylogging = nullptr;
+  time::SteadyPoint last_pressed_time = time::kZeroSteady;
+  time::SteadyPoint last_released_time = time::kZeroSteady;
   bool key_pressed = false;
 
   DEF_INTERFACE(KeyPresser, OnOff, monitoring, "Monitoring")
@@ -23,8 +26,19 @@ struct KeyPresser : Object, ui::Keylogger {
   bool IsOn() const { return obj->key_pressed; }
   void OnTurnOn() { obj->Press(); }
   void OnTurnOff() { obj->Release(); }
-  void OnSync() { obj->monitoring->TurnOn(); }
-  void OnUnsync() { obj->monitoring->TurnOff(); }
+  void OnSync() {
+    // Prevent monitoring from being started while object is being deserialized.
+    if (obj->inhibit_sync_notifications) {
+      return;
+    }
+    obj->monitoring->TurnOn();
+  }
+  void OnUnsync() {
+    if (obj->inhibit_sync_notifications) {
+      return;
+    }
+    obj->monitoring->TurnOff();
+  }
   DEF_END(state);
 
   DEF_INTERFACE(KeyPresser, Runnable, run, "Run")

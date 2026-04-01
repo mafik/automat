@@ -41,6 +41,7 @@ void KeyPresser::Press() {
   audio::Play(embedded::assets_SFX_key_down_wav);
   if (key_pressed) return;
   key_pressed = true;
+  last_pressed_time = time::SteadyNow();
   SendKeyEvent(key, true);
   WakeToys();
 }
@@ -48,6 +49,7 @@ void KeyPresser::Release() {
   audio::Play(embedded::assets_SFX_key_up_wav);
   if (!key_pressed) return;
   key_pressed = false;
+  last_released_time = time::SteadyNow();
   SendKeyEvent(key, false);
   WakeToys();
 }
@@ -247,6 +249,10 @@ void KeyPresser::SerializeState(ObjectSerializer& writer) const {
   writer.Key("key");
   auto key_name = ToStr(this->key);
   writer.String(key_name.data(), key_name.size());
+  if (monitoring->IsOn()) {
+    writer.Key("monitoring");
+    writer.Bool(true);
+  }
 }
 bool KeyPresser::DeserializeKey(ObjectDeserializer& d, StrView keyName) {
   if (keyName == "key") {
@@ -259,6 +265,14 @@ bool KeyPresser::DeserializeKey(ObjectDeserializer& d, StrView keyName) {
       ReportError("Failed to deserialize KeyPresser. " + status.ToStr());
     }
     return true;
+  } else if (keyName == "monitoring") {
+    Status status;
+    bool monitoring_on;
+    d.Get(monitoring_on, status);
+    if (OK(status) && monitoring_on) {
+      monitoring->TurnOn();
+    }
+    return true;
   }
   return false;
 }
@@ -269,8 +283,15 @@ KeyPresser::~KeyPresser() {
   }
 }
 
+constexpr time::Duration kKeyEventInhibitDuration = 50ms;
+
 void KeyPresser::KeyloggerKeyDown(ui::Key key_down) {
   if (this->key != key_down.physical) return;
+  if (key_pressed) return;
+  if (time::SteadyNow() < last_pressed_time + kKeyEventInhibitDuration) {
+    last_pressed_time = time::kZeroSteady;
+    return;
+  }
   key_pressed = true;
   state->NotifyTurnedOn();
   WakeToys();
@@ -278,6 +299,11 @@ void KeyPresser::KeyloggerKeyDown(ui::Key key_down) {
 
 void KeyPresser::KeyloggerKeyUp(ui::Key key_up) {
   if (this->key != key_up.physical) return;
+  if (!key_pressed) return;
+  if (time::SteadyNow() < last_released_time + kKeyEventInhibitDuration) {
+    last_released_time = time::kZeroSteady;
+    return;
+  }
   key_pressed = false;
   state->NotifyTurnedOff();
   WakeToys();

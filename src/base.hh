@@ -74,7 +74,14 @@ struct Runnable : Interface {
 
   void Run(std::unique_ptr<RunTask>& run_task) const { table->on_run(*this, run_task); }
 
-  void ScheduleRun() const { (new RunTask(object_ptr->AcquireWeakPtr(), table_ptr))->Schedule(); }
+  void ScheduleRun(Interface source = {}) const {
+    auto* task = new RunTask(object_ptr->AcquireWeakPtr(), table_ptr);
+    if (source) {
+      task->source = source.object_ptr->AcquireWeakPtr();
+      task->source_interface = source.table_ptr;
+    }
+    task->Schedule();  // steals the ownership of the pointer
+  }
 
   // ImplT must provide:
   //   static constexpr StrView kName = "..."sv;
@@ -107,30 +114,15 @@ struct LongRunning : OnOff {
 
     void (*on_cancel)(LongRunning) = nullptr;
 
-    static bool DefaultIsOn(OnOff self) {
-      return LongRunning(*self.object_ptr, static_cast<Table&>(*self.table_ptr)).IsRunning();
-    }
-    static void DefaultOnTurnOn(OnOff self) {
-      if (auto r = self.object_ptr->As<Runnable>()) r.ScheduleRun();
-    }
-    static void DefaultOnTurnOff(OnOff self) {
-      LongRunning(*self.object_ptr, static_cast<Table&>(*self.table_ptr)).Cancel();
-    }
-
-    constexpr Table(StrView name) : OnOff::Table(name, Interface::kLongRunning) {
-      is_on = &DefaultIsOn;
-      on_turn_on = &DefaultOnTurnOn;
-      on_turn_off = &DefaultOnTurnOff;
-    }
-
+    constexpr Table(StrView name) : OnOff::Table(name, Interface::kLongRunning) {}
     template <typename ImplT>
     constexpr void FillFrom() {
       struct FullImpl : ImplT {
         bool IsOn() const { return this->IsRunning(); }
         void OnTurnOn() {
-          if (auto r = this->object_ptr->template As<Runnable>()) r.ScheduleRun();
+          if (auto r = this->object_ptr->template As<Runnable>()) r.ScheduleRun(*this);
         }
-        void OnTurnOff() { this->Cancel(); }
+        void OnTurnOff() { this->CancelWithoutNotify(); }
       };
       OnOff::Table::FillFrom<FullImpl>();
       if constexpr (requires(ImplT& i) { i.OnCancel(); })
@@ -143,9 +135,16 @@ struct LongRunning : OnOff {
   bool IsRunning() const { return state->task != nullptr; }
 
   void BeginLongRunning(std::unique_ptr<RunTask>&& task) const {
+    auto iface = Interface(task->source.GetUnsafe(), task->source_interface);
     state->task = std::move(task);
-    NotifyTurnedOn();
+    // Avoids notifying other synchronized objects if it was started from another sync'ed object.
+    if (iface != *this) {
+      NotifyTurnedOn();
+    }
   }
+
+  // Cancels this object without notifying other synchronized objects.
+  void CancelWithoutNotify() const;
 
   void Cancel() const;
 

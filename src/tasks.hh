@@ -31,6 +31,11 @@ void ScheduleArgumentTargets(Argument);
 
 struct Task {
   WeakPtr<Object> target;
+
+  // Record of which object (& interface) started this task.
+  WeakPtr<Object> source;
+  Interface::Table* source_interface;
+
   std::vector<Task*> predecessors;
   std::vector<Task*> successors;
   bool scheduled = false;  // only used for error detection

@@ -49,6 +49,7 @@ struct Syncable : Argument {
 
   struct State : Argument::State {
     WeakPtr<Gear> gear_weak;
+    uint32_t sync_balance = 0;  // used for scrolling the sync belt
     bool source = false;
 
     // Remember to call this before this state is destroyed!
@@ -136,50 +137,72 @@ struct Gear : Object {
 
 template <typename T, typename F>
 void Syncable::ForwardDo(this T self, F&& lambda) {
-  auto& st = *self.state;
-  if (!st.source) {
-    self.WakeToys();
-    lambda(self);
-  } else if (auto gear = st.gear_weak.Lock()) {
-    gear->WakeToys();
-    auto lock = std::shared_lock(gear->mutex);
-    for (auto& member : gear->members) {
-      if (!member.sink) continue;
-      auto locked = member.weak.Lock();
-      if (!locked) continue;
-      T other(*locked.template Owner<Object>(), *static_cast<typename T::Table*>(locked.Get()));
-      other.WakeToys();
-      lambda(other);
-    }
-  } else {
-    self.WakeToys();
-    lambda(self);
-  }
+  lambda(self);
+  self.ForwardNotify(std::forward<F>(lambda));
 }
+
+// Syncables that receive sync notifications must take steps to avoid immediately sending back their
+// own notifications. Otherwise:
+// - infinite loops may occur (when multiple reflecting members are synced)
+// - direction of the belt is messed up (scrolls in the correct direction and then back, resulting
+//   in no net movement)
+//
+// Additionally during object initialization / destruction, any notifications may mess up the
+// desired state of objects.
+//
+// To avoid this, there are a couple approaches:
+// 1) Separate the paths of code that are allowed / or not to send notifications.
+//    This is the reason for "TurnOn" / "OnTurnOn" distinction. TurnOn sends a notification,
+//    but OnTurnOn is not allowed to. This works fine for simple syncables, like FlipFlop, where the
+//    "may notify" signal can be passed through method signatures.
+// 2) Track the "source" of some action & make sure that notifications don't flow back. This
+//    approach is used in tasks.cc/hh for LongRunning syncables. They must schedule a job using a
+//    scheduler and the "source" field can be used to prevent backflow of notifications.
+// 3) Track the target state in each Syncable and make sure that notifications are only sent when
+//    the state actually changes.
+// 4) A variable that inhibits notifications when set. Care must be taken to make it work in
+//    concurrent scenarios. It may be attached to individual objects or be thread-local. This does
+//    not address the reflections where the feedback loop exits the process.
+// 5) Inhibitory period - a startegy inspired by spiking neurons. When a notification is received,
+//    the Syncable enters an inhibitory period when it no longer sends any outgoing notifications
+//    for some hardcoded period. This helps with feedback loops that exit the process but may mess
+//    up with some of tightly timed logic. This is used by KeyPresser, where the feedback loop goes
+//    out to the OS.
+// 6) Accept this behavior - fundamentally, it's how real world works. Oscillations may occur if
+//    multiple objects try to synchronize their state but disagree on the result.
+//
+// Each object needs to deal with its unique constraints in its own way.
 
 template <typename T, typename F>
 void Syncable::ForwardNotify(this T self, F&& lambda) {
-  auto& st = *self.state;
-  if (!st.source) return;
+  if (self.object_ptr->inhibit_sync_notifications) {
+    return;
+  }
+  // self.obj.inhibit_sync_notifications is guaranteed to be false at this point.
+  self.object_ptr->inhibit_sync_notifications = true;
+  --self.state->sync_balance;
   self.WakeToys();
-  if (auto gear = st.gear_weak.Lock()) {
-    gear->WakeToys();
-    auto lock = std::shared_lock(gear->mutex);
-    // How to visualize sync events?
-    //
-    // Option 1: every sync event rotates the gear by one tooth
-    // Option 2: same but also introduce a maximum speed
-    for (auto& member : gear->members) {
-      member.weak.template OwnerUnsafe<Object>()->WakeToys();
-      auto locked = member.weak.Lock();
-      if (!locked) continue;
-      T other(*locked.template Owner<Object>(), *static_cast<typename T::Table*>(locked.Get()));
-      // Skip self
-      if (self == other) continue;
-      lambda(other);
-      other.WakeToys();
+  auto& st = *self.state;
+  if (st.source) {
+    if (auto gear = st.gear_weak.Lock()) {
+      gear->WakeToys();
+      auto lock = std::shared_lock(gear->mutex);
+      for (auto& member : gear->members) {
+        if (!member.sink) continue;
+        auto locked = member.weak.Lock();
+        if (!locked) continue;
+        T other(*locked.template Owner<Object>(), *static_cast<typename T::Table*>(locked.Get()));
+        // Skip self
+        if (self == other) {
+          continue;
+        }
+        lambda(other);
+        ++other.state->sync_balance;
+        other.WakeToys();
+      }
     }
   }
+  self.object_ptr->inhibit_sync_notifications = false;
 }
 
 // Returns a reference to the existing or a new Gear.
@@ -197,6 +220,10 @@ struct SyncBelt : ArgumentToy {
   animation::SpringV2<Vec2> pinion_deflection{};  // deflection from the ideal position
   float angle = 0;
   float scale = 1;
+  float scroll_ratio = 0;
+  float scroll_ratio_velocity = 0;
+  float target_scroll_ratio = 0;
+  int last_sync_balance = 0;
   bool is_dragged = false;
 
   SyncBelt(ui::Widget* parent, Object& object, Syncable::Table& syncable);

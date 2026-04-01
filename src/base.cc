@@ -8,7 +8,7 @@ using namespace std;
 
 namespace automat {
 
-void LongRunning::Cancel() const {
+void LongRunning::CancelWithoutNotify() const {
   auto& task = state->task;
   if (task == nullptr) {
     ERROR << "LongRunning::Cancel called without a long_running_task";
@@ -16,6 +16,10 @@ void LongRunning::Cancel() const {
   }
   if (auto on_cancel = table->on_cancel) on_cancel(*this);
   task.reset();
+}
+
+void LongRunning::Cancel() const {
+  CancelWithoutNotify();
   NotifyTurnedOff();
 }
 

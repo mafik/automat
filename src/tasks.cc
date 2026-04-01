@@ -87,7 +87,12 @@ NextGuard::~NextGuard() {
   }
 }
 
-Task::Task(WeakPtr<Object> target) : target(target), predecessors(), successors(global_successors) {
+Task::Task(WeakPtr<Object> target)
+    : target(target),
+      source(nullptr),
+      source_interface(nullptr),
+      predecessors(),
+      successors(global_successors) {
   for (Task* successor : successors) {
     successor->predecessors.push_back(this);
   }

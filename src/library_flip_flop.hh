@@ -11,19 +11,19 @@ struct FlipFlop : Object {
   bool current_state = false;
 
   DEF_INTERFACE(FlipFlop, Runnable, flip, "Flip")
-    void OnRun(std::unique_ptr<RunTask>&) { obj->enabled->Toggle(); }
+  void OnRun(std::unique_ptr<RunTask>&) { obj->enabled->Toggle(); }
   DEF_END(flip);
 
   DEF_INTERFACE(FlipFlop, OnOff, enabled, "State")
-    bool IsOn() const { return obj->current_state; }
-    void OnTurnOn() {
-      obj->current_state = true;
-      obj->WakeToys();
-    }
-    void OnTurnOff() {
-      obj->current_state = false;
-      obj->WakeToys();
-    }
+  bool IsOn() const { return obj->current_state; }
+  void OnTurnOn() {
+    obj->current_state = true;
+    obj->WakeToys();
+  }
+  void OnTurnOff() {
+    obj->current_state = false;
+    obj->WakeToys();
+  }
   DEF_END(enabled);
 
   INTERFACES(flip, enabled)

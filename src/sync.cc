@@ -8,6 +8,7 @@
 #include <include/core/SkPictureRecorder.h>
 #include <include/core/SkScalar.h>
 
+#include <cmath>
 #include <cstdint>
 #include <mutex>
 
@@ -266,7 +267,7 @@ struct GearWidget : ObjectToy {
     auto wake_counter = gear->wake_counter.load(std::memory_order_relaxed);
     if (wake_counter != last_wake_counter) {
       last_wake_counter = wake_counter;
-      target_angle += M_PI / 12;  // half tooth
+      target_angle += M_PI / kPrimaryGearCount;  // half tooth
     }
     if (angle >= 2 * M_PI) {
       angle -= 2 * M_PI;
@@ -330,6 +331,22 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
   // Check if the object of this connection still exists.
   auto syncable = LockBind<Syncable>();
   if (!syncable) return animation::Finished;
+
+  auto sync_balance = syncable.state->sync_balance;
+  if (sync_balance != last_sync_balance) {
+    int32_t diff = (int)(sync_balance - last_sync_balance) > 0 ? 1 : -1;
+    target_scroll_ratio += (float)(diff) / kPrimaryGearCount / 2;
+    last_sync_balance = sync_balance;
+  }
+
+  phase |= animation::LowLevelSineTowards(target_scroll_ratio, t.d, 0.6, scroll_ratio,
+                                          scroll_ratio_velocity);
+  // Keeping the animation close to 0 makes it smoother.
+  if (fabs(scroll_ratio) > 0) {
+    float wholes = truncf(scroll_ratio);
+    target_scroll_ratio -= wholes;
+    scroll_ratio -= wholes;
+  }
 
   // Find the owner object widget
   auto* owner_widget = toy_store.FindOrNull(*syncable.object_ptr);
@@ -469,7 +486,7 @@ void SyncBelt::Draw(SkCanvas& canvas) const {
 
   SkPaint secondary_gear_paint;
   builder.uniform("iRotationRad") = -secondary_gear_rot;
-  builder.uniform("iScrollRatio") = SkScalarFraction((angle + rot_offset + M_PI) / (2 * M_PI));
+  builder.uniform("iScrollRatio") = scroll_ratio;
   builder.uniform("iEndPos") = pinion_to_origin;
   secondary_gear_paint.setShader(builder.makeShader());
   secondary_gear_paint.setStyle(SkPaint::kStroke_Style);

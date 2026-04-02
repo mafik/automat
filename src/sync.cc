@@ -551,15 +551,14 @@ bool Gear::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 SyncAction::SyncAction(ui::Pointer& pointer, Syncable syncable) : Action(pointer) {
   syncable.Unsync();
-  auto* sync_widget = pointer.root_widget.toys.FindOrNull(syncable);
-  if (sync_widget) {
-    sync_widget->is_dragged = true;
-    sync_widget->pinion_deflection.SmoothTargetUpdate(sync_widget->pinion,
-                                                      pointer.PositionWithinRootBoard());
-    sync_widget->WakeAnimation();
-  }
+  auto& sync_widget = pointer.root_widget.toys.FindOrMake(syncable, &pointer.root_widget);
+  sync_widget.is_dragged = true;
+  sync_widget.pinion_deflection.SmoothTargetUpdate(sync_widget.pinion,
+                                                   pointer.PositionWithinRootBoard());
+  sync_widget.WakeAnimation();
   Update();
   this->weak = NestedWeakPtr<Syncable::Table>(syncable.GetOwner().AcquireWeakPtr(), syncable.table);
+  pointer.root_widget.WakeAnimation();
 }
 SyncAction::~SyncAction() {
   // Check if the pointer is over a compatible Syncable

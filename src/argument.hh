@@ -79,6 +79,12 @@ struct Argument : Interface {
       return NestedPtr<Interface::Table>();
     };
 
+    // Checks whether this argument has an active connection. Cheaper than `find`
+    // because it avoids constructing the full NestedPtr / locking weak pointers.
+    bool (*is_connected)(Argument) = [](Argument self) {
+      return self.Find().Owner<>() != nullptr;
+    };
+
     // Prototype for automatically constructed value for this argument. It is used if this Argument
     // is used through one of the *OrMake functions.
     Ptr<Object> (*prototype)() = []() { return Ptr<Object>(nullptr); };
@@ -112,6 +118,10 @@ struct Argument : Interface {
         make_icon = [](Argument self, ui::Widget* p) {
           return static_cast<ImplT&>(self).OnMakeIcon(p);
         };
+      if constexpr (requires(ImplT& i) {
+                      { i.OnIsConnected() } -> std::same_as<bool>;
+                    })
+        is_connected = [](Argument self) { return static_cast<ImplT&>(self).OnIsConnected(); };
       if constexpr (requires { &ImplT::MakePrototype; })
         prototype = []() { return ImplT::MakePrototype(); };
     }
@@ -176,6 +186,8 @@ struct Argument : Interface {
   void Disconnect() const { Connect(Interface()); }
 
   NestedPtr<Interface::Table> Find() const { return table->find(*this); }
+
+  bool IsConnected() const { return table->is_connected(*this); }
 
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) const;
 
@@ -254,6 +266,8 @@ struct ObjectArgument : Argument {
     using Impl = ImplT;
     using Bound = ObjectArgument<T>;
 
+    bool OnIsConnected() { return !this->target.IsExpired(); }
+
     static constexpr Table MakeTable() {
       Table t(ImplT::kName);
       t.template FillFrom<ImplT>();
@@ -324,6 +338,8 @@ struct InterfaceArgument : Argument {
   struct Def : State, Interface::DefBase {
     using Impl = ImplT;
     using Bound = InterfaceArgument<T, kKind>;
+
+    bool OnIsConnected() { return !this->target.IsExpired(); }
 
     static constexpr Table MakeTable() {
       Table t(ImplT::kName);

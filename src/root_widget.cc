@@ -297,7 +297,7 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
       o.Each<Argument>([&](Argument arg) {
         Toy* arg_toy = nullptr;
         if (auto syncable = dyn_cast<Syncable>(arg)) {
-          bool connected = !syncable.state->gear_weak.IsExpired();
+          bool connected = arg.IsConnected();
           auto* toy = connected ? &toys.FindOrMake(syncable, this) : toys.FindOrNull(syncable);
           if (toy) {
             sync_belts.push_back(toy);

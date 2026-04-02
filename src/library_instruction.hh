@@ -52,6 +52,7 @@ struct Instruction : Object, Buffer {
   void OnCanConnect(Interface end, Status& status);
   void OnConnect(Interface end);
   NestedPtr<Interface::Table> OnFind();
+  bool OnIsConnected();
   DEF_END(assembler_arg);
 
   DEF_INTERFACE(Instruction, InterfaceArgument<Runnable>, jump_arg, "Jump")

@@ -151,6 +151,10 @@ NestedPtr<Interface::Table> Instruction::assembler_arg_Impl::OnFind() {
   return NestedPtr<Interface::Table>(obj->assembler_weak.Lock(), nullptr);
 }
 
+bool Instruction::assembler_arg_Impl::OnIsConnected() {
+  return !obj->assembler_weak.IsExpired();
+}
+
 static Assembler* FindAssembler(Object& start) {
   return dynamic_cast<Assembler*>(Argument(start, Instruction::assembler_arg_tbl).ObjectOrNull());
 }

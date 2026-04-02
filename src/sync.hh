@@ -80,6 +80,8 @@ struct Syncable : Argument {
     using Impl = ImplT;
     using Bound = Syncable;
 
+    bool OnIsConnected() { return !gear_weak.IsExpired(); }
+
     static constexpr Table MakeTable() {
       Table t(ImplT::kName);
       t.FillFrom<ImplT>();

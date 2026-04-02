@@ -297,9 +297,15 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
       o.Each<Argument>([&](Argument arg) {
         Toy* arg_toy = nullptr;
         if (auto syncable = dyn_cast<Syncable>(arg)) {
-          sync_belts.push_back(&toys.FindOrMake(syncable, this));
+          bool connected = !syncable.state->gear_weak.IsExpired();
+          auto* toy = connected ? &toys.FindOrMake(syncable, this) : toys.FindOrNull(syncable);
+          if (toy) {
+            sync_belts.push_back(toy);
+          }
           return LoopControl::Continue;
         } else {
+          // For now we always create toys for non-Syncable Arguments, but it might be changed to
+          // reduce the visual clutter.
           arg_toy = &toys.FindOrMake(arg, this);
         }
         arg_toy->local_to_parent = canvas_to_window44;

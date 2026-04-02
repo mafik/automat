@@ -173,6 +173,8 @@ Locked<T> AdoptLocked(T bound) {
   return Locked<T>(bound, {});
 }
 
+Str ToStr(Interface iface);
+
 }  // namespace automat
 
 #if defined(_MSC_VER)

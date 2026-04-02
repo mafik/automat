@@ -16,4 +16,10 @@ Interface::operator NestedWeakPtr<Table>() {
   return {object_ptr->AcquireWeakPtr(), table_ptr};
 }
 
+Str ToStr(Interface iface) {
+  auto obj_name = iface.has_object() ? Str(iface.object_ptr->Name()) : "null";
+  auto iface_name = iface.has_table() ? Str(iface.Name()) : "null";
+  return obj_name + "." + iface_name;
+}
+
 }  // namespace automat

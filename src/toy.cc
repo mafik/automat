@@ -37,7 +37,7 @@ void ToyStore::WakeUpdatedToys(time::SteadyPoint last_wake) {
       // Safe to read through `rc`: WeakPtr in the Toy keeps memory alive.
       // Counter at `wake_counter` is valid even after ~Object.
       current = rc->wake_counter.load(std::memory_order_relaxed);
-    } else if (auto ptr = rc->AcquirePtr()) {  // True interface toys
+    } else if (auto ptr = toy->LockOwner()) {  // True interface toys
       Interface interface(static_cast<Object&>(*ptr), *iface);
       if (auto arg = dyn_cast<Argument>(interface)) {
         current = arg.state->wake_counter.load(std::memory_order_relaxed);

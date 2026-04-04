@@ -21,7 +21,8 @@ template <class T = char, Size Extent = DynamicExtent>
 struct Span : std::span<T, Extent> {
   using std::span<T, Extent>::span;
 
-  inline Span(const Str& s) : Span(static_cast<T*>(s.data()), s.size() / sizeof(T)) {}
+  inline Span(const Str& s)
+      : Span(reinterpret_cast<T*>(const_cast<char*>(s.data())), s.size() / sizeof(T)) {}
   inline Span(StrView s)
       : Span(reinterpret_cast<T*>(const_cast<char*>(s.data())), s.size() / sizeof(T)) {}
 
@@ -59,8 +60,8 @@ struct Span : std::span<T, Extent> {
   template <typename U>
   U& As(Status& status) {
     if (this->size() < sizeof(U)) {
-      AppendErrorMessage(status) +=
-          f("Span too small to contain {} ({:x} vs {:x})", typeid(U).name(), this->size(), sizeof(U));
+      AppendErrorMessage(status) += f("Span too small to contain {} ({:x} vs {:x})",
+                                      typeid(U).name(), this->size(), sizeof(U));
       // TODO: return nullptr
     }
     return *(U*)this->data();
@@ -83,8 +84,8 @@ struct Span : std::span<T, Extent> {
   U& Consume(Status& status) {
     U& ret = *(U*)this->data();
     if (this->size() < sizeof(U)) {
-      AppendErrorMessage(status) +=
-          f("Span too small to contain {} ({:x} vs {:x})", typeid(U).name(), this->size(), sizeof(U));
+      AppendErrorMessage(status) += f("Span too small to contain {} ({:x} vs {:x})",
+                                      typeid(U).name(), this->size(), sizeof(U));
       this->RemovePrefix(this->size());
       // TODO: return nullptr
     } else {

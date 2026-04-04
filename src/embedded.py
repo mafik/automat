@@ -10,6 +10,7 @@ import fs_utils
 import cc_embed
 import make
 import src
+import subprocess
 
 from pathlib import Path
 from functools import partial
@@ -85,22 +86,8 @@ main_step = None
 
 def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
 
-    paths = list(Path('static').glob('**/*'))
-    paths += list(Path('assets').glob('**/*'))
-    paths += list(Path('src').glob('**/*'))
-    paths += list(Path('run_py').glob('**/*'))
-    paths += list(Path('LICENSES').glob('**/*'))
-    paths += list(Path('third_party/FastTrigo').glob('**/*'))
-    paths += list(Path('third_party/WinElevator').glob('**/*'))
-    paths += list(Path('third_party/cavalier_contours').glob('**/*'))
-    paths += list(Path('.').glob('*.md'))
-    paths.append(Path('run.bat'))
-    paths.append(Path('run.py'))
-    paths.append(Path('source_images/Mouse/Mouse.kra'))
-    paths.append(Path('source_images/Hand.kra'))
-
-    # retain only files
-    paths = [path for path in paths if path.is_file()]
+    result = subprocess.run(['git', 'ls-files'], capture_output=True, text=True)
+    paths = [Path(p) for p in result.stdout.splitlines() if Path(p).is_file()]
 
     fs_utils.generated_dir.mkdir(exist_ok=True)
 

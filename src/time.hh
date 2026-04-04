@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <chrono>
+#include <chrono>  // IWYU pragma: export
 #include <cmath>
 
 namespace automat {

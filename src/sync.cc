@@ -134,14 +134,16 @@ Gear::~Gear() {
   while (!members.empty()) {
     auto& back = members.back();
     if (auto locked = back.weak.Lock()) {
-      auto* syncable = locked.Get();
+      auto* table = locked.Get();
       auto* owner = locked.Owner<Object>();
-      auto& state = *Syncable(*owner, *syncable).state;
+      auto syncable = Syncable(*owner, *table);
+      auto& state = *syncable.state;
       if (state.source) {
         state.source = false;
         state.gear_weak.Reset();
-        if (syncable->on_unsync) syncable->on_unsync(Syncable(*owner, *syncable));
+        if (table->on_unsync) table->on_unsync(syncable);
       }
+      syncable.WakeToys();
     }
     members.pop_back();
   }

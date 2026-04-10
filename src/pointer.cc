@@ -171,7 +171,8 @@ void Pointer::Wheel(float delta) {
 void Pointer::ButtonDown(PointerButton btn) {
   if (btn == PointerButton::Unknown || btn >= PointerButton::Count) return;
   button_down_position[static_cast<int>(btn)] = pointer_position;
-  button_down_time[static_cast<int>(btn)] = time::SystemNow();
+  auto now = time::SteadyNow();
+  button_down_time[static_cast<int>(btn)] = now;
   auto& action = actions[static_cast<int>(btn)];
 
   if (grab) {
@@ -193,6 +194,7 @@ void Pointer::ButtonDown(PointerButton btn) {
       pointer_widget->ValidateHierarchy();
       UpdatePath();
     }
+    pointer_widget->WakeAnimationAt(now);
   }
 }
 
@@ -209,7 +211,8 @@ void Pointer::ButtonUp(PointerButton btn) {
     UpdatePath();
   }
   button_down_position[static_cast<int>(btn)] = Vec2(0, 0);
-  button_down_time[static_cast<int>(btn)] = time::kZero;
+  button_down_time[static_cast<int>(btn)] = time::kZeroSteady;
+  pointer_widget->WakeAnimation();
 }
 Pointer::IconType Pointer::Icon() const {
   if (icons.empty()) {
@@ -275,6 +278,7 @@ void Pointer::ReplaceAction(Action& old_action, std::unique_ptr<Action>&& new_ac
     if (actions[i].get() == &old_action) {
       actions[i] = std::move(new_action);
       pointer_widget->ValidateHierarchy();
+      pointer_widget->WakeAnimation();
       break;
     }
   }

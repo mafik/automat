@@ -516,7 +516,7 @@ struct DragCameraAction : Action {
   }
   ~DragCameraAction() {
     time::Duration down_duration =
-        time::SystemNow() - pointer.button_down_time[static_cast<int>(PointerButton::Middle)];
+        time::SteadyNow() - pointer.button_down_time[static_cast<int>(PointerButton::Middle)];
     Vec2 delta = pointer.pointer_position -
                  pointer.button_down_position[static_cast<int>(PointerButton::Middle)];
     float delta_m = Length(delta);

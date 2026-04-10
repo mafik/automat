@@ -545,7 +545,6 @@ void DragConnectionAction::Update() {
   Vec2 new_position = pointer.PositionWithinRootBoard();
   widget.manual_position = new_position - grab_offset * widget.state->connector_scale;
   widget.WakeAnimation();
-  pointer.pointer_widget->WakeAnimation();
 }
 
 bool DragConnectionAction::Highlight(Interface end) const {

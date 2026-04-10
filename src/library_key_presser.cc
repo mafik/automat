@@ -78,7 +78,7 @@ struct DragAndClickAction : Action {
   ui::PointerButton btn;
   std::unique_ptr<Action> drag_action;
   std::unique_ptr<Option> click_option;
-  time::SystemPoint press_time;
+  time::SteadyPoint press_time;
   DragAndClickAction(ui::Pointer& pointer, ui::PointerButton btn,
                      std::unique_ptr<Action>&& drag_action, std::unique_ptr<Option>&& click_option)
       : Action(pointer),
@@ -88,7 +88,7 @@ struct DragAndClickAction : Action {
     press_time = pointer.button_down_time[static_cast<int>(btn)];
   }
   ~DragAndClickAction() override {
-    if (click_option && (time::SystemNow() - press_time < 0.2s)) {
+    if (click_option && (time::SteadyNow() - press_time < 0.2s)) {
       auto click_action = click_option->Activate(pointer);
     }
   }

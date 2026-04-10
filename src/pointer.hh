@@ -124,7 +124,7 @@ struct Pointer {
   std::list<Pointer::IconType> icons;
 
   Vec2 button_down_position[static_cast<int>(PointerButton::Count)];
-  time::SystemPoint button_down_time[static_cast<int>(PointerButton::Count)];
+  time::SteadyPoint button_down_time[static_cast<int>(PointerButton::Count)];
 
   Vec<PointerMoveCallback*> move_callbacks;
 

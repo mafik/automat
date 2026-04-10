@@ -59,27 +59,19 @@ void Syncable::Table::DefaultCanConnect(Argument self, Interface end, Status& st
 }
 
 void Syncable::Table::DefaultOnConnect(Argument self, Interface end) {
-  auto syncable = cast<Syncable>(self);
-
-  syncable.state->gear_weak = dynamic_cast<Gear*>(end.object_ptr);
-
-  if (!end) return;
-
-  auto* target_syncable = dyn_cast_if_present<Syncable::Table>(end.table_ptr);
-  if (target_syncable) {
-    auto sync_block = FindGearOrNull(*end.object_ptr, *target_syncable);
-    if (sync_block == nullptr) {
-      sync_block = FindGearOrMake(*self.object_ptr, *syncable.table);
-      auto& loc = root_board->Insert(sync_block);
-      loc.position = (end.object_ptr->here->position + self.object_ptr->here->position) / 2;
+  auto* self_obj = self.object_ptr;
+  auto* self_tab = cast<Syncable::Table>(self.table_ptr);
+  if (auto end_syncable = dyn_cast_if_present<Syncable>(end)) {
+    auto gear = FindGearOrNull(*end_syncable.object_ptr, *end_syncable.table);
+    if (gear == nullptr) {
+      gear = FindGearOrMake(*self_obj, *self_tab);
+      auto& loc = root_board->Insert(gear);
+      loc.position = (end.object_ptr->here->position + self_obj->here->position) / 2;
     }
-    sync_block->FullSync(*self.object_ptr, *syncable.table);
-    sync_block->FullSync(*end.object_ptr, *target_syncable);
-    return;
-  }
-  auto* gear = dynamic_cast<Gear*>(end.object_ptr);
-  if (gear) {
-    gear->FullSync(*self.object_ptr, *syncable.table);
+    gear->FullSync(*self_obj, *self_tab);
+    gear->FullSync(*end_syncable.object_ptr, *end_syncable.table);
+  } else if (auto* gear = dynamic_cast<Gear*>(end.object_ptr)) {
+    gear->FullSync(*self_obj, *self_tab);
   }
 }
 
@@ -169,15 +161,15 @@ void Gear::AddSink(Object& obj, Syncable::Table& syncable) {
 
 void Gear::AddSource(Object& obj, Syncable::Table& syncable) {
   auto& state = *Syncable(obj, syncable).state;
-  auto old_sync_block = state.gear_weak.Lock();
+  auto old_gear = state.gear_weak.Lock();
   bool was_source = state.source;
-  if (old_sync_block.Get() != this) {
-    Syncable(obj, syncable).Connect(Interface(*this));
-    if (old_sync_block) {
-      while (!old_sync_block->members.empty()) {
+  if (old_gear.Get() != this) {
+    state.gear_weak = AcquireWeakPtr();
+    if (old_gear) {
+      while (!old_gear->members.empty()) {
         // stealing all of the members from the old gear
-        members.emplace_back(old_sync_block->members.back());
-        old_sync_block->members.pop_back();
+        members.emplace_back(old_gear->members.back());
+        old_gear->members.pop_back();
 
         // redirecting the members' sync state to this gear
         if (auto locked = members.back().weak.Lock()) {

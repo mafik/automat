@@ -256,15 +256,16 @@ struct GearWidget : ObjectToy {
   float target_angle = 0;
 
   animation::Phase Tick(time::Timer& t) override {
-    auto gear = LockOwner<Gear>();
-    auto wake_counter = gear->wake_counter.load(std::memory_order_relaxed);
-    if (wake_counter != last_wake_counter) {
-      last_wake_counter = wake_counter;
-      target_angle += M_PI / kPrimaryGearCount;  // half tooth
-    }
-    if (angle >= 2 * M_PI) {
-      angle -= 2 * M_PI;
-      target_angle -= 2 * M_PI;
+    if (auto gear = LockOwner<Gear>()) {
+      auto wake_counter = gear->wake_counter.load(std::memory_order_relaxed);
+      if (wake_counter != last_wake_counter) {
+        last_wake_counter = wake_counter;
+        target_angle += M_PI / kPrimaryGearCount;  // half tooth
+      }
+      if (angle >= 2 * M_PI) {
+        angle -= 2 * M_PI;
+        target_angle -= 2 * M_PI;
+      }
     }
 
     return animation::LowLevelSineTowards(target_angle, t.d, 0.6, angle, angular_velocity);

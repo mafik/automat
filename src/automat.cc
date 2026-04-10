@@ -1,5 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
+#include <string_view>
+
 #include "tasks.hh"
 #pragma maf main
 

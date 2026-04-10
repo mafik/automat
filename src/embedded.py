@@ -31,8 +31,6 @@ cc_path = fs_utils.generated_dir / 'embedded.cc'
 def gen(embedded_paths):
     with hh_path.open('w') as hh:
         print(f'''#pragma once
-#include <cstddef>
-#include <string_view>
 #include <unordered_map>
 
 #include "../../src/virtual_fs.hh"
@@ -61,20 +59,14 @@ namespace automat::embedded {{''',
             slug = slug_from_path(path)
             escaped_path = escape_string(str(path))
             print(f'''
+static constexpr char {slug}_content[] = {{
+#embed "{path}"
+}};
 VFile {slug} = {{
   .path = "{escaped_path}"sv,
-  .content = ''',
-                  file=cc,
-                  end='')
-            buf = path.read_bytes()
-            bytes_per_line = 200
-            for i in range(0, len(buf), bytes_per_line):
-                chunk = buf[i:i + bytes_per_line]
-                print('\n    ' + cc_embed.bytes_to_c_string(chunk),
-                      file=cc,
-                      end='')
-            print(f'''sv,
-}};''', file=cc)
+  .content = std::string_view({slug}_content, sizeof({slug}_content))
+}};''',
+                  file=cc)
         print('''std::unordered_map<StrView, VFile*> index = {''', file=cc)
         for path in embedded_paths:
             slug = slug_from_path(path)

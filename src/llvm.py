@@ -5,7 +5,11 @@ import subprocess
 import build
 import sys
 import extension_helper
+import src
 import fs_utils
+
+zlib_ext = src.load_extension('zlib')
+zstd_ext = src.load_extension('zstd')
 
 hook = extension_helper.ExtensionHelper('LLVM', globals())
 
@@ -81,12 +85,14 @@ def post_install(*outputs):
                               str(build.PREFIX),
                               str(hook.checkout_dir))
 
+hook.ConfigureDependsOn(zlib_ext.hook, zstd_ext.hook)
 hook.FetchFromGit('https://github.com/llvm/llvm-project.git', 'llvmorg-19.1.6')
 hook.SetSrcDir(hook.checkout_dir / 'llvm')
 hook.ConfigureWithCMake(llvm_config_path)
 hook.ConfigureOption('LLVM_ENABLE_RTTI', 'ON')
 hook.ConfigureOption('LLVM_TARGETS_TO_BUILD', 'X86')
 hook.ConfigureOption('LLVM_USE_LINKER', 'lld')
+hook.ConfigureOption('LLVM_USE_STATIC_ZSTD', 'TRUE')
 hook.ConfigureOption('LLVM_INCLUDE_BENCHMARKS', 'OFF') # not needed
 hook.ConfigureOption('LLVM_INCLUDE_EXAMPLES', 'OFF') # not needed
 hook.ConfigureOption('LLVM_INCLUDE_TESTS', 'OFF') # not needed

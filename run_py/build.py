@@ -22,7 +22,7 @@ TRIPLE = 'x86_64-pc-linux-gnu'
 compile_args = []
 link_args = []
 
-debug_suffix = 'd' if platform == 'win32' and debug else ''
+debug_suffix = 'd' if debug else ''
 
 if platform == 'win32':
     # Windows batch scripts don't expand environment variables in the PATH variable.

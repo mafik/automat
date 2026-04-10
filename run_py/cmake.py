@@ -27,6 +27,9 @@ def CMakeArgs(extra_defines: dict[str, str] = {}):
                   '-DCMAKE_POLICY_DEFAULT_CMP0091=NEW']
 
     cmake_args += ['-DCMAKE_INSTALL_PREFIX=' + str(build.PREFIX)]
+    cmake_args += ['-DCMAKE_PREFIX_PATH=' + str(build.PREFIX)]
+    cmake_args += [f'-DCMAKE_C_FLAGS=-isystem {build.PREFIX}/include']
+    cmake_args += [f'-DCMAKE_CXX_FLAGS=-isystem {build.PREFIX}/include']
 
     for name, value in extra_defines.items():
       cmake_args += ['-D' + name + '=' + value]

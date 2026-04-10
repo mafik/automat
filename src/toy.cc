@@ -49,7 +49,8 @@ void ToyStore::Tick(time::Timer& timer) {
         continue;  // Not an Argument toy, no wake_counter to check
       }
     } else {
-      continue;  // Interface owner has been destroyed
+      // Interface owner has been destroyed
+      current = ~toy->observed_notify_counter;
     }
     if (current != toy->observed_notify_counter) {
       toy->observed_notify_counter = current;

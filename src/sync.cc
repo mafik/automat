@@ -85,7 +85,7 @@ NestedPtr<Interface::Table> Syncable::Table::DefaultFind(Argument self) {
 
 void Syncable::Unsync() { state->Unsync(*object_ptr, *table); }
 
-void Syncable::State::Unsync(Object& self, Syncable::Table& syncable) {
+void Syncable::State::Unsync(Object& self, Syncable::Table& table) {
   auto gear = gear_weak.Lock();
   if (!gear) return;
   auto lock = std::unique_lock(gear->mutex);
@@ -95,7 +95,7 @@ void Syncable::State::Unsync(Object& self, Syncable::Table& syncable) {
     // Compare both the interface pointer and the owner
     auto* member_iface = members[i].weak.GetUnsafe();
     auto* member_owner = members[i].weak.template OwnerUnsafe<Object>();
-    if (member_iface == &syncable && member_owner == &self) {
+    if (member_iface == &table && member_owner == &self) {
       members.erase(members.begin() + i);
       break;
     }
@@ -103,7 +103,9 @@ void Syncable::State::Unsync(Object& self, Syncable::Table& syncable) {
 
   source = false;
   gear_weak.Reset();
-  if (syncable.on_unsync) syncable.on_unsync(Syncable(self, syncable));
+  auto syncable = Syncable(self, table);
+  if (table.on_unsync) table.on_unsync(syncable);
+  syncable.WakeToys();
 }
 
 // --- FindGearOrMake / FindGearOrNull ---
@@ -326,7 +328,16 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
 
   // Check if the object of this connection still exists.
   auto syncable = LockBind<Syncable>();
-  if (!syncable) return animation::Finished;
+  if (!syncable) {
+    phase |=
+        animation::LowLevelSpringTowards(pinion.x, t.d, 0.3, 0.05, origin.x, origin_velocity.x);
+    phase |=
+        animation::LowLevelSpringTowards(pinion.y, t.d, 0.3, 0.05, origin.y, origin_velocity.y);
+    if (phase == animation::Finished) {
+      MarkDead(t.now);
+    }
+    return phase;
+  }
 
   auto sync_balance = syncable.state->sync_balance;
   if (sync_balance != last_sync_balance) {
@@ -434,8 +445,6 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
   phase |= pinion_deflection.SpringTowards({}, t.d, 0.3, 0.05);
 
   if (!gear && !is_dragged && phase == animation::Finished) {
-    LOG << "Marking SyncBelt @" << AddrToStr(this)
-        << " dead because it has no gear and is not being dragged";
     MarkDead(t.now);
   }
 

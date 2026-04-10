@@ -220,6 +220,11 @@ struct SyncBelt : ArgumentToy {
   Vec2 origin{};                                  // where the rubber belt starts
   Vec2 pinion{};                                  // where the small gear is located
   animation::SpringV2<Vec2> pinion_deflection{};  // deflection from the ideal position
+  // Used for animating belt disappearance
+  //
+  // This is stored as a separate variable rather than SpringV2 because animation is only used on
+  // disappearance.
+  Vec2 origin_velocity{};
   float angle = 0;
   float scale = 1;
   float scroll_ratio = 0;

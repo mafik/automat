@@ -23,6 +23,10 @@
 #define M_SQRT2f 1.41421356237309504880f
 #endif
 
+#ifndef M_PIf
+#define M_PIf 3.14159265358979323846f
+#endif
+
 union Vec2;
 
 constexpr float LengthSquared(Vec2 v);

@@ -277,7 +277,7 @@ struct GearWidget : ObjectToy {
 
     SkRuntimeEffectBuilder builder(effect);
     builder.uniform("iRotationRad") = angle;
-    builder.uniform("iScrollRatio") = angle / (2 * M_PI) + 0.5;
+    builder.uniform("iScrollRatio") = (float)(angle / (2 * M_PIf) + 0.5f);
     SkMatrix px_to_local;
     (void)canvas.getLocalToDeviceAs3x3().invert(&px_to_local);
     builder.uniform("iPixelRadius") = (float)px_to_local.mapRadius(1);

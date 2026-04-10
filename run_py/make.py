@@ -148,7 +148,7 @@ class Step:
             return updated_inputs
         recorded_hashes = defaultdict(str)
         for line in hash_path.open().readlines():
-            inp, hsh = line.split()
+            inp, _, hsh = line.rpartition(' ')
             recorded_hashes[inp] = hsh
         changed_inputs = [
             inp for inp in updated_inputs

@@ -267,9 +267,6 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
 
   auto canvas_to_window44 = SkM44(CanvasToWindow());
 
-  // Remove expired widgets from the old children list
-  std::erase_if(children, [](Widget* w) { return w->dead; });
-
   {  // Update `children`
     // Make sure that all Arguments are raised above their endpoints
     // TODO: std maps & sets are slow - use something better here
@@ -432,6 +429,11 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
   }
 
   return phase;
+}
+
+void RootWidget::OnChildDead(Widget& child, time::SteadyPoint now) {
+  std::erase(children, &child);
+  WakeAnimationAt(now);
 }
 
 void RootWidget::Draw(SkCanvas& canvas) const {

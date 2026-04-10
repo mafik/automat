@@ -110,9 +110,9 @@ struct ToyStore {
     return static_cast<std::remove_reference_t<T>::Toy*>(it->second.get());
   }
 
-  // Scan all toys for owners whose generation has changed. Wake those toys.
   // Called once per frame on the UI thread.
-  void WakeUpdatedToys(time::SteadyPoint last_wake);
+  // Removes dead toys and wakes toys whose owners have updated state.
+  void Tick(time::Timer&);
 
   template <ToyMaker T>
   T::Toy& FindOrMake(T& maker, ui::Widget* parent) {

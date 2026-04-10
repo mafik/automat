@@ -18,6 +18,7 @@
 #include "casting.hh"
 #include "embedded.hh"
 #include "font.hh"
+#include "format.hh"
 #include "global_resources.hh"
 #include "log.hh"
 #include "math.hh"
@@ -436,6 +437,13 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
                                           label_rotation_ratio, label_rotation_velocity);
 
   phase |= pinion_deflection.SpringTowards({}, t.d, 0.3, 0.05);
+
+  if (!gear && !is_dragged && phase == animation::Finished) {
+    LOG << "Marking SyncBelt @" << AddrToStr(this)
+        << " dead because it has no gear and is not being dragged";
+    MarkDead(t.now);
+  }
+
   return phase;
 }
 
@@ -443,7 +451,8 @@ Vec<Vec2> SyncBelt::TextureAnchors() {
   time::Timer t;
   t.last = t.now = time::SteadyNow();
   t.d = 0;
-  Tick(t);
+  // TODO: figure out what to do with this tick
+  // Tick(t);
   return {pinion + pinion_deflection, origin};
 }
 

@@ -128,3 +128,12 @@ Objects (multi-threaded) notify Toys (UI-thread) via `wake_counter`:
 - Build variants controlled by `run_py/build_variant.py`
 - Custom pragma directives in source files control compilation and linking
 - Extension system allows easy integration of external libraries
+
+### Renderer & Widget Lifecycle Gotchas
+
+- **`TextureAnchors()` can call `Tick()`**: Some widgets (e.g. `SyncBelt`) call `Tick()` from their `TextureAnchors()` override to compute positions. `TextureAnchors()` is called up to 3 times per frame (renderer.cc lines 924, 1195, 1200). Any side effects in `Tick()` (like `MarkDead`) will fire multiple times. Be aware of this when adding stateful logic to `Tick()`.
+- **Renderer tree build and Tick are interleaved**: The renderer builds the widget tree and ticks each widget in the same loop (renderer.cc step 2). RootWidget is ticked first, which rebuilds `children`. Then `Children()` returns the fresh list for tree expansion. Widgets are NOT ticked from `RootWidget::Tick` — only from the renderer's tree traversal.
+- **`Syncable::Table::DefaultFind` returns a `NestedPtr` with null `Interface::Table*`**: Because Gears are top-level Objects, not interfaces. `NestedPtr::operator bool()` checks the nested pointer (null), not the owner. So `(bool)arg.Find()` returns false even when connected to a Gear. Use `Argument::IsConnected()` instead.
+- **ToyStore is UI-thread only**: Not synchronized. VM threads must not call `FindOrMake` or modify ToyStore. Signal via `wake_counter` instead.
+- **`ToyStore::Tick` runs before widget tree is built**: Dead entries should be cleaned here. But widgets that call `MarkDead` during the tree traversal (after `ToyStore::Tick`) won't be cleaned until the next frame.
+- **`RootWidget::OnChildDead` removes from `children`**: Dead children are removed immediately when `MarkDead` fires (during the child's Tick). The old `std::erase_if(children, dead)` sweep was removed because `ToyStore::Tick` may destroy widgets before the sweep runs, creating dangling pointers in `children`.

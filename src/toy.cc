@@ -29,7 +29,11 @@ void ToyMakerMixin::ForEachToyImpl(Object& owner, Interface::Table* iface,
   }
 }
 
-void ToyStore::WakeUpdatedToys(time::SteadyPoint last_wake) {
+void ToyStore::Tick(time::Timer& timer) {
+  // Remove dead toys
+  std::erase_if(container, [](auto& entry) { return entry.second->dead; });
+
+  // Wake toys whose owners have updated state
   for (auto& [key, toy] : container) {
     auto [rc, iface] = key;
     uint32_t current;
@@ -49,7 +53,7 @@ void ToyStore::WakeUpdatedToys(time::SteadyPoint last_wake) {
     }
     if (current != toy->observed_notify_counter) {
       toy->observed_notify_counter = current;
-      toy->WakeAnimationAt(last_wake);
+      toy->WakeAnimationAt(timer.last);
     }
   }
 }

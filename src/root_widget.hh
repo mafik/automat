@@ -117,6 +117,7 @@ struct RootWidget final : Widget, DropTarget {
 
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
+  void OnChildDead(Widget& child, time::SteadyPoint now) override;
   Compositor GetCompositor() const override { return Compositor::COPY_RAW; }
 
   Vec2 move_velocity = Vec2(0, 0);

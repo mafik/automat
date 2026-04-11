@@ -39,6 +39,9 @@ struct XCBWindow : automat::ui::Window {
   void RequestResize(Vec2 new_size) override;
   void RequestMaximize(bool horizontally, bool vertically) override;
   void OnRegisterInput(bool keylogging, bool pointerlogging) override;
+  void OnWindowWatchingChanged() override;
+
+  bool watching_root_property = false;
 
   static std::unique_ptr<automat::ui::Window> Make(automat::ui::RootWidget&, automat::Status&);
 

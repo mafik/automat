@@ -36,6 +36,9 @@ struct Win32Window : automat::ui::Window {
 
   void PostToMainLoop(std::function<void()>);
   void OnRegisterInput(bool keylogging, bool pointerlogging) override;
+  void OnWindowWatchingChanged() override;
+
+  HWINEVENTHOOK win_event_hook = nullptr;
 
  private:
   Win32Window(automat::ui::RootWidget& root);

@@ -340,6 +340,25 @@ XCBWindow::~XCBWindow() {
   }
 }
 
+void XCBWindow::OnWindowWatchingChanged() {
+  bool need_watch = !window_watchings.empty();
+  if (need_watch == watching_root_property) return;
+  watching_root_property = need_watch;
+
+  // Get current event mask on root window, then add/remove PROPERTY_CHANGE
+  auto attrs = xcb::get_window_attributes(screen->root);
+  uint32_t current_mask = attrs ? attrs->your_event_mask : 0;
+  uint32_t new_mask;
+  if (need_watch) {
+    new_mask = current_mask | XCB_EVENT_MASK_PROPERTY_CHANGE;
+  } else {
+    new_mask = current_mask & ~XCB_EVENT_MASK_PROPERTY_CHANGE;
+  }
+  uint32_t values[] = {new_mask};
+  xcb_change_window_attributes(connection, screen->root, XCB_CW_EVENT_MASK, values);
+  xcb_flush(connection);
+}
+
 struct XCBPointerGrab : automat::ui::PointerGrab {
   XCBWindow& xcb_window;
   XCBPointerGrab(automat::ui::Pointer& pointer, automat::ui::PointerGrabber& grabber,
@@ -656,11 +675,20 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
         }
         case XCB_PROPERTY_NOTIFY: {
           xcb_property_notify_event_t* ev = (xcb_property_notify_event_t*)event;
-          if (ev->atom == atom::_NET_WM_STATE) {
+          if (ev->window == xcb_window && ev->atom == atom::_NET_WM_STATE) {
             WM_STATE wm_state = WM_STATE::Get(xcb_window);
             root.maximized_horizontally = wm_state.MAXIMIZED_HORZ;
             root.maximized_vertically = wm_state.MAXIMIZED_VERT;
             root.always_on_top = wm_state.ABOVE;
+          } else if (ev->window == screen->root && ev->atom == atom::_NET_ACTIVE_WINDOW) {
+            auto reply = xcb::get_property(screen->root, atom::_NET_ACTIVE_WINDOW,
+                                           XCB_ATOM_WINDOW, 0, 1);
+            automat::ui::WindowHandle active = automat::ui::kNoWindow;
+            if (reply && reply->value_len == 1) {
+              active = *(xcb_window_t*)xcb_get_property_value(reply.get());
+            }
+            auto lock = Lock();
+            NotifyForegroundChanged(active);
           }
           break;
         }

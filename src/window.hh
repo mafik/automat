@@ -9,6 +9,7 @@
 #include "keyboard.hh"
 #include "math.hh"
 #include "pointer.hh"
+#include "window_watch.hh"
 
 namespace automat::ui {
 
@@ -50,6 +51,18 @@ struct Window {
 
   void BeginLogging(Keylogger* keylogger, Keylogging** keylogging, Pointer::Logger* pointer_logger,
                     Pointer::Logging** pointer_logging);
+
+  // Window watching - for tracking foreground window changes.
+  Vec<std::unique_ptr<WindowWatching>> window_watchings;
+
+  void BeginWindowWatching(WindowWatcher* watcher, WindowWatching** watching);
+
+  // Called when window watchings are added/removed. Platform implementations should
+  // subscribe/unsubscribe from OS events as needed.
+  virtual void OnWindowWatchingChanged() {}
+
+  // Platform implementations call this to notify all watchers.
+  void NotifyForegroundChanged(WindowHandle window);
 
  protected:
   Window(RootWidget& root) : root(root) {}

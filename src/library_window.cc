@@ -647,6 +647,28 @@ void Window::Capture() {
   }
 }
 
+void Window::WindowWatcherForegroundChanged(ui::WindowWatching&, ui::WindowHandle window) {
+  ui::WindowHandle tracked = ui::kNoWindow;
+#ifdef __linux__
+  {
+    auto lock = std::lock_guard(impl->mutex);
+    tracked = impl->xcb_window;
+  }
+#elif defined(_WIN32)
+  tracked = impl->hwnd;
+#endif
+  bool now_active = (tracked != ui::kNoWindow && window == tracked);
+  if (now_active != active) {
+    active = now_active;
+    if (now_active) {
+      on_off->NotifyTurnedOn();
+    } else {
+      on_off->NotifyTurnedOff();
+    }
+    WakeToys();
+  }
+}
+
 void Window::Relocate(Location* new_here) {
   Object::Relocate(new_here);
   if (run_continuously && new_here) {
@@ -684,6 +706,8 @@ void Window::SerializeState(ObjectSerializer& writer) const {
   writer.String(title.data(), title.size());
   writer.Key("run_continuously");
   writer.Bool(run_continuously);
+  writer.Key("active");
+  writer.Bool(active);
   writer.Key("capture_time");
   writer.Double(time::ToSeconds(capture_time));
 }
@@ -697,6 +721,8 @@ bool Window::DeserializeKey(ObjectDeserializer& d, StrView key) {
     }
   } else if (key == "run_continuously") {
     d.Get(run_continuously, status);
+  } else if (key == "active") {
+    d.Get(active, status);
   } else if (key == "capture_time") {
     double capture_time_seconds;
     d.Get(capture_time_seconds, status);
@@ -710,4 +736,10 @@ bool Window::DeserializeKey(ObjectDeserializer& d, StrView key) {
   return true;
 }
 
+void Window::on_off_Impl::OnSync() {
+  if (obj->window_watching) return;  // Already watching
+  if (obj->here) {
+    ui::root_widget->window->BeginWindowWatching(&*obj, &obj->window_watching);
+  }
+}
 }  // namespace automat::library

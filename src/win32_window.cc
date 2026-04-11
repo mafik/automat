@@ -232,6 +232,10 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
 Win32Window::Win32Window(automat::ui::RootWidget& root) : automat::ui::Window(root) {}
 
 Win32Window::~Win32Window() {
+  if (win_event_hook) {
+    UnhookWinEvent(win_event_hook);
+    win_event_hook = nullptr;
+  }
   if (hwnd) {
     hwnd_to_window.erase(hwnd);
     hwnd = nullptr;
@@ -787,4 +791,29 @@ void Win32Window::RequestMaximize(bool horiz, bool vert) {
     ShowWindow(hwnd, SW_MAXIMIZE);
   }
   root.Maximized(horiz, vert);
+}
+
+static void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
+                                  LONG idObject, LONG idChild, DWORD dwEventThread,
+                                  DWORD dwmsEventTime) {
+  if (event != EVENT_SYSTEM_FOREGROUND) return;
+  // Find the Win32Window that owns this hook
+  for (auto& [h, w] : hwnd_to_window) {
+    if (w->win_event_hook == hWinEventHook) {
+      auto lock = w->Lock();
+      w->NotifyForegroundChanged(hwnd);
+      break;
+    }
+  }
+}
+
+void Win32Window::OnWindowWatchingChanged() {
+  bool need_watch = !window_watchings.empty();
+  if (need_watch && !win_event_hook) {
+    win_event_hook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr,
+                                     WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+  } else if (!need_watch && win_event_hook) {
+    UnhookWinEvent(win_event_hook);
+    win_event_hook = nullptr;
+  }
 }

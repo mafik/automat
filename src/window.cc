@@ -30,4 +30,18 @@ void Window::RegisterInput() {
   OnRegisterInput(!root.keyboard.keyloggings.empty(), mouse && !mouse->loggings.empty());
 }
 
+void Window::BeginWindowWatching(WindowWatcher* watcher, WindowWatching** watching) {
+  assert(watcher != nullptr);
+  assert(watching != nullptr);
+  *watching =
+      window_watchings.emplace_back(new WindowWatching(*this, *watcher)).get();
+  OnWindowWatchingChanged();
+}
+
+void Window::NotifyForegroundChanged(WindowHandle window) {
+  for (auto& w : window_watchings) {
+    w->watcher.WindowWatcherForegroundChanged(*w, window);
+  }
+}
+
 }  // namespace automat::ui

@@ -61,11 +61,15 @@ struct Syncable : Argument {
 
   INTERFACE_BOUND(Syncable, Argument)
 
-  // ForwardDo distributes a command to all synced implementations.
+  // Distributes a command to self AND all synced peers.
+  // Use this as the entry point when an external caller requests a state change.
+  // The lambda is called on self first, then on every synced peer.
   template <typename T, typename F>
   void ForwardDo(this T self, F&& lambda);
 
-  // ForwardNotify distributes a notification to OTHER synced implementations (not self).
+  // Distributes a notification to all synced peers, EXCLUDING self.
+  // Use this when this object has already changed state (e.g. detected an OS event,
+  // received a hardware signal) and needs to propagate that change to its peers.
   template <typename T, typename F>
   void ForwardNotify(this T self, F&& lambda);
 
@@ -143,6 +147,23 @@ void Syncable::ForwardDo(this T self, F&& lambda) {
   self.ForwardNotify(std::forward<F>(lambda));
 }
 
+// ## Sync notification conventions
+//
+// Each Syncable typically exposes three tiers of methods (using OnOff as an example):
+//
+//   OnTurnOn / OnTurnOff   — "On" prefix. Applies the state change to THIS object only.
+//                            Called by the sync infrastructure on each peer. Must NOT
+//                            call any of the methods below — doing so would create loops.
+//
+//   TurnOn / TurnOff       — External entry point. Calls OnTurnOn/OnTurnOff on self AND
+//                            every synced peer (via ForwardDo). Use when an outside caller
+//                            (user click, another object) requests the transition.
+//
+//   NotifyTurnedOn/Off     — Self-originated notification. This object has already changed
+//                            state on its own (e.g. an OS event, a sensor reading). Calls
+//                            OnTurnOn/OnTurnOff on every OTHER synced peer, skipping self
+//                            (via ForwardNotify).
+//
 // Syncables that receive sync notifications must take steps to avoid immediately sending back their
 // own notifications. Otherwise:
 // - infinite loops may occur (when multiple reflecting members are synced)

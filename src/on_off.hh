@@ -39,18 +39,30 @@ struct OnOff : Syncable {
 
   bool IsOn() const { return table->is_on(*this); }
 
+  // External entry point: transitions this object AND all synced peers to On.
+  // Calls OnTurnOn on self first, then on every synced peer (via ForwardDo).
+  // Use when an outside caller (user click, another object) requests the transition.
   void TurnOn() const {
     ForwardDo([](OnOff other) { other.table->on_turn_on(other); });
   }
 
+  // Self-originated notification: this object has already turned On on its own (e.g. detected
+  // an OS event, received a hardware signal). Propagates OnTurnOn to all OTHER synced peers,
+  // skipping self whose state is already up to date (via ForwardNotify).
   void NotifyTurnedOn() const {
     ForwardNotify([](OnOff other) { other.table->on_turn_on(other); });
   }
 
+  // External entry point: transitions this object AND all synced peers to Off.
+  // Calls OnTurnOff on self first, then on every synced peer (via ForwardDo).
+  // Use when an outside caller (user click, another object) requests the transition.
   void TurnOff() const {
     ForwardDo([](OnOff other) { other.table->on_turn_off(other); });
   }
 
+  // Self-originated notification: this object has already turned Off on its own (e.g. detected
+  // an OS event, received a hardware signal). Propagates OnTurnOff to all OTHER synced peers,
+  // skipping self whose state is already up to date (via ForwardNotify).
   void NotifyTurnedOff() const {
     ForwardNotify([](OnOff other) { other.table->on_turn_off(other); });
   }
@@ -67,6 +79,10 @@ struct OnOff : Syncable {
   //   static constexpr StrView kName = "..."sv;
   //   static constexpr int Offset();  // offsetof(Parent, def_member)
   //   bool IsOn() const;
+  //
+  //   // Apply the On/Off state change to THIS object only. Called by the sync infrastructure
+  //   // (from ForwardDo or ForwardNotify). Must NOT call TurnOn/TurnOff/NotifyTurnedOn/
+  //   // NotifyTurnedOff — doing so would create feedback loops.
   //   void OnTurnOn();
   //   void OnTurnOff();
   template <typename ImplT>

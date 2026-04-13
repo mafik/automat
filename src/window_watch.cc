@@ -18,8 +18,10 @@ void WindowWatching::Release() {
     return;
   }
   watcher.WindowWatcherOnRelease(*this);
-  window.window_watchings.erase(it);  // After this line `this` is deleted!
-  window.OnWindowWatchingChanged();
+  // local variable because `this` is deleted after `window.window_watchings.erase(it)`.
+  auto& win = window;
+  win.window_watchings.erase(it);
+  win.OnWindowWatchingChanged();
 }
 
 }  // namespace automat::ui

@@ -170,7 +170,7 @@ void ScheduleArgumentTargets(Argument arg) {
       runnable.ScheduleRun();
     }
   }
-  arg.object_ptr->WakeToys();
+  arg.WakeToys();
 }
 
 void RunTask::OnExecute(std::unique_ptr<Task>& self) {

@@ -15,7 +15,6 @@
 #include "keyboard.hh"
 #include "math.hh"
 #include "root_widget.hh"
-#include "text_field.hh"
 #include "ui_constants.hh"
 #include "widget.hh"
 
@@ -283,7 +282,7 @@ struct HotKeyWidget : ObjectToy, ui::CaretOwner {
     };
   }
 
-  animation::Phase Tick(time::Timer&) override {
+  animation::Phase Tick(time::Timer& t) override {
     if (hotkey_selector) {
       shortcut_button->fg = kKeyGrabbingColor;
     } else {
@@ -296,6 +295,7 @@ struct HotKeyWidget : ObjectToy, ui::CaretOwner {
       windows_button->fg = KeyColor(hk->windows);
       shortcut_button->SetLabel(ToStr(hk->key));
     }
+    power_button->WakeAnimationAt(t.last);
     return animation::Finished;
   }
 

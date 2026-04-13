@@ -155,7 +155,7 @@ struct KeyPresserWidget : ObjectToy, ui::CaretOwner {
     if (auto key_presser = LockObject<KeyPresser>()) {
       shortcut_button->is_pressed = key_presser->key_pressed;
     }
-    shortcut_button->WakeAnimationAt(timer.now);
+    shortcut_button->WakeAnimationAt(timer.last);
     return animation::Finished;
   }
 

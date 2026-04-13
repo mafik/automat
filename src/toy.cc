@@ -50,10 +50,10 @@ void ToyStore::Tick(time::Timer& timer) {
       }
     } else {
       // Interface owner has been destroyed
-      current = ~toy->observed_notify_counter;
+      current = ~toy->observed_wake_counter;
     }
-    if (current != toy->observed_notify_counter) {
-      toy->observed_notify_counter = current;
+    if (current != toy->observed_wake_counter) {
+      toy->observed_wake_counter = current;
       toy->WakeAnimationAt(timer.last);
     }
   }

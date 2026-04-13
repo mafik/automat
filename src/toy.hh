@@ -31,7 +31,7 @@ struct Object;
 struct Toy : ui::Widget {
   WeakPtr<Object> owner;
   Interface::Table* iface;
-  uint32_t observed_notify_counter = 0;  // UI-thread only — last seen notify_counter
+  uint32_t observed_wake_counter = 0;  // UI-thread only — last seen notify_counter
 
   Toy(ui::Widget* parent, Object& owner, Interface::Table* iface);
 

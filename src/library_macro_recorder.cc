@@ -187,8 +187,9 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
   }
 
   if (track_index == -1) {
-    if (!down && timeline->tracks.empty()) {
-      // Timeline is empty and the key is released. Do nothing.
+    if (!down) {
+      // Don't create a track if a key is just released. This helps filter out the keys which were
+      // used to start the recording.
       return;
     }
     auto& new_track = timeline->AddOnOffTrack(track_name);

@@ -513,16 +513,38 @@ void Keyboard::KeyUp(Key key) {
     }
   }
 }
-void Keyboard::LogKeyDown(Key key) {
-  for (auto& keylogging : keyloggings) {
-    keylogging->keylogger.KeyloggerKeyDown(key);
+
+static void KeyloggingsGC(Keyboard& keyboard) {
+  if (keyboard.keyloggings.empty()) {
+    return;
+  }
+  // Remove all released keyloggings.
+  keyboard.keyloggings.erase(
+      std::remove_if(
+          keyboard.keyloggings.begin(), keyboard.keyloggings.end(),
+          [](const std::unique_ptr<Keylogging>& keylogging) { return keylogging->released; }),
+      keyboard.keyloggings.end());
+  if (keyboard.keyloggings.empty()) {
+    keyboard.root_widget.window->RegisterInput();
   }
 }
 
+void Keyboard::LogKeyDown(Key key) {
+  keyloggings_locked = true;
+  for (auto& keylogging : keyloggings) {
+    keylogging->keylogger.KeyloggerKeyDown(key);
+  }
+  keyloggings_locked = false;
+  KeyloggingsGC(*this);
+}
+
 void Keyboard::LogKeyUp(Key key) {
+  keyloggings_locked = true;
   for (auto& keylogging : keyloggings) {
     keylogging->keylogger.KeyloggerKeyUp(key);
   }
+  keyloggings_locked = false;
+  KeyloggingsGC(*this);
 }
 
 void SendKeyEvent(AnsiKey physical, bool down) {
@@ -655,6 +677,11 @@ void KeyGrab::Release() {
 }
 
 void Keylogging::Release() {
+  released = true;
+  keylogger.KeyloggerOnRelease(*this);
+  if (keyboard.keyloggings_locked) {
+    return;
+  }
   auto it = keyboard.keyloggings.begin();
   for (; it != keyboard.keyloggings.end(); ++it) {
     if (it->get() == this) {
@@ -665,7 +692,6 @@ void Keylogging::Release() {
     return;
   }
   auto& window = *keyboard.root_widget.window;
-  keylogger.KeyloggerOnRelease(*this);
   keyboard.keyloggings.erase(it);  // After this line `this` is deleted!
   window.RegisterInput();
 }

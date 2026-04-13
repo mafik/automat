@@ -162,6 +162,7 @@ struct KeyGrab {
 struct Keylogging {
   Keyboard& keyboard;
   Keylogger& keylogger;
+  bool released = false;
   Keylogging(Keyboard& keyboard, Keylogger& keylogger) : keyboard(keyboard), keylogger(keylogger) {}
   void Release();
 };
@@ -195,6 +196,8 @@ struct Keyboard final : Widget {
 
   std::vector<std::unique_ptr<KeyGrab>> key_grabs;
   std::vector<std::unique_ptr<Keylogging>> keyloggings;
+  bool keyloggings_locked = false;
+
   std::unique_ptr<Action> actions[static_cast<size_t>(AnsiKey::Count)];
 
   Keyboard(RootWidget&);

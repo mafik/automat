@@ -62,7 +62,7 @@ struct Window {
   virtual void OnWindowWatchingChanged() {}
 
   // Platform implementations call this to notify all watchers.
-  void NotifyForegroundChanged(WindowHandle window);
+  void NotifyForegroundChanged(os::WindowHandle window);
 
  protected:
   Window(RootWidget& root) : root(root) {}

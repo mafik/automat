@@ -647,8 +647,8 @@ void Window::Capture() {
   }
 }
 
-void Window::WindowWatcherForegroundChanged(ui::WindowWatching&, ui::WindowHandle window) {
-  ui::WindowHandle tracked = ui::kNoWindow;
+void Window::WindowWatcherForegroundChanged(ui::WindowWatching&, os::WindowHandle window) {
+  os::WindowHandle tracked = os::kNoWindow;
 #ifdef __linux__
   {
     auto lock = std::lock_guard(impl->mutex);
@@ -657,7 +657,7 @@ void Window::WindowWatcherForegroundChanged(ui::WindowWatching&, ui::WindowHandl
 #elif defined(_WIN32)
   tracked = impl->hwnd;
 #endif
-  bool now_active = (tracked != ui::kNoWindow && window == tracked);
+  bool now_active = (tracked != os::kNoWindow && window == tracked);
   if (now_active != active) {
     active = now_active;
     if (now_active) {

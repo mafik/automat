@@ -75,7 +75,7 @@ struct Window : public Object, ui::WindowWatcher {
   ui::WindowWatching* window_watching = nullptr;
 
   // WindowWatcher interface
-  void WindowWatcherForegroundChanged(ui::WindowWatching&, ui::WindowHandle window) override;
+  void WindowWatcherForegroundChanged(ui::WindowWatching&, os::WindowHandle window) override;
   void WindowWatcherOnRelease(const ui::WindowWatching&) override { window_watching = nullptr; }
 
   void Relocate(Location* new_here) override;

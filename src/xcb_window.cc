@@ -681,9 +681,9 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
             root.maximized_vertically = wm_state.MAXIMIZED_VERT;
             root.always_on_top = wm_state.ABOVE;
           } else if (ev->window == screen->root && ev->atom == atom::_NET_ACTIVE_WINDOW) {
-            auto reply = xcb::get_property(screen->root, atom::_NET_ACTIVE_WINDOW,
-                                           XCB_ATOM_WINDOW, 0, 1);
-            automat::ui::WindowHandle active = automat::ui::kNoWindow;
+            auto reply =
+                xcb::get_property(screen->root, atom::_NET_ACTIVE_WINDOW, XCB_ATOM_WINDOW, 0, 1);
+            automat::os::WindowHandle active = automat::os::kNoWindow;
             if (reply && reply->value_len == 1) {
               active = *(xcb_window_t*)xcb_get_property_value(reply.get());
             }

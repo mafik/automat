@@ -33,12 +33,11 @@ void Window::RegisterInput() {
 void Window::BeginWindowWatching(WindowWatcher* watcher, WindowWatching** watching) {
   assert(watcher != nullptr);
   assert(watching != nullptr);
-  *watching =
-      window_watchings.emplace_back(new WindowWatching(*this, *watcher)).get();
+  *watching = window_watchings.emplace_back(new WindowWatching(*this, *watcher)).get();
   OnWindowWatchingChanged();
 }
 
-void Window::NotifyForegroundChanged(WindowHandle window) {
+void Window::NotifyForegroundChanged(os::WindowHandle window) {
   for (auto& w : window_watchings) {
     w->watcher.WindowWatcherForegroundChanged(*w, window);
   }

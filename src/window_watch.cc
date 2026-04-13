@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 #include "window_watch.hh"
 
-#include "root_widget.hh"
 #include "window.hh"
 
 namespace automat::ui {

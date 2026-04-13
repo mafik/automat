@@ -48,7 +48,8 @@ struct Window : public Object, ui::WindowWatcher {
     obj->WakeToys();
   }
   void OnTurnOff() {
-    LOG << "TODO: Deactivate the window";
+    // Note that we're not turning off the active window here!
+    // OS-es don't really offer a great way to deactivate a window :(
     obj->active = false;
     obj->WakeToys();
   }

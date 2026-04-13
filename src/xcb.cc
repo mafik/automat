@@ -16,6 +16,9 @@ xcb_connection_t* connection = nullptr;
 xcb_screen_t* screen = nullptr;
 uint8_t xi_opcode = 0;
 
+std::atomic<xcb_timestamp_t> last_event_time{XCB_CURRENT_TIME};
+std::atomic<xcb_window_t> active_window{XCB_WINDOW_NONE};
+
 #define WRAP(f, ...)                             \
   std::unique_ptr<f##_reply_t, void (*)(void*)>( \
       f##_reply(connection, f(connection, __VA_ARGS__), nullptr), free)
@@ -114,7 +117,7 @@ void ReplaceProperty32(xcb_window_t window, xcb_atom_t property, xcb_atom_t type
 
 namespace freedesktop {
 
-void ActivateWindow(xcb_window_t window, xcb_window_t active_window) {
+void ActivateWindow(xcb_window_t window) {
   xcb_client_message_event_t event = {
       .response_type = XCB_CLIENT_MESSAGE,
       .format = 32,
@@ -124,14 +127,15 @@ void ActivateWindow(xcb_window_t window, xcb_window_t active_window) {
       .data = {.data32 =
                    {
                        1,  // source indication - 1 means application
-                       0,  // TODO: time
-                       active_window,
+                       xcb::last_event_time.load(std::memory_order_relaxed),
+                       xcb::active_window.load(std::memory_order_relaxed),
                    }},
   };
 
   xcb_send_event(xcb::connection, 1, xcb::screen->root,
                  XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT | XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY,
                  (const char*)&event);
+  xcb_flush(xcb::connection);
 }
 
 }  // namespace freedesktop

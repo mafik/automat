@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <atomic>
+
+#include "time.hh"
+
 #ifdef __linux__
 #include <xcb/xcb.h>
 #endif
@@ -22,5 +26,13 @@ constexpr WindowHandle kNoWindow = 0;  // XCB_WINDOW_NONE
 using WindowHandle = HWND;
 constexpr WindowHandle kNoWindow = nullptr;
 #endif
+
+// Ask the OS / window manager to bring `window` to the foreground.
+//
+// Non-blocking and safe to call from any thread. The request may be ignored,
+// honoured immediately, or downgraded to an attention hint depending on the
+// window manager's focus-stealing policy. Callers that need to react to the
+// outcome should observe foreground changes via the WindowWatching API.
+void ActivateWindow(WindowHandle window);
 
 }  // namespace automat::os

@@ -5,6 +5,7 @@
 #include <xcb/xinput.h>
 #include <xkbcommon/xkbcommon-x11.h>
 
+#include <atomic>
 #include <bit>
 #include <stop_token>
 
@@ -675,6 +676,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
         }
         case XCB_PROPERTY_NOTIFY: {
           xcb_property_notify_event_t* ev = (xcb_property_notify_event_t*)event;
+          xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
           if (ev->window == xcb_window && ev->atom == atom::_NET_WM_STATE) {
             WM_STATE wm_state = WM_STATE::Get(xcb_window);
             root.maximized_horizontally = wm_state.MAXIMIZED_HORZ;
@@ -687,6 +689,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
             if (reply && reply->value_len == 1) {
               active = *(xcb_window_t*)xcb_get_property_value(reply.get());
             }
+            xcb::active_window.store(active, std::memory_order_relaxed);
             auto lock = Lock();
             NotifyForegroundChanged(active);
           }
@@ -712,6 +715,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                 // We should update the scroll valua based on the valuator from the
                 // current slave.
                 xcb_input_device_changed_event_t* ev = (xcb_input_device_changed_event_t*)event;
+                xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
                 auto device_it = devices.find(ev->deviceid);
                 if (device_it != devices.end() && device_it->second.vertical_scroll) {
                   auto& vertical_scroll = device_it->second.vertical_scroll.value();
@@ -737,12 +741,14 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                 break;
               }
               case XCB_INPUT_RAW_KEY_PRESS: {
-                automat::ui::root_widget->keyboard.KeyDown(
-                    *(xcb_input_raw_key_press_event_t*)event);
+                auto ev = (xcb_input_raw_key_press_event_t*)event;
+                xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
+                automat::ui::root_widget->keyboard.KeyDown(*ev);
                 break;
               }
               case XCB_INPUT_KEY_PRESS: {
                 auto ev = (xcb_input_key_press_event_t*)event;
+                xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
                 ReplaceProperty32(xcb_window, atom::_NET_WM_USER_TIME, XCB_ATOM_CARDINAL, ev->time);
                 automat::ui::root_widget->keyboard.KeyDown(*ev);
                 break;
@@ -753,7 +759,9 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                 break;
               }
               case XCB_INPUT_KEY_RELEASE: {
-                automat::ui::root_widget->keyboard.KeyUp(*(xcb_input_key_release_event_t*)event);
+                auto ev = (xcb_input_key_release_event_t*)event;
+                xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
+                automat::ui::root_widget->keyboard.KeyUp(*ev);
                 break;
               }
               case XCB_INPUT_BUTTON_PRESS: {
@@ -762,6 +770,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                 if (ev->flags & XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED) {
                   break;
                 }
+                xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
                 ReplaceProperty32(xcb_window, atom::_NET_WM_USER_TIME, XCB_ATOM_CARDINAL, ev->time);
                 auto lock = Lock();
                 GetMouse().ButtonDown(EventDetailToButton(ev->detail));
@@ -769,6 +778,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
               }
               case XCB_INPUT_BUTTON_RELEASE: {
                 xcb_input_button_release_event_t* ev = (xcb_input_button_release_event_t*)event;
+                xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
                 // Ignore emulated mouse wheel "buttons"
                 if (ev->flags & XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED) {
                   break;
@@ -779,6 +789,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
               }
               case XCB_INPUT_RAW_BUTTON_PRESS: {
                 xcb_input_raw_button_press_event_t* ev = (xcb_input_raw_button_press_event_t*)event;
+                xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
                 auto& pointer = GetMouse();
                 auto btn = EventDetailToButton(ev->detail);
                 if (btn == automat::ui::PointerButton::Unknown) {
@@ -792,6 +803,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
               case XCB_INPUT_RAW_BUTTON_RELEASE: {
                 xcb_input_raw_button_release_event_t* ev =
                     (xcb_input_raw_button_release_event_t*)event;
+                xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
                 auto& pointer = GetMouse();
                 auto btn = EventDetailToButton(ev->detail);
                 if (btn == automat::ui::PointerButton::Unknown) {
@@ -804,6 +816,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
               }
               case XCB_INPUT_RAW_MOTION: {
                 xcb_input_raw_motion_event_t* ev = (xcb_input_raw_motion_event_t*)event;
+                xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
                 auto lock = Lock();
                 auto& pointer = GetMouse();
                 auto valuators = RawButtonValuators(*ev);
@@ -822,6 +835,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
 
               case XCB_INPUT_MOTION: {
                 xcb_input_motion_event_t* ev = (xcb_input_motion_event_t*)event;
+                xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
 
                 auto valuators = ButtonValuators(*ev);
                 if (auto delta = valuators.GetVerticalScrollDelta(true)) {
@@ -841,6 +855,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                 // but gives better UX.
                 ScanDevices(*this);
                 xcb_input_enter_event_t* ev = (xcb_input_enter_event_t*)event;
+                xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
                 mouse_position_on_screen.x = fp1616_to_float(ev->root_x);
                 mouse_position_on_screen.y = fp1616_to_float(ev->root_y);
                 auto lock = Lock();
@@ -880,6 +895,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
         case XCB_KEY_RELEASE: {
           // This is only called by registered hotkeys
           xcb_key_press_event_t* ev = (xcb_key_press_event_t*)event;
+          xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
           auto key = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail);
           // LOG << "Key event: " << dump_struct(*ev) << " " << automat::ui::ToStr(key);
           if (opcode == XCB_KEY_RELEASE) {

@@ -5,6 +5,7 @@
 #include "base.hh"
 #include "image_provider.hh"
 #include "on_off.hh"
+#include "os_window.hh"
 #include "str.hh"
 #include "time.hh"
 #include "window_watch.hh"
@@ -13,9 +14,10 @@ namespace automat::library {
 
 struct Window : public Object, ui::WindowWatcher {
   std::mutex mutex;
-  Str title = "";
+  os::WindowHandle handle = os::kNoWindow;
   bool run_continuously = true;
-  bool active = false;            // Whether the tracked window is currently active (focused)
+  bool active = false;  // Whether the tracked window is currently active (focused)
+  Str title = "";
   sk_sp<SkImage> captured_image;  // Captured window image
 
   DEF_INTERFACE(Window, Runnable, capture, "Capture")
@@ -35,8 +37,14 @@ struct Window : public Object, ui::WindowWatcher {
   DEF_INTERFACE(Window, OnOff, on_off, "Active")
   bool IsOn() const { return obj->active; }
   void OnTurnOn() {
-    LOG << "TODO: Activate the window";
+    os::WindowHandle tracked = os::kNoWindow;
+    {
+      auto lock = std::lock_guard(obj->mutex);
+      tracked = obj->handle;
+      obj->last_activated_time = time::SteadyNow();
+    }
     obj->active = true;
+    os::ActivateWindow(tracked);
     obj->WakeToys();
   }
   void OnTurnOff() {
@@ -58,6 +66,13 @@ struct Window : public Object, ui::WindowWatcher {
   std::unique_ptr<Impl> impl;
 
   time::SteadyPoint capture_time = time::kZeroSteady;
+  time::SteadyPoint last_activated_time = time::kZeroSteady;
+
+  // Receiving a "OnTurnOn" notification causes the window to be activated. After some time the OS
+  // is going to deliver a "window got activated" event, which will cause the same information to be
+  // "reflected" back. To prevent this we're using an inhibitory period, just as described in
+  // sync.hh.
+  static constexpr time::Duration kActivationInhibitDuration = 50ms;
 
   Window();
 

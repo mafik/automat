@@ -6,6 +6,8 @@
 #include <xcb/xinput.h>
 #include <xcb/xproto.h>
 
+#include <atomic>
+
 #include "status.hh"
 
 namespace xcb {
@@ -13,6 +15,16 @@ namespace xcb {
 extern xcb_connection_t* connection;
 extern xcb_screen_t* screen;
 extern uint8_t xi_opcode;
+
+// Last X server timestamp observed on any input event. Updated from the XCB
+// event loop, read by ActivateWindow so the WM honours focus-stealing rules.
+extern std::atomic<xcb_timestamp_t> last_event_time;
+
+// The window currently holding the WM's _NET_ACTIVE_WINDOW. Tracked by the
+// XCB event loop (initial query + PropertyNotify on root). Used by
+// ActivateWindow as the "requestor's currently active window" field, which
+// some WMs check as part of focus-stealing prevention.
+extern std::atomic<xcb_window_t> active_window;
 
 namespace atom {
 
@@ -131,9 +143,12 @@ namespace freedesktop {
 
 // Activate the target `window` by sending a _NET_ACTIVE_WINDOW event to the root window.
 //
-// If `active_window` is provided, it will be used as the active window in the event. This may
-// make the window manager more compliant.
-void ActivateWindow(xcb_window_t window, xcb_window_t active_window = XCB_WINDOW_NONE);
+// Pulls the X server timestamp and Automat's currently-active window from the
+// cached globals (`xcb::last_event_time`, `xcb::our_window`) so the WM can
+// validate the request against its focus-stealing-prevention rules.
+//
+// Non-blocking and safe to call from any thread.
+void ActivateWindow(xcb_window_t window);
 }  // namespace freedesktop
 
 }  // namespace xcb

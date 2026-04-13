@@ -125,9 +125,6 @@ std::string_view Window::Name() const { return "Window"; }
 
 struct Window::Impl {
 #ifdef __linux__
-  std::mutex mutex;
-  xcb_window_t xcb_window = XCB_WINDOW_NONE;
-
   xcb_shm_seg_t shmseg = -1;
   int shmid = -1;
   std::span<char> data;
@@ -146,10 +143,6 @@ struct Window::Impl {
   }
 #endif
 
-#ifdef _WIN32
-  HWND hwnd = nullptr;
-#endif
-
   Impl() {}
 };
 
@@ -160,12 +153,7 @@ Ptr<Object> Window::Clone() const {
   ret->run_continuously = run_continuously;
   ret->captured_image = captured_image;
   ret->capture_time = capture_time;
-#ifdef __linux__
-  ret->impl->xcb_window = impl->xcb_window;
-#endif
-#ifdef _WIN32
-  ret->impl->hwnd = impl->hwnd;
-#endif
+  ret->handle = handle;
   return ret;
 }
 
@@ -416,11 +404,8 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
     WakeAnimation();
     if (auto window = LockWindow()) {
       {
-        auto impl_lock = std::lock_guard(window->impl->mutex);
-        window->impl->xcb_window = found_window;
-      }
-      {
         auto window_lock = std::lock_guard(window->mutex);
+        window->handle = found_window;
         window->title = window_name;
       }
       window->ClearOwnError();
@@ -488,17 +473,21 @@ std::unique_ptr<ObjectToy> Window::MakeToy(ui::Widget* parent) {
 
 void Window::Capture() {
   ZoneScopedN("Window");
+  ClearOwnError();
+  os::WindowHandle tracked;
+  {
+    auto lock = std::lock_guard(mutex);
+    tracked = handle;
+  }
+  if (tracked == os::kNoWindow) {
+    ReportError("No window selected");
+    return;
+  } else if (HasError(*this)) {
+    return;
+  }
+
 #ifdef __linux__
   {
-    auto impl_lock = std::lock_guard(impl->mutex);
-    ClearOwnError();
-    if (impl->xcb_window == XCB_WINDOW_NONE) {
-      ReportError("No window selected");
-      return;
-    } else if (HasError(*this)) {
-      return;
-    }
-
     // Initialize capture if not already done
     if (impl->data.empty()) {
       if (impl->shmseg == -1) {
@@ -512,7 +501,7 @@ void Window::Capture() {
       impl->data = std::span<char>(static_cast<char*>(shmat(impl->shmid, nullptr, 0)), size);
     }
 
-    auto geometry_reply = xcb::get_geometry(impl->xcb_window);
+    auto geometry_reply = xcb::get_geometry(tracked);
     if (!geometry_reply) {
       return;
     }
@@ -523,7 +512,7 @@ void Window::Capture() {
     U16 height = geometry_reply->height;
 
     auto gtk_frame_extents_reply =
-        xcb::get_property(impl->xcb_window, xcb::atom::_GTK_FRAME_EXTENTS, XCB_ATOM_CARDINAL, 0, 4);
+        xcb::get_property(tracked, xcb::atom::_GTK_FRAME_EXTENTS, XCB_ATOM_CARDINAL, 0, 4);
     if (gtk_frame_extents_reply->value_len == 4) {
       auto extents = (U32*)xcb_get_property_value(gtk_frame_extents_reply.get());
       x += extents[0];
@@ -532,7 +521,7 @@ void Window::Capture() {
       height -= extents[2] + extents[3];
     }
 
-    auto cookie = xcb_shm_get_image(xcb::connection, impl->xcb_window, x, y, width, height, ~0,
+    auto cookie = xcb_shm_get_image(xcb::connection, tracked, x, y, width, height, ~0,
                                     XCB_IMAGE_FORMAT_Z_PIXMAP, impl->shmseg, 0);
 
     std::unique_ptr<xcb_shm_get_image_reply_t, xcb::FreeDeleter> reply(
@@ -648,19 +637,19 @@ void Window::Capture() {
 }
 
 void Window::WindowWatcherForegroundChanged(ui::WindowWatching&, os::WindowHandle window) {
-  os::WindowHandle tracked = os::kNoWindow;
-#ifdef __linux__
+  os::WindowHandle tracked;
+  auto now = time::SteadyNow();
+  time::SteadyPoint last_activated;
   {
-    auto lock = std::lock_guard(impl->mutex);
-    tracked = impl->xcb_window;
+    auto lock = std::lock_guard(mutex);
+    tracked = handle;
+    last_activated = last_activated_time;
   }
-#elif defined(_WIN32)
-  tracked = impl->hwnd;
-#endif
+  auto time_since_last_activation = now - last_activated;
   bool now_active = (tracked != os::kNoWindow && window == tracked);
   if (now_active != active) {
     active = now_active;
-    if (now_active) {
+    if (now_active && time_since_last_activation > kActivationInhibitDuration) {
       on_off->NotifyTurnedOn();
     } else {
       on_off->NotifyTurnedOff();
@@ -687,7 +676,7 @@ void Window::AttachToTitle() {
       return ControlFlow::Continue;
     }
     if (HasWMState(window)) {
-      impl->xcb_window = window;
+      handle = window;
       return ControlFlow::Break;
     }
     return ControlFlow::Enter;

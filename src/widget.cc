@@ -218,8 +218,8 @@ SkMatrix TransformBetween(const Widget& from, const Widget& to) {
   SkMatrix between;
   (void)to_up.invert(&between);
 
-  for (int i = 0; i < path_from.size() - n_shared_ancestors; ++i) {
-    between.postConcat(path_from[i]->local_to_parent.asM33());
+  for (int i = path_from.size() - n_shared_ancestors - 1; i >= 0; --i) {
+    between.preConcat(path_from[i]->local_to_parent.asM33());
   }
 
   return between;

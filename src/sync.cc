@@ -513,7 +513,7 @@ void SyncBelt::Draw(SkCanvas& canvas) const {
 Optional<Rect> SyncBelt::TextureBounds() const {
   constexpr float r = kSecondaryGearRadius + kTeethAmplitude;
   auto bounds = Rect::MakeCenter(pinion + pinion_deflection, r * 2, r * 2);
-  bounds.ExpandToInclude(Rect::MakeCenter(origin, 6_mm, 6_mm));
+  bounds.ExpandToInclude(Rect::MakeCenter(origin, r * 2, r * 2));
   return bounds;
 }
 

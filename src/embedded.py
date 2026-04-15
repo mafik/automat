@@ -11,6 +11,7 @@ import cc_embed
 import make
 import src
 import subprocess
+import random
 
 from pathlib import Path
 from functools import partial
@@ -52,6 +53,9 @@ extern std::unordered_map<StrView, fs::VFile*> index;
 using namespace std::string_literals;
 using namespace automat;
 using namespace automat::fs;
+              
+// Random number to force recompilation:
+// {random.randbytes(16).hex()}
 
 namespace automat::embedded {{''',
               file=cc)

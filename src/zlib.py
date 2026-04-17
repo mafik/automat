@@ -9,4 +9,7 @@ hook = extension_helper.ExtensionHelper('zlib', globals())
 hook.FetchFromGit('https://github.com/madler/zlib.git', 'v1.3.1')
 hook.ConfigureWithCMake(build.PREFIX / 'include' / 'zlib.h')
 hook.ConfigureOption('BUILD_SHARED_LIBS', 'OFF')
-hook.AddLinkArg('-lzlibstatic')
+if build.platform == 'win32':
+  hook.AddLinkArg('-lzlibstatic')
+else:
+  hook.AddLinkArg('-lz')

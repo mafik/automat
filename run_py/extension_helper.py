@@ -107,6 +107,7 @@ class ExtensionHelper:
     self.include_regex = None
     self.skip_configure = False
     self.configure_inputs = []
+    self.link_deps = []
     self.ninja_target = 'install'
     self.meson_install_tags = ''
 
@@ -290,10 +291,13 @@ class ExtensionHelper:
   def _hook_plan(self, srcs, objs : list[build.ObjectFile], bins, recipe):
     if self.old_hook_plan:
       self.old_hook_plan(srcs, objs, bins, recipe)
+    transitive_link_deps = self._transitive_link_deps()
     for obj in objs:
       if obj.deps.intersection(self.install_srcs):
         self.install_objs.add(obj)
         obj.deps.update(self.beam) # variant-specific dependencies
+        for dep_ext in transitive_link_deps:
+          obj.deps.update(dep_ext.beam)
         obj.compile_args += self.compile_args
 
     for bin in bins:
@@ -301,6 +305,20 @@ class ExtensionHelper:
         self.install_bins.add(bin)
         bin.link_args += self.link_args
         bin.run_args += self.run_args
+        for dep_ext in transitive_link_deps:
+          bin.link_args += dep_ext.link_args
+          bin.run_args += dep_ext.run_args
+
+  def _transitive_link_deps(self, visited=None):
+    '''Returns a list of ExtensionHelpers this extension transitively links against.'''
+    if visited is None:
+      visited = set()
+    for dep in self.link_deps:
+      if dep in visited:
+        continue
+      visited.add(dep)
+      dep._transitive_link_deps(visited)
+    return list(visited)
 
   '''Can be used to delay the configure step until some other files are ready.
 
@@ -312,6 +330,24 @@ class ExtensionHelper:
   def ConfigureDependsOn(self, *deps):
     for dep in deps:
       as_path_list(dep, self.configure_inputs)
+
+  '''Declare link-time dependencies on other extensions.
+
+  For every binary that links this extension, each dep's `link_args` and
+  `run_args` are appended and its built libraries are added as build
+  prerequisites. Propagation is transitive.'''
+  def LinkDependsOn(self, *deps):
+    for dep in deps:
+      if not isinstance(dep, ExtensionHelper):
+        raise ValueError(f'LinkDependsOn expects ExtensionHelper, got {type(dep)}')
+      self.link_deps.append(dep)
+
+  '''Convenience wrapper combining ConfigureDependsOn and LinkDependsOn.'''
+  def DependsOn(self, *deps, configure=True, link=True):
+    if configure:
+      self.ConfigureDependsOn(*deps)
+    if link:
+      self.LinkDependsOn(*deps)
 
   def FetchFromGit(self, git_url, git_tag):
     if self.git_url:

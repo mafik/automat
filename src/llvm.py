@@ -50,11 +50,9 @@ def PostInstallProcess(BASE, PREFIX, checkout_dir):
   llvm_config_ldflags.wait()
   llvm_config_cxxflags.wait()
 
-  with ldflags_path.open('a') as f:
-    if fs_utils.platform == 'win32':
+  if fs_utils.platform == 'win32':
+    with ldflags_path.open('a') as f:
       f.write('-lntdll')
-    else:
-      f.write('-lz -lzstd')
 
   cxxflags = cxxflags_path.read_text().split()
   cxxflags = [f for f in cxxflags if not f.startswith('-std=')]
@@ -85,7 +83,7 @@ def post_install(*outputs):
                               str(build.PREFIX),
                               str(hook.checkout_dir))
 
-hook.ConfigureDependsOn(zlib_ext.hook, zstd_ext.hook)
+hook.DependsOn(zlib_ext.hook, zstd_ext.hook)
 hook.FetchFromGit('https://github.com/llvm/llvm-project.git', 'llvmorg-19.1.6')
 hook.SetSrcDir(hook.checkout_dir / 'llvm')
 hook.ConfigureWithCMake(llvm_config_path)

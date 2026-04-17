@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <memory>
+#include <source_location>
 
 #include "action.hh"
 #include "animation.hh"
@@ -171,6 +172,11 @@ struct Widget : Trackable, OptionsProvider {
   // This will typically be called AFTER parent's Tick & DURING the child's Tick.
   virtual void OnChildDead(Widget& child, time::SteadyPoint now) { WakeAnimationAt(now); }
 
+  // Called on the *old* parent immediately after one of its children was reparented to a different
+  // widget. The old parent should remove `child` from any list/slot it stores it in so that
+  // subsequent `FillChildren` calls don't return a widget whose `parent` no longer points at us.
+  virtual void OnChildReparentedAway(Widget& child) {}
+
   // Can be used by parent to store some data. Helps in avoiding allocations
   int index;
 
@@ -178,7 +184,7 @@ struct Widget : Trackable, OptionsProvider {
   ToyStore& ToyStore() const;
 
   // Validates that the parent/children hierarchy is correctly maintained (in non-release builds).
-  void ValidateHierarchy();
+  void ValidateHierarchy(std::source_location location = std::source_location::current());
 
   virtual void PointerOver(Pointer&) {}
   virtual void PointerLeave(Pointer&) {}

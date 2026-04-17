@@ -95,13 +95,17 @@ void Location::Put(Ptr<Object> obj) {
   object = std::move(obj);
 }
 
-Ptr<Object> Location::Take() { return std::move(object); }
+Ptr<Object> Location::Take() {
+  object->here = nullptr;
+  auto ptr = std::move(object);
+  WakeToys();
+  return std::move(ptr);
+}
 
 Ptr<Object> Location::InsertHere(Ptr<Object>&& object) {
   this->object.Swap(object);
   this->object->Relocate(this);
   // TODO: VM layer shouldn't mutate UI like that!
-  if (widget) widget->toy = nullptr;
   ui::root_widget->WakeAnimation();
   return object;
 }
@@ -212,6 +216,10 @@ Optional<Rect> LocationWidget::TextureBounds() const { return nullopt; }
 animation::Phase LocationWidget::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
   auto loc = LockLocation();
+
+  if (toy && toy->parent != this) {
+    toy = nullptr;
+  }
 
   if (!loc) {
     // Location is dead — fade out and eventually expire
@@ -687,6 +695,12 @@ void LocationWidget::OnReparent(ui::Widget& new_parent, SkM44& fix) {
     auto fix33 = fix.asM33();
     fix33.mapVector(position_vel);
     fix33.mapRadius(scale_vel);
+  }
+}
+
+void LocationWidget::OnChildReparentedAway(ui::Widget& child) {
+  if (toy.Get() == &child) {
+    toy = nullptr;
   }
 }
 }  // namespace automat

@@ -67,7 +67,11 @@ void Widget::Reparent(Widget& new_parent) {
   auto fix = TransformBetween(*parent, new_parent);
   SkM44 fix44(fix);
   OnReparent(new_parent, fix44);
+  Widget* old_parent = parent;
   parent = new_parent.AcquireTrackedPtr();
+  if (old_parent && old_parent != &new_parent) {
+    old_parent->OnChildReparentedAway(*this);
+  }
 }
 
 void Widget::PreDrawChildren(SkCanvas& canvas) const {
@@ -285,16 +289,17 @@ Widget* Widget::Find(uint32_t id) {
   }
 }
 
-void Widget::ValidateHierarchy() {
+void Widget::ValidateHierarchy(std::source_location location) {
   if constexpr (build_variant::NotRelease) {
     for (auto* child : Children()) {
       if (child->parent != this) {
-        ERROR << "Widget " << child->Name() << " has parent "
-              << (child->parent ? child->parent->Name() : "nullptr")
-              << f(" ({})", static_cast<void*>(child->parent)) << " but should have "
-              << this->Name() << f(" ({})", static_cast<void*>(this));
+        LogEntry(LogLevel::Error, location)
+            << "Widget " << child->Name() << " has parent "
+            << (child->parent ? child->parent->Name() : "nullptr")
+            << f(" ({})", static_cast<void*>(child->parent)) << " but should have " << this->Name()
+            << f(" ({})", static_cast<void*>(this));
       }
-      child->ValidateHierarchy();
+      child->ValidateHierarchy(location);
     }
   }
 }

@@ -234,6 +234,7 @@ struct LocationWidget : ObjectToy {
   void UpdateAutoconnectArgs();
 
   void OnReparent(ui::Widget& new_parent, SkM44& fix) override;
+  void OnChildReparentedAway(ui::Widget& child) override;
 };
 
 static_assert(ToyMaker<Location>);

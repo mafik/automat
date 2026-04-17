@@ -554,6 +554,10 @@ void AssemblerWidget::FillChildren(Vec<ui::Widget*>& children) {
   }
 }
 
+void AssemblerWidget::OnChildReparentedAway(ui::Widget& child) {
+  std::erase(reg_widgets, &child);
+}
+
 void AssemblerWidget::TransformUpdated() {
   WakeAnimation();
   RedrawThisFrame();

@@ -184,6 +184,7 @@ DragLocationAction::~DragLocationAction() {
         location->widget->local_anchor.reset();
         Location::FromMatrix(matrix, location->widget->LocalAnchor(), location->position,
                              location->scale);
+        location->widget->RedrawThisFrame();
       }
       drop_target->DropLocation(std::move(location));
     }

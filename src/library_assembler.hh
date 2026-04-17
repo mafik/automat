@@ -65,6 +65,7 @@ struct AssemblerWidget : ObjectToy, ui::DropTarget {
   void Draw(SkCanvas&) const override;
   void VisitOptions(const OptionsVisitor&) const override;
   void TransformUpdated() override;
+  void OnChildReparentedAway(ui::Widget& child) override;
 
   DropTarget* AsDropTarget() override { return this; }
   bool CanDrop(Location&) const override;

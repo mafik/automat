@@ -9,6 +9,7 @@
 #endif
 
 #include "format.hh"
+#include "path.hh"
 
 namespace automat {
 
@@ -38,6 +39,32 @@ LogEntry::LogEntry(LogLevel log_level, const std::source_location location)
   }
 }
 
+StrView CleanFunctionName(const char* func) {
+  StrView name(func);
+  // Remove args
+  auto paren_pos = name.find('(');
+  if (paren_pos != StrView::npos) {
+    name = name.substr(0, paren_pos);
+  }
+  // Remove return type
+  auto last_space_pos = name.rfind(' ');
+  if (last_space_pos != StrView::npos) {
+    name = name.substr(last_space_pos + 1);
+  }
+  // Remove namespaces
+  while (true) {
+    if (name.size() > 0 && isupper(name[0])) {
+      break;
+    }
+    auto colon_pos = name.find("::");
+    if (colon_pos == StrView::npos) {
+      break;
+    }
+    name = name.substr(colon_pos + 2);
+  }
+  return name;
+}
+
 LogEntry::~LogEntry() {
   if (log_level == LogLevel::Ignore) {
     return;
@@ -46,6 +73,11 @@ LogEntry::~LogEntry() {
   if (log_level == LogLevel::Fatal) {
     buffer += f(" Crashing in {}:{} [{}].", location.file_name(), location.line(),
                 location.function_name());
+  }
+
+  if (log_level == LogLevel::Error) {
+    buffer += f(" ({} at {}:{})", CleanFunctionName(location.function_name()),
+                Path(location.file_name()).Name(), location.line());
   }
 
   auto& loggers = GetLoggers();

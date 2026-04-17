@@ -6,7 +6,7 @@ import build
 
 hook = extension_helper.ExtensionHelper('PipeWire', globals())
 
-hook.FetchFromGit('https://gitlab.freedesktop.org/pipewire/pipewire.git', '1.2.5')
+hook.FetchFromGit('https://gitlab.freedesktop.org/pipewire/pipewire.git', '1.4.11')
 
 hook.ConfigureWithMeson(build.PREFIX / 'include' / 'pipewire-0.3' / 'pipewire' / 'pipewire.h')
 hook.ConfigureOptions(**{

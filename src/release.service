@@ -4,6 +4,7 @@ Description=Release a new version of the Automat
 [Service]
 Type=oneshot
 ExecStart=%Y/release.py --pull_and_restart
+ExecStopPost=/bin/sh -c 'test "$SERVICE_RESULT" = success && exit 0; journalctl -u %N -n 30 --no-pager | curl -s -H "Title: %N failed ($SERVICE_RESULT)" -H "Priority: high" -H "Tags: rotating_light" --data-binary @- https://ntfy.sh/automat-release'
 LoadCredential=GITHUB_TOKEN:/etc/credstore/GITHUB_TOKEN
 WorkingDirectory=%Y
 

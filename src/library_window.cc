@@ -1,6 +1,18 @@
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
-#include "library_window.hh"
+
+#ifdef _WIN32
+#undef NOGDI
+// clang-format off
+#include <windows.h>
+// clang-format on
+
+#include <dwmapi.h>
+
+#pragma comment(lib, "dwmapi.lib")
+#pragma comment(lib, "gdi32.lib")
+#pragma comment(lib, "user32.lib")
+#endif
 
 #include <include/core/SkColor.h>
 #include <include/core/SkColorType.h>
@@ -14,6 +26,7 @@
 #include "color.hh"
 #include "font.hh"
 #include "key.hh"
+#include "library_window.hh"
 #include "pointer.hh"
 #include "root_widget.hh"
 #include "str.hh"
@@ -34,15 +47,6 @@
 #endif
 
 #ifdef _WIN32
-#undef NOGDI
-#include <dwmapi.h>
-#include <windows.h>
-
-#include <vector>
-#pragma comment(lib, "dwmapi.lib")
-#pragma comment(lib, "gdi32.lib")
-#pragma comment(lib, "user32.lib")
-
 // Windows helper functions
 static std::string GetWindowTitle(HWND hwnd) {
   int length = GetWindowTextLengthA(hwnd);
@@ -445,7 +449,7 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
 
     WakeAnimation();
     if (auto window = LockWindow()) {
-      window->impl->hwnd = found_window;
+      window->handle = found_window;
       window->title = window_name;
       window->ClearOwnError();
     }
@@ -549,7 +553,7 @@ void Window::Capture() {
     HWND hwnd;
     {
       auto lock = std::lock_guard(mutex);
-      hwnd = impl->hwnd;
+      hwnd = handle;
     }
     if (hwnd == nullptr) {
       ReportError("No window selected");
@@ -683,9 +687,9 @@ void Window::AttachToTitle() {
   });
 #elif defined(_WIN32)
   // Find window by title
-  impl->hwnd = FindWindowA(nullptr, title.c_str());
-  if (impl->hwnd && !IsValidWindow(impl->hwnd)) {
-    impl->hwnd = nullptr;
+  handle = FindWindowA(nullptr, title.c_str());
+  if (handle && !IsValidWindow(handle)) {
+    handle = nullptr;
   }
 #endif
 }

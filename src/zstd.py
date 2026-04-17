@@ -15,4 +15,8 @@ hook.ConfigureOptions(**{
     'ZSTD_BUILD_STATIC': 'ON',
     'ZSTD_BUILD_TESTS': 'OFF',
 })
-hook.AddLinkArg('-lzstd')
+
+if build.platform == 'win32':
+  hook.AddLinkArg('-lzstd_static')
+else:
+  hook.AddLinkArg('-lzstd')

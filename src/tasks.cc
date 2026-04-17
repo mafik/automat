@@ -47,7 +47,7 @@ std::shared_mutex worker_threads_mtx;
 
 void StartWorkerThreads(std::stop_token stop_token) {
   auto lock = std::unique_lock(worker_threads_mtx);
-  for (int i = 0; i < 1; ++i) {
+  for (int i = 0; i < 4; ++i) {
     worker_threads.emplace_back(AutomatLoop, stop_token);
   }
 }

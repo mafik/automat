@@ -18,6 +18,7 @@
 #include <bit>
 #include <vector>
 
+#include "automat.hh"
 #include "embedded.hh"
 #include "format.hh"
 #include "log.hh"
@@ -26,6 +27,8 @@
 namespace automat {
 
 #ifdef __linux__
+
+constexpr bool kDebugDBus = false;
 
 using std::map;
 using std::string;
@@ -132,10 +135,16 @@ class StatusNotifierItem final : public AdaptorInterfaces<org::kde::StatusNotifi
     LOG << "StatusNotifierItem::Activate(" << x << ", " << y << ")";
   }
   void SecondaryActivate(const int32_t& x, const int32_t& y) override {
-    LOG << "StatusNotifierItem::SecondaryActivate(" << x << ", " << y << ")";
+    // Invoked when user middle-clicks on the tray icon.
+    if constexpr (kDebugDBus) {
+      LOG << "StatusNotifierItem::SecondaryActivate(" << x << ", " << y << ")";
+    }
   }
   void Scroll(const int32_t& delta, const string& orientation) override {
-    LOG << "StatusNotifierItem::Scroll(" << delta << ", " << orientation << ")";
+    // Invoked when user scrolls over the tray icon.
+    if constexpr (kDebugDBus) {
+      LOG << "StatusNotifierItem::Scroll(" << delta << ", " << orientation << ")";
+    }
   }
 };
 
@@ -154,6 +163,7 @@ struct MenuItemProperties {
   string toggle_type;     // "checkmark", "radio" or ""
   string shortcut;
   vector<int32_t> child_ids;
+  std::function<void()> on_click;
 };
 
 class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor> {
@@ -170,8 +180,10 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
     // items.push_back({.type = "standard", .label = "Show", .icon_name = "view-reveal-symbolic"});
     items.push_back({.type = "standard", .label = "Hide", .icon_name = "view-conceal-symbolic"});
     items.push_back({.type = "separator", .label = "", .icon_name = "", .shortcut = ""});
-    items.push_back(
-        {.type = "standard", .label = "Quit", .icon_name = "application-exit-symbolic"});
+    items.push_back({.type = "standard",
+                     .label = "Quit",
+                     .icon_name = "application-exit-symbolic",
+                     .on_click = []() { stop_source.request_stop(); }});
     items[0].child_ids.push_back(1);
     items[0].child_ids.push_back(2);
     items[0].child_ids.push_back(3);
@@ -193,11 +205,13 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
 
     bool all = propertyNames.empty();
 
-    for (auto& prop_name : propertyNames) {
-      LOG << "Requested " << prop_name;
-    }
-    if (all) {
-      LOG << "Requested ALL";
+    if constexpr (kDebugDBus) {
+      for (auto& prop_name : propertyNames) {
+        LOG << "Requested " << prop_name;
+      }
+      if (all) {
+        LOG << "Requested ALL";
+      }
     }
 
     auto shouldInclude = [&](const std::string& name) {
@@ -240,7 +254,9 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
 
   tuple<uint32_t, LayoutItem> GetLayout(const int32_t& parent_id, const int32_t& depth,
                                         const vector<string>& property_names) override {
-    LOG << "DBusMenu::GetLayout(" << parent_id << ", " << depth << ")";
+    if constexpr (kDebugDBus) {
+      LOG << "DBusMenu::GetLayout(" << parent_id << ", " << depth << ")";
+    }
     PropertyMap props;
     vector<Variant> children;
     if (parent_id < items.size()) {
@@ -279,6 +295,15 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
 
   void Event(const int32_t& id, const string& event_id, const Variant& data,
              const uint32_t& timestamp) override {
+    if (event_id == "opened" || event_id == "closed") {
+      return;  // Irrelevant for us
+    }
+    if (event_id == "clicked") {
+      if (items[id].on_click) {
+        items[id].on_click();
+      }
+      return;
+    }
     LOG << "DBusMenu::Event(" << id << ", " << event_id << ", " << data.peekValueType() << ", "
         << timestamp << ")";
   }

@@ -178,11 +178,28 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
   DBusMenu(IConnection& connection) : AdaptorInterfaces(connection, kMenuPath) {
     registerAdaptor();
     items.push_back({});  // Root item
-    // items.push_back({.type = "standard", .label = "Show", .icon_name = "view-reveal-symbolic"});
-    items.push_back({.type = "standard",
-                     .label = "Hide",
-                     .icon_name = "view-conceal-symbolic",
-                     .on_click = []() { ui::root_widget->MinimizeToTray(); }});
+    items.push_back(
+        {.type = "standard",
+         .label = "Hide",
+         .icon_name = "view-conceal-symbolic",
+         .on_click = [this]() {
+           auto& item = items[1];
+           if (item.label == "Hide") {
+             ui::root_widget->MinimizeToTray();
+             item.label = "Show";
+             item.icon_name = "view-reveal-symbolic";
+             emitItemsPropertiesUpdated(
+                 {{1, {{"label", Variant(item.label)}, {"icon-name", Variant(item.icon_name)}}}},
+                 {});
+           } else {
+             //  ui::root_widget->RestoreFromTray();
+             item.label = "Hide";
+             item.icon_name = "view-conceal-symbolic";
+             emitItemsPropertiesUpdated(
+                 {{1, {{"label", Variant(item.label)}, {"icon-name", Variant(item.icon_name)}}}},
+                 {});
+           }
+         }});
     items.push_back({.type = "separator", .label = "", .icon_name = "", .shortcut = ""});
     items.push_back({.type = "standard",
                      .label = "Quit",

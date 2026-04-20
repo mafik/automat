@@ -55,7 +55,7 @@ def PostInstallProcess(BASE, PREFIX, checkout_dir):
       f.write('-lntdll')
 
   cxxflags = cxxflags_path.read_text().split()
-  cxxflags = [f for f in cxxflags if not f.startswith('-std=')]
+  cxxflags = [f for f in cxxflags if not f.startswith('-std=') and not f == '-fno-exceptions']
   extra_dir = BASE / 'LLVM' / 'lib' / 'Target' / 'X86'
   cxxflags.append(f'-I{extra_dir}')
   cxxflags_path.write_text(' '.join(cxxflags))

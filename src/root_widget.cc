@@ -110,6 +110,10 @@ void VulkanPaint(RootWidget& rw) {
 void RenderThread(RootWidget& rw, std::stop_token stop_token) {
   SetThreadName("Render Thread");
   while (!stop_token.stop_requested()) {
+    rw.minimized.WaitFalse(stop_token);
+    if (stop_token.stop_requested()) {
+      break;
+    }
     VulkanPaint(rw);
     {
       ZoneScopedN("ImageProvider TickCache");
@@ -827,7 +831,14 @@ void RootWidget::DisplayPixelDensity(float pixels_per_meter) {
   UpdateLocalToParent(*this);
 }
 
-void RootWidget::MinimizeToTray() { window->RequestMinimizeToTray(); }
+void RootWidget::MinimizeToTray() {
+  minimized.Set(true);
+  window->RequestMinimizeToTray();
+}
+void RootWidget::RestoreFromTray() {
+  minimized.Set(false);
+  window->RequestRestoreFromTray();
+}
 
 void RootWidget::Resized(Vec2 size) {
   this->size = size;

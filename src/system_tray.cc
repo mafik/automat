@@ -192,7 +192,7 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
                  {{1, {{"label", Variant(item.label)}, {"icon-name", Variant(item.icon_name)}}}},
                  {});
            } else {
-             //  ui::root_widget->RestoreFromTray();
+             ui::root_widget->RestoreFromTray();
              item.label = "Hide";
              item.icon_name = "view-conceal-symbolic";
              emitItemsPropertiesUpdated(

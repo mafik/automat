@@ -42,6 +42,7 @@ struct Window {
   virtual void RequestResize(Vec2 new_size) = 0;
   virtual void RequestMaximize(bool maximize_horizontally, bool maximize_vertically) = 0;
   virtual void RequestMinimizeToTray() = 0;
+  virtual void RequestRestoreFromTray() = 0;
 
   std::lock_guard<std::mutex> Lock();
 

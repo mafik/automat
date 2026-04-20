@@ -41,6 +41,7 @@ struct XCBWindow : automat::ui::Window {
 
   // Note: may be called on non-main thread.
   void RequestMinimizeToTray() override;
+  void RequestRestoreFromTray() override;
   void OnRegisterInput(bool keylogging, bool pointerlogging) override;
   void OnWindowWatchingChanged() override;
 

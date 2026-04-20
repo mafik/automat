@@ -311,6 +311,11 @@ void XCBWindow::RequestMinimizeToTray() {
   xcb_flush(connection);
 }
 
+void XCBWindow::RequestRestoreFromTray() {
+  xcb_map_window(connection, xcb_window);
+  xcb_flush(connection);
+}
+
 void XCBWindow::OnRegisterInput(bool keylogging, bool pointerlogging) {
   struct input_event_mask {
     xcb_input_event_mask_t header = {

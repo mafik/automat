@@ -10,6 +10,7 @@
 #include "animation.hh"
 #include "base.hh"
 #include "black_hole.hh"
+#include "concurrent_bool.hh"
 #include "deserializer.hh"
 #include "drag_action.hh"
 #include "keyboard.hh"
@@ -102,10 +103,14 @@ struct RootWidget final : Widget, DropTarget {
     return px2canvas;
   }
 
+  ConcurrentBool minimized;
+
   // Tells Automat to hide its window, stop rendering & release all GPU resources.
   //
   // Warning: This may be called on non-main thread.
   void MinimizeToTray();
+
+  void RestoreFromTray();
 
   // Used to tell the window that it's OS window has been resized.
   // Should call Window::Resized() if successful.

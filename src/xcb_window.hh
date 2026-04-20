@@ -38,6 +38,9 @@ struct XCBWindow : automat::ui::Window {
   automat::Optional<Vec2> MousePositionScreenPx() override;
   void RequestResize(Vec2 new_size) override;
   void RequestMaximize(bool horizontally, bool vertically) override;
+
+  // Note: may be called on non-main thread.
+  void RequestMinimizeToTray() override;
   void OnRegisterInput(bool keylogging, bool pointerlogging) override;
   void OnWindowWatchingChanged() override;
 

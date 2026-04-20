@@ -306,6 +306,11 @@ void XCBWindow::RequestMaximize(bool horizontally, bool vertically) {
   root.Maximized(horizontally, vertically);
 }
 
+void XCBWindow::RequestMinimizeToTray() {
+  xcb_unmap_window(connection, xcb_window);
+  xcb_flush(connection);
+}
+
 void XCBWindow::OnRegisterInput(bool keylogging, bool pointerlogging) {
   struct input_event_mask {
     xcb_input_event_mask_t header = {
@@ -608,7 +613,17 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
   xcb_generic_event_t *event, *peeked_event = nullptr;
   bool keys_down[256] = {0};
 
-  std::stop_callback on_automat_stop(stop_token, [&] { running = false; });
+  std::stop_callback on_automat_stop(stop_token, [&] {
+    xcb_client_message_event_t ev = {};
+    ev.response_type = XCB_CLIENT_MESSAGE;
+    ev.window = xcb_window;
+    ev.data.data32[0] = atom::WM_DELETE_WINDOW;
+    // ev.type = atom::WM_DELETE_WINDOW;
+    ev.format = 32;
+    // optionally stash a small tag in ev.data.data32[0..4]
+    xcb_send_event(connection, false, xcb_window, XCB_EVENT_MASK_NO_EVENT, (const char*)&ev);
+    xcb_flush(connection);
+  });
 
   while (running) {
     if (peeked_event) {
@@ -628,6 +643,10 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
           if (ev->count == 0) {
             automat::ui::root_widget->WakeAnimation();
           }
+          break;
+        }
+        case XCB_UNMAP_NOTIFY: {  // ignore
+          xcb_unmap_notify_event_t* ev = (xcb_unmap_notify_event_t*)event;
           break;
         }
         case XCB_MAP_NOTIFY: {  // ignore
@@ -697,7 +716,9 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
         }
         case XCB_CLIENT_MESSAGE: {
           xcb_client_message_event_t* cm = (xcb_client_message_event_t*)event;
-          if (cm->data.data32[0] == atom::WM_DELETE_WINDOW) running = false;
+          if (cm->data.data32[0] == atom::WM_DELETE_WINDOW) {
+            running = false;
+          }
           break;
         }
         case XCB_MAPPING_NOTIFY: {

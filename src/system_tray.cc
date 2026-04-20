@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
 
+#include "root_widget.hh"
 #ifdef __linux__
 #include <sdbus-c++/sdbus-c++.h>
 
@@ -178,7 +179,10 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
     registerAdaptor();
     items.push_back({});  // Root item
     // items.push_back({.type = "standard", .label = "Show", .icon_name = "view-reveal-symbolic"});
-    items.push_back({.type = "standard", .label = "Hide", .icon_name = "view-conceal-symbolic"});
+    items.push_back({.type = "standard",
+                     .label = "Hide",
+                     .icon_name = "view-conceal-symbolic",
+                     .on_click = []() { ui::root_widget->MinimizeToTray(); }});
     items.push_back({.type = "separator", .label = "", .icon_name = "", .shortcut = ""});
     items.push_back({.type = "standard",
                      .label = "Quit",

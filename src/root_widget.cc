@@ -714,6 +714,8 @@ void RootWidget::DisplayPixelDensity(float pixels_per_meter) {
   UpdateLocalToParent(*this);
 }
 
+void RootWidget::MinimizeToTray() { window->RequestMinimizeToTray(); }
+
 void RootWidget::Resized(Vec2 size) {
   this->size = size;
   UpdateLocalToParent(*this);

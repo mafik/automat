@@ -28,10 +28,6 @@ struct NoopTask : Task {
 
 static void AutomatLoop(std::stop_token stop_token) {
   SetThreadName("Automat Loop");
-  auto stop_callback = std::stop_callback(stop_token, [&]() {
-    // noop - wakes up the queue::wait_dequeue
-    (new NoopTask())->Schedule();
-  });
   while (!stop_token.stop_requested()) {
     Task* task;
     {
@@ -43,33 +39,27 @@ static void AutomatLoop(std::stop_token stop_token) {
 }
 
 std::vector<std::jthread> worker_threads;
-std::shared_mutex worker_threads_mtx;
 
 void StartWorkerThreads(std::stop_token stop_token) {
-  auto lock = std::unique_lock(worker_threads_mtx);
   for (int i = 0; i < 4; ++i) {
     worker_threads.emplace_back(AutomatLoop, stop_token);
   }
 }
 
 void JoinWorkerThreads() {
-  auto lock = std::unique_lock(worker_threads_mtx);
   // Explicit join included for readability only - jthread::~jthread will join the threads
   // automatically anyway.
+  // NoopTasks are used to unblock the worker threads that are waiting in wait_dequeue.
+  //
+  // Note that it can't be called from stop_token's callback because stop_requested is still false
+  // when it runs!
+  for (int i = 0; i < worker_threads.size(); ++i) {
+    (new NoopTask())->Schedule();
+  }
   for (auto& thread : worker_threads) {
     thread.join();
   }
   worker_threads.clear();
-}
-
-static bool IsWorkerThread() {
-  auto lock = std::shared_lock(worker_threads_mtx);
-  for (auto& thread : worker_threads) {
-    if (std::this_thread::get_id() == thread.get_id()) {
-      return true;
-    }
-  }
-  return false;
 }
 
 NextGuard::NextGuard(std::vector<Task*>&& successors) : successors(std::move(successors)) {

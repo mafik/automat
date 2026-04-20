@@ -7,12 +7,21 @@
 #include "../build/generated/com.canonical.dbusmenu_adaptor.hh"
 #include "../build/generated/org.kde.StatusNotifierItem_adaptor.hh"
 #include "../build/generated/org.kde.StatusNotifierWatcher_proxy.hh"
-#endif
+#endif  // __linux__
 
+#include <include/core/SkAlphaType.h>
+#include <include/core/SkColorSpace.h>
+#include <include/core/SkColorType.h>
+#include <include/core/SkImageInfo.h>
+#include <include/core/SkPixmap.h>
+
+#include <bit>
 #include <vector>
 
+#include "embedded.hh"
 #include "format.hh"
 #include "log.hh"
+#include "textures.hh"
 
 namespace automat {
 
@@ -78,8 +87,31 @@ class StatusNotifierItem final : public AdaptorInterfaces<org::kde::StatusNotifi
   string Title() override { return "Automat"; }
   string Status() override { return "Active"; }
   uint32_t WindowId() override { return 0; }
-  string IconName() override { return "format-text-rich-symbolic"; }
-  IconPixmapList IconPixmap() override { return {}; }
+  string IconName() override { return ""; }
+  IconPixmapList IconPixmap() override {
+    static IconPixmapList icon_pixmaps = []() {
+      IconPixmapList pixmaps;
+      static auto large = PersistentImage::MakeFromAsset(embedded::docs_assets_favicon_184_png);
+      auto sampling_options = SkSamplingOptions(SkCubicResampler::CatmullRom());
+      for (int size : {16, 22, 24, 32, 48, 64}) {
+        IconPixmap_t& dbus_pixmap = pixmaps.emplace_back();
+        dbus_pixmap.get<0>() = size;
+        dbus_pixmap.get<1>() = size;
+        dbus_pixmap.get<2>() = vector<uint8_t>(size * size * 4);
+        auto& vec = dbus_pixmap.get<2>();
+        auto image_info = SkImageInfo::Make(size, size, SkColorType::kRGBA_8888_SkColorType,
+                                            kUnpremul_SkAlphaType);
+        SkPixmap sk_pixmap(image_info, vec.data(), size * 4);
+        (*large.image)->scalePixels(sk_pixmap, sampling_options);
+        for (int i = 0; i < size * size; ++i) {
+          U32* pixel = (U32*)(vec.data() + i * 4);
+          *pixel = std::rotl(*pixel, 8);  // Convert RGBA to ARGB
+        }
+      }
+      return pixmaps;
+    }();
+    return icon_pixmaps;
+  }
   string OverlayIconName() override { return ""; }
   IconPixmapList OverlayIconPixmap() override { return {}; }
   string AttentionIconName() override { return ""; }
@@ -296,8 +328,8 @@ void InitSystemTray() {
 
   dbus_connection->enterEventLoopAsync();
 }
-#else
+#else   // NOT __linux__
 void InitSystemTray() {}
-#endif
+#endif  // __linux__
 
 }  // namespace automat

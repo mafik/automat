@@ -10,6 +10,7 @@
 
 #include <memory>
 #include <ranges>
+#include <tracy/Tracy.hpp>
 
 #include "animation.hh"
 #include "argument.hh"
@@ -25,22 +26,106 @@
 #include "pointer.hh"
 #include "prototypes.hh"
 #include "ptr.hh"
+#include "renderer.hh"
 #include "sync.hh"
+#include "textures.hh"
+#include "thread_name.hh"
 #include "time.hh"
 #include "touchpad.hh"
 #include "ui_connection_widget.hh"
+#include "vk.hh"
+
+#if defined(_WIN32)
+#include "win32.hh"
+#include "win32_window.hh"
+#elif defined(__linux__)
+#include "xcb_window.hh"
+#endif
 
 using namespace std;
 
 namespace automat::ui {
 
+constexpr bool kPowersave = true;
+
 std::vector<RootWidget*> root_widgets;
 unique_ptr<RootWidget> root_widget;
+
+void VulkanPaint(RootWidget& rw) {
+  ZoneScoped;
+  if (!vk::initialized) {
+    return;
+  }
+  static time::SteadyPoint next_frame = time::kZeroSteady;
+  if (kPowersave) {
+    ZoneScopedN("Powersave");
+    time::SteadyPoint now = time::SteadyNow();
+    // TODO: Adjust next_frame to minimize input latency
+    // VK_EXT_present_timing
+    // https://github.com/KhronosGroup/Vulkan-Docs/pull/1364
+    if (next_frame <= now) {
+      auto frame_count = time::ToSeconds(now - next_frame) / rw.window->screen_refresh_rate;
+      next_frame = now + time::Duration(1s) / rw.window->screen_refresh_rate;
+      constexpr bool kLogSkippedFrames = false;
+      if (kLogSkippedFrames && frame_count > 1) {
+        LOG << "Skipped " << (uint64_t)(frame_count - 1) << " frames";
+      }
+    } else {
+      // This normally sleeps until T + ~10ms.
+      // With timeBeginPeriod(1) it's T + ~1ms.
+      // TODO: try condition_variable instead
+      std::this_thread::sleep_until(next_frame);
+      next_frame += time::Duration(1s) / rw.window->screen_refresh_rate;
+    }
+  }
+
+  {
+    ZoneScopedN("Resize");
+    auto lock = rw.window->Lock();
+    Vec2 size_px = Vec2(rw.window->client_width, rw.window->client_height);
+    if (rw.window->vk_size != size_px) {
+      Status status;
+      vk::Resize(rw.window->client_width, rw.window->client_height, status);
+      if (!OK(status)) {
+        FATAL << "Couldn't set window size to " << rw.window->client_width << "x"
+              << rw.window->client_height << ": " << status;
+      }
+      rw.window->vk_size = size_px;
+    }
+  }
+
+  SkCanvas* canvas = vk::AcquireCanvas();
+  // When window is resized continously, vulkan may return VK_ERROR_OUT_OF_DATE_KHR and it may be
+  // hard to obtain a valid surface. When this happens, we just skip the paint for this frame.
+  if (canvas == nullptr) {
+    return;
+  }
+  {
+    ZoneScopedN("RenderFrame");
+    RenderFrame(*canvas, rw);
+  }
+  FrameMark;
+}
+
+void RenderThread(RootWidget& rw, std::stop_token stop_token) {
+  SetThreadName("Render Thread");
+  while (!stop_token.stop_requested()) {
+    VulkanPaint(rw);
+    {
+      ZoneScopedN("ImageProvider TickCache");
+      static_cast<AutomatImageProvider*>(image_provider.get())->TickCache();
+    }
+  }
+}
 
 RootWidget::RootWidget() : Widget(nullptr), keyboard(*this), zoom_warning(this), black_hole(this) {
   root_widgets.push_back(this);
 }
 RootWidget::~RootWidget() {
+  if (render_thread.joinable()) {
+    render_thread.request_stop();
+    render_thread.join();
+  }
   auto it = std::find(root_widgets.begin(), root_widgets.end(), this);
   if (it != root_widgets.end()) {
     root_widgets.erase(it);
@@ -50,10 +135,38 @@ RootWidget::~RootWidget() {
   }
 }
 
-void RootWidget::InitToolbar() {
-  toolbar = make_unique<Toolbar>(this);
-  for (auto& proto : prototypes->default_toolbar) {
-    toolbar->AddObjectPrototype(proto);
+void RootWidget::Init() {
+  Status status;
+#ifdef __linux__
+  window = xcb::XCBWindow::Make(*this, status);
+#else
+  window = Win32Window::Make(*this, status);
+#endif
+  if (!OK(status)) {
+    FATAL << "Couldn't create main window: " << status;
+  }
+
+#ifdef CPU_RENDERING
+  // nothing to do here
+#else
+  vk::Init(status);
+  if (!OK(status)) {
+    FATAL << "Failed to initialize Vulkan: " << status;
+  }
+#endif
+
+  RendererInit();
+  PersistentImage::PreloadAll();
+
+  render_thread = std::jthread(RenderThread, std::ref(*this), stop_source.get_token());
+
+  loading_animation = std::make_unique<HypnoRect>();
+
+  {  // Initialize toolbar
+    toolbar = make_unique<Toolbar>(this);
+    for (auto& proto : prototypes->default_toolbar) {
+      toolbar->AddObjectPrototype(proto);
+    }
   }
 }
 

@@ -10,7 +10,8 @@ namespace automat {
 
 namespace ui {
 struct Widget;
-}
+struct RootWidget;
+}  // namespace ui
 
 struct RenderResult {
   uint32_t id;
@@ -37,6 +38,6 @@ void RendererShutdown();
 //
 // Internally this function manages the frame packing only renders what's possible to fit in the
 // 16ms frame time.
-void RenderFrame(SkCanvas& canvas);
+void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw);
 
 }  // namespace automat

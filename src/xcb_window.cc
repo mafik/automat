@@ -641,7 +641,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
           // ev-count is the number of expose events that are still in the queue.
           // We only want to do a full redraw on the last expose event.
           if (ev->count == 0) {
-            automat::ui::root_widget->WakeAnimation();
+            root.WakeAnimation();
           }
           break;
         }
@@ -764,25 +764,24 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
               case XCB_INPUT_RAW_KEY_PRESS: {
                 auto ev = (xcb_input_raw_key_press_event_t*)event;
                 xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
-                automat::ui::root_widget->keyboard.KeyDown(*ev);
+                root.keyboard.KeyDown(*ev);
                 break;
               }
               case XCB_INPUT_KEY_PRESS: {
                 auto ev = (xcb_input_key_press_event_t*)event;
                 xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
                 ReplaceProperty32(xcb_window, atom::_NET_WM_USER_TIME, XCB_ATOM_CARDINAL, ev->time);
-                automat::ui::root_widget->keyboard.KeyDown(*ev);
+                root.keyboard.KeyDown(*ev);
                 break;
               }
               case XCB_INPUT_RAW_KEY_RELEASE: {
-                automat::ui::root_widget->keyboard.KeyUp(
-                    *(xcb_input_raw_key_release_event_t*)event);
+                root.keyboard.KeyUp(*(xcb_input_raw_key_release_event_t*)event);
                 break;
               }
               case XCB_INPUT_KEY_RELEASE: {
                 auto ev = (xcb_input_key_release_event_t*)event;
                 xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
-                automat::ui::root_widget->keyboard.KeyUp(*ev);
+                root.keyboard.KeyUp(*ev);
                 break;
               }
               case XCB_INPUT_BUTTON_PRESS: {
@@ -943,7 +942,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
               .logical = key,
           };
           bool handled = false;
-          for (auto& key_grab : automat::ui::root_widget->keyboard.key_grabs) {
+          for (auto& key_grab : root.keyboard.key_grabs) {
             if (key_grab->key == key) {
               if (opcode == XCB_KEY_PRESS) {
                 key_grab->grabber.KeyGrabberKeyDown(*key_grab);
@@ -955,15 +954,15 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
             }
           }
           if (opcode == XCB_KEY_PRESS) {
-            automat::ui::root_widget->keyboard.LogKeyDown(key_struct);
+            root.keyboard.LogKeyDown(key_struct);
           } else {
-            automat::ui::root_widget->keyboard.LogKeyUp(key_struct);
+            root.keyboard.LogKeyUp(key_struct);
           }
           if (!handled) {
             if (opcode == XCB_KEY_PRESS) {
-              automat::ui::root_widget->keyboard.KeyDown(*ev);
+              root.keyboard.KeyDown(*ev);
             } else {
-              automat::ui::root_widget->keyboard.KeyUp(*ev);
+              root.keyboard.KeyUp(*ev);
             }
           }
           break;

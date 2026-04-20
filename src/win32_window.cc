@@ -643,7 +643,7 @@ unique_ptr<Window> Win32Window::Make(RootWidget& root, Status& status) {
     return nullptr;
   }
   hwnd_to_window[window->hwnd] = window.get();
-  root_widget->DisplayPixelDensity(win32::caps.px_per_meter);
+  root.DisplayPixelDensity(win32::caps.px_per_meter);
 
   // Restore the position of the client area.
   if (!maximized && !isnan(desired_pos.x) && !isnan(desired_pos.y)) {

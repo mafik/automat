@@ -357,6 +357,9 @@ std::unique_ptr<skgpu::graphite::Recorder> global_background_recorder;
 void RendererInit() {
   SkFlattenable::Register("WidgetDrawable", WidgetDrawable::CreateProc);
   skgpu::graphite::RecorderOptions options;
+  if (image_provider == nullptr) {
+    image_provider.reset(new AutomatImageProvider());
+  }
   options.fImageProvider = image_provider;
   // Recordings which are part of the current frame might be recorded with
   // "fRequireOrderedRecordings" set to true.
@@ -690,14 +693,14 @@ struct PackedFrame {
   animation::Phase animation_phase;
 };
 
-void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
-  root_widget->timer.Tick();
-  auto now = root_widget->timer.now;
-  auto root_widget_bounds_px = Rect::MakeAtZero<LeftX, BottomY>(
-                                   Round(root_widget->size * root_widget->display_pixels_per_meter))
-                                   .Outset(64);  // 64px margin around screen
-  root_widget->ValidateHierarchy();
-  root_widget->toys.Tick(root_widget->timer);
+void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pack) {
+  rw.timer.Tick();
+  auto now = rw.timer.now;
+  auto root_widget_bounds_px =
+      Rect::MakeAtZero<LeftX, BottomY>(Round(rw.size * rw.display_pixels_per_meter))
+          .Outset(64);  // 64px margin around screen
+  rw.ValidateHierarchy();
+  rw.toys.Tick(rw.timer);
 
   enum class Verdict {
     Unknown = 0,
@@ -791,14 +794,14 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     }
   }
 
-  if (root_widget->rendering) {
+  if (rw.rendering) {
     FATAL << "Root widget wasn't rendered during the last frame.";
   }
 
   {  // Step 2 - flatten the widget tree for analysis.
     // Queue with (parent index, widget) pairs.
     vector<pair<int, Widget*>> q;
-    q.push_back(make_pair(0, root_widget.get()));
+    q.push_back(make_pair(0, &rw));
     while (!q.empty()) {
       auto [parent, widget] = std::move(q.back());
       q.pop_back();
@@ -835,15 +838,15 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       // TICK
       if (node.verdict == Verdict::Unknown && widget->wake_time != time::SteadyPoint::max()) {
         node.wants_to_draw = true;
-        auto true_d = root_widget->timer.d;
+        auto true_d = rw.timer.d;
         auto fake_d = min(1.0, time::ToSeconds(now - widget->last_tick_time));
         if (widget->wake_time == time::SteadyPoint::min()) {
           // This is the first time this widget is being rendered - use `true_d` to animate it.
           fake_d = true_d;
         }
-        root_widget->timer.d = fake_d;
-        auto animation_phase = widget->Tick(root_widget->timer);
-        root_widget->timer.d = true_d;
+        rw.timer.d = fake_d;
+        auto animation_phase = widget->Tick(rw.timer);
+        rw.timer.d = true_d;
         widget->last_tick_time = now;
         if (animation_phase == animation::Finished) {
           widget->wake_time = time::SteadyPoint::max();
@@ -1222,7 +1225,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   }
 }
 
-void RenderFrame(SkCanvas& canvas) {
+void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
   if constexpr (kDebugRendering && kDebugRenderEvents) {
     debug_render_events += "WaitingStart(";
     debug_render_events += to_string(foreground_rendering_jobs);
@@ -1247,7 +1250,7 @@ void RenderFrame(SkCanvas& canvas) {
   PackFrameRequest request;
   vector<WidgetDrawable*> frame;
   {  // Pack Frame
-    lock_guard lock(root_widget->mutex);
+    lock_guard lock(rw.mutex);
     request = std::move(next_frame_request);
     if constexpr (kDebugRendering && kDebugRenderEvents) {
       static int frame_number = 0;
@@ -1262,7 +1265,7 @@ void RenderFrame(SkCanvas& canvas) {
       LOG << "Finished since last frame: " << finished_widgets;
       debug_render_events.clear();
     }
-    PackFrame(request, pack);
+    PackFrame(rw, request, pack);
   }
 
   // Update all WidgetRenderStates
@@ -1427,17 +1430,17 @@ void RenderFrame(SkCanvas& canvas) {
     }
   }
 
-  canvas.setMatrix(root_widget->local_to_parent);
+  canvas.setMatrix(rw.local_to_parent);
 
   // Final widget in the frame is the RootWidget
   auto* top_level_widget = frame.back();
   top_level_widget->onDraw(&canvas);
 
   if constexpr (kDebugRendering) {  // bullseye for latency visualisation
-    lock_guard lock(root_widget->mutex);
-    if (root_widget->pointers.size() > 0) {
-      auto p = root_widget->pointers[0]->pointer_position;
-      auto window_transform = ui::TransformUp(*root_widget);
+    lock_guard lock(rw.mutex);
+    if (rw.pointers.size() > 0) {
+      auto p = rw.pointers[0]->pointer_position;
+      auto window_transform = ui::TransformUp(rw);
       canvas.resetMatrix();
       SkPaint red;
       red.setColor(SK_ColorRED);

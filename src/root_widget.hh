@@ -5,6 +5,7 @@
 #include <include/core/SkCanvas.h>
 
 #include <cmath>
+#include <thread>
 
 #include "animation.hh"
 #include "base.hh"
@@ -38,6 +39,8 @@ struct RootWidget final : Widget, DropTarget {
   RootWidget();
   ~RootWidget();
 
+  std::jthread render_thread;
+
   std::unique_ptr<Window> window;
   std::unique_ptr<LoadingAnimation> loading_animation;
 
@@ -55,7 +58,7 @@ struct RootWidget final : Widget, DropTarget {
 
   BlackHole black_hole;
 
-  void InitToolbar();
+  void Init();
 
   struct ToyStore toys;
   std::vector<Action*> active_actions;

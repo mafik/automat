@@ -7,6 +7,7 @@
 #include <xcb/xproto.h>
 
 #include <atomic>
+#include <span>
 
 #include "status.hh"
 

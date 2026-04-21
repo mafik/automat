@@ -110,6 +110,7 @@ class ExtensionHelper:
     self.link_deps = []
     self.ninja_target = 'install'
     self.meson_install_tags = ''
+    self.meson_build_targets = []
 
   def _hook_recipe(self, recipe):
     if self.old_hook_recipe:
@@ -259,12 +260,34 @@ class ExtensionHelper:
           shortcut=f'install {self.name}')
     elif makefile.name == 'meson-info.json':
       import meson
-      recipe.add_step(
-        partial(Popen, meson.ARGS + ['install', '-C', build_dir, '--tags', self.meson_install_tags]),
-        outputs=self.outputs,
-        inputs=configure_inputs + [makefile, ninja.BIN],
-        desc=f'Installing {self.name}',
-        shortcut=f'install {self.name}')
+      if self.meson_build_targets:
+        # Build only the requested subset of targets, then install without rebuilding.
+        # Without this, `meson install` invokes `ninja all`, which is wasteful for deps
+        # where we only consume a static archive (and sometimes catastrophic when the
+        # default ninja target includes broken or platform-hostile shared libraries we
+        # don't actually need — e.g. systemd's libsystemd-shared-258.so linking non-PIC
+        # libcrypt.a on Debian/Ubuntu).
+        ninja_targets = list(self.meson_build_targets)
+        def install_meson_subset():
+          ninja_proc = Popen([ninja.BIN, '-C', build_dir, *ninja_targets])
+          rc = ninja_proc.wait()
+          if rc != 0:
+            raise subprocess.CalledProcessError(rc, ninja_proc.args)
+          return Popen(meson.ARGS + ['install', '-C', build_dir, '--no-rebuild',
+                                     '--tags', self.meson_install_tags])
+        recipe.add_step(
+          install_meson_subset,
+          outputs=self.outputs,
+          inputs=configure_inputs + [makefile, ninja.BIN],
+          desc=f'Installing {self.name}',
+          shortcut=f'install {self.name}')
+      else:
+        recipe.add_step(
+          partial(Popen, meson.ARGS + ['install', '-C', build_dir, '--tags', self.meson_install_tags]),
+          outputs=self.outputs,
+          inputs=configure_inputs + [makefile, ninja.BIN],
+          desc=f'Installing {self.name}',
+          shortcut=f'install {self.name}')
     else:
       raise ValueError(f'Unknown build system for {self.name}')
 
@@ -383,11 +406,16 @@ class ExtensionHelper:
     self.configure = 'cmake'
     as_path_list(outputs, self.outputs)
 
-  def ConfigureWithMeson(self, *outputs, install_tags='devel,runtime'):
+  def ConfigureWithMeson(self, *outputs, install_tags='devel,runtime', build_targets=()):
     if self.configure:
       raise ValueError(f'{self.name} was already configured')
     self.configure = 'meson'
     self.meson_install_tags = install_tags
+    # If provided, `build_targets` restricts what gets built before install. Install
+    # then runs with `--no-rebuild` so only these targets (and anything they depend on)
+    # are compiled. Leave empty to preserve the default behaviour of building every
+    # meson target (`ninja all`).
+    self.meson_build_targets = list(build_targets)
     as_path_list(outputs, self.outputs)
 
   def ConfigureWithAutotools(self, *outputs):

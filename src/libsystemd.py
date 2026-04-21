@@ -106,6 +106,16 @@ if sys.platform == 'linux':
         'ukify': 'disabled',
         'analyze': 'false',
     })
-    hook.ConfigureWithMeson(build.PREFIX / 'lib64' / 'libsystemd.a', install_tags='devel,libsystemd')
+    # We only consume libsystemd.a. Don't let `ninja all` build every other systemd
+    # target — on distros that ship libcrypt.a / libselinux.a without -fPIC (current
+    # Debian/Ubuntu), linking those static archives into libsystemd-shared-258.so
+    # aborts with R_X86_64_PC32 / R_X86_64_TPOFF32 "can not be used when making a
+    # shared object" errors. The two meson aliases below are the minimum top-level
+    # targets that cover every file tagged `devel` or `libsystemd`:
+    #   * `libsystemd` — alias_target wrapping libsystemd.so + libsystemd.a
+    #   * `devel`     — alias_target wrapping the .pc files for libsystemd, libudev, etc.
+    hook.ConfigureWithMeson(build.PREFIX / 'lib64' / 'libsystemd.a',
+                            install_tags='devel,libsystemd',
+                            build_targets=['libsystemd', 'devel'])
     hook.AddLinkArgs('-l:libsystemd.a', '-lcap', '-lm')
     hook.InstallWhenIncluded(r'^systemd/.*')

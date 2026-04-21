@@ -375,10 +375,8 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
   }
 
   if (phase == animation::Animating) {
-    for (auto& each_window : root_widgets) {
-      for (auto& each_pointer : each_window->pointers) {
-        each_pointer->UpdatePath();
-      }
+    for (auto& each_pointer : pointers) {
+      each_pointer->UpdatePath();
     }
   }
 

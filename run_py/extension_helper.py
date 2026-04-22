@@ -260,10 +260,6 @@ class ExtensionHelper:
           shortcut=f'install {self.name}')
     elif makefile.name == 'meson-info.json':
       import meson
-      # Build and install are two separate ninja invocations so that dependencies
-      # can choose a subset of meson targets to build (via `build_targets`) while
-      # still letting meson handle the install phase. The build step's completion
-      # is signalled by `build_stamp`, which post_success touches after ninja exits 0.
       build_stamp = build_dir / '.automat.build_stamp'
       recipe.add_step(
         partial(Popen, [ninja.BIN, '-C', build_dir, *self.meson_build_targets]),
@@ -275,7 +271,7 @@ class ExtensionHelper:
       recipe.add_step(
         partial(Popen, meson.ARGS + ['install', '-C', build_dir, '--no-rebuild', '--tags', self.meson_install_tags]),
         outputs=self.outputs,
-        inputs=configure_inputs + [makefile, build_stamp],
+        inputs=configure_inputs + [makefile, ninja.BIN, build_stamp],
         desc=f'Installing {self.name}',
         shortcut=f'install {self.name}')
     else:

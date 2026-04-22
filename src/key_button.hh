@@ -30,20 +30,20 @@ ui::Font& KeyFont();
 struct KeyButton : ui::Button {
   float width;
   std::function<void(ui::Pointer&)> activate;
-  SkColor fg;
-  KeyButton(Widget* parent, StrView label, SkColor color, float width);
+  SkColor4f fg;
+  KeyButton(Widget* parent, StrView label, SkColor4f color, float width);
   void Activate(ui::Pointer&) override;
   SkRRect RRect() const override;
-  SkColor ForegroundColor() const override { return fg; }
-  void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const override;
+  SkColor4f ForegroundColor() const override { return fg; }
+  void DrawButtonFace(SkCanvas&, SkColor4f bg, SkColor4f fg) const override;
   StrView Name() const override { return "KeyButton"; }
   void SetLabel(StrView new_label);
 };
 
-static constexpr SkColor kKeyEnabledColor = "#f3a75b"_color;
-static constexpr SkColor kKeyDisabledColor = "#f4efea"_color;
-static constexpr SkColor kKeyGrabbingColor = "#f15555"_color;
+static constexpr SkColor4f kKeyEnabledColor = "#f3a75b"_color4f;
+static constexpr SkColor4f kKeyDisabledColor = "#f4efea"_color4f;
+static constexpr SkColor4f kKeyGrabbingColor = "#f15555"_color4f;
 
-static SkColor KeyColor(bool enabled) { return enabled ? kKeyEnabledColor : kKeyDisabledColor; }
+static SkColor4f KeyColor(bool enabled) { return enabled ? kKeyEnabledColor : kKeyDisabledColor; }
 
 }  // namespace automat::library

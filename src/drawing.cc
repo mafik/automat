@@ -7,8 +7,8 @@
 
 namespace automat {
 
-void SetRRectShader(SkPaint& paint, const RRect& rrect, SkColor top, SkColor middle,
-                    SkColor bottom) {
+void SetRRectShader(SkPaint& paint, const RRect& rrect, SkColor4f top, SkColor4f middle,
+                    SkColor4f bottom) {
   // Get the center point of the rounded rectangle
   SkPoint center = rrect.Center();
 
@@ -16,14 +16,14 @@ void SetRRectShader(SkPaint& paint, const RRect& rrect, SkColor top, SkColor mid
   // We'll use strategic positions to create the transitions between colors
   constexpr int count = 8;
   SkColor4f colors[count] = {
-      SkColor4f::FromColor(middle),  // right top
-      SkColor4f::FromColor(top),     // top right
-      SkColor4f::FromColor(top),     // top left
-      SkColor4f::FromColor(middle),  // left top
-      SkColor4f::FromColor(middle),  // left bottom
-      SkColor4f::FromColor(bottom),  // bottom left
-      SkColor4f::FromColor(bottom),  // bottom right
-      SkColor4f::FromColor(middle),  // right bottom
+      middle,  // right top
+      top,     // top right
+      top,     // top left
+      middle,  // left top
+      middle,  // left bottom
+      bottom,  // bottom left
+      bottom,  // bottom right
+      middle,  // right bottom
   };
 
   auto Angle = [](Vec2 v) -> float { return SinCos::FromVec2(v).ToRadiansPositive() / M_PI / 2; };

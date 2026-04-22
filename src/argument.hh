@@ -53,10 +53,10 @@ struct Argument : Interface {
     enum class Style { Arrow, Cable, Spotlight, Invisible };
 
     // The primary color of this connection.
-    SkColor tint = "#404040"_color;
+    SkColor4f tint = "#404040"_color4f;
 
     // The color of the "blink" light of the cable.
-    SkColor light = "#ef9f37"_color;
+    SkColor4f light = "#ef9f37"_color4f;
 
     // How far the connection will look around to auto-snap to compatible objects.
     float autoconnect_radius = 0_cm;
@@ -81,9 +81,7 @@ struct Argument : Interface {
 
     // Checks whether this argument has an active connection. Cheaper than `find`
     // because it avoids constructing the full NestedPtr / locking weak pointers.
-    bool (*is_connected)(Argument) = [](Argument self) {
-      return self.Find().Owner<>() != nullptr;
-    };
+    bool (*is_connected)(Argument) = [](Argument self) { return self.Find().Owner<>() != nullptr; };
 
     // Prototype for automatically constructed value for this argument. It is used if this Argument
     // is used through one of the *OrMake functions.
@@ -200,7 +198,7 @@ struct Argument : Interface {
   // ImplT may optionally provide:
   //   static constexpr Style kStyle = ...;
   //   static constexpr float kAutoconnectRadius = ...;
-  //   static constexpr SkColor kTint = ...;
+  //   static constexpr SkColor4f kTint = ...;
   //   void OnCanConnect(Interface end, Status& status);
   //   void OnConnect(Interface end);
   //   NestedPtr<Interface::Table> OnFind();

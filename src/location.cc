@@ -11,9 +11,9 @@
 #include <include/core/SkPathUtils.h>
 #include <include/core/SkPictureRecorder.h>
 #include <include/core/SkPoint3.h>
+#include <include/core/SkShader.h>
 #include <include/core/SkSurface.h>
 #include <include/core/SkTileMode.h>
-#include <include/core/SkShader.h>
 #include <include/effects/SkGradient.h>
 #include <include/effects/SkImageFilters.h>
 #include <include/utils/SkShadowUtils.h>
@@ -288,9 +288,8 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
     canvas.drawPath(my_shape, frame_bg);
 
     SkPaint frame_border;
-    SkColor4f frame_border_colors[2] = {
-        SkColor4f::FromColor(color::AdjustLightness(frame_bg_colors_raw[0], 5)),
-        SkColor4f::FromColor(color::AdjustLightness(frame_bg_colors_raw[1], -5))};
+    SkColor4f frame_border_colors[2] = {color::AdjustLightness(frame_bg_colors[0], 5),
+                                        color::AdjustLightness(frame_bg_colors[1], -5)};
     sk_sp<SkShader> frame_border_shader = SkShaders::LinearGradient(
         gradient_pts, SkGradient{SkGradient::Colors{frame_border_colors, SkTileMode::kClamp}, {}});
     frame_border.setShader(frame_border_shader);

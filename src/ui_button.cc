@@ -101,7 +101,7 @@ SkRRect Button::RRect() const {
 
 static float ShadowSigma(SkRRect& bounds) { return bounds.width() / 20; }
 
-void Button::DrawButtonShadow(SkCanvas& canvas, SkColor bg) const {
+void Button::DrawButtonShadow(SkCanvas& canvas, SkColor4f bg) const {
   auto oval = RRect();
   float offset = ShadowOffset(oval), sigma = ShadowSigma(oval);
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
@@ -121,7 +121,7 @@ Optional<Rect> Button::TextureBounds() const {
   return base_rect;
 }
 
-void Button::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
+void Button::DrawButtonFace(SkCanvas& canvas, SkColor4f bg, SkColor4f fg) const {
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
   float press_shift_y = PressRatio() * -kPressOffset;
@@ -130,18 +130,16 @@ void Button::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
 
   SkPaint paint;
   SkPoint pts[2] = {{0, oval.rect().bottom()}, {0, oval.rect().top()}};
-  SkColor4f colors[2] = {
-      SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust)),        // top
-      SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust - 10))};  // bottom
+  SkColor4f colors[2] = {color::AdjustLightness(bg, lightness_adjust),        // top
+                         color::AdjustLightness(bg, lightness_adjust - 10)};  // bottom
   sk_sp<SkShader> gradient = SkShaders::LinearGradient(
       pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
   paint.setShader(gradient);
   canvas.drawRRect(pressed_oval, paint);
 
   SkPaint border;
-  SkColor4f border_colors[2] = {
-      SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust + 10)),
-      SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust - 20))};
+  SkColor4f border_colors[2] = {color::AdjustLightness(bg, lightness_adjust + 10),
+                                color::AdjustLightness(bg, lightness_adjust - 20)};
   sk_sp<SkShader> border_gradient = SkShaders::LinearGradient(
       pts, SkGradient{SkGradient::Colors{border_colors, SkTileMode::kClamp}, {}});
   border.setShader(border_gradient);
@@ -159,7 +157,7 @@ animation::Phase Button::Tick(time::Timer& timer) {
 
   for (auto* child : Children()) {
     if (auto paint = PaintMixin::Get(child)) {
-      if (paint->getColor() == fg) {
+      if (paint->getColor4f() == fg) {
         continue;
       }
       paint->setColor(fg);

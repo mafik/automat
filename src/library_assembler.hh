@@ -80,7 +80,7 @@ struct Register : Object {
   DEF_INTERFACE(Register, ObjectArgument<Assembler>, assembler_arg, "Reg's Assembler")
   static constexpr auto kStyle = Argument::Style::Spotlight;
   static constexpr float kAutoconnectRadius = INFINITY;
-  static constexpr SkColor kTint = "#ff0000"_color;
+  static constexpr SkColor4f kTint = "#ff0000"_color4f;
   DEF_END(assembler_arg);
 
   Register(WeakPtr<Assembler> assembler_weak, int register_index);

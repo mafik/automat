@@ -14,7 +14,6 @@
 #include <include/core/SkShader.h>
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkBlenders.h>
-#include <include/core/SkShader.h>
 #include <include/effects/SkGradient.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/MC/MCInstBuilder.h>
@@ -153,9 +152,7 @@ NestedPtr<Interface::Table> Instruction::assembler_arg_Impl::OnFind() {
   return NestedPtr<Interface::Table>(obj->assembler_weak.Lock(), nullptr);
 }
 
-bool Instruction::assembler_arg_Impl::OnIsConnected() {
-  return !obj->assembler_weak.IsExpired();
-}
+bool Instruction::assembler_arg_Impl::OnIsConnected() { return !obj->assembler_weak.IsExpired(); }
 
 static Assembler* FindAssembler(Object& start) {
   return dynamic_cast<Assembler*>(Argument(start, Instruction::assembler_arg_tbl).ObjectOrNull());
@@ -2454,7 +2451,7 @@ struct EnumKnobWidget : ui::Widget {
                                          kRegion15b,       kRegion16b,       kRegion31b,
                                          kRegion32b,       kRegion63b,       kRegionSigned64b,
                                          kRegionSigned32b, kRegionSigned16b, kRegionSigned8b};
-    static const SkColor kUnsignedColors[] = {
+    static const SkColor4f kUnsignedColors[] = {
         color::HSLuv(0, 0, 57),      // 0b
         color::HSLuv(128, 100, 60),  // 7b
         color::HSLuv(121, 100, 62),  // 8b
@@ -2468,7 +2465,7 @@ struct EnumKnobWidget : ui::Widget {
         color::HSLuv(12, 95, 53),    // 16b
         color::HSLuv(12, 95, 53),    // 8b
     };
-    static const SkColor kSignedColors[] = {
+    static const SkColor4f kSignedColors[] = {
         kUnsignedColors[0],          // 0b
         kUnsignedColors[1],          // 7b
         kUnsignedColors[2],          // 8b
@@ -2541,17 +2538,15 @@ struct EnumKnobWidget : ui::Widget {
     }
     static const SkPaint white_overlay = [] {
       SkPaint paint;
-      SkColor4f mask_colors[] = {"#ffffff"_color4f,
-                                 "#ffffff00"_color4f};
+      SkColor4f mask_colors[] = {"#ffffff"_color4f, "#ffffff00"_color4f};
       float mask_pos[] = {kRegionStartRadius / kRegionEndRadius, 1};
       auto mask = SkShaders::RadialGradient(
           Vec2(), kRegionEndRadius,
           SkGradient{SkGradient::Colors{mask_colors, mask_pos, SkTileMode::kClamp}, {}});
-      SkColor4f colors[] = {"#dddddd"_color4f,
-                            "#bbbbbb"_color4f};
-      auto color = SkShaders::RadialGradient(
-          Vec2(0, kMiddleR), kGaugeRadius + kMiddleR,
-          SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
+      SkColor4f colors[] = {"#dddddd"_color4f, "#bbbbbb"_color4f};
+      auto color =
+          SkShaders::RadialGradient(Vec2(0, kMiddleR), kGaugeRadius + kMiddleR,
+                                    SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
       paint.setShader(SkShaders::Blend(SkBlendMode::kSrcIn, mask, color));
       return paint;
     }();
@@ -2749,7 +2744,8 @@ struct EnumKnobWidget : ui::Widget {
           SkPathBuilder builder;
           builder.addPath(kFlagSymbol.makeTransform(
               SkMatrix::RotateDeg(-5).preTranslate(0.7_mm, -0.5_mm).preScale(0.6, 0.6)));
-          builder.addPath(kFlagSymbol.makeTransform(SkMatrix::RotateDeg(5).preTranslate(0, 0.3_mm)));
+          builder.addPath(
+              kFlagSymbol.makeTransform(SkMatrix::RotateDeg(5).preTranslate(0, 0.3_mm)));
           // builder.setFillType(SkPathFillType::kEvenOdd);
           return builder.detach();
         }();
@@ -2766,8 +2762,7 @@ struct EnumKnobWidget : ui::Widget {
             bounds[i] = glyph_path->getBounds();
             SkPath transformed =
                 glyph_path
-                    ->makeTransform(
-                        SkMatrix::Translate(-bounds[i].centerX(), -bounds[i].centerY()))
+                    ->makeTransform(SkMatrix::Translate(-bounds[i].centerX(), -bounds[i].centerY()))
                     .makeTransform(SkMatrix::Scale(font->font_scale, -font->font_scale));
             auto dir = SinCos::FromDegrees(i * 360.f / 9);
             transformed = transformed.makeTransform(
@@ -2875,17 +2870,15 @@ struct EnumKnobWidget : ui::Widget {
         canvas.save();
         RRect clip = RRect::MakeSimple(kGaugeOval, kGaugeRadius);
         canvas.clipRRect(clip.sk);
-        SkPath path = SkPath::Circle(0, -kBorderWidth * 2, kGaugeRadius)
-                          .makeToggleInverseFillType();
+        SkPath path =
+            SkPath::Circle(0, -kBorderWidth * 2, kGaugeRadius).makeToggleInverseFillType();
         canvas.drawPath(path, paint);
         canvas.restore();
       }
 
       {  // sky reflection
         SkPaint paint;
-        SkColor4f colors[] = {"#ffffffaa"_color4f,
-                              "#ffffff30"_color4f,
-                              "#ffffff00"_color4f};
+        SkColor4f colors[] = {"#ffffffaa"_color4f, "#ffffff30"_color4f, "#ffffff00"_color4f};
         paint.setShader(SkShaders::RadialGradient(
             Vec2(0, kMiddleR), kGaugeRadius * 1.5,
             SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
@@ -2899,9 +2892,7 @@ struct EnumKnobWidget : ui::Widget {
       {  // light edge
         SkPaint paint;
         SkPoint pts[] = {Vec2(-kGaugeRadius, 0), Vec2(kGaugeRadius, 0)};
-        SkColor4f colors[] = {"#ffffff20"_color4f,
-                              "#ffffffaa"_color4f,
-                              "#ffffff20"_color4f};
+        SkColor4f colors[] = {"#ffffff20"_color4f, "#ffffffaa"_color4f, "#ffffff20"_color4f};
         paint.setShader(SkShaders::LinearGradient(
             pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
         paint.setStyle(SkPaint::kStroke_Style);
@@ -3433,11 +3424,10 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
   {  // Vignette
     SkPaint vignette_paint;
     float r = hypotf(Instruction::Widget::kWidth, kHeight) / 2;
-    SkColor4f colors[2] = {"#20100800"_color4f,
-                           "#20100810"_color4f};
-    vignette_paint.setShader(SkShaders::RadialGradient(
-        SkPoint::Make(Instruction::Widget::kWidth / 2, kHeight / 2), r,
-        SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
+    SkColor4f colors[2] = {"#20100800"_color4f, "#20100810"_color4f};
+    vignette_paint.setShader(
+        SkShaders::RadialGradient(SkPoint::Make(Instruction::Widget::kWidth / 2, kHeight / 2), r,
+                                  SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
     canvas.drawRRect(kInstructionRRect, vignette_paint);
   }
 

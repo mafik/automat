@@ -33,10 +33,10 @@ sk_sp<SkVertices> WindowBorder(Rect outer, SkColor title_color = "#0066ff"_color
 struct TitleButton : ui::Button {
   TitleButton(ui::Widget* parent) : ui::Button(parent) {}
 
-  void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const override {}
-  void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const override;
-  SkColor ForegroundColor() const override { return SK_ColorWHITE; }
-  SkColor BackgroundColor() const override { return "#d4301f"_color; }
+  void DrawButtonShadow(SkCanvas& canvas, SkColor4f bg) const override {}
+  void DrawButtonFace(SkCanvas&, SkColor4f bg, SkColor4f fg) const override;
+  SkColor4f ForegroundColor() const override { return SkColors::kWhite; }
+  SkColor4f BackgroundColor() const override { return "#d4301f"_color4f; }
 };
 
 }  // namespace automat::theme::xp

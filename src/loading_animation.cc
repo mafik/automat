@@ -6,8 +6,8 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPath.h>
-#include <include/core/SkTileMode.h>
 #include <include/core/SkShader.h>
+#include <include/core/SkTileMode.h>
 #include <include/effects/SkGradient.h>
 
 #include "color.hh"
@@ -89,7 +89,7 @@ void HypnoRect::PreDraw(SkCanvas& canvas) {
         rect.TopCenter(),
         rect.BottomCenter(),
     };
-    SkColor4f colors[2] = {SkColor4f::FromColor(top_color), SkColor4f::FromColor(bottom_color)};
+    SkColor4f colors[2] = {top_color, bottom_color};
     auto matrix = canvas.getLocalToDeviceAs3x3();
     paint.setShader(SkShaders::LinearGradient(
         pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));

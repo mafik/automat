@@ -17,9 +17,9 @@ SkColor SetAlpha(SkColor color, uint8_t alpha);
 
 SkColor SetAlpha(SkColor color, float alpha_01);
 
-SkColor AdjustLightness(SkColor color, float adjust_percent);
+SkColor4f AdjustLightness(SkColor4f color, float adjust_percent);
 
-SkColor MixColors(SkColor zero, SkColor one, float ratio);
+SkColor4f MixColors(SkColor4f zero, SkColor4f one, float ratio);
 
 constexpr SkColor FastMix(SkColor zero, SkColor one, float ratio) {
   float ratio_inv = 1.0f - ratio;
@@ -36,7 +36,7 @@ constexpr SkColor ClampedSubtractRGB(SkColor base, SkColor subtract) {
                         std::max<int>(0, SkColorGetB(base) - SkColorGetB(subtract)));
 }
 
-SkColor HSLuv(float h360, float s100, float l100, float a100 = 100.f);
+SkColor4f HSLuv(float h360, float s100, float l100, float a100 = 100.f);
 
 Vec3 ToHSLuv(SkColor);
 
@@ -90,7 +90,7 @@ inline SkColor Vec3ToSkColor(Vec3 vec) {
 }  // namespace automat
 
 namespace automat::color {
-constexpr SkColor kParrotRed = "#bd1929"_color;
+constexpr SkColor4f kParrotRed = "#bd1929"_color4f;
 sk_sp<SkColorFilter> MakeTintFilter(SkColor, float contrast);
 sk_sp<SkColorFilter> DesaturateFilter();
 

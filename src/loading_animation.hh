@@ -78,11 +78,9 @@ struct HypnoRect : public LoadingAnimation {
   constexpr static float kScalePerTwist = 1.20f;
   constexpr static float kDegreesPerTwist = 19;
 
-  // SkColor kTopColor = "#16389d"_color;
-  // SkColor kBottomColor = "#142261"_color;
-  SkColor top_color = "#ff389d"_color;
-  SkColor bottom_color = "#14ff10"_color;
-  SkColor background_color = "#111616"_color;
+  SkColor4f top_color = "#ff389d"_color4f;
+  SkColor4f bottom_color = "#14ff10"_color4f;
+  SkColor4f background_color = "#111616"_color4f;
 
   HypnoRect();
 

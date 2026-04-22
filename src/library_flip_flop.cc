@@ -86,7 +86,7 @@ struct YingYangIcon : ui::Widget, ui::PaintMixin {
 };
 
 struct YingYangButton : ui::ColoredButton {
-  YingYangButton(ui::Widget* parent, SkColor fg, SkColor bg)
+  YingYangButton(ui::Widget* parent, SkColor4f fg, SkColor4f bg)
       : ColoredButton(parent,
                       ui::ColoredButtonArgs{.fg = fg, .bg = bg, .radius = kYingYangButtonRadius}) {
     child = make_unique<YingYangIcon>(this);
@@ -99,8 +99,8 @@ struct FlipFlopButton : ui::ToggleButton {
 
   FlipFlopButton(ui::Widget* parent, WeakPtr<FlipFlop> flip_flop)
       : ui::ToggleButton(parent), flip_flop(flip_flop) {
-    on = make_unique<YingYangButton>(this, "#eae9e8"_color, "#1d1d1d"_color);
-    off = make_unique<YingYangButton>(this, "#1d1d1d"_color, "#eae9e8"_color);
+    on = make_unique<YingYangButton>(this, "#eae9e8"_color4f, "#1d1d1d"_color4f);
+    off = make_unique<YingYangButton>(this, "#1d1d1d"_color4f, "#eae9e8"_color4f);
     static_cast<YingYangButton*>(this->off.get())->on_click =
         static_cast<YingYangButton*>(this->on.get())->on_click = [this](ui::Pointer&) {
           if (auto flip_flop_ptr = this->flip_flop.Lock()) {
@@ -145,19 +145,17 @@ struct FlipFlopWidget : ObjectToy {
       SkPoint center = {kFlipFlopWidth / 2, 2_cm};
       float radius = 0.5_mm;
       float a = light;
-      SkColor4f colors[] = {
-          SkColor4f::FromColor(color::MixColors("#725016"_color, "#ff8786"_color, a)),
-          SkColor4f::FromColor(color::MixColors("#2b1e07"_color, "#ff3e3e"_color, a))};
+      SkColor4f colors[] = {color::MixColors("#725016"_color4f, "#ff8786"_color4f, a),
+                            color::MixColors("#2b1e07"_color4f, "#ff3e3e"_color4f, a)};
       gradient.setShader(SkShaders::RadialGradient(
           center + SkPoint(0, 0.25_mm), radius,
           SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
       canvas.drawCircle(center, radius, gradient);
 
       SkPaint shine;
-      SkColor4f shine_colors[] = {
-          SkColor4f::FromColor(color::MixColors("#d2b788ff"_color, "#ffe8e8ff"_color, a)),
-          SkColor4f::FromColor(color::MixColors("#d2b78800"_color, "#ffe8e800"_color, a)),
-          SkColor4f::FromColor(color::MixColors("#d2b788ff"_color, "#ffe8e8ff"_color, a))};
+      SkColor4f shine_colors[] = {color::MixColors("#d2b788ff"_color4f, "#ffe8e8ff"_color4f, a),
+                                  color::MixColors("#d2b78800"_color4f, "#ffe8e800"_color4f, a),
+                                  color::MixColors("#d2b788ff"_color4f, "#ffe8e8ff"_color4f, a)};
       SkPoint shine_pts[] = {center + SkPoint{0, 0.5_mm}, center - SkPoint{0, 0.5_mm}};
       shine.setShader(SkShaders::LinearGradient(
           shine_pts, SkGradient{SkGradient::Colors{shine_colors, SkTileMode::kClamp}, {}}));
@@ -167,7 +165,7 @@ struct FlipFlopWidget : ObjectToy {
       canvas.drawCircle(center, radius - 0.1_mm, shine);
 
       SkPaint stroke;
-      stroke.setColor(color::MixColors("#110902"_color, "#930d0d"_color, a));
+      stroke.setColor(color::MixColors("#110902"_color4f, "#930d0d"_color4f, a));
       stroke.setStroke(SkPaint::kStroke_Style);
       stroke.setStrokeWidth(0.1_mm);
       canvas.drawCircle(center, radius + 0.04_mm, stroke);

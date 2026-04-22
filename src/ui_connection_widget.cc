@@ -116,10 +116,10 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
   auto anim = &animation_state;
   if (anim->radar_alpha >= 0.01f) {
     SkPaint radius_paint;
-    SkColor tint = arg.table->tint;
-    SkColor4f colors[] = {SkColor4f::FromColor(SkColorSetA(tint, 0)),
-                          SkColor4f::FromColor(SkColorSetA(tint, (int)(anim->radar_alpha * 96))),
-                          SkColor4f::FromColor(SK_ColorTRANSPARENT)};
+    SkColor4f tint = arg.table->tint;
+    SkColor4f colors[] = {{tint.fR, tint.fG, tint.fB, 0},
+                          {tint.fR, tint.fG, tint.fB, anim->radar_alpha * 96 / 255.f},
+                          SkColors::kTransparent};
     float pos[] = {0, 1, 1};
     constexpr float kPeriod = 2.f;
     double t = anim->time_seconds;
@@ -140,7 +140,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     canvas.drawArc(crt_oval, 0, 360, true, radius_paint);
 
     SkPaint stroke_paint;
-    stroke_paint.setColor(SkColorSetA(tint, (int)(anim->radar_alpha * 128)));
+    stroke_paint.setColor(SkColor4f{tint.fR, tint.fG, tint.fB, anim->radar_alpha * 128 / 255.f});
     stroke_paint.setStyle(SkPaint::kStroke_Style);
 
     float radar_alpha_sin = sin((anim->radar_alpha - 0.5f) * M_PI) * 0.5f + 0.5f;
@@ -176,7 +176,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
         SkTextBlob::MakeFromRSXform(name.data(), name.size(), transforms_span, font.sk_font);
     SkPaint text_paint;
     float text_alpha = animation::SinInterp(anim->radar_alpha, 0.5f, 0.0f, 1.f, 1.f);
-    text_paint.setColor(SkColorSetA(tint, (int)(text_alpha * 255)));
+    text_paint.setColor(SkColor4f{tint.fR, tint.fG, tint.fB, text_alpha});
 
     canvas.save();
     canvas.translate(pos_dir.pos.x, pos_dir.pos.y);
@@ -303,7 +303,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   Argument arg = a.start_arg;
 
   style = arg.table->style;
-  tint = arg.table->tint;
+  tint = arg.table->tint.toSkColor();
   if (style == Argument::Style::Invisible || style == Argument::Style::Spotlight) {
     return animation::Finished;
   }

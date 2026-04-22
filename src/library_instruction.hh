@@ -47,7 +47,7 @@ struct Instruction : Object, Buffer {
   DEF_INTERFACE(Instruction, Argument, assembler_arg, "Assembler")
   static constexpr auto kStyle = Argument::Style::Invisible;
   static constexpr float kAutoconnectRadius = INFINITY;
-  static constexpr SkColor kTint = "#ff0000"_color;
+  static constexpr SkColor4f kTint = "#ff0000"_color4f;
   static Ptr<Object> MakePrototype();
   void OnCanConnect(Interface end, Status& status);
   void OnConnect(Interface end);

@@ -41,7 +41,7 @@ struct KeyLabelWidget : Widget, LabelMixin {
   }
 };
 
-KeyButton::KeyButton(Widget* parent, StrView label, SkColor color, float width)
+KeyButton::KeyButton(Widget* parent, StrView label, SkColor4f color, float width)
     : Button(parent), width(width), fg(color) {
   child = make_unique<KeyLabelWidget>(this, label);
   SetLabel(label);
@@ -57,24 +57,24 @@ SkRRect KeyButton::RRect() const {
   return SkRRect::MakeRectXY(SkRect::MakeWH(width, kKeyHeight), kKeyBaseRadius, kKeyBaseRadius);
 }
 
-static sk_sp<SkShader> MakeSweepShader(const RRect& rrect, SkColor side_color, SkColor top_color,
-                                       SkColor top_corner_top, SkColor top_corner_side,
-                                       SkColor bottom_corner_side, SkColor bottom_corner_bottom,
-                                       SkColor bottom_color) {
+static sk_sp<SkShader> MakeSweepShader(const RRect& rrect, SkColor4f side_color,
+                                       SkColor4f top_color, SkColor4f top_corner_top,
+                                       SkColor4f top_corner_side, SkColor4f bottom_corner_side,
+                                       SkColor4f bottom_corner_bottom, SkColor4f bottom_color) {
   SkColor4f colors[] = {
-      SkColor4f::FromColor(side_color),            // right middle
-      SkColor4f::FromColor(top_corner_side),       // bottom of top-right corner
-      SkColor4f::FromColor(top_corner_top),        // top of the top-right corner
-      SkColor4f::FromColor(top_color),             // center top
-      SkColor4f::FromColor(top_corner_top),        // top of the top-left corner
-      SkColor4f::FromColor(top_corner_side),       // bottom of the top-left corner
-      SkColor4f::FromColor(side_color),            // left middle
-      SkColor4f::FromColor(bottom_corner_side),    // top of the bottom-left corner
-      SkColor4f::FromColor(bottom_corner_bottom),  // bottom of the bottom-left corner
-      SkColor4f::FromColor(bottom_color),          // center bottom
-      SkColor4f::FromColor(bottom_corner_bottom),  // bottom of the bottom-right corner
-      SkColor4f::FromColor(bottom_corner_side),    // top of the bottom-right corner
-      SkColor4f::FromColor(side_color),            // right middle
+      side_color,            // right middle
+      top_corner_side,       // bottom of top-right corner
+      top_corner_top,        // top of the top-right corner
+      top_color,             // center top
+      top_corner_top,        // top of the top-left corner
+      top_corner_side,       // bottom of the top-left corner
+      side_color,            // left middle
+      bottom_corner_side,    // top of the bottom-left corner
+      bottom_corner_bottom,  // bottom of the bottom-left corner
+      bottom_color,          // center bottom
+      bottom_corner_bottom,  // bottom of the bottom-right corner
+      bottom_corner_side,    // top of the bottom-right corner
+      side_color,            // right middle
   };
   auto center = rrect.Center();
   float pos[] = {0,
@@ -95,7 +95,7 @@ static sk_sp<SkShader> MakeSweepShader(const RRect& rrect, SkColor side_color, S
       SkGradient{SkGradient::Colors{colors, pos, SkTileMode::kClamp}, {}});
 }
 
-void KeyButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
+void KeyButton::DrawButtonFace(SkCanvas& canvas, SkColor4f bg, SkColor4f fg) const {
   bool enabled = false;
 
   SkRRect key_base = RRect();
@@ -111,9 +111,8 @@ void KeyButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
 
   SkPaint face_paint;
   SkPoint face_pts[] = {{0, key_face.rect().bottom()}, {0, key_face.rect().top()}};
-  SkColor4f face_colors[] = {
-      SkColor4f::FromColor(color::AdjustLightness(fg, -10 + lightness_adjust)),
-      SkColor4f::FromColor(color::AdjustLightness(fg, lightness_adjust))};
+  SkColor4f face_colors[] = {color::AdjustLightness(fg, -10 + lightness_adjust),
+                             color::AdjustLightness(fg, lightness_adjust)};
   face_paint.setShader(SkShaders::LinearGradient(
       face_pts, SkGradient{SkGradient::Colors{face_colors, SkTileMode::kClamp}, {}}));
 
@@ -122,10 +121,10 @@ void KeyButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
 
   canvas.drawRRect(key_face, face_paint);
 
-  SkColor top_color = color::AdjustLightness(fg, 20 + lightness_adjust);
-  SkColor side_color = color::AdjustLightness(fg, -20 + lightness_adjust);
-  SkColor side_color2 = color::AdjustLightness(fg, -25 + lightness_adjust);
-  SkColor bottom_color = color::AdjustLightness(fg, -50 + lightness_adjust);
+  SkColor4f top_color = color::AdjustLightness(fg, 20 + lightness_adjust);
+  SkColor4f side_color = color::AdjustLightness(fg, -20 + lightness_adjust);
+  SkColor4f side_color2 = color::AdjustLightness(fg, -25 + lightness_adjust);
+  SkColor4f bottom_color = color::AdjustLightness(fg, -50 + lightness_adjust);
 
   SkPaint side_paint;
   side_paint.setAntiAlias(true);

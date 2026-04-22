@@ -395,9 +395,6 @@ class ExtensionHelper:
   def ConfigureWithMeson(self, *outputs, install_tags='devel,runtime', build_targets=('all',)):
     '''
     `build_targets` is the list of meson targets passed to ninja before install.
-    Defaults to `('all',)` which builds everything. Restrict it when the project
-    contains targets we don't consume and that fail to build on some platforms
-    (e.g. systemd's shared libraries linking non-PIC system archives).
     `install_tags` must cover only files produced by the chosen `build_targets`.
     '''
     if self.configure:

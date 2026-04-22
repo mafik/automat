@@ -71,6 +71,9 @@ def hexdigest(path):
 
 class Step:
 
+    '''
+    post_success - lambda to execute (synchronously, on the main thread) after job finishes successfully
+    '''
     def __init__(self,
                  build_func,
                  outputs,
@@ -102,10 +105,6 @@ class Step:
         self.id = id
         self.stderr_prettifier = stderr_prettifier
         self.cleanup = cleanup
-        # Optional callback invoked after the step's subprocess exits successfully.
-        # Useful for steps that launch a subprocess (e.g. `ninja`) which does not itself
-        # produce a file the build graph can use as a stamp. The callback runs on the
-        # recipe thread, before downstream steps are unblocked.
         self.post_success = post_success
 
     def __repr__(self):

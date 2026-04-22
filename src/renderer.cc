@@ -9,8 +9,8 @@
 #include <include/core/SkPathTypes.h>
 #include <include/core/SkPictureRecorder.h>
 #include <include/core/SkSamplingOptions.h>
-#include <include/core/SkStream.h>
 #include <include/core/SkShader.h>
+#include <include/core/SkStream.h>
 #include <include/effects/SkGradient.h>
 #include <include/effects/SkRuntimeEffect.h>
 #include <include/encode/SkWebpEncoder.h>
@@ -142,7 +142,6 @@ struct WidgetDrawable : SkDrawableRTTI {
     Rect surface_bounds_local;
     SkImageInfo image_info;
     time::Duration cpu_time;
-    time::SteadyPoint gpu_start;
 
     ~Rendered() {
       if (texture.isValid()) {
@@ -420,23 +419,19 @@ void WidgetDrawable::InsertRecording() {
     insert_recording_info.fNumWaitSemaphores = wait_list_vec.size();
   }
 
-  // insert_recording_info.fGpuStatsFlags = skgpu::GpuStatsFlags::kElapsedTime;
+  insert_recording_info.fGpuStatsFlags = skgpu::GpuStatsFlags::kElapsedTime;
   insert_recording_info.fFinishedContext = this;
-  // insert_recording_info.fFinishedWithStatsProc
-  insert_recording_info.fFinishedProc = [](skgpu::graphite::GpuFinishedContext context,
-                                           skgpu::CallbackResult result) {
+  insert_recording_info.fFinishedWithStatsProc = [](skgpu::graphite::GpuFinishedContext context,
+                                                    skgpu::CallbackResult result,
+                                                    const skgpu::GpuStats& stats) {
     auto* w = static_cast<WidgetDrawable*>(context);
     if (result == skgpu::CallbackResult::kFailed) {
       ERROR << "Failed to insert recording for " << w->name;
     }
     auto& frame = w->in_progress();
 
-    // LOG << "GPU time: " << stats.elapsedTime << " (" << (bool)result << ")";
-    float gpu_time = time::ToSeconds(time::SteadyNow() - frame.gpu_start);
+    float gpu_time = stats.elapsedTime * 1e-9f;  // ns → s
     float render_time = max<float>(gpu_time, time::ToSeconds(frame.cpu_time));
-    if (gpu_time > 1) {
-      LOG << "Widget " << w->name << " took " << gpu_time << "s to render";
-    }
     w->Present();
     next_frame_request.render_results.emplace_back(RenderResult{w->id, render_time});
     if (w->render_in_background) {
@@ -458,7 +453,6 @@ void WidgetDrawable::InsertRecording() {
     ++foreground_rendering_jobs;
     context = vk::graphite_context.get();
   }
-  frame.gpu_start = time::SteadyNow();
   if constexpr (kDebugRendering && kDebugRenderEvents) {
     debug_render_events += "InsertRecording(";
     debug_render_events += name;

@@ -71,9 +71,6 @@ def hexdigest(path):
 
 class Step:
 
-    '''
-    post_success - lambda to execute (synchronously, on the main thread) after job finishes successfully
-    '''
     def __init__(self,
                  build_func,
                  outputs,
@@ -84,6 +81,9 @@ class Step:
                  cleanup=None,
                  post_success=None,
                  stderr_prettifier=lambda x: x):
+        '''
+        post_success - lambda to execute (synchronously, on the main thread) after job finishes successfully
+        '''
         if not desc:
             if hasattr(build_func, '__name__'):
                 desc = f'Running {build_func.__name__}'

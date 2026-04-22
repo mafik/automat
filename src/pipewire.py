@@ -45,15 +45,7 @@ hook.ConfigureOptions(**{
   'flatpak': 'disabled',
   'examples': 'disabled',
   'x11': 'disabled',
-  # SELinux off: PipeWire's protocol-native module links libselinux.a into a shared
-  # object, but the system libselinux.a is built without -fPIC on this distro, so ld
-  # fails with "R_X86_64_TPOFF32 ... can not be used when making a shared object".
-  # We don't use the SELinux integration anyway.
   'selinux': 'disabled',
-  # Disable anything that transitively pulls GLib's static archive into a shared
-  # module. Debian/Ubuntu ships libgio-2.0.a / libglib-2.0.a with a static dependency
-  # on libselinux.a (and libmount.a / libblkid.a), which re-introduces the non-PIC
-  # linker error above via module-protocol-pulse's gsettings + avahi helpers.
   'gsettings': 'disabled',
   'avahi': 'disabled',
   'raop': 'disabled',

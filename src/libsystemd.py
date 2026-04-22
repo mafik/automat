@@ -106,13 +106,6 @@ if sys.platform == 'linux':
         'ukify': 'disabled',
         'analyze': 'false',
     })
-    # We only consume libsystemd.a. Restrict the ninja targets to avoid building
-    # libsystemd-shared-258.so, which on current Debian/Ubuntu links the system
-    # libcrypt.a/libselinux.a — both shipped without -fPIC, which ld then rejects
-    # with R_X86_64_PC32/R_X86_64_TPOFF32 against shared-object relocations.
-    # The `libsystemd` and `devel` targets are alias_target()s in systemd's meson
-    # graph that cover every file in those install tags without pulling in the
-    # shared-library targets.
     hook.ConfigureWithMeson(build.PREFIX / 'lib64' / 'libsystemd.a',
                             install_tags='devel,libsystemd',
                             build_targets=('libsystemd', 'devel'))

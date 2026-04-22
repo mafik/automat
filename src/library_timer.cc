@@ -266,8 +266,8 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
 static sk_sp<SkShader> MakeGradient(SkPoint a, SkPoint b, SkColor color_a, SkColor color_b) {
   SkPoint pts[2] = {a, b};
   SkColor4f colors[2] = {SkColor4f::FromColor(color_a), SkColor4f::FromColor(color_b)};
-  return SkShaders::LinearGradient(
-      pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kMirror}, {}});
+  return SkShaders::LinearGradient(pts,
+                                   SkGradient{SkGradient::Colors{colors, SkTileMode::kMirror}, {}});
 }
 
 enum DrawRingMode {
@@ -349,10 +349,8 @@ static void DrawPusher(SkCanvas& canvas, const SkRRect& axle, const SkRRect& pus
   SkPaint pusher_axle_paint;
   pusher_axle_paint.setAntiAlias(true);
   SkPoint axle_pts[2] = {{axle.rect().fLeft, 0}, {axle.rect().fRight, 0}};
-  SkColor4f axle_colors[] = {
-      SkColor4f::FromColor(0xffb0b0b0), SkColor4f::FromColor(0xff383739),
-      SkColor4f::FromColor(0xffa8a9ab), SkColor4f::FromColor(0xff000000),
-      SkColor4f::FromColor(0xff4d4b4f)};
+  SkColor4f axle_colors[] = {"#b0b0b0"_color4f, "#383739"_color4f, "#a8a9ab"_color4f,
+                             "#000000"_color4f, "#4d4b4f"_color4f};
   float positions[] = {0, 0.1, 0.3, 0.6, 1};
   pusher_axle_paint.setShader(SkShaders::LinearGradient(
       axle_pts, SkGradient{SkGradient::Colors{axle_colors, positions, SkTileMode::kClamp}, {}}));
@@ -363,8 +361,7 @@ static void DrawPusher(SkCanvas& canvas, const SkRRect& axle, const SkRRect& pus
 
   SkPaint pusher_paint;
   SkPoint btn_pts[2] = {{0, 0}, {0.0004, 0}};
-  SkColor4f btn_colors[] = {SkColor4f::FromColor(0xff707070), SkColor4f::FromColor(0xff303030),
-                            SkColor4f::FromColor(0xff000000)};
+  SkColor4f btn_colors[] = {"#707070"_color4f, "#303030"_color4f, "#000000"_color4f};
   float btn_positions[] = {0, 0.3, 1};
   pusher_paint.setShader(SkShaders::LinearGradient(
       btn_pts, SkGradient{SkGradient::Colors{btn_colors, btn_positions, SkTileMode::kMirror}, {}}));
@@ -579,20 +576,17 @@ struct TimerWidget : ObjectToy {
     DrawRing(canvas, r0, r1, 0xfff7f4f2, 0xff5e5f65, kRingInset);
 
     {  // Draw pusher
-      SkColor4f colors1[] = {SkColor4f::FromColor(0x20ffffff), SkColor4f::FromColor(0x15000000),
-                             SkColor4f::FromColor(0xA0000000)};
+      SkColor4f colors1[] = {"#ffffff20"_color4f, "#00000015"_color4f, "#000000a0"_color4f};
       auto start_pusher =
           kStartPusher.makeOffset(0, -start_pusher_depression * kStartPusherAxleLength);
       DrawPusher(canvas, kStartPusherAxle, start_pusher, colors1);
       canvas.save();
       canvas.rotate(45);
-      SkColor4f colors2[] = {SkColor4f::FromColor(0xD0000000), SkColor4f::FromColor(0x40000000),
-                             SkColor4f::FromColor(0xD0000000)};
+      SkColor4f colors2[] = {"#000000d0"_color4f, "#00000040"_color4f, "#000000d0"_color4f};
       auto left_pusher = kSmallPusher.makeOffset(0, -left_pusher_depression * kSmallAxleLength);
       DrawPusher(canvas, kSmallAxle, left_pusher, colors2);
       canvas.rotate(-90);
-      SkColor4f colors3[] = {SkColor4f::FromColor(0x40FFFFFF), SkColor4f::FromColor(0x40000000),
-                             SkColor4f::FromColor(0xFF000000)};
+      SkColor4f colors3[] = {"#ffffff40"_color4f, "#00000040"_color4f, "#000000"_color4f};
       auto right_pusher = kSmallPusher.makeOffset(0, -right_pusher_depression * kSmallAxleLength);
       DrawPusher(canvas, kSmallAxle, right_pusher, colors3);
       canvas.restore();

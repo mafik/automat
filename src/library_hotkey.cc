@@ -348,8 +348,8 @@ struct HotKeyWidget : ObjectToy, ui::CaretOwner {
     SkPaint border_paint;
     border_paint.setAntiAlias(true);
     SkPoint border_pts[] = {{0, kShapeRect.top}, {0, kShapeRect.bottom}};
-    SkColor4f border_colors[] = {SkColor4f::FromColor("#f0f0f0"_color),
-                                 SkColor4f::FromColor("#cccccc"_color)};
+    SkColor4f border_colors[] = {"#f0f0f0"_color4f,
+                                 "#cccccc"_color4f};
     border_paint.setShader(SkShaders::LinearGradient(
         border_pts, SkGradient{SkGradient::Colors{border_colors, SkTileMode::kClamp}, {}}));
 
@@ -363,8 +363,8 @@ struct HotKeyWidget : ObjectToy, ui::CaretOwner {
     SkBlendMode shade_blend_mode = SkBlendMode::kHardLight;
     float shade_alpha = 0.5;
     SkPoint light_pts[] = {{0, kShapeRect.top}, {0, kShapeRect.bottom}};
-    SkColor4f light_colors[] = {SkColor4f::FromColor("#fdf8e0"_color),
-                                SkColor4f::FromColor("#111c22"_color)};
+    SkColor4f light_colors[] = {"#fdf8e0"_color4f,
+                                "#111c22"_color4f};
     SkPaint light_paint;
     light_paint.setAntiAlias(true);
     light_paint.setBlendMode(shade_blend_mode);
@@ -375,8 +375,8 @@ struct HotKeyWidget : ObjectToy, ui::CaretOwner {
     canvas.drawDRRect(kShapeRRect, frame_outer, light_paint);
 
     SkPoint shadow_pts[] = {{0, kShapeRect.bottom + kFrameOuterRadius}, {0, kShapeRect.bottom}};
-    SkColor4f shadow_colors[] = {SkColor4f::FromColor("#111c22"_color),
-                                 SkColor4f::FromColor("#fdf8e0"_color)};
+    SkColor4f shadow_colors[] = {"#111c22"_color4f,
+                                 "#fdf8e0"_color4f};
     SkPaint shadow_paint;
     shadow_paint.setAntiAlias(true);
     shadow_paint.setBlendMode(shade_blend_mode);

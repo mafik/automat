@@ -8,10 +8,10 @@
 #include <include/core/SkPathBuilder.h>
 #include <include/core/SkRRect.h>
 #include <include/core/SkRSXform.h>
+#include <include/core/SkShader.h>
 #include <include/core/SkTextBlob.h>
 #include <include/core/SkTileMode.h>
 #include <include/core/SkVertices.h>
-#include <include/core/SkShader.h>
 #include <include/effects/SkGradient.h>
 
 #include <atomic>
@@ -79,8 +79,8 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     {  // Circle around the target
       SkPaint circle_paint;
       SkColor4f colors[] = {
-          SkColor4f::FromColor("#ffffff"_color),
-          SkColor4f::FromColor("#ffffbe00"_color),
+          "#ffffff"_color4f,
+          "#ffffbe00"_color4f,
       };
       float pos[] = {0.5, 1};
       circle_paint.setShader(SkShaders::RadialGradient(
@@ -100,8 +100,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
                           .lineTo(target + Vec2::Polar((angle + 90_deg), radius))
                           .lineTo(target + Vec2::Polar((angle - 90_deg), radius))
                           .detach();
-        SkColor4f ray_colors[] = {SkColor4f::FromColor("#ffffbe"_color),
-                                  SkColor4f::FromColor("#ffffbe00"_color)};
+        SkColor4f ray_colors[] = {"#ffffbe"_color4f, "#ffffbe00"_color4f};
         Vec2 ray_positions[] = {source, target};
         SkPaint ray_paint;
         ray_paint.setShader(SkShaders::LinearGradient(

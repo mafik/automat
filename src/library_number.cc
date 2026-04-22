@@ -69,7 +69,7 @@ static const SkPath kNumberShape = SkPath::RRect(kNumberRRect);
 static const SkPaint kNumberBackgroundPaint = [] {
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, kHeight}};
-  SkColor4f colors[2] = {SkColor4f::FromColor(0xff483e37), SkColor4f::FromColor(0xff6c5d53)};
+  SkColor4f colors[2] = {"#483e37"_color4f, "#6c5d53"_color4f};
   sk_sp<SkShader> gradient = SkShaders::LinearGradient(
       pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
   paint.setShader(gradient);
@@ -79,8 +79,8 @@ static const SkPaint kNumberBackgroundPaint = [] {
 static const SkPaint kNumberBorderPaint = [] {
   SkPaint paint_border;
   SkPoint pts[2] = {{0, 0}, {0, kHeight}};
-  SkColor4f colors_border[2] = {SkColor4f::FromColor(0xff241f1c),
-                                SkColor4f::FromColor(0xffac9d93)};
+  SkColor4f colors_border[2] = {"#241f1c"_color4f,
+                                "#ac9d93"_color4f};
   sk_sp<SkShader> gradient_border = SkShaders::LinearGradient(
       pts, SkGradient{SkGradient::Colors{colors_border, SkTileMode::kClamp}, {}});
   paint_border.setShader(gradient_border);

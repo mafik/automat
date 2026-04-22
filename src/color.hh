@@ -62,6 +62,23 @@ consteval SkColor operator""_color() {
   return 0;
 }
 
+template <TemplateStringArg S>
+consteval SkColor4f operator""_color4f() {
+  static_assert(S.c_str[0] == '#', "Color must start with #");
+  static_assert(S.c_str[S.size() - 1] == '\0', "Color must end with \\0");
+
+  if constexpr (S.size() == 8) {  // RGB
+    return SkColor4f{HexToU8(S.c_str + 1) / 255.0f, HexToU8(S.c_str + 3) / 255.0f,
+                     HexToU8(S.c_str + 5) / 255.0f, 1.0f};
+  } else if constexpr (S.size() == 10) {  // RGBA
+    return SkColor4f{HexToU8(S.c_str + 1) / 255.0f, HexToU8(S.c_str + 3) / 255.0f,
+                     HexToU8(S.c_str + 5) / 255.0f, HexToU8(S.c_str + 7) / 255.0f};
+  } else {
+    static_assert(S.size() == 0, "Hex color must be 6 or 8 characters long");
+  }
+  return {};
+}
+
 inline Vec3 SkColorToVec3(SkColor color) {
   return Vec3(SkColorGetR(color) / 255.0f, SkColorGetG(color) / 255.0f,
               SkColorGetB(color) / 255.0f);

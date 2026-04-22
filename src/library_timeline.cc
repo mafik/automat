@@ -152,8 +152,7 @@ const SkPaint kPlasticPaint = [] {
   SkPaint p;
   // p.setColor("#f0eae5"_color);
   SkPoint pts[2] = {{0, kPlasticTop}, {0, 0}};
-  SkColor4f colors[2] = {SkColor4f::FromColor("#f2ece8"_color),
-                         SkColor4f::FromColor("#e0dbd8"_color)};
+  SkColor4f colors[2] = {"#f2ece8"_color4f, "#e0dbd8"_color4f};
   sk_sp<SkShader> gradient = SkShaders::LinearGradient(
       pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
   p.setShader(gradient);
@@ -211,7 +210,7 @@ const SkPaint kTickPaint = [] {
 const SkPaint kBridgeHandlePaint = [] {
   SkPaint p;
   SkPoint pts[2] = {{0, -kRulerHeight - kMarginAroundTracks}, {0, -kRulerHeight}};
-  SkColor4f colors[2] = {SkColor4f::FromColor(kOrange), SkColor4f::FromColor("#f17149"_color)};
+  SkColor4f colors[2] = {SkColor4f::FromColor(kOrange), "#f17149"_color4f};
   auto shader = SkShaders::LinearGradient(
       pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
   p.setShader(shader);
@@ -991,8 +990,7 @@ struct TimelineWidget : ObjectToy {
       outer_shadow.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, 1_mm));
       SkPoint pts[2] = {{0, kPlasticTop + kWoodWidth},
                         {0, kPlasticTop + kWoodWidth - kWoodenCaseCornerRadius}};
-      SkColor4f colors[2] = {SkColor4f::FromColor("#aa6048"_color),
-                             SkColor4f::FromColor("#2d1f1b"_color)};
+      SkColor4f colors[2] = {"#aa6048"_color4f, "#2d1f1b"_color4f};
 
       outer_shadow.setShader(SkShaders::LinearGradient(
           pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
@@ -1009,8 +1007,7 @@ struct TimelineWidget : ObjectToy {
       inset_shadow.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.2_mm));
       SkPoint pts[2] = {{0, inset_rrect.getBounds().fTop + inset_rrect.getSimpleRadii().y()},
                         {0, inset_rrect.getBounds().fTop}};
-      SkColor4f colors[2] = {SkColor4f::FromColor("#2d1f1b"_color),
-                             SkColor4f::FromColor("#aa6048"_color)};
+      SkColor4f colors[2] = {"#2d1f1b"_color4f, "#aa6048"_color4f};
 
       inset_shadow.setShader(SkShaders::LinearGradient(
           pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
@@ -1326,8 +1323,7 @@ struct TimelineWidget : ObjectToy {
       inner_paint.setStyle(SkPaint::kStroke_Style);
       inner_paint.setStrokeWidth(0.1_mm);
       SkPoint pts[2] = {{x, y - kScrewRadius}, {x, y + kScrewRadius}};
-      SkColor4f colors[2] = {SkColor4f::FromColor("#615954"_color),
-                             SkColor4f::FromColor("#fbf9f3"_color)};
+      SkColor4f colors[2] = {"#615954"_color4f, "#fbf9f3"_color4f};
       auto inner_gradient = SkShaders::LinearGradient(
           pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
       inner_paint.setShader(inner_gradient);
@@ -1336,8 +1332,7 @@ struct TimelineWidget : ObjectToy {
       outer_paint.setAntiAlias(true);
       outer_paint.setStyle(SkPaint::kStroke_Style);
       outer_paint.setStrokeWidth(0.1_mm);
-      SkColor4f outer_colors[2] = {SkColor4f::FromColor("#fbf9f3"_color),
-                                   SkColor4f::FromColor("#615954"_color)};
+      SkColor4f outer_colors[2] = {"#fbf9f3"_color4f, "#615954"_color4f};
       auto outer_gradient = SkShaders::LinearGradient(
           pts, SkGradient{SkGradient::Colors{outer_colors, SkTileMode::kClamp}, {}});
       outer_paint.setShader(outer_gradient);
@@ -1386,8 +1381,7 @@ struct TimelineWidget : ObjectToy {
       canvas.drawPaint(kBridgeHandlePaint);
 
       SkPoint pts2[2] = {{x, 0}, {x + 0.4_mm, 0}};
-      SkColor4f colors2[2] = {SkColor4f::FromColor("#cb532d"_color),
-                              SkColor4f::FromColor("#809d3312"_color)};
+      SkColor4f colors2[2] = {"#cb532d"_color4f, "#809d3312"_color4f};
       auto shader2 = SkShaders::LinearGradient(
           pts2, SkGradient{SkGradient::Colors{colors2, SkTileMode::kMirror}, {}});
       SkPaint wavy_paint;

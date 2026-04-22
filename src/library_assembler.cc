@@ -516,21 +516,20 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
   constexpr float kLightRadius = 1_mm;
 
   SkColor4f bulb_colors[] = {
-      SkColor4f::FromColor("#ffffa2"_color),  // light center
-      SkColor4f::FromColor("#ffff70"_color),  // light mid
-      SkColor4f::FromColor("#ffff93"_color),  // outer light edge (faint yellow)
+      "#ffffa2"_color4f,  // light center
+      "#ffff70"_color4f,  // light mid
+      "#ffff93"_color4f,  // outer light edge (faint yellow)
   };
   SkPaint bulb_paint;
   bulb_paint.setShader(SkShaders::RadialGradient(
-      center, kLightRadius,
-      SkGradient{SkGradient::Colors{bulb_colors, SkTileMode::kClamp}, {}}));
+      center, kLightRadius, SkGradient{SkGradient::Colors{bulb_colors, SkTileMode::kClamp}, {}}));
 
   SkColor4f glow_colors[] = {
-      SkColor4f::FromColor("#5b0e00"_color),    // shadow
-      SkColor4f::FromColor("#5b0e00"_color),    // shadow
-      SkColor4f::FromColor("#ec4329"_color),    // warm red
-      SkColor4f::FromColor("#ec432980"_color),  // half-transparent warm red
-      SkColor4f::FromColor("#ec432900"_color),  // transparent warm red
+      "#5b0e00"_color4f,    // shadow
+      "#5b0e00"_color4f,    // shadow
+      "#ec4329"_color4f,    // warm red
+      "#ec432980"_color4f,  // half-transparent warm red
+      "#ec432900"_color4f,  // transparent warm red
   };
   SkPaint glow_paint;
   float glow_positions[] = {0, kLightRadius / kLightRange, kLightRadius * 1.1 / kLightRange,
@@ -557,9 +556,7 @@ void AssemblerWidget::FillChildren(Vec<ui::Widget*>& children) {
   }
 }
 
-void AssemblerWidget::OnChildReparentedAway(ui::Widget& child) {
-  std::erase(reg_widgets, &child);
-}
+void AssemblerWidget::OnChildReparentedAway(ui::Widget& child) { std::erase(reg_widgets, &child); }
 
 void AssemblerWidget::TransformUpdated() {
   WakeAnimation();
@@ -699,10 +696,8 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
       SkPaint flag_paint;
       SkPoint points[2] = {SkPoint::Make(-kCellWidth * 0.2, 0),
                            SkPoint::Make(kCellWidth * 1.2, kCellHeight * 0.1)};
-      SkColor4f colors[5] = {
-          SkColor4f::FromColor("#ff0000"_color), SkColor4f::FromColor("#800000"_color),
-          SkColor4f::FromColor("#ff0000"_color), SkColor4f::FromColor("#800000"_color),
-          SkColor4f::FromColor("#ff0000"_color)};
+      SkColor4f colors[5] = {"#ff0000"_color4f, "#800000"_color4f, "#ff0000"_color4f,
+                             "#800000"_color4f, "#ff0000"_color4f};
       flag_paint.setShader(SkShaders::LinearGradient(
           points, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
       if (reg_value & (1ULL << position)) {

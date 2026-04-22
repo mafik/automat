@@ -79,7 +79,11 @@ class Step:
                  desc=None,
                  shortcut=None,
                  cleanup=None,
+                 post_success=None,
                  stderr_prettifier=lambda x: x):
+        '''
+        post_success - lambda to execute (synchronously, on the main thread) after job finishes successfully
+        '''
         if not desc:
             if hasattr(build_func, '__name__'):
                 desc = f'Running {build_func.__name__}'
@@ -101,6 +105,7 @@ class Step:
         self.id = id
         self.stderr_prettifier = stderr_prettifier
         self.cleanup = cleanup
+        self.post_success = post_success
 
     def __repr__(self):
         return f'{self.desc}'
@@ -343,6 +348,8 @@ class Recipe:
                     return False
                 step.builder = None
                 del self.pid_to_step[pid]
+                if step.post_success:
+                    step.post_success()
                 on_step_finished(step)
             else:
                 next = ready_steps.pop()

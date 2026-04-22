@@ -110,6 +110,7 @@ class ExtensionHelper:
     self.link_deps = []
     self.ninja_target = 'install'
     self.meson_install_tags = ''
+    self.meson_build_targets = ['all']
 
   def _hook_recipe(self, recipe):
     if self.old_hook_recipe:
@@ -259,10 +260,22 @@ class ExtensionHelper:
           shortcut=f'install {self.name}')
     elif makefile.name == 'meson-info.json':
       import meson
+      # Build and install are two separate ninja invocations so that dependencies
+      # can choose a subset of meson targets to build (via `build_targets`) while
+      # still letting meson handle the install phase. The build step's completion
+      # is signalled by `build_stamp`, which post_success touches after ninja exits 0.
+      build_stamp = build_dir / '.automat.build_stamp'
       recipe.add_step(
-        partial(Popen, meson.ARGS + ['install', '-C', build_dir, '--tags', self.meson_install_tags]),
-        outputs=self.outputs,
+        partial(Popen, [ninja.BIN, '-C', build_dir, *self.meson_build_targets]),
+        outputs=[build_stamp],
         inputs=configure_inputs + [makefile, ninja.BIN],
+        desc=f'Building {self.name}',
+        shortcut=f'build {self.name}',
+        post_success=build_stamp.touch)
+      recipe.add_step(
+        partial(Popen, meson.ARGS + ['install', '-C', build_dir, '--no-rebuild', '--tags', self.meson_install_tags]),
+        outputs=self.outputs,
+        inputs=configure_inputs + [makefile, build_stamp],
         desc=f'Installing {self.name}',
         shortcut=f'install {self.name}')
     else:
@@ -383,11 +396,19 @@ class ExtensionHelper:
     self.configure = 'cmake'
     as_path_list(outputs, self.outputs)
 
-  def ConfigureWithMeson(self, *outputs, install_tags='devel,runtime'):
+  def ConfigureWithMeson(self, *outputs, install_tags='devel,runtime', build_targets=('all',)):
+    '''
+    `build_targets` is the list of meson targets passed to ninja before install.
+    Defaults to `('all',)` which builds everything. Restrict it when the project
+    contains targets we don't consume and that fail to build on some platforms
+    (e.g. systemd's shared libraries linking non-PIC system archives).
+    `install_tags` must cover only files produced by the chosen `build_targets`.
+    '''
     if self.configure:
       raise ValueError(f'{self.name} was already configured')
     self.configure = 'meson'
     self.meson_install_tags = install_tags
+    self.meson_build_targets = list(build_targets)
     as_path_list(outputs, self.outputs)
 
   def ConfigureWithAutotools(self, *outputs):

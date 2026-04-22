@@ -2541,14 +2541,14 @@ struct EnumKnobWidget : ui::Widget {
     }
     static const SkPaint white_overlay = [] {
       SkPaint paint;
-      SkColor4f mask_colors[] = {SkColor4f::FromColor("#ffffff"_color),
-                                 SkColor4f::FromColor("#ffffff00"_color)};
+      SkColor4f mask_colors[] = {"#ffffff"_color4f,
+                                 "#ffffff00"_color4f};
       float mask_pos[] = {kRegionStartRadius / kRegionEndRadius, 1};
       auto mask = SkShaders::RadialGradient(
           Vec2(), kRegionEndRadius,
           SkGradient{SkGradient::Colors{mask_colors, mask_pos, SkTileMode::kClamp}, {}});
-      SkColor4f colors[] = {SkColor4f::FromColor("#dddddd"_color),
-                            SkColor4f::FromColor("#bbbbbb"_color)};
+      SkColor4f colors[] = {"#dddddd"_color4f,
+                            "#bbbbbb"_color4f};
       auto color = SkShaders::RadialGradient(
           Vec2(0, kMiddleR), kGaugeRadius + kMiddleR,
           SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
@@ -2883,9 +2883,9 @@ struct EnumKnobWidget : ui::Widget {
 
       {  // sky reflection
         SkPaint paint;
-        SkColor4f colors[] = {SkColor4f::FromColor("#ffffffaa"_color),
-                              SkColor4f::FromColor("#ffffff30"_color),
-                              SkColor4f::FromColor("#ffffff00"_color)};
+        SkColor4f colors[] = {"#ffffffaa"_color4f,
+                              "#ffffff30"_color4f,
+                              "#ffffff00"_color4f};
         paint.setShader(SkShaders::RadialGradient(
             Vec2(0, kMiddleR), kGaugeRadius * 1.5,
             SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
@@ -2899,9 +2899,9 @@ struct EnumKnobWidget : ui::Widget {
       {  // light edge
         SkPaint paint;
         SkPoint pts[] = {Vec2(-kGaugeRadius, 0), Vec2(kGaugeRadius, 0)};
-        SkColor4f colors[] = {SkColor4f::FromColor("#ffffff20"_color),
-                              SkColor4f::FromColor("#ffffffaa"_color),
-                              SkColor4f::FromColor("#ffffff20"_color)};
+        SkColor4f colors[] = {"#ffffff20"_color4f,
+                              "#ffffffaa"_color4f,
+                              "#ffffff20"_color4f};
         paint.setShader(SkShaders::LinearGradient(
             pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
         paint.setStyle(SkPaint::kStroke_Style);
@@ -3433,8 +3433,8 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
   {  // Vignette
     SkPaint vignette_paint;
     float r = hypotf(Instruction::Widget::kWidth, kHeight) / 2;
-    SkColor4f colors[2] = {SkColor4f::FromColor("#20100800"_color),
-                           SkColor4f::FromColor("#20100810"_color)};
+    SkColor4f colors[2] = {"#20100800"_color4f,
+                           "#20100810"_color4f};
     vignette_paint.setShader(SkShaders::RadialGradient(
         SkPoint::Make(Instruction::Widget::kWidth / 2, kHeight / 2), r,
         SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
@@ -3444,10 +3444,10 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
   // Bevel
   SkPoint points[2] = {SkPoint::Make(0, kHeight), SkPoint::Make(0, 0)};
   SkColor4f colors[4] = {
-      SkColor4f::FromColor("#ffffff"_color),
-      SkColor4f::FromColor("#cccccc"_color),
-      SkColor4f::FromColor("#bbbbbb"_color),
-      SkColor4f::FromColor("#888888"_color),
+      "#ffffff"_color4f,
+      "#cccccc"_color4f,
+      "#bbbbbb"_color4f,
+      "#888888"_color4f,
   };
   float pos[4] = {0, 3_mm / kHeight, 1 - 3_mm / kHeight, 1};
   float bevel_width = 0.4_mm;

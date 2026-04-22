@@ -21,8 +21,7 @@ SkRRect NumberTextField::ShapeRRect() const {
 }
 
 // First bottom then top
-static const SkColor4f kNumberBackgroundColors[2] = {SkColor4f::FromColor("#bec8b7"_color),
-                                                     SkColor4f::FromColor("#dee3db"_color)};
+static const SkColor4f kNumberBackgroundColors[2] = {"#bec8b7"_color4f, "#dee3db"_color4f};
 
 static const SkPaint kNumberTextBackgroundPaint = [] {
   SkPoint pts[2] = {{0, 0}, {0, TextField::kHeight}};
@@ -39,7 +38,7 @@ const SkPaint& NumberTextField::GetBackgroundPaint() const { return kNumberTextB
 static const SkPaint kNumberTextBorderPaint = [] {
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, TextField::kHeight}};
-  SkColor4f colors[2] = {SkColor4f::FromColor(0xffffffff), SkColor4f::FromColor(0xff000000)};
+  SkColor4f colors[2] = {"#ffffff"_color4f, "#000000"_color4f};
   sk_sp<SkShader> shader = SkShaders::LinearGradient(
       pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
   paint.setShader(shader);

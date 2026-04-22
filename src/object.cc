@@ -35,7 +35,7 @@ void ObjectToy::Draw(SkCanvas& canvas) const {
 
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, 0.01}};
-  SkColor4f colors[2] = {SkColor4f::FromColor(0xff0f5f4d), SkColor4f::FromColor(0xff468257)};
+  SkColor4f colors[2] = {"#0f5f4d"_color4f, "#468257"_color4f};
   sk_sp<SkShader> gradient = SkShaders::LinearGradient(
       pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
   paint.setShader(gradient);
@@ -52,8 +52,7 @@ void ObjectToy::Draw(SkCanvas& canvas) const {
     path = SkPath::RRect(rrect);
   }
 
-  SkColor4f border_colors[2] = {SkColor4f::FromColor(0xff1c5d3e),
-                                SkColor4f::FromColor(0xff76a87a)};
+  SkColor4f border_colors[2] = {"#1c5d3e"_color4f, "#76a87a"_color4f};
   sk_sp<SkShader> border_gradient = SkShaders::LinearGradient(
       pts, SkGradient{SkGradient::Colors{border_colors, SkTileMode::kClamp}, {}});
   border_paint.setShader(border_gradient);

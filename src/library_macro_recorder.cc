@@ -539,9 +539,9 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
           }
 
           SkPaint eyelid_paint;
-          SkColor4f colors[] = {SkColor4f::FromColor("#353940"_color),
-                                SkColor4f::FromColor("#131519"_color),
-                                SkColor4f::FromColor("#070708"_color)};
+          SkColor4f colors[] = {"#353940"_color4f,
+                                "#131519"_color4f,
+                                "#070708"_color4f};
           float colors_pos[] = {0, 0.6, 1};
           eyelid_paint.setShader(SkShaders::RadialGradient(
               bounds.Center() + Vec2(0, kEyeRadius / 2), kEyeRadius,
@@ -549,9 +549,9 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
           canvas.drawPath(eyelid, eyelid_paint);
         }
 
-        SkColor4f colors[] = {SkColor4f::FromColor("#00000000"_color),
-                              SkColor4f::FromColor("#00000010"_color),
-                              SkColor4f::FromColor("#00000080"_color)};
+        SkColor4f colors[] = {"#00000000"_color4f,
+                              "#00000010"_color4f,
+                              "#00000080"_color4f};
         float colors_pos[] = {0, 0.6, 1};
         SkPaint eye_shadow_paint;
         eye_shadow_paint.setShader(SkShaders::RadialGradient(

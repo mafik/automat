@@ -775,8 +775,7 @@ void RootWidget::DeserializeState(Deserializer& d, Status& status) {
 
 SkPath RootWidget::TrashShape() const {
   SkPath trash_area_path = SkPath::Circle(size.width, size.height, trash_radius);
-  trash_area_path.transform(this->WindowToCanvas());
-  return trash_area_path;
+  return trash_area_path.makeTransform(this->WindowToCanvas());
 }
 
 SkMatrix RootWidget::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point) {

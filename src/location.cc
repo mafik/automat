@@ -13,7 +13,8 @@
 #include <include/core/SkPoint3.h>
 #include <include/core/SkSurface.h>
 #include <include/core/SkTileMode.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 #include <include/effects/SkImageFilters.h>
 #include <include/utils/SkShadowUtils.h>
 
@@ -197,9 +198,7 @@ SkPath LocationWidget::Shape() const {
 
 SkPath LocationWidget::ShapeRigid() const {
   if (!toy) return SkPath();
-  auto toy_shape = toy->ShapeRigid();
-  toy_shape.transform(toy->local_to_parent.asM33());
-  return toy_shape;
+  return toy->ShapeRigid().makeTransform(toy->local_to_parent.asM33());
 }
 
 void LocationWidget::FillChildren(Vec<Widget*>& children) {
@@ -279,18 +278,21 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
 
   if constexpr (false) {  // Gray frame
     SkPaint frame_bg;
-    SkColor frame_bg_colors[2] = {0xffcccccc, 0xffaaaaaa};
+    SkColor frame_bg_colors_raw[2] = {0xffcccccc, 0xffaaaaaa};
+    SkColor4f frame_bg_colors[2] = {SkColor4f::FromColor(frame_bg_colors_raw[0]),
+                                    SkColor4f::FromColor(frame_bg_colors_raw[1])};
     SkPoint gradient_pts[2] = {{0, bounds.top}, {0, bounds.bottom}};
-    sk_sp<SkShader> frame_bg_shader =
-        SkGradientShader::MakeLinear(gradient_pts, frame_bg_colors, nullptr, 2, SkTileMode::kClamp);
+    sk_sp<SkShader> frame_bg_shader = SkShaders::LinearGradient(
+        gradient_pts, SkGradient{SkGradient::Colors{frame_bg_colors, SkTileMode::kClamp}, {}});
     frame_bg.setShader(frame_bg_shader);
     canvas.drawPath(my_shape, frame_bg);
 
     SkPaint frame_border;
-    SkColor frame_border_colors[2] = {color::AdjustLightness(frame_bg_colors[0], 5),
-                                      color::AdjustLightness(frame_bg_colors[1], -5)};
-    sk_sp<SkShader> frame_border_shader = SkGradientShader::MakeLinear(
-        gradient_pts, frame_border_colors, nullptr, 2, SkTileMode::kClamp);
+    SkColor4f frame_border_colors[2] = {
+        SkColor4f::FromColor(color::AdjustLightness(frame_bg_colors_raw[0], 5)),
+        SkColor4f::FromColor(color::AdjustLightness(frame_bg_colors_raw[1], -5))};
+    sk_sp<SkShader> frame_border_shader = SkShaders::LinearGradient(
+        gradient_pts, SkGradient{SkGradient::Colors{frame_border_colors, SkTileMode::kClamp}, {}});
     frame_border.setShader(frame_border_shader);
     frame_border.setStyle(SkPaint::kStroke_Style);
     frame_border.setStrokeWidth(0.00025);
@@ -373,7 +375,7 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
     canvas.drawPath(my_shape_px, paint);
 
     paint.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, blur_radius / 4, false));
-    my_shape_px.toggleInverseFillType();
+    my_shape_px = my_shape_px.makeToggleInverseFillType();
     canvas.drawPath(my_shape_px, paint);
 
     canvas.restore();
@@ -412,7 +414,8 @@ void LocationWidget::PreDraw(SkCanvas& canvas) const {
   Vec2 dst[2] = {control_points[0], control_points[1] - Vec2{0, elevation_mm}};
 
   SkMatrix matrix;
-  if (!matrix.setPolyToPoly(&control_points[0].sk, &dst[0].sk, 2)) {
+  if (!matrix.setPolyToPoly(SkSpan<const SkPoint>{&control_points[0].sk, 2},
+                            SkSpan<const SkPoint>{&dst[0].sk, 2})) {
     matrix = SkMatrix::I();
   }
 

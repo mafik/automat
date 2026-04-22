@@ -9,12 +9,12 @@
 #include <include/core/SkImageInfo.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
+#include <include/core/SkPathBuilder.h>
 #include <include/core/SkPictureRecorder.h>
 #include <include/core/SkRect.h>
 #include <include/core/SkSamplingOptions.h>
 #include <include/core/SkSerialProcs.h>
 #include <include/core/SkShader.h>
-#include <include/effects/SkGradientShader.h>
 #include <include/effects/SkRuntimeEffect.h>
 #include <include/gpu/graphite/Context.h>
 #include <include/gpu/graphite/Surface.h>
@@ -307,11 +307,13 @@ void Widget::ValidateHierarchy(std::source_location location) {
 SkPath Widget::ShapeRecursive() const {
   SkPath shape = Shape();
   if (shape.isEmpty()) {  // only descend into children if the parent widget has no shape
+    SkPathBuilder builder;
+    builder.addPath(shape);
     for (auto* child : Children()) {
-      SkPath child_shape = child->ShapeRigid();
-      child_shape.transform(child->local_to_parent.asM33());
-      shape.addPath(child_shape);
+      SkPath child_shape = child->ShapeRigid().makeTransform(child->local_to_parent.asM33());
+      builder.addPath(child_shape);
     }
+    shape = builder.detach();
   }
   return shape;
 }
@@ -319,9 +321,8 @@ SkPath Widget::ShapeRecursive() const {
 SkPath Widget::ShapeRigid() const { return ShapeRecursive(); }
 
 bool Widget::Intersects(const Widget& a, const Widget& b) {
-  SkPath a_shape = a.ShapeRigid();
+  SkPath a_shape = a.ShapeRigid().makeTransform(TransformBetween(a, b));
   SkPath b_shape = b.ShapeRigid();
-  a_shape.transform(TransformBetween(a, b));
   SkPath intersection;
   bool result = Op(a_shape, b_shape, kIntersect_SkPathOp, &intersection);
   return result && intersection.countVerbs() > 0;

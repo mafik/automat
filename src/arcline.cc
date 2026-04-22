@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #include "arcline.hh"
 
+#include <include/core/SkPathBuilder.h>
+
 #include <cavc/polyline.hpp>
 #include <cavc/polylineoffset.hpp>
 #include <cmath>
@@ -386,10 +388,10 @@ std::string ArcLine::ToStrCpp() const {
 }
 
 SkPath ArcLine::ToPath(bool close, float length_limit) const {
-  SkPath path;
-  path.moveTo(start.x, start.y);
+  SkPathBuilder builder;
+  builder.moveTo(start.x, start.y);
   if (length_limit <= 0) {
-    return path;
+    return builder.detach();
   }
   Vec2 p = start;
   SinCos current_alpha = start_angle;
@@ -399,11 +401,11 @@ SkPath ArcLine::ToPath(bool close, float length_limit) const {
     if (types[i] == Type::Line) {
       if (segments[i].line.length < remaining) {
         p += Vec2::Polar(current_alpha, segments[i].line.length);
-        path.lineTo(p.x, p.y);
+        builder.lineTo(p.x, p.y);
         length += segments[i].line.length;
       } else {
         p += Vec2::Polar(current_alpha, remaining);
-        path.lineTo(p.x, p.y);
+        builder.lineTo(p.x, p.y);
         length = length_limit;
         break;
       }
@@ -418,22 +420,22 @@ SkPath ArcLine::ToPath(bool close, float length_limit) const {
       if (l < remaining) {
         SinCos sweep_angle = segments[i].arc.sweep_angle;
         Turn(p, current_alpha, sweep_angle, r);
-        path.arcTo(oval, (std::signbit(r) ? 90 : -90) + alpha0.ToDegrees(),
-                   segments[i].arc.ToDegrees(), false);
+        builder.arcTo(oval, (std::signbit(r) ? 90 : -90) + alpha0.ToDegrees(),
+                      segments[i].arc.ToDegrees(), false);
         length += l;
       } else {
         sweep_radians = remaining / r;
-        path.arcTo(oval, (std::signbit(r) ? 90 : -90) + alpha0.ToDegrees(),
-                   sweep_radians * 180 / M_PI, false);
+        builder.arcTo(oval, (std::signbit(r) ? 90 : -90) + alpha0.ToDegrees(),
+                      sweep_radians * 180 / M_PI, false);
         length = length_limit;
         break;
       }
     }
   }
   if (close) {
-    path.close();
+    builder.close();
   }
-  return path;
+  return builder.detach();
 }
 
 Rect ArcLine::Bounds() const {

@@ -21,6 +21,9 @@
 #include <include/gpu/graphite/vk/VulkanGraphiteTypes.h>
 #include <include/gpu/graphite/vk/VulkanGraphiteUtils.h>
 #include <include/gpu/vk/VulkanBackendContext.h>
+#include <include/gpu/vk/VulkanMemoryAllocator.h>
+#include <src/gpu/GpuTypesPriv.h>
+#include <src/gpu/vk/vulkanmemoryallocator/VulkanMemoryAllocatorPriv.h>
 #include <include/gpu/vk/VulkanExtensions.h>
 #include <include/gpu/vk/VulkanMutableTextureState.h>
 #include <include/gpu/vk/VulkanPreferredFeatures.h>
@@ -449,6 +452,9 @@ void InitGrContext() {
       .fDeviceFeatures2 = &device.features,
       .fGetProc = GetProc,
   };
+  foreground_backend.fMemoryAllocator =
+      skgpu::VulkanMemoryAllocators::Make(foreground_backend, skgpu::ThreadSafe::kYes);
+
   skgpu::VulkanBackendContext background_backend = {
       .fInstance = instance,
       .fPhysicalDevice = physical_device,
@@ -459,6 +465,7 @@ void InitGrContext() {
       .fVkExtensions = &device.extensions,
       .fDeviceFeatures2 = &device.features,
       .fGetProc = GetProc,
+      .fMemoryAllocator = foreground_backend.fMemoryAllocator,
   };
 
   graphite::ContextOptions options{};
@@ -870,9 +877,9 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
 
   SkISize dimensions = {(int)extent.width, (int)extent.height};
   auto texture_info = graphite::VulkanTextureInfo(
-      sample_count, skgpu::Mipmapped::kNo, 0, surfaceFormat, VK_IMAGE_TILING_OPTIMAL, usageFlags,
-      swapchainCreateInfo.imageSharingMode, VK_IMAGE_ASPECT_COLOR_BIT,
-      skgpu::VulkanYcbcrConversionInfo());
+      static_cast<VkSampleCountFlagBits>(sample_count), skgpu::Mipmapped::kNo, 0, surfaceFormat,
+      VK_IMAGE_TILING_OPTIMAL, usageFlags, swapchainCreateInfo.imageSharingMode,
+      VK_IMAGE_ASPECT_COLOR_BIT, skgpu::VulkanYcbcrConversionInfo());
 
   std::vector<graphite::BackendTexture> canvas_textures;
 

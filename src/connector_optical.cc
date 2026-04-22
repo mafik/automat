@@ -12,11 +12,12 @@
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkMesh.h>
 #include <include/core/SkPaint.h>
+#include <include/core/SkPathBuilder.h>
 #include <include/core/SkPathMeasure.h>
 #include <include/core/SkPictureRecorder.h>
 #include <include/core/SkSamplingOptions.h>
 #include <include/core/SkVertices.h>
-#include <include/effects/SkGradientShader.h>
+#include <src/core/SkPathPriv.h>
 #include <include/effects/SkRuntimeEffect.h>
 
 #include <cmath>
@@ -658,10 +659,11 @@ static const Rect kSteelRect = Rect(-3_mm, -1_mm, 3_mm, 1_mm);
 
 SkPath CablePhysicsSimulation::Shape() const {
   auto rect = Rect(-kCasingWidth / 2, 0, kCasingWidth / 2, kCasingHeight);
-  SkPath path = SkPath::Rect(rect);
-  path.addRect(kSteelRect.sk.makeOffset(0, 2_mm * steel_insert_hidden));
-  path.transform(ConnectorMatrix());
-  return path;
+  SkMatrix m = ConnectorMatrix();
+  return SkPathBuilder()
+      .addRect(rect)
+      .addRect(kSteelRect.sk.makeOffset(0, 2_mm * steel_insert_hidden))
+      .detach(&m);
 }
 
 static SkPoint conic(SkPoint p0, SkPoint p1, SkPoint p2, float w, float t) {
@@ -866,14 +868,14 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
   float dispenser_scale = state.start_widget->local_to_parent.rc(0, 0);
   SkMatrix connector_matrix = state.ConnectorMatrix();
 
-  SkPath p;
+  SkPathBuilder p_builder;
   if (state.stabilized) {
     if (state.arcline) {
       SkPath p2 = state.arcline->ToPath(false);
-      p.reverseAddPath(p2);
+      SkPathPriv::ReverseAddPath(&p_builder, p2);
     }
   } else {
-    p.moveTo(state.sections[0].pos);
+    p_builder.moveTo(state.sections[0].pos);
     for (int i = 1; i < state.sections.size(); i++) {
       Vec2 p1 = state.sections[i - 1].pos +
                 Vec2::Polar(state.sections[i - 1].dir + state.sections[i - 1].true_dir_offset,
@@ -881,9 +883,10 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
       Vec2 p2 = state.sections[i].pos -
                 Vec2::Polar(state.sections[i].dir + state.sections[i].true_dir_offset,
                             state.sections[i].distance / 3);
-      p.cubicTo(p1, p2, state.sections[i].pos);
+      p_builder.cubicTo(p1, p2, state.sections[i].pos);
     }
   }
+  SkPath p = p_builder.detach();
   p.setIsVolatile(true);
 
   // Draw the cable
@@ -1165,15 +1168,16 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
       Vec<Vec2> anchors;
       Vec<SinCos> true_anchor_dir;
       PopulateAnchors(anchors, true_anchor_dir, *state.arcline);
-      SkPath anchor_shape;
-      anchor_shape.moveTo(1_mm, 0);
-      anchor_shape.lineTo(0.5_mm, 0.5_mm);
-      anchor_shape.lineTo(0.5_mm, 0.2_mm);
-      anchor_shape.lineTo(-1_mm, 0.2_mm);
-      anchor_shape.lineTo(-1_mm, -0.2_mm);
-      anchor_shape.lineTo(0.5_mm, -0.2_mm);
-      anchor_shape.lineTo(0.5_mm, -0.5_mm);
-      anchor_shape.close();
+      SkPath anchor_shape = SkPathBuilder()
+                                .moveTo(1_mm, 0)
+                                .lineTo(0.5_mm, 0.5_mm)
+                                .lineTo(0.5_mm, 0.2_mm)
+                                .lineTo(-1_mm, 0.2_mm)
+                                .lineTo(-1_mm, -0.2_mm)
+                                .lineTo(0.5_mm, -0.2_mm)
+                                .lineTo(0.5_mm, -0.5_mm)
+                                .close()
+                                .detach();
       SkPaint anchor_paint;
       anchor_paint.setColor("#ff00ff"_color);
       anchor_paint.setBlendMode(SkBlendMode::kDifference);

@@ -6,7 +6,7 @@ from sys import platform
 import subprocess
 
 skia = ExtensionHelper('Skia', globals())
-skia.FetchFromGit('https://skia.googlesource.com/skia.git', 'chrome/m139')
+skia.FetchFromGit('https://skia.googlesource.com/skia.git', 'chrome/m148')
 skia.ConfigureWithGN(skia.build_dir / build.libname('skia'))
 skia.ninja_target = 'all'
 skia.ConfigureOptions(

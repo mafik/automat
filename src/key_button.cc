@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 #include "key_button.hh"
 
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 
 #include "font.hh"
 #include "ui_button.hh"
@@ -60,20 +61,20 @@ static sk_sp<SkShader> MakeSweepShader(const RRect& rrect, SkColor side_color, S
                                        SkColor top_corner_top, SkColor top_corner_side,
                                        SkColor bottom_corner_side, SkColor bottom_corner_bottom,
                                        SkColor bottom_color) {
-  SkColor colors[] = {
-      side_color,            // right middle
-      top_corner_side,       // bottom of top-right corner
-      top_corner_top,        // top of the top-right corner
-      top_color,             // center top
-      top_corner_top,        // top of the top-left corner
-      top_corner_side,       // bottom of the top-left corner
-      side_color,            // left middle
-      bottom_corner_side,    // top of the bottom-left corner
-      bottom_corner_bottom,  // bottom of the bottom-left corner
-      bottom_color,          // center bottom
-      bottom_corner_bottom,  // bottom of the bottom-right corner
-      bottom_corner_side,    // top of the bottom-right corner
-      side_color,            // right middle
+  SkColor4f colors[] = {
+      SkColor4f::FromColor(side_color),            // right middle
+      SkColor4f::FromColor(top_corner_side),       // bottom of top-right corner
+      SkColor4f::FromColor(top_corner_top),        // top of the top-right corner
+      SkColor4f::FromColor(top_color),             // center top
+      SkColor4f::FromColor(top_corner_top),        // top of the top-left corner
+      SkColor4f::FromColor(top_corner_side),       // bottom of the top-left corner
+      SkColor4f::FromColor(side_color),            // left middle
+      SkColor4f::FromColor(bottom_corner_side),    // top of the bottom-left corner
+      SkColor4f::FromColor(bottom_corner_bottom),  // bottom of the bottom-left corner
+      SkColor4f::FromColor(bottom_color),          // center bottom
+      SkColor4f::FromColor(bottom_corner_bottom),  // bottom of the bottom-right corner
+      SkColor4f::FromColor(bottom_corner_side),    // top of the bottom-right corner
+      SkColor4f::FromColor(side_color),            // right middle
   };
   auto center = rrect.Center();
   float pos[] = {0,
@@ -89,7 +90,9 @@ static sk_sp<SkShader> MakeSweepShader(const RRect& rrect, SkColor side_color, S
                  (float)(atan(rrect.LineEndLowerRight() - center) / (2 * M_PI) + 1),
                  (float)(atan(rrect.LineEndRightLower() - center) / (2 * M_PI) + 1),
                  1};
-  return SkGradientShader::MakeSweep(center.x, center.y, colors, pos, 13);
+  return SkShaders::SweepGradient(
+      SkPoint::Make(center.x, center.y),
+      SkGradient{SkGradient::Colors{colors, pos, SkTileMode::kClamp}, {}});
 }
 
 void KeyButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
@@ -108,10 +111,11 @@ void KeyButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
 
   SkPaint face_paint;
   SkPoint face_pts[] = {{0, key_face.rect().bottom()}, {0, key_face.rect().top()}};
-  SkColor face_colors[] = {color::AdjustLightness(fg, -10 + lightness_adjust),
-                           color::AdjustLightness(fg, lightness_adjust)};
-  face_paint.setShader(
-      SkGradientShader::MakeLinear(face_pts, face_colors, nullptr, 2, SkTileMode::kClamp));
+  SkColor4f face_colors[] = {
+      SkColor4f::FromColor(color::AdjustLightness(fg, -10 + lightness_adjust)),
+      SkColor4f::FromColor(color::AdjustLightness(fg, lightness_adjust))};
+  face_paint.setShader(SkShaders::LinearGradient(
+      face_pts, SkGradient{SkGradient::Colors{face_colors, SkTileMode::kClamp}, {}}));
 
   face_paint.setStyle(SkPaint::kStrokeAndFill_Style);
   face_paint.setStrokeWidth(0.5_mm);

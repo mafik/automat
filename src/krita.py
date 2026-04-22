@@ -398,7 +398,7 @@ def generate_skpath_cc_impl(layer_name: str, path_data: str, svg_transform: dict
     );
     transform.postTranslate({translate_x:.10f}, {translate_y:.10f});
     transform.postScale({scale_x}, {scale_y});
-    path.transform(transform);
+    path = path.makeTransform(transform);
     return path;
 }}"""
 

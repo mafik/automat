@@ -3,8 +3,8 @@
 #include "raycast.hh"
 
 #include <include/core/SkPath.h>
-#include <modules/pathops/src/SkIntersections.h>
-#include <modules/pathops/src/SkOpContour.h>
+#include <src/pathops/SkIntersections.h>
+#include <src/pathops/SkOpContour.h>
 
 namespace automat {
 

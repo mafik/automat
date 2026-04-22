@@ -5,12 +5,14 @@
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkColor.h>
 #include <include/core/SkMatrix.h>
+#include <include/core/SkPathBuilder.h>
 #include <include/core/SkRRect.h>
 #include <include/core/SkRSXform.h>
 #include <include/core/SkTextBlob.h>
 #include <include/core/SkTileMode.h>
 #include <include/core/SkVertices.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 
 #include <atomic>
 #include <optional>
@@ -76,13 +78,13 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
 
     {  // Circle around the target
       SkPaint circle_paint;
-      SkColor colors[] = {
-          "#ffffff"_color,
-          "#ffffbe00"_color,
+      SkColor4f colors[] = {
+          SkColor4f::FromColor("#ffffff"_color),
+          SkColor4f::FromColor("#ffffbe00"_color),
       };
       float pos[] = {0.5, 1};
-      circle_paint.setShader(
-          SkGradientShader::MakeRadial(target, radius, colors, pos, 2, SkTileMode::kClamp));
+      circle_paint.setShader(SkShaders::RadialGradient(
+          target, radius, SkGradient{SkGradient::Colors{colors, pos, SkTileMode::kClamp}, {}}));
       canvas.drawCircle(target, radius, circle_paint);
     }
 
@@ -93,15 +95,18 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
         Vec2 diff = target - source;
         float dist = Length(diff);
         auto angle = SinCos::FromVec2(diff, dist);
-        SkPath path;
-        path.moveTo(source);
-        path.lineTo(target + Vec2::Polar((angle + 90_deg), radius));
-        path.lineTo(target + Vec2::Polar((angle - 90_deg), radius));
-        SkColor ray_colors[] = {"#ffffbe"_color, "#ffffbe00"_color};
+        SkPath path = SkPathBuilder()
+                          .moveTo(source)
+                          .lineTo(target + Vec2::Polar((angle + 90_deg), radius))
+                          .lineTo(target + Vec2::Polar((angle - 90_deg), radius))
+                          .detach();
+        SkColor4f ray_colors[] = {SkColor4f::FromColor("#ffffbe"_color),
+                                  SkColor4f::FromColor("#ffffbe00"_color)};
         Vec2 ray_positions[] = {source, target};
         SkPaint ray_paint;
-        ray_paint.setShader(SkGradientShader::MakeLinear(&ray_positions[0].sk, ray_colors, 0, 2,
-                                                         SkTileMode::kClamp));
+        ray_paint.setShader(SkShaders::LinearGradient(
+            &ray_positions[0].sk,
+            SkGradient{SkGradient::Colors{ray_colors, SkTileMode::kClamp}, {}}));
         ray_paint.setMaskFilter(SkMaskFilter::MakeBlur(SkBlurStyle::kNormal_SkBlurStyle, 1_mm));
         canvas.drawPath(path, ray_paint);
       }
@@ -113,15 +118,17 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
   if (anim->radar_alpha >= 0.01f) {
     SkPaint radius_paint;
     SkColor tint = arg.table->tint;
-    SkColor colors[] = {SkColorSetA(tint, 0), SkColorSetA(tint, (int)(anim->radar_alpha * 96)),
-                        SK_ColorTRANSPARENT};
+    SkColor4f colors[] = {SkColor4f::FromColor(SkColorSetA(tint, 0)),
+                          SkColor4f::FromColor(SkColorSetA(tint, (int)(anim->radar_alpha * 96))),
+                          SkColor4f::FromColor(SK_ColorTRANSPARENT)};
     float pos[] = {0, 1, 1};
     constexpr float kPeriod = 2.f;
     double t = anim->time_seconds;
     auto local_matrix = SkMatrix::RotateRad(fmod(t * 2 * M_PI / kPeriod, 2 * M_PI))
                             .postTranslate(pos_dir.pos.x, pos_dir.pos.y);
-    radius_paint.setShader(SkGradientShader::MakeSweep(0, 0, colors, pos, 3, SkTileMode::kClamp, 0,
-                                                       60, 0, &local_matrix));
+    radius_paint.setShader(SkShaders::SweepGradient(
+        SkPoint::Make(0, 0), 0, 60,
+        SkGradient{SkGradient::Colors{colors, pos, SkTileMode::kClamp}, {}}, &local_matrix));
     // TODO: switch to drawArc instead
     float autoconnect_radius = arg.table->autoconnect_radius;
     SkRect oval = Rect::MakeCenter(pos_dir.pos, autoconnect_radius * 2, autoconnect_radius * 2);
@@ -311,7 +318,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   from_shape = start_base_widget->Shape();
   if (a.board_widget) {
     auto transform_from_to_board = TransformBetween(*start_base_widget, *a.board_widget);
-    from_shape.transform(transform_from_to_board);
+    from_shape = from_shape.makeTransform(transform_from_to_board);
   }
 
   UpdateEndpoints(*this, a);
@@ -332,8 +339,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   }
 
   if (a.end_iface) {
-    to_shape = a.end_widget->Shape();
-    to_shape.transform(a.end_transform);
+    to_shape = a.end_widget->Shape().makeTransform(a.end_transform);
   } else {
     to_shape.reset();
   }
@@ -464,8 +470,7 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
     if (style == Argument::Style::Arrow) {
       if (to_shape.isEmpty()) {
         if (!to_points.empty()) {
-          SkPath dummy_to_shape;
-          dummy_to_shape.moveTo(to_points[0].pos);
+          SkPath dummy_to_shape = SkPathBuilder().moveTo(to_points[0].pos).detach();
           DrawArrow(canvas, from_shape, dummy_to_shape);
         }
       }

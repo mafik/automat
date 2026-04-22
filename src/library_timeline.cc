@@ -11,7 +11,8 @@
 #include <include/core/SkPath.h>
 #include <include/core/SkPathBuilder.h>
 #include <include/core/SkRRect.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 
 #include <algorithm>
 #include <cmath>
@@ -151,9 +152,10 @@ const SkPaint kPlasticPaint = [] {
   SkPaint p;
   // p.setColor("#f0eae5"_color);
   SkPoint pts[2] = {{0, kPlasticTop}, {0, 0}};
-  SkColor colors[3] = {"#f2ece8"_color, "#e0dbd8"_color};
-  sk_sp<SkShader> gradient =
-      SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+  SkColor4f colors[2] = {SkColor4f::FromColor("#f2ece8"_color),
+                         SkColor4f::FromColor("#e0dbd8"_color)};
+  sk_sp<SkShader> gradient = SkShaders::LinearGradient(
+      pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
   p.setShader(gradient);
   return p;
 }();
@@ -209,8 +211,9 @@ const SkPaint kTickPaint = [] {
 const SkPaint kBridgeHandlePaint = [] {
   SkPaint p;
   SkPoint pts[2] = {{0, -kRulerHeight - kMarginAroundTracks}, {0, -kRulerHeight}};
-  SkColor colors[2] = {kOrange, "#f17149"_color};
-  auto shader = SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+  SkColor4f colors[2] = {SkColor4f::FromColor(kOrange), SkColor4f::FromColor("#f17149"_color)};
+  auto shader = SkShaders::LinearGradient(
+      pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
   p.setShader(shader);
   return p;
 }();
@@ -277,21 +280,15 @@ const SkPaint kZoomTickPaint = [] {
 const SkMatrix kHorizontalFlip = SkMatrix::Scale(-1, 1);
 
 static SkPath GetPausedPath() {
-  static SkPath path = [] {
-    SkPath path;
-    path.addRect(-1.5_mm, -1.5_mm, -0.5_mm, 1.5_mm);
-    path.addRect(0.5_mm, -1.5_mm, 1.5_mm, 1.5_mm);
-    return path;
-  }();
+  static SkPath path = SkPathBuilder()
+                           .addRect(SkRect::MakeLTRB(-1.5_mm, -1.5_mm, -0.5_mm, 1.5_mm))
+                           .addRect(SkRect::MakeLTRB(0.5_mm, -1.5_mm, 1.5_mm, 1.5_mm))
+                           .detach();
   return path;
 }
 
 static SkPath GetRecPath() {
-  static SkPath path = [] {
-    SkPath path;
-    path.addCircle(0, 0, 2.5_mm);
-    return path;
-  }();
+  static SkPath path = SkPath::Circle(0, 0, 2.5_mm);
   return path;
 }
 
@@ -469,18 +466,16 @@ SkPath SplicerShape(int num_tracks, float current_pos_ratio) {
     Vec2 top_right = {edge_offset, top};
     float radius = 0.5_mm;
 
-    SkPath path;
-    // Start at bottom center
-    path.moveTo(bottom_center);
-    path.arcTo(bottom_right, (bottom_right + right) / 2, radius);
-    path.arcTo(right, (right + top_right) / 2, radius);
-    path.arcTo(top_right, top_center, radius);
-    path.arcTo(top_left, (top_left + left) / 2, radius);
-    path.arcTo(left, (left + bottom_left) / 2, radius);
-    path.arcTo(bottom_left, bottom_center, radius);
-    path.close();
-
-    return path;
+    return SkPathBuilder()
+        .moveTo(bottom_center)
+        .arcTo(bottom_right, (bottom_right + right) / 2, radius)
+        .arcTo(right, (right + top_right) / 2, radius)
+        .arcTo(top_right, top_center, radius)
+        .arcTo(top_left, (top_left + left) / 2, radius)
+        .arcTo(left, (left + bottom_left) / 2, radius)
+        .arcTo(bottom_left, bottom_center, radius)
+        .close()
+        .detach();
   }();
 
   float x = BridgeOffsetX(current_pos_ratio);
@@ -531,33 +526,32 @@ SkPath BridgeShape(int num_tracks, float current_pos_ratio) {
   float line_width = 0.5_mm;
   float line_gap = 1_mm;
 
-  SkPath bridge_handle;
-  bridge_handle.moveTo(0, kRulerHeight / 6);                              // top of the arrow
-  bridge_handle.lineTo(kMinimalTouchableSize / 4, 0);                     // right of the arrow
-  bridge_handle.lineTo(kMinimalTouchableSize / 2, 0);                     // top right
-  bridge_handle.lineTo(kMinimalTouchableSize / 2, -kMarginAroundTracks);  // bottom right
+  SkPathBuilder bridge_builder;
+  bridge_builder.moveTo(0, kRulerHeight / 6);                              // top of the arrow
+  bridge_builder.lineTo(kMinimalTouchableSize / 4, 0);                     // right of the arrow
+  bridge_builder.lineTo(kMinimalTouchableSize / 2, 0);                     // top right
+  bridge_builder.lineTo(kMinimalTouchableSize / 2, -kMarginAroundTracks);  // bottom right
 
   {  // right vertical line
-    bridge_handle.lineTo(line_gap / 2 + line_width, -kMarginAroundTracks);
-    bridge_handle.lineTo(line_gap / 2 + line_width, bottom_y);
-    bridge_handle.lineTo(line_gap / 2, bottom_y);
-    bridge_handle.lineTo(line_gap / 2, -kMarginAroundTracks);
+    bridge_builder.lineTo(line_gap / 2 + line_width, -kMarginAroundTracks);
+    bridge_builder.lineTo(line_gap / 2 + line_width, bottom_y);
+    bridge_builder.lineTo(line_gap / 2, bottom_y);
+    bridge_builder.lineTo(line_gap / 2, -kMarginAroundTracks);
   }
 
   {  // left vertical line
-    bridge_handle.lineTo(-line_gap / 2, -kMarginAroundTracks);
-    bridge_handle.lineTo(-line_gap / 2, bottom_y);
-    bridge_handle.lineTo(-line_gap / 2 - line_width, bottom_y);
-    bridge_handle.lineTo(-line_gap / 2 - line_width, -kMarginAroundTracks);
+    bridge_builder.lineTo(-line_gap / 2, -kMarginAroundTracks);
+    bridge_builder.lineTo(-line_gap / 2, bottom_y);
+    bridge_builder.lineTo(-line_gap / 2 - line_width, bottom_y);
+    bridge_builder.lineTo(-line_gap / 2 - line_width, -kMarginAroundTracks);
   }
 
-  bridge_handle.lineTo(-kMinimalTouchableSize / 2, -kMarginAroundTracks);  // bottom left
-  bridge_handle.lineTo(-kMinimalTouchableSize / 2, 0);                     // top left
-  bridge_handle.lineTo(-kMinimalTouchableSize / 4, 0);                     // left of the arrow
-  bridge_handle.close();
-  bridge_handle.offset(bridge_offset_x, -kRulerHeight);
-
-  return bridge_handle;
+  bridge_builder.lineTo(-kMinimalTouchableSize / 2, -kMarginAroundTracks);  // bottom left
+  bridge_builder.lineTo(-kMinimalTouchableSize / 2, 0);                     // top left
+  bridge_builder.lineTo(-kMinimalTouchableSize / 4, 0);                     // left of the arrow
+  bridge_builder.close();
+  // TODO: Switch to matrix-based detach
+  return bridge_builder.detach().makeOffset(bridge_offset_x, -kRulerHeight);
 }
 
 constexpr float kZoomTresholdsS[] = {
@@ -655,7 +649,8 @@ struct SideButton : ui::Button {
 
 struct PrevButton : SideButton {
   PrevButton(TimelineWidget& parent) : SideButton(parent) {
-    child = MakeShapeWidget(this, PathFromSVG(kNextShape).makeTransform(kHorizontalFlip), SK_ColorWHITE);
+    child = MakeShapeWidget(this, PathFromSVG(kNextShape).makeTransform(kHorizontalFlip),
+                            SK_ColorWHITE);
     UpdateChildTransform();
   }
   void Activate(ui::Pointer&) override;
@@ -996,13 +991,13 @@ struct TimelineWidget : ObjectToy {
       outer_shadow.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, 1_mm));
       SkPoint pts[2] = {{0, kPlasticTop + kWoodWidth},
                         {0, kPlasticTop + kWoodWidth - kWoodenCaseCornerRadius}};
-      SkColor colors[2] = {"#aa6048"_color, "#2d1f1b"_color};
+      SkColor4f colors[2] = {SkColor4f::FromColor("#aa6048"_color),
+                             SkColor4f::FromColor("#2d1f1b"_color)};
 
-      outer_shadow.setShader(
-          SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp));
+      outer_shadow.setShader(SkShaders::LinearGradient(
+          pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
 
-      wood_case_path.toggleInverseFillType();
-      canvas.drawPath(wood_case_path, outer_shadow);
+      canvas.drawPath(wood_case_path.makeToggleInverseFillType(), outer_shadow);
 
       canvas.restore();
     }
@@ -1014,10 +1009,11 @@ struct TimelineWidget : ObjectToy {
       inset_shadow.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.2_mm));
       SkPoint pts[2] = {{0, inset_rrect.getBounds().fTop + inset_rrect.getSimpleRadii().y()},
                         {0, inset_rrect.getBounds().fTop}};
-      SkColor colors[2] = {"#2d1f1b"_color, "#aa6048"_color};
+      SkColor4f colors[2] = {SkColor4f::FromColor("#2d1f1b"_color),
+                             SkColor4f::FromColor("#aa6048"_color)};
 
-      inset_shadow.setShader(
-          SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp));
+      inset_shadow.setShader(SkShaders::LinearGradient(
+          pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
       canvas.drawRRect(inset_rrect, inset_shadow);
     }
 
@@ -1222,7 +1218,7 @@ struct TimelineWidget : ObjectToy {
         SkPaint delete_paint;
         SkPoint pts[2] = {rect.TopLeftCorner(), rect.TopRightCorner()};
         constexpr int n = 10;
-        SkColor colors[n] = {};
+        SkColor4f colors[n] = {};
         float pos[n] = {};
         float w = rect.Width();
         float cx = w / 2;
@@ -1232,7 +1228,7 @@ struct TimelineWidget : ObjectToy {
           float a1 = i / (n - 1.f) * 2;
           float a2 = (n - 1 - i) / (n - 1.f) * 2;
           float a = min(a1, a2);
-          colors[i] = SkColorSetA(shadow_color, lerp(255, 128, a));
+          colors[i] = SkColor4f::FromColor(SkColorSetA(shadow_color, lerp(255, 128, a)));
           float t = i / (n - 1.f);
           // Don't try to unterstand this - it doesn't make sense - but looks ok.
           if (i <= n / 2) {
@@ -1242,8 +1238,8 @@ struct TimelineWidget : ObjectToy {
           }
           pos[i] = clamp<float>(pos[i], 0, 1);
         }
-        delete_paint.setShader(
-            SkGradientShader::MakeLinear(pts, colors, pos, n, SkTileMode::kClamp));
+        delete_paint.setShader(SkShaders::LinearGradient(
+            pts, SkGradient{SkGradient::Colors{colors, pos, SkTileMode::kClamp}, {}}));
         delete_paint.setBlendMode(SkBlendMode::kColorBurn);
 
         canvas.drawRect(rect, delete_paint);
@@ -1330,18 +1326,20 @@ struct TimelineWidget : ObjectToy {
       inner_paint.setStyle(SkPaint::kStroke_Style);
       inner_paint.setStrokeWidth(0.1_mm);
       SkPoint pts[2] = {{x, y - kScrewRadius}, {x, y + kScrewRadius}};
-      SkColor colors[2] = {"#615954"_color, "#fbf9f3"_color};
-      auto inner_gradient =
-          SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+      SkColor4f colors[2] = {SkColor4f::FromColor("#615954"_color),
+                             SkColor4f::FromColor("#fbf9f3"_color)};
+      auto inner_gradient = SkShaders::LinearGradient(
+          pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
       inner_paint.setShader(inner_gradient);
 
       SkPaint outer_paint;
       outer_paint.setAntiAlias(true);
       outer_paint.setStyle(SkPaint::kStroke_Style);
       outer_paint.setStrokeWidth(0.1_mm);
-      SkColor outer_colors[2] = {"#fbf9f3"_color, "#615954"_color};
-      auto outer_gradient =
-          SkGradientShader::MakeLinear(pts, outer_colors, nullptr, 2, SkTileMode::kClamp);
+      SkColor4f outer_colors[2] = {SkColor4f::FromColor("#fbf9f3"_color),
+                                   SkColor4f::FromColor("#615954"_color)};
+      auto outer_gradient = SkShaders::LinearGradient(
+          pts, SkGradient{SkGradient::Colors{outer_colors, SkTileMode::kClamp}, {}});
       outer_paint.setShader(outer_gradient);
 
       canvas.drawCircle(x, y, kScrewRadius - 0.05_mm, inner_paint);
@@ -1366,8 +1364,7 @@ struct TimelineWidget : ObjectToy {
     {  // Window shadow
       SkPaint paint;
       paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 5_mm));
-      window_path.toggleInverseFillType();
-      canvas.drawPath(window_path, paint);
+      canvas.drawPath(window_path.makeToggleInverseFillType(), paint);
     }
     {  // Bridge
       float x = BridgeOffsetX(current_pos_ratio);
@@ -1389,8 +1386,10 @@ struct TimelineWidget : ObjectToy {
       canvas.drawPaint(kBridgeHandlePaint);
 
       SkPoint pts2[2] = {{x, 0}, {x + 0.4_mm, 0}};
-      SkColor colors2[2] = {"#cb532d"_color, "#809d3312"_color};
-      auto shader2 = SkGradientShader::MakeLinear(pts2, colors2, nullptr, 2, SkTileMode::kMirror);
+      SkColor4f colors2[2] = {SkColor4f::FromColor("#cb532d"_color),
+                              SkColor4f::FromColor("#809d3312"_color)};
+      auto shader2 = SkShaders::LinearGradient(
+          pts2, SkGradient{SkGradient::Colors{colors2, SkTileMode::kMirror}, {}});
       SkPaint wavy_paint;
       wavy_paint.setShader(shader2);
       wavy_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.5_mm));
@@ -1402,9 +1401,7 @@ struct TimelineWidget : ObjectToy {
       SkPaint bridge_stroke_paint;
       bridge_stroke_paint.setColor("#5d1e0a"_color);
       bridge_stroke_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.2_mm));
-      bridge_shape.toggleInverseFillType();
-
-      canvas.drawPath(bridge_shape, bridge_stroke_paint);
+      canvas.drawPath(bridge_shape.makeToggleInverseFillType(), bridge_stroke_paint);
 
       canvas.restore();
     }
@@ -1425,8 +1422,7 @@ struct TimelineWidget : ObjectToy {
       SkPaint splicer_stroke_paint;
       splicer_stroke_paint.setColor("#5d1e0a"_color);
       splicer_stroke_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.2_mm));
-      splicer_shape.toggleInverseFillType();
-      canvas.drawPath(splicer_shape, splicer_stroke_paint);
+      canvas.drawPath(splicer_shape.makeToggleInverseFillType(), splicer_stroke_paint);
 
       canvas.restore();
 
@@ -2222,13 +2218,14 @@ struct Vec2TrackWidget : TrackBaseWidget {
 
         auto display_duration = display_end_t - display_start_t;
         float display_width = display_duration / s_per_m;  // division as double (doesn't floor)
-        SkPath trail;
-        trail.moveTo(0, 0);
+        SkPathBuilder trail_builder;
+        trail_builder.moveTo(0, 0);
         Vec2 cursor = {};
         for (int i = start_i; i < end_i; ++i) {
           cursor += Vec2(values[i].x, -values[i].y);
-          trail.lineTo(cursor.x, cursor.y);
+          trail_builder.lineTo(cursor.x, cursor.y);
         }
+        SkPath trail = trail_builder.detach();
         Rect bounds = trail.getBounds().makeOutset(1, 1);
 
         auto rect = Rect(display_start_t / s_per_m + kVec2DisplayMargin / 2, -kDisplayHeight / 2,
@@ -2371,8 +2368,7 @@ struct Float64TrackWidget : TrackBaseWidget {
     if (trail_height > 0) {
       m.postScale(1, (kTrackHeight - 1_mm) / trail_height);
     }
-    trail_builder.transform(m);
-    trail = trail_builder.detach();
+    trail = trail_builder.detach(&m);
 
     return phase;
   }

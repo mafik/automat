@@ -359,8 +359,8 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
   auto* owner_widget = toy_store.FindOrNull(*syncable.object_ptr);
   if (!owner_widget) return animation::Finished;
 
-  auto origin_shape = owner_widget->Shape();
-  origin_shape.transform(TransformBetween(*owner_widget, *this));
+  auto origin_shape =
+      owner_widget->Shape().makeTransform(TransformBetween(*owner_widget, *this));
   origin = origin_shape.getBounds().center();
   if (auto new_label = syncable.Name(); label != new_label) {
     label = new_label;

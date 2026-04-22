@@ -5,7 +5,8 @@
 
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkColor.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 
 #include <algorithm>
 
@@ -397,10 +398,12 @@ void TitleButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const
 
   {  // gradient
     SkPaint paint;
-    SkColor colors[2] = {color::AdjustLightness(bg, lightness_adjust + 10),   // top
-                         color::AdjustLightness(bg, lightness_adjust - 10)};  // bottom
-    sk_sp<SkShader> gradient = SkGradientShader::MakeRadial(gradient_center, gradient_radius,
-                                                            colors, nullptr, 2, SkTileMode::kClamp);
+    SkColor4f colors[2] = {
+        SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust + 10)),   // top
+        SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust - 10))};  // bottom
+    sk_sp<SkShader> gradient = SkShaders::RadialGradient(
+        gradient_center, gradient_radius,
+        SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
     paint.setShader(gradient);
     canvas.drawRRect(pressed_oval, paint);
   }
@@ -408,14 +411,15 @@ void TitleButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const
   {  // soft shadow around the edges
     SkPaint paint;
     paint.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, 0.5_mm));
-    SkColor colors[2] = {color::AdjustLightness(bg, lightness_adjust + 40),   // top
-                         color::AdjustLightness(bg, lightness_adjust - 30)};  // bottom
-    sk_sp<SkShader> gradient = SkGradientShader::MakeRadial(gradient_center, gradient_radius,
-                                                            colors, nullptr, 2, SkTileMode::kClamp);
+    SkColor4f colors[2] = {
+        SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust + 40)),   // top
+        SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust - 30))};  // bottom
+    sk_sp<SkShader> gradient = SkShaders::RadialGradient(
+        gradient_center, gradient_radius,
+        SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
     paint.setShader(gradient);
 
-    SkPath path = SkPath::RRect(pressed_oval);
-    path.toggleInverseFillType();
+    SkPath path = SkPath::RRect(pressed_oval).makeToggleInverseFillType();
     canvas.drawPath(path, paint);
   }
 

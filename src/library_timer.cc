@@ -9,7 +9,8 @@
 #include <include/core/SkPath.h>
 #include <include/core/SkPathBuilder.h>
 #include <include/core/SkPathUtils.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 #include <include/pathops/SkPathOps.h>
 
 #include <cmath>
@@ -264,8 +265,9 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 static sk_sp<SkShader> MakeGradient(SkPoint a, SkPoint b, SkColor color_a, SkColor color_b) {
   SkPoint pts[2] = {a, b};
-  SkColor colors[2] = {color_a, color_b};
-  return SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kMirror);
+  SkColor4f colors[2] = {SkColor4f::FromColor(color_a), SkColor4f::FromColor(color_b)};
+  return SkShaders::LinearGradient(
+      pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kMirror}, {}});
 }
 
 enum DrawRingMode {
@@ -341,16 +343,19 @@ constexpr static SkRect kSmallPusherBox = SkRect::MakeXYWH(
 static SkRRect kSmallPusher = SkRRect::MakeRectXY(kSmallPusherBox, 0.0002, 0.0002);
 
 static void DrawPusher(SkCanvas& canvas, const SkRRect& axle, const SkRRect& pusher,
-                       SkColor pusher_gradient[3]) {
+                       const SkColor4f pusher_gradient[3]) {
   SkPath pusher_axle_path = SkPath::RRect(axle);
 
   SkPaint pusher_axle_paint;
   pusher_axle_paint.setAntiAlias(true);
   SkPoint axle_pts[2] = {{axle.rect().fLeft, 0}, {axle.rect().fRight, 0}};
-  SkColor axle_colors[] = {0xffb0b0b0, 0xff383739, 0xffa8a9ab, 0xff000000, 0xff4d4b4f};
+  SkColor4f axle_colors[] = {
+      SkColor4f::FromColor(0xffb0b0b0), SkColor4f::FromColor(0xff383739),
+      SkColor4f::FromColor(0xffa8a9ab), SkColor4f::FromColor(0xff000000),
+      SkColor4f::FromColor(0xff4d4b4f)};
   float positions[] = {0, 0.1, 0.3, 0.6, 1};
-  pusher_axle_paint.setShader(
-      SkGradientShader::MakeLinear(axle_pts, axle_colors, positions, 5, SkTileMode::kClamp));
+  pusher_axle_paint.setShader(SkShaders::LinearGradient(
+      axle_pts, SkGradient{SkGradient::Colors{axle_colors, positions, SkTileMode::kClamp}, {}}));
 
   canvas.drawPath(pusher_axle_path, pusher_axle_paint);
 
@@ -358,17 +363,20 @@ static void DrawPusher(SkCanvas& canvas, const SkRRect& axle, const SkRRect& pus
 
   SkPaint pusher_paint;
   SkPoint btn_pts[2] = {{0, 0}, {0.0004, 0}};
-  SkColor btn_colors[] = {0xff707070, 0xff303030, 0xff000000};
+  SkColor4f btn_colors[] = {SkColor4f::FromColor(0xff707070), SkColor4f::FromColor(0xff303030),
+                            SkColor4f::FromColor(0xff000000)};
   float btn_positions[] = {0, 0.3, 1};
-  pusher_paint.setShader(
-      SkGradientShader::MakeLinear(btn_pts, btn_colors, btn_positions, 3, SkTileMode::kMirror));
+  pusher_paint.setShader(SkShaders::LinearGradient(
+      btn_pts, SkGradient{SkGradient::Colors{btn_colors, btn_positions, SkTileMode::kMirror}, {}}));
   pusher_paint.setAntiAlias(true);
   canvas.drawPath(pusher_path, pusher_paint);
 
   SkPoint btn_pts2[2] = {{pusher.rect().fLeft, 0}, {pusher.rect().fRight, 0}};
 
-  pusher_paint.setShader(
-      SkGradientShader::MakeLinear(btn_pts2, pusher_gradient, nullptr, 3, SkTileMode::kClamp));
+  pusher_paint.setShader(SkShaders::LinearGradient(
+      btn_pts2, SkGradient{SkGradient::Colors{SkSpan<const SkColor4f>{pusher_gradient, 3},
+                                              SkTileMode::kClamp},
+                           {}}));
   canvas.drawPath(pusher_path, pusher_paint);
 }
 
@@ -571,17 +579,20 @@ struct TimerWidget : ObjectToy {
     DrawRing(canvas, r0, r1, 0xfff7f4f2, 0xff5e5f65, kRingInset);
 
     {  // Draw pusher
-      SkColor colors1[] = {0x20ffffff, 0x15000000, 0xA0000000};
+      SkColor4f colors1[] = {SkColor4f::FromColor(0x20ffffff), SkColor4f::FromColor(0x15000000),
+                             SkColor4f::FromColor(0xA0000000)};
       auto start_pusher =
           kStartPusher.makeOffset(0, -start_pusher_depression * kStartPusherAxleLength);
       DrawPusher(canvas, kStartPusherAxle, start_pusher, colors1);
       canvas.save();
       canvas.rotate(45);
-      SkColor colors2[] = {0xD0000000, 0x40000000, 0xD0000000};
+      SkColor4f colors2[] = {SkColor4f::FromColor(0xD0000000), SkColor4f::FromColor(0x40000000),
+                             SkColor4f::FromColor(0xD0000000)};
       auto left_pusher = kSmallPusher.makeOffset(0, -left_pusher_depression * kSmallAxleLength);
       DrawPusher(canvas, kSmallAxle, left_pusher, colors2);
       canvas.rotate(-90);
-      SkColor colors3[] = {0x40FFFFFF, 0x40000000, 0xFF000000};
+      SkColor4f colors3[] = {SkColor4f::FromColor(0x40FFFFFF), SkColor4f::FromColor(0x40000000),
+                             SkColor4f::FromColor(0xFF000000)};
       auto right_pusher = kSmallPusher.makeOffset(0, -right_pusher_depression * kSmallAxleLength);
       DrawPusher(canvas, kSmallAxle, right_pusher, colors3);
       canvas.restore();
@@ -641,11 +652,13 @@ struct TimerWidget : ObjectToy {
       path_builder.addOval(kOuterOval);
       path_builder.addRect(kStartPusherAxleBox);
       path_builder.addRRect(kStartPusher);
-      SkPath small_pusher = SkPath::RRect(kSmallPusher);
-      small_pusher.addRRect(kSmallAxle);
-      small_pusher.transform(SkMatrix::RotateDeg(45));
+      SkPath small_pusher = SkPathBuilder()
+                                .addRRect(kSmallPusher)
+                                .addRRect(kSmallAxle)
+                                .detach()
+                                .makeTransform(SkMatrix::RotateDeg(45));
       path_builder.addPath(small_pusher);
-      small_pusher.transform(SkMatrix::RotateDeg(-90));
+      small_pusher = small_pusher.makeTransform(SkMatrix::RotateDeg(-90));
       path_builder.addPath(small_pusher);
       SkPath path = path_builder.detach();
       SkPath simple_path;
@@ -679,37 +692,34 @@ static SkPath HandPath(const TimerWidget& w) {
   animation::WrapModulo(twist_degrees, 0, 360);
 
   if (fabs(twist_degrees) < 1) {
-    SkPath path;
     auto end_point = SkMatrix::RotateDeg(end_degrees).mapPoint({kHandLength, 0});
-    path.lineTo(end_point);
-    return path;
+    return SkPathBuilder().lineTo(end_point).detach();
   }
 
   float R = kHandLength / ((twist_degrees / 360) * 2 * M_PI);
 
-  SkPath path;
-
   auto end_point =
       SkMatrix::Translate(R, 0).postRotate(twist_degrees).postTranslate(-R, 0).mapPoint({0, 0});
 
-  path.rArcTo(R, R, 0, SkPath::kSmall_ArcSize,
-              twist_degrees > 0 ? SkPathDirection::kCW : SkPathDirection::kCCW, end_point.x(),
-              end_point.y());
-  path.transform(SkMatrix::RotateDeg(base_degrees - 90));
-  return path;
+  SkPathBuilder builder;
+  builder.rArcTo({R, R}, 0, SkPathBuilder::kSmall_ArcSize,
+                 twist_degrees > 0 ? SkPathDirection::kCW : SkPathDirection::kCCW,
+                 {end_point.x(), end_point.y()});
+  SkMatrix m = SkMatrix::RotateDeg(base_degrees - 90);
+  return builder.detach(&m);
 }
 
 static SkPath DurationHandlePath(const TimerWidget& w) {
   static const SkPath path = [] {
-    SkPath path;
-    path.moveTo(kTickOuterRadius, 0);
+    SkPathBuilder builder;
+    builder.moveTo(kTickOuterRadius, 0);
     float start_angle = atan2(0.001, r4) / M_PI * 180;
     float handle_angle = 20;
-    path.arcTo(kDialOval, start_angle, handle_angle / 2 - start_angle, false);
-    path.arcTo(kOuterOval.makeOutset(0.0005, 0.0005), handle_angle / 2, -handle_angle, false);
-    path.arcTo(kDialOval, -handle_angle / 2, handle_angle / 2 - start_angle, false);
-    path.close();
-    return path;
+    builder.arcTo(kDialOval, start_angle, handle_angle / 2 - start_angle, false);
+    builder.arcTo(kOuterOval.makeOutset(0.0005, 0.0005), handle_angle / 2, -handle_angle, false);
+    builder.arcTo(kDialOval, -handle_angle / 2, handle_angle / 2 - start_angle, false);
+    builder.close();
+    return builder.detach();
   }();
   return path.makeTransform(SkMatrix::RotateRad(w.duration_handle_rotation));
 }
@@ -811,8 +821,8 @@ std::unique_ptr<Action> TimerWidget::FindAction(ui::Pointer& pointer, ui::Action
     }
 
     SkPath hand_path = HandPath(*this);
-    SkPath hand_outline;  // Hand is just a straight line so we have to "widen" it
-    skpathutils::FillPathWithPaint(hand_path, kHandPaint, &hand_outline);
+    // Hand is just a straight line so we have to "widen" it
+    SkPath hand_outline = skpathutils::FillPathWithPaint(hand_path, kHandPaint);
     if (hand_outline.contains(pos.x, pos.y)) {
       return std::make_unique<DragHandAction>(pointer, *this);
     }

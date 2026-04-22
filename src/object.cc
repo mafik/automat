@@ -5,7 +5,8 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkRRect.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 
 #include "../build/generated/embedded.hh"
 #include "automat.hh"
@@ -34,9 +35,9 @@ void ObjectToy::Draw(SkCanvas& canvas) const {
 
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, 0.01}};
-  SkColor colors[2] = {0xff0f5f4d, 0xff468257};
-  sk_sp<SkShader> gradient =
-      SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+  SkColor4f colors[2] = {SkColor4f::FromColor(0xff0f5f4d), SkColor4f::FromColor(0xff468257)};
+  sk_sp<SkShader> gradient = SkShaders::LinearGradient(
+      pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
   paint.setShader(gradient);
   canvas.drawPath(path, paint);
 
@@ -51,9 +52,10 @@ void ObjectToy::Draw(SkCanvas& canvas) const {
     path = SkPath::RRect(rrect);
   }
 
-  SkColor border_colors[2] = {0xff1c5d3e, 0xff76a87a};
-  sk_sp<SkShader> border_gradient =
-      SkGradientShader::MakeLinear(pts, border_colors, nullptr, 2, SkTileMode::kClamp);
+  SkColor4f border_colors[2] = {SkColor4f::FromColor(0xff1c5d3e),
+                                SkColor4f::FromColor(0xff76a87a)};
+  sk_sp<SkShader> border_gradient = SkShaders::LinearGradient(
+      pts, SkGradient{SkGradient::Colors{border_colors, SkTileMode::kClamp}, {}});
   border_paint.setShader(border_gradient);
 
   canvas.drawPath(path, border_paint);

@@ -6,8 +6,10 @@
 #include <include/core/SkClipOp.h>
 #include <include/core/SkColor.h>
 #include <include/core/SkMaskFilter.h>
+#include <include/core/SkPathBuilder.h>
 #include <include/core/SkRRect.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 
 #include <cmath>
 
@@ -128,18 +130,20 @@ void Button::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
 
   SkPaint paint;
   SkPoint pts[2] = {{0, oval.rect().bottom()}, {0, oval.rect().top()}};
-  SkColor colors[2] = {color::AdjustLightness(bg, lightness_adjust),        // top
-                       color::AdjustLightness(bg, lightness_adjust - 10)};  // bottom
-  sk_sp<SkShader> gradient =
-      SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+  SkColor4f colors[2] = {
+      SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust)),        // top
+      SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust - 10))};  // bottom
+  sk_sp<SkShader> gradient = SkShaders::LinearGradient(
+      pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
   paint.setShader(gradient);
   canvas.drawRRect(pressed_oval, paint);
 
   SkPaint border;
-  SkColor border_colors[2] = {color::AdjustLightness(bg, lightness_adjust + 10),
-                              color::AdjustLightness(bg, lightness_adjust - 20)};
-  sk_sp<SkShader> border_gradient =
-      SkGradientShader::MakeLinear(pts, border_colors, nullptr, 2, SkTileMode::kClamp);
+  SkColor4f border_colors[2] = {
+      SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust + 10)),
+      SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust - 20))};
+  sk_sp<SkShader> border_gradient = SkShaders::LinearGradient(
+      pts, SkGradient{SkGradient::Colors{border_colors, SkTileMode::kClamp}, {}});
   border.setShader(border_gradient);
   border.setStyle(SkPaint::kStroke_Style);
   border.setAntiAlias(true);
@@ -219,17 +223,18 @@ void ToggleButton::DrawChildCached(SkCanvas& canvas, const Widget& child) const 
   points[0].x = pressed_outer_oval.rect().fLeft - kClipMargin;
   points[n_points - 1].x = pressed_outer_oval.rect().fRight + kClipMargin;
   constexpr float wave_width = 2 * waving_x;
-  SkPath waves_clip;
-  waves_clip.moveTo(points[0].x, points[0].y);
+  SkPathBuilder waves_builder;
+  waves_builder.moveTo(points[0].x, points[0].y);
   for (int i = 0; i < n_points - 1; ++i) {
-    waves_clip.cubicTo(points[i].x + wave_width, points[i].y, points[i + 1].x - wave_width,
-                       points[i + 1].y, points[i + 1].x, points[i + 1].y);
+    waves_builder.cubicTo(points[i].x + wave_width, points[i].y, points[i + 1].x - wave_width,
+                          points[i + 1].y, points[i + 1].x, points[i + 1].y);
   }
-  waves_clip.lineTo(pressed_outer_oval.rect().fRight + kClipMargin,
-                    pressed_outer_oval.rect().fTop - Button::kPressOffset - kClipMargin);
-  waves_clip.lineTo(pressed_outer_oval.rect().fLeft - kClipMargin,
-                    pressed_outer_oval.rect().fTop - Button::kPressOffset - kClipMargin);
-  waves_clip.close();
+  waves_builder.lineTo(pressed_outer_oval.rect().fRight + kClipMargin,
+                       pressed_outer_oval.rect().fTop - Button::kPressOffset - kClipMargin);
+  waves_builder.lineTo(pressed_outer_oval.rect().fLeft - kClipMargin,
+                       pressed_outer_oval.rect().fTop - Button::kPressOffset - kClipMargin);
+  waves_builder.close();
+  SkPath waves_clip = waves_builder.detach();
 
   canvas.save();
   if (&child == off.get()) {

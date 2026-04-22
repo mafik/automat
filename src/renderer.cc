@@ -5,11 +5,13 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkColorType.h>
 #include <include/core/SkPaint.h>
+#include <include/core/SkPathBuilder.h>
 #include <include/core/SkPathTypes.h>
 #include <include/core/SkPictureRecorder.h>
 #include <include/core/SkSamplingOptions.h>
 #include <include/core/SkStream.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 #include <include/effects/SkRuntimeEffect.h>
 #include <include/encode/SkWebpEncoder.h>
 #include <include/gpu/GpuTypes.h>
@@ -562,8 +564,9 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       // Apply the inverse transform to the surface mapping - we want to get the original texture
       // position. Note that this transform uses `draw_texture_anchors` which have been saved
       // during the last RenderToSurface.
-      if (anchor_mapping.setPolyToPoly(&fresh_texture_anchors[0].sk, &frame.texture_anchors[0].sk,
-                                       anchor_count)) {
+      if (anchor_mapping.setPolyToPoly(
+              SkSpan<const SkPoint>{&fresh_texture_anchors[0].sk, size_t(anchor_count)},
+              SkSpan<const SkPoint>{&frame.texture_anchors[0].sk, size_t(anchor_count)})) {
         surface_transform.preConcat(anchor_mapping);
         SkMatrix inverse;
         (void)anchor_mapping.invert(&inverse);
@@ -591,18 +594,18 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     if constexpr (kDebugRendering) {
       SkPaint surface_bounds_paint;
       constexpr int kNumColors = 10;
-      SkColor colors[kNumColors];
+      SkColor4f colors[kNumColors];
       float pos[kNumColors];
       double fraction = time::ToSeconds(last_tick_time.time_since_epoch() % 4s);
       SkMatrix shader_matrix = SkMatrix::RotateDeg(fraction * -360.0f, surface_size.center());
       for (int i = 0; i < kNumColors; ++i) {
         float hsv[] = {i * 360.0f / kNumColors, 1.0f, 1.0f};
-        colors[i] = SkHSVToColor((kNumColors - i) * 255 / kNumColors, hsv);
+        colors[i] = SkColor4f::FromColor(SkHSVToColor((kNumColors - i) * 255 / kNumColors, hsv));
         pos[i] = (float)i / (kNumColors - 1);
       }
-      surface_bounds_paint.setShader(
-          SkGradientShader::MakeSweep(surface_size.centerX(), surface_size.centerY(), colors, pos,
-                                      kNumColors, 0, &shader_matrix));
+      surface_bounds_paint.setShader(SkShaders::SweepGradient(
+          surface_size.center(),
+          SkGradient{SkGradient::Colors{colors, pos, SkTileMode::kClamp}, {}}, &shader_matrix));
       surface_bounds_paint.setStyle(SkPaint::kStroke_Style);
       surface_bounds_paint.setStrokeWidth(2.0f);
       canvas->concat(SkMatrix::RectToRect(surface_size, frame.surface_bounds_local.sk));
@@ -1448,13 +1451,15 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
       SkPaint orange;
       orange.setColor("#ff8000"_color);
       orange.setAntiAlias(true);
-      SkPath red_ring;
       auto mm = window_transform.mapRadius(1_mm);
-      red_ring.addCircle(p.x, p.y, 4 * mm);
-      red_ring.addCircle(p.x, p.y, 3 * mm, SkPathDirection::kCCW);
-      SkPath orange_ring;
-      orange_ring.addCircle(p.x, p.y, 2 * mm);
-      orange_ring.addCircle(p.x, p.y, 1 * mm, SkPathDirection::kCCW);
+      SkPath red_ring = SkPathBuilder()
+                            .addCircle(p.x, p.y, 4 * mm)
+                            .addCircle(p.x, p.y, 3 * mm, SkPathDirection::kCCW)
+                            .detach();
+      SkPath orange_ring = SkPathBuilder()
+                               .addCircle(p.x, p.y, 2 * mm)
+                               .addCircle(p.x, p.y, 1 * mm, SkPathDirection::kCCW)
+                               .detach();
       canvas.drawPath(red_ring, red);
       canvas.drawPath(orange_ring, orange);
       SkPaint stroke;

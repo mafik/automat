@@ -4,7 +4,8 @@
 
 #include <include/core/SkMatrix.h>
 #include <include/core/SkRRect.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 #include <rapidjson/rapidjson.h>
 
 #include <charconv>
@@ -68,9 +69,9 @@ static const SkPath kNumberShape = SkPath::RRect(kNumberRRect);
 static const SkPaint kNumberBackgroundPaint = [] {
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, kHeight}};
-  SkColor colors[2] = {0xff483e37, 0xff6c5d53};
-  sk_sp<SkShader> gradient =
-      SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+  SkColor4f colors[2] = {SkColor4f::FromColor(0xff483e37), SkColor4f::FromColor(0xff6c5d53)};
+  sk_sp<SkShader> gradient = SkShaders::LinearGradient(
+      pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
   paint.setShader(gradient);
   return paint;
 }();
@@ -78,9 +79,10 @@ static const SkPaint kNumberBackgroundPaint = [] {
 static const SkPaint kNumberBorderPaint = [] {
   SkPaint paint_border;
   SkPoint pts[2] = {{0, 0}, {0, kHeight}};
-  SkColor colors_border[2] = {0xff241f1c, 0xffac9d93};
-  sk_sp<SkShader> gradient_border =
-      SkGradientShader::MakeLinear(pts, colors_border, nullptr, 2, SkTileMode::kClamp);
+  SkColor4f colors_border[2] = {SkColor4f::FromColor(0xff241f1c),
+                                SkColor4f::FromColor(0xffac9d93)};
+  sk_sp<SkShader> gradient_border = SkShaders::LinearGradient(
+      pts, SkGradient{SkGradient::Colors{colors_border, SkTileMode::kClamp}, {}});
   paint_border.setShader(gradient_border);
   paint_border.setAntiAlias(true);
   paint_border.setStyle(SkPaint::kStroke_Style);

@@ -328,6 +328,197 @@ def parse_shape_layer(kra_data, layer) -> tuple[str, dict, dict]:
     return path_data, transform, svg_info
 
 
+_SVG_TOKEN_RE = re.compile(r'[MLHVCSQTAZmlhvcsqtaz]|-?\d*\.?\d+(?:[eE][+-]?\d+)?')
+
+# Verb name -> (SkPathVerb enum identifier, points-consumed-from-this-verb's-own-data).
+# Note: Move/Line consume 1 point, Quad consumes 2, Cubic consumes 3, Close consumes 0.
+_VERB_NAMES = {
+    'M': 'kMove',
+    'L': 'kLine',
+    'Q': 'kQuad',
+    'C': 'kCubic',
+    'Z': 'kClose',
+}
+
+
+def _bake_svg_path(path: str, sx: float, kx: float, tx: float,
+                   ky: float, sy: float, ty: float) -> tuple[list, list]:
+    """Parse an SVG path `d` string, apply an affine transform, and produce
+    ``(verbs, pts)`` ready for ``SkPath::Raw``.
+
+    The matrix mirrors SkMatrix::MakeAll(sx, kx, tx, ky, sy, ty, 0, 0, 1):
+        point:  (x, y)   -> (sx*x + kx*y + tx, ky*x + sy*y + ty)
+        vector: (dx, dy) -> (sx*dx + kx*dy,    ky*dx + sy*dy)   (no translation)
+
+    All non-cubic curve commands are converted to the four primitive verbs the
+    Skia ``SkPath::Raw`` constructor accepts: kMove, kLine, kQuad, kCubic, kClose.
+    H/V become kLine. Smooth-curve commands (S, T) are unfolded by reflecting
+    the previous control point. Arcs (A) are not supported.
+    """
+    tokens = _SVG_TOKEN_RE.findall(path)
+
+    def apply_pt(x, y):
+        return (sx * x + kx * y + tx, ky * x + sy * y + ty)
+
+    pts = []     # list of (float, float) in transformed space
+    verbs = []   # list of strings: 'M', 'L', 'Q', 'C', 'Z'
+
+    cur_x = cur_y = 0.0       # current pen position (in pre-transform space)
+    start_x = start_y = 0.0   # start of current contour (pre-transform)
+    # Reflection state for S/T: the second control point of the previous cubic/quad.
+    last_cubic_ctrl = None    # (x, y) in pre-transform space, or None
+    last_quad_ctrl = None
+    last_cmd = None
+    i = 0
+
+    def take():
+        nonlocal i
+        v = float(tokens[i])
+        i += 1
+        return v
+
+    def emit(verb_letter, *abs_points):
+        verbs.append(verb_letter)
+        for x, y in abs_points:
+            pts.append(apply_pt(x, y))
+
+    while i < len(tokens):
+        t = tokens[i]
+        if t.isalpha():
+            cmd = t
+            i += 1
+        else:
+            # Implicit command repetition: after M/m the default is L/l, otherwise repeat last.
+            cmd = {'M': 'L', 'm': 'l'}.get(last_cmd, last_cmd)
+            if cmd is None:
+                raise ValueError(f"SVG path starts with a number: {path!r}")
+
+        # Reset reflection memory when the next command isn't its smooth pair.
+        if cmd not in ('C', 'c', 'S', 's'):
+            last_cubic_ctrl = None
+        if cmd not in ('Q', 'q', 'T', 't'):
+            last_quad_ctrl = None
+
+        if cmd == 'M':
+            x, y = take(), take()
+            emit('M', (x, y))
+            cur_x, cur_y = x, y
+            start_x, start_y = x, y
+        elif cmd == 'm':
+            dx, dy = take(), take()
+            x, y = cur_x + dx, cur_y + dy
+            emit('M', (x, y))
+            cur_x, cur_y = x, y
+            start_x, start_y = x, y
+        elif cmd == 'L':
+            x, y = take(), take()
+            emit('L', (x, y))
+            cur_x, cur_y = x, y
+        elif cmd == 'l':
+            dx, dy = take(), take()
+            x, y = cur_x + dx, cur_y + dy
+            emit('L', (x, y))
+            cur_x, cur_y = x, y
+        elif cmd == 'H':
+            x = take()
+            emit('L', (x, cur_y))
+            cur_x = x
+        elif cmd == 'h':
+            dx = take()
+            x = cur_x + dx
+            emit('L', (x, cur_y))
+            cur_x = x
+        elif cmd == 'V':
+            y = take()
+            emit('L', (cur_x, y))
+            cur_y = y
+        elif cmd == 'v':
+            dy = take()
+            y = cur_y + dy
+            emit('L', (cur_x, y))
+            cur_y = y
+        elif cmd == 'C':
+            x1, y1, x2, y2, x, y = (take() for _ in range(6))
+            emit('C', (x1, y1), (x2, y2), (x, y))
+            last_cubic_ctrl = (x2, y2)
+            cur_x, cur_y = x, y
+        elif cmd == 'c':
+            dx1, dy1, dx2, dy2, dx, dy = (take() for _ in range(6))
+            x1, y1 = cur_x + dx1, cur_y + dy1
+            x2, y2 = cur_x + dx2, cur_y + dy2
+            x, y = cur_x + dx, cur_y + dy
+            emit('C', (x1, y1), (x2, y2), (x, y))
+            last_cubic_ctrl = (x2, y2)
+            cur_x, cur_y = x, y
+        elif cmd == 'S':
+            x2, y2, x, y = (take() for _ in range(4))
+            if last_cubic_ctrl is None:
+                x1, y1 = cur_x, cur_y
+            else:
+                x1 = 2 * cur_x - last_cubic_ctrl[0]
+                y1 = 2 * cur_y - last_cubic_ctrl[1]
+            emit('C', (x1, y1), (x2, y2), (x, y))
+            last_cubic_ctrl = (x2, y2)
+            cur_x, cur_y = x, y
+        elif cmd == 's':
+            dx2, dy2, dx, dy = (take() for _ in range(4))
+            if last_cubic_ctrl is None:
+                x1, y1 = cur_x, cur_y
+            else:
+                x1 = 2 * cur_x - last_cubic_ctrl[0]
+                y1 = 2 * cur_y - last_cubic_ctrl[1]
+            x2, y2 = cur_x + dx2, cur_y + dy2
+            x, y = cur_x + dx, cur_y + dy
+            emit('C', (x1, y1), (x2, y2), (x, y))
+            last_cubic_ctrl = (x2, y2)
+            cur_x, cur_y = x, y
+        elif cmd == 'Q':
+            x1, y1, x, y = (take() for _ in range(4))
+            emit('Q', (x1, y1), (x, y))
+            last_quad_ctrl = (x1, y1)
+            cur_x, cur_y = x, y
+        elif cmd == 'q':
+            dx1, dy1, dx, dy = (take() for _ in range(4))
+            x1, y1 = cur_x + dx1, cur_y + dy1
+            x, y = cur_x + dx, cur_y + dy
+            emit('Q', (x1, y1), (x, y))
+            last_quad_ctrl = (x1, y1)
+            cur_x, cur_y = x, y
+        elif cmd == 'T':
+            x, y = take(), take()
+            if last_quad_ctrl is None:
+                x1, y1 = cur_x, cur_y
+            else:
+                x1 = 2 * cur_x - last_quad_ctrl[0]
+                y1 = 2 * cur_y - last_quad_ctrl[1]
+            emit('Q', (x1, y1), (x, y))
+            last_quad_ctrl = (x1, y1)
+            cur_x, cur_y = x, y
+        elif cmd == 't':
+            dx, dy = take(), take()
+            if last_quad_ctrl is None:
+                x1, y1 = cur_x, cur_y
+            else:
+                x1 = 2 * cur_x - last_quad_ctrl[0]
+                y1 = 2 * cur_y - last_quad_ctrl[1]
+            x, y = cur_x + dx, cur_y + dy
+            emit('Q', (x1, y1), (x, y))
+            last_quad_ctrl = (x1, y1)
+            cur_x, cur_y = x, y
+        elif cmd in ('A', 'a'):
+            raise NotImplementedError(
+                f"SVG arc commands not supported by the bake-time transform: {path!r}")
+        elif cmd in ('Z', 'z'):
+            emit('Z')
+            cur_x, cur_y = start_x, start_y
+        else:
+            raise ValueError(f"Unknown SVG path command {cmd!r} in {path!r}")
+
+        last_cmd = cmd
+
+    return verbs, pts
+
+
 def generate_skpath_cc_impl(layer_name: str, path_data: str, svg_transform: dict, svg_info: dict, kra_data: dict, layer: dict) -> str:
     """Generate C++ code to create an SkPath from SVG path data.
 
@@ -339,10 +530,6 @@ def generate_skpath_cc_impl(layer_name: str, path_data: str, svg_transform: dict
 
     layer_x = layer['x']
     layer_y = layer['y']
-
-    # Escape the path data for C++ string literal
-    # Replace backslashes and quotes
-    escaped_path = path_data.replace('\\', '\\\\').replace('"', '\\"')
 
     # Calculate the combined transform:
     # 1. SVG local transform from the path element (in SVG point space)
@@ -386,20 +573,50 @@ def generate_skpath_cc_impl(layer_name: str, path_data: str, svg_transform: dict
     translate_x = layer_x_pt - svg_viewbox_width / 2.0
     translate_y = layer_y_pt - svg_viewbox_height / 2.0
 
+    # Precompute the composed affine matrix. SkMatrix::MakeAll(scaleX, skewX, transX,
+    # skewY, scaleY, transY, 0, 0, 1) corresponds to the affine:
+    #     [ sx  kx  tx ]
+    #     [ ky  sy  ty ]
+    # where points are mapped as (x', y') = (sx*x + kx*y + tx, ky*x + sy*y + ty).
+    # Starting from the SVG local transform (svg_a..svg_f with SVG's column-major convention:
+    # a=sx, b=ky, c=kx, d=sy, e=tx, f=ty), we compose postTranslate(tx, ty) then
+    # postScale(scale_x, scale_y):
+    sx = svg_a
+    kx = svg_c
+    tx = svg_e
+    ky = svg_b
+    sy = svg_d
+    ty = svg_f
+    # postTranslate: add (translate_x, translate_y) to (tx, ty).
+    tx += translate_x
+    ty += translate_y
+    # postScale: multiply the whole top row by scale_x, bottom row by scale_y.
+    sx *= scale_x
+    kx *= scale_x
+    tx *= scale_x
+    ky *= scale_y
+    sy *= scale_y
+    ty *= scale_y
+
+    verbs, pts = _bake_svg_path(path_data, sx, kx, tx, ky, sy, ty)
+
+    def fmt(v):
+        s = f"{v:.7g}"
+        if not any(c in s for c in ".eE"):
+            s += ".0"
+        return s + "f"
+
+    pts_lines = ',\n        '.join(f"{{{fmt(x)}, {fmt(y)}}}" for x, y in pts)
+    verbs_lines = ',\n        '.join(f"SkPathVerb::{_VERB_NAMES[v]}" for v in verbs)
+
     code = f"""SkPath {layer_name}() {{
-    SkPath path;
-    if (!SkParsePath::FromSVGString(R"({escaped_path})", &path)) {{
-        return path;
-    }}
-    SkMatrix transform = SkMatrix::MakeAll(
-        {svg_a}, {svg_c}, {svg_e},
-        {svg_b}, {svg_d}, {svg_f},
-        0, 0, 1
-    );
-    transform.postTranslate({translate_x:.10f}, {translate_y:.10f});
-    transform.postScale({scale_x}, {scale_y});
-    path = path.makeTransform(transform);
-    return path;
+    static constexpr SkPoint kPts[] = {{
+        {pts_lines}
+    }};
+    static constexpr SkPathVerb kVerbs[] = {{
+        {verbs_lines}
+    }};
+    return SkPath::Raw(kPts, kVerbs, {{}}, SkPathFillType::kDefault);
 }}"""
 
     return code
@@ -463,7 +680,7 @@ def generate_cpp_code(kra_data, file_basename: str, paint_layers_with_metadata, 
         "",
         '#include "embedded.hh"',
         "",
-        '#include <include/utils/SkParsePath.h>',
+        '#include <include/core/SkPathTypes.h>',
         "",
     ]
 

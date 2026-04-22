@@ -4,8 +4,10 @@
 
 #include <include/core/SkColor.h>
 #include <include/core/SkPaint.h>
+#include <include/core/SkPathBuilder.h>
 #include <include/core/SkTileMode.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 #include <modules/svg/include/SkSVGDOM.h>
 
 #include <tracy/Tracy.hpp>
@@ -50,10 +52,10 @@ static SkPath& MacroRecorderShape() {
     auto bounds = path.getBounds();
     // scale to kHeight
     float scale = kHeight / bounds.height();
-    path.transform(SkMatrix::Scale(scale, scale));
+    path = path.makeTransform(SkMatrix::Scale(scale, scale));
     // align bottom edge to 0
     bounds = path.getBounds();
-    path.transform(SkMatrix::Translate(0.25_mm, -bounds.fTop));
+    path = path.makeTransform(SkMatrix::Translate(0.25_mm, -bounds.fTop));
 
     return path;
   }();
@@ -524,30 +526,37 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
             Vec2 cp_top = bounds.Center() + Vec2(0, eyelid_offset);
             Vec2 cp_bottom = bounds.Center() - Vec2(0, eyelid_offset);
             float eyelid_r = Length(cp_top - bounds.LeftCenter()) * kEyeRadius / eyelid_offset;
-            eyelid.moveTo(bounds.LeftCenter());
-            eyelid.arcTo(cp_top, bounds.RightCenter(), eyelid_r);
-            eyelid.arcTo(cp_bottom, bounds.LeftCenter(), eyelid_r);
-            eyelid.lineTo(bounds.BottomLeftCorner());
-            eyelid.lineTo(bounds.BottomRightCorner());
-            eyelid.lineTo(bounds.TopRightCorner());
-            eyelid.lineTo(bounds.TopLeftCorner());
-            eyelid.close();
+            eyelid = SkPathBuilder()
+                         .moveTo(bounds.LeftCenter())
+                         .arcTo(cp_top, bounds.RightCenter(), eyelid_r)
+                         .arcTo(cp_bottom, bounds.LeftCenter(), eyelid_r)
+                         .lineTo(bounds.BottomLeftCorner())
+                         .lineTo(bounds.BottomRightCorner())
+                         .lineTo(bounds.TopRightCorner())
+                         .lineTo(bounds.TopLeftCorner())
+                         .close()
+                         .detach();
           }
 
           SkPaint eyelid_paint;
-          SkColor colors[] = {"#353940"_color, "#131519"_color, "#070708"_color};
+          SkColor4f colors[] = {SkColor4f::FromColor("#353940"_color),
+                                SkColor4f::FromColor("#131519"_color),
+                                SkColor4f::FromColor("#070708"_color)};
           float colors_pos[] = {0, 0.6, 1};
-          eyelid_paint.setShader(
-              SkGradientShader::MakeRadial(bounds.Center() + Vec2(0, kEyeRadius / 2), kEyeRadius,
-                                           colors, colors_pos, 3, SkTileMode::kClamp));
+          eyelid_paint.setShader(SkShaders::RadialGradient(
+              bounds.Center() + Vec2(0, kEyeRadius / 2), kEyeRadius,
+              SkGradient{SkGradient::Colors{colors, colors_pos, SkTileMode::kClamp}, {}}));
           canvas.drawPath(eyelid, eyelid_paint);
         }
 
-        SkColor colors[] = {"#00000000"_color, "#00000010"_color, "#00000080"_color};
+        SkColor4f colors[] = {SkColor4f::FromColor("#00000000"_color),
+                              SkColor4f::FromColor("#00000010"_color),
+                              SkColor4f::FromColor("#00000080"_color)};
         float colors_pos[] = {0, 0.6, 1};
         SkPaint eye_shadow_paint;
-        eye_shadow_paint.setShader(SkGradientShader::MakeRadial(center, kEyeRadius, colors,
-                                                                colors_pos, 3, SkTileMode::kClamp));
+        eye_shadow_paint.setShader(SkShaders::RadialGradient(
+            center, kEyeRadius,
+            SkGradient{SkGradient::Colors{colors, colors_pos, SkTileMode::kClamp}, {}}));
         canvas.drawRect(bounds, eye_shadow_paint);
       };
       DrawEye(kLeftEyeCenter, animation_state.googly_left);

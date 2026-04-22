@@ -245,7 +245,7 @@ static CaretAnimAction UpdateCaret(time::Timer& timer, CaretAnimation& anim, Car
     }
   } else if (disappear) {
     animation::LinearApproach(0, timer.d, 1, anim.alpha);
-    anim.shape.offset(0, timer.d * kLetterSize);
+    anim.shape = anim.shape.makeOffset(0, timer.d * kLetterSize);
   }
 
   if (disappear) {

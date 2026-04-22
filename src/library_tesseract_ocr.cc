@@ -10,6 +10,7 @@
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPath.h>
+#include <include/core/SkPathBuilder.h>
 #include <include/core/SkShader.h>
 #include <include/core/SkVertices.h>
 #include <include/effects/SkTrimPathEffect.h>
@@ -430,19 +431,17 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
     auto& box_image = BoxImage();
     auto box_back = Rect(214, 127, 1082, 654);
     auto DrawQuad = [&](Vec2 pts[4], Vec2 tex_pts[4]) {
-      SkMatrix m;
-      m.setPolyToPoly((SkPoint*)tex_pts, (SkPoint*)pts, 4);
-      auto builder = SkVertices::Builder(SkVertices::kTriangleFan_VertexMode, 4, 0, 0);
+      auto builder = SkVertices::Builder(SkVertices::kTriangleFan_VertexMode, 4, 0,
+                                         SkVertices::kHasTexCoords_BuilderFlag);
       auto pos = builder.positions();
+      auto tex = builder.texCoords();
       for (int i = 0; i < 4; ++i) {
-        pos[i] = tex_pts[i];
+        pos[i] = pts[i];
+        tex[i] = tex_pts[i];
       }
       SkPaint paint;
       paint.setShader(*box_image.shader);
-      canvas.save();
-      canvas.concat(m);
-      canvas.drawVertices(builder.detach(), SkBlendMode::kSrc, paint);
-      canvas.restore();
+      canvas.drawVertices(builder.detach(), SkBlendMode::kSrcOver, paint);
     };
 
     {  // left wall
@@ -561,21 +560,21 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
     }
 
     auto RectPath = [&](Vec2 p1, Vec2 p2, Vec2 p3, Vec2 p4, float radius = kEdgeWidth / 2) {
-      SkPath border_path;
-      border_path.moveTo((p1 + p2) / 2);
+      SkPathBuilder builder;
+      builder.moveTo((p1 + p2) / 2);
       if (radius > 0) {
-        border_path.arcTo(p2, (p2 + p3) / 2, radius);
-        border_path.arcTo(p3, (p4 + p3) / 2, radius);
-        border_path.arcTo(p4, (p1 + p4) / 2, radius);
-        border_path.arcTo(p1, (p1 + p2) / 2, radius);
+        builder.arcTo(p2, (p2 + p3) / 2, radius);
+        builder.arcTo(p3, (p4 + p3) / 2, radius);
+        builder.arcTo(p4, (p1 + p4) / 2, radius);
+        builder.arcTo(p1, (p1 + p2) / 2, radius);
       } else {
-        border_path.lineTo(p2);
-        border_path.lineTo(p3);
-        border_path.lineTo(p4);
-        border_path.lineTo(p1);
+        builder.lineTo(p2);
+        builder.lineTo(p3);
+        builder.lineTo(p4);
+        builder.lineTo(p1);
       }
-      border_path.close();
-      return border_path;
+      builder.close();
+      return builder.detach();
     };
     auto color_outer = color::MakeTintFilter("#333333"_color, 80);
     auto color_outer_back = color::MakeTintFilter("#111111"_color, 20);
@@ -659,45 +658,49 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
 
     for (int i = 0; i < 2; ++i) {
       for (int j = 0; j < 2; ++j) {
-        SkPath inner_outer;
-        inner_outer.moveTo(layout[(AxisX)i, (AxisY)j, Back, Inner]);
-        inner_outer.lineTo(layout[(AxisX)i, (AxisY)j, Back, Outer]);
+        SkPath inner_outer = SkPathBuilder()
+                                 .moveTo(layout[(AxisX)i, (AxisY)j, Back, Inner])
+                                 .lineTo(layout[(AxisX)i, (AxisY)j, Back, Outer])
+                                 .detach();
         ui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Braided,
                       kEdgeWidth * 0.5, kEdgeWidth * 0.5, nullptr);
       }
     }
     {    // sides of the inner cube
       {  // top
-        SkPath path;
-        path.moveTo(layout[Left, Top, Back, Inner]);
-        path.lineTo(layout[Right, Top, Back, Inner]);
-        path.lineTo(layout[Right, Top, Front, Inner]);
-        path.lineTo(layout[Left, Top, Front, Inner]);
-        path.close();
+        SkPath path = SkPathBuilder()
+                          .moveTo(layout[Left, Top, Back, Inner])
+                          .lineTo(layout[Right, Top, Back, Inner])
+                          .lineTo(layout[Right, Top, Front, Inner])
+                          .lineTo(layout[Left, Top, Front, Inner])
+                          .close()
+                          .detach();
         SkPaint paint;
         paint.setColor("#6c2f1b"_color);
         paint.setAlphaf(0.5);
         canvas.drawPath(path, paint);
       }
       for (int i = 0; i < 2; ++i) {  // left & right
-        SkPath path;
-        path.moveTo(layout[(AxisX)i, Top, Back, Inner]);
-        path.lineTo(layout[(AxisX)i, Top, Front, Inner]);
-        path.lineTo(layout[(AxisX)i, Bottom, Front, Inner]);
-        path.lineTo(layout[(AxisX)i, Bottom, Back, Inner]);
-        path.close();
+        SkPath path = SkPathBuilder()
+                          .moveTo(layout[(AxisX)i, Top, Back, Inner])
+                          .lineTo(layout[(AxisX)i, Top, Front, Inner])
+                          .lineTo(layout[(AxisX)i, Bottom, Front, Inner])
+                          .lineTo(layout[(AxisX)i, Bottom, Back, Inner])
+                          .close()
+                          .detach();
         SkPaint paint;
         paint.setColor("#a54b2f"_color);
         paint.setAlphaf(0.5);
         canvas.drawPath(path, paint);
       }
       {  // bottom
-        SkPath path;
-        path.moveTo(layout[Left, Bottom, Back, Inner]);
-        path.lineTo(layout[Right, Bottom, Back, Inner]);
-        path.lineTo(layout[Right, Bottom, Front, Inner]);
-        path.lineTo(layout[Left, Bottom, Front, Inner]);
-        path.close();
+        SkPath path = SkPathBuilder()
+                          .moveTo(layout[Left, Bottom, Back, Inner])
+                          .lineTo(layout[Right, Bottom, Back, Inner])
+                          .lineTo(layout[Right, Bottom, Front, Inner])
+                          .lineTo(layout[Left, Bottom, Front, Inner])
+                          .close()
+                          .detach();
         SkPaint paint;
         paint.setColor("#ee7857"_color);
         paint.setAlphaf(0.5);
@@ -716,18 +719,20 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
 
     for (int i = 0; i < 2; ++i) {
       for (int j = 0; j < 2; ++j) {
-        SkPath front_back;
-        front_back.moveTo(layout[(AxisX)i, (AxisY)j, Back, Inner]);
-        front_back.lineTo(layout[(AxisX)i, (AxisY)j, Front, Inner]);
+        SkPath front_back = SkPathBuilder()
+                                .moveTo(layout[(AxisX)i, (AxisY)j, Back, Inner])
+                                .lineTo(layout[(AxisX)i, (AxisY)j, Front, Inner])
+                                .detach();
         ui::DrawCable(canvas, front_back, color_inner, CableTexture::Smooth, kEdgeWidth * 0.5,
                       kEdgeWidth, nullptr);
       }
     }
     for (int i = 0; i < 2; ++i) {
       for (int j = 0; j < 2; ++j) {
-        SkPath inner_outer;
-        inner_outer.moveTo(layout[(AxisX)i, (AxisY)j, Front, Inner]);
-        inner_outer.lineTo(layout[(AxisX)i, (AxisY)j, Front, Outer]);
+        SkPath inner_outer = SkPathBuilder()
+                                 .moveTo(layout[(AxisX)i, (AxisY)j, Front, Inner])
+                                 .lineTo(layout[(AxisX)i, (AxisY)j, Front, Outer])
+                                 .detach();
         ui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Braided,
                       kEdgeWidth * 0.75, kEdgeWidth, nullptr);
       }
@@ -751,9 +756,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
 
     auto& eye_image = EyeImage();
     canvas.save();
-    eye_path.toggleInverseFillType();
-    canvas.clipPath(eye_path);
-    eye_path.toggleInverseFillType();
+    canvas.clipPath(eye_path.makeToggleInverseFillType());
     canvas.translate(-eye_image.width() / 2, -eye_image.height() / 2 + layout.eye_center.y);
     eye_image.draw(canvas);
     canvas.restore();
@@ -800,41 +803,42 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
     }
 
     if (laser_alpha > 0.0f) {
-      SkPath path;
-      path.moveTo(layout[Left, Top, Front, Outer]);
-      path.lineTo(layout[Right, Top, Front, Outer]);
-      path.lineTo(layout[Right, Top, Front, Inner]);
-      path.lineTo(layout[Right, Bottom, Front, Inner]);
-      path.lineTo(layout[Right, Bottom, Back, Inner]);
-      path.lineTo(layout[Left, Bottom, Back, Inner]);
-      path.lineTo(layout[Left, Bottom, Back, Outer]);
-      path.lineTo(layout[Left, Top, Back, Outer]);
-      path.lineTo(layout[Left, Top, Front, Outer]);
-      path.lineTo(layout[Left, Top, Front, Inner]);
-      path.lineTo(layout[Left, Top, Back, Inner]);
-      path.lineTo(layout[Right, Top, Back, Inner]);
-      path.lineTo(layout[Right, Top, Back, Outer]);
-      path.lineTo(layout[Right, Bottom, Back, Outer]);
-      path.lineTo(layout[Right, Bottom, Front, Outer]);
-      path.lineTo(layout[Left, Bottom, Front, Outer]);
-      path.lineTo(layout[Left, Bottom, Front, Inner]);
-      path.lineTo(layout[Left, Bottom, Back, Inner]);
-      path.lineTo(layout[Left, Top, Back, Inner]);
-      path.lineTo(layout[Left, Top, Back, Outer]);
-      path.lineTo(layout[Right, Top, Back, Outer]);
-      path.lineTo(layout[Right, Top, Front, Outer]);
-      path.lineTo(layout[Right, Bottom, Front, Outer]);
-      path.lineTo(layout[Right, Bottom, Front, Inner]);
-      path.lineTo(layout[Left, Bottom, Front, Inner]);
-      path.lineTo(layout[Left, Top, Front, Inner]);
-      path.lineTo(layout[Right, Top, Front, Inner]);
-      path.lineTo(layout[Right, Top, Back, Inner]);
-      path.lineTo(layout[Right, Bottom, Back, Inner]);
-      path.lineTo(layout[Right, Bottom, Back, Outer]);
-      path.lineTo(layout[Left, Bottom, Back, Outer]);
-      path.lineTo(layout[Left, Bottom, Front, Outer]);
-      path.lineTo(layout[Left, Top, Front, Outer]);
-      path.close();
+      SkPath path = SkPathBuilder()
+                        .moveTo(layout[Left, Top, Front, Outer])
+                        .lineTo(layout[Right, Top, Front, Outer])
+                        .lineTo(layout[Right, Top, Front, Inner])
+                        .lineTo(layout[Right, Bottom, Front, Inner])
+                        .lineTo(layout[Right, Bottom, Back, Inner])
+                        .lineTo(layout[Left, Bottom, Back, Inner])
+                        .lineTo(layout[Left, Bottom, Back, Outer])
+                        .lineTo(layout[Left, Top, Back, Outer])
+                        .lineTo(layout[Left, Top, Front, Outer])
+                        .lineTo(layout[Left, Top, Front, Inner])
+                        .lineTo(layout[Left, Top, Back, Inner])
+                        .lineTo(layout[Right, Top, Back, Inner])
+                        .lineTo(layout[Right, Top, Back, Outer])
+                        .lineTo(layout[Right, Bottom, Back, Outer])
+                        .lineTo(layout[Right, Bottom, Front, Outer])
+                        .lineTo(layout[Left, Bottom, Front, Outer])
+                        .lineTo(layout[Left, Bottom, Front, Inner])
+                        .lineTo(layout[Left, Bottom, Back, Inner])
+                        .lineTo(layout[Left, Top, Back, Inner])
+                        .lineTo(layout[Left, Top, Back, Outer])
+                        .lineTo(layout[Right, Top, Back, Outer])
+                        .lineTo(layout[Right, Top, Front, Outer])
+                        .lineTo(layout[Right, Bottom, Front, Outer])
+                        .lineTo(layout[Right, Bottom, Front, Inner])
+                        .lineTo(layout[Left, Bottom, Front, Inner])
+                        .lineTo(layout[Left, Top, Front, Inner])
+                        .lineTo(layout[Right, Top, Front, Inner])
+                        .lineTo(layout[Right, Top, Back, Inner])
+                        .lineTo(layout[Right, Bottom, Back, Inner])
+                        .lineTo(layout[Right, Bottom, Back, Outer])
+                        .lineTo(layout[Left, Bottom, Back, Outer])
+                        .lineTo(layout[Left, Bottom, Front, Outer])
+                        .lineTo(layout[Left, Top, Front, Outer])
+                        .close()
+                        .detach();
       float laser_width = status_progress_ratio.value_or(4.0f) / 4.f;
       float laser_start = laser_phase;
       float laser_end = laser_start + laser_width;

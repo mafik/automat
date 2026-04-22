@@ -18,7 +18,6 @@
 #include <include/core/SkColorType.h>
 #include <include/core/SkImage.h>
 #include <include/core/SkTileMode.h>
-#include <include/effects/SkGradientShader.h>
 
 #include <tracy/Tracy.hpp>
 

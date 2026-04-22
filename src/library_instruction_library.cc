@@ -4,6 +4,7 @@
 
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkColor.h>
+#include <include/core/SkPathBuilder.h>
 #include <include/core/SkPathMeasure.h>
 #include <llvm/MC/MCInstBuilder.h>
 #include <llvm/MC/MCInstrInfo.h>
@@ -195,12 +196,12 @@ static SkPathMeasure CategoryPathMeasure(int i, int n) {
   float angle_off_vertical = branch_dir - M_PI / 2;
 
   constexpr int kSegmentCount = 2;
-  SkPath stem_path;
+  SkPathBuilder stem_builder;
   Vec2 segment_start = Vec2::Polar(branch_dir_sin_cos, kStartDist);
   float segment_start_angle_offset = 0;
   constexpr float kSegmentLength = (kRoseDist - kStartDist) / kSegmentCount;
   constexpr float kControlPointDistance = kSegmentLength / 2;
-  stem_path.moveTo(segment_start);
+  stem_builder.moveTo(segment_start);
   for (int segment = 0; segment < kSegmentCount; ++segment) {
     float segment_end_dist = kStartDist + kSegmentLength * (segment + 1);
     Vec2 segment_end = Vec2::Polar(branch_dir_sin_cos, segment_end_dist);
@@ -218,12 +219,12 @@ static SkPathMeasure CategoryPathMeasure(int i, int n) {
     Vec2 cp2 = segment_end -
                Vec2::Polar(branch_dir_sin_cos + SinCos::FromRadians(segment_end_angle_offset),
                            kControlPointDistance);
-    stem_path.cubicTo(cp1, cp2, segment_end);
+    stem_builder.cubicTo(cp1, cp2, segment_end);
     segment_start = segment_end;
     segment_start_angle_offset = segment_end_angle_offset;
   }
 
-  return SkPathMeasure(stem_path, false, 1000);
+  return SkPathMeasure(stem_builder.detach(), false, 1000);
 }
 
 struct StalkMetrics {

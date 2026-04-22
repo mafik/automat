@@ -3,7 +3,8 @@
 #include "library_assembler.hh"
 
 #include <include/core/SkMatrix.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 #include <llvm/MC/MCCodeEmitter.h>
 #include <llvm/MC/MCInstBuilder.h>
 #include <llvm/MC/MCInstPrinter.h>
@@ -514,27 +515,29 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
   constexpr float kLightRange = 5_mm;
   constexpr float kLightRadius = 1_mm;
 
-  SkColor bulb_colors[] = {
-      "#ffffa2"_color,  // light center
-      "#ffff70"_color,  // light mid
-      "#ffff93"_color,  // outer light edge (faint yellow)
+  SkColor4f bulb_colors[] = {
+      SkColor4f::FromColor("#ffffa2"_color),  // light center
+      SkColor4f::FromColor("#ffff70"_color),  // light mid
+      SkColor4f::FromColor("#ffff93"_color),  // outer light edge (faint yellow)
   };
   SkPaint bulb_paint;
-  bulb_paint.setShader(SkGradientShader::MakeRadial(center, kLightRadius, bulb_colors, nullptr, 3,
-                                                    SkTileMode::kClamp));
+  bulb_paint.setShader(SkShaders::RadialGradient(
+      center, kLightRadius,
+      SkGradient{SkGradient::Colors{bulb_colors, SkTileMode::kClamp}, {}}));
 
-  SkColor glow_colors[] = {
-      "#5b0e00"_color,    // shadow
-      "#5b0e00"_color,    // shadow
-      "#ec4329"_color,    // warm red
-      "#ec432980"_color,  // half-transparent warm red
-      "#ec432900"_color,  // transparent warm red
+  SkColor4f glow_colors[] = {
+      SkColor4f::FromColor("#5b0e00"_color),    // shadow
+      SkColor4f::FromColor("#5b0e00"_color),    // shadow
+      SkColor4f::FromColor("#ec4329"_color),    // warm red
+      SkColor4f::FromColor("#ec432980"_color),  // half-transparent warm red
+      SkColor4f::FromColor("#ec432900"_color),  // transparent warm red
   };
   SkPaint glow_paint;
   float glow_positions[] = {0, kLightRadius / kLightRange, kLightRadius * 1.1 / kLightRange,
                             kLightRadius * 2 / kLightRange, 1};
-  glow_paint.setShader(SkGradientShader::MakeRadial(center, kLightRange, glow_colors,
-                                                    glow_positions, 5, SkTileMode::kClamp));
+  glow_paint.setShader(SkShaders::RadialGradient(
+      center, kLightRange,
+      SkGradient{SkGradient::Colors{glow_colors, glow_positions, SkTileMode::kClamp}, {}}));
   canvas.save();
   canvas.clipRRect(kRRect.sk);
   canvas.clipRRect(kBorderMidRRect.sk, SkClipOp::kDifference);
@@ -696,10 +699,12 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
       SkPaint flag_paint;
       SkPoint points[2] = {SkPoint::Make(-kCellWidth * 0.2, 0),
                            SkPoint::Make(kCellWidth * 1.2, kCellHeight * 0.1)};
-      SkColor colors[5] = {"#ff0000"_color, "#800000"_color, "#ff0000"_color, "#800000"_color,
-                           "#ff0000"_color};
-      flag_paint.setShader(
-          SkGradientShader::MakeLinear(points, colors, nullptr, 5, SkTileMode::kClamp));
+      SkColor4f colors[5] = {
+          SkColor4f::FromColor("#ff0000"_color), SkColor4f::FromColor("#800000"_color),
+          SkColor4f::FromColor("#ff0000"_color), SkColor4f::FromColor("#800000"_color),
+          SkColor4f::FromColor("#ff0000"_color)};
+      flag_paint.setShader(SkShaders::LinearGradient(
+          points, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
       if (reg_value & (1ULL << position)) {
         canvas.save();
         canvas.translate(left + kCellWidth * 0.2, bottom);

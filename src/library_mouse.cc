@@ -7,6 +7,7 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
+#include <include/core/SkPathBuilder.h>
 #include <include/core/SkShader.h>
 #include <include/pathops/SkPathOps.h>
 
@@ -584,25 +585,26 @@ struct MouseMoveWidget : MouseWidget {
   void Draw(SkCanvas& canvas) const override {
     krita::mouse::base.draw(canvas);
     krita::mouse::dpad.draw(canvas);
-    SkPath path;
+    SkPathBuilder path_builder;
     Vec2 cursor = {0, 0};
     SkPath dpad_window = krita::mouse::DpadWindow();
     Rect dpad_window_bounds = dpad_window.getBounds();
     float kDisplayRadius = dpad_window_bounds.Width() / 2;
     float trail_scale =
         kDisplayRadius / 15;  // initial scale shows at least 15 pixels (0 and 10 pixel axes)
-    path.moveTo(cursor.x, cursor.y);
+    path_builder.moveTo(cursor.x, cursor.y);
     int end = trail_end_idx.load(std::memory_order_relaxed);
     for (int i = end + kMaxTrailPoints - 1; i != end; --i) {
       Vec2 delta = trail[i % kMaxTrailPoints].load(std::memory_order_relaxed);
       cursor += delta;
-      path.lineTo(-cursor.x, cursor.y);
+      path_builder.lineTo(-cursor.x, cursor.y);
       float cursor_dist = Length(cursor);
       float trail_scale_new = kDisplayRadius / cursor_dist;
       if (trail_scale_new < trail_scale) {
         trail_scale = trail_scale_new;
       }
     }
+    SkPath path = path_builder.detach();
     canvas.translate(dpad_window_bounds.CenterX(),
                      dpad_window_bounds.CenterY());  // move the trail end to the center of display
 
@@ -724,10 +726,11 @@ struct MouseScrollYWidget : MouseWidgetBase {
         // s0 and s1 are the arc control points
         Vec2 s0 = Vec2(wheel_bounds.centerX(), cy + x0);
         Vec2 s1 = Vec2(wheel_bounds.centerX(), cy + x1);
-        SkPath path;
-        path.moveTo(left);
-        path.arcTo(s0, right, r0);
-        path.arcTo(s1, left, r1);
+        SkPath path = SkPathBuilder()
+                          .moveTo(left)
+                          .arcTo(s0, right, r0)
+                          .arcTo(s1, left, r1)
+                          .detach();
         canvas.drawPath(path, paint);
       }
       alpha = alpha + 30_deg;
@@ -790,10 +793,11 @@ struct MouseScrollXWidget : MouseWidgetBase {
         float x1 = 2 * a1 * c * c / (c * c - a1 * a1);
         Vec2 s0 = Vec2(cx + x0, wheel_bounds.centerY());
         Vec2 s1 = Vec2(cx + x1, wheel_bounds.centerY());
-        SkPath path;
-        path.moveTo(bottom);
-        path.arcTo(s0, top, r0);
-        path.arcTo(s1, bottom, r1);
+        SkPath path = SkPathBuilder()
+                          .moveTo(bottom)
+                          .arcTo(s0, top, r0)
+                          .arcTo(s1, bottom, r1)
+                          .detach();
         canvas.drawPath(path, paint);
       }
       alpha = alpha + 30_deg;
@@ -862,8 +866,8 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
 
     presser_widget.local_to_parent = SkM44(MouseWidgetCommon::GetPresserMatrix(center, 1));
 
-    auto presser_shape = presser_widget.Shape();
-    presser_shape.transform(presser_widget.local_to_parent.asM33());
+    auto presser_shape =
+        presser_widget.Shape().makeTransform(presser_widget.local_to_parent.asM33());
     Op(mouse_shape, presser_shape, kUnion_SkPathOp, &shape);
   }
 

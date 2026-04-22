@@ -1,6 +1,7 @@
 #include "drawing.hh"
 
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 
 #include "sincos.hh"
 
@@ -14,15 +15,15 @@ void SetRRectShader(SkPaint& paint, const RRect& rrect, SkColor top, SkColor mid
   // Define color stops for a sweep gradient
   // We'll use strategic positions to create the transitions between colors
   constexpr int count = 8;
-  SkColor colors[count] = {
-      middle,  // right top
-      top,     // top right
-      top,     // top left
-      middle,  // left top
-      middle,  // left bottom
-      bottom,  // bottom left
-      bottom,  // bottom right
-      middle,  // right bottom
+  SkColor4f colors[count] = {
+      SkColor4f::FromColor(middle),  // right top
+      SkColor4f::FromColor(top),     // top right
+      SkColor4f::FromColor(top),     // top left
+      SkColor4f::FromColor(middle),  // left top
+      SkColor4f::FromColor(middle),  // left bottom
+      SkColor4f::FromColor(bottom),  // bottom left
+      SkColor4f::FromColor(bottom),  // bottom right
+      SkColor4f::FromColor(middle),  // right bottom
   };
 
   auto Angle = [](Vec2 v) -> float { return SinCos::FromVec2(v).ToRadiansPositive() / M_PI / 2; };
@@ -35,7 +36,8 @@ void SetRRectShader(SkPaint& paint, const RRect& rrect, SkColor top, SkColor mid
       Angle(rrect.LineEndLowerRight()), Angle(rrect.LineEndRightLower()),
   };
 
-  paint.setShader(SkGradientShader::MakeSweep(center.x(), center.y(), colors, positions, count));
+  paint.setShader(SkShaders::SweepGradient(
+      center, SkGradient{SkGradient::Colors{colors, positions, SkTileMode::kClamp}, {}}));
 }
 
 }  // namespace automat

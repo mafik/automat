@@ -68,7 +68,7 @@ static SkPath GetHandShape() {
     matrix.postScale(s, s);
     matrix.postRotate(15);
     matrix.postTranslate(2.6_mm, 1.9_mm);
-    path.transform(matrix);
+    path = path.makeTransform(matrix);
     return path;
   }();
   return path;

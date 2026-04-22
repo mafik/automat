@@ -5,8 +5,9 @@
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkMatrix.h>
+#include <include/core/SkPathBuilder.h>
 #include <include/core/SkShader.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/effects/SkGradient.h>
 #include <include/effects/SkRuntimeEffect.h>
 
 #include "arcline.hh"
@@ -347,39 +348,43 @@ struct HotKeyWidget : ObjectToy, ui::CaretOwner {
     SkPaint border_paint;
     border_paint.setAntiAlias(true);
     SkPoint border_pts[] = {{0, kShapeRect.top}, {0, kShapeRect.bottom}};
-    SkColor border_colors[] = {"#f0f0f0"_color, "#cccccc"_color};
-    border_paint.setShader(
-        SkGradientShader::MakeLinear(border_pts, border_colors, nullptr, 2, SkTileMode::kClamp));
+    SkColor4f border_colors[] = {SkColor4f::FromColor("#f0f0f0"_color),
+                                 SkColor4f::FromColor("#cccccc"_color)};
+    border_paint.setShader(SkShaders::LinearGradient(
+        border_pts, SkGradient{SkGradient::Colors{border_colors, SkTileMode::kClamp}, {}}));
 
-    SkPath border_path;
-    border_path.addRRect(kShapeRRect);
-    border_path.addPath(inner_contour);
-    border_path.setFillType(SkPathFillType::kEvenOdd);
+    SkPath border_path = SkPathBuilder()
+                             .setFillType(SkPathFillType::kEvenOdd)
+                             .addRRect(kShapeRRect)
+                             .addPath(inner_contour)
+                             .detach();
     canvas.drawPath(border_path, border_paint);
 
     SkBlendMode shade_blend_mode = SkBlendMode::kHardLight;
     float shade_alpha = 0.5;
     SkPoint light_pts[] = {{0, kShapeRect.top}, {0, kShapeRect.bottom}};
-    SkColor light_colors[] = {"#fdf8e0"_color, "#111c22"_color};
+    SkColor4f light_colors[] = {SkColor4f::FromColor("#fdf8e0"_color),
+                                SkColor4f::FromColor("#111c22"_color)};
     SkPaint light_paint;
     light_paint.setAntiAlias(true);
     light_paint.setBlendMode(shade_blend_mode);
     light_paint.setAlphaf(shade_alpha);
-    light_paint.setShader(
-        SkGradientShader::MakeLinear(light_pts, light_colors, nullptr, 2, SkTileMode::kClamp));
+    light_paint.setShader(SkShaders::LinearGradient(
+        light_pts, SkGradient{SkGradient::Colors{light_colors, SkTileMode::kClamp}, {}}));
 
     canvas.drawDRRect(kShapeRRect, frame_outer, light_paint);
 
     SkPoint shadow_pts[] = {{0, kShapeRect.bottom + kFrameOuterRadius}, {0, kShapeRect.bottom}};
-    SkColor shadow_colors[] = {"#111c22"_color, "#fdf8e0"_color};
+    SkColor4f shadow_colors[] = {SkColor4f::FromColor("#111c22"_color),
+                                 SkColor4f::FromColor("#fdf8e0"_color)};
     SkPaint shadow_paint;
     shadow_paint.setAntiAlias(true);
     shadow_paint.setBlendMode(shade_blend_mode);
     shadow_paint.setAlphaf(shade_alpha);
     shadow_paint.setStyle(SkPaint::kStroke_Style);
     shadow_paint.setStrokeWidth(kBorderWidth * 2);
-    shadow_paint.setShader(
-        SkGradientShader::MakeLinear(shadow_pts, shadow_colors, nullptr, 2, SkTileMode::kClamp));
+    shadow_paint.setShader(SkShaders::LinearGradient(
+        shadow_pts, SkGradient{SkGradient::Colors{shadow_colors, SkTileMode::kClamp}, {}}));
     canvas.save();
     canvas.clipPath(border_path, true);
     canvas.drawPath(inner_contour, shadow_paint);

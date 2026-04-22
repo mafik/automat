@@ -6,9 +6,10 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkPaint.h>
+#include <include/core/SkPathBuilder.h>
 #include <include/core/SkSamplingOptions.h>
 #include <include/core/SkShader.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/effects/SkGradient.h>
 #include <include/pathops/SkPathOps.h>
 
 #include <tracy/Tracy.hpp>
@@ -73,9 +74,11 @@ struct YingYangIcon : ui::Widget, ui::PaintMixin {
     tear.TurnConvex(180_deg, -kYingYangRadius);
     tear.TurnConvex(180_deg, -kYingYangRadiusSmall);
     tear.TurnConvex(180_deg, kYingYangRadiusSmall);
-    auto black_path = tear.ToPath();
-    black_path.addCircle(0, kYingYangRadiusSmall, kYingYangRadiusSmall / 4);
-    black_path.addCircle(0, -kYingYangRadiusSmall, kYingYangRadiusSmall / 4);
+    SkPathBuilder black_builder;
+    black_builder.addPath(tear.ToPath());
+    black_builder.addCircle(0, kYingYangRadiusSmall, kYingYangRadiusSmall / 4);
+    black_builder.addCircle(0, -kYingYangRadiusSmall, kYingYangRadiusSmall / 4);
+    auto black_path = black_builder.detach();
     canvas.drawPath(black_path, paint);
   }
   SkPath Shape() const override { return SkPath::Circle(0, 0, kYingYangRadius); }
@@ -142,19 +145,22 @@ struct FlipFlopWidget : ObjectToy {
       SkPoint center = {kFlipFlopWidth / 2, 2_cm};
       float radius = 0.5_mm;
       float a = light;
-      SkColor colors[] = {color::MixColors("#725016"_color, "#ff8786"_color, a),
-                          color::MixColors("#2b1e07"_color, "#ff3e3e"_color, a)};
-      gradient.setShader(SkGradientShader::MakeRadial(center + SkPoint(0, 0.25_mm), radius, colors,
-                                                      0, 2, SkTileMode::kClamp));
+      SkColor4f colors[] = {
+          SkColor4f::FromColor(color::MixColors("#725016"_color, "#ff8786"_color, a)),
+          SkColor4f::FromColor(color::MixColors("#2b1e07"_color, "#ff3e3e"_color, a))};
+      gradient.setShader(SkShaders::RadialGradient(
+          center + SkPoint(0, 0.25_mm), radius,
+          SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
       canvas.drawCircle(center, radius, gradient);
 
       SkPaint shine;
-      SkColor shine_colors[] = {color::MixColors("#d2b788ff"_color, "#ffe8e8ff"_color, a),
-                                color::MixColors("#d2b78800"_color, "#ffe8e800"_color, a),
-                                color::MixColors("#d2b788ff"_color, "#ffe8e8ff"_color, a)};
+      SkColor4f shine_colors[] = {
+          SkColor4f::FromColor(color::MixColors("#d2b788ff"_color, "#ffe8e8ff"_color, a)),
+          SkColor4f::FromColor(color::MixColors("#d2b78800"_color, "#ffe8e800"_color, a)),
+          SkColor4f::FromColor(color::MixColors("#d2b788ff"_color, "#ffe8e8ff"_color, a))};
       SkPoint shine_pts[] = {center + SkPoint{0, 0.5_mm}, center - SkPoint{0, 0.5_mm}};
-      shine.setShader(
-          SkGradientShader::MakeLinear(shine_pts, shine_colors, nullptr, 3, SkTileMode::kClamp));
+      shine.setShader(SkShaders::LinearGradient(
+          shine_pts, SkGradient{SkGradient::Colors{shine_colors, SkTileMode::kClamp}, {}}));
       shine.setStyle(SkPaint::kStroke_Style);
       shine.setStrokeWidth(0.06_mm);
       shine.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.05_mm));

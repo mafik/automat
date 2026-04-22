@@ -9,11 +9,13 @@
 #include <include/core/SkImage.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkPaint.h>
+#include <include/core/SkPathBuilder.h>
 #include <include/core/SkPictureRecorder.h>
 #include <include/core/SkShader.h>
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkBlenders.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/MC/MCInstBuilder.h>
 #include <llvm/MC/MCInstPrinter.h>
@@ -2258,9 +2260,7 @@ void DrawFlag(SkCanvas& canvas, Flag flag) {
     auto base_path = PathFromSVG("M-4 0A40 40 0 000-10 40 40 0 004 0 8 8 0 01-4 0");
     auto bounds = base_path.getBounds();
     float scale = 1.5_mm / bounds.bottom();
-    base_path = base_path.makeScale(scale, scale);
-    base_path.offset(0, 10_mm);
-    return base_path;
+    return base_path.makeScale(scale, scale).makeOffset(0, 10_mm);
   }();
   SkPaint pole_paint;
   pole_paint.setStyle(SkPaint::kStroke_Style);
@@ -2402,38 +2402,38 @@ struct EnumKnobWidget : ui::Widget {
         asin(kRegionMargin / 2 / kRegionEndRadius) * 180 / M_PI;
     const static float kRegionInnerAngleAdjust =
         asin(kRegionMargin / 2 / kRegionStartRadius) * 180 / M_PI;
-    SkPath path;
+    SkPathBuilder builder;
     float sweep = end_deg - start_deg;
-    path.arcTo(kRegionOuter.sk, start_deg + kRegionOuterAngleAdjust,
-               sweep - 2 * kRegionOuterAngleAdjust, true);
-    path.arcTo(kRegionInner.sk, end_deg - kRegionInnerAngleAdjust,
-               -sweep + 2 * kRegionInnerAngleAdjust, false);
-    path.close();
-    return path;
+    builder.arcTo(kRegionOuter.sk, start_deg + kRegionOuterAngleAdjust,
+                  sweep - 2 * kRegionOuterAngleAdjust, true);
+    builder.arcTo(kRegionInner.sk, end_deg - kRegionInnerAngleAdjust,
+                  -sweep + 2 * kRegionInnerAngleAdjust, false);
+    builder.close();
+    return builder.detach();
   };
 
   static void DrawConditionCodeBackground(SkCanvas& canvas, X86::CondCode cond_code) {
     static constexpr float kParityRegionSweep = 360.f / 9;
     static const SkPath kEvenParityRegion = [&]() {
-      SkPath path;
+      SkPathBuilder builder;
       for (int i = 0; i < 9; ++i) {
         if ((i & 1) == 1) continue;
         float start_deg = (i - 0.5f) * 360 / 9;
-        path.arcTo(kRegionOuter.sk, start_deg, kParityRegionSweep, true);
-        path.arcTo(kRegionInner.sk, start_deg + kParityRegionSweep, -kParityRegionSweep, false);
-        path.lineTo(0, 0);
+        builder.arcTo(kRegionOuter.sk, start_deg, kParityRegionSweep, true);
+        builder.arcTo(kRegionInner.sk, start_deg + kParityRegionSweep, -kParityRegionSweep, false);
+        builder.lineTo(0, 0);
       }
-      return path;
+      return builder.detach();
     }();
     static const SkPath kOddParityRegion = [&]() {
-      SkPath path;
+      SkPathBuilder builder;
       for (int i = 0; i < 9; ++i) {
         if ((i & 1) != 1) continue;
         float start_deg = (i - 0.5f) * 360 / 9;
-        path.arcTo(kRegionOuter.sk, start_deg, kParityRegionSweep, true);
-        path.arcTo(kRegionInner.sk, start_deg + kParityRegionSweep, -kParityRegionSweep, false);
+        builder.arcTo(kRegionOuter.sk, start_deg, kParityRegionSweep, true);
+        builder.arcTo(kRegionInner.sk, start_deg + kParityRegionSweep, -kParityRegionSweep, false);
       }
-      return path;
+      return builder.detach();
     }();
 
     static constexpr float kZeroAngle = 12;
@@ -2541,13 +2541,17 @@ struct EnumKnobWidget : ui::Widget {
     }
     static const SkPaint white_overlay = [] {
       SkPaint paint;
-      SkColor mask_colors[] = {"#ffffff"_color, "#ffffff00"_color};
+      SkColor4f mask_colors[] = {SkColor4f::FromColor("#ffffff"_color),
+                                 SkColor4f::FromColor("#ffffff00"_color)};
       float mask_pos[] = {kRegionStartRadius / kRegionEndRadius, 1};
-      auto mask = SkGradientShader::MakeRadial(Vec2(), kRegionEndRadius, mask_colors, mask_pos,
-                                               std::size(mask_colors), SkTileMode::kClamp);
-      SkColor colors[] = {"#dddddd"_color, "#bbbbbb"_color};
-      auto color = SkGradientShader::MakeRadial(Vec2(0, kMiddleR), kGaugeRadius + kMiddleR, colors,
-                                                nullptr, std::size(colors), SkTileMode::kClamp);
+      auto mask = SkShaders::RadialGradient(
+          Vec2(), kRegionEndRadius,
+          SkGradient{SkGradient::Colors{mask_colors, mask_pos, SkTileMode::kClamp}, {}});
+      SkColor4f colors[] = {SkColor4f::FromColor("#dddddd"_color),
+                            SkColor4f::FromColor("#bbbbbb"_color)};
+      auto color = SkShaders::RadialGradient(
+          Vec2(0, kMiddleR), kGaugeRadius + kMiddleR,
+          SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
       paint.setShader(SkShaders::Blend(SkBlendMode::kSrcIn, mask, color));
       return paint;
     }();
@@ -2555,8 +2559,8 @@ struct EnumKnobWidget : ui::Widget {
   }
 
   static void DrawConditionCodeSymbol(SkCanvas& canvas, X86::CondCode cond_code) {
-    SkPath dial;    // black arrow
-    SkPath symbol;  // symbol drawn in the center
+    SkPathBuilder dial;  // black arrow
+    SkPath symbol;       // symbol drawn in the center
 
     SkPaint symbol_fill;
     symbol_fill.setAntiAlias(true);
@@ -2742,39 +2746,42 @@ struct EnumKnobWidget : ui::Widget {
             "0-.09-.05.02-.08.02-.16.02.14-.11.22-.2.29-.33Z",
             SVGUnit_Millimeters);
         static const SkPath kTwoFlagsSymbol = [] {
-          SkPath path;
-          path.addPath(kFlagSymbol.makeTransform(
+          SkPathBuilder builder;
+          builder.addPath(kFlagSymbol.makeTransform(
               SkMatrix::RotateDeg(-5).preTranslate(0.7_mm, -0.5_mm).preScale(0.6, 0.6)));
-          path.addPath(kFlagSymbol.makeTransform(SkMatrix::RotateDeg(5).preTranslate(0, 0.3_mm)));
-          // path.setFillType(SkPathFillType::kEvenOdd);
-          return path;
+          builder.addPath(kFlagSymbol.makeTransform(SkMatrix::RotateDeg(5).preTranslate(0, 0.3_mm)));
+          // builder.setFillType(SkPathFillType::kEvenOdd);
+          return builder.detach();
         }();
         static const SkPath kParityDial = [&]() {
-          SkPath path;
+          SkPathBuilder builder;
           auto font = ui::Font::MakeV2(ui::Font::GetSilkscreen(), 1.4_mm);
           SkGlyphID glyphs[9];
           SkRect bounds[9];
           font->sk_font.textToGlyphs("012345678", 9, SkTextEncoding::kUTF8, glyphs);
-          font->sk_font.getBounds(glyphs, bounds, nullptr);
+          font->sk_font.getBounds(glyphs, SkSpan<SkRect>{bounds, 9}, nullptr);
           for (int i = 0; i < 9; ++i) {
-            SkPath glyph_path;
-            font->sk_font.getPath(glyphs[i], &glyph_path);
-            bounds[i] = glyph_path.getBounds();
-            glyph_path.transform(SkMatrix::Translate(-bounds[i].centerX(), -bounds[i].centerY()));
-            glyph_path.transform(SkMatrix::Scale(font->font_scale, -font->font_scale));
+            std::optional<SkPath> glyph_path = font->sk_font.getPath(glyphs[i]);
+            if (!glyph_path.has_value()) continue;
+            bounds[i] = glyph_path->getBounds();
+            SkPath transformed =
+                glyph_path
+                    ->makeTransform(
+                        SkMatrix::Translate(-bounds[i].centerX(), -bounds[i].centerY()))
+                    .makeTransform(SkMatrix::Scale(font->font_scale, -font->font_scale));
             auto dir = SinCos::FromDegrees(i * 360.f / 9);
-            glyph_path.transform(
+            transformed = transformed.makeTransform(
                 SkMatrix::Translate(Vec2::Polar(dir, (kInnerRadius + kSymbolRadius) / 2)));
-            path.addPath(glyph_path);
+            builder.addPath(transformed);
           }
-          return path;
+          return builder.detach();
         }();
         if (cond_code == X86::CondCode::COND_P) {
           symbol = kTwoFlagsSymbol;
         } else {
           symbol = kFlagSymbol;
         }
-        dial = kParityDial;
+        dial.addPath(kParityDial);
         break;
       }
       default: {
@@ -2782,7 +2789,7 @@ struct EnumKnobWidget : ui::Widget {
       }
     }
 
-    canvas.drawPath(dial, dial_fill);
+    canvas.drawPath(dial.detach(), dial_fill);
     canvas.drawPath(symbol, symbol_fill);
   }
 
@@ -2868,19 +2875,20 @@ struct EnumKnobWidget : ui::Widget {
         canvas.save();
         RRect clip = RRect::MakeSimple(kGaugeOval, kGaugeRadius);
         canvas.clipRRect(clip.sk);
-        SkPath path;
-        path.addCircle(0, -kBorderWidth * 2, kGaugeRadius);
-        path.toggleInverseFillType();
+        SkPath path = SkPath::Circle(0, -kBorderWidth * 2, kGaugeRadius)
+                          .makeToggleInverseFillType();
         canvas.drawPath(path, paint);
         canvas.restore();
       }
 
       {  // sky reflection
         SkPaint paint;
-        SkColor colors[] = {"#ffffffaa"_color, "#ffffff30"_color, "#ffffff00"_color};
-        paint.setShader(SkGradientShader::MakeRadial(Vec2(0, kMiddleR), kGaugeRadius * 1.5, colors,
-                                                     nullptr, std::size(colors),
-                                                     SkTileMode::kClamp));
+        SkColor4f colors[] = {SkColor4f::FromColor("#ffffffaa"_color),
+                              SkColor4f::FromColor("#ffffff30"_color),
+                              SkColor4f::FromColor("#ffffff00"_color)};
+        paint.setShader(SkShaders::RadialGradient(
+            Vec2(0, kMiddleR), kGaugeRadius * 1.5,
+            SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
         canvas.save();
         RRect clip = RRect::MakeSimple(kInnerOval, kInnerRadius);
         canvas.clipRRect(clip.sk);
@@ -2891,9 +2899,11 @@ struct EnumKnobWidget : ui::Widget {
       {  // light edge
         SkPaint paint;
         SkPoint pts[] = {Vec2(-kGaugeRadius, 0), Vec2(kGaugeRadius, 0)};
-        SkColor colors[] = {"#ffffff20"_color, "#ffffffaa"_color, "#ffffff20"_color};
-        paint.setShader(SkGradientShader::MakeLinear(pts, colors, nullptr, std::size(colors),
-                                                     SkTileMode::kClamp));
+        SkColor4f colors[] = {SkColor4f::FromColor("#ffffff20"_color),
+                              SkColor4f::FromColor("#ffffffaa"_color),
+                              SkColor4f::FromColor("#ffffff20"_color)};
+        paint.setShader(SkShaders::LinearGradient(
+            pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
         paint.setStyle(SkPaint::kStroke_Style);
         paint.setStrokeWidth(kBorderWidth);
         paint.setMaskFilter(
@@ -3122,7 +3132,7 @@ struct ConditionCodeWidget : public EnumKnobWidget {
   // Draws the waving water
   void DrawKnobBelowGlass(SkCanvas& canvas) const override {
     if (!wave.has_value()) return;
-    SkPath water;
+    SkPathBuilder water_builder;
     SinCos angle_0;
     SinCos angle_n;
     for (int i = 0; i < wave->n; ++i) {
@@ -3138,9 +3148,9 @@ struct ConditionCodeWidget : public EnumKnobWidget {
       }
       if (i == 0) {
         angle_0 = SinCos::FromVec2({x, y}, d);
-        water.moveTo(x, y);
+        water_builder.moveTo(x, y);
       } else {
-        water.lineTo(x, y);
+        water_builder.lineTo(x, y);
       }
       if (i == wave->n - 1) {
         angle_n = SinCos::FromVec2({x, y}, d);
@@ -3148,9 +3158,9 @@ struct ConditionCodeWidget : public EnumKnobWidget {
     }
     float start_deg = angle_n.ToDegrees();
     float sweep_deg = (angle_0 - angle_n).ToDegreesNegative();
-    water.arcTo(kWaterOval.sk, start_deg, sweep_deg, false);
-    water.close();
-    water.toggleInverseFillType();
+    water_builder.arcTo(kWaterOval.sk, start_deg, sweep_deg, false);
+    water_builder.close();
+    SkPath water = water_builder.detach().makeToggleInverseFillType();
 
     SkPaint displacement_paint;
     displacement_paint.setImageFilter(SkImageFilters::Magnifier(
@@ -3423,26 +3433,28 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
   {  // Vignette
     SkPaint vignette_paint;
     float r = hypotf(Instruction::Widget::kWidth, kHeight) / 2;
-    SkColor colors[2] = {"#20100800"_color, "#20100810"_color};
-    vignette_paint.setShader(
-        SkGradientShader::MakeRadial(SkPoint::Make(Instruction::Widget::kWidth / 2, kHeight / 2), r,
-                                     colors, nullptr, 2, SkTileMode::kClamp));
+    SkColor4f colors[2] = {SkColor4f::FromColor("#20100800"_color),
+                           SkColor4f::FromColor("#20100810"_color)};
+    vignette_paint.setShader(SkShaders::RadialGradient(
+        SkPoint::Make(Instruction::Widget::kWidth / 2, kHeight / 2), r,
+        SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
     canvas.drawRRect(kInstructionRRect, vignette_paint);
   }
 
   // Bevel
   SkPoint points[2] = {SkPoint::Make(0, kHeight), SkPoint::Make(0, 0)};
-  SkColor colors[4] = {
-      "#ffffff"_color,
-      "#cccccc"_color,
-      "#bbbbbb"_color,
-      "#888888"_color,
+  SkColor4f colors[4] = {
+      SkColor4f::FromColor("#ffffff"_color),
+      SkColor4f::FromColor("#cccccc"_color),
+      SkColor4f::FromColor("#bbbbbb"_color),
+      SkColor4f::FromColor("#888888"_color),
   };
   float pos[4] = {0, 3_mm / kHeight, 1 - 3_mm / kHeight, 1};
   float bevel_width = 0.4_mm;
 
   SkPaint bevel_paint;
-  bevel_paint.setShader(SkGradientShader::MakeLinear(points, colors, pos, 4, SkTileMode::kClamp));
+  bevel_paint.setShader(SkShaders::LinearGradient(
+      points, SkGradient{SkGradient::Colors{colors, pos, SkTileMode::kClamp}, {}}));
   bevel_paint.setAntiAlias(true);
   bevel_paint.setStyle(SkPaint::kStroke_Style);
   bevel_paint.setStrokeWidth(bevel_width);

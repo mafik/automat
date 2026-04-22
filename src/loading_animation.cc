@@ -7,7 +7,8 @@
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPath.h>
 #include <include/core/SkTileMode.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 
 #include "color.hh"
 #include "random.hh"
@@ -88,10 +89,10 @@ void HypnoRect::PreDraw(SkCanvas& canvas) {
         rect.TopCenter(),
         rect.BottomCenter(),
     };
-    SkColor colors[2] = {top_color, bottom_color};
+    SkColor4f colors[2] = {SkColor4f::FromColor(top_color), SkColor4f::FromColor(bottom_color)};
     auto matrix = canvas.getLocalToDeviceAs3x3();
-    paint.setShader(
-        SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp, 0, nullptr));
+    paint.setShader(SkShaders::LinearGradient(
+        pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
   }
 
   canvas.clear(background_color);
@@ -121,8 +122,7 @@ void HypnoRect::PreDraw(SkCanvas& canvas) {
     canvas.drawRect(rect, paint);
   }
 
-  SkPath clip_path = SkPath::Rect(rect);
-  clip_path.transform(clip_transform);
+  SkPath clip_path = SkPath::Rect(rect).makeTransform(clip_transform);
 
   SkMatrix transform2;
   Twist(*this, transform2, first_twist);

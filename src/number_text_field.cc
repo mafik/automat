@@ -4,7 +4,8 @@
 
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkMaskFilter.h>
-#include <include/effects/SkGradientShader.h>
+#include <include/core/SkShader.h>
+#include <include/effects/SkGradient.h>
 
 #include "font.hh"
 #include "text_field.hh"
@@ -20,12 +21,13 @@ SkRRect NumberTextField::ShapeRRect() const {
 }
 
 // First bottom then top
-static constexpr SkColor kNumberBackgroundColors[2] = {"#bec8b7"_color, "#dee3db"_color};
+static const SkColor4f kNumberBackgroundColors[2] = {SkColor4f::FromColor("#bec8b7"_color),
+                                                     SkColor4f::FromColor("#dee3db"_color)};
 
 static const SkPaint kNumberTextBackgroundPaint = [] {
   SkPoint pts[2] = {{0, 0}, {0, TextField::kHeight}};
-  sk_sp<SkShader> shader =
-      SkGradientShader::MakeLinear(pts, kNumberBackgroundColors, nullptr, 2, SkTileMode::kClamp);
+  sk_sp<SkShader> shader = SkShaders::LinearGradient(
+      pts, SkGradient{SkGradient::Colors{kNumberBackgroundColors, SkTileMode::kClamp}, {}});
   SkPaint paint;
   paint.setShader(shader);
   paint.setAntiAlias(true);
@@ -37,9 +39,9 @@ const SkPaint& NumberTextField::GetBackgroundPaint() const { return kNumberTextB
 static const SkPaint kNumberTextBorderPaint = [] {
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, TextField::kHeight}};
-  SkColor colors[2] = {0xffffffff, 0xff000000};
-  sk_sp<SkShader> shader =
-      SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+  SkColor4f colors[2] = {SkColor4f::FromColor(0xffffffff), SkColor4f::FromColor(0xff000000)};
+  sk_sp<SkShader> shader = SkShaders::LinearGradient(
+      pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
   paint.setShader(shader);
   paint.setAntiAlias(true);
   paint.setStyle(SkPaint::kStroke_Style);
@@ -51,8 +53,8 @@ static const SkPaint kNumberTextBorderPaint = [] {
 void NumberTextField::DrawBackground(SkCanvas& canvas, SkRRect rrect) {
   rrect.inset(kBorderWidth, kBorderWidth);
   SkPoint pts[2] = {{0, rrect.getBounds().top()}, {0, rrect.getBounds().bottom()}};
-  sk_sp<SkShader> shader =
-      SkGradientShader::MakeLinear(pts, kNumberBackgroundColors, nullptr, 2, SkTileMode::kClamp);
+  sk_sp<SkShader> shader = SkShaders::LinearGradient(
+      pts, SkGradient{SkGradient::Colors{kNumberBackgroundColors, SkTileMode::kClamp}, {}});
   SkPaint paint;
   paint.setShader(shader);
   paint.setAntiAlias(true);
@@ -62,8 +64,7 @@ void NumberTextField::DrawBackground(SkCanvas& canvas, SkRRect rrect) {
   canvas.drawPaint(paint);
 
   // Inner shadows
-  SkPath path = SkPath::RRect(rrect);
-  path.toggleInverseFillType();
+  SkPath path = SkPath::RRect(rrect).makeToggleInverseFillType();
   SkPaint shadow_paint;
   shadow_paint.setColor("#86a174"_color);
   shadow_paint.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, 0.5_mm));

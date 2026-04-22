@@ -484,8 +484,8 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
   canvas.drawDRRect(kRRect.sk, kBorderMidRRect.sk, flat_border_paint);
   SkPaint bevel_border_paint;
   bevel_border_paint.setColor("#7d2627"_color);
-  SetRRectShader(bevel_border_paint, kBorderMidRRect, "#3a2021"_color, "#7e2627"_color,
-                 "#d86355"_color);
+  SetRRectShader(bevel_border_paint, kBorderMidRRect, "#3a2021"_color4f, "#7e2627"_color4f,
+                 "#d86355"_color4f);
 
   canvas.drawDRRect(kBorderMidRRect.sk, kInnerRRect.sk, bevel_border_paint);
 

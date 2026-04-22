@@ -15,7 +15,7 @@ namespace automat {
 // This should be used for borders - the inner color of the SkPaint will draw artifacts.
 //
 // TODO: switch this from a simple conic gradient into a proper rrect-based shader.
-void SetRRectShader(SkPaint& paint, const RRect& rrect, SkColor top, SkColor middle,
-                    SkColor bottom);
+void SetRRectShader(SkPaint& paint, const RRect& rrect, SkColor4f top, SkColor4f middle,
+                    SkColor4f bottom);
 
 }  // namespace automat

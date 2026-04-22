@@ -88,7 +88,7 @@ constexpr float kTrackWidth = kWindowWidth - 2 * kTrackMargin;
 constexpr float kZoomRadius = 3_cm;
 constexpr float kZoomVisible = (kWindowWidth - kRulerLength) / 2 - kTrackMargin;
 
-constexpr SkColor kOrange = "#e24e1f"_color;
+constexpr SkColor4f kOrange = "#e24e1f"_color4f;
 
 static constexpr Vec2 ZoomDialCenter(float window_height) {
   return {kWindowWidth / 2 + kZoomRadius - kZoomVisible, -window_height / 2};
@@ -210,7 +210,7 @@ const SkPaint kTickPaint = [] {
 const SkPaint kBridgeHandlePaint = [] {
   SkPaint p;
   SkPoint pts[2] = {{0, -kRulerHeight - kMarginAroundTracks}, {0, -kRulerHeight}};
-  SkColor4f colors[2] = {SkColor4f::FromColor(kOrange), "#f17149"_color4f};
+  SkColor4f colors[2] = {kOrange, "#f17149"_color4f};
   auto shader = SkShaders::LinearGradient(
       pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
   p.setShader(shader);
@@ -291,11 +291,11 @@ static SkPath GetRecPath() {
   return path;
 }
 
-static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
+static constexpr SkColor4f kTimelineButtonBackground = "#fdfcfb"_color4f;
 
 TrackBase::TrackBase(Str name_arg) : name_str(std::move(name_arg)), arg_table(name_str) {
-  arg_table.tint = "#17aeb7"_color;
-  arg_table.light = "#17aeb7"_color;
+  arg_table.tint = "#17aeb7"_color4f;
+  arg_table.light = "#17aeb7"_color4f;
   arg_table.can_connect = [](Argument, Interface, Status&) {};
   arg_table.on_connect = [](Argument self, Interface end) {
     auto& track = static_cast<TrackBase&>(*self.object_ptr);
@@ -641,8 +641,8 @@ struct TimelineWidget;
 struct SideButton : ui::Button {
   SideButton(TimelineWidget& parent) : Button((Widget*)&parent) {}
   TimelineWidget* GetTimelineWidget() { return (TimelineWidget*)(parent.get()); }
-  SkColor ForegroundColor() const override { return "#404040"_color; }
-  SkColor BackgroundColor() const override { return kTimelineButtonBackground; }
+  SkColor4f ForegroundColor() const override { return "#404040"_color4f; }
+  SkColor4f BackgroundColor() const override { return kTimelineButtonBackground; }
   SkRRect RRect() const override;
 };
 
@@ -1220,12 +1220,13 @@ struct TimelineWidget : ObjectToy {
         float w = rect.Width();
         float cx = w / 2;
         float r = 1_cm;
-        SkColor shadow_color = "#801010"_color;
+        SkColor4f shadow_color = "#801010"_color4f;
         for (int i = 0; i < n; ++i) {
           float a1 = i / (n - 1.f) * 2;
           float a2 = (n - 1 - i) / (n - 1.f) * 2;
           float a = min(a1, a2);
-          colors[i] = SkColor4f::FromColor(SkColorSetA(shadow_color, lerp(255, 128, a)));
+          colors[i] = {shadow_color.fR, shadow_color.fG, shadow_color.fB,
+                       lerp(1.0f, 128.f / 255.f, a)};
           float t = i / (n - 1.f);
           // Don't try to unterstand this - it doesn't make sense - but looks ok.
           if (i <= n / 2) {

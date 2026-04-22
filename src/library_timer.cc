@@ -263,9 +263,9 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
 // TimerWidget (Toy)
 // ============================================================================
 
-static sk_sp<SkShader> MakeGradient(SkPoint a, SkPoint b, SkColor color_a, SkColor color_b) {
+static sk_sp<SkShader> MakeGradient(SkPoint a, SkPoint b, SkColor4f color_a, SkColor4f color_b) {
   SkPoint pts[2] = {a, b};
-  SkColor4f colors[2] = {SkColor4f::FromColor(color_a), SkColor4f::FromColor(color_b)};
+  SkColor4f colors[2] = {color_a, color_b};
   return SkShaders::LinearGradient(pts,
                                    SkGradient{SkGradient::Colors{colors, SkTileMode::kMirror}, {}});
 }
@@ -277,8 +277,8 @@ enum DrawRingMode {
   kRingInset,
 };
 
-static void DrawRing(SkCanvas& canvas, float outer_r, float inner_r, SkColor top_left,
-                     SkColor bottom_right, DrawRingMode mode = kRingAntiAliased) {
+static void DrawRing(SkCanvas& canvas, float outer_r, float inner_r, SkColor4f top_left,
+                     SkColor4f bottom_right, DrawRingMode mode = kRingAntiAliased) {
   SkPaint paint;
   SkPoint top_left_pos = SkPoint::Make(-outer_r * M_SQRT2 / 2, outer_r * M_SQRT2 / 2);
   SkPoint bottom_right_pos = SkPoint::Make(outer_r * M_SQRT2 / 2, -outer_r * M_SQRT2 / 2);
@@ -379,7 +379,7 @@ static void DrawPusher(SkCanvas& canvas, const SkRRect& axle, const SkRRect& pus
 
 SkPaint kDurationPaint = [] {
   SkPaint paint;
-  paint.setColor(0xff23a9f2);
+  paint.setColor("#23a9f2"_color4f);
   paint.setAntiAlias(true);
   return paint;
 }();
@@ -398,7 +398,7 @@ static void DrawDial(SkCanvas& canvas, Timer::Range range, time::Duration durati
 
   // Draw ticks
   SkPaint tick_paint;
-  tick_paint.setColor(0xff121215);
+  tick_paint.setColor("#121215"_color4f);
   tick_paint.setAntiAlias(true);
   float circumference = 2 * M_PI * r4;
   float minor_tick_w = std::min<float>(circumference / tick_count / 2, 0.0003);
@@ -449,7 +449,7 @@ static SkPath DurationHandlePath(const TimerWidget& w);
 
 const static SkPaint kHandPaint = [] {
   SkPaint paint;
-  paint.setColor(0xffd93f2a);
+  paint.setColor("#d93f2a"_color4f);
   paint.setAntiAlias(true);
   paint.setStrokeWidth(kHandWidth);
   paint.setStyle(SkPaint::kStroke_Style);
@@ -544,7 +544,7 @@ struct TimerWidget : ObjectToy {
   }
 
   void Draw(SkCanvas& canvas) const override {
-    DrawRing(canvas, r4, r5, 0xffcfd0cf, 0xffc9c9cb);  // white watch face
+    DrawRing(canvas, r4, r5, "#cfd0cf"_color4f, "#c9c9cb"_color4f);  // white watch face
 
     canvas.save();
     canvas.clipRRect(SkRRect::MakeOval(SkRect::MakeXYWH(-r4, -r4, r4 * 2, r4 * 2)), false);
@@ -565,15 +565,15 @@ struct TimerWidget : ObjectToy {
 
     DrawChildren(canvas);
 
-    DrawRing(canvas, r4, r4_b, 0x46000000, 0xe1ffffff, kRingInset);
+    DrawRing(canvas, r4, r4_b, "#00000046"_color4f, "#ffffffe1"_color4f, kRingInset);
 
     canvas.save();
     canvas.translate(0.001, -0.001);
-    DrawRing(canvas, r5, 0, 0xff46464d, 0xff46464d, kRingBlurred);
+    DrawRing(canvas, r5, 0, "#46464d"_color4f, "#46464d"_color4f, kRingBlurred);
     canvas.restore();
 
-    DrawRing(canvas, r0, r2, 0xfff6f6f0, 0xff6a6a71);
-    DrawRing(canvas, r0, r1, 0xfff7f4f2, 0xff5e5f65, kRingInset);
+    DrawRing(canvas, r0, r2, "#f6f6f0"_color4f, "#6a6a71"_color4f);
+    DrawRing(canvas, r0, r1, "#f7f4f2"_color4f, "#5e5f65"_color4f, kRingInset);
 
     {  // Draw pusher
       SkColor4f colors1[] = {"#ffffff20"_color4f, "#00000015"_color4f, "#000000a0"_color4f};
@@ -592,8 +592,8 @@ struct TimerWidget : ObjectToy {
       canvas.restore();
     }
 
-    DrawRing(canvas, r2, r3, 0xff878682, 0xff020302);
-    DrawRing(canvas, r3, r4, 0xff080604, 0xffe2e2e1);
+    DrawRing(canvas, r2, r3, "#878682"_color4f, "#020302"_color4f);
+    DrawRing(canvas, r3, r4, "#080604"_color4f, "#e2e2e1"_color4f);
 
     // Draw hand
     {
@@ -601,7 +601,7 @@ struct TimerWidget : ObjectToy {
       canvas.save();
       canvas.translate(0.001, -0.001);
       SkPaint shadow_paint;
-      shadow_paint.setColor(0xff46464d);
+      shadow_paint.setColor("#46464d"_color4f);
       shadow_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.0005f, true));
       shadow_paint.setStyle(SkPaint::kStroke_Style);
       shadow_paint.setStrokeWidth(kHandWidth);
@@ -610,8 +610,8 @@ struct TimerWidget : ObjectToy {
       canvas.drawPath(path, kHandPaint);
     }
 
-    DrawRing(canvas, r5, 0, 0xff25272e, 0xff0d0b0f);
-    DrawRing(canvas, r5, r6, 0xff7e7d7a, 0xff05070b, kRingInset);
+    DrawRing(canvas, r5, 0, "#25272e"_color4f, "#0d0b0f"_color4f);
+    DrawRing(canvas, r5, r6, "#7e7d7a"_color4f, "#05070b"_color4f, kRingInset);
 
     auto duration_handle_matrix = SkMatrix::RotateRad(duration_handle_rotation);
     SkPath duration_path_rotated = DurationHandlePath(*this);
@@ -623,10 +623,10 @@ struct TimerWidget : ObjectToy {
     quad[3] = ClampLength(quad[3], kTickOuterRadius, kOuterRadius);
     duration_handle_paint.setShader(MakeGradient(duration_handle_matrix.mapPoint({0, 0}),
                                                  duration_handle_matrix.mapPoint({0, 0.0005}),
-                                                 0xff404040, 0xff202020));
+                                                 "#404040"_color4f, "#202020"_color4f));
 
     SkPaint highlight_paint;
-    highlight_paint.setShader(MakeGradient(quad[3], quad[1], 0xff404040, 0xff202020));
+    highlight_paint.setShader(MakeGradient(quad[3], quad[1], "#404040"_color4f, "#202020"_color4f));
     highlight_paint.setStyle(SkPaint::kStroke_Style);
     highlight_paint.setStrokeWidth(0.001);
     highlight_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.0002));

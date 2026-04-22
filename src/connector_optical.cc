@@ -17,8 +17,8 @@
 #include <include/core/SkPictureRecorder.h>
 #include <include/core/SkSamplingOptions.h>
 #include <include/core/SkVertices.h>
-#include <src/core/SkPathPriv.h>
 #include <include/effects/SkRuntimeEffect.h>
+#include <src/core/SkPathPriv.h>
 
 #include <cmath>
 
@@ -890,7 +890,7 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
   p.setIsVolatile(true);
 
   // Draw the cable
-  auto color_filter = color::MakeTintFilter(state.argument.table->tint, NAN);
+  auto color_filter = color::MakeTintFilter(state.argument.table->tint.toSkColor(), NAN);
   DrawCable(canvas, p, color_filter, CableTexture::Braided,
             state.cable_width * state.connector_scale, state.cable_width * dispenser_scale,
             &state.approx_length);
@@ -972,9 +972,9 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
 
     Vec2 icon_offset = connector_matrix.mapPoint(Vec2(0, kCasingHeight / 2));
 
-    SkColor base_color = color::AdjustLightness(state.argument.table->tint, 30);
-    SkColor bright_light = color::AdjustLightness(state.argument.table->light, 50);
-    SkColor adjusted_color = color::AdjustLightness(base_color, state.lightness_pct);
+    SkColor4f base_color = color::AdjustLightness(state.argument.table->tint, 30);
+    SkColor4f bright_light = color::AdjustLightness(state.argument.table->light, 50);
+    SkColor4f adjusted_color = color::AdjustLightness(base_color, state.lightness_pct);
     adjusted_color = color::MixColors(adjusted_color, bright_light, state.lightness_pct / 100);
 
     auto* icon_paint = PaintMixin::Get(icon);

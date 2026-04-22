@@ -230,19 +230,16 @@ SkColor SetAlpha(SkColor color, float alpha_01) {
   return SetAlpha(color, (uint8_t)(alpha_01 * 255));
 }
 
-SkColor AdjustLightness(SkColor color, float adjust_percent) {
-  Vec3 hsluv = RGBToHSLuv(SkColorGetR(color) / 255.0, SkColorGetG(color) / 255.0,
-                          SkColorGetB(color) / 255.0);
+SkColor4f AdjustLightness(SkColor4f color, float adjust_percent) {
+  Vec3 hsluv = RGBToHSLuv(color.fR, color.fG, color.fB);
   float l = std::clamp(hsluv.elements[2] + adjust_percent, 0.0f, 100.0f);
   Vec3 rgb = HSLuvToRGB(hsluv.elements[0], hsluv.elements[1], l);
-  return SkColorSetARGB(SkColorGetA(color), rgb.r * 255, rgb.g * 255, rgb.b * 255);
+  return SkColor4f{rgb.r, rgb.g, rgb.b, color.fA};
 }
 
-SkColor MixColors(SkColor zero, SkColor one, float ratio) {
-  Vec3 zero_luv =
-      RGBToHSLuv(SkColorGetR(zero) / 255.0, SkColorGetG(zero) / 255.0, SkColorGetB(zero) / 255.0);
-  Vec3 one_luv =
-      RGBToHSLuv(SkColorGetR(one) / 255.0, SkColorGetG(one) / 255.0, SkColorGetB(one) / 255.0);
+SkColor4f MixColors(SkColor4f zero, SkColor4f one, float ratio) {
+  Vec3 zero_luv = RGBToHSLuv(zero.fR, zero.fG, zero.fB);
+  Vec3 one_luv = RGBToHSLuv(one.fR, one.fG, one.fB);
   if (fabs(zero_luv.x - one_luv.x) > 0.5f) {
     // Linear interpolation would circle around the color wheel.
     // Instead, we'll use the shortest path.
@@ -256,10 +253,8 @@ SkColor MixColors(SkColor zero, SkColor one, float ratio) {
     mixed_luv.x += 1.0f;
   }
   Vec3 mixed_rgb = HSLuvToRGB(mixed_luv.x, mixed_luv.y, mixed_luv.z);
-  float alpha = SkColorGetA(zero) * (1.0f - ratio) + SkColorGetA(one) * ratio;
-  // LOG << "0=" << zero_luv << " 1=" << one_luv << " " << ratio << "=" <<
-  // mixed_luv;
-  return SkColorSetARGB(alpha, mixed_rgb.r * 255, mixed_rgb.g * 255, mixed_rgb.b * 255);
+  float alpha = zero.fA * (1.0f - ratio) + one.fA * ratio;
+  return SkColor4f{mixed_rgb.r, mixed_rgb.g, mixed_rgb.b, alpha};
 }
 
 sk_sp<SkColorFilter> MakeTintFilter(SkColor tint, float depth) {
@@ -267,13 +262,14 @@ sk_sp<SkColorFilter> MakeTintFilter(SkColor tint, float depth) {
     // set depth to average value of all channels
     depth = (SkColorGetR(tint) + SkColorGetG(tint) + SkColorGetB(tint)) / 255.f / 3 * 20 + 40;
   }
+  SkColor4f tint4f = SkColor4f::FromColor(tint);
   uint8_t a[256], r[256], g[256], b[256];
   for (int i = 0; i < 256; i++) {
-    SkColor adjusted = color::AdjustLightness(tint, (i - 128) * depth / 128);
+    SkColor4f adjusted = color::AdjustLightness(tint4f, (i - 128) * depth / 128);
     a[i] = i;
-    r[i] = SkColorGetR(adjusted);
-    g[i] = SkColorGetG(adjusted);
-    b[i] = SkColorGetB(adjusted);
+    r[i] = std::clamp<int>(adjusted.fR * 255 + 0.5f, 0, 255);
+    g[i] = std::clamp<int>(adjusted.fG * 255 + 0.5f, 0, 255);
+    b[i] = std::clamp<int>(adjusted.fB * 255 + 0.5f, 0, 255);
   }
   return SkColorFilters::TableARGB(a, r, g, b);
 }
@@ -287,9 +283,9 @@ sk_sp<SkColorFilter> DesaturateFilter() {
   return filter;
 }
 
-SkColor HSLuv(float h, float s, float l, float a) {
-  auto hsluv = HSLuvToRGB(h, s, l);
-  return SkColorSetARGB(a * 255 / 100, hsluv.r * 255, hsluv.g * 255, hsluv.b * 255);
+SkColor4f HSLuv(float h, float s, float l, float a) {
+  auto rgb = HSLuvToRGB(h, s, l);
+  return SkColor4f{rgb.r, rgb.g, rgb.b, a / 100.f};
 }
 
 }  // namespace automat::color

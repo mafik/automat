@@ -25,9 +25,10 @@ sk_sp<SkVertices> WindowBorder(Rect outer, SkColor title_color) {
   Vec3 hsluv = color::ToHSLuv(title_color);
 
   // Create darker and brighter variants for the borders
-  SkColor title_dark = color::AdjustLightness(title_color, -15);
-  SkColor title_medium = color::AdjustLightness(title_color, -5);
-  SkColor title_bright = color::AdjustLightness(title_color, 5);
+  SkColor4f title_color4f = SkColor4f::FromColor(title_color);
+  SkColor title_dark = color::AdjustLightness(title_color4f, -15).toSkColor();
+  SkColor title_medium = color::AdjustLightness(title_color4f, -5).toSkColor();
+  SkColor title_bright = color::AdjustLightness(title_color4f, 5).toSkColor();
 
   // Names for the vertices of the top left & top right of the window border.
   enum TopBorder { TopBorder_Outer, TopBorder_Middle, TopBorder_Inner, TopBorder_Count };
@@ -388,7 +389,7 @@ sk_sp<SkVertices> WindowBorder(Rect outer, SkColor title_color) {
   return builder.detach();
 }
 
-void TitleButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
+void TitleButton::DrawButtonFace(SkCanvas& canvas, SkColor4f bg, SkColor4f fg) const {
   union RRect oval = {.sk = RRect()};
   float press_shift_y = PressRatio() * -kPressOffset;
   auto pressed_oval = oval.sk.makeOffset(0, press_shift_y);
@@ -398,12 +399,11 @@ void TitleButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const
 
   {  // gradient
     SkPaint paint;
-    SkColor4f colors[2] = {
-        SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust + 10)),   // top
-        SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust - 10))};  // bottom
-    sk_sp<SkShader> gradient = SkShaders::RadialGradient(
-        gradient_center, gradient_radius,
-        SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
+    SkColor4f colors[2] = {color::AdjustLightness(bg, lightness_adjust + 10),   // top
+                           color::AdjustLightness(bg, lightness_adjust - 10)};  // bottom
+    sk_sp<SkShader> gradient =
+        SkShaders::RadialGradient(gradient_center, gradient_radius,
+                                  SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
     paint.setShader(gradient);
     canvas.drawRRect(pressed_oval, paint);
   }
@@ -411,12 +411,11 @@ void TitleButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const
   {  // soft shadow around the edges
     SkPaint paint;
     paint.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, 0.5_mm));
-    SkColor4f colors[2] = {
-        SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust + 40)),   // top
-        SkColor4f::FromColor(color::AdjustLightness(bg, lightness_adjust - 30))};  // bottom
-    sk_sp<SkShader> gradient = SkShaders::RadialGradient(
-        gradient_center, gradient_radius,
-        SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
+    SkColor4f colors[2] = {color::AdjustLightness(bg, lightness_adjust + 40),   // top
+                           color::AdjustLightness(bg, lightness_adjust - 30)};  // bottom
+    sk_sp<SkShader> gradient =
+        SkShaders::RadialGradient(gradient_center, gradient_radius,
+                                  SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
     paint.setShader(gradient);
 
     SkPath path = SkPath::RRect(pressed_oval).makeToggleInverseFillType();

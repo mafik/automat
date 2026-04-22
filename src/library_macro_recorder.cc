@@ -5,8 +5,8 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPathBuilder.h>
-#include <include/core/SkTileMode.h>
 #include <include/core/SkShader.h>
+#include <include/core/SkTileMode.h>
 #include <include/effects/SkGradient.h>
 #include <modules/svg/include/SkSVGDOM.h>
 
@@ -376,7 +376,7 @@ bool MacroRecorder::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 struct GlassRunButton : ui::PowerButton {
   GlassRunButton(ui::Widget* parent, NestedWeakPtr<OnOff::Table> on_off)
-      : ui::PowerButton(parent, std::move(on_off), color::kParrotRed, "#eeeeee"_color) {}
+      : ui::PowerButton(parent, std::move(on_off), color::kParrotRed, "#eeeeee"_color4f) {}
   void PointerOver(ui::Pointer& p) override {
     ToggleButton::PointerOver(p);
     if (auto locked = target.Lock()) {
@@ -539,9 +539,7 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
           }
 
           SkPaint eyelid_paint;
-          SkColor4f colors[] = {"#353940"_color4f,
-                                "#131519"_color4f,
-                                "#070708"_color4f};
+          SkColor4f colors[] = {"#353940"_color4f, "#131519"_color4f, "#070708"_color4f};
           float colors_pos[] = {0, 0.6, 1};
           eyelid_paint.setShader(SkShaders::RadialGradient(
               bounds.Center() + Vec2(0, kEyeRadius / 2), kEyeRadius,
@@ -549,9 +547,7 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
           canvas.drawPath(eyelid, eyelid_paint);
         }
 
-        SkColor4f colors[] = {"#00000000"_color4f,
-                              "#00000010"_color4f,
-                              "#00000080"_color4f};
+        SkColor4f colors[] = {"#00000000"_color4f, "#00000010"_color4f, "#00000080"_color4f};
         float colors_pos[] = {0, 0.6, 1};
         SkPaint eye_shadow_paint;
         eye_shadow_paint.setShader(SkShaders::RadialGradient(

@@ -286,10 +286,7 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
     float t = std::clamp<float>((timer.now - capture_time - timer.Delta() * 2) / 0.3s, 0, 1);
 
     // Interpolate from blue to red
-    SkColor blue = "#0066ff"_color;
-    SkColor red = "#d4301f"_color;
-
-    title_bar_color = color::MixColors(red, blue, t);
+    title_bar_color = color::MixColors("#d4301f"_color4f, "#0066ff"_color4f, t).toSkColor();
 
     // Continue animation if not fully decayed
     if (t < 1.0f) {

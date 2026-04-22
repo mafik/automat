@@ -50,8 +50,8 @@ struct Button : Widget {
   std::unique_ptr<Action> FindAction(Pointer& p, ActionTrigger a) override {
     return clickable.FindAction(p, a);
   }
-  virtual SkColor ForegroundColor() const { return SK_ColorBLACK; }
-  virtual SkColor BackgroundColor() const { return SK_ColorWHITE; }
+  virtual SkColor4f ForegroundColor() const { return SkColors::kBlack; }
+  virtual SkColor4f BackgroundColor() const { return SkColors::kWhite; }
 
   // Float between 0 and 1 which indicates how much the button is pressed.
   //
@@ -63,8 +63,8 @@ struct Button : Widget {
   SkPath Shape() const override;
   virtual void Activate(ui::Pointer&) { WakeAnimation(); }
 
-  virtual void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
-  virtual void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const;
+  virtual void DrawButtonShadow(SkCanvas& canvas, SkColor4f bg) const;
+  virtual void DrawButtonFace(SkCanvas&, SkColor4f bg, SkColor4f fg) const;
 
   Optional<Rect> TextureBounds() const override;
 
@@ -75,13 +75,13 @@ struct Button : Widget {
 };
 
 struct ColoredButtonArgs {
-  SkColor fg = SK_ColorBLACK, bg = SK_ColorWHITE;
+  SkColor4f fg = SkColors::kBlack, bg = SkColors::kWhite;
   float radius = kMinimalTouchableSize / 2;
   std::function<void(ui::Pointer&)> on_click = nullptr;
 };
 
 struct ColoredButton : Button {
-  SkColor fg, bg;
+  SkColor4f fg, bg;
   float radius;
   std::function<void(ui::Pointer&)> on_click;
 
@@ -94,8 +94,8 @@ struct ColoredButton : Button {
     UpdateChildTransform();
   }
 
-  SkColor ForegroundColor() const override { return fg; }
-  SkColor BackgroundColor() const override { return bg; }
+  SkColor4f ForegroundColor() const override { return fg; }
+  SkColor4f BackgroundColor() const override { return bg; }
   void Activate(ui::Pointer& ptr) override {
     if (on_click) {
       on_click(ptr);

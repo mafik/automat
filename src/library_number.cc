@@ -79,8 +79,7 @@ static const SkPaint kNumberBackgroundPaint = [] {
 static const SkPaint kNumberBorderPaint = [] {
   SkPaint paint_border;
   SkPoint pts[2] = {{0, 0}, {0, kHeight}};
-  SkColor4f colors_border[2] = {"#241f1c"_color4f,
-                                "#ac9d93"_color4f};
+  SkColor4f colors_border[2] = {"#241f1c"_color4f, "#ac9d93"_color4f};
   sk_sp<SkShader> gradient_border = SkShaders::LinearGradient(
       pts, SkGradient{SkGradient::Colors{colors_border, SkTileMode::kClamp}, {}});
   paint_border.setShader(gradient_border);
@@ -153,7 +152,7 @@ struct NumberButton : ui::Button {
     }
   }
   StrView Name() const override { return "NumberButton"; }
-  SkColor BackgroundColor() const override { return "#c8c4b7"_color; }
+  SkColor4f BackgroundColor() const override { return "#c8c4b7"_color4f; }
 };
 
 // NumberWidget

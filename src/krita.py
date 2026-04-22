@@ -574,12 +574,6 @@ def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
         hh_file.direct_includes.append(str(fs_utils.src_dir / 'textures.hh'))
         srcs[str(hh_path)] = hh_file
         cc_file = src.File(cc_path)
-        # The generated .cc starts with `#include "krita_<basename>.hh"`, so it
-        # transitively depends on everything textures.hh pulls in (Skia, LLVM
-        # SmallVector via vec.hh, ...). Without this dep, update_transitive_includes
-        # never sees the LLVM headers and the build infra won't add LLVM as a
-        # prerequisite of the krita_*.o compile, leading to flaky races where the
-        # .cc tries to compile before LLVM has installed its headers.
         cc_file.direct_includes.append(str(hh_path))
         cc_file.direct_includes.append(str(fs_utils.generated_dir / 'embedded.hh'))
         srcs[str(cc_path)] = cc_file

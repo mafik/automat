@@ -393,7 +393,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
       {  // animate iris
         Vec2 eye_delta;
         if (iris_target.has_value()) {
-          auto* mw = ToyStore().FindOrNull(*root_board);
+          auto* mw = ToyStore().FindOrNull(*vm.root_board);
           auto matrix = mw ? TransformBetween(*mw, *this) : SkMatrix::I();
           eye_delta = matrix.mapPoint(iris_target->sk) - layout.eye_center;
         } else {

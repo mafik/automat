@@ -6,8 +6,6 @@
 
 #include "base.hh"
 #include "drag_action.hh"
-#include "format.hh"
-#include "root_widget.hh"
 #include "svg.hh"
 #include "ui_connection_widget.hh"
 #include "ui_shape_widget.hh"
@@ -39,9 +37,7 @@ Object& Argument::ObjectOrMake() const {
   PositionAhead(*start_loc, *table, loc);
   PositionBelow(loc, *start_loc);
   Connect(*loc.object);
-  auto target = Find();
 
-  ui::root_widget->WakeAnimation();
   return *loc.object;
 }
 

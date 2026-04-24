@@ -65,7 +65,7 @@ void Syncable::Table::DefaultOnConnect(Argument self, Interface end) {
     auto gear = FindGearOrNull(*end_syncable.object_ptr, *end_syncable.table);
     if (gear == nullptr) {
       gear = FindGearOrMake(*self_obj, *self_tab);
-      auto& loc = root_board->Insert(gear);
+      auto& loc = vm.root_board->Insert(gear);
       loc.position = (end.object_ptr->here->position + self_obj->here->position) / 2;
     }
     gear->FullSync(*self_obj, *self_tab);
@@ -581,7 +581,7 @@ SyncAction::~SyncAction() {
     if (sync_widget) {
       sync_widget->is_dragged = false;
       sync_widget->WakeAnimation();
-      auto* bw = pointer.root_widget.toys.FindOrNull(*root_board);
+      auto* bw = pointer.root_widget.toys.FindOrNull(*vm.root_board);
       if (bw) {
         bw->ConnectAtPoint(syncable, sync_widget->pinion);
         // TODO: animate towards the true target rather than origin
@@ -594,7 +594,7 @@ void SyncAction::Update() {
   if (auto syncable_ptr = weak.Lock()) {
     Syncable syncable(syncable_ptr.Owner<Object>(), syncable_ptr.Get());
     auto* origin_widget = pointer.root_widget.toys.FindOrNull(*syncable.object_ptr);
-    auto* bw = pointer.root_widget.toys.FindOrNull(*root_board);
+    auto* bw = pointer.root_widget.toys.FindOrNull(*vm.root_board);
     auto start_local = origin_widget->Shape().getBounds().center();
     auto start = bw ? TransformBetween(*origin_widget, *bw).mapPoint(start_local) : start_local;
     if (auto* sync_widget = pointer.root_widget.toys.FindOrNull(syncable)) {

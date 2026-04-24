@@ -423,7 +423,7 @@ bool ObjectToy::IsIconified() const {
 void Object::Interfaces(const std::function<LoopControl(Interface)>& cb) {}
 
 Location* Object::MyLocation() {
-  for (auto& loc : root_board->locations) {
+  for (auto& loc : vm.root_board->locations) {
     if (loc->object == this) {
       return loc.Get();
     }

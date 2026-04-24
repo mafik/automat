@@ -106,8 +106,8 @@ Ptr<Object> Location::Take() {
 Ptr<Object> Location::InsertHere(Ptr<Object>&& object) {
   this->object.Swap(object);
   this->object->Relocate(this);
-  // TODO: VM layer shouldn't mutate UI like that!
-  ui::root_widget->WakeAnimation();
+  this->object->WakeToys();
+  vm.WakeToys();
   return object;
 }
 
@@ -441,7 +441,7 @@ std::unique_ptr<Action> LocationWidget::FindAction(ui::Pointer& p, ui::ActionTri
 }
 
 void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const {
-  if (!ui::root_widget || !object) return;
+  if (!object) return;
   object->Each<Argument>([&](Argument arg) {
     arg.WakeToys();
     return LoopControl::Continue;
@@ -468,7 +468,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
   }
   auto& toys = ToyStore();
   auto& toy = ToyForObject();
-  auto* parent_mw = toys.FindOrNull(*root_board);
+  auto* parent_mw = toys.FindOrNull(*vm.root_board);
   if (!parent_mw) return;
   loc->object->Each<Argument>([&](Argument arg) {
     float autoconnect_radius = arg.table->autoconnect_radius;
@@ -538,7 +538,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
     to.pos = here_up.mapPoint(to.pos);
   }
 
-  for (auto& other : root_board->locations) {
+  for (auto& other : vm.root_board->locations) {
     if (other.get() == loc.get()) {
       continue;
     }

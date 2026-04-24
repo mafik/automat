@@ -6,10 +6,13 @@
 // some earlier include (e.g. root_widget.hh) would load windows.h with GDI disabled and the
 // later re-include would be a no-op.
 #include "win32.hh"
+#include "win32_window.hh"
 #pragma push_macro("ERROR")
 #include <shellapi.h>
 #pragma pop_macro("ERROR")
 #pragma comment(lib, "shell32.lib")
+
+#include "system_tray.hh"
 #endif  // _WIN32
 
 #include "root_widget.hh"
@@ -387,11 +390,8 @@ void InitSystemTray() {
 }
 #elif defined(_WIN32)
 
-using automat::win32::GetInstance;
-
 namespace {
 
-constexpr UINT kTrayCallbackMessage = WM_APP + 1;
 constexpr UINT kTrayIconId = 1;
 
 enum TrayMenuCommand : UINT {
@@ -399,7 +399,8 @@ enum TrayMenuCommand : UINT {
   kMenuCmdQuit = 2,
 };
 
-HWND tray_hwnd = nullptr;
+// Cached HWND of the main window
+HWND main_hwnd = nullptr;
 HMENU tray_menu = nullptr;
 NOTIFYICONDATAW tray_icon_data = {};
 HICON tray_icon = nullptr;
@@ -458,70 +459,47 @@ void ToggleHideShow() {
   }
 }
 
-LRESULT CALLBACK TrayWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-  if (uMsg == kTrayCallbackMessage) {
-    UINT event = LOWORD(lParam);
-    switch (event) {
-      case NIN_SELECT:
-      case NIN_KEYSELECT:
-        ToggleHideShow();
-        return 0;
-      case WM_CONTEXTMENU:
-      case WM_RBUTTONUP: {
-        POINT pt;
-        GetCursorPos(&pt);
-        ModifyMenuW(tray_menu, kMenuCmdHideShow, MF_BYCOMMAND | MF_STRING, kMenuCmdHideShow,
-                    is_hidden ? L"Show" : L"Hide");
-        // TrackPopupMenu requires the owning window to be the foreground window, otherwise the
-        // menu won't dismiss when the user clicks elsewhere.
-        SetForegroundWindow(hwnd);
-        UINT cmd = TrackPopupMenu(tray_menu,
-                                  TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN,
-                                  pt.x, pt.y, 0, hwnd, nullptr);
-        PostMessageW(hwnd, WM_NULL, 0, 0);  // workaround for the menu not dismissing cleanly
-        if (cmd == kMenuCmdHideShow) {
-          ToggleHideShow();
-        } else if (cmd == kMenuCmdQuit) {
-          stop_source.request_stop();
-          PostQuitMessage(0);
-        }
-        return 0;
-      }
-    }
-    return 0;
-  }
-  if (uMsg == WM_DESTROY) {
-    if (tray_icon_data.cbSize != 0) {
-      Shell_NotifyIconW(NIM_DELETE, &tray_icon_data);
-      tray_icon_data.cbSize = 0;
-    }
-    return 0;
-  }
-  return DefWindowProcW(hwnd, uMsg, wParam, lParam);
-}
-
 }  // namespace
 
+void OnSystemTrayMessage(unsigned event, int mouse_screen_x, int mouse_screen_y) {
+  switch (event) {
+    case NIN_SELECT:
+    case NIN_KEYSELECT:
+      ToggleHideShow();
+      return;
+    case WM_CONTEXTMENU:
+    case WM_RBUTTONUP: {
+      if (!tray_menu || !main_hwnd) return;
+      ModifyMenuW(tray_menu, kMenuCmdHideShow, MF_BYCOMMAND | MF_STRING, kMenuCmdHideShow,
+                  is_hidden ? L"Show" : L"Hide");
+      // TrackPopupMenu requires the owning window to be the foreground window, otherwise the
+      // menu won't dismiss when the user clicks elsewhere. SetForegroundWindow is a no-op when
+      // the window is hidden, which matches what we want in the minimized-to-tray state.
+      SetForegroundWindow(main_hwnd);
+      UINT cmd = TrackPopupMenu(tray_menu,
+                                TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN,
+                                mouse_screen_x, mouse_screen_y, 0, main_hwnd, nullptr);
+      // Claude (possibly hallucinated) the following comment here:
+      // "Without this, TrackPopupMenu sometimes leaves the menu visible until the next event."
+      PostMessageW(main_hwnd, WM_NULL, 0, 0);
+      if (cmd == kMenuCmdHideShow) {
+        ToggleHideShow();
+      } else if (cmd == kMenuCmdQuit) {
+        stop_source.request_stop();
+        PostQuitMessage(0);
+      }
+      return;
+    }
+  }
+}
+
 void InitSystemTray() {
-  HINSTANCE hinstance = GetInstance();
-  static const wchar_t kTrayClassName[] = L"AutomatSystemTray";
-
-  WNDCLASSEXW wc = {};
-  wc.cbSize = sizeof(wc);
-  wc.lpfnWndProc = TrayWndProc;
-  wc.hInstance = hinstance;
-  wc.lpszClassName = kTrayClassName;
-  if (!RegisterClassExW(&wc)) {
-    ERROR << "Failed to register system tray window class: " << GetLastError();
+  auto* win32_window = static_cast<Win32Window*>(ui::root_widget->window.get());
+  if (!win32_window || !win32_window->hwnd) {
+    ERROR << "Cannot initialize system tray: main window not created";
     return;
   }
-
-  tray_hwnd = CreateWindowExW(0, kTrayClassName, L"Automat Tray", 0, 0, 0, 0, 0, HWND_MESSAGE,
-                              nullptr, hinstance, nullptr);
-  if (!tray_hwnd) {
-    ERROR << "Failed to create system tray message window: " << GetLastError();
-    return;
-  }
+  main_hwnd = win32_window->hwnd;
 
   tray_menu = CreatePopupMenu();
   if (tray_menu) {
@@ -533,10 +511,10 @@ void InitSystemTray() {
   tray_icon = MakeTrayIcon(GetSystemMetrics(SM_CXSMICON));
 
   tray_icon_data.cbSize = sizeof(tray_icon_data);
-  tray_icon_data.hWnd = tray_hwnd;
+  tray_icon_data.hWnd = main_hwnd;
   tray_icon_data.uID = kTrayIconId;
   tray_icon_data.uFlags = NIF_MESSAGE | NIF_TIP | (tray_icon ? NIF_ICON : 0);
-  tray_icon_data.uCallbackMessage = kTrayCallbackMessage;
+  tray_icon_data.uCallbackMessage = kSystemTrayMessage;
   tray_icon_data.hIcon = tray_icon;
   wcsncpy_s(tray_icon_data.szTip, L"Automat", _TRUNCATE);
 

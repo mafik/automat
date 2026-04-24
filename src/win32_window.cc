@@ -12,6 +12,7 @@
 #include "optional.hh"
 #include "root_widget.hh"
 #include "status.hh"
+#include "system_tray.hh"
 #include "time.hh"
 #include "touchpad.hh"
 #include "widget.hh"
@@ -597,6 +598,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     }
     case WM_DESTROY: {
       PostQuitMessage(0);
+      break;
+    }
+    case automat::kSystemTrayMessage: {
+      int x = static_cast<int16_t>(LOWORD(wParam));
+      int y = static_cast<int16_t>(HIWORD(wParam));
+      automat::OnSystemTrayMessage(LOWORD(lParam), x, y);
       break;
     }
     default:

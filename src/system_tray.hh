@@ -16,35 +16,69 @@ namespace system_tray {
 
 struct MenuItem {
   enum Kind {
-    Spacer,
-    Action,
-    Menu,
+    SpacerKind,
+    ActionKind,
+    MenuKind,
   } kind;
-  MenuItem(Kind kind) : kind(kind) {}
-  virtual ~MenuItem() = default;
 };
 
-struct Spacer : MenuItem {
-  Spacer() : MenuItem(Kind::Spacer) {}
+struct MenuIcon {
+  enum Kind {
+    SkiaIconKind,
+    WindowsStockIconKind,
+    FreedesktopIconKind,
+  } kind;
 };
 
-struct Action : MenuItem {
+struct SkiaIcon {
+  MenuIcon icon = {MenuIcon::SkiaIconKind};
+  MenuIcon* fallback = nullptr;
+  sk_sp<SkImage> image;
+
+  operator MenuIcon*() noexcept { return &icon; }
+};
+
+struct WindowsStockIcon {
+  MenuIcon icon = {MenuIcon::WindowsStockIconKind};
+  MenuIcon* fallback = nullptr;
+  int shell_stock_icon_id = 0;
+
+  operator MenuIcon*() noexcept { return &icon; }
+};
+
+struct FreedesktopIcon {
+  MenuIcon icon = {MenuIcon::FreedesktopIconKind};
+  MenuIcon* fallback = nullptr;
   Str name;
-  sk_sp<SkImage> icon;
+
+  operator MenuIcon*() noexcept { return &icon; }
+};
+
+struct Spacer {
+  MenuItem item = {MenuItem::SpacerKind};
+
+  operator MenuItem*() noexcept { return &item; }
+};
+
+struct Action {
+  MenuItem item = {MenuItem::ActionKind};
+  Str name;
+  MenuIcon* icon = nullptr;
   Fn<void()> on_click;
 
-  Action() : MenuItem(Kind::Action) {}
+  operator MenuItem*() noexcept { return &item; }
 };
 
 // For the root Menu passed to Icon: `name` becomes the tooltip, `icon` the tray bitmap.
 // For nested submenus those fields describe the submenu entry itself.
 // `items` are non-owning pointers.
-struct Menu : MenuItem {
+struct Menu {
+  MenuItem item = {MenuItem::MenuKind};
   Str name;
-  sk_sp<SkImage> icon;
+  MenuIcon* icon = nullptr;
   Vec<MenuItem*> items;
 
-  Menu() : MenuItem(Kind::Menu) {}
+  operator MenuItem*() noexcept { return &item; }
 };
 
 // RAII handle to a system tray icon. `on_activate` fires on left-click of the tray icon.
@@ -65,9 +99,6 @@ struct Icon {
 #endif
 constexpr unsigned kSystemTrayMessage = WM_APP + 1;
 void OnSystemTrayMessage(unsigned event, int mouse_screen_x, int mouse_screen_y, unsigned icon_uid);
-
-// Loads a Windows stock icon (SHSTOCKICONID / SIID_*). Returns null on failure.
-sk_sp<SkImage> LoadSystemIcon(int shell_stock_icon_id);
 #endif
 
 }  // namespace automat

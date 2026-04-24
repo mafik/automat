@@ -27,6 +27,7 @@
 #include <include/core/SkPixmap.h>
 
 #include <bit>
+#include <cstddef>
 #include <map>
 
 #include "automat.hh"
@@ -37,11 +38,34 @@
 
 namespace automat {
 
+namespace system_tray {
+static_assert(offsetof(Spacer, item) == 0);
+static_assert(offsetof(Action, item) == 0);
+static_assert(offsetof(Menu, item) == 0);
+static_assert(offsetof(SkiaIcon, icon) == 0);
+static_assert(offsetof(WindowsStockIcon, icon) == 0);
+static_assert(offsetof(FreedesktopIcon, icon) == 0);
+}  // namespace system_tray
+
 namespace {
 
 IdPool& IconUidPool() {
   static IdPool pool(1, 0x10000);
   return pool;
+}
+
+system_tray::MenuIcon* NextInChain(system_tray::MenuIcon* icon) {
+  using namespace system_tray;
+  if (!icon) return nullptr;
+  switch (icon->kind) {
+    case MenuIcon::SkiaIconKind:
+      return reinterpret_cast<SkiaIcon*>(icon)->fallback;
+    case MenuIcon::WindowsStockIconKind:
+      return reinterpret_cast<WindowsStockIcon*>(icon)->fallback;
+    case MenuIcon::FreedesktopIconKind:
+      return reinterpret_cast<FreedesktopIcon*>(icon)->fallback;
+  }
+  return nullptr;
 }
 
 }  // namespace
@@ -53,6 +77,47 @@ using std::string;
 using std::tuple;
 using std::vector;
 using namespace sdbus;
+
+namespace {
+
+// Single-link try-helpers. Each returns an empty result if this link's kind isn't usable in
+// this context (or if the load fails). Consumer walks the chain via NextInChain until one
+// succeeds.
+string TryGetIconName(system_tray::MenuIcon* link) {
+  using namespace system_tray;
+  if (!link || link->kind != MenuIcon::FreedesktopIconKind) return {};
+  auto* f = reinterpret_cast<FreedesktopIcon*>(link);
+  return f->name;
+}
+
+sk_sp<SkImage> TryGetIconImage(system_tray::MenuIcon* link) {
+  using namespace system_tray;
+  if (!link || link->kind != MenuIcon::SkiaIconKind) return {};
+  auto* s = reinterpret_cast<SkiaIcon*>(link);
+  return s->image;
+}
+
+void AppendSNIPixmaps(const sk_sp<SkImage>& image,
+                      vector<Struct<int32_t, int32_t, vector<uint8_t>>>& pixmaps) {
+  auto sampling_options = SkSamplingOptions(SkCubicResampler::CatmullRom());
+  for (int size : {16, 22, 24, 32, 48, 64}) {
+    auto& dbus_pixmap = pixmaps.emplace_back();
+    dbus_pixmap.get<0>() = size;
+    dbus_pixmap.get<1>() = size;
+    dbus_pixmap.get<2>() = vector<uint8_t>(size * size * 4);
+    auto& vec = dbus_pixmap.get<2>();
+    auto image_info = SkImageInfo::Make(size, size, SkColorType::kRGBA_8888_SkColorType,
+                                        kUnpremul_SkAlphaType);
+    SkPixmap sk_pixmap(image_info, vec.data(), size * 4);
+    image->scalePixels(sk_pixmap, sampling_options);
+    for (int i = 0; i < size * size; ++i) {
+      U32* pixel = (U32*)(vec.data() + i * 4);
+      *pixel = std::rotl(*pixel, 8);
+    }
+  }
+}
+
+}  // namespace
 
 const ObjectPath kStatusNotifierPath{"/StatusNotifierItem"};
 const ObjectPath kMenuPath{"/MenuBar"};
@@ -78,31 +143,24 @@ class StatusNotifierItem final : public AdaptorInterfaces<org::kde::StatusNotifi
   using IconPixmapList = vector<IconPixmap_t>;
 
   string title;
+  string icon_name;
   IconPixmapList icon_pixmaps;
   Fn<void()> on_activate;
 
  public:
-  StatusNotifierItem(IConnection& connection, string title, const sk_sp<SkImage>& image,
+  StatusNotifierItem(IConnection& connection, string title, system_tray::MenuIcon* icon_chain,
                      Fn<void()> on_activate)
       : AdaptorInterfaces(connection, kStatusNotifierPath),
         title(std::move(title)),
         on_activate(std::move(on_activate)) {
-    if (image) {
-      auto sampling_options = SkSamplingOptions(SkCubicResampler::CatmullRom());
-      for (int size : {16, 22, 24, 32, 48, 64}) {
-        IconPixmap_t& dbus_pixmap = icon_pixmaps.emplace_back();
-        dbus_pixmap.get<0>() = size;
-        dbus_pixmap.get<1>() = size;
-        dbus_pixmap.get<2>() = vector<uint8_t>(size * size * 4);
-        auto& vec = dbus_pixmap.get<2>();
-        auto image_info = SkImageInfo::Make(size, size, SkColorType::kRGBA_8888_SkColorType,
-                                            kUnpremul_SkAlphaType);
-        SkPixmap sk_pixmap(image_info, vec.data(), size * 4);
-        image->scalePixels(sk_pixmap, sampling_options);
-        for (int i = 0; i < size * size; ++i) {
-          U32* pixel = (U32*)(vec.data() + i * 4);
-          *pixel = std::rotl(*pixel, 8);
-        }
+    for (auto* link = icon_chain; link; link = NextInChain(link)) {
+      if (string name = TryGetIconName(link); !name.empty()) {
+        icon_name = std::move(name);
+        break;
+      }
+      if (auto image = TryGetIconImage(link)) {
+        AppendSNIPixmaps(image, icon_pixmaps);
+        break;
       }
     }
     registerAdaptor();
@@ -115,7 +173,7 @@ class StatusNotifierItem final : public AdaptorInterfaces<org::kde::StatusNotifi
   string Title() override { return title; }
   string Status() override { return "Active"; }
   uint32_t WindowId() override { return 0; }
-  string IconName() override { return ""; }
+  string IconName() override { return icon_name; }
   IconPixmapList IconPixmap() override { return icon_pixmaps; }
   string OverlayIconName() override { return ""; }
   IconPixmapList OverlayIconPixmap() override { return {}; }
@@ -137,6 +195,7 @@ class StatusNotifierItem final : public AdaptorInterfaces<org::kde::StatusNotifi
 struct DBusMenuItem {
   string type{"standard"};
   string label;
+  string icon_name;
   vector<int32_t> child_ids;
   std::function<void()> on_click;
 };
@@ -163,22 +222,35 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
   }
 
  private:
-  int32_t Add(const system_tray::MenuItem& node) {
+  int32_t Add(system_tray::MenuItem& node) {
+    using namespace system_tray;
     int32_t id = (int32_t)items.size();
     items.emplace_back();
     switch (node.kind) {
-      case system_tray::MenuItem::Spacer:
+      case MenuItem::SpacerKind:
         items[id].type = "separator";
         break;
-      case system_tray::MenuItem::Action: {
-        auto& a = static_cast<const system_tray::Action&>(node);
+      case MenuItem::ActionKind: {
+        auto& a = *reinterpret_cast<Action*>(&node);
         items[id].label = a.name;
         items[id].on_click = a.on_click;
+        for (auto* link = a.icon; link; link = NextInChain(link)) {
+          if (string name = TryGetIconName(link); !name.empty()) {
+            items[id].icon_name = std::move(name);
+            break;
+          }
+        }
         break;
       }
-      case system_tray::MenuItem::Menu: {
-        auto& m = static_cast<const system_tray::Menu&>(node);
+      case MenuItem::MenuKind: {
+        auto& m = *reinterpret_cast<Menu*>(&node);
         items[id].label = m.name;
+        for (auto* link = m.icon; link; link = NextInChain(link)) {
+          if (string name = TryGetIconName(link); !name.empty()) {
+            items[id].icon_name = std::move(name);
+            break;
+          }
+        }
         for (auto* child : m.items) {
           int32_t child_id = Add(*child);
           items[id].child_ids.push_back(child_id);
@@ -212,6 +284,8 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
     };
     if (want("type") && item.type != "standard") props["type"] = Variant(item.type);
     if (want("label") && !item.label.empty()) props["label"] = Variant(item.label);
+    if (want("icon-name") && !item.icon_name.empty())
+      props["icon-name"] = Variant(item.icon_name);
     if (want("children-display") && !item.child_ids.empty())
       props["children-display"] = Variant(std::string("submenu"));
     return props;
@@ -289,8 +363,8 @@ Icon::Icon(const Menu& root_menu, Fn<void()> on_activate)
   auto service_name = f("org.automat.pid-{}-{}", getpid(), impl->uid.id);
   impl->connection = createSessionBusConnection(ServiceName{service_name});
   impl->menu = std::make_unique<DBusMenu>(*impl->connection, root_menu);
-  impl->sni = std::make_unique<StatusNotifierItem>(*impl->connection, root_menu.name,
-                                                   root_menu.icon, std::move(on_activate));
+  impl->sni = std::make_unique<StatusNotifierItem>(*impl->connection, root_menu.name, root_menu.icon,
+                                                   std::move(on_activate));
   StatusNotifierWatcherProxy watcher{*impl->connection};
   watcher.RegisterStatusNotifierItem(service_name);
   impl->connection->enterEventLoopAsync();
@@ -298,12 +372,9 @@ Icon::Icon(const Menu& root_menu, Fn<void()> on_activate)
 
 Icon::~Icon() = default;
 
-void Icon::Update(const Menu& root_menu, Fn<void()> on_activate) {
+void Icon::Update(const Menu& root_menu, Fn<void()>) {
   if (!impl || !impl->menu) return;
   impl->menu->Rebuild(root_menu);
-  // StatusNotifierItem's on_activate can't be swapped without reregistering; accepted as a
-  // no-op for now since the tooltip/icon are also not updated on Linux yet.
-  (void)on_activate;
 }
 
 }  // namespace system_tray
@@ -329,7 +400,7 @@ std::wstring Utf8ToWide(StrView s) {
   return w;
 }
 
-HBITMAP MakeDIBFromImage(const sk_sp<SkImage>& image, int size) {
+HICON MakeHIconFromImage(const sk_sp<SkImage>& image, int size) {
   if (!image) return nullptr;
 
   BITMAPINFO bi = {};
@@ -342,8 +413,7 @@ HBITMAP MakeDIBFromImage(const sk_sp<SkImage>& image, int size) {
 
   HDC screen_dc = GetDC(nullptr);
   void* dib_bits = nullptr;
-  HBITMAP color_bmp =
-      CreateDIBSection(screen_dc, &bi, DIB_RGB_COLORS, &dib_bits, nullptr, 0);
+  HBITMAP color_bmp = CreateDIBSection(screen_dc, &bi, DIB_RGB_COLORS, &dib_bits, nullptr, 0);
   ReleaseDC(nullptr, screen_dc);
   if (!color_bmp || !dib_bits) {
     if (color_bmp) DeleteObject(color_bmp);
@@ -353,12 +423,6 @@ HBITMAP MakeDIBFromImage(const sk_sp<SkImage>& image, int size) {
   auto image_info = SkImageInfo::Make(size, size, kBGRA_8888_SkColorType, kPremul_SkAlphaType);
   SkPixmap sk_pixmap(image_info, dib_bits, size * 4);
   image->scalePixels(sk_pixmap, SkSamplingOptions(SkCubicResampler::CatmullRom()));
-  return color_bmp;
-}
-
-HICON MakeHIcon(const sk_sp<SkImage>& image, int size) {
-  HBITMAP color_bmp = MakeDIBFromImage(image, size);
-  if (!color_bmp) return nullptr;
 
   HBITMAP mask_bmp = CreateBitmap(size, size, 1, 1, nullptr);
 
@@ -373,57 +437,54 @@ HICON MakeHIcon(const sk_sp<SkImage>& image, int size) {
   return icon;
 }
 
-sk_sp<SkImage> HIconToSkImage(HICON hicon) {
-  if (!hicon) return nullptr;
-  ICONINFO info = {};
-  if (!GetIconInfo(hicon, &info)) return nullptr;
-  BITMAP bm = {};
-  bool ok = GetObject(info.hbmColor, sizeof(bm), &bm) != 0;
-  int w = bm.bmWidth;
-  int h = bm.bmHeight;
-  if (info.hbmColor) DeleteObject(info.hbmColor);
-  if (info.hbmMask) DeleteObject(info.hbmMask);
-  if (!ok || w <= 0 || h <= 0) return nullptr;
-
-  BITMAPV5HEADER bi = {};
-  bi.bV5Size = sizeof(bi);
-  bi.bV5Width = w;
-  bi.bV5Height = -h;
-  bi.bV5Planes = 1;
-  bi.bV5BitCount = 32;
-  bi.bV5Compression = BI_BITFIELDS;
-  bi.bV5RedMask = 0x00FF0000;
-  bi.bV5GreenMask = 0x0000FF00;
-  bi.bV5BlueMask = 0x000000FF;
-  bi.bV5AlphaMask = 0xFF000000;
-
-  HDC screen_dc = GetDC(nullptr);
-  void* dib_bits = nullptr;
-  HBITMAP dib = CreateDIBSection(screen_dc, reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS,
-                                 &dib_bits, nullptr, 0);
-  sk_sp<SkImage> result;
-  if (dib && dib_bits) {
-    HDC mem_dc = CreateCompatibleDC(screen_dc);
-    HGDIOBJ old = SelectObject(mem_dc, dib);
-    DrawIconEx(mem_dc, 0, 0, hicon, w, h, 0, nullptr, DI_NORMAL);
-    SelectObject(mem_dc, old);
-    DeleteDC(mem_dc);
-
-    auto image_info = SkImageInfo::Make(w, h, kBGRA_8888_SkColorType, kPremul_SkAlphaType);
-    SkPixmap pm(image_info, dib_bits, w * 4);
-    result = SkImages::RasterFromPixmapCopy(pm);
+// Attempts to load a single chain link as an HICON at the given size. Returns null if this
+// link's kind isn't usable on Windows, or if the load fails. Caller owns the returned HICON.
+HICON TryLoadHIcon(system_tray::MenuIcon* link, int size) {
+  using namespace system_tray;
+  if (!link) return nullptr;
+  if (link->kind == MenuIcon::WindowsStockIconKind) {
+    auto* w = reinterpret_cast<WindowsStockIcon*>(link);
+    SHSTOCKICONINFO info = {};
+    info.cbSize = sizeof(info);
+    UINT flags = SHGSI_ICON | (size <= 16 ? SHGSI_SMALLICON : SHGSI_LARGEICON);
+    if (SUCCEEDED(SHGetStockIconInfo((SHSTOCKICONID)w->shell_stock_icon_id, flags, &info)) &&
+        info.hIcon) {
+      return info.hIcon;
+    }
+    return nullptr;
   }
-  if (dib) DeleteObject(dib);
-  ReleaseDC(nullptr, screen_dc);
-  return result;
+  if (link->kind == MenuIcon::SkiaIconKind) {
+    auto* s = reinterpret_cast<SkiaIcon*>(link);
+    return MakeHIconFromImage(s->image, size);
+  }
+  return nullptr;
 }
 
-void AttachBitmap(HMENU hmenu, UINT id_or_pos, bool by_position, const sk_sp<SkImage>& icon,
-                  int size, Vec<HBITMAP>& bitmaps) {
-  if (!icon) return;
-  HBITMAP bmp = MakeDIBFromImage(icon, size);
+HBITMAP HIconToMenuBitmap(HICON hicon, int size) {
+  if (!hicon) return nullptr;
+  BITMAPINFO bi = {};
+  bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  bi.bmiHeader.biWidth = size;
+  bi.bmiHeader.biHeight = -size;
+  bi.bmiHeader.biPlanes = 1;
+  bi.bmiHeader.biBitCount = 32;
+  bi.bmiHeader.biCompression = BI_RGB;
+  HDC screen_dc = GetDC(nullptr);
+  void* bits = nullptr;
+  HBITMAP bmp = CreateDIBSection(screen_dc, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+  if (bmp && bits) {
+    HDC mem_dc = CreateCompatibleDC(screen_dc);
+    HGDIOBJ old = SelectObject(mem_dc, bmp);
+    DrawIconEx(mem_dc, 0, 0, hicon, size, size, 0, nullptr, DI_NORMAL);
+    SelectObject(mem_dc, old);
+    DeleteDC(mem_dc);
+  }
+  ReleaseDC(nullptr, screen_dc);
+  return bmp;
+}
+
+void AttachBitmap(HMENU hmenu, UINT id_or_pos, bool by_position, HBITMAP bmp) {
   if (!bmp) return;
-  bitmaps.push_back(bmp);
   MENUITEMINFOW mii = {};
   mii.cbSize = sizeof(mii);
   mii.fMask = MIIM_BITMAP;
@@ -436,26 +497,44 @@ void BuildMenu(HMENU hmenu, const system_tray::Menu& menu, Vec<Fn<void()>>& hand
   static const int menu_icon_size = GetSystemMetrics(SM_CXSMICON);
   for (auto* item : menu.items) {
     switch (item->kind) {
-      case system_tray::MenuItem::Spacer:
+      case system_tray::MenuItem::SpacerKind:
         AppendMenuW(hmenu, MF_SEPARATOR, 0, nullptr);
         break;
-      case system_tray::MenuItem::Action: {
-        auto& a = *static_cast<system_tray::Action*>(item);
+      case system_tray::MenuItem::ActionKind: {
+        auto& a = *reinterpret_cast<system_tray::Action*>(item);
         handlers.push_back(a.on_click);
         UINT cmd = (UINT)handlers.size();
         auto wide = Utf8ToWide(a.name);
         AppendMenuW(hmenu, MF_STRING, cmd, wide.c_str());
-        AttachBitmap(hmenu, cmd, /*by_position=*/false, a.icon, menu_icon_size, bitmaps);
+        for (auto* link = a.icon; link; link = NextInChain(link)) {
+          HICON hicon = TryLoadHIcon(link, menu_icon_size);
+          if (!hicon) continue;
+          HBITMAP bmp = HIconToMenuBitmap(hicon, menu_icon_size);
+          DestroyIcon(hicon);
+          if (!bmp) continue;
+          bitmaps.push_back(bmp);
+          AttachBitmap(hmenu, cmd, /*by_position=*/false, bmp);
+          break;
+        }
         break;
       }
-      case system_tray::MenuItem::Menu: {
-        auto& m = *static_cast<system_tray::Menu*>(item);
+      case system_tray::MenuItem::MenuKind: {
+        auto& m = *reinterpret_cast<system_tray::Menu*>(item);
         HMENU sub = CreatePopupMenu();
         BuildMenu(sub, m, handlers, bitmaps);
         auto wide = Utf8ToWide(m.name);
         AppendMenuW(hmenu, MF_POPUP, (UINT_PTR)sub, wide.c_str());
         UINT pos = (UINT)GetMenuItemCount(hmenu) - 1;
-        AttachBitmap(hmenu, pos, /*by_position=*/true, m.icon, menu_icon_size, bitmaps);
+        for (auto* link = m.icon; link; link = NextInChain(link)) {
+          HICON hicon = TryLoadHIcon(link, menu_icon_size);
+          if (!hicon) continue;
+          HBITMAP bmp = HIconToMenuBitmap(hicon, menu_icon_size);
+          DestroyIcon(hicon);
+          if (!bmp) continue;
+          bitmaps.push_back(bmp);
+          AttachBitmap(hmenu, pos, /*by_position=*/true, bmp);
+          break;
+        }
         break;
       }
     }
@@ -487,7 +566,9 @@ Icon::Icon(const Menu& root_menu, Fn<void()> on_activate)
   impl->hmenu = CreatePopupMenu();
   BuildMenu(impl->hmenu, root_menu, impl->action_handlers, impl->menu_bitmaps);
   impl->on_activate = std::move(on_activate);
-  impl->hicon = MakeHIcon(root_menu.icon, TraySize());
+  for (auto* link = root_menu.icon; link; link = NextInChain(link)) {
+    if ((impl->hicon = TryLoadHIcon(link, TraySize()))) break;
+  }
 
   auto& data = impl->data;
   data.cbSize = sizeof(data);
@@ -527,7 +608,10 @@ void Icon::Update(const Menu& root_menu, Fn<void()> on_activate) {
   BuildMenu(impl->hmenu, root_menu, impl->action_handlers, impl->menu_bitmaps);
   impl->on_activate = std::move(on_activate);
 
-  HICON new_hicon = MakeHIcon(root_menu.icon, TraySize());
+  HICON new_hicon = nullptr;
+  for (auto* link = root_menu.icon; link; link = NextInChain(link)) {
+    if ((new_hicon = TryLoadHIcon(link, TraySize()))) break;
+  }
   auto wide_tip = Utf8ToWide(root_menu.name);
   auto& data = impl->data;
   data.uFlags = NIF_MESSAGE | NIF_TIP | (new_hicon ? NIF_ICON : 0);
@@ -540,17 +624,6 @@ void Icon::Update(const Menu& root_menu, Fn<void()> on_activate) {
 }
 
 }  // namespace system_tray
-
-sk_sp<SkImage> LoadSystemIcon(int shell_stock_icon_id) {
-  SHSTOCKICONINFO info = {};
-  info.cbSize = sizeof(info);
-  HRESULT hr = SHGetStockIconInfo((SHSTOCKICONID)shell_stock_icon_id,
-                                  SHGSI_ICON | SHGSI_LARGEICON, &info);
-  if (FAILED(hr) || !info.hIcon) return nullptr;
-  auto result = HIconToSkImage(info.hIcon);
-  DestroyIcon(info.hIcon);
-  return result;
-}
 
 void OnSystemTrayMessage(unsigned event, int mouse_x, int mouse_y, unsigned icon_uid) {
   auto it = IconsByUid().find(icon_uid);

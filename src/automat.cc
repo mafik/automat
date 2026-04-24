@@ -10,10 +10,6 @@
 
 #if defined(_WIN32)
 #include "win32.hh"
-#pragma push_macro("ERROR")
-#include <shellapi.h>
-#include <shlobj.h>
-#pragma pop_macro("ERROR")
 #endif
 
 #include <include/core/SkGraphics.h>
@@ -51,13 +47,7 @@ static PersistentImage favicon =
     PersistentImage::MakeFromAsset(embedded::docs_assets_favicon_184_png);
 
 void RefreshTrayIcon() {
-  system_tray::Action hide_action;
-  system_tray::Spacer tray_separator;
-  system_tray::Action quit_action;
-  system_tray::Menu root;
-
-  hide_action.name = tray_hidden ? "Show" : "Hide";
-  hide_action.on_click = []() {
+  auto toggle_hidden = []() {
     if (tray_hidden) {
       root_widget->RestoreFromTray();
     } else {
@@ -67,27 +57,51 @@ void RefreshTrayIcon() {
     RefreshTrayIcon();
   };
 
-  quit_action.name = "Quit";
-  quit_action.on_click = []() {
-    stop_source.request_stop();
-#ifdef _WIN32
-    PostQuitMessage(0);
-#endif
+  // From <shlobj_core.h>: SHSTOCKICONID values for the Windows stock icons we want.
+  // Hardcoded here so automat.cc doesn't have to pull in the Windows shell headers.
+  constexpr int kSIID_FIND = 22;
+  constexpr int kSIID_DELETE = 84;
+
+  system_tray::FreedesktopIcon hide_fd{.name = tray_hidden ? "view-reveal-symbolic"
+                                                           : "view-conceal-symbolic"};
+  system_tray::WindowsStockIcon hide_icon{.fallback = hide_fd, .shell_stock_icon_id = kSIID_FIND};
+
+  system_tray::FreedesktopIcon quit_fd{.name = "application-exit-symbolic"};
+  system_tray::WindowsStockIcon quit_icon{.fallback = quit_fd, .shell_stock_icon_id = kSIID_DELETE};
+
+  system_tray::SkiaIcon tray_icon_image{
+      .image = *favicon.image,
   };
 
+  system_tray::Action hide_action{
+      .name = tray_hidden ? "Show" : "Hide",
+      .icon = hide_icon,
+      .on_click = toggle_hidden,
+  };
+  system_tray::Spacer tray_separator{};
+  system_tray::Action quit_action{
+      .name = "Quit",
+      .icon = quit_icon,
+      .on_click =
+          []() {
 #ifdef _WIN32
-  hide_action.icon = LoadSystemIcon(SIID_FIND);
-  quit_action.icon = LoadSystemIcon(SIID_DELETE);
+            PostQuitMessage(0);
+#else
+            stop_source.request_stop();
 #endif
+          },
+  };
 
-  root.name = "Automat";
-  root.icon = favicon.image ? *favicon.image : sk_sp<SkImage>();
-  root.items = {&hide_action, &tray_separator, &quit_action};
+  system_tray::Menu root{
+      .name = "Automat",
+      .icon = tray_icon_image,
+      .items = {hide_action, tray_separator, quit_action},
+  };
 
   if (tray_icon) {
-    tray_icon->Update(root, hide_action.on_click);
+    tray_icon->Update(root, toggle_hidden);
   } else {
-    tray_icon.emplace(root, hide_action.on_click);
+    tray_icon.emplace(root, toggle_hidden);
   }
 }
 

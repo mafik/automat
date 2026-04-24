@@ -922,6 +922,13 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
         node.SetVerdict(Verdict::Skip_Clipped);
       } else {
         for (auto* child : ranges::reverse_view(widget->Children())) {
+          if (child->parent != widget) {
+            ERROR << "Widget " << widget->Name() << "::FillChildren returned " << child->Name()
+                  << " whose parent pointer is "
+                  << (child->parent ? child->parent->Name() : StrView("nullptr"))
+                  << "; skipping to preserve render tree invariants.";
+            continue;
+          }
           q.push_back(make_pair(tree_index, child));
         }
       }
@@ -1126,10 +1133,9 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     auto& node = tree[i];
     auto& widget = *node.widget;
 
-    if constexpr (kDebugRendering) {
-      if (widget.rendering) {
-        FATAL << "Widget " << widget.Name() << " has been repacked!";
-      }
+    if (widget.rendering) {
+      ERROR << "Widget " << widget.Name() << " has been repacked!";
+      continue;
     }
 
     WidgetDrawable::Update update = {};

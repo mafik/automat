@@ -118,6 +118,8 @@ Objects (multi-threaded) notify Toys (UI-thread) via `wake_counter`:
   - `automat::build_variant::Fast` - true for fast builds
   - Also provides `NotDebug`, `NotRelease`, `NotFast` convenience constants
   - All constants are `constexpr` and suitable for use in `if constexpr` conditions
+- Comments should NOT document the development process
+- Avoid fragile comments that are likely to become outdated as the codebase evolves
 
 ### Testing
 

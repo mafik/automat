@@ -32,6 +32,7 @@ class File:
         self.compile_args = defaultdict(list)
         self.run_args = defaultdict(list)
         self.main = False
+        self.manifest = False
         self.transitive_includes = set()
 
     def is_header(self) -> bool:
@@ -55,6 +56,7 @@ class File:
         self.compile_args.clear()
         self.run_args.clear()
         self.main = False
+        self.manifest = False
 
         if_stack = [True]
         current_defines = clang.default_defines.copy()
@@ -124,6 +126,10 @@ class File:
             if match:
                 self.main = True
 
+            match = re.match(r'^#pragma maf manifest', line)
+            if match:
+                self.manifest = True
+
     # This should be called after all files are scanned
     def update_transitive_includes(self, srcs: dict[str, 'File']):
         self.transitive_includes.clear()
@@ -142,6 +148,7 @@ class File:
                 if sys not in self.system_includes:
                     self.system_includes.append(sys)
             self.main = self.main or inc.main  # propagate `main` flag from headers to sources
+            self.manifest = self.manifest or inc.manifest
             include_queue.extend(inc.direct_includes)
 
     def __str__(self) -> str:

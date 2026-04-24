@@ -65,6 +65,9 @@ struct Icon {
 #endif
 constexpr unsigned kSystemTrayMessage = WM_APP + 1;
 void OnSystemTrayMessage(unsigned event, int mouse_screen_x, int mouse_screen_y, unsigned icon_uid);
+
+// Loads a Windows stock icon (SHSTOCKICONID / SIID_*). Returns null on failure.
+sk_sp<SkImage> LoadSystemIcon(int shell_stock_icon_id);
 #endif
 
 }  // namespace automat

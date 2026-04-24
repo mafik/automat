@@ -6,6 +6,7 @@
 #include "win32_window.hh"
 #pragma push_macro("ERROR")
 #include <shellapi.h>
+#include <shlobj_core.h>
 #pragma pop_macro("ERROR")
 #pragma comment(lib, "shell32.lib")
 #endif  // _WIN32
@@ -328,34 +329,36 @@ std::wstring Utf8ToWide(StrView s) {
   return w;
 }
 
-HICON MakeHIcon(const sk_sp<SkImage>& image, int size) {
+HBITMAP MakeDIBFromImage(const sk_sp<SkImage>& image, int size) {
   if (!image) return nullptr;
 
-  BITMAPV5HEADER bi = {};
-  bi.bV5Size = sizeof(BITMAPV5HEADER);
-  bi.bV5Width = size;
-  bi.bV5Height = -size;
-  bi.bV5Planes = 1;
-  bi.bV5BitCount = 32;
-  bi.bV5Compression = BI_BITFIELDS;
-  bi.bV5RedMask = 0x00FF0000;
-  bi.bV5GreenMask = 0x0000FF00;
-  bi.bV5BlueMask = 0x000000FF;
-  bi.bV5AlphaMask = 0xFF000000;
+  BITMAPINFO bi = {};
+  bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  bi.bmiHeader.biWidth = size;
+  bi.bmiHeader.biHeight = -size;
+  bi.bmiHeader.biPlanes = 1;
+  bi.bmiHeader.biBitCount = 32;
+  bi.bmiHeader.biCompression = BI_RGB;
 
   HDC screen_dc = GetDC(nullptr);
   void* dib_bits = nullptr;
-  HBITMAP color_bmp = CreateDIBSection(screen_dc, reinterpret_cast<BITMAPINFO*>(&bi),
-                                       DIB_RGB_COLORS, &dib_bits, nullptr, 0);
+  HBITMAP color_bmp =
+      CreateDIBSection(screen_dc, &bi, DIB_RGB_COLORS, &dib_bits, nullptr, 0);
   ReleaseDC(nullptr, screen_dc);
   if (!color_bmp || !dib_bits) {
     if (color_bmp) DeleteObject(color_bmp);
     return nullptr;
   }
 
-  auto image_info = SkImageInfo::Make(size, size, kBGRA_8888_SkColorType, kUnpremul_SkAlphaType);
+  auto image_info = SkImageInfo::Make(size, size, kBGRA_8888_SkColorType, kPremul_SkAlphaType);
   SkPixmap sk_pixmap(image_info, dib_bits, size * 4);
   image->scalePixels(sk_pixmap, SkSamplingOptions(SkCubicResampler::CatmullRom()));
+  return color_bmp;
+}
+
+HICON MakeHIcon(const sk_sp<SkImage>& image, int size) {
+  HBITMAP color_bmp = MakeDIBFromImage(image, size);
+  if (!color_bmp) return nullptr;
 
   HBITMAP mask_bmp = CreateBitmap(size, size, 1, 1, nullptr);
 
@@ -370,7 +373,67 @@ HICON MakeHIcon(const sk_sp<SkImage>& image, int size) {
   return icon;
 }
 
-void BuildMenu(HMENU hmenu, const system_tray::Menu& menu, Vec<Fn<void()>>& handlers) {
+sk_sp<SkImage> HIconToSkImage(HICON hicon) {
+  if (!hicon) return nullptr;
+  ICONINFO info = {};
+  if (!GetIconInfo(hicon, &info)) return nullptr;
+  BITMAP bm = {};
+  bool ok = GetObject(info.hbmColor, sizeof(bm), &bm) != 0;
+  int w = bm.bmWidth;
+  int h = bm.bmHeight;
+  if (info.hbmColor) DeleteObject(info.hbmColor);
+  if (info.hbmMask) DeleteObject(info.hbmMask);
+  if (!ok || w <= 0 || h <= 0) return nullptr;
+
+  BITMAPV5HEADER bi = {};
+  bi.bV5Size = sizeof(bi);
+  bi.bV5Width = w;
+  bi.bV5Height = -h;
+  bi.bV5Planes = 1;
+  bi.bV5BitCount = 32;
+  bi.bV5Compression = BI_BITFIELDS;
+  bi.bV5RedMask = 0x00FF0000;
+  bi.bV5GreenMask = 0x0000FF00;
+  bi.bV5BlueMask = 0x000000FF;
+  bi.bV5AlphaMask = 0xFF000000;
+
+  HDC screen_dc = GetDC(nullptr);
+  void* dib_bits = nullptr;
+  HBITMAP dib = CreateDIBSection(screen_dc, reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS,
+                                 &dib_bits, nullptr, 0);
+  sk_sp<SkImage> result;
+  if (dib && dib_bits) {
+    HDC mem_dc = CreateCompatibleDC(screen_dc);
+    HGDIOBJ old = SelectObject(mem_dc, dib);
+    DrawIconEx(mem_dc, 0, 0, hicon, w, h, 0, nullptr, DI_NORMAL);
+    SelectObject(mem_dc, old);
+    DeleteDC(mem_dc);
+
+    auto image_info = SkImageInfo::Make(w, h, kBGRA_8888_SkColorType, kPremul_SkAlphaType);
+    SkPixmap pm(image_info, dib_bits, w * 4);
+    result = SkImages::RasterFromPixmapCopy(pm);
+  }
+  if (dib) DeleteObject(dib);
+  ReleaseDC(nullptr, screen_dc);
+  return result;
+}
+
+void AttachBitmap(HMENU hmenu, UINT id_or_pos, bool by_position, const sk_sp<SkImage>& icon,
+                  int size, Vec<HBITMAP>& bitmaps) {
+  if (!icon) return;
+  HBITMAP bmp = MakeDIBFromImage(icon, size);
+  if (!bmp) return;
+  bitmaps.push_back(bmp);
+  MENUITEMINFOW mii = {};
+  mii.cbSize = sizeof(mii);
+  mii.fMask = MIIM_BITMAP;
+  mii.hbmpItem = bmp;
+  SetMenuItemInfoW(hmenu, id_or_pos, by_position ? TRUE : FALSE, &mii);
+}
+
+void BuildMenu(HMENU hmenu, const system_tray::Menu& menu, Vec<Fn<void()>>& handlers,
+               Vec<HBITMAP>& bitmaps) {
+  static const int menu_icon_size = GetSystemMetrics(SM_CXSMICON);
   for (auto* item : menu.items) {
     switch (item->kind) {
       case system_tray::MenuItem::Spacer:
@@ -382,14 +445,17 @@ void BuildMenu(HMENU hmenu, const system_tray::Menu& menu, Vec<Fn<void()>>& hand
         UINT cmd = (UINT)handlers.size();
         auto wide = Utf8ToWide(a.name);
         AppendMenuW(hmenu, MF_STRING, cmd, wide.c_str());
+        AttachBitmap(hmenu, cmd, /*by_position=*/false, a.icon, menu_icon_size, bitmaps);
         break;
       }
       case system_tray::MenuItem::Menu: {
         auto& m = *static_cast<system_tray::Menu*>(item);
         HMENU sub = CreatePopupMenu();
-        BuildMenu(sub, m, handlers);
+        BuildMenu(sub, m, handlers, bitmaps);
         auto wide = Utf8ToWide(m.name);
         AppendMenuW(hmenu, MF_POPUP, (UINT_PTR)sub, wide.c_str());
+        UINT pos = (UINT)GetMenuItemCount(hmenu) - 1;
+        AttachBitmap(hmenu, pos, /*by_position=*/true, m.icon, menu_icon_size, bitmaps);
         break;
       }
     }
@@ -405,6 +471,7 @@ struct Icon::Impl {
   HMENU hmenu = nullptr;
   HICON hicon = nullptr;
   Vec<Fn<void()>> action_handlers;
+  Vec<HBITMAP> menu_bitmaps;
   Fn<void()> on_activate;
   NOTIFYICONDATAW data = {};
 
@@ -418,7 +485,7 @@ Icon::Icon(const Menu& root_menu, Fn<void()> on_activate)
   IconsByUid()[(UINT)impl->uid.id] = impl.get();
 
   impl->hmenu = CreatePopupMenu();
-  BuildMenu(impl->hmenu, root_menu, impl->action_handlers);
+  BuildMenu(impl->hmenu, root_menu, impl->action_handlers, impl->menu_bitmaps);
   impl->on_activate = std::move(on_activate);
   impl->hicon = MakeHIcon(root_menu.icon, TraySize());
 
@@ -445,6 +512,7 @@ Icon::~Icon() {
   if (!impl) return;
   if (impl->data.cbSize != 0) Shell_NotifyIconW(NIM_DELETE, &impl->data);
   if (impl->hmenu) DestroyMenu(impl->hmenu);
+  for (HBITMAP b : impl->menu_bitmaps) DeleteObject(b);
   if (impl->hicon) DestroyIcon(impl->hicon);
   IconsByUid().erase((UINT)impl->uid.id);
 }
@@ -452,9 +520,11 @@ Icon::~Icon() {
 void Icon::Update(const Menu& root_menu, Fn<void()> on_activate) {
   if (!impl) return;
   if (impl->hmenu) DestroyMenu(impl->hmenu);
+  for (HBITMAP b : impl->menu_bitmaps) DeleteObject(b);
+  impl->menu_bitmaps.clear();
   impl->hmenu = CreatePopupMenu();
   impl->action_handlers.clear();
-  BuildMenu(impl->hmenu, root_menu, impl->action_handlers);
+  BuildMenu(impl->hmenu, root_menu, impl->action_handlers, impl->menu_bitmaps);
   impl->on_activate = std::move(on_activate);
 
   HICON new_hicon = MakeHIcon(root_menu.icon, TraySize());
@@ -470,6 +540,17 @@ void Icon::Update(const Menu& root_menu, Fn<void()> on_activate) {
 }
 
 }  // namespace system_tray
+
+sk_sp<SkImage> LoadSystemIcon(int shell_stock_icon_id) {
+  SHSTOCKICONINFO info = {};
+  info.cbSize = sizeof(info);
+  HRESULT hr = SHGetStockIconInfo((SHSTOCKICONID)shell_stock_icon_id,
+                                  SHGSI_ICON | SHGSI_LARGEICON, &info);
+  if (FAILED(hr) || !info.hIcon) return nullptr;
+  auto result = HIconToSkImage(info.hIcon);
+  DestroyIcon(info.hIcon);
+  return result;
+}
 
 void OnSystemTrayMessage(unsigned event, int mouse_x, int mouse_y, unsigned icon_uid) {
   auto it = IconsByUid().find(icon_uid);

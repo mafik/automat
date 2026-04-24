@@ -1,6 +1,17 @@
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
 
+#ifdef _WIN32
+// Include before anything else so that windows.h is first seen with NOGDI undefined; otherwise
+// some earlier include (e.g. root_widget.hh) would load windows.h with GDI disabled and the
+// later re-include would be a no-op.
+#include "win32.hh"
+#pragma push_macro("ERROR")
+#include <shellapi.h>
+#pragma pop_macro("ERROR")
+#pragma comment(lib, "shell32.lib")
+#endif  // _WIN32
+
 #include "root_widget.hh"
 #ifdef __linux__
 #include <sdbus-c++/sdbus-c++.h>
@@ -374,7 +385,171 @@ void InitSystemTray() {
 
   dbus_connection->enterEventLoopAsync();
 }
-#else   // NOT __linux__
+#elif defined(_WIN32)
+
+using automat::win32::GetInstance;
+
+namespace {
+
+constexpr UINT kTrayCallbackMessage = WM_APP + 1;
+constexpr UINT kTrayIconId = 1;
+
+enum TrayMenuCommand : UINT {
+  kMenuCmdHideShow = 1,
+  kMenuCmdQuit = 2,
+};
+
+HWND tray_hwnd = nullptr;
+HMENU tray_menu = nullptr;
+NOTIFYICONDATAW tray_icon_data = {};
+HICON tray_icon = nullptr;
+bool is_hidden = false;
+
+HICON MakeTrayIcon(int size) {
+  static auto large = PersistentImage::MakeFromAsset(embedded::docs_assets_favicon_184_png);
+
+  BITMAPV5HEADER bi = {};
+  bi.bV5Size = sizeof(BITMAPV5HEADER);
+  bi.bV5Width = size;
+  bi.bV5Height = -size;  // negative = top-down DIB
+  bi.bV5Planes = 1;
+  bi.bV5BitCount = 32;
+  bi.bV5Compression = BI_BITFIELDS;
+  bi.bV5RedMask = 0x00FF0000;
+  bi.bV5GreenMask = 0x0000FF00;
+  bi.bV5BlueMask = 0x000000FF;
+  bi.bV5AlphaMask = 0xFF000000;
+
+  HDC screen_dc = GetDC(nullptr);
+  void* dib_bits = nullptr;
+  HBITMAP color_bmp = CreateDIBSection(screen_dc, reinterpret_cast<BITMAPINFO*>(&bi),
+                                       DIB_RGB_COLORS, &dib_bits, nullptr, 0);
+  ReleaseDC(nullptr, screen_dc);
+  if (!color_bmp || !dib_bits) {
+    if (color_bmp) DeleteObject(color_bmp);
+    return nullptr;
+  }
+
+  auto image_info = SkImageInfo::Make(size, size, kBGRA_8888_SkColorType, kUnpremul_SkAlphaType);
+  SkPixmap sk_pixmap(image_info, dib_bits, size * 4);
+  auto sampling_options = SkSamplingOptions(SkCubicResampler::CatmullRom());
+  (*large.image)->scalePixels(sk_pixmap, sampling_options);
+
+  HBITMAP mask_bmp = CreateBitmap(size, size, 1, 1, nullptr);
+
+  ICONINFO icon_info = {};
+  icon_info.fIcon = TRUE;
+  icon_info.hbmColor = color_bmp;
+  icon_info.hbmMask = mask_bmp;
+  HICON icon = CreateIconIndirect(&icon_info);
+
+  DeleteObject(color_bmp);
+  DeleteObject(mask_bmp);
+  return icon;
+}
+
+void ToggleHideShow() {
+  if (is_hidden) {
+    ui::root_widget->RestoreFromTray();
+    is_hidden = false;
+  } else {
+    ui::root_widget->MinimizeToTray();
+    is_hidden = true;
+  }
+}
+
+LRESULT CALLBACK TrayWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+  if (uMsg == kTrayCallbackMessage) {
+    UINT event = LOWORD(lParam);
+    switch (event) {
+      case NIN_SELECT:
+      case NIN_KEYSELECT:
+        ToggleHideShow();
+        return 0;
+      case WM_CONTEXTMENU:
+      case WM_RBUTTONUP: {
+        POINT pt;
+        GetCursorPos(&pt);
+        ModifyMenuW(tray_menu, kMenuCmdHideShow, MF_BYCOMMAND | MF_STRING, kMenuCmdHideShow,
+                    is_hidden ? L"Show" : L"Hide");
+        // TrackPopupMenu requires the owning window to be the foreground window, otherwise the
+        // menu won't dismiss when the user clicks elsewhere.
+        SetForegroundWindow(hwnd);
+        UINT cmd = TrackPopupMenu(tray_menu,
+                                  TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN,
+                                  pt.x, pt.y, 0, hwnd, nullptr);
+        PostMessageW(hwnd, WM_NULL, 0, 0);  // workaround for the menu not dismissing cleanly
+        if (cmd == kMenuCmdHideShow) {
+          ToggleHideShow();
+        } else if (cmd == kMenuCmdQuit) {
+          stop_source.request_stop();
+          PostQuitMessage(0);
+        }
+        return 0;
+      }
+    }
+    return 0;
+  }
+  if (uMsg == WM_DESTROY) {
+    if (tray_icon_data.cbSize != 0) {
+      Shell_NotifyIconW(NIM_DELETE, &tray_icon_data);
+      tray_icon_data.cbSize = 0;
+    }
+    return 0;
+  }
+  return DefWindowProcW(hwnd, uMsg, wParam, lParam);
+}
+
+}  // namespace
+
+void InitSystemTray() {
+  HINSTANCE hinstance = GetInstance();
+  static const wchar_t kTrayClassName[] = L"AutomatSystemTray";
+
+  WNDCLASSEXW wc = {};
+  wc.cbSize = sizeof(wc);
+  wc.lpfnWndProc = TrayWndProc;
+  wc.hInstance = hinstance;
+  wc.lpszClassName = kTrayClassName;
+  if (!RegisterClassExW(&wc)) {
+    ERROR << "Failed to register system tray window class: " << GetLastError();
+    return;
+  }
+
+  tray_hwnd = CreateWindowExW(0, kTrayClassName, L"Automat Tray", 0, 0, 0, 0, 0, HWND_MESSAGE,
+                              nullptr, hinstance, nullptr);
+  if (!tray_hwnd) {
+    ERROR << "Failed to create system tray message window: " << GetLastError();
+    return;
+  }
+
+  tray_menu = CreatePopupMenu();
+  if (tray_menu) {
+    AppendMenuW(tray_menu, MF_STRING, kMenuCmdHideShow, L"Hide");
+    AppendMenuW(tray_menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(tray_menu, MF_STRING, kMenuCmdQuit, L"Quit");
+  }
+
+  tray_icon = MakeTrayIcon(GetSystemMetrics(SM_CXSMICON));
+
+  tray_icon_data.cbSize = sizeof(tray_icon_data);
+  tray_icon_data.hWnd = tray_hwnd;
+  tray_icon_data.uID = kTrayIconId;
+  tray_icon_data.uFlags = NIF_MESSAGE | NIF_TIP | (tray_icon ? NIF_ICON : 0);
+  tray_icon_data.uCallbackMessage = kTrayCallbackMessage;
+  tray_icon_data.hIcon = tray_icon;
+  wcsncpy_s(tray_icon_data.szTip, L"Automat", _TRUNCATE);
+
+  if (!Shell_NotifyIconW(NIM_ADD, &tray_icon_data)) {
+    ERROR << "Failed to add system tray icon: " << GetLastError();
+    tray_icon_data.cbSize = 0;
+    return;
+  }
+  tray_icon_data.uVersion = NOTIFYICON_VERSION_4;
+  Shell_NotifyIconW(NIM_SETVERSION, &tray_icon_data);
+}
+
+#else   // NOT __linux__ and NOT _WIN32
 void InitSystemTray() {}
 #endif  // __linux__
 

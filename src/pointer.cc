@@ -247,7 +247,7 @@ Vec2 Pointer::PositionWithin(const Widget& widget) const {
   return Vec2(transform_down.mapPoint(pointer_position));
 }
 Vec2 Pointer::PositionWithinRootBoard() const {
-  auto* mw = root_widget.toys.FindOrNull(*root_board);
+  auto* mw = root_widget.toys.FindOrNull(*vm.root_board);
   if (!mw) return pointer_position;
   SkMatrix transform_down = TransformDown(*mw);
   return Vec2(transform_down.mapPoint(pointer_position));
@@ -342,7 +342,7 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
     }
   };
   // Note: this could only iterate over visible locations
-  for (auto& loc : root_board->locations) {
+  for (auto& loc : vm.root_board->locations) {
     auto& obj = *loc->object;
     if (!loc->widget || !loc->widget->toy) continue;
     HighlightCheck(obj, *loc->widget->toy, nullptr);

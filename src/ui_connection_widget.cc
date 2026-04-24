@@ -190,7 +190,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     canvas.drawTextBlob(text_blob, 0, 0, text_paint);
     canvas.restore();
 
-    auto* mw = ToyStore().FindOrNull(*root_board);
+    auto* mw = ToyStore().FindOrNull(*vm.root_board);
     if (mw) {
       mw->NearbyCandidates(
           from, *arg.table, autoconnect_radius * 2 + 10_cm,
@@ -240,7 +240,7 @@ struct ConnectionWidgetLocker {
   // Computing everything in initializer avoids zero-initialization
   ConnectionWidgetLocker(ConnectionWidget& w)
       : toy_store(w.ToyStore()),
-        board_widget(toy_store.FindOrNull(*root_board)),
+        board_widget(toy_store.FindOrNull(*vm.root_board)),
         start_obj(w.LockOwner<Object>()),
         start_arg(start_obj ? w.Bind<Argument>(*start_obj) : nullptr),
         start_widget(start_obj ? toy_store.FindOrNull(*start_obj) : nullptr),
@@ -395,7 +395,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   if (state) {
     if (state->stabilized && !state->stabilized_end.has_value()) {
       auto& toy = *a.start_widget;
-      auto* mw = ToyStore().FindOrNull(*root_board);
+      auto* mw = ToyStore().FindOrNull(*vm.root_board);
 
       auto pos_dir = this->pos_dir;
       state->stabilized_start = pos_dir.pos;
@@ -537,7 +537,7 @@ DragConnectionAction::~DragConnectionAction() {
   } else {
     return;
   }
-  auto* mw = pointer.root_widget.toys.FindOrNull(*root_board);
+  auto* mw = pointer.root_widget.toys.FindOrNull(*vm.root_board);
   if (mw) {
     mw->ConnectAtPoint(arg, pos);
   }

@@ -1096,7 +1096,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(ui::Pointer& p,
       auto obj = instruction_helix.front().instruction->Clone();
       auto& toy = p.root_widget.toys.FindOrMake(*obj, this);
       toy.local_to_parent.setTranslate(kFrontInstructionRect.left, kFrontInstructionRect.bottom);
-      auto loc = MAKE_PTR(Location, root_location);
+      auto loc = MAKE_PTR(Location, vm.root_location);
       loc->InsertHere(std::move(obj));
       audio::Play(embedded::assets_SFX_toolbar_pick_wav);
       return std::make_unique<DragLocationAction>(p, std::move(loc));

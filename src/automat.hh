@@ -4,15 +4,14 @@
 
 #include <thread>
 
-#include "base.hh"
+#include "base.hh"  // IWYU pragma: export
+#include "vm.hh"    // IWYU pragma: export
 
 // High-level automat code.
 
 namespace automat {
 
 extern std::stop_source stop_source;
-extern Ptr<Location> root_location;
-extern Ptr<Board> root_board;
 
 extern std::thread::id main_thread_id;
 

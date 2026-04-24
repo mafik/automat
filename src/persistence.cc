@@ -31,7 +31,7 @@ void SaveState(ui::RootWidget& root_widget, Status& status) {
 
   writer.assigned_names.emplace("version");
   writer.assigned_names.emplace("window");
-  writer.Serialize(*root_board);
+  writer.Serialize(*vm.root_board);
 
   writer.EndObject();
   writer.Flush();
@@ -76,11 +76,11 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
             lookahead.Get(type, status);
             if (OK(status)) {
               if (type == "Board") {
-                d.RegisterObject(key, *root_board);
+                d.RegisterObject(key, *vm.root_board);
               } else {
                 auto proto = prototypes->Find(type);
                 if (proto == nullptr) {
-                  root_board->ReportError(f("Unknown object type: {}", type));
+                  vm.root_board->ReportError(f("Unknown object type: {}", type));
                 } else {
                   auto object = proto->Clone();
                   object->inhibit_sync_notifications = true;
@@ -141,7 +141,7 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
   }
 
   // Objects may have been rendered in their incomplete state - re-render them all.
-  for (auto& loc : root_board->locations) {
+  for (auto& loc : vm.root_board->locations) {
     loc->WakeToys();
   }
 

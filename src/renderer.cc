@@ -41,6 +41,7 @@
 #include "thread_name.hh"
 #include "time.hh"
 #include "vk.hh"
+#include "vm.hh"
 #include "widget.hh"
 
 // TODO: replace `root_canvas` with surface properties
@@ -697,6 +698,13 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       Rect::MakeAtZero<LeftX, BottomY>(Round(rw.size * rw.display_pixels_per_meter))
           .Outset(64);  // 64px margin around screen
   rw.ValidateHierarchy();
+  {
+    uint32_t current = vm.wake_counter.load(std::memory_order_relaxed);
+    if (current != rw.observed_vm_wake_counter) {
+      rw.observed_vm_wake_counter = current;
+      rw.WakeAnimationAt(now);
+    }
+  }
   rw.toys.Tick(rw.timer);
 
   enum class Verdict {

@@ -458,12 +458,12 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
     children_tmp.push_back(&zoom_warning);
 
     // Then flatten the Object Toys stored by the Boards
-    for (auto& loc : root_board->locations) {
+    for (auto& loc : vm.root_board->locations) {
       VisitObject(*loc->object);
     }
 
     // At the very end - add the board widget
-    auto& board_widget = toys.FindOrMake(*root_board, this);
+    auto& board_widget = toys.FindOrMake(*vm.root_board, this);
     board_widget.local_to_parent = canvas_to_window44;
     children_tmp.push_back(&board_widget);
 
@@ -777,7 +777,7 @@ SkPath RootWidget::TrashShape() const {
 }
 
 SkMatrix RootWidget::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point) {
-  auto* mw = toys.FindOrNull(*root_board);
+  auto* mw = toys.FindOrNull(*vm.root_board);
   Rect board_bounds = mw ? Rect(mw->Shape().getBounds()) : Rect{};
 
   SkMatrix matrix;

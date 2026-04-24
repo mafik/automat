@@ -301,7 +301,7 @@ Ptr<Location> Assembler::Extract(Object& descendant) {
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     auto* reg = reg_objects_idx[i].get();
     if (reg != &descendant) continue;
-    auto loc = MAKE_PTR(Location, root_location);
+    auto loc = MAKE_PTR(Location, vm.root_location);
     loc->InsertHere(reg_objects_idx[i].borrow());
     audio::Play(embedded::assets_SFX_toolbar_pick_wav);
     WakeToys();
@@ -583,7 +583,7 @@ void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
   }
 }
 SkMatrix AssemblerWidget::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point) {
-  auto* mw = ToyStore().FindOrNull(*root_board);
+  auto* mw = ToyStore().FindOrNull(*vm.root_board);
   auto local_to_machine = mw ? TransformBetween(*this, *mw) : SkMatrix::I();
   auto my_rect = kRRect.rect.Outset(-2 * kFlatBorderWidth);
   local_to_machine.mapRect(&my_rect.sk);

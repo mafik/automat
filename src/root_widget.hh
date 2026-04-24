@@ -183,6 +183,8 @@ struct RootWidget final : Widget, DropTarget {
 
   Vec<Widget*> children;
 
+  uint32_t observed_vm_wake_counter = 0;
+
   std::mutex mutex;
 };
 

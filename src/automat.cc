@@ -36,8 +36,6 @@ using namespace automat::ui;
 namespace automat {
 
 std::stop_source stop_source;
-Ptr<Location> root_location;
-Ptr<Board> root_board;
 
 std::thread::id main_thread_id;
 
@@ -68,8 +66,8 @@ int Main() {
   root_widget = make_unique<RootWidget>();
   root_widget->Init();
 
-  root_location = MAKE_PTR(Location);
-  root_board = root_location->Create<Board>();
+  vm.root_location = MAKE_PTR(Location);
+  vm.root_board = vm.root_location->Create<Board>();
   StartTimeThread(stop_source.get_token());
 
   InitSystemTray();
@@ -100,11 +98,11 @@ int Main() {
     ERROR << "Failed to save state: " << status;
   }
 
-  root_board->locations.clear();
+  vm.root_board->locations.clear();
 
   root_widget.reset();
-  root_board.reset();
-  root_location.reset();
+  vm.root_board.reset();
+  vm.root_location.reset();
 
   prototypes.reset();
 

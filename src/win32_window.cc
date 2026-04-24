@@ -603,7 +603,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     case automat::kSystemTrayMessage: {
       int x = static_cast<int16_t>(LOWORD(wParam));
       int y = static_cast<int16_t>(HIWORD(wParam));
-      automat::OnSystemTrayMessage(LOWORD(lParam), x, y);
+      automat::OnSystemTrayMessage(LOWORD(lParam), x, y, HIWORD(lParam));
       break;
     }
     default:

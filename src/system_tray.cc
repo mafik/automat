@@ -2,17 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 #ifdef _WIN32
-// Include before anything else so that windows.h is first seen with NOGDI undefined; otherwise
-// some earlier include (e.g. root_widget.hh) would load windows.h with GDI disabled and the
-// later re-include would be a no-op.
 #include "win32.hh"
 #include "win32_window.hh"
 #pragma push_macro("ERROR")
 #include <shellapi.h>
 #pragma pop_macro("ERROR")
 #pragma comment(lib, "shell32.lib")
-
-#include "system_tray.hh"
 #endif  // _WIN32
 
 #include "root_widget.hh"
@@ -31,19 +26,26 @@
 #include <include/core/SkPixmap.h>
 
 #include <bit>
-#include <vector>
+#include <map>
 
 #include "automat.hh"
-#include "embedded.hh"
 #include "format.hh"
+#include "id_pool.hh"
 #include "log.hh"
-#include "textures.hh"
+#include "system_tray.hh"
 
 namespace automat {
 
-#ifdef __linux__
+namespace {
 
-constexpr bool kDebugDBus = false;
+IdPool& IconUidPool() {
+  static IdPool pool(1, 0x10000);
+  return pool;
+}
+
+}  // namespace
+
+#ifdef __linux__
 
 using std::map;
 using std::string;
@@ -54,65 +56,40 @@ using namespace sdbus;
 const ObjectPath kStatusNotifierPath{"/StatusNotifierItem"};
 const ObjectPath kMenuPath{"/MenuBar"};
 
-//////////////////////////////////
-/// org.kde.StatusNotifierWatcher proxy
-//////////////////////////////////
-
-class StatusNotifierWatcher final : public ProxyInterfaces<org::kde::StatusNotifierWatcher_proxy> {
+class StatusNotifierWatcherProxy final
+    : public ProxyInterfaces<org::kde::StatusNotifierWatcher_proxy> {
  public:
-  StatusNotifierWatcher(IConnection& connection)
+  StatusNotifierWatcherProxy(IConnection& connection)
       : ProxyInterfaces(connection, ServiceName{"org.kde.StatusNotifierWatcher"},
                         ObjectPath{"/StatusNotifierWatcher"}) {
     registerProxy();
   }
-
-  ~StatusNotifierWatcher() { unregisterProxy(); }
+  ~StatusNotifierWatcherProxy() { unregisterProxy(); }
 
  protected:
-  void onStatusNotifierItemRegistered(const string& item) override {
-    LOG << "StatusNotifierWatcher::onStatusNotifierItemRegistered(" << item << ")";
-  }
-  void onStatusNotifierItemUnregistered(const string& item) override {
-    LOG << "StatusNotifierWatcher::onStatusNotifierItemUnregistered(" << item << ")";
-  }
-  void onStatusNotifierHostRegistered() override {
-    LOG << "StatusNotifierWatcher::onStatusNotifierHostRegistered()";
-  }
+  void onStatusNotifierItemRegistered(const string& item) override {}
+  void onStatusNotifierItemUnregistered(const string& item) override {}
+  void onStatusNotifierHostRegistered() override {}
 };
 
-/////////////////////////////////////////
-/// org.kde.StatusNotifierItem adaptor
-/////////////////////////////////////////
-
 class StatusNotifierItem final : public AdaptorInterfaces<org::kde::StatusNotifierItem_adaptor> {
-  // Icon pixmap type: (width, height, ARGB32 data)
   using IconPixmap_t = Struct<int32_t, int32_t, vector<uint8_t>>;
   using IconPixmapList = vector<IconPixmap_t>;
 
-  // Tooltip type: (icon_name, icon_pixmaps, title, description)
-  using Tooltip = std::tuple<string, IconPixmapList, string, string>;
+  string title;
+  IconPixmapList icon_pixmaps;
+  Fn<void()> on_activate;
 
  public:
-  StatusNotifierItem(IConnection& connection) : AdaptorInterfaces(connection, kStatusNotifierPath) {
-    registerAdaptor();
-  }
-  ~StatusNotifierItem() { unregisterAdaptor(); }
-
- protected:
-  // Property getters
-  string Category() override { return "ApplicationStatus"; }
-  string Id() override { return "automat"; }
-  string Title() override { return "Automat"; }
-  string Status() override { return "Active"; }
-  uint32_t WindowId() override { return 0; }
-  string IconName() override { return ""; }
-  IconPixmapList IconPixmap() override {
-    static IconPixmapList icon_pixmaps = []() {
-      IconPixmapList pixmaps;
-      static auto large = PersistentImage::MakeFromAsset(embedded::docs_assets_favicon_184_png);
+  StatusNotifierItem(IConnection& connection, string title, const sk_sp<SkImage>& image,
+                     Fn<void()> on_activate)
+      : AdaptorInterfaces(connection, kStatusNotifierPath),
+        title(std::move(title)),
+        on_activate(std::move(on_activate)) {
+    if (image) {
       auto sampling_options = SkSamplingOptions(SkCubicResampler::CatmullRom());
       for (int size : {16, 22, 24, 32, 48, 64}) {
-        IconPixmap_t& dbus_pixmap = pixmaps.emplace_back();
+        IconPixmap_t& dbus_pixmap = icon_pixmaps.emplace_back();
         dbus_pixmap.get<0>() = size;
         dbus_pixmap.get<1>() = size;
         dbus_pixmap.get<2>() = vector<uint8_t>(size * size * 4);
@@ -120,63 +97,45 @@ class StatusNotifierItem final : public AdaptorInterfaces<org::kde::StatusNotifi
         auto image_info = SkImageInfo::Make(size, size, SkColorType::kRGBA_8888_SkColorType,
                                             kUnpremul_SkAlphaType);
         SkPixmap sk_pixmap(image_info, vec.data(), size * 4);
-        (*large.image)->scalePixels(sk_pixmap, sampling_options);
+        image->scalePixels(sk_pixmap, sampling_options);
         for (int i = 0; i < size * size; ++i) {
           U32* pixel = (U32*)(vec.data() + i * 4);
-          *pixel = std::rotl(*pixel, 8);  // Convert RGBA to ARGB
+          *pixel = std::rotl(*pixel, 8);
         }
       }
-      return pixmaps;
-    }();
-    return icon_pixmaps;
+    }
+    registerAdaptor();
   }
+  ~StatusNotifierItem() { unregisterAdaptor(); }
+
+ protected:
+  string Category() override { return "ApplicationStatus"; }
+  string Id() override { return "automat"; }
+  string Title() override { return title; }
+  string Status() override { return "Active"; }
+  uint32_t WindowId() override { return 0; }
+  string IconName() override { return ""; }
+  IconPixmapList IconPixmap() override { return icon_pixmaps; }
   string OverlayIconName() override { return ""; }
   IconPixmapList OverlayIconPixmap() override { return {}; }
   string AttentionIconName() override { return ""; }
   IconPixmapList AttentionIconPixmap() override { return {}; }
   string AttentionMovieName() override { return ""; }
-  Struct<string, IconPixmapList, string, string> ToolTip() override {
-    // icon name, icon pixmaps, title, description
-    return {"", {}, "Automat", ""};
-  }
+  Struct<string, IconPixmapList, string, string> ToolTip() override { return {"", {}, title, ""}; }
   bool ItemIsMenu() override { return false; }
   ObjectPath Menu() override { return kMenuPath; }
 
-  // Methods
-  void ContextMenu(const int32_t& x, const int32_t& y) override {
-    LOG << "StatusNotifierItem::ContextMenu(" << x << ", " << y << ")";
-  }
+  void ContextMenu(const int32_t& x, const int32_t& y) override {}
   void Activate(const int32_t& x, const int32_t& y) override {
-    LOG << "StatusNotifierItem::Activate(" << x << ", " << y << ")";
+    if (on_activate) on_activate();
   }
-  void SecondaryActivate(const int32_t& x, const int32_t& y) override {
-    // Invoked when user middle-clicks on the tray icon.
-    if constexpr (kDebugDBus) {
-      LOG << "StatusNotifierItem::SecondaryActivate(" << x << ", " << y << ")";
-    }
-  }
-  void Scroll(const int32_t& delta, const string& orientation) override {
-    // Invoked when user scrolls over the tray icon.
-    if constexpr (kDebugDBus) {
-      LOG << "StatusNotifierItem::Scroll(" << delta << ", " << orientation << ")";
-    }
-  }
+  void SecondaryActivate(const int32_t& x, const int32_t& y) override {}
+  void Scroll(const int32_t& delta, const string& orientation) override {}
 };
 
-////////////////////////////////////////
-/// com.canonical.dbusmenu adaptor
-////////////////////////////////////////
-
-// Menu item properties
-struct MenuItemProperties {
-  string type{"standard"};  // "standard" or "separator"
+struct DBusMenuItem {
+  string type{"standard"};
   string label;
-  bool enabled{true};
-  bool visible{true};
-  string icon_name;
-  int toggle_state = -1;  // 1, 0, or -1
-  string toggle_type;     // "checkmark", "radio" or ""
-  string shortcut;
   vector<int32_t> child_ids;
   std::function<void()> on_click;
 };
@@ -186,117 +145,84 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
   using LayoutItem = Struct<int32_t, PropertyMap, vector<Variant>>;
 
   uint32_t revision{0};
-  vector<MenuItemProperties> items;
+  vector<DBusMenuItem> items;
 
  public:
-  DBusMenu(IConnection& connection) : AdaptorInterfaces(connection, kMenuPath) {
+  DBusMenu(IConnection& connection, const system_tray::Menu& root)
+      : AdaptorInterfaces(connection, kMenuPath) {
+    Populate(root);
     registerAdaptor();
-    items.push_back({});  // Root item
-    items.push_back(
-        {.type = "standard",
-         .label = "Hide",
-         .icon_name = "view-conceal-symbolic",
-         .on_click = [this]() {
-           auto& item = items[1];
-           if (item.label == "Hide") {
-             ui::root_widget->MinimizeToTray();
-             item.label = "Show";
-             item.icon_name = "view-reveal-symbolic";
-             emitItemsPropertiesUpdated(
-                 {{1, {{"label", Variant(item.label)}, {"icon-name", Variant(item.icon_name)}}}},
-                 {});
-           } else {
-             ui::root_widget->RestoreFromTray();
-             item.label = "Hide";
-             item.icon_name = "view-conceal-symbolic";
-             emitItemsPropertiesUpdated(
-                 {{1, {{"label", Variant(item.label)}, {"icon-name", Variant(item.icon_name)}}}},
-                 {});
-           }
-         }});
-    items.push_back({.type = "separator", .label = "", .icon_name = "", .shortcut = ""});
-    items.push_back({.type = "standard",
-                     .label = "Quit",
-                     .icon_name = "application-exit-symbolic",
-                     .on_click = []() { stop_source.request_stop(); }});
-    items[0].child_ids.push_back(1);
-    items[0].child_ids.push_back(2);
-    items[0].child_ids.push_back(3);
   }
   ~DBusMenu() { unregisterAdaptor(); }
 
- protected:
-  // Property getters
-  uint32_t Version() override {
-    return 3;  // DBusMenu protocol version
+  void Rebuild(const system_tray::Menu& root) {
+    Populate(root);
+    revision++;
+    emitLayoutUpdated(revision, 0);
   }
+
+ private:
+  int32_t Add(const system_tray::MenuItem& node) {
+    int32_t id = (int32_t)items.size();
+    items.emplace_back();
+    switch (node.kind) {
+      case system_tray::MenuItem::Spacer:
+        items[id].type = "separator";
+        break;
+      case system_tray::MenuItem::Action: {
+        auto& a = static_cast<const system_tray::Action&>(node);
+        items[id].label = a.name;
+        items[id].on_click = a.on_click;
+        break;
+      }
+      case system_tray::MenuItem::Menu: {
+        auto& m = static_cast<const system_tray::Menu&>(node);
+        items[id].label = m.name;
+        for (auto* child : m.items) {
+          int32_t child_id = Add(*child);
+          items[id].child_ids.push_back(child_id);
+        }
+        break;
+      }
+    }
+    return id;
+  }
+
+  void Populate(const system_tray::Menu& root) {
+    items.clear();
+    items.push_back({});
+    for (auto* child : root.items) {
+      int32_t child_id = Add(*child);
+      items[0].child_ids.push_back(child_id);
+    }
+  }
+
+ protected:
+  uint32_t Version() override { return 3; }
   string TextDirection() override { return "ltr"; }
   string Status() override { return "normal"; }
   vector<string> IconThemePath() override { return {}; }
 
-  static PropertyMap GetPropertiesForItem(const MenuItemProperties& item,
-                                          const vector<string>& propertyNames) {
+  static PropertyMap PropertiesFor(const DBusMenuItem& item, const vector<string>& names) {
     PropertyMap props;
-
-    bool all = propertyNames.empty();
-
-    if constexpr (kDebugDBus) {
-      for (auto& prop_name : propertyNames) {
-        LOG << "Requested " << prop_name;
-      }
-      if (all) {
-        LOG << "Requested ALL";
-      }
-    }
-
-    auto shouldInclude = [&](const std::string& name) {
-      return all ||
-             std::find(propertyNames.begin(), propertyNames.end(), name) != propertyNames.end();
+    bool all = names.empty();
+    auto want = [&](const std::string& n) {
+      return all || std::find(names.begin(), names.end(), n) != names.end();
     };
-
-    if (shouldInclude("type") && item.type != "standard") {
-      props["type"] = sdbus::Variant(item.type);
-    }
-    if (shouldInclude("label") && !item.label.empty()) {
-      props["label"] = sdbus::Variant(item.label);
-    }
-    if (shouldInclude("enabled") && !item.enabled) {
-      props["enabled"] = sdbus::Variant(item.enabled);
-    }
-    if (shouldInclude("visible") && !item.visible) {
-      props["visible"] = sdbus::Variant(item.visible);
-    }
-    if (shouldInclude("icon-name") && !item.icon_name.empty()) {
-      props["icon-name"] = sdbus::Variant(item.icon_name);
-    }
-    if (shouldInclude("toggle-state") && item.toggle_state != -1) {
-      props["toggle-state"] = sdbus::Variant(item.toggle_state);
-    }
-    if (shouldInclude("toggle-type")) {
-      props["toggle-type"] = sdbus::Variant(item.toggle_type);
-    }
-    if (shouldInclude("shortcut") && !item.shortcut.empty()) {
-      // Shortcut format: array of array of strings
-      std::vector<std::vector<std::string>> shortcut = {{item.shortcut}};
-      props["shortcut"] = sdbus::Variant(shortcut);
-    }
-    if (shouldInclude("children-display") && !item.child_ids.empty()) {
-      props["children-display"] = sdbus::Variant(std::string("submenu"));
-    }
-
+    if (want("type") && item.type != "standard") props["type"] = Variant(item.type);
+    if (want("label") && !item.label.empty()) props["label"] = Variant(item.label);
+    if (want("children-display") && !item.child_ids.empty())
+      props["children-display"] = Variant(std::string("submenu"));
     return props;
   }
 
   tuple<uint32_t, LayoutItem> GetLayout(const int32_t& parent_id, const int32_t& depth,
                                         const vector<string>& property_names) override {
-    if constexpr (kDebugDBus) {
-      LOG << "DBusMenu::GetLayout(" << parent_id << ", " << depth << ")";
-    }
     PropertyMap props;
     vector<Variant> children;
-    if (parent_id < items.size()) {
+    if (parent_id < (int32_t)items.size()) {
       auto& item = items[parent_id];
-      props = GetPropertiesForItem(item, property_names);
+      props = PropertiesFor(item, property_names);
       if (depth != 0) {
         for (auto child_id : item.child_ids) {
           auto [_, child] = GetLayout(child_id, depth - 1, property_names);
@@ -311,36 +237,26 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
       const vector<int32_t>& ids, const vector<string>& property_names) override {
     vector<Struct<int32_t, PropertyMap>> result;
     for (int32_t id : ids) {
-      if (id < items.size()) {
-        result.push_back({id, GetPropertiesForItem(items[id], property_names)});
+      if (id < (int32_t)items.size()) {
+        result.push_back({id, PropertiesFor(items[id], property_names)});
       }
     }
     return result;
   }
 
   Variant GetProperty(const int32_t& id, const string& name) override {
-    if (id >= items.size()) {
-      auto props = GetPropertiesForItem(items[id], {name});
-      if (props.contains(name)) {
-        return props[name];
-      }
+    if (id < (int32_t)items.size()) {
+      auto props = PropertiesFor(items[id], {name});
+      if (props.contains(name)) return props[name];
     }
     return Variant(string(""));
   }
 
   void Event(const int32_t& id, const string& event_id, const Variant& data,
              const uint32_t& timestamp) override {
-    if (event_id == "opened" || event_id == "closed") {
-      return;  // Irrelevant for us
+    if (event_id == "clicked" && id < (int32_t)items.size() && items[id].on_click) {
+      items[id].on_click();
     }
-    if (event_id == "clicked") {
-      if (items[id].on_click) {
-        items[id].on_click();
-      }
-      return;
-    }
-    LOG << "DBusMenu::Event(" << id << ", " << event_id << ", " << data.peekValueType() << ", "
-        << timestamp << ")";
   }
 
   vector<int32_t> EventGroup(
@@ -352,67 +268,73 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
   }
 
   bool AboutToShow(const int32_t& id) override { return false; }
-
-  tuple<vector<int32_t>, vector<int32_t>> AboutToShowGroup(const vector<int32_t>& ids) override {
-    std::vector<int32_t> needs_update;
-    std::vector<int32_t> errors;
-
-    for (int32_t id : ids) {
-      if (id < items.size()) {
-        if (AboutToShow(id)) {
-          needs_update.push_back(id);
-        }
-      } else {
-        errors.push_back(id);
-      }
-    }
-
-    return {needs_update, errors};
+  tuple<vector<int32_t>, vector<int32_t>> AboutToShowGroup(const vector<int32_t>&) override {
+    return {{}, {}};
   }
 };
 
-std::unique_ptr<IConnection> dbus_connection;
+namespace system_tray {
 
-std::unique_ptr<DBusMenu> system_tray_menu;
-std::unique_ptr<StatusNotifierItem> status_notifier_item;
+struct Icon::Impl {
+  IdPool::Handle uid;
+  std::unique_ptr<IConnection> connection;
+  std::unique_ptr<DBusMenu> menu;
+  std::unique_ptr<StatusNotifierItem> sni;
+  Impl(IdPool& pool) : uid(pool) {}
+};
 
-void InitSystemTray() {
-  pid_t pid = getpid();
-  auto service_name = f("org.automat.pid-{}", pid);
-  dbus_connection = createSessionBusConnection(ServiceName{service_name});
-
-  system_tray_menu = std::make_unique<DBusMenu>(*dbus_connection);
-  status_notifier_item = std::make_unique<StatusNotifierItem>(*dbus_connection);
-  StatusNotifierWatcher status_notifier_watcher{*dbus_connection};
-  status_notifier_watcher.RegisterStatusNotifierItem(service_name);
-
-  dbus_connection->enterEventLoopAsync();
+Icon::Icon(const Menu& root_menu, Fn<void()> on_activate)
+    : impl(std::make_unique<Impl>(IconUidPool())) {
+  auto service_name = f("org.automat.pid-{}-{}", getpid(), impl->uid.id);
+  impl->connection = createSessionBusConnection(ServiceName{service_name});
+  impl->menu = std::make_unique<DBusMenu>(*impl->connection, root_menu);
+  impl->sni = std::make_unique<StatusNotifierItem>(*impl->connection, root_menu.name,
+                                                   root_menu.icon, std::move(on_activate));
+  StatusNotifierWatcherProxy watcher{*impl->connection};
+  watcher.RegisterStatusNotifierItem(service_name);
+  impl->connection->enterEventLoopAsync();
 }
+
+Icon::~Icon() = default;
+
+void Icon::Update(const Menu& root_menu, Fn<void()> on_activate) {
+  if (!impl || !impl->menu) return;
+  impl->menu->Rebuild(root_menu);
+  // StatusNotifierItem's on_activate can't be swapped without reregistering; accepted as a
+  // no-op for now since the tooltip/icon are also not updated on Linux yet.
+  (void)on_activate;
+}
+
+}  // namespace system_tray
+
 #elif defined(_WIN32)
 
 namespace {
 
-constexpr UINT kTrayIconId = 1;
+std::map<UINT, system_tray::Icon::Impl*>& IconsByUid() {
+  static std::map<UINT, system_tray::Icon::Impl*> m;
+  return m;
+}
 
-enum TrayMenuCommand : UINT {
-  kMenuCmdHideShow = 1,
-  kMenuCmdQuit = 2,
-};
+HWND MainHwnd() {
+  return static_cast<Win32Window*>(ui::root_widget->window.get())->hwnd;
+}
 
-// Cached HWND of the main window
-HWND main_hwnd = nullptr;
-HMENU tray_menu = nullptr;
-NOTIFYICONDATAW tray_icon_data = {};
-HICON tray_icon = nullptr;
-bool is_hidden = false;
+std::wstring Utf8ToWide(StrView s) {
+  if (s.empty()) return {};
+  int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), nullptr, 0);
+  std::wstring w((size_t)n, L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), w.data(), n);
+  return w;
+}
 
-HICON MakeTrayIcon(int size) {
-  static auto large = PersistentImage::MakeFromAsset(embedded::docs_assets_favicon_184_png);
+HICON MakeHIcon(const sk_sp<SkImage>& image, int size) {
+  if (!image) return nullptr;
 
   BITMAPV5HEADER bi = {};
   bi.bV5Size = sizeof(BITMAPV5HEADER);
   bi.bV5Width = size;
-  bi.bV5Height = -size;  // negative = top-down DIB
+  bi.bV5Height = -size;
   bi.bV5Planes = 1;
   bi.bV5BitCount = 32;
   bi.bV5Compression = BI_BITFIELDS;
@@ -433,8 +355,7 @@ HICON MakeTrayIcon(int size) {
 
   auto image_info = SkImageInfo::Make(size, size, kBGRA_8888_SkColorType, kUnpremul_SkAlphaType);
   SkPixmap sk_pixmap(image_info, dib_bits, size * 4);
-  auto sampling_options = SkSamplingOptions(SkCubicResampler::CatmullRom());
-  (*large.image)->scalePixels(sk_pixmap, sampling_options);
+  image->scalePixels(sk_pixmap, SkSamplingOptions(SkCubicResampler::CatmullRom()));
 
   HBITMAP mask_bmp = CreateBitmap(size, size, 1, 1, nullptr);
 
@@ -449,86 +370,145 @@ HICON MakeTrayIcon(int size) {
   return icon;
 }
 
-void ToggleHideShow() {
-  if (is_hidden) {
-    ui::root_widget->RestoreFromTray();
-    is_hidden = false;
-  } else {
-    ui::root_widget->MinimizeToTray();
-    is_hidden = true;
+void BuildMenu(HMENU hmenu, const system_tray::Menu& menu, Vec<Fn<void()>>& handlers) {
+  for (auto* item : menu.items) {
+    switch (item->kind) {
+      case system_tray::MenuItem::Spacer:
+        AppendMenuW(hmenu, MF_SEPARATOR, 0, nullptr);
+        break;
+      case system_tray::MenuItem::Action: {
+        auto& a = *static_cast<system_tray::Action*>(item);
+        handlers.push_back(a.on_click);
+        UINT cmd = (UINT)handlers.size();
+        auto wide = Utf8ToWide(a.name);
+        AppendMenuW(hmenu, MF_STRING, cmd, wide.c_str());
+        break;
+      }
+      case system_tray::MenuItem::Menu: {
+        auto& m = *static_cast<system_tray::Menu*>(item);
+        HMENU sub = CreatePopupMenu();
+        BuildMenu(sub, m, handlers);
+        auto wide = Utf8ToWide(m.name);
+        AppendMenuW(hmenu, MF_POPUP, (UINT_PTR)sub, wide.c_str());
+        break;
+      }
+    }
   }
 }
 
 }  // namespace
 
-void OnSystemTrayMessage(unsigned event, int mouse_screen_x, int mouse_screen_y) {
+namespace system_tray {
+
+struct Icon::Impl {
+  IdPool::Handle uid;
+  HMENU hmenu = nullptr;
+  HICON hicon = nullptr;
+  Vec<Fn<void()>> action_handlers;
+  Fn<void()> on_activate;
+  NOTIFYICONDATAW data = {};
+
+  Impl(IdPool& pool) : uid(pool) {}
+};
+
+static int TraySize() { return GetSystemMetrics(SM_CXSMICON); }
+
+Icon::Icon(const Menu& root_menu, Fn<void()> on_activate)
+    : impl(std::make_unique<Impl>(IconUidPool())) {
+  IconsByUid()[(UINT)impl->uid.id] = impl.get();
+
+  impl->hmenu = CreatePopupMenu();
+  BuildMenu(impl->hmenu, root_menu, impl->action_handlers);
+  impl->on_activate = std::move(on_activate);
+  impl->hicon = MakeHIcon(root_menu.icon, TraySize());
+
+  auto& data = impl->data;
+  data.cbSize = sizeof(data);
+  data.hWnd = MainHwnd();
+  data.uID = (UINT)impl->uid.id;
+  data.uFlags = NIF_MESSAGE | NIF_TIP | (impl->hicon ? NIF_ICON : 0);
+  data.uCallbackMessage = kSystemTrayMessage;
+  data.hIcon = impl->hicon;
+  auto wide_tip = Utf8ToWide(root_menu.name);
+  wcsncpy_s(data.szTip, wide_tip.c_str(), _TRUNCATE);
+
+  if (!Shell_NotifyIconW(NIM_ADD, &data)) {
+    ERROR << "Failed to add system tray icon: " << GetLastError();
+    data.cbSize = 0;
+    return;
+  }
+  data.uVersion = NOTIFYICON_VERSION_4;
+  Shell_NotifyIconW(NIM_SETVERSION, &data);
+}
+
+Icon::~Icon() {
+  if (!impl) return;
+  if (impl->data.cbSize != 0) Shell_NotifyIconW(NIM_DELETE, &impl->data);
+  if (impl->hmenu) DestroyMenu(impl->hmenu);
+  if (impl->hicon) DestroyIcon(impl->hicon);
+  IconsByUid().erase((UINT)impl->uid.id);
+}
+
+void Icon::Update(const Menu& root_menu, Fn<void()> on_activate) {
+  if (!impl) return;
+  if (impl->hmenu) DestroyMenu(impl->hmenu);
+  impl->hmenu = CreatePopupMenu();
+  impl->action_handlers.clear();
+  BuildMenu(impl->hmenu, root_menu, impl->action_handlers);
+  impl->on_activate = std::move(on_activate);
+
+  HICON new_hicon = MakeHIcon(root_menu.icon, TraySize());
+  auto wide_tip = Utf8ToWide(root_menu.name);
+  auto& data = impl->data;
+  data.uFlags = NIF_MESSAGE | NIF_TIP | (new_hicon ? NIF_ICON : 0);
+  data.hIcon = new_hicon;
+  wcsncpy_s(data.szTip, wide_tip.c_str(), _TRUNCATE);
+  if (data.cbSize != 0) Shell_NotifyIconW(NIM_MODIFY, &data);
+
+  if (impl->hicon) DestroyIcon(impl->hicon);
+  impl->hicon = new_hicon;
+}
+
+}  // namespace system_tray
+
+void OnSystemTrayMessage(unsigned event, int mouse_x, int mouse_y, unsigned icon_uid) {
+  auto it = IconsByUid().find(icon_uid);
+  if (it == IconsByUid().end()) return;
+  auto& impl = *it->second;
   switch (event) {
     case NIN_SELECT:
     case NIN_KEYSELECT:
-      ToggleHideShow();
+      if (impl.on_activate) impl.on_activate();
       return;
     case WM_CONTEXTMENU:
     case WM_RBUTTONUP: {
-      if (!tray_menu || !main_hwnd) return;
-      ModifyMenuW(tray_menu, kMenuCmdHideShow, MF_BYCOMMAND | MF_STRING, kMenuCmdHideShow,
-                  is_hidden ? L"Show" : L"Hide");
-      // TrackPopupMenu requires the owning window to be the foreground window, otherwise the
-      // menu won't dismiss when the user clicks elsewhere. SetForegroundWindow is a no-op when
-      // the window is hidden, which matches what we want in the minimized-to-tray state.
-      SetForegroundWindow(main_hwnd);
-      UINT cmd = TrackPopupMenu(tray_menu,
-                                TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN,
-                                mouse_screen_x, mouse_screen_y, 0, main_hwnd, nullptr);
-      // Claude (possibly hallucinated) the following comment here:
-      // "Without this, TrackPopupMenu sometimes leaves the menu visible until the next event."
-      PostMessageW(main_hwnd, WM_NULL, 0, 0);
-      if (cmd == kMenuCmdHideShow) {
-        ToggleHideShow();
-      } else if (cmd == kMenuCmdQuit) {
-        stop_source.request_stop();
-        PostQuitMessage(0);
+      if (!impl.hmenu) return;
+      HWND hwnd = MainHwnd();
+      SetForegroundWindow(hwnd);
+      UINT cmd = TrackPopupMenu(
+          impl.hmenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN,
+          mouse_x, mouse_y, 0, hwnd, nullptr);
+      PostMessageW(hwnd, WM_NULL, 0, 0);
+      if (cmd >= 1 && cmd <= impl.action_handlers.size()) {
+        auto& fn = impl.action_handlers[cmd - 1];
+        if (fn) fn();
       }
       return;
     }
   }
 }
 
-void InitSystemTray() {
-  auto* win32_window = static_cast<Win32Window*>(ui::root_widget->window.get());
-  if (!win32_window || !win32_window->hwnd) {
-    ERROR << "Cannot initialize system tray: main window not created";
-    return;
-  }
-  main_hwnd = win32_window->hwnd;
+#else  // other platforms: no-op
 
-  tray_menu = CreatePopupMenu();
-  if (tray_menu) {
-    AppendMenuW(tray_menu, MF_STRING, kMenuCmdHideShow, L"Hide");
-    AppendMenuW(tray_menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(tray_menu, MF_STRING, kMenuCmdQuit, L"Quit");
-  }
+namespace system_tray {
 
-  tray_icon = MakeTrayIcon(GetSystemMetrics(SM_CXSMICON));
+struct Icon::Impl {};
+Icon::Icon(const Menu&, Fn<void()>) : impl(std::make_unique<Impl>()) {}
+Icon::~Icon() = default;
+void Icon::Update(const Menu&, Fn<void()>) {}
 
-  tray_icon_data.cbSize = sizeof(tray_icon_data);
-  tray_icon_data.hWnd = main_hwnd;
-  tray_icon_data.uID = kTrayIconId;
-  tray_icon_data.uFlags = NIF_MESSAGE | NIF_TIP | (tray_icon ? NIF_ICON : 0);
-  tray_icon_data.uCallbackMessage = kSystemTrayMessage;
-  tray_icon_data.hIcon = tray_icon;
-  wcsncpy_s(tray_icon_data.szTip, L"Automat", _TRUNCATE);
+}  // namespace system_tray
 
-  if (!Shell_NotifyIconW(NIM_ADD, &tray_icon_data)) {
-    ERROR << "Failed to add system tray icon: " << GetLastError();
-    tray_icon_data.cbSize = 0;
-    return;
-  }
-  tray_icon_data.uVersion = NOTIFYICON_VERSION_4;
-  Shell_NotifyIconW(NIM_SETVERSION, &tray_icon_data);
-}
-
-#else   // NOT __linux__ and NOT _WIN32
-void InitSystemTray() {}
-#endif  // __linux__
+#endif
 
 }  // namespace automat

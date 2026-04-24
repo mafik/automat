@@ -4,6 +4,7 @@
 
 #include <llvm/ADT/SmallVector.h>
 
+#include <algorithm>
 #include <vector>
 
 #include "span.hh"
@@ -57,6 +58,16 @@ struct Vec : std::vector<T> {
   //
   // Returns an iterator to the element after the removed element (which may be `end()`).
   iterator EraseIndex(int i) { return this->erase(this->begin() + i); }
+
+  // Inserts `value` into a sorted vector such that the vector remains sorted.
+  //
+  // `proj` is called on each element to extract the key used for comparison.
+  // The vector is expected to already be sorted by `proj(element)`.
+  template <typename Key, typename Proj = std::identity>
+  iterator InsertSorted(const Key& key, T value, Proj proj = {}) {
+    auto pos = std::ranges::upper_bound(*this, key, {}, proj);
+    return this->insert(pos, std::move(value));
+  }
 };
 
 template <typename T, typename... Args>

@@ -404,23 +404,16 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   // Create new register widgets for register objects that don't have a widget.
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     auto assembler_reg = assembler->reg_objects_idx[i].get();
-    // Now create a widget if needed.
     if (assembler_reg) {
       if (reg_widgets_idx[i] != nullptr) continue;
-      auto* register_widget = ToyStore().FindOrNull(*assembler_reg);
-      if (register_widget == nullptr) {
-        register_widget = &ToyStore().FindOrMake(*assembler_reg, this);
-        register_widget->local_to_parent = SkM44::Translate(0, 10_cm);
-      } else {
-        register_widget->Reparent(*this);
-      }
+      if (ToyStore().FindOrNull(*assembler_reg) != nullptr) continue;
+      auto* register_widget = &ToyStore().FindOrMake(*assembler_reg, this);
+      register_widget->local_to_parent = SkM44::Translate(0, 10_cm);
       reg_widgets_idx[i] = register_widget;
-      reg_widgets.emplace_back(register_widget);
+      reg_widgets.InsertSorted(i, register_widget,
+                               [](auto* w) { return w->LockRegister()->register_index; });
       register_widget->WakeAnimation();
       register_widget->ValidateHierarchy();
-      std::sort(reg_widgets.begin(), reg_widgets.end(), [](auto* a, auto* b) {
-        return a->LockRegister()->register_index < b->LockRegister()->register_index;
-      });
     }
   }
 
@@ -577,6 +570,13 @@ bool AssemblerWidget::CanDrop(Location& loc) const {
 void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
   if (auto reg = loc->As<Register>()) {
     if (auto my_assembler = LockObject<Assembler>()) {
+      if (auto* register_widget = ToyStore().FindOrNull(*reg)) {
+        register_widget->Reparent(*this);
+        if (std::ranges::find(reg_widgets, register_widget) == reg_widgets.end()) {
+          reg_widgets.InsertSorted(reg->register_index, register_widget,
+                                   [](auto* w) { return w->LockRegister()->register_index; });
+        }
+      }
       my_assembler->reg_objects_idx[reg->register_index] = loc->Take().Cast<Register>();
       my_assembler->WakeToys();
     }

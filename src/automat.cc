@@ -17,6 +17,7 @@
 #include <tracy/Tracy.hpp>
 
 #include "automat.hh"
+#include "embedded.hh"
 #include "global_resources.hh"
 #include "loading_animation.hh"
 #include "persistence.hh"
@@ -38,6 +39,47 @@ namespace automat {
 std::stop_source stop_source;
 
 std::thread::id main_thread_id;
+
+static std::optional<system_tray::Icon> tray_icon;
+static bool tray_hidden = false;
+static PersistentImage favicon =
+    PersistentImage::MakeFromAsset(embedded::docs_assets_favicon_184_png);
+
+void RefreshTrayIcon() {
+  system_tray::Action hide_action;
+  system_tray::Spacer tray_separator;
+  system_tray::Action quit_action;
+  system_tray::Menu root;
+
+  hide_action.name = tray_hidden ? "Show" : "Hide";
+  hide_action.on_click = []() {
+    if (tray_hidden) {
+      root_widget->RestoreFromTray();
+    } else {
+      root_widget->MinimizeToTray();
+    }
+    tray_hidden = !tray_hidden;
+    RefreshTrayIcon();
+  };
+
+  quit_action.name = "Quit";
+  quit_action.on_click = []() {
+    stop_source.request_stop();
+#ifdef _WIN32
+    PostQuitMessage(0);
+#endif
+  };
+
+  root.name = "Automat";
+  root.icon = favicon.image ? *favicon.image : sk_sp<SkImage>();
+  root.items = {&hide_action, &tray_separator, &quit_action};
+
+  if (tray_icon) {
+    tray_icon->Update(root, hide_action.on_click);
+  } else {
+    tray_icon.emplace(root, hide_action.on_click);
+  }
+}
 
 static int argc;
 static char** argv;
@@ -70,7 +112,7 @@ int Main() {
   vm.root_board = vm.root_location->Create<Board>();
   StartTimeThread(stop_source.get_token());
 
-  InitSystemTray();
+  RefreshTrayIcon();
 
   Status status;
   LoadState(*root_widget, status);
@@ -90,6 +132,8 @@ int Main() {
 
   // Shutdown
   stop_source.request_stop();
+
+  tray_icon.reset();
 
   JoinWorkerThreads();
 

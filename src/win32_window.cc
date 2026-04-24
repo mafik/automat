@@ -793,6 +793,10 @@ void Win32Window::RequestMaximize(bool horiz, bool vert) {
   root.Maximized(horiz, vert);
 }
 
+void Win32Window::RequestMinimizeToTray() { ShowWindow(hwnd, SW_HIDE); }
+
+void Win32Window::RequestRestoreFromTray() { ShowWindow(hwnd, SW_SHOW); }
+
 static void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
                                   LONG idObject, LONG idChild, DWORD dwEventThread,
                                   DWORD dwmsEventTime) {

@@ -4,11 +4,16 @@
 
 #include "tasks.hh"
 #pragma maf main
+#pragma maf manifest
 
 #pragma comment(lib, "skia")
 
 #if defined(_WIN32)
 #include "win32.hh"
+#pragma push_macro("ERROR")
+#include <shellapi.h>
+#include <shlobj.h>
+#pragma pop_macro("ERROR")
 #endif
 
 #include <include/core/SkGraphics.h>
@@ -69,6 +74,11 @@ void RefreshTrayIcon() {
     PostQuitMessage(0);
 #endif
   };
+
+#ifdef _WIN32
+  hide_action.icon = LoadSystemIcon(SIID_FIND);
+  quit_action.icon = LoadSystemIcon(SIID_DELETE);
+#endif
 
   root.name = "Automat";
   root.icon = favicon.image ? *favicon.image : sk_sp<SkImage>();

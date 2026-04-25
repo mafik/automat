@@ -200,7 +200,10 @@ struct Swapchain {
   std::vector<Canvas> canvases;
 
   uint32_t current_image_index = 0;
-  Semaphore sem_acquired;  // signals image is available for use (vkAcquireNextImageKHR)
+
+  // Semaphores that are signaled when a swapchain image is acquired and ready for rendering.
+  std::vector<Semaphore> sem_acquired_ring;
+  uint32_t sem_acquired_index = 0;
 
   // Skia milestone 137 includes a change that requires all window surfaces to support
   // VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT.
@@ -714,10 +717,6 @@ static void ImageMemBarrier(VkCommandBuffer cmd_buffer, VkImage image, VkFormat 
 }
 
 void Swapchain::Create(int widthHint, int heightHint, Status& status) {
-  sem_acquired.Create(status);
-  if (!OK(status)) {
-    return;
-  }
 
   // check for capabilities
   VkSurfaceCapabilitiesKHR caps;
@@ -764,6 +763,16 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
     // Application must settle for fewer images than desired:
     image_count = caps.maxImageCount;
   }
+
+  sem_acquired_ring.clear();
+  sem_acquired_ring.resize(image_count + 1);
+  for (auto& sem : sem_acquired_ring) {
+    sem.Create(status);
+    if (!OK(status)) {
+      return;
+    }
+  }
+  sem_acquired_index = 0;
 
   VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                                  VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -1003,6 +1012,9 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
 }
 
 SkCanvas* Swapchain::AcquireCanvas() {
+  sem_acquired_index = (sem_acquired_index + 1) % sem_acquired_ring.size();
+  Semaphore& sem_acquired = sem_acquired_ring[sem_acquired_index];
+
   VkResult res = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, sem_acquired, VK_NULL_HANDLE,
                                        &current_image_index);
   if (VK_ERROR_SURFACE_LOST_KHR == res) {
@@ -1018,7 +1030,8 @@ SkCanvas* Swapchain::AcquireCanvas() {
       return nullptr;
     }
 
-    res = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, sem_acquired, VK_NULL_HANDLE,
+    res = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
+                                sem_acquired_ring[sem_acquired_index], VK_NULL_HANDLE,
                                 &current_image_index);
 
     if (VK_SUCCESS != res) {
@@ -1035,6 +1048,7 @@ void Swapchain::Present() {
   const int current_backbuffer_index =
       render_offscreen ? render_offscreen->current : current_image_index;
   auto& backbuffer = canvases[current_backbuffer_index];
+  Semaphore& sem_acquired = sem_acquired_ring[sem_acquired_index];
 
   graphite::BackendSemaphore sk_sem_acquired = sem_acquired;
   graphite::BackendSemaphore sk_sem_rendered = backbuffer.sem_rendered;
@@ -1121,7 +1135,7 @@ void Swapchain::WaitAndDestroy() {
     vkQueueWaitIdle(device.present_queue);
     vkDeviceWaitIdle(device);
     DestroyBuffers();
-    sem_acquired.Destroy();
+    sem_acquired_ring.clear();
 
     vkDestroySwapchainKHR(device, swapchain, nullptr);
     swapchain = VK_NULL_HANDLE;

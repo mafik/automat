@@ -388,15 +388,11 @@ void RendererShutdown() {
   for (int i = 0; i < kNumVkRecorderThreads; ++i) {
     vk_recorder_threads[i].join();
   }
-  cached_widget_drawables.clear();
   global_foreground_recorder.reset();
   global_background_recorder.reset();
-  while (foreground_rendering_jobs) {
-    vk::graphite_context->checkAsyncWorkCompletion();
-  }
-  while (background_rendering_jobs) {
-    vk::background_context->checkAsyncWorkCompletion();
-  }
+  vk::graphite_context->submit({skgpu::graphite::SyncToCpu::kYes});
+  vk::background_context->submit({skgpu::graphite::SyncToCpu::kYes});
+  cached_widget_drawables.clear();
 }
 
 void WidgetDrawable::InsertRecording() {

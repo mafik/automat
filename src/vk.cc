@@ -764,16 +764,6 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
     image_count = caps.maxImageCount;
   }
 
-  sem_acquired_ring.clear();
-  sem_acquired_ring.resize(image_count + 1);
-  for (auto& sem : sem_acquired_ring) {
-    sem.Create(status);
-    if (!OK(status)) {
-      return;
-    }
-  }
-  sem_acquired_index = 0;
-
   VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                                  VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
   SkASSERT((caps.supportedUsageFlags & usageFlags) == usageFlags);
@@ -890,6 +880,16 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
     vkDestroySwapchainKHR(device, swapchainCreateInfo.oldSwapchain, nullptr);
     swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
   }
+
+  sem_acquired_ring.clear();
+  sem_acquired_ring.resize(image_count + 1);
+  for (auto& sem : sem_acquired_ring) {
+    sem.Create(status);
+    if (!OK(status)) {
+      return;
+    }
+  }
+  sem_acquired_index = 0;
 
   images.resize(image_count);
   vkGetSwapchainImagesKHR(device, swapchain, &image_count, images.data());

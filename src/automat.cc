@@ -99,9 +99,9 @@ void RefreshTrayIcon() {
   };
 
   if (tray_icon) {
-    tray_icon->Update(root, toggle_hidden);
+    tray_icon->Update(root, &hide_action);
   } else {
-    tray_icon.emplace(root, toggle_hidden);
+    tray_icon.emplace(root, &hide_action);
   }
 }
 

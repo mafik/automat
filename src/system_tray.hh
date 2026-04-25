@@ -81,14 +81,14 @@ struct Menu {
   operator MenuItem*() noexcept { return &item; }
 };
 
-// RAII handle to a system tray icon. `on_activate` fires on left-click of the tray icon.
+// RAII handle to a system tray icon. `default_item` is highlighted and fires on left-click.
 struct Icon {
   struct Impl;
   std::unique_ptr<Impl> impl;
 
-  Icon(const Menu& root_menu, Fn<void()> on_activate);
+  Icon(const Menu& root_menu, Action* default_item = nullptr);
   ~Icon();
-  void Update(const Menu& root_menu, Fn<void()> on_activate);
+  void Update(const Menu& root_menu, Action* default_item = nullptr);
 };
 
 }  // namespace system_tray

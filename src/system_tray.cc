@@ -106,8 +106,8 @@ void AppendSNIPixmaps(const sk_sp<SkImage>& image,
     dbus_pixmap.get<1>() = size;
     dbus_pixmap.get<2>() = vector<uint8_t>(size * size * 4);
     auto& vec = dbus_pixmap.get<2>();
-    auto image_info = SkImageInfo::Make(size, size, SkColorType::kRGBA_8888_SkColorType,
-                                        kUnpremul_SkAlphaType);
+    auto image_info =
+        SkImageInfo::Make(size, size, SkColorType::kRGBA_8888_SkColorType, kUnpremul_SkAlphaType);
     SkPixmap sk_pixmap(image_info, vec.data(), size * 4);
     image->scalePixels(sk_pixmap, sampling_options);
     for (int i = 0; i < size * size; ++i) {
@@ -284,8 +284,7 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
     };
     if (want("type") && item.type != "standard") props["type"] = Variant(item.type);
     if (want("label") && !item.label.empty()) props["label"] = Variant(item.label);
-    if (want("icon-name") && !item.icon_name.empty())
-      props["icon-name"] = Variant(item.icon_name);
+    if (want("icon-name") && !item.icon_name.empty()) props["icon-name"] = Variant(item.icon_name);
     if (want("children-display") && !item.child_ids.empty())
       props["children-display"] = Variant(std::string("submenu"));
     return props;
@@ -358,13 +357,14 @@ struct Icon::Impl {
   Impl(IdPool& pool) : uid(pool) {}
 };
 
-Icon::Icon(const Menu& root_menu, Fn<void()> on_activate)
+Icon::Icon(const Menu& root_menu, Action* default_item)
     : impl(std::make_unique<Impl>(IconUidPool())) {
   auto service_name = f("org.automat.pid-{}-{}", getpid(), impl->uid.id);
   impl->connection = createSessionBusConnection(ServiceName{service_name});
   impl->menu = std::make_unique<DBusMenu>(*impl->connection, root_menu);
-  impl->sni = std::make_unique<StatusNotifierItem>(*impl->connection, root_menu.name, root_menu.icon,
-                                                   std::move(on_activate));
+  impl->sni =
+      std::make_unique<StatusNotifierItem>(*impl->connection, root_menu.name, root_menu.icon,
+                                           default_item ? default_item->on_click : Fn<void()>{});
   StatusNotifierWatcherProxy watcher{*impl->connection};
   watcher.RegisterStatusNotifierItem(service_name);
   impl->connection->enterEventLoopAsync();
@@ -372,7 +372,7 @@ Icon::Icon(const Menu& root_menu, Fn<void()> on_activate)
 
 Icon::~Icon() = default;
 
-void Icon::Update(const Menu& root_menu, Fn<void()>) {
+void Icon::Update(const Menu& root_menu, Action*) {
   if (!impl || !impl->menu) return;
   impl->menu->Rebuild(root_menu);
 }
@@ -388,9 +388,7 @@ std::map<UINT, system_tray::Icon::Impl*>& IconsByUid() {
   return m;
 }
 
-HWND MainHwnd() {
-  return static_cast<Win32Window*>(ui::root_widget->window.get())->hwnd;
-}
+HWND MainHwnd() { return static_cast<Win32Window*>(ui::root_widget->window.get())->hwnd; }
 
 std::wstring Utf8ToWide(StrView s) {
   if (s.empty()) return {};
@@ -493,7 +491,7 @@ void AttachBitmap(HMENU hmenu, UINT id_or_pos, bool by_position, HBITMAP bmp) {
 }
 
 void BuildMenu(HMENU hmenu, const system_tray::Menu& menu, Vec<Fn<void()>>& handlers,
-               Vec<HBITMAP>& bitmaps) {
+               Vec<HBITMAP>& bitmaps, system_tray::Action* default_target) {
   static const int menu_icon_size = GetSystemMetrics(SM_CXSMICON);
   for (auto* item : menu.items) {
     switch (item->kind) {
@@ -506,6 +504,7 @@ void BuildMenu(HMENU hmenu, const system_tray::Menu& menu, Vec<Fn<void()>>& hand
         UINT cmd = (UINT)handlers.size();
         auto wide = Utf8ToWide(a.name);
         AppendMenuW(hmenu, MF_STRING, cmd, wide.c_str());
+        if (&a == default_target) SetMenuDefaultItem(hmenu, cmd, FALSE);
         for (auto* link = a.icon; link; link = NextInChain(link)) {
           HICON hicon = TryLoadHIcon(link, menu_icon_size);
           if (!hicon) continue;
@@ -521,7 +520,7 @@ void BuildMenu(HMENU hmenu, const system_tray::Menu& menu, Vec<Fn<void()>>& hand
       case system_tray::MenuItem::MenuKind: {
         auto& m = *reinterpret_cast<system_tray::Menu*>(item);
         HMENU sub = CreatePopupMenu();
-        BuildMenu(sub, m, handlers, bitmaps);
+        BuildMenu(sub, m, handlers, bitmaps, default_target);
         auto wide = Utf8ToWide(m.name);
         AppendMenuW(hmenu, MF_POPUP, (UINT_PTR)sub, wide.c_str());
         UINT pos = (UINT)GetMenuItemCount(hmenu) - 1;
@@ -559,13 +558,13 @@ struct Icon::Impl {
 
 static int TraySize() { return GetSystemMetrics(SM_CXSMICON); }
 
-Icon::Icon(const Menu& root_menu, Fn<void()> on_activate)
+Icon::Icon(const Menu& root_menu, Action* default_item)
     : impl(std::make_unique<Impl>(IconUidPool())) {
   IconsByUid()[(UINT)impl->uid.id] = impl.get();
 
   impl->hmenu = CreatePopupMenu();
-  BuildMenu(impl->hmenu, root_menu, impl->action_handlers, impl->menu_bitmaps);
-  impl->on_activate = std::move(on_activate);
+  BuildMenu(impl->hmenu, root_menu, impl->action_handlers, impl->menu_bitmaps, default_item);
+  impl->on_activate = default_item ? default_item->on_click : Fn<void()>{};
   for (auto* link = root_menu.icon; link; link = NextInChain(link)) {
     if ((impl->hicon = TryLoadHIcon(link, TraySize()))) break;
   }
@@ -598,15 +597,15 @@ Icon::~Icon() {
   IconsByUid().erase((UINT)impl->uid.id);
 }
 
-void Icon::Update(const Menu& root_menu, Fn<void()> on_activate) {
+void Icon::Update(const Menu& root_menu, Action* default_item) {
   if (!impl) return;
   if (impl->hmenu) DestroyMenu(impl->hmenu);
   for (HBITMAP b : impl->menu_bitmaps) DeleteObject(b);
   impl->menu_bitmaps.clear();
   impl->hmenu = CreatePopupMenu();
   impl->action_handlers.clear();
-  BuildMenu(impl->hmenu, root_menu, impl->action_handlers, impl->menu_bitmaps);
-  impl->on_activate = std::move(on_activate);
+  BuildMenu(impl->hmenu, root_menu, impl->action_handlers, impl->menu_bitmaps, default_item);
+  impl->on_activate = default_item ? default_item->on_click : Fn<void()>{};
 
   HICON new_hicon = nullptr;
   for (auto* link = root_menu.icon; link; link = NextInChain(link)) {
@@ -639,9 +638,9 @@ void OnSystemTrayMessage(unsigned event, int mouse_x, int mouse_y, unsigned icon
       if (!impl.hmenu) return;
       HWND hwnd = MainHwnd();
       SetForegroundWindow(hwnd);
-      UINT cmd = TrackPopupMenu(
-          impl.hmenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN,
-          mouse_x, mouse_y, 0, hwnd, nullptr);
+      UINT cmd = TrackPopupMenu(impl.hmenu,
+                                TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN,
+                                mouse_x, mouse_y, 0, hwnd, nullptr);
       PostMessageW(hwnd, WM_NULL, 0, 0);
       if (cmd >= 1 && cmd <= impl.action_handlers.size()) {
         auto& fn = impl.action_handlers[cmd - 1];
@@ -657,9 +656,9 @@ void OnSystemTrayMessage(unsigned event, int mouse_x, int mouse_y, unsigned icon
 namespace system_tray {
 
 struct Icon::Impl {};
-Icon::Icon(const Menu&, Fn<void()>) : impl(std::make_unique<Impl>()) {}
+Icon::Icon(const Menu&, Action*) : impl(std::make_unique<Impl>()) {}
 Icon::~Icon() = default;
-void Icon::Update(const Menu&, Fn<void()>) {}
+void Icon::Update(const Menu&, Action*) {}
 
 }  // namespace system_tray
 

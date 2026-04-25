@@ -383,6 +383,19 @@ void Device::Init(Status& status) {
   skia_features.addFeaturesToEnable(app_extensions, features);
   vk::physical_device.enable_extensions_if_present(app_extensions);
 
+  // Workaround for a Skia bug: VulkanPreferredFeatures::addFeaturesToEnable unconditionally
+  // chains uninitialized fSamplerYcbcrConversion (happens when fAPIVersion >= 1.2).
+  //
+  // If you remove this and Automat starts without Vulkan validation errors then it means that
+  // it was fixed upstream in Skia and this workaround is no longer needed.
+  for (auto* prev = (VkBaseOutStructure*)&features; prev->pNext;) {
+    if (prev->pNext->sType == 0) {
+      prev->pNext = prev->pNext->pNext;
+    } else {
+      prev = prev->pNext;
+    }
+  }
+
   vkb::DeviceBuilder device_builder(vk::physical_device);
 
   std::vector<vkb::CustomQueueDescription> queue_descriptions;

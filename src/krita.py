@@ -15,10 +15,7 @@ import make
 from functools import partial
 import src
 
-kra_files = [
-  fs_utils.project_root / 'source_images' / 'Mouse' / 'Mouse.kra',
-  fs_utils.project_root / 'source_images' / 'Hand.kra'
-]
+kra_files = sorted((fs_utils.project_root / 'art' / 'masters').glob('*.kra'))
 
 krita_layer_to_webp = (build_variant.current.BASE / 'krita_layer_to_webp').with_suffix(fs_utils.binary_extension)
 

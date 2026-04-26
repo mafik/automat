@@ -333,6 +333,11 @@ def recipe() -> make.Recipe:
         pargs += LDFLAGS()
         for arg in bin.link_args:
             pargs.append(arg)
+        if release and platform == 'win32':
+            # useful for binary size attribution
+            map_path = bin.path.with_suffix(bin.path.suffix + '.map')
+            pargs.append(f'-Wl,/MAP:{map_path}')
+            r.generated.add(str(map_path))
         pargs += ['-o', str(bin.path)]
         builder = functools.partial(make.Popen, pargs)
         r.add_step(builder,

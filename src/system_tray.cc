@@ -231,7 +231,7 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
         items[id].type = "separator";
         break;
       case MenuItem::ActionKind: {
-        auto& a = *reinterpret_cast<Action*>(&node);
+        auto& a = *reinterpret_cast<system_tray::Action*>(&node);
         items[id].label = a.name;
         items[id].on_click = a.on_click;
         for (auto* link = a.icon; link; link = NextInChain(link)) {

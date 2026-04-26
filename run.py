@@ -9,6 +9,7 @@ from subprocess import run
 from pathlib import Path
 
 base_dir = Path(__file__).parent
+os.environ.setdefault('PYTHONHASHSEED', '0')
 exit_code = 0
 try:
   completed_process = run(['python', str(base_dir / 'run_py')] + sys.argv[1:], cwd=base_dir)

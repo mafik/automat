@@ -44,7 +44,7 @@ std::thread::id main_thread_id;
 static std::optional<system_tray::Icon> tray_icon;
 static bool tray_hidden = false;
 static PersistentImage favicon =
-    PersistentImage::MakeFromAsset(embedded::docs_assets_favicon_184_png);
+    PersistentImage::MakeFromAsset(embedded::assets_favicon_184_png);
 
 void RefreshTrayIcon() {
   auto toggle_hidden = []() {

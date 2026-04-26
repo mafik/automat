@@ -144,7 +144,7 @@ if platform == 'linux':
 
 class ObjectFile:
     path: Path
-    deps: set[src.File]
+    deps: set[src.File | str]
     source: src.File
     compile_args: list[str]
 
@@ -197,6 +197,7 @@ def plan(srcs) -> tuple[list[ObjectFile], list[Binary]]:
         f_obj = ObjectFile(obj_path(src_file.path))
         objs[str(f_obj.path)] = f_obj
         f_obj.deps = set(src_file.transitive_includes)
+        f_obj.deps.update(src_file.embeds)
         f_obj.deps.add(src_file)
         # TODO: maybe instead of depending on this file, it would be possible
         # to depend on the specific compile_args that were used?

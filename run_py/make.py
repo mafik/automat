@@ -106,6 +106,7 @@ class Step:
         self.stderr_prettifier = stderr_prettifier
         self.cleanup = cleanup
         self.post_success = post_success
+        self.ran = False
 
     def __repr__(self):
         return f'{self.desc}'
@@ -166,15 +167,18 @@ class Step:
                                          for out in self.outputs):
             if cmdline_args.args.verbose:
                 print(f'Running "{self.shortcut}" because some of the outputs don\'t exist')
+            self.ran = True
             return self.build_and_log([])
         if len(self.outputs) == 0:
             if cmdline_args.args.verbose:
                 print(f'Running "{self.shortcut}" because it has no outputs (phony target)')
+            self.ran = True
             return self.build_and_log([])
         updated_inputs = self.dirty_inputs()
         if len(updated_inputs) > 0:
             if cmdline_args.args.verbose:
                 print(f'Running "{self.shortcut}" because {str(updated_inputs)} changed')
+            self.ran = True
             return self.build_and_log(updated_inputs)
 
 
@@ -268,6 +272,7 @@ class Recipe:
 
         for step in self.steps:
             step.blocker_count = 0
+            step.ran = False
 
         for a in self.steps:
             for b in self.steps:
@@ -279,7 +284,8 @@ class Recipe:
                 ready_steps.append(a)
 
         def on_step_finished(a):
-            a.record_input_hashes()
+            if a.ran:
+                a.record_input_hashes()
             for b in self.steps:
                 if b.inputs & a.outputs:
                     b.blocker_count -= 1

@@ -1,0 +1,4 @@
+# Intermediate art is synced via Google Drive (see ../ART.md).
+# Only this .gitignore is tracked, so the directory exists in fresh clones.
+*
+!.gitignore

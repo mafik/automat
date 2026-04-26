@@ -57,8 +57,14 @@ def Popen(args, **kwargs):
         p.env = kwargs['env']
     return p
 
-def hexdigest(path):
-    path = Path(path)
+hexdigest_cache: dict[str, str] = {}
+
+
+def hexdigest(path_str : str):
+    path = Path(path_str)
+    cached = hexdigest_cache.get(path_str)
+    if cached is not None:
+        return cached
     if path.exists():
         if path.is_dir():
             contents = path.stat().st_mtime_ns.to_bytes(8, 'big')
@@ -66,7 +72,9 @@ def hexdigest(path):
             contents = path.read_bytes()
     else:
         contents = b''
-    return hashlib.md5(contents).hexdigest()
+    digest = hashlib.md5(contents).hexdigest()
+    hexdigest_cache[path_str] = digest
+    return digest
 
 
 class Step:
@@ -113,6 +121,8 @@ class Step:
 
     def build_and_log(self, reasons):
         print(f'{self.desc}...')  # , '(because', *reasons, 'changed)')
+        for out in self.outputs:
+            hexdigest_cache.pop(out, None) # like del, but without KeyError
         return self.build()
 
     def record_input_hashes(self):
@@ -269,6 +279,7 @@ class Recipe:
         start_time = time.time()
         desired_parallelism = multiprocessing.cpu_count()
         ready_steps = []
+        hexdigest_cache.clear()
 
         for step in self.steps:
             step.blocker_count = 0

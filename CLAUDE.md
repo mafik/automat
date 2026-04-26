@@ -124,6 +124,11 @@ Objects (multi-threaded) notify Toys (UI-thread) via `wake_counter`:
   - Module-level names are public unless there's a reason to hide them — don't add a leading underscore just because the name lives in one file
   - Don't introduce a wrapper function for a one-line stdlib operation; inline it at the call site
   - One short inline comment is plenty when a stdlib idiom isn't obvious; skip multi-line explanatory blocks
+  - Extend the existing data model in the natural place rather than patching it from the outside — when a piece of metadata is conceptually a property of an existing object, add a field to that class. Don't reach for a hook/lookup-table workaround if the field would fit cleanly on the existing type
+  - When a parser handles a family of directives, extend the parser with the new directive of the same kind, rather than re-parsing or working around it from a different module
+  - Pre-compute module-level lists once at import and index by integer; don't recompute paths/strings inside loops or pass slices through closure arguments when an index suffices
+  - For "depend on the *list* of items, not on each item's contents", materialize the list to a file and depend on that single file. This decouples list-membership changes from item-content changes
+  - Split a coarse build step into multiple narrower steps with disjoint outputs when finer invalidation is wanted; don't keep one big step and try to gate parts of its work internally
 
 ### Testing
 

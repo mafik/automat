@@ -120,6 +120,10 @@ Objects (multi-threaded) notify Toys (UI-thread) via `wake_counter`:
   - All constants are `constexpr` and suitable for use in `if constexpr` conditions
 - Comments should NOT document the development process
 - Avoid fragile comments that are likely to become outdated as the codebase evolves
+- Python in `run_py/`:
+  - Module-level names are public unless there's a reason to hide them — don't add a leading underscore just because the name lives in one file
+  - Don't introduce a wrapper function for a one-line stdlib operation; inline it at the call site
+  - One short inline comment is plenty when a stdlib idiom isn't obvious; skip multi-line explanatory blocks
 
 ### Testing
 

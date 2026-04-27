@@ -81,6 +81,8 @@ if __name__ == '__main__':
         if ' ' in s:
           return f'"{s}"'
         return s
+      
+      ssh_cmd = ['ssh', '-o', 'WarnWeakCrypto=no-pq-kex', self.ssh_host]
 
       if cwd:
         cmd_str = ' '.join(shquote(arg) for arg in cmd)
@@ -89,15 +91,15 @@ if __name__ == '__main__':
           # Convert forward slashes to backslashes for Windows
           win_cwd = cwd.replace('/', '\\')
           full_cmd = f'cd /d {win_cwd} && {cmd_str}'
-          ssh_cmd = ['ssh', self.ssh_host, full_cmd]
+          ssh_cmd += [full_cmd]
         else:
           # On Unix, use cd && command with proper shell quoting
           full_cmd = f'cd {shquote(cwd)} && {cmd_str}'
-          ssh_cmd = ['ssh', self.ssh_host, full_cmd]
+          ssh_cmd += [full_cmd]
       else:
         # Without cwd, just pass the command directly
         # SSH will execute it via the remote shell
-        ssh_cmd = ['ssh', self.ssh_host] + cmd
+        ssh_cmd += cmd
 
       print(f'[{self.ssh_host}] Running: {" ".join(cmd)}')
       result = subprocess.run(ssh_cmd, check=False)

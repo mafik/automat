@@ -21,15 +21,17 @@
 #include <include/gpu/graphite/vk/VulkanGraphiteTypes.h>
 #include <include/gpu/graphite/vk/VulkanGraphiteUtils.h>
 #include <include/gpu/vk/VulkanBackendContext.h>
-#include <include/gpu/vk/VulkanMemoryAllocator.h>
-#include <src/gpu/GpuTypesPriv.h>
-#include <src/gpu/vk/vulkanmemoryallocator/VulkanMemoryAllocatorPriv.h>
 #include <include/gpu/vk/VulkanExtensions.h>
+#include <include/gpu/vk/VulkanMemoryAllocator.h>
 #include <include/gpu/vk/VulkanMutableTextureState.h>
 #include <include/gpu/vk/VulkanPreferredFeatures.h>
+#include <src/gpu/GpuTypesPriv.h>
 #include <src/gpu/graphite/vk/VulkanGraphiteUtils.h>
+#include <src/gpu/vk/vulkanmemoryallocator/VulkanMemoryAllocatorPriv.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
+
+#include <tracy/Tracy.hpp>
 
 #include "log.hh"
 #include "root_widget.hh"
@@ -60,7 +62,8 @@ PFN_vkGetDeviceProcAddr GetDeviceProcAddr;
   X(GetPhysicalDeviceSurfaceFormatsKHR)      \
   X(GetPhysicalDeviceSurfacePresentModesKHR) \
   X(EnumerateDeviceExtensionProperties)      \
-  X(GetPhysicalDeviceFeatures2)
+  X(GetPhysicalDeviceFeatures2)              \
+  X(GetPhysicalDeviceMemoryProperties2)
 
 #define EACH_DEVICE_PROC(X) \
   X(GetDeviceQueue)         \
@@ -172,6 +175,9 @@ Semaphore::operator graphite::BackendSemaphore() {
 }
 
 std::unique_ptr<graphite::Context> graphite_context, background_context;
+
+sk_sp<skgpu::VulkanMemoryAllocator> memory_allocator;
+bool memory_budget_available = false;  // VK_EXT_memory_budget
 
 std::unique_ptr<graphite::Recorder> graphite_recorder;
 
@@ -384,7 +390,10 @@ void Device::Init(Status& status) {
 
   std::vector<const char*> app_extensions;
   skia_features.addFeaturesToEnable(app_extensions, features);
+  app_extensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
   vk::physical_device.enable_extensions_if_present(app_extensions);
+  memory_budget_available =
+      vk::physical_device.is_extension_present(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
 
   // Workaround for a Skia bug: VulkanPreferredFeatures::addFeaturesToEnable unconditionally
   // chains uninitialized fSamplerYcbcrConversion (happens when fAPIVersion >= 1.2).
@@ -468,7 +477,7 @@ void InitGrContext() {
       .fDeviceFeatures2 = &device.features,
       .fGetProc = GetProc,
   };
-  foreground_backend.fMemoryAllocator =
+  memory_allocator = foreground_backend.fMemoryAllocator =
       skgpu::VulkanMemoryAllocators::Make(foreground_backend, skgpu::ThreadSafe::kYes);
 
   skgpu::VulkanBackendContext background_backend = {
@@ -717,7 +726,6 @@ static void ImageMemBarrier(VkCommandBuffer cmd_buffer, VkImage image, VkFormat 
 }
 
 void Swapchain::Create(int widthHint, int heightHint, Status& status) {
-
   // check for capabilities
   VkSurfaceCapabilitiesKHR caps;
   CHECK_RESULT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &caps));
@@ -1030,9 +1038,9 @@ SkCanvas* Swapchain::AcquireCanvas() {
       return nullptr;
     }
 
-    res = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
-                                sem_acquired_ring[sem_acquired_index], VK_NULL_HANDLE,
-                                &current_image_index);
+    res =
+        vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, sem_acquired_ring[sem_acquired_index],
+                              VK_NULL_HANDLE, &current_image_index);
 
     if (VK_SUCCESS != res) {
       return nullptr;
@@ -1142,6 +1150,80 @@ void Swapchain::WaitAndDestroy() {
   }
 }
 
+constexpr int kMaxTrackedHeaps = 4;
+
+constexpr const char* kHeapUsageDevicePlotNames[kMaxTrackedHeaps] = {
+    "GPU Heap 0 usage (device)",
+    "GPU Heap 1 usage (device)",
+    "GPU Heap 2 usage (device)",
+    "GPU Heap 3 usage (device)",
+};
+constexpr const char* kHeapUsageHostPlotNames[kMaxTrackedHeaps] = {
+    "GPU Heap 0 usage (host)",
+    "GPU Heap 1 usage (host)",
+    "GPU Heap 2 usage (host)",
+    "GPU Heap 3 usage (host)",
+};
+constexpr const char* kHeapBudgetPlotNames[kMaxTrackedHeaps] = {
+    "GPU Heap 0 budget",
+    "GPU Heap 1 budget",
+    "GPU Heap 2 budget",
+    "GPU Heap 3 budget",
+};
+
+static void ConfigureGpuMemoryPlots() {
+  constexpr auto kMemory = tracy::PlotFormatType::Memory;
+  constexpr auto kNumber = tracy::PlotFormatType::Number;
+  TracyPlotConfig("VMA allocated", kMemory, false, true, 0);
+  TracyPlotConfig("VMA used", kMemory, false, true, 0);
+  for (int i = 0; i < kMaxTrackedHeaps; ++i) {
+    TracyPlotConfig(kHeapUsageDevicePlotNames[i], kMemory, false, true, 0);
+    TracyPlotConfig(kHeapUsageHostPlotNames[i], kMemory, false, true, 0);
+    TracyPlotConfig(kHeapBudgetPlotNames[i], kMemory, true, false, 0);
+  }
+}
+
+void ReportMemoryStats() {
+  ZoneScoped;
+
+  if (vk::memory_allocator) {
+    auto [allocated, used] = vk::memory_allocator->totalAllocatedAndUsedMemory();
+    TracyPlot("VMA allocated", (int64_t)allocated);
+    if constexpr (kDebugVulkanMemory) {
+      TracyPlot("VMA used", (int64_t)used);
+    }
+  }
+
+  if constexpr (!kDebugVulkanMemory) {
+    return;
+  }
+
+  if (physical_device == VK_NULL_HANDLE) {
+    return;
+  }
+
+  VkPhysicalDeviceMemoryBudgetPropertiesEXT budget_props = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,
+  };
+  VkPhysicalDeviceMemoryProperties2 props = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,
+      .pNext = memory_budget_available ? &budget_props : nullptr,
+  };
+  vkGetPhysicalDeviceMemoryProperties2(physical_device, &props);
+
+  uint32_t heap_count = props.memoryProperties.memoryHeapCount;
+  for (uint32_t i = 0; i < heap_count; ++i) {
+    auto& names =
+        (props.memoryProperties.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0
+            ? kHeapUsageDevicePlotNames
+            : kHeapUsageHostPlotNames;
+    if (memory_budget_available) {
+      TracyPlot(names[i], (int64_t)budget_props.heapUsage[i]);
+      TracyPlot(kHeapBudgetPlotNames[i], (int64_t)budget_props.heapBudget[i]);
+    }
+  }
+}
+
 bool initialized = false;
 void Init(Status& status) {
   initialized = true;
@@ -1185,6 +1267,8 @@ void Init(Status& status) {
     AppendErrorMessage(status) += "Failed to create Vulkan swapchain";
     return;
   }
+
+  ConfigureGpuMemoryPlots();
 }
 
 void Destroy() {
@@ -1194,6 +1278,7 @@ void Destroy() {
     command_pool.Destroy();
   }
 
+  memory_allocator.reset();
   graphite_recorder.reset();
   graphite_context.reset();
   background_context.reset();

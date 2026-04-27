@@ -107,12 +107,42 @@ void VulkanPaint(RootWidget& rw) {
   FrameMark;
 }
 
+static void BuildToolbar(RootWidget& rw) {
+  rw.toolbar = make_unique<Toolbar>(&rw);
+  for (auto& proto : prototypes->default_toolbar) {
+    rw.toolbar->AddObjectPrototype(proto);
+  }
+}
+
 void RenderThread(RootWidget& rw, std::stop_token stop_token) {
   SetThreadName("Render Thread");
   while (!stop_token.stop_requested()) {
-    rw.minimized.WaitFalse(stop_token);
-    if (stop_token.stop_requested()) {
-      break;
+    if (rw.minimized.Get()) {
+      {
+        ZoneScopedN("ReleaseGpuResources");
+        rw.children.clear();
+        rw.toys.container.clear();
+        rw.toolbar.reset();
+        rw.sk_drawable.reset();
+        rw.rendering = false;
+        rw.rendering_to_screen = false;
+        rw.rendered_bounds.reset();
+        RendererShutdown();
+        vk::Destroy();
+      }
+      if (!rw.minimized.WaitFalse(stop_token)) break;
+      {
+        ZoneScopedN("RestoreGpuResources");
+        Status status;
+        vk::Init(status);
+        if (!OK(status)) {
+          FATAL << "Failed to re-initialize Vulkan after restore: " << status;
+        }
+        RendererInit();
+        PersistentImage::PreloadAll();
+        BuildToolbar(rw);
+        rw.sk_drawable = MakeWidgetDrawable(rw);
+      }
     }
     VulkanPaint(rw);
     {
@@ -166,12 +196,7 @@ void RootWidget::Init() {
 
   loading_animation = std::make_unique<HypnoRect>();
 
-  {  // Initialize toolbar
-    toolbar = make_unique<Toolbar>(this);
-    for (auto& proto : prototypes->default_toolbar) {
-      toolbar->AddObjectPrototype(proto);
-    }
-  }
+  BuildToolbar(*this);
 }
 
 animation::Phase RootWidget::ZoomWarning::Tick(time::Timer& timer) {

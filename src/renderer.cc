@@ -356,7 +356,10 @@ std::jthread vk_recorder_threads[kNumVkRecorderThreads];
 std::unique_ptr<skgpu::graphite::Recorder> global_foreground_recorder;
 std::unique_ptr<skgpu::graphite::Recorder> global_background_recorder;
 
+bool renderer_initialized = false;
+
 void RendererInit() {
+  if (renderer_initialized) return;
   SkFlattenable::Register("WidgetDrawable", WidgetDrawable::CreateProc);
   skgpu::graphite::RecorderOptions options;
   if (image_provider == nullptr) {
@@ -376,23 +379,35 @@ void RendererInit() {
   }
   global_foreground_recorder = vk::graphite_context->makeRecorder(options);
   global_background_recorder = vk::background_context->makeRecorder(options);
+  renderer_initialized = true;
 }
 
 int foreground_rendering_jobs = 0;
 int background_rendering_jobs = 0;
 
 void RendererShutdown() {
+  if (!renderer_initialized) return;
+
   for (int i = 0; i < kNumVkRecorderThreads; ++i) {
     recording_queue.enqueue(nullptr);
   }
   for (int i = 0; i < kNumVkRecorderThreads; ++i) {
     vk_recorder_threads[i].join();
   }
+
+  cached_widget_drawables.clear();
+  overflow_queue.clear();
+  next_frame_request.render_results.clear();
+  if (image_provider) {
+    image_provider->cache.clear();
+  }
+
   global_foreground_recorder.reset();
   global_background_recorder.reset();
   vk::graphite_context->submit({skgpu::graphite::SyncToCpu::kYes});
   vk::background_context->submit({skgpu::graphite::SyncToCpu::kYes});
-  cached_widget_drawables.clear();
+
+  renderer_initialized = false;
 }
 
 void WidgetDrawable::InsertRecording() {

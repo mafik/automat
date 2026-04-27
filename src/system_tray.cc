@@ -219,6 +219,11 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
     Populate(root);
     revision++;
     emitLayoutUpdated(revision, 0);
+    vector<Struct<int32_t, PropertyMap>> updated;
+    for (int32_t id = 1; id < (int32_t)items.size(); ++id) {
+      updated.push_back({id, PropertiesFor(items[id], {})});
+    }
+    if (!updated.empty()) emitItemsPropertiesUpdated(updated, {});
   }
 
  private:

@@ -1475,6 +1475,8 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
 
   // TODO: present should wait for a semaphore from the top_level_widget
   vk::Present();
+
+  EVERY_N_SEC(1) { vk::ReportMemoryStats(); }
 }
 
 }  // namespace automat

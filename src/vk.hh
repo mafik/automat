@@ -5,9 +5,13 @@
 // Vulkan interface.
 
 #include <include/core/SkCanvas.h>
+#include <include/core/SkRefCnt.h>
 #include <include/gpu/graphite/BackendSemaphore.h>
 #include <include/gpu/graphite/Context.h>
+#include <include/gpu/vk/VulkanMemoryAllocator.h>
 #include <vulkan/vulkan_core.h>
+
+#include <vector>
 
 #include "status.hh"
 
@@ -15,6 +19,7 @@ namespace automat::vk {
 
 constexpr int cfg_MSAASampleCount = 1;
 constexpr bool cfg_DisableVsync = true;
+constexpr bool kDebugVulkanMemory = false;
 
 extern bool initialized;
 extern std::unique_ptr<skgpu::graphite::Context> graphite_context, background_context;
@@ -26,6 +31,10 @@ void Resize(int width_hint, int height_hint, Status&);
 
 SkCanvas* AcquireCanvas();
 void Present();
+
+// Reports basic memory stats through Tracy plots.
+// Enable kDebugVulkanMemory for even more plots.
+void ReportMemoryStats();
 
 // RAII wrapper for VkSemaphore.
 struct Semaphore {

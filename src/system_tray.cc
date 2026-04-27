@@ -365,14 +365,20 @@ struct Icon::Impl {
 Icon::Icon(const Menu& root_menu, Action* default_item)
     : impl(std::make_unique<Impl>(IconUidPool())) {
   auto service_name = f("org.automat.pid-{}-{}", getpid(), impl->uid.id);
-  impl->connection = createSessionBusConnection(ServiceName{service_name});
-  impl->menu = std::make_unique<DBusMenu>(*impl->connection, root_menu);
-  impl->sni =
-      std::make_unique<StatusNotifierItem>(*impl->connection, root_menu.name, root_menu.icon,
-                                           default_item ? default_item->on_click : Fn<void()>{});
-  StatusNotifierWatcherProxy watcher{*impl->connection};
-  watcher.RegisterStatusNotifierItem(service_name);
-  impl->connection->enterEventLoopAsync();
+  try {
+    impl->connection = createSessionBusConnection(ServiceName{service_name});
+    impl->menu = std::make_unique<DBusMenu>(*impl->connection, root_menu);
+    impl->sni =
+        std::make_unique<StatusNotifierItem>(*impl->connection, root_menu.name, root_menu.icon,
+                                             default_item ? default_item->on_click : Fn<void()>{});
+    StatusNotifierWatcherProxy watcher{*impl->connection};
+    watcher.RegisterStatusNotifierItem(service_name);
+    impl->connection->enterEventLoopAsync();
+  } catch (const sdbus::Error&) {
+    impl->sni.reset();
+    impl->menu.reset();
+    impl->connection.reset();
+  }
 }
 
 Icon::~Icon() = default;

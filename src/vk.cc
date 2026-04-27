@@ -265,6 +265,7 @@ void Instance::Init(Status& status) {
   }
 
   auto system_info = vkb::SystemInfo::get_system_info().value();
+  skia_features = {};
   skia_features.init(kMinimumVulkanVersion);
   skia_features.addToInstanceExtensions(system_info.available_extensions.data(),
                                         system_info.available_extensions.size(), extensions);
@@ -1144,6 +1145,7 @@ void Swapchain::WaitAndDestroy() {
     vkDeviceWaitIdle(device);
     DestroyBuffers();
     sem_acquired_ring.clear();
+    render_offscreen.reset();
 
     vkDestroySwapchainKHR(device, swapchain, nullptr);
     swapchain = VK_NULL_HANDLE;
@@ -1286,6 +1288,8 @@ void Destroy() {
   device.Destroy();
   physical_device.Destroy();
   instance.Destroy();
+
+  initialized = false;
 }
 
 void Resize(int width_hint, int height_hint, Status& status) {

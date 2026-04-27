@@ -120,7 +120,7 @@ class ExtensionHelper:
       recipe.add_step(
           git.clone(self.git_url, self.checkout_dir, self.git_tag),
           outputs=[self.checkout_dir],
-          inputs=[],
+          inputs=[self.module_globals['__file__'], __file__],
           desc = f'Downloading {self.name}',
           shortcut=f'get {self.name}')
       self.beam = [self.checkout_dir]
@@ -130,7 +130,7 @@ class ExtensionHelper:
       recipe.add_step(
           partial(download_from_url, self.fetch_url, archive),
           outputs=[archive],
-          inputs=[],
+          inputs=[self.module_globals['__file__'], __file__],
           desc = f'Downloading {self.name}',
           shortcut=f'get {self.name}')
 

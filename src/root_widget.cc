@@ -866,7 +866,7 @@ void RootWidget::Resized(Vec2 size) {
   this->size = size;
   UpdateLocalToParent(*this);
   if (toolbar) {
-    toolbar->local_to_parent = SkM44(SkMatrix::Translate(size.x / 2, 0));
+    toolbar->WakeAnimation();
   }
 }
 

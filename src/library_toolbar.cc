@@ -57,11 +57,14 @@ animation::Phase Toolbar::Tick(time::Timer& timer) {
     width_targets[i] = buttons[i]->natural_width;
   }
 
+  auto& root_widget = FindRootWidget();
+  // Toolbar centers itself on the bottom edge of the root widget.
+  local_to_parent = SkM44(SkMatrix::Translate(root_widget.size.x / 2, 0));
+
   auto my_transform = ui::TransformDown(*this);
 
   float width = CalculateWidth();
   int new_hovered_button = -1;
-  auto& root_widget = FindRootWidget();
 
   for (auto* pointer : root_widget.pointers) {
     if (pointer->actions[static_cast<int>(PointerButton::Left)]) {

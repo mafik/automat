@@ -253,6 +253,7 @@ struct ObjectArgument : Argument {
     }
 
     constexpr Table(StrView name) : Argument::Table(name, Interface::kObjectArgument) {
+      style = Style::Cable;
       can_connect = &DefaultCanConnect;
       on_connect = &DefaultOnConnect;
       find = &DefaultFind;

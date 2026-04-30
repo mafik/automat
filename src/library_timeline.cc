@@ -2213,6 +2213,9 @@ struct Vec2TrackWidget : TrackBaseWidget {
 
         auto display_duration = display_end_t - display_start_t;
         float display_width = display_duration / s_per_m;  // division as double (doesn't floor)
+        if (display_width <= kVec2DisplayMargin) {
+          continue;
+        }
         SkPathBuilder trail_builder;
         trail_builder.moveTo(0, 0);
         Vec2 cursor = {};
@@ -2317,6 +2320,9 @@ struct Float64TrackWidget : TrackBaseWidget {
   animation::Phase Tick(time::Timer& t, Context& ctx) override {
     auto phase = animation::Finished;
     auto* track = ctx.GetTrack<Float64Track>();
+    if (!track) {
+      return animation::Finished;
+    }
     auto* timeline_widget = ctx.timeline_widget;
     auto& timestamps = track->timestamps;
     auto& values = track->values;

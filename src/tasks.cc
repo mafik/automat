@@ -12,6 +12,7 @@
 #include "base.hh"
 #include "blockingconcurrentqueue.hh"
 #include "casting.hh"
+#include "error.hh"
 #include "thread_name.hh"
 #include "time.hh"
 #include "ui_connection_widget.hh"
@@ -169,6 +170,7 @@ void RunTask::OnExecute(std::unique_ptr<Task>& self) {
     if (auto lr = s->As<LongRunning>(); lr && lr.IsRunning()) {
       return;
     }
+    s->ClearOwnError();
     auto* r = static_cast<Runnable::Table*>(runnable);
     // Cast the `self` to RunTask for the OnRun invocation
     std::unique_ptr<RunTask> self_as_run_task((RunTask*)self.release());

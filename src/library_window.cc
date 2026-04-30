@@ -473,7 +473,6 @@ std::unique_ptr<ObjectToy> Window::MakeToy(ui::Widget* parent) {
 
 void Window::Capture() {
   ZoneScopedN("Window");
-  ClearOwnError();
   os::WindowHandle tracked;
   {
     auto lock = std::lock_guard(mutex);

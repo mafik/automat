@@ -15,7 +15,6 @@ namespace automat::library {
 struct Window : public Object, ui::WindowWatcher {
   std::mutex mutex;
   os::WindowHandle handle = os::kNoWindow;
-  bool run_continuously = true;
   bool active = false;  // Whether the tracked window is currently active (focused)
   Str title = "";
   sk_sp<SkImage> captured_image;  // Captured window image
@@ -93,8 +92,6 @@ struct Window : public Object, ui::WindowWatcher {
   // WindowWatcher interface
   void WindowWatcherForegroundChanged(ui::WindowWatching&, os::WindowHandle window) override;
   void WindowWatcherOnRelease(const ui::WindowWatching&) override { window_watching = nullptr; }
-
-  void Relocate(Location* new_here) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

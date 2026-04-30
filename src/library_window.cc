@@ -83,47 +83,6 @@ namespace automat::library {
 
 constexpr bool kDebugWindowPicking = false;
 
-struct EnableContinuousRunOption : TextOption {
-  WeakPtr<Window> weak;
-
-  EnableContinuousRunOption(WeakPtr<Window> weak) : TextOption("Start"), weak(weak) {}
-
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<EnableContinuousRunOption>(weak);
-  }
-
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    if (auto window = weak.lock()) {
-      auto lock = std::lock_guard(window->mutex);
-      window->run_continuously = true;
-      // Start continuous execution
-      if (auto here_ptr = window->here) {
-        window->capture->ScheduleRun();
-      }
-    }
-    return nullptr;
-  }
-  Dir PreferredDir() const override { return SW; }
-};
-
-struct DisableContinuousRunOption : TextOption {
-  WeakPtr<Window> weak;
-
-  DisableContinuousRunOption(WeakPtr<Window> weak) : TextOption("Stop"), weak(weak) {}
-
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<DisableContinuousRunOption>(weak);
-  }
-
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    if (auto window = weak.lock()) {
-      auto lock = std::lock_guard(window->mutex);
-      window->run_continuously = false;
-    }
-    return nullptr;
-  }
-};
-
 std::string_view Window::Name() const { return "Window"; }
 
 struct Window::Impl {
@@ -153,7 +112,6 @@ Window::Window() { impl = std::make_unique<Impl>(); }
 
 Ptr<Object> Window::Clone() const {
   auto ret = MAKE_PTR(Window);
-  ret->run_continuously = run_continuously;
   ret->captured_image = captured_image;
   ret->capture_time = capture_time;
   ret->handle = handle;
@@ -451,20 +409,6 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
     }
 #endif
   }
-
-  void VisitOptions(const OptionsVisitor& visitor) const override {
-    ObjectToy::VisitOptions(visitor);
-    if (auto window = LockWindow()) {
-      auto lock = std::lock_guard(window->mutex);
-      if (window->run_continuously) {
-        DisableContinuousRunOption disable{window};
-        visitor(disable);
-      } else {
-        EnableContinuousRunOption enable{window};
-        visitor(enable);
-      }
-    }
-  }
 };
 
 std::unique_ptr<ObjectToy> Window::MakeToy(ui::Widget* parent) {
@@ -629,10 +573,6 @@ void Window::Capture() {
   WakeToys();
 
   here->ScheduleUpdate();
-  // Re-schedule execution if continuous run is enabled
-  if (run_continuously) {
-    capture->ScheduleRun();
-  }
 }
 
 void Window::WindowWatcherForegroundChanged(ui::WindowWatching&, os::WindowHandle window) {
@@ -654,13 +594,6 @@ void Window::WindowWatcherForegroundChanged(ui::WindowWatching&, os::WindowHandl
       on_off->NotifyTurnedOff();
     }
     WakeToys();
-  }
-}
-
-void Window::Relocate(Location* new_here) {
-  Object::Relocate(new_here);
-  if (run_continuously && new_here) {
-    capture->ScheduleRun();
   }
 }
 
@@ -692,8 +625,6 @@ void Window::AttachToTitle() {
 void Window::SerializeState(ObjectSerializer& writer) const {
   writer.Key("title");
   writer.String(title.data(), title.size());
-  writer.Key("run_continuously");
-  writer.Bool(run_continuously);
   writer.Key("active");
   writer.Bool(active);
   writer.Key("capture_time");
@@ -707,8 +638,6 @@ bool Window::DeserializeKey(ObjectDeserializer& d, StrView key) {
     if (!title.empty()) {
       AttachToTitle();
     }
-  } else if (key == "run_continuously") {
-    d.Get(run_continuously, status);
   } else if (key == "active") {
     d.Get(active, status);
   } else if (key == "capture_time") {

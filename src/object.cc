@@ -488,8 +488,10 @@ void ObjectSerializer::Serialize(Object& start) {
       // ATM we only serialize Args
       bool args_opened = false;  // used to lazily call StartObject
       o->Each<Argument>([&](Argument arg) {
+        if (!arg.IsConnected()) return LoopControl::Continue;
         auto end = arg.Find();
-        if (!end) return LoopControl::Continue;
+        auto* end_owner = end.Owner<Object>();
+        if (end_owner == nullptr) return LoopControl::Continue;
         if (!args_opened) {
           args_opened = true;
           Key("links");
@@ -497,7 +499,7 @@ void ObjectSerializer::Serialize(Object& start) {
         }
         Str arg_name(arg.Name());
         Key(arg_name);
-        auto to_name = ResolveName(*end.Owner<Object>(), end.Get());
+        auto to_name = ResolveName(*end_owner, end.Get());
         String(to_name);
         return LoopControl::Continue;
       });

@@ -118,9 +118,9 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
                 Str to_name;
                 d.Get(to_name, status);
                 auto to_iface = d.LookupInterface(to_name);
-                if (to_iface) {
+                if (auto* to_owner = to_iface.Owner<Object>()) {
                   Argument(*object, *from_arg)
-                      .Connect(Interface(to_iface.Owner<Object>(), to_iface.Get()));
+                      .Connect(Interface(to_owner, to_iface.Get()));
                 }
               } else {
                 d.Skip();

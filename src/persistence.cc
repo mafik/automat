@@ -112,15 +112,13 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
           } else if (field == "links") {
             // Deserialize argument connections
             for (auto& arg_name : ObjectView(d, status)) {
-              auto* from_arg =
-                  dyn_cast_if_present<Argument::Table>(object->InterfaceFromName(arg_name));
+              auto from_arg = dyn_cast_if_present<Argument>(object->InterfaceFromName(arg_name));
               if (from_arg) {
                 Str to_name;
                 d.Get(to_name, status);
                 auto to_iface = d.LookupInterface(to_name);
                 if (auto* to_owner = to_iface.Owner<Object>()) {
-                  Argument(*object, *from_arg)
-                      .Connect(Interface(to_owner, to_iface.Get()));
+                  from_arg.Connect(Interface(to_owner, to_iface.Get()));
                 }
               } else {
                 d.Skip();

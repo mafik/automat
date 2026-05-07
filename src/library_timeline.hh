@@ -25,6 +25,7 @@ struct TrackBase : Object {
 
   Timeline* timeline = nullptr;
   Vec<time::Duration> timestamps;
+  string_view Name() const override { return name_str; }
   virtual string_view Type() const = 0;
   virtual void Splice(time::Duration current_offset, time::Duration splice_to) = 0;
   virtual void UpdateOutput(Location& target, time::SteadyPoint started_at,

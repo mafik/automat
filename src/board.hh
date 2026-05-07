@@ -113,6 +113,7 @@ struct BoardWidget : ObjectToy, ui::DropTarget {
   void ForStack(Location& base, std::function<void(Location&, int index)> callback);
   SkPath StackShape(Location& base);
   Vec<Ptr<Location>> ExtractStack(Location& base);
+  Vec<Ptr<Location>> CloneStack(Location& base);
   void RaiseStack(Location& base);
 };
 

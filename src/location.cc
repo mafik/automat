@@ -73,12 +73,13 @@ std::unique_ptr<ObjectToy> Location::MakeToy(ui::Widget* parent) {
   return toy;
 }
 
+// TODO: bad API - doesn't specify root widget
 ObjectToy& Location::ToyForObject() {
   if (!widget) {
     ui::root_widget->toys.FindOrMake(*this, ui::root_widget.get());
     // MakeToy was called, widget is now set.
   }
-  return ui::root_widget->toys.FindOrMake(*object, widget);
+  return widget->ToyForObject();
 }
 
 Object* Location::Follow() {

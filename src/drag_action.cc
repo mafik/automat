@@ -50,7 +50,7 @@ void DragLocationAction::Update() {
   current_position = pointer.PositionWithinRootBoard();
 
   int n = locations.size();
-  Toy* widgets[n];
+  ObjectToy* widgets[n];
   for (int i = 0; i < n; ++i) {
     widgets[i] = &locations[i]->ToyForObject();
   }
@@ -60,7 +60,7 @@ void DragLocationAction::Update() {
   }
   SkMatrix location_transform[n];
   for (int i = 0; i < n; ++i) {
-    float scale = locations[i]->widget->toy->GetBaseScale();
+    float scale = widgets[i]->GetBaseScale();
     location_transform[i] = SkMatrix::Scale(scale, scale)
                                 .postTranslate(current_position.x, current_position.y)
                                 .preTranslate(-locations[i]->widget->local_anchor->x,

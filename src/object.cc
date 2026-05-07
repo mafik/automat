@@ -158,6 +158,46 @@ struct MoveLocationOption : TextOption {
   Dir PreferredDir() const override { return N; }
 };
 
+struct CloneOption : TextOption {
+  WeakPtr<Location> location_weak;
+  WeakPtr<Object> object_weak;
+
+  CloneOption(WeakPtr<Location> location_weak, WeakPtr<Object> object_weak)
+      : TextOption("Clone"), location_weak(location_weak), object_weak(object_weak) {}
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<CloneOption>(location_weak, object_weak);
+  }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    auto location = location_weak.lock();
+    if (location == nullptr) {
+      return nullptr;
+    }
+    auto object = object_weak.lock();
+    if (object == nullptr) {
+      return nullptr;
+    }
+    // Cloning an object that lives inside a container: produce a fresh
+    // standalone Location holding the cloned inner object.
+    if (location->object != object) {
+      auto new_loc = MAKE_PTR(Location);
+      new_loc->InsertHere(object->Clone());
+      audio::Play(embedded::assets_SFX_canvas_pick_wav);
+      return std::make_unique<DragLocationAction>(pointer, std::move(new_loc));
+    }
+    auto parent_location = location->parent_location.Lock();
+    auto* board = parent_location->ThisAs<Board>();
+    if (board && location->object) {
+      board->ForEachToy([](ui::RootWidget&, automat::Toy& w) { w.RedrawThisFrame(); });
+      auto* mw = pointer.root_widget.toys.FindOrNull(*board);
+      if (mw) {
+        audio::Play(embedded::assets_SFX_canvas_pick_wav);
+        return std::make_unique<DragLocationAction>(pointer, mw->CloneStack(*location));
+      }
+    }
+    return nullptr;
+  }
+};
+
 struct IconifyOption : TextOption {
   WeakPtr<Location> weak;
   IconifyOption(WeakPtr<Location> weak) : TextOption("Iconify"), weak(weak) {}
@@ -286,6 +326,8 @@ void ObjectToy::VisitOptions(const OptionsVisitor& visitor) const {
       visitor(del);
       MoveLocationOption move{loc_weak, owner.Copy<Object>()};
       visitor(move);
+      CloneOption clone{loc_weak, owner.Copy<Object>()};
+      visitor(clone);
       if (auto runnable = loc->object->As<Runnable>()) {
         RunOption run{owner.Copy<Object>(), *runnable.table};
         visitor(run);

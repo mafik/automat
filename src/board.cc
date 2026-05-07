@@ -10,6 +10,9 @@
 #include <include/effects/SkRuntimeEffect.h>
 #include <include/pathops/SkPathOps.h>
 
+#include <unordered_map>
+
+#include "argument.hh"
 #include "control_flow.hh"
 #include "drag_action.hh"
 #include "embedded.hh"
@@ -367,6 +370,44 @@ Vec<Ptr<Location>> BoardWidget::ExtractStack(Location& base) {
 
   WakeAnimation();
   audio::Play(embedded::assets_SFX_canvas_pick_wav);
+  return result;
+}
+
+Vec<Ptr<Location>> BoardWidget::CloneStack(Location& base) {
+  auto board = LockBoard();
+  if (!board) return {};
+  Vec<Location*> originals;
+  ForStack(base, [&](Location& loc, int) { originals.insert(originals.begin(), &loc); });
+  if (originals.empty()) return {};
+
+  Vec<Ptr<Location>> result;
+  result.reserve(originals.size());
+  std::unordered_map<Object*, Object*> orig_to_clone;
+  for (auto* orig : originals) {
+    auto clone_loc = orig->Clone().Cast<Location>();
+    if (orig->object) {
+      clone_loc->InsertHere(orig->object->Clone());
+      orig_to_clone[orig->object.get()] = clone_loc->object.get();
+    }
+    result.push_back(std::move(clone_loc));
+  }
+
+  // Arguments within stack should stay within the cloned stack.
+  for (auto& clone_loc : result) {
+    if (!clone_loc->object) continue;
+    clone_loc->object->Each<Argument>([&](Argument arg) {
+      if (!arg.IsConnected()) return LoopControl::Continue;
+      auto target = arg.Find();
+      auto* target_owner = target.Owner<Object>();
+      auto it = orig_to_clone.find(target_owner);
+      if (it != orig_to_clone.end()) {
+        arg.Connect(Interface(it->second, target.Get()));
+      }
+      return LoopControl::Continue;
+    });
+  }
+
+  WakeAnimation();
   return result;
 }
 

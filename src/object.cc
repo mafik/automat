@@ -431,11 +431,11 @@ Location* Object::MyLocation() {
   return here;
 }
 
-Interface::Table* Object::InterfaceFromName(StrView needle) {
-  Interface::Table* result = nullptr;
+Interface Object::InterfaceFromName(StrView needle) {
+  Interface result;
   Interfaces([&](Interface iface) {
     if (iface.Name() == needle) {
-      result = iface.table_ptr;
+      result = iface;
       return LoopControl::Break;
     }
     return LoopControl::Continue;
@@ -538,8 +538,14 @@ NestedPtr<Interface::Table> ObjectDeserializer::LookupInterface(StrView name) {
   if (to == nullptr) {
     return {};
   }
-  Interface::Table* iface = to_iface.empty() ? nullptr : to->InterfaceFromName(to_iface);
-  return NestedPtr<Interface::Table>(to->AcquirePtr(), iface);
+  if (to_iface.empty()) {
+    return NestedPtr<Interface::Table>(to->AcquirePtr(), nullptr);
+  }
+  Interface iface = to->InterfaceFromName(to_iface);
+  if (iface.object_ptr == nullptr) {
+    return {};
+  }
+  return NestedPtr<Interface::Table>(iface.object_ptr->AcquirePtr(), iface.table_ptr);
 }
 
 }  // namespace automat

@@ -109,7 +109,7 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
     return result;
   }
 
-  virtual Interface::Table* InterfaceFromName(StrView name);
+  virtual Interface InterfaceFromName(StrView name);
 
   virtual void Updated(WeakPtr<Object>& updated);
 

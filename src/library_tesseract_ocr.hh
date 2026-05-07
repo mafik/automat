@@ -45,7 +45,7 @@ struct TesseractOCR : public Object {
 
   DEF_INTERFACE(TesseractOCR, InterfaceArgument<ImageProvider>, image, "Image")
   static constexpr auto kStyle = Argument::Style::Invisible;
-  static constexpr float kAutoconnectRadius = 20_cm;
+  static constexpr float kAutoconnectRadius = INFINITY;
   std::unique_ptr<ui::Widget> OnMakeIcon(ui::Widget* parent);
   DEF_END(image);
 

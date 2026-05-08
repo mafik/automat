@@ -700,6 +700,7 @@ struct SignalController : Controller {
       if (state.current_instruction) {
         rip = InstToInstructionPointer(state.current_instruction);
       } else {
+        // DIY "call epilogue"
         NATIVE_RSP(context) -= 8;
         *(uint64_t*)NATIVE_RSP(context) = old_rip;
         rip = epilogue_address;

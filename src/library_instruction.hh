@@ -21,7 +21,7 @@ struct RegisterPresentation {
   int regs_index;  // index of this register in mc::Regs (matches Regs::operator[])
 };
 
-constexpr static int kGeneralPurposeRegisterCount = 6;
+constexpr static int kGeneralPurposeRegisterCount = 8;
 
 extern RegisterPresentation kRegisters[kGeneralPurposeRegisterCount];
 

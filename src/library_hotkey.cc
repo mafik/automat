@@ -147,7 +147,7 @@ bool HotKey::DeserializeKey(ObjectDeserializer& d, StrView keyName) {
     ModifySetting([&] { d.Get(shift, status); });
   } else if (keyName == "windows") {
     ModifySetting([&] { d.Get(windows, status); });
-  } else if (keyName == "active") {
+  } else if (keyName == "enabled") {
     bool should_be_on = false;
     d.Get(should_be_on, status);
     if (should_be_on && !was_on) {

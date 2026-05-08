@@ -82,6 +82,20 @@ RegisterPresentation kRegisters[kGeneralPurposeRegisterCount] = {
     },
     RegisterPresentation{
         .image = PersistentImage::MakeFromAsset(
+            embedded::assets_reg_bp_webp, PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
+        .llvm_reg = X86::RBP,
+        .name = "RBP",
+        .regs_index = offsetof(mc::Regs, RBP) / sizeof(uint64_t),
+    },
+    RegisterPresentation{
+        .image = PersistentImage::MakeFromAsset(
+            embedded::assets_reg_sp_webp, PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
+        .llvm_reg = X86::RSP,
+        .name = "RSP",
+        .regs_index = offsetof(mc::Regs, RSP) / sizeof(uint64_t),
+    },
+    RegisterPresentation{
+        .image = PersistentImage::MakeFromAsset(
             embedded::assets_reg_si_webp, PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RSI,
         .name = "RSI",

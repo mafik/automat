@@ -18,6 +18,7 @@ struct RegisterPresentation {
   PersistentImage image;
   unsigned llvm_reg;
   std::string name;
+  int regs_index;  // index of this register in mc::Regs (matches Regs::operator[])
 };
 
 constexpr static int kGeneralPurposeRegisterCount = 6;

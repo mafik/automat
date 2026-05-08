@@ -517,7 +517,7 @@ struct SignalController : Controller {
         }
 
         auto& last_inst_info = llvm_asm.mc_instr_info->get(program[last_inst_i].inst->getOpcode());
-        if (!last_inst_info.isUnconditionalBranch()) {
+        if (!last_inst_info.isUnconditionalBranch() && !last_inst_info.isReturn()) {
           EmitExitPoint(last_inst_i, StopType::Next);
         }
       };
@@ -943,7 +943,7 @@ struct PtraceController : Controller {
         }
 
         auto& last_inst_info = llvm_asm.mc_instr_info->get(program[last_inst_i].inst->getOpcode());
-        if (!last_inst_info.isUnconditionalBranch()) {
+        if (!last_inst_info.isUnconditionalBranch() && !last_inst_info.isReturn()) {
           EmitExitPoint(last_inst_i, StopType::Next);
         }
       };

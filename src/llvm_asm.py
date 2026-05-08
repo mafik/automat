@@ -67,7 +67,7 @@ def gen_x86_hh():
   # Step 1: Filter out opcodes that we don't support
   for opcode_name, opcode in x.items():
     skip = opcode_name.startswith('!') or 'Instruction' not in opcode['!superclasses']
-    skip = skip or opcode['isPseudo'] or opcode['mayStore'] or opcode['mayLoad'] or opcode['isCall']
+    skip = skip or opcode['isPseudo'] or opcode['mayStore'] or opcode['mayLoad']
     if not skip:
       for predicate in opcode['Predicates']:
         if predicate['kind'] == 'def' and predicate['def'] in ('In32BitMode', 'Not64BitMode', 'HasX87', 'HasMMX', 'HasLWP', 'HasAMXCOMPLEX', 'HasAMXTILE', 'HasAMXINT8', 'HasAMXFP16', 'HasTBM'):
@@ -93,8 +93,7 @@ def gen_x86_hh():
           skip = True
     if not skip:
       # Skip instruction prefixes and nops
-      # Skip Rets
-      if opcode['SchedRW'] and opcode['SchedRW'][0]['def'] in ('WriteNop', 'WriteLoad', 'WriteJumpLd'):
+      if opcode['SchedRW'] and opcode['SchedRW'][0]['def'] in ('WriteNop', 'WriteLoad'):
         skip = True
     if skip:
       skip_opcodes.add(opcode_name)
@@ -226,7 +225,15 @@ def gen_x86_hh():
   Group('Move', [r'^MOV\d+(rr|ri)'])
   Group('Move Debug', [r'^MOV\d+(rd|dr)'])
   Group('Move If', [r'^CMOV\d', '^SETCC'])
-  Group('Jump', ['^JMP', '^JCC', '^JECXZ', '^JRCXZ', '^LOOP'])
+  Group('Jump', ['^JMP_', '^JCC', '^JECXZ', '^JRCXZ', '^LOOP'])
+  Group('Absolute Jump', ['^JMPABS64i'])
+  Group('Procedures', ['^CALL64pcrel32$', '^RET64$'])
+  Group('Indirect Call', ['^CALL64r$', '^CALL64r_NT$'])
+  Group('Call with marker', ['^CALL64pcrel32_RVMARKER$'])
+  Group('Tail Call', ['^TCRETURN', '^TAILJMP'])
+  Group('Far Return', ['^LRET'])
+  Group('Interrupt Return', ['^IRET'], ring0=True)
+  Group('Other Return', ['^RET$', '^RET16$', '^RET32$', '^RETI'])
   Group('CRC32', ['^CRC32'])
   Group('Carry Flag', ['^CMC', '^CLC', '^STC'], shortcut='Carry')
   Group('Auxiliary Carry', ['^CLAC', '^STAC'])
@@ -304,15 +311,16 @@ def gen_x86_hh():
   Category('System', [name for name in groups.keys() if groups[name].ring0], supported=False)
   Category('Virtualization', ['AMD-V', 'Intel VMX'], supported=False)
   Category('Floating Point', ['x87'], supported=False)
-  Category('LLVM Stuff', ['LLVM sanitizers', 'LLVM internals'], supported=False)
+  Category('LLVM Stuff', ['LLVM sanitizers', 'LLVM internals', 'Tail Call', 'Call with marker'], supported=False)
   Category('Specialist Stuff', [
     'Push/Pop FS/GS', 'Get Extended Control Registers', 'Intel Trusted Execution', 'Unsigned Double Shift', 'CPUID',
     'Software Tracing', 'Model Specific Registers', 'Cache Control', 'Control Flow Tracking/Indirect Branch Tracking',
     'Performance Counters', 'Software Interrupt', 'User Interrupt', 'Segment Descriptors', 'SGX', 'System Call',
     'Breakpoint', 'Memory Monitoring', 'User Page Keys', 'Read/Write FS/GS', 'Control Flow Shadow Stack',
     'Multi-line unsigned add', 'Move Debug', 'Flag Register', 'CRC32', 'Core ID', 'Time + Core ID',
-    'Shift without affecting flags', 'Multiply without affecting flags'], supported=False)
-  Category('Obsolete', ['VIA PadLock', 'Auxiliary Carry', 'Invalid Byte Swap'], supported=False)
+    'Shift without affecting flags', 'Multiply without affecting flags',
+    'Indirect Call', 'Other Return', 'Absolute Jump'], supported=False)
+  Category('Obsolete', ['VIA PadLock', 'Auxiliary Carry', 'Invalid Byte Swap', 'Far Return'], supported=False)
   Category('Accesses Memory', ['String scan', 'String store', 'Stack Frames', 'Direction Flag'], supported=False)
   Category('Prefixes', ['Rep prefixes', 'Synchronization prefixes'], supported=False)
   Category('Multithreading', ['Fence', 'Restricted Transactional Memory'], supported=False)
@@ -326,7 +334,7 @@ def gen_x86_hh():
   Category('Signed Math', ['Signed Negate', 'Signed Shift', 'Signed Divide', 'Signed Multiply', 'Sign Extend'])
   Category('Unsigned Math', ['Unsigned Shift', 'Unsigned Divide', 'Unsigned Multiply', 'Zero Extend', 'Add Carry', 'Subtract Carry'])
   Category('Misc', ['Random Numbers', 'Time'])
-  Category('Control', ['Compare', 'Test', 'Jump', 'Move If', 'Carry Flag'])
+  Category('Control', ['Compare', 'Test', 'Jump', 'Procedures', 'Move If', 'Carry Flag'])
 
   # At this point all categories should have been grouped. Print the stragglers.
   covered_groups = set()

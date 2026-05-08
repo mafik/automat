@@ -161,7 +161,8 @@ static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now
     assembler.mc_controller->GetState(assembler.state, ignore);
     // Wake all registers widgets where values have changed.
     for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-      if (old_regs[i] != assembler.state.regs[i]) {
+      int regs_idx = kRegisters[i].regs_index;
+      if (old_regs[regs_idx] != assembler.state.regs[regs_idx]) {
         if (auto reg = assembler.reg_objects_idx[i].lock()) {
           reg->WakeToys();
         }
@@ -319,9 +320,9 @@ void Assembler::SerializeState(ObjectSerializer& writer) const {
   }
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     auto& reg = kRegisters[i];
-    if (mc_state.regs[i] == 0) continue;
+    if (mc_state.regs[reg.regs_index] == 0) continue;
     writer.Key(reg.name.data(), reg.name.size());
-    auto hex_value = ValToHex(mc_state.regs[i]);
+    auto hex_value = ValToHex(mc_state.regs[reg.regs_index]);
     writer.String(hex_value.data(), hex_value.size());
   }
   // TODO: store currently executing instruction
@@ -337,8 +338,8 @@ bool Assembler::DeserializeKey(ObjectDeserializer& d, StrView key) {
       if (hex_value.size() != 16) {
         AppendErrorMessage(status) += "Registers should have 16 hex digits";
       } else {
-        static_assert(sizeof(state.regs[i]) == 8);
-        HexToBytesUnchecked(hex_value, (char*)&state.regs[i]);
+        static_assert(sizeof(state.regs[reg.regs_index]) == 8);
+        HexToBytesUnchecked(hex_value, (char*)&state.regs[reg.regs_index]);
         // Update the controller state
         if (mc_controller) {
           mc_controller->ChangeState([&](mc::Controller::State& mc_state) { mc_state = state; },
@@ -396,7 +397,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   }
   // Create new register objects for registers that have non-zero values.
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    if (assembler->state.regs[i] == 0) continue;
+    if (assembler->state.regs[kRegisters[i].regs_index] == 0) continue;
     if (assembler->reg_objects_idx[i] != nullptr) continue;
     assembler->reg_objects_idx[i] = MAKE_PTR(Register, owner.Copy<Assembler>(), i);
   }
@@ -641,7 +642,7 @@ animation::Phase RegisterWidget::Tick(time::Timer& timer) {
     auto register_index = register_obj->register_index;
     if (auto assembler = register_obj->assembler_arg->FindObject()) {
       phase = RefreshState(*assembler, timer.now);
-      auto reg_value = assembler->state.regs[register_index];
+      auto reg_value = assembler->state.regs[kRegisters[register_index].regs_index];
     }
   }
   return phase;
@@ -653,7 +654,7 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
   if (auto register_obj = LockRegister()) {
     register_index = register_obj->register_index;
     if (auto assembler = register_obj->assembler_arg->FindObject()) {
-      reg_value = assembler->state.regs[register_index];
+      reg_value = assembler->state.regs[kRegisters[register_index].regs_index];
     }
   }
   SkPaint dark_paint;
@@ -750,7 +751,7 @@ void Register::SetText(std::string_view text) {
       [&](mc::Controller::State& state) {
         uint64_t reg_value = 0;
         memcpy(&reg_value, text.data(), std::min(text.size(), sizeof(reg_value)));
-        state.regs[register_index] = reg_value;
+        state.regs[kRegisters[register_index].regs_index] = reg_value;
       },
       status);
   if (!OK(status)) {

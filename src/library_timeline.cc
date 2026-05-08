@@ -361,7 +361,24 @@ void Timeline::AddTrack(Ptr<TrackBase>&& track) {
   WakeToys();
 }
 
-Timeline::Timeline(const Timeline& other) : Timeline() {
+Timeline::Timeline(const Timeline& other)
+    : Object(other),
+      run(other.run),
+      next(other.next),
+      zoom(other.zoom),
+      state(other.state),
+      timeline_length(other.timeline_length) {
+  switch (state) {
+    case kPaused:
+      paused = other.paused;
+      break;
+    case kPlaying:
+      playing = other.playing;
+      break;
+    case kRecording:
+      recording = other.recording;
+      break;
+  }
   tracks.reserve(other.tracks.size());
   for (const auto& track : other.tracks) {
     AddTrack(track->Clone().Cast<TrackBase>());

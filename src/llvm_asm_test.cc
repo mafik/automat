@@ -125,8 +125,9 @@ class MachineCodeControllerTest : public ::testing::Test {
     return inst;
   }
 
-  Connection* Next(Ptr<library::Instruction>& a, Ptr<library::Instruction>& b) {
-    return a->here->ConnectTo(*b->here, library::Instruction::next_tbl);
+  void Next(Ptr<library::Instruction>& a, Ptr<library::Instruction>& b) {
+    Argument(*a, library::Instruction::next_tbl)
+        .Connect(Interface(*b, library::Instruction::run_tbl));
   }
 
   void TestUpdateCode(std::span<library::Instruction*> instructions) {
@@ -225,7 +226,7 @@ TEST_F(MachineCodeControllerTest, HotReload) {
   auto inst2 = MakeInstructionRegImm(llvm::X86::MOV64ri, llvm::X86::RAX, 42);
 
   // Start executing inst2 in a loop.
-  auto conn = Next(inst2, inst2);
+  Next(inst2, inst2);
   library::Instruction* instructions[] = {inst1.get(), inst2.get()};
   TestUpdateCode(instructions);
   StartExecution(inst2, true);
@@ -233,10 +234,28 @@ TEST_F(MachineCodeControllerTest, HotReload) {
   VerifyState({.current_instruction = inst2->ToMC(), .regs = {.RAX = 42}});
 
   // Then break the loop by redirecting inst2 to inst1.
-  delete conn;
   Next(inst2, inst1);
   library::Instruction* instructions2[] = {inst2.get(), inst1.get()};
   TestUpdateCode(instructions2);
   ASSERT_TRUE(WaitForExecution());
   VerifyState({.regs = {.RAX = 1337}}, inst1->ToMC(), mc::StopType::Next);
+}
+
+TEST_F(MachineCodeControllerTest, PersistentStack) {
+  auto pusher = MakeInstructionImm(llvm::X86::PUSH64i32, 0x1337);
+  library::Instruction* push_set[] = {pusher.get()};
+  TestUpdateCode(push_set);
+  StartExecution(pusher);
+  ASSERT_TRUE(WaitForExecution());
+
+  auto popper = MakeInstruction(llvm::MCInstBuilder(llvm::X86::POP64r).addReg(llvm::X86::RAX));
+  library::Instruction* pop_set[] = {popper.get()};
+  TestUpdateCode(pop_set);
+  StartExecution(popper);
+  ASSERT_TRUE(WaitForExecution());
+
+  mc::Controller::State state;
+  Status status;
+  controller->GetState(state, status);
+  EXPECT_EQ(state.regs.RAX, 0x1337u);
 }

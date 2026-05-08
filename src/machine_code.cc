@@ -86,7 +86,8 @@ struct SignalController : Controller {
   X(R12, R12);          \
   X(R13, R13);          \
   X(R14, R14);          \
-  X(R15, R15);
+  X(R15, R15);          \
+  X(RSP, RSP);
 
 #elif defined _WIN32
   using ThreadHandle = HANDLE;
@@ -111,13 +112,18 @@ struct SignalController : Controller {
   X(R12, R12);          \
   X(R13, R13);          \
   X(R14, R14);          \
-  X(R15, R15);
+  X(R15, R15);          \
+  X(RSP, Rsp);
 
 #endif  // __linux__
 
   ThreadHandle executing_thread_tid{0};
 
   Regs regs;
+  uint64_t cpp_rsp = 0;
+
+  char* asm_stack_mmap = nullptr;
+  size_t asm_stack_mmap_size = 0;
 
   std::span<char> code;
   // Note: maybe a better calling ABI would be used for assembly? For example preserve_none.
@@ -176,6 +182,10 @@ struct SignalController : Controller {
 
   SignalController(ExitCallback&& exit_callback) : Controller(std::move(exit_callback)) {
     constexpr size_t kDefaultMachineCodeSize = 4096;
+    constexpr size_t kPageSize = 4096;
+    constexpr size_t kStackPages = 1;
+    constexpr size_t kTotalPages = kStackPages + 2;
+    asm_stack_mmap_size = kTotalPages * kPageSize;
 
 #if defined __linux__
     auto mem = (char*)mmap((void*)0x10000, kDefaultMachineCodeSize, PROT_READ | PROT_EXEC,
@@ -183,15 +193,28 @@ struct SignalController : Controller {
     if (mem == MAP_FAILED) {
       return;
     }
+    asm_stack_mmap =
+        (char*)mmap(nullptr, asm_stack_mmap_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (asm_stack_mmap == MAP_FAILED) {
+      asm_stack_mmap = nullptr;
+      return;
+    }
+    mprotect(asm_stack_mmap + kPageSize, kStackPages * kPageSize, PROT_READ | PROT_WRITE);
 #elif _WIN32
     auto mem = (char*)VirtualAlloc(NULL, kDefaultMachineCodeSize, MEM_COMMIT | MEM_RESERVE,
                                    PAGE_EXECUTE_READWRITE);
     if (mem == NULL) {
       return;
     }
+    asm_stack_mmap = (char*)VirtualAlloc(NULL, asm_stack_mmap_size, MEM_RESERVE, PAGE_NOACCESS);
+    if (asm_stack_mmap == nullptr) {
+      return;
+    }
+    VirtualAlloc(asm_stack_mmap + kPageSize, kStackPages * kPageSize, MEM_COMMIT, PAGE_READWRITE);
 #endif  // __linux__
 
     code = std::span(mem, kDefaultMachineCodeSize);
+    regs.RSP = (uint64_t)(asm_stack_mmap + (kStackPages + 1) * kPageSize);
   }
 
   ~SignalController() {
@@ -199,8 +222,10 @@ struct SignalController : Controller {
     Cancel(status_ignored);
 #if defined __linux__
     munmap(code.data(), code.size());
+    if (asm_stack_mmap) munmap(asm_stack_mmap, asm_stack_mmap_size);
 #elif _WIN32
     VirtualFree(code.data(), code.size(), MEM_RELEASE);
+    if (asm_stack_mmap) VirtualFree(asm_stack_mmap, 0, MEM_RELEASE);
 #endif  // __linux__
   }
 
@@ -244,6 +269,9 @@ struct SignalController : Controller {
     SmallVector<char, 256> epilogue_prologue;
     SmallVector<MCFixup, 4> epilogue_prologue_fixups;
     int64_t regs_addr = reinterpret_cast<int64_t>(&regs);
+
+    constexpr int kCppRspOff =
+        offsetof(SignalController, cpp_rsp) - offsetof(SignalController, regs);
 
     auto& llvm_asm = LLVM_Assembler::Get();
     auto& mc_code_emitter = llvm_asm.mc_code_emitter;
@@ -289,6 +317,11 @@ struct SignalController : Controller {
                                          epilogue_prologue, epilogue_prologue_fixups,
                                          *mc_subtarget_info);
     };
+    auto MOVrr = [&](unsigned dst, unsigned src) {
+      mc_code_emitter->encodeInstruction(MCInstBuilder(X86::MOV64rr).addReg(dst).addReg(src),
+                                         epilogue_prologue, epilogue_prologue_fixups,
+                                         *mc_subtarget_info);
+    };
 
     // # EPILOGUE:
 
@@ -313,10 +346,11 @@ struct SignalController : Controller {
 #define SAVE(reg) MOVmr(X86::RAX, offsetof(Regs, reg), X86::reg);
     REGS(SAVE);  // Save all registers to Regs
 #undef SAVE
-    // MOVrm(X86::RSP, X86::RAX, offsetof(Regs, original_RSP));
 
-    // Store the 64-bit address of the exit point in
-    POPr(X86::RAX);
+    POPr(X86::RBX);                                  // RBX = return address (exit_ptr)
+    MOVmr(X86::RAX, offsetof(Regs, RSP), X86::RSP);  // save assembly RSP
+    MOVrm(X86::RSP, X86::RAX, kCppRspOff);           // restore C++ RSP
+    MOVrr(X86::RAX, X86::RBX);                       // RAX = exit_ptr return value
 
     // Restore callee-saved registers
     POPr(X86::R15);
@@ -342,11 +376,13 @@ struct SignalController : Controller {
     PUSHr(X86::R14);
     PUSHr(X86::R15);
 
+    MOVri(X86::RAX, regs_addr);
+    MOVmr(X86::RAX, kCppRspOff, X86::RSP);           // save C++ RSP
+    MOVrm(X86::RSP, X86::RAX, offsetof(Regs, RSP));  // switch to assembly stack
+
     PUSHr(X86::RDI);  // Push the first argument (RDI) so that it can be used to "RET" into the
                       // right address
 
-    MOVri(X86::RAX, regs_addr);
-    // MOVmr(X86::RAX, offsetof(Regs, original_RSP), X86::RSP);
 #define LOAD(reg) MOVrm(X86::reg, X86::RAX, offsetof(Regs, reg));
     REGS(LOAD);
     LOAD(RAX);  // load RAX last because it's used as a base for address
@@ -701,8 +737,8 @@ struct SignalController : Controller {
         rip = InstToInstructionPointer(state.current_instruction);
       } else {
         // DIY "call epilogue"
-        NATIVE_RSP(context) -= 8;
-        *(uint64_t*)NATIVE_RSP(context) = old_rip;
+        state.regs.RSP -= 8;
+        *(uint64_t*)state.regs.RSP = old_rip;
         rip = epilogue_address;
       }
       StateToNative(context, state, rip);

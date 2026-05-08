@@ -193,6 +193,7 @@ void Instruction::BufferVisit(const BufferVisitor& visitor) {
       bool changed = visitor(span);
       if (changed) {
         operand.setImm(imm);
+        WakeToys();
         if (auto assembler = FindAssembler(*this)) {
           assembler->UpdateMachineCode();
         }
@@ -2995,6 +2996,7 @@ struct ConditionCodeWidget : public EnumKnobWidget {
   void KnobSet(int new_value) override {
     auto instruction = instruction_weak.Lock().Cast<Instruction>();
     instruction->mc_inst.getOperand(token_i).setImm(new_value);
+    instruction->WakeToys();
     if (auto assembler = FindAssembler(*instruction)) {
       assembler->UpdateMachineCode();
     }
@@ -3225,6 +3227,7 @@ struct LoopConditionCodeWidget : public EnumKnobWidget {
     } else {
       LOG << "Can't set condition code for loop instruction";
     }
+    instruction->WakeToys();
     if (auto assembler = FindAssembler(*instruction)) {
       assembler->UpdateMachineCode();
     }

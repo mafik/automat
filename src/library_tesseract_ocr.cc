@@ -67,17 +67,27 @@ TesseractOCR::TesseractOCR() {
   }
 }
 
+TesseractOCR::TesseractOCR(const TesseractOCR& other)
+    : Object(other),
+      ocr_text(other.ocr_text),
+      run(other.run),
+      next(other.next),
+      x_min_ratio(other.x_min_ratio),
+      x_max_ratio(other.x_max_ratio),
+      y_min_ratio(other.y_min_ratio),
+      y_max_ratio(other.y_max_ratio),
+      image(other.image),
+      text(other.text) {
+  auto eng_traineddata = embedded::assets_eng_traineddata.content;
+  if (tesseract.Init(eng_traineddata.data(), eng_traineddata.size(), "eng",
+                     tesseract::OEM_LSTM_ONLY, nullptr, 0, nullptr, nullptr, true, nullptr)) {
+    LOG << "Tesseract init failed";
+  }
+}
+
 std::string_view TesseractOCR::Name() const { return "Tesseract OCR"; }
 
-Ptr<Object> TesseractOCR::Clone() const {
-  auto ret = MAKE_PTR(TesseractOCR);
-  ret->x_min_ratio = x_min_ratio;
-  ret->x_max_ratio = x_max_ratio;
-  ret->y_min_ratio = y_min_ratio;
-  ret->y_max_ratio = y_max_ratio;
-  ret->ocr_text = ocr_text;
-  return ret;
-}
+Ptr<Object> TesseractOCR::Clone() const { return MAKE_PTR(TesseractOCR, *this); }
 
 struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
   constexpr static float kSize = 5_cm;

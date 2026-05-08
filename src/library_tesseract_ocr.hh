@@ -54,6 +54,7 @@ struct TesseractOCR : public Object {
   DEF_END(text);
 
   TesseractOCR();
+  TesseractOCR(const TesseractOCR&);
 
   void Run();
   std::string_view Name() const override;

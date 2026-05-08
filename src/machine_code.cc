@@ -77,6 +77,7 @@ struct SignalController : Controller {
   X(RCX, RCX);          \
   X(RDX, RDX);          \
   X(RBP, RBP);          \
+  X(RSP, RSP);          \
   X(RSI, RSI);          \
   X(RDI, RDI);          \
   X(R8, R8);            \
@@ -86,8 +87,7 @@ struct SignalController : Controller {
   X(R12, R12);          \
   X(R13, R13);          \
   X(R14, R14);          \
-  X(R15, R15);          \
-  X(RSP, RSP);
+  X(R15, R15);
 
 #elif defined _WIN32
   using ThreadHandle = HANDLE;
@@ -103,6 +103,7 @@ struct SignalController : Controller {
   X(RCX, Rcx);          \
   X(RDX, Rdx);          \
   X(RBP, Rbp);          \
+  X(RSP, Rsp);          \
   X(RSI, Rsi);          \
   X(RDI, Rdi);          \
   X(R8, R8);            \
@@ -112,8 +113,7 @@ struct SignalController : Controller {
   X(R12, R12);          \
   X(R13, R13);          \
   X(R14, R14);          \
-  X(R15, R15);          \
-  X(RSP, Rsp);
+  X(R15, R15);
 
 #endif  // __linux__
 

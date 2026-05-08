@@ -32,6 +32,7 @@ struct Regs {
   uint64_t RCX = 0;
   uint64_t RDX = 0;
   uint64_t RBP = 0;
+  uint64_t RSP = 0;
   uint64_t RSI = 0;
   uint64_t RDI = 0;
   uint64_t R8 = 0;
@@ -42,7 +43,6 @@ struct Regs {
   uint64_t R13 = 0;
   uint64_t R14 = 0;
   uint64_t R15 = 0;
-  uint64_t RSP = 0;
 
   static constexpr int kNumRegisters = 16;
 

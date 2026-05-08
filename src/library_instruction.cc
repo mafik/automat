@@ -57,36 +57,42 @@ RegisterPresentation kRegisters[kGeneralPurposeRegisterCount] = {
             embedded::assets_reg_ax_webp, PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RAX,
         .name = "RAX",
+        .regs_index = offsetof(mc::Regs, RAX) / sizeof(uint64_t),
     },
     RegisterPresentation{
         .image = PersistentImage::MakeFromAsset(
             embedded::assets_reg_bx_webp, PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RBX,
         .name = "RBX",
+        .regs_index = offsetof(mc::Regs, RBX) / sizeof(uint64_t),
     },
     RegisterPresentation{
         .image = PersistentImage::MakeFromAsset(
             embedded::assets_reg_cx_webp, PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RCX,
         .name = "RCX",
+        .regs_index = offsetof(mc::Regs, RCX) / sizeof(uint64_t),
     },
     RegisterPresentation{
         .image = PersistentImage::MakeFromAsset(
             embedded::assets_reg_dx_webp, PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RDX,
         .name = "RDX",
+        .regs_index = offsetof(mc::Regs, RDX) / sizeof(uint64_t),
     },
     RegisterPresentation{
         .image = PersistentImage::MakeFromAsset(
             embedded::assets_reg_si_webp, PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RSI,
         .name = "RSI",
+        .regs_index = offsetof(mc::Regs, RSI) / sizeof(uint64_t),
     },
     RegisterPresentation{
         .image = PersistentImage::MakeFromAsset(
             embedded::assets_reg_di_webp, PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RDI,
         .name = "RDI",
+        .regs_index = offsetof(mc::Regs, RDI) / sizeof(uint64_t),
     },
 };
 
@@ -165,13 +171,14 @@ static Assembler* FindOrCreateAssembler(Object& start) {
 void Instruction::Interfaces(const std::function<LoopControl(Interface)>& cb) {
   if (LoopControl::Break == cb(run.Bind())) return;
   auto opcode = mc_inst.getOpcode();
-  if (opcode != X86::JMP_1 && opcode != X86::JMP_4) {
+  auto& assembler_info = LLVM_Assembler::Get();
+  auto& info = assembler_info.mc_instr_info->get(opcode);
+  bool is_terminal = (opcode == X86::JMP_1 || opcode == X86::JMP_4 || info.isReturn());
+  if (!is_terminal) {
     if (LoopControl::Break == cb(next.Bind())) return;
   }
   if (LoopControl::Break == cb(assembler_arg.Bind())) return;
-  auto& assembler_info = LLVM_Assembler::Get();
-  auto& info = assembler_info.mc_instr_info->get(opcode);
-  if (info.isBranch()) {
+  if (info.isBranch() || info.isCall()) {
     if (LoopControl::Break == cb(jump_arg.Bind())) return;
   }
   if (auto* as = FindAssembler(*this)) {
@@ -282,6 +289,16 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
     case X86::JMP_2:
     case X86::JMP_4: {
       constexpr static Token tokens[] = {{.tag = Token::String, .str = "Jump"}};
+      return tokens;
+    }
+
+    case X86::CALL64pcrel32: {
+      constexpr static Token tokens[] = {{.tag = Token::String, .str = "Call"}};
+      return tokens;
+    }
+
+    case X86::RET64: {
+      constexpr static Token tokens[] = {{.tag = Token::String, .str = "Return"}};
       return tokens;
     }
 

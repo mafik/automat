@@ -407,6 +407,18 @@ Vec<Ptr<Location>> BoardWidget::CloneStack(Location& base) {
     });
   }
 
+  // Prevent default toy appearance animation by pre-creating toys for the clones.
+  // Anchoring to the original toys makes the new toys appear in the same place as the originals.
+  // This violates some parent/child properties (parent is not aware of the child toys) but it
+  // shouldn't cause any big issues.
+  // (if it does - move this part out of CloneStack and into the caller)
+  auto& root = FindRootWidget();
+  for (size_t i = 0; i < originals.size(); ++i) {
+    auto* orig_lw = originals[i]->widget;
+    if (!orig_lw || !orig_lw->toy || !result[i]->object) continue;
+    root.toys.FindOrMake(*result[i]->object, orig_lw->toy.Get());
+  }
+
   WakeAnimation();
   return result;
 }

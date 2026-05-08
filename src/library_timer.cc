@@ -167,10 +167,12 @@ void Timer::CancelTimer() {
 
 Timer::Timer() {}
 
-Timer::Timer(const Timer& other) : Timer() {
-  range = other.range;
-  duration_value = other.duration_value;
-}
+Timer::Timer(const Timer& other)
+    : Object(other),
+      duration_value(other.duration_value),
+      run(other.run),
+      next(other.next),
+      range(other.range) {}
 
 Ptr<Object> Timer::Clone() const { return MAKE_PTR(Timer, *this); }
 

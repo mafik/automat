@@ -2,9 +2,15 @@
 // SPDX-License-Identifier: MIT
 #include "library_assembler.hh"
 
+#include <include/core/SkBlendMode.h>
+#include <include/core/SkBlurTypes.h>
+#include <include/core/SkMaskFilter.h>
 #include <include/core/SkMatrix.h>
+#include <include/core/SkPaint.h>
 #include <include/core/SkPathBuilder.h>
+#include <include/core/SkPathTypes.h>
 #include <include/core/SkShader.h>
+#include <include/core/SkTileMode.h>
 #include <include/effects/SkGradient.h>
 #include <llvm/MC/MCCodeEmitter.h>
 #include <llvm/MC/MCInstBuilder.h>
@@ -361,7 +367,7 @@ AssemblerWidget::AssemblerWidget(Widget* parent, Assembler& assembler)
     : ObjectToy(parent, assembler) {}
 
 std::string_view AssemblerWidget::Name() const { return "Assembler"; }
-SkPath AssemblerWidget::Shape() const { return SkPath::RRect(kRRect.sk); }
+SkPath AssemblerWidget::Shape() const { return SkPath::RRect(kRRect); }
 
 static constexpr float kFlatBorderWidth = 3_mm;
 static constexpr RRect kBorderLightsRRect = AssemblerWidget::kRRect.Outset(-kFlatBorderWidth / 2);
@@ -477,13 +483,13 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
   float one_pixel = 1.0f / canvas.getTotalMatrix().getScaleX();
   SkPaint flat_border_paint;
   flat_border_paint.setColor("#9b252a"_color);
-  canvas.drawDRRect(kRRect.sk, kBorderMidRRect.sk, flat_border_paint);
+  canvas.drawDRRect(kRRect, kBorderMidRRect, flat_border_paint);
   SkPaint bevel_border_paint;
   bevel_border_paint.setColor("#7d2627"_color);
   SetRRectShader(bevel_border_paint, kBorderMidRRect, "#3a2021"_color4f, "#7e2627"_color4f,
                  "#d86355"_color4f);
 
-  canvas.drawDRRect(kBorderMidRRect.sk, kInnerRRect.sk, bevel_border_paint);
+  canvas.drawDRRect(kBorderMidRRect, kInnerRRect, bevel_border_paint);
 
   SkPaint bg_paint = [&]() {
     Status status;
@@ -496,10 +502,10 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
     paint.setShader(shader);
     return paint;
   }();
-  canvas.drawRRect(kInnerRRect.Outset(one_pixel).sk, bg_paint);
+  canvas.drawRRect(kInnerRRect.Outset(one_pixel), bg_paint);
 
   canvas.save();
-  canvas.clipRRect(kInnerRRect.sk);
+  canvas.clipRRect(kInnerRRect);
 
   DrawChildren(canvas);
   canvas.restore();
@@ -534,8 +540,8 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
       center, kLightRange,
       SkGradient{SkGradient::Colors{glow_colors, glow_positions, SkTileMode::kClamp}, {}}));
   canvas.save();
-  canvas.clipRRect(kRRect.sk);
-  canvas.clipRRect(kBorderMidRRect.sk, SkClipOp::kDifference);
+  canvas.clipRRect(kRRect);
+  canvas.clipRRect(kBorderMidRRect, SkClipOp::kDifference);
   for (int i = 0; i < kNumLights; ++i) {
     canvas.save();
     canvas.translate(light_positions[i].x, light_positions[i].y);
@@ -663,26 +669,59 @@ RegisterWidget::RegisterWidget(Widget* parent, Object& reg)
           this, static_cast<Register&>(reg).AcquireWeakPtr())) {
   small_buffer_widget.Measure();
   small_buffer_widget.local_to_parent.setIdentity();
-  small_buffer_widget.local_to_parent.preTranslate(-small_buffer_widget.width / 2,
-                                                   kBaseRect.bottom - small_buffer_widget.height);
-  register_index_knob->local_to_parent =
-      SkM44::Translate(0, kBaseRect.top + kRegisterIconWidth * 0.35);
+  small_buffer_widget.local_to_parent.preTranslate(
+      -small_buffer_widget.width - small_buffer_widget.vertical_margin -
+          register_index_knob->kGaugeRadius,
+      small_buffer_widget.vertical_margin - small_buffer_widget.height / 2);
 }
 RegisterWidget::~RegisterWidget() = default;
-SkPath RegisterWidget::Shape() const { return SkPath::Rect(kBoundingRect.Outset(1_cm).sk); }
-std::string_view RegisterWidget::Name() const { return "Register"; }
 
-void RegisterWidget::FillChildren(Vec<Widget*>& children) {
-  children.push_back(&small_buffer_widget);
-  children.push_back(register_index_knob.get());
+RRect RegisterWidget::MarbleShape() const {
+  Rect rect(-small_buffer_widget.width - small_buffer_widget.vertical_margin * 2 -
+                register_index_knob->kGaugeRadius,
+            -register_index_knob->kGaugeRadius - small_buffer_widget.vertical_margin,
+            register_index_knob->kGaugeRadius + small_buffer_widget.vertical_margin,
+            register_index_knob->kGaugeRadius + small_buffer_widget.vertical_margin);
+  return RRect::MakeSimple(rect, rect.Height() / 2);
 }
 
-static const SkPath kFlagPole = PathFromSVG(
-    "m-.5-.7c-1.8-7.1-2.3-14.5-2.5-21.9-.3.2-.8.3-1.3.4.7-1 1.4-1.8 1.8-3 .3 1.2.8 2 1.6 2.9-.4 "
-    "0-.7-.1-1.2-.3 0 7.4 1 14.7 2.5 21.9.5.2.8.5.9.7h-2.5c.1-.2.3-.5.7-.7z");
+RRect RegisterWidget::SpearShaft() const {
+  float margin = small_buffer_widget.vertical_margin;
+  float width = margin * 0.5f;
+  float bottom = register_index_knob->kGaugeRadius + margin - width / 4;
+  float left = -width / 2;
+  float right = left + width;
+  float top = bottom + kCellHeight * 8 + margin * 2 + width;
+  Rect rect(left, bottom, right, top);
+  auto rrect = RRect::MakeWithRadii(rect, 0, 0, 0, 0);
+  rrect.radii[0].x = width / 2;
+  rrect.radii[0].y = width / 4;
+  rrect.radii[1].x = width / 2;
+  rrect.radii[1].y = width / 4;
+  return rrect;
+}
 
-static const SkPath kFlag = PathFromSVG(
-    R"(m-3.5-21.7c.2-.5 3.1 1 4.6.9 1.6-.1 3.1-1.4 4.7-1.3 1.5.1 2.6 1.8 4.1 1.9 2 .2 3.9-1.4 6-1.5 2.7-.1 8 1.2 8 1.2s-6.7 1-9.7 2.5c-1.8.8-2.8 3-4.7 3.6-1.3.4-2.6-.7-3.9-.4-1.7.4-2.8 2.2-4.4 2.8-1.3.5-4.1.9-4.2.5-.4-3.4-.8-6.6-.6-10.2z)");
+SkPath RegisterWidget::SpearTip() const {
+  auto shaft = SpearShaft();
+  float width = shaft.rect.Width();
+  Vec2 lower = shaft.rect.TopCenter().Down(width * 0.5);
+  auto left = lower.Left(width * 2).Up(width * 1);
+  auto upper = lower.Up(width * 6);
+  auto right = lower.Right(width * 2).Up(width * 1);
+  return SkPathBuilder()
+      .moveTo(lower)
+      .lineTo(left)
+      .lineTo(upper)
+      .lineTo(right)
+      .lineTo(lower)
+      .close()
+      .detach();
+}
+
+Rect RegisterWidget::Checkerboard() const {
+  return Rect::MakeAtZero<::RightX, ::BottomY>(8 * kCellWidth, 8 * kCellHeight)
+      .MoveBy({0, register_index_knob->kGaugeRadius + small_buffer_widget.vertical_margin * 2});
+}
 
 static constexpr float kBitPositionFontSize = RegisterWidget::kCellHeight * 0.42;
 
@@ -697,6 +736,81 @@ static ui::Font& ByteValueFont() {
   static auto font = ui::Font::MakeV2(ui::Font::GetHeavyData(), kByteValueFontSize);
   return *font;
 }
+
+float RegisterWidget::HexWidth() const {
+  static const float kHexWidth = ByteValueFont().MeasureText("00") + kHexMargin * 2;
+  return kHexWidth;
+}
+
+SkPath RegisterWidget::FlagFront() const {
+  float hex_width = HexWidth();
+  auto c = Checkerboard();
+  auto br = c.BottomRightCorner();
+  auto bl = c.BottomLeftCorner().Left(hex_width);
+  auto tl = c.TopLeftCorner().Left(hex_width);
+  auto tr = c.TopRightCorner();
+  auto r = kCellWidth / 4;
+  return SkPathBuilder()
+      .moveTo(br)
+      .lineTo(bl)
+      .arcTo(bl.Left(r), bl.Left(r).Up(r), r)  // bend on the bottom left
+      .lineTo(tl.Left(r).Up(r))
+      .arcTo(tl.Left(r), tl, r)  // bend on the top left
+      .lineTo(tr)
+      .arcTo(tr.Right(r), tr.Right(r).Down(r), r)  // bend on the top right
+      .lineTo(br.Right(r).Down(r))
+      .arcTo(br.Right(r), br, r)  // bend on the bottom right
+      .close()
+      .detach();
+}
+
+SkPath RegisterWidget::FlagBack() const {
+  float hex_width = HexWidth();
+  auto c = Checkerboard();
+  Vec2 bottom = c.TopLeftCorner().Left(hex_width);
+  Vec2 center = bottom.Up(kBendR);
+  Vec2 left = center.Left(kBendR);
+  Vec2 top = center.Up(kBendR);
+  Vec2 end2 = c.TopRightCorner().Right(kBendR * 3);
+  Vec2 end1 = end2.Up(kBendR * 2).Right(kBendR * 2);
+  Vec2 end3 = end1.Down(kCellWidth);
+  return SkPathBuilder()
+      .moveTo(bottom)
+      .arcTo(left.Down(kBendR), left, kBendR)
+      .arcTo(left.Up(kBendR), top, kBendR)
+      .lineTo(end1)
+      .lineTo(end2)
+      .lineTo(end3)
+      .lineTo(top.Down(kCellWidth))
+      .close()
+      .detach();
+}
+
+SkPath RegisterWidget::Shape() const {
+  if (cached_shape.isEmpty()) {
+    cached_shape = SkPathBuilder()
+                       .addRRect(MarbleShape())
+                       .addRRect(SpearShaft())
+                       .addPath(SpearTip())
+                       .addPath(FlagFront())
+                       .addPath(FlagBack())
+                       .detach();
+  }
+  return cached_shape;
+}
+std::string_view RegisterWidget::Name() const { return "Register"; }
+
+void RegisterWidget::FillChildren(Vec<Widget*>& children) {
+  children.push_back(&small_buffer_widget);
+  children.push_back(register_index_knob.get());
+}
+
+static const SkPath kFlagPole = PathFromSVG(
+    "m-.5-.7c-1.8-7.1-2.3-14.5-2.5-21.9-.3.2-.8.3-1.3.4.7-1 1.4-1.8 1.8-3 .3 1.2.8 2 1.6 2.9-.4 "
+    "0-.7-.1-1.2-.3 0 7.4 1 14.7 2.5 21.9.5.2.8.5.9.7h-2.5c.1-.2.3-.5.7-.7z");
+
+static const SkPath kFlag = PathFromSVG(
+    R"(m-3.5-21.7c.2-.5 3.1 1 4.6.9 1.6-.1 3.1-1.4 4.7-1.3 1.5.1 2.6 1.8 4.1 1.9 2 .2 3.9-1.4 6-1.5 2.7-.1 8 1.2 8 1.2s-6.7 1-9.7 2.5c-1.8.8-2.8 3-4.7 3.6-1.3.4-2.6-.7-3.9-.4-1.7.4-2.8 2.2-4.4 2.8-1.3.5-4.1.9-4.2.5-.4-3.4-.8-6.6-.6-10.2z)");
 
 // Shift the byte values up so that they're vertically centered with their rows
 static constexpr float kByteValueFontShiftUp =
@@ -719,6 +833,71 @@ animation::Phase RegisterWidget::Tick(time::Timer& timer) {
 }
 
 void RegisterWidget::Draw(SkCanvas& canvas) const {
+  auto marble_shape = MarbleShape();
+
+  float margin = small_buffer_widget.vertical_margin;
+  float height = margin * 2 + register_index_knob->kGaugeRadius * 2;
+
+  Rect base_rect = Checkerboard();
+
+  {    // Marble
+    {  // Marble color
+      constexpr SkColor marble_color = "#938681"_color;
+      SkPaint marble_paint;
+      marble_paint.setColor(marble_color);
+      canvas.drawRRect(marble_shape, marble_paint);
+    }
+
+    {  // Marble texture
+      SkPaint marble_texture;
+      static auto marble_texture_image = PersistentImage::MakeFromAsset(
+          embedded::assets_17_texture_melt_png,
+          {.tile_x = SkTileMode::kRepeat, .tile_y = SkTileMode::kRepeat});
+      marble_texture.setShader(*marble_texture_image.shader);
+      marble_texture.setBlendMode(SkBlendMode::kOverlay);
+      marble_texture.setAlphaf(0.18f);
+      canvas.drawRRect(marble_shape, marble_texture);
+    }
+
+    {  // Marble bevel
+      SkPaint bevel_paint;
+      SkPoint pts[] = {marble_shape.rect.TopCenter(), marble_shape.rect.BottomCenter()};
+      SkColor4f colors[] = {
+          "#ffffff80"_color4f,  // white light
+          "#ffffff00"_color4f,  // transparent white
+      };
+      float pos[] = {0, 0.5};
+
+      bevel_paint.setShader(SkShaders::LinearGradient(
+          pts, SkGradient(SkGradient::Colors{colors, pos, SkTileMode::kClamp}, {})));
+
+      bevel_paint.setStyle(SkPaint::kStroke_Style);
+      bevel_paint.setStrokeWidth(margin * 0.25f);
+      bevel_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, margin * 0.125f));
+      auto bevel_shape = marble_shape.Outset(-margin * 0.125f);
+      canvas.save();
+      canvas.clipRRect(marble_shape);
+      canvas.drawRRect(bevel_shape, bevel_paint);
+      canvas.restore();
+    }
+
+    {  // Marble shade
+      SkPaint shade_paint;
+
+      shade_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, height * 0.25f));
+      shade_paint.setBlendMode(SkBlendMode::kOverlay);
+      shade_paint.setAlphaf(0.4f);
+      auto shade_shape = marble_shape.MoveBy(Vec2(0, height * 0.25f));
+      canvas.save();
+      canvas.clipRRect(marble_shape);
+      auto path = SkPath::RRect(shade_shape);
+      path.toggleInverseFillType();
+      canvas.drawPath(path, shade_paint);
+      // canvas.drawRRect(shade_shape, shade_paint);
+      canvas.restore();
+    }
+  }
+
   int register_index = 0;
   uint64_t reg_value = 0;
   if (auto register_obj = LockRegister()) {
@@ -734,10 +913,8 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
 
   SkColor4f back_color = "#8d7c60"_color4f;
 
-  constexpr float kBendR = kCellWidth / 4;
-
   {  // Back side of the flag on the bottom right bit
-    Vec2 center = Vec2(kBaseRect.right, kBaseRect.bottom + kBendR * 3);
+    Vec2 center = Vec2(base_rect.right, base_rect.bottom - kBendR);
     Vec2 top = center.Up(kBendR);
     Vec2 bottom = center.Down(kBendR);
     Vec2 right = center.Right(kBendR);
@@ -761,53 +938,61 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
   }
 
   {  // Back side of the flag visible above the checkerboard
-    Vec2 bottom = kBaseRect.TopLeftCorner();
-    Vec2 center = bottom.Up(kBendR);
-    Vec2 left = center.Left(kBendR);
-    Vec2 top = center.Up(kBendR);
-    Vec2 end2 = kBaseRect.TopRightCorner().Right(kBendR * 3);
-    Vec2 end1 = end2.Up(kBendR * 2).Right(kBendR * 2);
-    Vec2 end3 = end1.Down(kCellWidth);
-    auto path = SkPathBuilder()
-                    .moveTo(bottom)
-                    .arcTo(left.Down(kBendR), left, kBendR)
-                    .arcTo(left.Up(kBendR), top, kBendR)
-                    .lineTo(end1)
-                    .lineTo(end2)
-                    .lineTo(end3)
-                    .lineTo(top.Down(kCellWidth))
-                    .close()
-                    .detach();
+    auto path = FlagBack();
     SkColor4f colors[2];
     colors[0] = back_color;
     colors[1] = color::AdjustLightness(colors[0], -20);
 
     SkPaint bend_paint;
-    SkPoint points[] = {center, left};
+    SkPoint points[2];
+    points[1] = path.getBounds().TL();
+    points[0] = points[1] + Vec2(kBendR, 0);
     bend_paint.setShader(SkShaders::LinearGradient(
         points, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
 
     canvas.drawPath(path, bend_paint);
   }
 
-  canvas.drawRect(kBaseRect.sk, dark_paint);
+  {  // Spear
+    canvas.drawRRect(SpearShaft(), SkPaint());
+    canvas.drawPath(SpearTip(), SkPaint());
+  }
 
   auto& bit_position_font = BitPositionFont();
   auto& byte_value_font = ByteValueFont();
+  float hex_width = byte_value_font.MeasureText("00") + kHexMargin * 2;
+  {  // flag background
+    auto br = base_rect.BottomRightCorner();
+    auto bl = base_rect.BottomLeftCorner().Left(hex_width);
+    auto r = kBendR;
+    auto path = FlagFront();
+
+    SkPoint points[] = {bl.Left(r), br.Right(r)};
+    SkColor4f colors[4];
+    colors[1] = colors[2] = dark_paint.getColor4f();
+    colors[0] = colors[3] = color::AdjustLightness(colors[1], -20);
+    float pos[4] = {};
+    pos[1] = r / ((br - bl).x + r * 2);
+    pos[2] = 1 - pos[1];
+    pos[3] = 1;
+
+    SkPaint bg_paint;
+    bg_paint.setShader(SkShaders::LinearGradient(
+        points, SkGradient{SkGradient::Colors{colors, pos, SkTileMode::kClamp}, {}}));
+
+    canvas.drawPath(path, bg_paint);
+  }
+
   for (int row = 0; row < 8; ++row) {
-    float bottom = kBaseRect.bottom + kCellHeight * row;
+    float bottom = base_rect.bottom + kCellHeight * row;
     float top = bottom + kCellHeight;
     int byte_value = (reg_value >> (row * 8)) & 0xFF;
-    canvas.save();
-    canvas.translate(kBaseRect.right + 0.5_mm, bottom + kByteValueFontShiftUp);
-    auto byte_value_str = f("{:02X}", byte_value);
-    byte_value_font.DrawText(canvas, byte_value_str, dark_paint);
-    canvas.restore();
     for (int bit = 0; bit < 8; ++bit) {
-      float right = kBaseRect.right - kCellWidth * bit;
+      float right = base_rect.right - kCellWidth * bit;
       float left = right - kCellWidth;
       SkPaint* cell_paint = &light_paint;
-      if (bit % 2 == row % 2) {
+      bool light = bit % 2 == row % 2;
+      if (light) {
         // light cell
         canvas.drawRect(SkRect::MakeLTRB(left, bottom, right, top), light_paint);
         cell_paint = &dark_paint;
@@ -839,14 +1024,17 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
         canvas.restore();
       }
 
-      if (bit == 7) {
+      if (bit == 7 && !light) {
         // Flag bending on the left
+        left -= hex_width;
         auto path = SkPathBuilder()
                         .moveTo(left, bottom)
                         .arcTo(SkPoint(left - kBendR, bottom),
                                SkPoint(left - kBendR, bottom + kBendR), kBendR)
                         .lineTo(SkPoint(left - kBendR, top + kBendR))
                         .arcTo(SkPoint(left - kBendR, top), SkPoint(left, top), kBendR)
+                        .lineTo(SkPoint(left + hex_width, top))
+                        .lineTo(SkPoint(left + hex_width, bottom))
                         .close()
                         .detach();
         SkColor4f colors[2];
@@ -860,7 +1048,7 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
 
         canvas.drawPath(path, bend_paint);
       }
-      if (bit == 0 && row > 0) {
+      if (bit == 0 && !light) {
         // Flag bending on the right
         auto path =
             SkPathBuilder()
@@ -883,6 +1071,14 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
         canvas.drawPath(path, bend_paint);
       }
     }
+    auto byte_value_str = f("{:02X}", byte_value);
+    SkPaint hex_paint;
+    hex_paint.setColor("#205130"_color);
+    hex_paint.setBlendMode(SkBlendMode::kHardLight);
+    canvas.save();
+    canvas.translate(base_rect.left + kHexMargin - hex_width, bottom + kByteValueFontShiftUp);
+    byte_value_font.DrawText(canvas, byte_value_str, hex_paint);
+    canvas.restore();
   }
 
   DrawChildren(canvas);

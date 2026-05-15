@@ -40,18 +40,28 @@ struct RegisterWidget : public ObjectToy {
   }();
   constexpr static float kCellHeight = kBaseRect.Height() / 8;
   constexpr static float kCellWidth = kBaseRect.Width() / 8;
+  constexpr static float kHexMargin = 0.5_mm;
+  constexpr static float kBendR = kCellWidth / 4;
 
   ui::SmallBufferWidget small_buffer_widget;
   std::unique_ptr<RegisterIndexKnobWidget> register_index_knob;
 
   animation::SpringV2<float> wrap_position_offset;
   animation::SpringV2<float> size_offset;
+  mutable SkPath cached_shape;
 
   RegisterWidget(Widget* parent, Object& reg);
   ~RegisterWidget();
   Ptr<Register> LockRegister() const { return LockObject<Register>(); }
   std::string_view Name() const override;
+  RRect MarbleShape() const;
+  RRect SpearShaft() const;
+  SkPath SpearTip() const;
   SkPath Shape() const override;
+  Rect Checkerboard() const;
+  SkPath FlagFront() const;
+  SkPath FlagBack() const;
+  float HexWidth() const;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   void VisitOptions(const OptionsVisitor&) const override;

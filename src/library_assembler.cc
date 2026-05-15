@@ -609,10 +609,6 @@ RegisterWidget::RegisterWidget(Widget* parent, Object& reg)
     : ObjectToy(parent, reg),
       small_buffer_widget(
           this, NestedWeakPtr<Buffer>(reg.AcquireWeakPtr(), &static_cast<Register&>(reg))) {
-  small_buffer_widget.fonts[(int)Buffer::Type::Text] = &Instruction::HeavyFont();
-  small_buffer_widget.fonts[(int)Buffer::Type::Unsigned] = &Instruction::HeavyFont();
-  small_buffer_widget.fonts[(int)Buffer::Type::Signed] = &Instruction::HeavyFont();
-  small_buffer_widget.fonts[(int)Buffer::Type::Hexadecimal] = &Instruction::HeavyFont();
   small_buffer_widget.Measure();
   small_buffer_widget.local_to_parent.setIdentity();
   small_buffer_widget.local_to_parent.preTranslate(-small_buffer_widget.width / 2,

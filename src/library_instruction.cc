@@ -33,7 +33,6 @@
 #include "embedded.hh"
 #include "font.hh"
 #include "hex.hh"
-#include "knob.hh"
 #include "library_assembler.hh"
 #include "llvm_asm.hh"
 #include "math.hh"
@@ -41,6 +40,7 @@
 #include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
+#include "ui_enum_knob_widget.hh"
 #include "ui_shape_widget.hh"
 #include "wave1d.hh"
 #include "widget.hh"
@@ -2332,678 +2332,411 @@ constexpr float kConditionCodeTokenHeight = 8_mm;
 constexpr Rect kConditionCodeRect =
     Rect::MakeAtZero<LeftX, BottomY>(kConditionCodeTokenWidth, kConditionCodeTokenHeight);
 
-struct EnumKnobWidget : ui::Widget {
-  float last_vx = 0;
-  Knob knob;
+using EnumKnobWidget = ui::EnumKnobWidget;
 
-  constexpr static time::FloatDuration kClickWigglePeriod = 0.5s;
-  constexpr static time::FloatDuration kClickWiggleHalfTime = 0.1s;
-  animation::SpringV2<float> click_wiggle = {};
-  bool is_dragging = false;
-  float cond_code_float = 0;
-  int n_options;
+static SkPath RegionPath(float start_deg, float end_deg) {
+  const static float kRegionOuterAngleAdjust =
+      asin(EnumKnobWidget::kRegionMargin / 2 / EnumKnobWidget::kRegionEndRadius) * 180 / M_PI;
+  const static float kRegionInnerAngleAdjust =
+      asin(EnumKnobWidget::kRegionMargin / 2 / EnumKnobWidget::kRegionStartRadius) * 180 / M_PI;
+  SkPathBuilder builder;
+  float sweep = end_deg - start_deg;
+  builder.arcTo(EnumKnobWidget::kRegionOuter.sk, start_deg + kRegionOuterAngleAdjust,
+                sweep - 2 * kRegionOuterAngleAdjust, true);
+  builder.arcTo(EnumKnobWidget::kRegionInner.sk, end_deg - kRegionInnerAngleAdjust,
+                -sweep + 2 * kRegionInnerAngleAdjust, false);
+  builder.close();
+  return builder.detach();
+}
 
-  int value = 0;  // ground-truth value, obtained from the getter in Tick
-
-  EnumKnobWidget(ui::Widget* parent, int n_options) : ui::Widget(parent), n_options(n_options) {
-    knob.unit_angle = 60_deg;
-    knob.unit_distance = kGaugeRadius * 2;
-
-    // Add some initial history to make the initial direction more stable.
-    constexpr static int kInitialHistory = 40;
-    for (int i = 0; i < kInitialHistory; ++i) {
-      float a = i * M_PI * 2 / kInitialHistory;
-      float x = knob.unit_distance * 2 * (kInitialHistory - i) / kInitialHistory;
-      float amp = kGaugeRadius * 0.25;
-      float perp = sinf(a * 2) * amp;
-      knob.history.push_back({-x - perp, -x + perp});
-    }
-    knob.Update({0, 0});
-    knob.value = 0;
-  }
-  SkPath Shape() const override { return SkPath::Circle(0, 0, kConditionCodeTokenWidth / 2); }
-  void TransformUpdated() override { WakeAnimation(); }
-
-  static constexpr float kBorderWidth = 0.5_mm;
-  static constexpr float kBorderHalf = kBorderWidth / 2;
-  static constexpr float kGaugeRadius = 4_mm;
-  static constexpr Rect kGaugeOval = Rect::MakeAtZero(kGaugeRadius * 2, kGaugeRadius * 2);
-  static constexpr float kInnerRadius = kGaugeRadius - kBorderWidth;
-  static constexpr Rect kInnerOval = Rect::MakeAtZero(kInnerRadius * 2, kInnerRadius * 2);
-  static constexpr float kSymbolRadius = 2_mm;
-  static constexpr Rect kSymbolOval = Rect::MakeAtZero(kSymbolRadius * 2, kSymbolRadius * 2);
-
-  static constexpr auto& kWaterOval = kInnerOval;
-  static constexpr float kWaterRadius = kWaterOval.Height() / 2;
-
-  // Constants describing the arrow around the condition symbol
-  static constexpr float kMiddleR = (kInnerRadius + kSymbolRadius) / 2;
-  static constexpr Rect kMiddleOval = Rect::MakeAtZero(kMiddleR * 2, kMiddleR * 2);
-  static constexpr Rect kFarOval = kMiddleOval.Outset(kBorderHalf);
-  static constexpr Rect kNearOval = kMiddleOval.Outset(-kBorderHalf);
-
-  constexpr static float kRegionEndRadius = kGaugeRadius;
-  constexpr static float kRegionStartRadius = kInnerRadius;
-  constexpr static float kRegionWidth = kRegionEndRadius - kRegionStartRadius;
-  constexpr static Rect kRegionOuter = Rect::MakeAtZero(2 * kRegionEndRadius, 2 * kRegionEndRadius);
-  constexpr static Rect kRegionInner =
-      Rect::MakeAtZero(2 * kRegionStartRadius, 2 * kRegionStartRadius);
-  constexpr static float kRegionMargin = kBorderWidth / 2;
-
-  virtual int KnobGet() const = 0;
-  virtual void KnobSet(int value) = 0;
-
-  animation::Phase Tick(time::Timer& timer) override {
-    auto phase = animation::Finished;
-    value = KnobGet();
-    auto old_value = value;
-    if (isnan(knob.value) || isinf(knob.value)) {
-      knob.value = 0;
-    }
-    while (knob.value >= 0.5) {
-      knob.value -= 1;
-      if (value >= n_options - 1) {
-        value = 0;
-      } else {
-        value = value + 1;
-      }
-    }
-    while (knob.value < -0.5) {
-      knob.value += 1;
-      if (value <= 0) {
-        value = n_options - 1;
-      } else {
-        value = value - 1;
-      }
-    }
-    if (value != old_value) {
-      KnobSet(value);
-    }
-    phase |= click_wiggle.SpringTowards(0, timer.d, time::ToSeconds(kClickWigglePeriod),
-                                        time::ToSeconds(kClickWiggleHalfTime));
-    cond_code_float = (float)value + knob.value + click_wiggle.value;
-
-    return phase;
-  }
-
-  static SkPath RegionPath(float start_deg, float end_deg) {
-    const static float kRegionOuterAngleAdjust =
-        asin(kRegionMargin / 2 / kRegionEndRadius) * 180 / M_PI;
-    const static float kRegionInnerAngleAdjust =
-        asin(kRegionMargin / 2 / kRegionStartRadius) * 180 / M_PI;
+static void DrawConditionCodeBackground(SkCanvas& canvas, X86::CondCode cond_code) {
+  constexpr auto kRegionEndRadius = EnumKnobWidget::kRegionEndRadius;
+  constexpr auto kRegionStartRadius = EnumKnobWidget::kRegionStartRadius;
+  constexpr auto kMiddleR = EnumKnobWidget::kMiddleR;
+  constexpr auto kGaugeRadius = EnumKnobWidget::kGaugeRadius;
+  constexpr auto& kRegionOuter = EnumKnobWidget::kRegionOuter;
+  constexpr auto& kRegionInner = EnumKnobWidget::kRegionInner;
+  static constexpr float kParityRegionSweep = 360.f / 9;
+  static const SkPath kEvenParityRegion = [&]() {
     SkPathBuilder builder;
-    float sweep = end_deg - start_deg;
-    builder.arcTo(kRegionOuter.sk, start_deg + kRegionOuterAngleAdjust,
-                  sweep - 2 * kRegionOuterAngleAdjust, true);
-    builder.arcTo(kRegionInner.sk, end_deg - kRegionInnerAngleAdjust,
-                  -sweep + 2 * kRegionInnerAngleAdjust, false);
-    builder.close();
+    for (int i = 0; i < 9; ++i) {
+      if ((i & 1) == 1) continue;
+      float start_deg = (i - 0.5f) * 360 / 9;
+      builder.arcTo(kRegionOuter.sk, start_deg, kParityRegionSweep, true);
+      builder.arcTo(kRegionInner.sk, start_deg + kParityRegionSweep, -kParityRegionSweep, false);
+      builder.lineTo(0, 0);
+    }
     return builder.detach();
+  }();
+  static const SkPath kOddParityRegion = [&]() {
+    SkPathBuilder builder;
+    for (int i = 0; i < 9; ++i) {
+      if ((i & 1) != 1) continue;
+      float start_deg = (i - 0.5f) * 360 / 9;
+      builder.arcTo(kRegionOuter.sk, start_deg, kParityRegionSweep, true);
+      builder.arcTo(kRegionInner.sk, start_deg + kParityRegionSweep, -kParityRegionSweep, false);
+    }
+    return builder.detach();
+  }();
+
+  static constexpr float kZeroAngle = 12;
+  static const SkPath kRegion0b = RegionPath(-kZeroAngle / 2, kZeroAngle / 2);
+  static const SkPath kRegion7b = RegionPath(kZeroAngle / 2, 45);
+  static const SkPath kRegion8b = RegionPath(45, 67.5);
+  static const SkPath kRegion15b = RegionPath(67.5, 90);
+  static const SkPath kRegion16b = RegionPath(90, 112.5);
+  static const SkPath kRegion31b = RegionPath(112.5, 135);
+  static const SkPath kRegion32b = RegionPath(135, 157.5);
+  static const SkPath kRegion63b = RegionPath(157.5, 180);
+  static const SkPath kRegionSigned64b = RegionPath(180, 225);
+  static const SkPath kRegionSigned32b = RegionPath(225, 270);
+  static const SkPath kRegionSigned16b = RegionPath(270, 315);
+  static const SkPath kRegionSigned8b = RegionPath(315, 360 - kZeroAngle / 2);
+
+  static const SkPath kRegionsArr[] = {kRegion0b,        kRegion7b,        kRegion8b,
+                                       kRegion15b,       kRegion16b,       kRegion31b,
+                                       kRegion32b,       kRegion63b,       kRegionSigned64b,
+                                       kRegionSigned32b, kRegionSigned16b, kRegionSigned8b};
+  static const SkColor4f kUnsignedColors[] = {
+      color::HSLuv(0, 0, 57),      // 0b
+      color::HSLuv(128, 100, 60),  // 7b
+      color::HSLuv(121, 100, 62),  // 8b
+      color::HSLuv(99, 100, 65),   // 15b
+      color::HSLuv(91, 100, 70),   // 16b
+      color::HSLuv(65, 100, 69),   // 31b
+      color::HSLuv(40, 100, 62),   // 32b
+      color::HSLuv(21, 100, 57),   // 63b
+      color::HSLuv(12, 95, 53),    // 64b
+      color::HSLuv(12, 95, 53),    // 32b
+      color::HSLuv(12, 95, 53),    // 16b
+      color::HSLuv(12, 95, 53),    // 8b
+  };
+  static const SkColor4f kSignedColors[] = {
+      kUnsignedColors[0],          // 0b
+      kUnsignedColors[1],          // 7b
+      kUnsignedColors[2],          // 8b
+      kUnsignedColors[3],          // 15b
+      kUnsignedColors[4],          // 16b
+      kUnsignedColors[5],          // 31b
+      kUnsignedColors[6],          // 32b
+      kUnsignedColors[7],          // 63b
+      color::HSLuv(250, 100, 46),  // 64b
+      color::HSLuv(240, 100, 50),  // 32b
+      color::HSLuv(226, 100, 73),  // 16b
+      color::HSLuv(176, 100, 65),  // 8b
   };
 
-  static void DrawConditionCodeBackground(SkCanvas& canvas, X86::CondCode cond_code) {
-    static constexpr float kParityRegionSweep = 360.f / 9;
-    static const SkPath kEvenParityRegion = [&]() {
-      SkPathBuilder builder;
-      for (int i = 0; i < 9; ++i) {
-        if ((i & 1) == 1) continue;
-        float start_deg = (i - 0.5f) * 360 / 9;
-        builder.arcTo(kRegionOuter.sk, start_deg, kParityRegionSweep, true);
-        builder.arcTo(kRegionInner.sk, start_deg + kParityRegionSweep, -kParityRegionSweep, false);
-        builder.lineTo(0, 0);
-      }
-      return builder.detach();
-    }();
-    static const SkPath kOddParityRegion = [&]() {
-      SkPathBuilder builder;
-      for (int i = 0; i < 9; ++i) {
-        if ((i & 1) != 1) continue;
-        float start_deg = (i - 0.5f) * 360 / 9;
-        builder.arcTo(kRegionOuter.sk, start_deg, kParityRegionSweep, true);
-        builder.arcTo(kRegionInner.sk, start_deg + kParityRegionSweep, -kParityRegionSweep, false);
-      }
-      return builder.detach();
-    }();
+  static const SkPaint neutral_paint = [] {
+    SkPaint paint;
+    paint.setColor(color::HSLuv(283, 100, 57));
+    return paint;
+  }();
 
-    static constexpr float kZeroAngle = 12;
-    static const SkPath kRegion0b = RegionPath(-kZeroAngle / 2, kZeroAngle / 2);
-    static const SkPath kRegion7b = RegionPath(kZeroAngle / 2, 45);
-    static const SkPath kRegion8b = RegionPath(45, 67.5);
-    static const SkPath kRegion15b = RegionPath(67.5, 90);
-    static const SkPath kRegion16b = RegionPath(90, 112.5);
-    static const SkPath kRegion31b = RegionPath(112.5, 135);
-    static const SkPath kRegion32b = RegionPath(135, 157.5);
-    static const SkPath kRegion63b = RegionPath(157.5, 180);
-    static const SkPath kRegionSigned64b = RegionPath(180, 225);
-    static const SkPath kRegionSigned32b = RegionPath(225, 270);
-    static const SkPath kRegionSigned16b = RegionPath(270, 315);
-    static const SkPath kRegionSigned8b = RegionPath(315, 360 - kZeroAngle / 2);
-
-    static const SkPath kRegionsArr[] = {kRegion0b,        kRegion7b,        kRegion8b,
-                                         kRegion15b,       kRegion16b,       kRegion31b,
-                                         kRegion32b,       kRegion63b,       kRegionSigned64b,
-                                         kRegionSigned32b, kRegionSigned16b, kRegionSigned8b};
-    static const SkColor4f kUnsignedColors[] = {
-        color::HSLuv(0, 0, 57),      // 0b
-        color::HSLuv(128, 100, 60),  // 7b
-        color::HSLuv(121, 100, 62),  // 8b
-        color::HSLuv(99, 100, 65),   // 15b
-        color::HSLuv(91, 100, 70),   // 16b
-        color::HSLuv(65, 100, 69),   // 31b
-        color::HSLuv(40, 100, 62),   // 32b
-        color::HSLuv(21, 100, 57),   // 63b
-        color::HSLuv(12, 95, 53),    // 64b
-        color::HSLuv(12, 95, 53),    // 32b
-        color::HSLuv(12, 95, 53),    // 16b
-        color::HSLuv(12, 95, 53),    // 8b
-    };
-    static const SkColor4f kSignedColors[] = {
-        kUnsignedColors[0],          // 0b
-        kUnsignedColors[1],          // 7b
-        kUnsignedColors[2],          // 8b
-        kUnsignedColors[3],          // 15b
-        kUnsignedColors[4],          // 16b
-        kUnsignedColors[5],          // 31b
-        kUnsignedColors[6],          // 32b
-        kUnsignedColors[7],          // 63b
-        color::HSLuv(250, 100, 46),  // 64b
-        color::HSLuv(240, 100, 50),  // 32b
-        color::HSLuv(226, 100, 73),  // 16b
-        color::HSLuv(176, 100, 65),  // 8b
-    };
-
-    static const SkPaint neutral_paint = [] {
-      SkPaint paint;
-      paint.setColor(color::HSLuv(283, 100, 57));
-      return paint;
-    }();
-
-    // Switch fill based on signed-ness of the condition
-    switch (cond_code) {
-      // Signed
-      case X86::CondCode::COND_S:
-      case X86::CondCode::COND_NS:
-      case X86::CondCode::COND_L:
-      case X86::CondCode::COND_LE:
-      case X86::CondCode::COND_G:
-      case X86::CondCode::COND_GE:
-      case X86::CondCode::COND_O:
-      case X86::CondCode::COND_NO: {
-        for (int i = 0; i < std::size(kRegionsArr); ++i) {
-          SkPaint paint;
-          paint.setColor(kSignedColors[i]);
-          canvas.drawPath(kRegionsArr[i], paint);
-        }
-        break;
-      }
-      // Unsigned
-      case X86::CondCode::COND_A:
-      case X86::CondCode::COND_AE:
-      case X86::CondCode::COND_B:
-      case X86::CondCode::COND_BE: {
-        for (int i = 0; i < std::size(kRegionsArr); ++i) {
-          SkPaint paint;
-          paint.setColor(kUnsignedColors[i]);
-          canvas.drawPath(kRegionsArr[i], paint);
-        }
-        break;
-      }
-      // Sign-neutral
-      case X86::CondCode::COND_E:
-      case X86::CondCode::COND_NE: {
-        for (int i = 0; i < std::size(kRegionsArr); ++i) {
-          canvas.drawPath(kRegionsArr[i], neutral_paint);
-        }
-        break;
-      }
-      case X86::CondCode::COND_P: {  // even number of bits in the lowest byte
-        canvas.drawPath(kEvenParityRegion, neutral_paint);
-        break;
-      }
-      case X86::CondCode::COND_NP: {  // odd number of bits in the lowest byte
-        canvas.drawPath(kOddParityRegion, neutral_paint);
-        break;
-      }
-      default: {
-        break;
-      }
-    }
-    static const SkPaint white_overlay = [] {
-      SkPaint paint;
-      SkColor4f mask_colors[] = {"#ffffff"_color4f, "#ffffff00"_color4f};
-      float mask_pos[] = {kRegionStartRadius / kRegionEndRadius, 1};
-      auto mask = SkShaders::RadialGradient(
-          Vec2(), kRegionEndRadius,
-          SkGradient{SkGradient::Colors{mask_colors, mask_pos, SkTileMode::kClamp}, {}});
-      SkColor4f colors[] = {"#dddddd"_color4f, "#bbbbbb"_color4f};
-      auto color =
-          SkShaders::RadialGradient(Vec2(0, kMiddleR), kGaugeRadius + kMiddleR,
-                                    SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
-      paint.setShader(SkShaders::Blend(SkBlendMode::kSrcIn, mask, color));
-      return paint;
-    }();
-    canvas.drawCircle(Vec2(), kRegionEndRadius, white_overlay);
-  }
-
-  static void DrawConditionCodeSymbol(SkCanvas& canvas, X86::CondCode cond_code) {
-    SkPathBuilder dial;  // black arrow
-    SkPath symbol;       // symbol drawn in the center
-
-    SkPaint symbol_fill;
-    symbol_fill.setAntiAlias(true);
-    SkPaint dial_fill;
-    dial_fill.setColor("#00000044"_color);
-
-    auto FillCircle = [&](float degrees) {
-      auto center = Vec2::Polar(degrees / 180 * M_PI, kMiddleR);
-      dial.addCircle(center.x, center.y, kBorderWidth * 0.75, SkPathDirection::kCW);
-    };
-    auto StrokeCircle = [&](float degrees) {
-      auto center = Vec2::Polar(degrees / 180 * M_PI, kMiddleR);
-      dial.addCircle(center.x, center.y, kBorderWidth, SkPathDirection::kCW);
-      dial.addCircle(center.x, center.y, kBorderHalf, SkPathDirection::kCCW);
-    };
-    static const float kCircleAngleAdjust = asin(kBorderWidth * 0.75 / kMiddleR) * 180 / M_PI;
-    auto Arc = [&](float start_deg, float sweep_deg) {
-      if (sweep_deg < 0) {
-        start_deg += sweep_deg;
-        sweep_deg = -sweep_deg;
-      }
-      static const SkRect kArcOuterRect =
-          kMiddleOval.sk.makeOutset(kBorderHalf / 2, kBorderHalf / 2);
-      static const SkRect kArcInnerRect =
-          kMiddleOval.sk.makeOutset(-kBorderHalf / 2, -kBorderHalf / 2);
-      Vec2 inner_point =
-          Vec2::Polar((start_deg + sweep_deg) / 180 * M_PI, kMiddleR - kBorderHalf / 2);
-      dial.arcTo(kArcOuterRect, start_deg, sweep_deg, true);
-      dial.lineTo(inner_point);
-      dial.arcTo(kArcInnerRect, start_deg + sweep_deg, -sweep_deg, false);
-      dial.close();
-    };
-    auto Triangle = [&](SinCos angle, bool ccw = false) {
-      constexpr static float kSide = kInnerRadius - kSymbolRadius;
-      const static float kHeight = kSide * sqrt(3) / 2;
-      auto ab = Vec2::Polar(angle, kMiddleR);
-      auto a = Vec2::Polar(angle, kInnerRadius);
-      auto b = Vec2::Polar(angle, kSymbolRadius);
-      auto c = ab + Vec2::Polar(angle + (ccw ? -90_deg : 90_deg), kHeight);
-      auto ca = (a + c) / 2;
-      auto bc = (b + c) / 2;
-      dial.moveTo(ab);
-      dial.arcTo(b, bc, kBorderHalf);
-      dial.arcTo(c, ca, 0);
-      dial.arcTo(a, ab, kBorderHalf);
-      dial.close();
-    };
-    // Switch the symbol
-    switch (cond_code) {
-      case X86::CondCode::COND_O: {  // overflow
-        Triangle(225_deg, false);
-        Triangle(135_deg, true);
-        Arc(135, 90);
-        static const SkPath kOverflowSymbol = PathFromSVG(
-            "M.9-.01c.1.16.15.35.15.53C1.05 1.1.58 1.57 0 1.57S-1.05 "
-            "1.1-1.05.52c0-.18.05-.37.15-.53L0-1.57Z",
-            SVGUnit_Millimeters);
-        symbol = kOverflowSymbol;
-        break;
-      }
-      case X86::CondCode::COND_NO: {  // no overflow
-        Arc(225, 270);
-        Triangle(225_deg, true);
-        Triangle(135_deg, false);
-        static const SkPath kNoOverflowSymbol = PathFromSVG(
-            "M.92.03c.09.15.13.33.13.5C1.05 1.11.58 1.58 0 1.58c-.18 "
-            "0-.35-.05-.5-.13L.92.03ZM1.14-.62-.9 1.42-1.21 "
-            "1.1.83-.94ZM.39-.91-1.04.52c0-.19.05-.37.14-.53L0-1.57Z",
-            SVGUnit_Millimeters);
-        symbol = kNoOverflowSymbol;
-        break;
-      }
-      case X86::CondCode::COND_L:  // fallthrough
-      case X86::CondCode::COND_B: {
-        static const SkPath static_path =
-            PathFromSVG("M-2.7-1.1V1.2L2.4 2.5 2.7 1.2-1.8 0l4.5-1.2-.3-1.4Z", SVGUnit_Millimeters)
-                .makeScale(0.5, 0.5);
-        symbol = static_path;
-        Arc(-90, 90 - kCircleAngleAdjust);
-        Triangle(-90_deg, true);
-        StrokeCircle(0);
-        break;
-      }
-      case X86::CondCode::COND_GE:  // fallthrough
-      case X86::CondCode::COND_AE: {
-        static const SkPath static_path = PathFromSVG(
-                                              "M-2.4-3.2-2.8-2 1.8-1-2.7 0l.3 1.1L2.7 "
-                                              "0V-1.9L-2.4-3.2ZM2.7.7-2.6 1.9l.4 1.3L2.7 2V.7Z",
-                                              SVGUnit_Millimeters)
-                                              .makeScale(0.5, 0.5);
-        symbol = static_path;
-        Triangle(90_deg, false);
-        FillCircle(0);
-        Arc(0, 90);
-        break;
-      }
-      case X86::CondCode::COND_E: {
-        static const SkPath static_path =
-            PathFromSVG(
-                "m-.45-2.08c-1.13 0-2.14.03-2.21.11-.17.17-.15 1.12 0 1.26.14.17 5.26.15 5.38 0 "
-                ".12-.08.05-1.2 0-1.26-.08-.06-1.72-.11-3.17-.11zm0 2.66c-1.13 "
-                "0-2.14.03-2.21.1-.17.17-.15 1.12 0 1.26.14.17 5.26.15 5.38 0 .12-.08.05-1.2 "
-                "0-1.26C2.64.62 1 .57-.45.58z",
-                SVGUnit_Millimeters)
-                .makeScale(0.5, 0.5);
-        symbol = static_path;
-        FillCircle(0);
-        break;
-      }
-      case X86::CondCode::COND_NE: {
-        static const SkPath static_path =
-            PathFromSVG(
-                "m1.08-2.74-2.89 5 .77.45 2.89-5zm-1.53.67c-1.13 0-2.14.03-2.21.1-.17.17-.15 1.12 "
-                "0 "
-                "1.26.05.06.78.1 1.68.11l.85-1.48c-.11 0-.22 0-.32 0zM2.51-2a.71.71 0 "
-                "01-.03.06L1.71-.61c.57-.02.98-.05 1.01-.09.12-.08.05-1.2 "
-                "0-1.26-.01-.01-.1-.02-.21-.03zM1.02.59.17 2.07c1.27 0 2.49-.05 "
-                "2.55-.12.12-.08.05-1.2 "
-                "0-1.26C2.67.65 1.93.62 1.02.6zm-2.68 0c-.56.02-.96.04-1 .09-.17.17-.15 1.12 0 "
-                "1.26.01.02.09.03.21.05a.71.71 0 01.04-.09z",
-                SVGUnit_Millimeters)
-                .makeScale(0.5, 0.5);
-        symbol = static_path;
-        StrokeCircle(0);
-        Arc(kCircleAngleAdjust, 360 - kCircleAngleAdjust * 2);
-        break;
-      }
-      case X86::CondCode::COND_LE:  // fallthrough
-      case X86::CondCode::COND_BE: {
-        static const SkPath static_path =
-            PathFromSVG(
-                "M-2.7.7V2L2.2 3.2 2.6 1.9-2.7.7ZM2.4-3.2-2.7-1.9V0L2.4 1.1 2.7 0-1.8-1 2.8-2 "
-                "2.4-3.2Z",
-                SVGUnit_Millimeters)
-                .makeScale(0.5, 0.5);
-        symbol = static_path;
-        Arc(0, -90);
-        FillCircle(0);
-        Triangle(-90_deg, true);
-        break;
-      }
-      case X86::CondCode::COND_G:  // fallthrough
-      case X86::CondCode::COND_A: {
-        static const SkPath static_path =
-            PathFromSVG("M2.7-1.1V1.2L-2.4 2.5-2.7 1.2 1.8 0-2.7-1.2l.3-1.4Z", SVGUnit_Millimeters)
-                .makeScale(0.5, 0.5);
-        symbol = static_path;
-        Arc(90, -90 + kCircleAngleAdjust);
-        StrokeCircle(0);
-        Triangle(90_deg, false);
-        break;
-      }
-      case X86::CondCode::COND_S: {  // sign / negative
-        static const SkPath kSignSymbol =
-            PathFromSVG("m-4.5-1c.1-.1 8.9-.1 9 0 .1.1.1 1.9 0 2-.1.1-8.9.1-9 0-.1-.1-.1-1.9 0-2z");
-        symbol = kSignSymbol;
-        StrokeCircle(0);
-        FillCircle(180);
-        Arc(180, 180 - kCircleAngleAdjust);
-        break;
-      }
-      case X86::CondCode::COND_NS: {  // not sign / positive
-        static const SkPath kNoSignSymbol = PathFromSVG(
-            "m-4.5-1c.1-.1 8.9-.1 9 0 .1.1.1 1.9 0 2-.1.1-8.9.1-9 0-.1-.1-.1-1.9 "
-            "0-2zm3.5-3.5c.1-.1 "
-            "1.9-.1 2 0 .1.1.1 8.9 0 9-.1.1-1.9.1-2 0-.1-.1-.1-8.9 0-9z");
-        symbol = kNoSignSymbol;
-        FillCircle(0);
-        StrokeCircle(180);
-        Arc(0, 180 - kCircleAngleAdjust);
-        break;
-      }
-      case X86::CondCode::COND_P:     // fallthrough
-      case X86::CondCode::COND_NP: {  // number of bits in the lowest byte
-        static const SkPath kFlagSymbol = PathFromSVG(
-            "M-1.22-1.42c.08.14.12.23.28.34-.06 0-.11-.02-.15-.04 0 .06 0 .11 0 "
-            ".18.09.02.18.05.25.04.19 0 "
-            ".36-.16.54-.14.18.01.3.21.48.22.23.02.45-.16.68-.17.31-.02.93.14.93.14S1.01-.74.67-."
-            "57C."
-            "46-.47.35-.22.13-.16-.01-.12-.17-.24-.32-.21-.51-.16-.64.04-.82.11-.85.12-.89.13-.93."
-            "14c.14.68.31 1.31.34 1.33 0 .06-.49.06-.5 0-.03-.13-.09-.7-.15-1.28-.04 "
-            "0-.06-.01-.07-.02C-1.35-.23-1.39-.6-1.37-1c0-.01.01-.01.02-.02 0-.03 0-.06 "
-            "0-.09-.05.02-.08.02-.16.02.14-.11.22-.2.29-.33Z",
-            SVGUnit_Millimeters);
-        static const SkPath kTwoFlagsSymbol = [] {
-          SkPathBuilder builder;
-          builder.addPath(kFlagSymbol.makeTransform(
-              SkMatrix::RotateDeg(-5).preTranslate(0.7_mm, -0.5_mm).preScale(0.6, 0.6)));
-          builder.addPath(
-              kFlagSymbol.makeTransform(SkMatrix::RotateDeg(5).preTranslate(0, 0.3_mm)));
-          // builder.setFillType(SkPathFillType::kEvenOdd);
-          return builder.detach();
-        }();
-        static const SkPath kParityDial = [&]() {
-          SkPathBuilder builder;
-          auto font = ui::Font::MakeV2(ui::Font::GetSilkscreen(), 1.4_mm);
-          SkGlyphID glyphs[9];
-          SkRect bounds[9];
-          font->sk_font.textToGlyphs("012345678", 9, SkTextEncoding::kUTF8, glyphs);
-          font->sk_font.getBounds(glyphs, SkSpan<SkRect>{bounds, 9}, nullptr);
-          for (int i = 0; i < 9; ++i) {
-            std::optional<SkPath> glyph_path = font->sk_font.getPath(glyphs[i]);
-            if (!glyph_path.has_value()) continue;
-            bounds[i] = glyph_path->getBounds();
-            SkPath transformed =
-                glyph_path
-                    ->makeTransform(SkMatrix::Translate(-bounds[i].centerX(), -bounds[i].centerY()))
-                    .makeTransform(SkMatrix::Scale(font->font_scale, -font->font_scale));
-            auto dir = SinCos::FromDegrees(i * 360.f / 9);
-            transformed = transformed.makeTransform(
-                SkMatrix::Translate(Vec2::Polar(dir, (kInnerRadius + kSymbolRadius) / 2)));
-            builder.addPath(transformed);
-          }
-          return builder.detach();
-        }();
-        if (cond_code == X86::CondCode::COND_P) {
-          symbol = kTwoFlagsSymbol;
-        } else {
-          symbol = kFlagSymbol;
-        }
-        dial.addPath(kParityDial);
-        break;
-      }
-      default: {
-        break;
-      }
-    }
-
-    canvas.drawPath(dial.detach(), dial_fill);
-    canvas.drawPath(symbol, symbol_fill);
-  }
-
-  virtual void DrawKnobBackground(SkCanvas& canvas, int cond_code) const {
-    SkPaint white_paint;
-    white_paint.setColor("#ffffff"_color);
-    canvas.drawCircle(Vec2(), kRegionEndRadius, white_paint);
-  }
-
-  virtual void DrawKnobSymbol(SkCanvas& canvas, int cond_code) const = 0;
-
-  // Allows derived classes to draw something under the glass
-  virtual void DrawKnobBelowGlass(SkCanvas& canvas) const {}
-
-  // Allows derived classes to draw something over the glass
-  virtual void DrawKnobOverGlass(SkCanvas& canvas) const {}
-
-  void Draw(SkCanvas& canvas) const override {
-    float cond_code_floor = floorf(cond_code_float);
-    float cond_code_ceil = ceilf(cond_code_float);
-    float cond_code_t = cond_code_float - cond_code_floor;  // how far towards ceil we are currently
-    if (cond_code_floor < 0) {
-      cond_code_floor = n_options - 1;
-    }
-    if (cond_code_ceil >= n_options) {
-      cond_code_ceil = 0;
-    }
-
-    DrawKnobBackground(canvas, (X86::CondCode)roundf(cond_code_float));
-
-    canvas.save();
-    SkRRect clip = SkRRect::MakeOval(kInnerOval.sk);
-    canvas.clipRRect(clip);
-    float radius = std::clamp(knob.radius, kGaugeRadius * 2, kGaugeRadius * 9);
-    Vec2 delta;
-    Vec2 center;
-    float angle;
-    if (isinf(radius)) {
-      delta = Vec2::Polar(knob.tangent, kGaugeRadius * 2);
-      canvas.translate(delta.x * cond_code_t, delta.y * cond_code_t);
-    } else {
-      center = Vec2::Polar(knob.tangent - 90_deg, radius);
-      angle = asinf(kGaugeRadius / radius) * 2 * 180 / M_PI;
-      canvas.rotate(-angle * cond_code_t, center.x, center.y);
-    }
-
-    DrawKnobSymbol(canvas, (X86::CondCode)cond_code_floor);
-    if (cond_code_ceil != cond_code_floor) {
-      if (isinf(radius)) {
-        canvas.translate(-delta.x, -delta.y);
-      } else {
-        canvas.rotate(angle, center.x, center.y);
-      }
-      DrawKnobSymbol(canvas, (X86::CondCode)cond_code_ceil);
-    }
-    canvas.restore();
-
-    DrawKnobBelowGlass(canvas);
-
-    if constexpr (kDebugKnob) {
-      SkPaint circle_paint;
-      circle_paint.setColor("#ff0000"_color);
-      circle_paint.setStyle(SkPaint::kStroke_Style);
-      if (isinf(knob.radius)) {  // line
-        Vec2 a = Vec2::Polar(knob.tangent, -10_mm);
-        Vec2 b = Vec2::Polar(knob.tangent, 10_mm);
-        canvas.drawLine(a.sk, b.sk, circle_paint);
-      } else {
-        canvas.drawCircle(knob.center, knob.radius, circle_paint);
-      }
-      SkPaint history_paint;
-      history_paint.setColor("#00ff00"_color);
-      for (auto& point : knob.history) {
-        canvas.drawCircle(point, 0.1_mm, history_paint);
-      }
-    }
-
-    {    // Glass effects
-      {  // shadow
+  // Switch fill based on signed-ness of the condition
+  switch (cond_code) {
+    // Signed
+    case X86::CondCode::COND_S:
+    case X86::CondCode::COND_NS:
+    case X86::CondCode::COND_L:
+    case X86::CondCode::COND_LE:
+    case X86::CondCode::COND_G:
+    case X86::CondCode::COND_GE:
+    case X86::CondCode::COND_O:
+    case X86::CondCode::COND_NO: {
+      for (int i = 0; i < std::size(kRegionsArr); ++i) {
         SkPaint paint;
-        paint.setColor("#00000080"_color);
-        paint.setMaskFilter(SkMaskFilter::MakeBlur(SkBlurStyle::kNormal_SkBlurStyle, kBorderWidth));
-        canvas.save();
-        RRect clip = RRect::MakeSimple(kGaugeOval, kGaugeRadius);
-        canvas.clipRRect(clip.sk);
-        SkPath path =
-            SkPath::Circle(0, -kBorderWidth * 2, kGaugeRadius).makeToggleInverseFillType();
-        canvas.drawPath(path, paint);
-        canvas.restore();
+        paint.setColor(kSignedColors[i]);
+        canvas.drawPath(kRegionsArr[i], paint);
       }
-
-      {  // sky reflection
+      break;
+    }
+    // Unsigned
+    case X86::CondCode::COND_A:
+    case X86::CondCode::COND_AE:
+    case X86::CondCode::COND_B:
+    case X86::CondCode::COND_BE: {
+      for (int i = 0; i < std::size(kRegionsArr); ++i) {
         SkPaint paint;
-        SkColor4f colors[] = {"#ffffffaa"_color4f, "#ffffff30"_color4f, "#ffffff00"_color4f};
-        paint.setShader(SkShaders::RadialGradient(
-            Vec2(0, kMiddleR), kGaugeRadius * 1.5,
-            SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
-        canvas.save();
-        RRect clip = RRect::MakeSimple(kInnerOval, kInnerRadius);
-        canvas.clipRRect(clip.sk);
-        canvas.drawCircle(Vec2(0, kGaugeRadius * 2), hypotf(kGaugeRadius * 2, kGaugeRadius), paint);
-        canvas.restore();
+        paint.setColor(kUnsignedColors[i]);
+        canvas.drawPath(kRegionsArr[i], paint);
       }
-
-      {  // light edge
-        SkPaint paint;
-        SkPoint pts[] = {Vec2(-kGaugeRadius, 0), Vec2(kGaugeRadius, 0)};
-        SkColor4f colors[] = {"#ffffff20"_color4f, "#ffffffaa"_color4f, "#ffffff20"_color4f};
-        paint.setShader(SkShaders::LinearGradient(
-            pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
-        paint.setStyle(SkPaint::kStroke_Style);
-        paint.setStrokeWidth(kBorderWidth);
-        paint.setMaskFilter(
-            SkMaskFilter::MakeBlur(SkBlurStyle::kNormal_SkBlurStyle, kBorderHalf / 3));
-        canvas.drawCircle(0, 0, kGaugeRadius - kBorderHalf, paint);
-      }
+      break;
     }
-
-    DrawKnobOverGlass(canvas);
+    // Sign-neutral
+    case X86::CondCode::COND_E:
+    case X86::CondCode::COND_NE: {
+      for (int i = 0; i < std::size(kRegionsArr); ++i) {
+        canvas.drawPath(kRegionsArr[i], neutral_paint);
+      }
+      break;
+    }
+    case X86::CondCode::COND_P: {  // even number of bits in the lowest byte
+      canvas.drawPath(kEvenParityRegion, neutral_paint);
+      break;
+    }
+    case X86::CondCode::COND_NP: {  // odd number of bits in the lowest byte
+      canvas.drawPath(kOddParityRegion, neutral_paint);
+      break;
+    }
+    default: {
+      break;
+    }
   }
+  static const SkPaint white_overlay = [] {
+    SkPaint paint;
+    SkColor4f mask_colors[] = {"#ffffff"_color4f, "#ffffff00"_color4f};
+    float mask_pos[] = {kRegionStartRadius / kRegionEndRadius, 1};
+    auto mask = SkShaders::RadialGradient(
+        Vec2(), kRegionEndRadius,
+        SkGradient{SkGradient::Colors{mask_colors, mask_pos, SkTileMode::kClamp}, {}});
+    SkColor4f colors[] = {"#dddddd"_color4f, "#bbbbbb"_color4f};
+    auto color =
+        SkShaders::RadialGradient(Vec2(0, kMiddleR), kGaugeRadius + kMiddleR,
+                                  SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}});
+    paint.setShader(SkShaders::Blend(SkBlendMode::kSrcIn, mask, color));
+    return paint;
+  }();
+  canvas.drawCircle(Vec2(), kRegionEndRadius, white_overlay);
+}
 
-  Optional<Rect> TextureBounds() const override {
-    if (kDebugKnob || is_dragging) {
-      return std::nullopt;
-    }
-    auto bounds = kGaugeOval;
-    bounds.left -= 2_mm;
-    return bounds;
-  }
+static void DrawConditionCodeSymbol(SkCanvas& canvas, X86::CondCode cond_code) {
+  constexpr auto kMiddleR = EnumKnobWidget::kMiddleR;
+  constexpr auto kBorderWidth = EnumKnobWidget::kBorderWidth;
+  constexpr auto kBorderHalf = EnumKnobWidget::kBorderHalf;
+  constexpr auto& kMiddleOval = EnumKnobWidget::kMiddleOval;
+  constexpr auto kInnerRadius = EnumKnobWidget::kInnerRadius;
+  constexpr auto kSymbolRadius = EnumKnobWidget::kSymbolRadius;
+  SkPathBuilder dial;  // black arrow
+  SkPath symbol;       // symbol drawn in the center
 
-  struct ChangeEnumKnobAction : public Action {
-    TrackedPtr<EnumKnobWidget> widget;
-    time::SteadyPoint start_time;
-    ui::Pointer::IconOverride scroll_icon;
+  SkPaint symbol_fill;
+  symbol_fill.setAntiAlias(true);
+  SkPaint dial_fill;
+  dial_fill.setColor("#00000044"_color);
 
-    ChangeEnumKnobAction(ui::Pointer& pointer, EnumKnobWidget& enum_knob_widget)
-        : Action(pointer),
-          widget(&enum_knob_widget),
-          scroll_icon(pointer, ui::Pointer::kIconAllScroll) {
-      if (widget) {
-        widget->is_dragging = true;
-        auto& history = widget->knob.history;
-        if (!history.empty()) {
-          Vec2 pos = pointer.PositionWithin(*widget);
-          Vec2 shift = pos - history.back();
-          for (auto& point : history) {
-            point += shift;
-          }
-        }
-        widget->click_wiggle.velocity += 5;
-        start_time = time::SteadyNow();
-        widget->WakeAnimation();
-      }
-    }
-    void Update() override {
-      if (!widget) {
-        pointer.ReplaceAction(*this, nullptr);
-        return;
-      }
-      Vec2 pos = pointer.PositionWithin(*widget);
-      widget->knob.Update(pos);
-      widget->WakeAnimation();
-    }
-
-    ~ChangeEnumKnobAction() {
-      if (!widget) {
-        return;
-      }
-      widget->click_wiggle.value += widget->knob.value;
-      widget->knob.value = 0;
-
-      if ((time::SteadyNow() - start_time) < kClickWigglePeriod / 2) {
-        widget->knob.value -= 1;
-        widget->click_wiggle.value += 1;
-      }
-      widget->is_dragging = false;
-      widget->WakeAnimation();
-    }
+  auto FillCircle = [&](float degrees) {
+    auto center = Vec2::Polar(degrees / 180 * M_PI, kMiddleR);
+    dial.addCircle(center.x, center.y, kBorderWidth * 0.75, SkPathDirection::kCW);
   };
-
-  std::unique_ptr<Action> FindAction(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    if (trigger == ui::PointerButton::Left) {
-      return std::make_unique<ChangeEnumKnobAction>(pointer, *this);
+  auto StrokeCircle = [&](float degrees) {
+    auto center = Vec2::Polar(degrees / 180 * M_PI, kMiddleR);
+    dial.addCircle(center.x, center.y, kBorderWidth, SkPathDirection::kCW);
+    dial.addCircle(center.x, center.y, kBorderHalf, SkPathDirection::kCCW);
+  };
+  static const float kCircleAngleAdjust = asin(kBorderWidth * 0.75 / kMiddleR) * 180 / M_PI;
+  auto Arc = [&](float start_deg, float sweep_deg) {
+    if (sweep_deg < 0) {
+      start_deg += sweep_deg;
+      sweep_deg = -sweep_deg;
     }
-    return nullptr;
+    static const SkRect kArcOuterRect = kMiddleOval.sk.makeOutset(kBorderHalf / 2, kBorderHalf / 2);
+    static const SkRect kArcInnerRect =
+        kMiddleOval.sk.makeOutset(-kBorderHalf / 2, -kBorderHalf / 2);
+    Vec2 inner_point =
+        Vec2::Polar((start_deg + sweep_deg) / 180 * M_PI, kMiddleR - kBorderHalf / 2);
+    dial.arcTo(kArcOuterRect, start_deg, sweep_deg, true);
+    dial.lineTo(inner_point);
+    dial.arcTo(kArcInnerRect, start_deg + sweep_deg, -sweep_deg, false);
+    dial.close();
+  };
+  auto Triangle = [&](SinCos angle, bool ccw = false) {
+    constexpr static float kSide = kInnerRadius - kSymbolRadius;
+    const static float kHeight = kSide * sqrt(3) / 2;
+    auto ab = Vec2::Polar(angle, kMiddleR);
+    auto a = Vec2::Polar(angle, kInnerRadius);
+    auto b = Vec2::Polar(angle, kSymbolRadius);
+    auto c = ab + Vec2::Polar(angle + (ccw ? -90_deg : 90_deg), kHeight);
+    auto ca = (a + c) / 2;
+    auto bc = (b + c) / 2;
+    dial.moveTo(ab);
+    dial.arcTo(b, bc, kBorderHalf);
+    dial.arcTo(c, ca, 0);
+    dial.arcTo(a, ab, kBorderHalf);
+    dial.close();
+  };
+  // Switch the symbol
+  switch (cond_code) {
+    case X86::CondCode::COND_O: {  // overflow
+      Triangle(225_deg, false);
+      Triangle(135_deg, true);
+      Arc(135, 90);
+      static const SkPath kOverflowSymbol = PathFromSVG(
+          "M.9-.01c.1.16.15.35.15.53C1.05 1.1.58 1.57 0 1.57S-1.05 "
+          "1.1-1.05.52c0-.18.05-.37.15-.53L0-1.57Z",
+          SVGUnit_Millimeters);
+      symbol = kOverflowSymbol;
+      break;
+    }
+    case X86::CondCode::COND_NO: {  // no overflow
+      Arc(225, 270);
+      Triangle(225_deg, true);
+      Triangle(135_deg, false);
+      static const SkPath kNoOverflowSymbol = PathFromSVG(
+          "M.92.03c.09.15.13.33.13.5C1.05 1.11.58 1.58 0 1.58c-.18 "
+          "0-.35-.05-.5-.13L.92.03ZM1.14-.62-.9 1.42-1.21 "
+          "1.1.83-.94ZM.39-.91-1.04.52c0-.19.05-.37.14-.53L0-1.57Z",
+          SVGUnit_Millimeters);
+      symbol = kNoOverflowSymbol;
+      break;
+    }
+    case X86::CondCode::COND_L:  // fallthrough
+    case X86::CondCode::COND_B: {
+      static const SkPath static_path =
+          PathFromSVG("M-2.7-1.1V1.2L2.4 2.5 2.7 1.2-1.8 0l4.5-1.2-.3-1.4Z", SVGUnit_Millimeters)
+              .makeScale(0.5, 0.5);
+      symbol = static_path;
+      Arc(-90, 90 - kCircleAngleAdjust);
+      Triangle(-90_deg, true);
+      StrokeCircle(0);
+      break;
+    }
+    case X86::CondCode::COND_GE:  // fallthrough
+    case X86::CondCode::COND_AE: {
+      static const SkPath static_path = PathFromSVG(
+                                            "M-2.4-3.2-2.8-2 1.8-1-2.7 0l.3 1.1L2.7 "
+                                            "0V-1.9L-2.4-3.2ZM2.7.7-2.6 1.9l.4 1.3L2.7 2V.7Z",
+                                            SVGUnit_Millimeters)
+                                            .makeScale(0.5, 0.5);
+      symbol = static_path;
+      Triangle(90_deg, false);
+      FillCircle(0);
+      Arc(0, 90);
+      break;
+    }
+    case X86::CondCode::COND_E: {
+      static const SkPath static_path =
+          PathFromSVG(
+              "m-.45-2.08c-1.13 0-2.14.03-2.21.11-.17.17-.15 1.12 0 1.26.14.17 5.26.15 5.38 0 "
+              ".12-.08.05-1.2 0-1.26-.08-.06-1.72-.11-3.17-.11zm0 2.66c-1.13 "
+              "0-2.14.03-2.21.1-.17.17-.15 1.12 0 1.26.14.17 5.26.15 5.38 0 .12-.08.05-1.2 "
+              "0-1.26C2.64.62 1 .57-.45.58z",
+              SVGUnit_Millimeters)
+              .makeScale(0.5, 0.5);
+      symbol = static_path;
+      FillCircle(0);
+      break;
+    }
+    case X86::CondCode::COND_NE: {
+      static const SkPath static_path =
+          PathFromSVG(
+              "m1.08-2.74-2.89 5 .77.45 2.89-5zm-1.53.67c-1.13 0-2.14.03-2.21.1-.17.17-.15 1.12 "
+              "0 "
+              "1.26.05.06.78.1 1.68.11l.85-1.48c-.11 0-.22 0-.32 0zM2.51-2a.71.71 0 "
+              "01-.03.06L1.71-.61c.57-.02.98-.05 1.01-.09.12-.08.05-1.2 "
+              "0-1.26-.01-.01-.1-.02-.21-.03zM1.02.59.17 2.07c1.27 0 2.49-.05 "
+              "2.55-.12.12-.08.05-1.2 "
+              "0-1.26C2.67.65 1.93.62 1.02.6zm-2.68 0c-.56.02-.96.04-1 .09-.17.17-.15 1.12 0 "
+              "1.26.01.02.09.03.21.05a.71.71 0 01.04-.09z",
+              SVGUnit_Millimeters)
+              .makeScale(0.5, 0.5);
+      symbol = static_path;
+      StrokeCircle(0);
+      Arc(kCircleAngleAdjust, 360 - kCircleAngleAdjust * 2);
+      break;
+    }
+    case X86::CondCode::COND_LE:  // fallthrough
+    case X86::CondCode::COND_BE: {
+      static const SkPath static_path =
+          PathFromSVG(
+              "M-2.7.7V2L2.2 3.2 2.6 1.9-2.7.7ZM2.4-3.2-2.7-1.9V0L2.4 1.1 2.7 0-1.8-1 2.8-2 "
+              "2.4-3.2Z",
+              SVGUnit_Millimeters)
+              .makeScale(0.5, 0.5);
+      symbol = static_path;
+      Arc(0, -90);
+      FillCircle(0);
+      Triangle(-90_deg, true);
+      break;
+    }
+    case X86::CondCode::COND_G:  // fallthrough
+    case X86::CondCode::COND_A: {
+      static const SkPath static_path =
+          PathFromSVG("M2.7-1.1V1.2L-2.4 2.5-2.7 1.2 1.8 0-2.7-1.2l.3-1.4Z", SVGUnit_Millimeters)
+              .makeScale(0.5, 0.5);
+      symbol = static_path;
+      Arc(90, -90 + kCircleAngleAdjust);
+      StrokeCircle(0);
+      Triangle(90_deg, false);
+      break;
+    }
+    case X86::CondCode::COND_S: {  // sign / negative
+      static const SkPath kSignSymbol =
+          PathFromSVG("m-4.5-1c.1-.1 8.9-.1 9 0 .1.1.1 1.9 0 2-.1.1-8.9.1-9 0-.1-.1-.1-1.9 0-2z");
+      symbol = kSignSymbol;
+      StrokeCircle(0);
+      FillCircle(180);
+      Arc(180, 180 - kCircleAngleAdjust);
+      break;
+    }
+    case X86::CondCode::COND_NS: {  // not sign / positive
+      static const SkPath kNoSignSymbol = PathFromSVG(
+          "m-4.5-1c.1-.1 8.9-.1 9 0 .1.1.1 1.9 0 2-.1.1-8.9.1-9 0-.1-.1-.1-1.9 "
+          "0-2zm3.5-3.5c.1-.1 "
+          "1.9-.1 2 0 .1.1.1 8.9 0 9-.1.1-1.9.1-2 0-.1-.1-.1-8.9 0-9z");
+      symbol = kNoSignSymbol;
+      FillCircle(0);
+      StrokeCircle(180);
+      Arc(0, 180 - kCircleAngleAdjust);
+      break;
+    }
+    case X86::CondCode::COND_P:     // fallthrough
+    case X86::CondCode::COND_NP: {  // number of bits in the lowest byte
+      static const SkPath kFlagSymbol = PathFromSVG(
+          "M-1.22-1.42c.08.14.12.23.28.34-.06 0-.11-.02-.15-.04 0 .06 0 .11 0 "
+          ".18.09.02.18.05.25.04.19 0 "
+          ".36-.16.54-.14.18.01.3.21.48.22.23.02.45-.16.68-.17.31-.02.93.14.93.14S1.01-.74.67-."
+          "57C."
+          "46-.47.35-.22.13-.16-.01-.12-.17-.24-.32-.21-.51-.16-.64.04-.82.11-.85.12-.89.13-.93."
+          "14c.14.68.31 1.31.34 1.33 0 .06-.49.06-.5 0-.03-.13-.09-.7-.15-1.28-.04 "
+          "0-.06-.01-.07-.02C-1.35-.23-1.39-.6-1.37-1c0-.01.01-.01.02-.02 0-.03 0-.06 "
+          "0-.09-.05.02-.08.02-.16.02.14-.11.22-.2.29-.33Z",
+          SVGUnit_Millimeters);
+      static const SkPath kTwoFlagsSymbol = [] {
+        SkPathBuilder builder;
+        builder.addPath(kFlagSymbol.makeTransform(
+            SkMatrix::RotateDeg(-5).preTranslate(0.7_mm, -0.5_mm).preScale(0.6, 0.6)));
+        builder.addPath(kFlagSymbol.makeTransform(SkMatrix::RotateDeg(5).preTranslate(0, 0.3_mm)));
+        // builder.setFillType(SkPathFillType::kEvenOdd);
+        return builder.detach();
+      }();
+      static const SkPath kParityDial = [&]() {
+        SkPathBuilder builder;
+        auto font = ui::Font::MakeV2(ui::Font::GetSilkscreen(), 1.4_mm);
+        SkGlyphID glyphs[9];
+        SkRect bounds[9];
+        font->sk_font.textToGlyphs("012345678", 9, SkTextEncoding::kUTF8, glyphs);
+        font->sk_font.getBounds(glyphs, SkSpan<SkRect>{bounds, 9}, nullptr);
+        for (int i = 0; i < 9; ++i) {
+          std::optional<SkPath> glyph_path = font->sk_font.getPath(glyphs[i]);
+          if (!glyph_path.has_value()) continue;
+          bounds[i] = glyph_path->getBounds();
+          SkPath transformed =
+              glyph_path
+                  ->makeTransform(SkMatrix::Translate(-bounds[i].centerX(), -bounds[i].centerY()))
+                  .makeTransform(SkMatrix::Scale(font->font_scale, -font->font_scale));
+          auto dir = SinCos::FromDegrees(i * 360.f / 9);
+          transformed = transformed.makeTransform(
+              SkMatrix::Translate(Vec2::Polar(dir, (kInnerRadius + kSymbolRadius) / 2)));
+          builder.addPath(transformed);
+        }
+        return builder.detach();
+      }();
+      if (cond_code == X86::CondCode::COND_P) {
+        symbol = kTwoFlagsSymbol;
+      } else {
+        symbol = kFlagSymbol;
+      }
+      dial.addPath(kParityDial);
+      break;
+    }
+    default: {
+      break;
+    }
   }
-};
+
+  canvas.drawPath(dial.detach(), dial_fill);
+  canvas.drawPath(symbol, symbol_fill);
+}
 
 struct ConditionCodeWidget : public EnumKnobWidget {
   WeakPtr<Instruction> instruction_weak;

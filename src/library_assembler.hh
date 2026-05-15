@@ -28,6 +28,7 @@ struct Regs;
 struct Register;
 struct Assembler;
 struct AssemblerWidget;
+struct RegisterIndexKnobWidget;
 
 struct RegisterWidget : public ObjectToy {
   constexpr static Rect kBaseRect = Rect::MakeAtZero<CenterX, CenterY>(3_cm, 3_cm);
@@ -41,11 +42,13 @@ struct RegisterWidget : public ObjectToy {
   constexpr static float kCellWidth = kBaseRect.Width() / 8;
 
   ui::SmallBufferWidget small_buffer_widget;
+  std::unique_ptr<RegisterIndexKnobWidget> register_index_knob;
 
   animation::SpringV2<float> wrap_position_offset;
   animation::SpringV2<float> size_offset;
 
   RegisterWidget(Widget* parent, Object& reg);
+  ~RegisterWidget();
   Ptr<Register> LockRegister() const { return LockObject<Register>(); }
   std::string_view Name() const override;
   SkPath Shape() const override;
@@ -53,7 +56,7 @@ struct RegisterWidget : public ObjectToy {
   void Draw(SkCanvas&) const override;
   void VisitOptions(const OptionsVisitor&) const override;
 
-  void FillChildren(Vec<Widget*>& children) override { children.push_back(&small_buffer_widget); }
+  void FillChildren(Vec<Widget*>& children) override;
 };
 
 struct AssemblerWidget : ObjectToy, ui::DropTarget {

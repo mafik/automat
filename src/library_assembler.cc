@@ -809,6 +809,14 @@ void RegisterWidget::FillChildren(Vec<Widget*>& children) {
   children.push_back(register_index_knob.get());
 }
 
+void RegisterWidget::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
+  auto front = Rect(FlagFront().getBounds());
+  auto back = Rect(FlagBack().getBounds());
+  out_positions.push_back(Vec2AndDir{.pos = back.TopCenter(), .dir = -90_deg});
+  out_positions.push_back(Vec2AndDir{.pos = front.RightCenter(), .dir = -180_deg});
+  out_positions.push_back(Vec2AndDir{.pos = front.LeftCenter(), .dir = 0_deg});
+}
+
 static const SkPath kFlagPole = PathFromSVG(
     "m-.5-.7c-1.8-7.1-2.3-14.5-2.5-21.9-.3.2-.8.3-1.3.4.7-1 1.4-1.8 1.8-3 .3 1.2.8 2 1.6 2.9-.4 "
     "0-.7-.1-1.2-.3 0 7.4 1 14.7 2.5 21.9.5.2.8.5.9.7h-2.5c.1-.2.3-.5.7-.7z");

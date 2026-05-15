@@ -68,7 +68,7 @@ struct SmallBufferWidget : TextFieldBase {
 
   ui::Font* fonts[(int)Buffer::Type::TypeCount] = {};
 
-  float vertical_margin;
+  float vertical_margin;  // margin below & above text
   float width;
   float height;
   Buffer::Type type = Buffer::Type::TypeCount;  // guard value, forces redraw

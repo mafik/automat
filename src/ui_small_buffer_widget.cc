@@ -4,10 +4,11 @@
 
 #include <include/core/SkPath.h>
 
-#include "ui_constants.hh"
-#include "ui_shape_widget.hh"
 #include "log.hh"
 #include "svg.hh"
+#include "ui_button.hh"
+#include "ui_constants.hh"
+#include "ui_shape_widget.hh"
 
 namespace automat::ui {
 

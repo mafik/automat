@@ -3,7 +3,6 @@
 #pragma once
 
 #include "font.hh"
-#include "ui_button.hh"
 #include "text_field.hh"
 
 namespace automat {

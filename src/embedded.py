@@ -37,7 +37,7 @@ def gen_hh():
         print('', file=hh)
         print('#include "../../src/virtual_fs.hh"', file=hh)
         for i in range(n_shards):
-            print(f'#include "{shard_names[i]}.hh"', file=hh)
+            print(f'#include "{shard_names[i]}.hh"  // IWYU pragma: export', file=hh)
         print('', file=hh)
         print('namespace automat::embedded {', file=hh)
         print('', file=hh)

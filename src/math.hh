@@ -90,6 +90,10 @@ union Vec2 {
   std::string ToStr() const;
   std::string ToStrMetric() const;
   std::string ToStrPx() const;
+  constexpr Vec2 Up(float d) const { return Vec2(x, y + d); }
+  constexpr Vec2 Down(float d) const { return Vec2(x, y - d); }
+  constexpr Vec2 Left(float d) const { return Vec2(x - d, y); }
+  constexpr Vec2 Right(float d) const { return Vec2(x + d, y); }
 };
 
 static constexpr Vec2 kZeroVec2 = {0, 0};

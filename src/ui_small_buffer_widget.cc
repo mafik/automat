@@ -105,17 +105,22 @@ Font& SmallBufferWidget::GetFont(Buffer::Type type) const {
   if (fonts[i] != nullptr) {
     return *fonts[i];
   }
+  constexpr float kFontSize = 4_mm;
   switch (type) {
     case Buffer::Type::Text:
-      return ui::GetFont();
+      static auto text_font = ui::Font::MakeV2(ui::Font::GetGrenzeRegular(), kFontSize);
+      return *text_font;
     case Buffer::Type::Signed:
-      return ui::GetFont();
+      static auto signed_font = ui::Font::MakeV2(ui::Font::GetComputerModernRoman(), kFontSize);
+      return *signed_font;
     case Buffer::Type::Unsigned:
-      return ui::GetFont();
+      static auto number_font = ui::Font::MakeV2(ui::Font::GetComputerModernConcrete(), kFontSize);
+      return *number_font;
     case Buffer::Type::Hexadecimal:
-      return ui::GetFont();
+      static auto hex_font = ui::Font::MakeV2(ui::Font::GetHeavyData(), kFontSize);
+      return *hex_font;
     default:
-      return ui::GetFont();
+      return *text_font;
   }
 }
 

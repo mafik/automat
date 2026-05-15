@@ -31,6 +31,9 @@ struct Font {
   static sk_sp<SkTypeface> GetHeavyData();
   static sk_sp<SkTypeface> GetHelsinki();
   static sk_sp<SkTypeface> GetPbio();
+  static sk_sp<SkTypeface> GetComputerModernConcrete();
+  static sk_sp<SkTypeface> GetComputerModernRoman();
+  static sk_sp<SkTypeface> GetComputerModernItalic();
   static sk_sp<SkTypeface> MakeWeightVariation(sk_sp<SkTypeface> base, float weight);
   static std::unique_ptr<Font> MakeV2(sk_sp<SkTypeface> typeface, float letter_size);
 

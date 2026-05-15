@@ -12,6 +12,7 @@
 #include <include/core/SkShader.h>
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkGradient.h>
+#include <include/pathops/SkPathOps.h>
 #include <llvm/MC/MCCodeEmitter.h>
 #include <llvm/MC/MCInstBuilder.h>
 #include <llvm/MC/MCInstPrinter.h>
@@ -788,13 +789,16 @@ SkPath RegisterWidget::FlagBack() const {
 
 SkPath RegisterWidget::Shape() const {
   if (cached_shape.isEmpty()) {
-    cached_shape = SkPathBuilder()
-                       .addRRect(MarbleShape())
-                       .addRRect(SpearShaft())
-                       .addPath(SpearTip())
-                       .addPath(FlagFront())
-                       .addPath(FlagBack())
-                       .detach();
+    cached_shape = SkPath::RRect(MarbleShape());
+    auto Union = [this](const SkPath& other) {
+      if (auto result = Op(cached_shape, other, kUnion_SkPathOp)) {
+        cached_shape = *std::move(result);
+      }
+    };
+    Union(SkPath::RRect(SpearShaft()));
+    Union(SpearTip());
+    Union(FlagFront());
+    Union(FlagBack());
   }
   return cached_shape;
 }

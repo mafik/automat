@@ -265,14 +265,14 @@ static std::string MachineText(const mc::Inst& mc_inst) {
 
 constexpr float kFineFontSize = 2_mm;
 
-static ui::Font& FineFont() {
+ui::Font& Instruction::FineFont() {
   static auto font = ui::Font::MakeV2(ui::Font::GetGrenzeThin(), kFineFontSize);
   return *font;
 }
 
 constexpr float kHeavyFontSize = 4_mm;
 
-static ui::Font& HeavyFont() {
+ui::Font& Instruction::HeavyFont() {
   static auto font = ui::Font::MakeV2(ui::Font::GetGrenzeSemiBold(), kHeavyFontSize);
   return *font;
 }

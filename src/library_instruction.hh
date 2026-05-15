@@ -37,6 +37,9 @@ struct Instruction : Object, Buffer {
   mc::Inst mc_inst;
   WeakPtr<Object> assembler_weak;
 
+  static ui::Font& FineFont();
+  static ui::Font& HeavyFont();
+
   DEF_INTERFACE(Instruction, Runnable, run, "Run")
   void OnRun(std::unique_ptr<RunTask>& run_task) { obj->Run(run_task); }
   DEF_END(run);

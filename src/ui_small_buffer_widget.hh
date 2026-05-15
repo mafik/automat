@@ -76,7 +76,7 @@ struct SmallBufferWidget : TextFieldBase {
 
   SmallBufferWidget(ui::Widget* parent, NestedWeakPtr<Buffer> buffer);
 
-  // Call this after setting the fonts to calculate the size of the widget.
+  // Should call this (after setting the fonts, if any) to calculate the size of the widget.
   void Measure();
 
   Font& GetFont(Buffer::Type) const;

@@ -8,11 +8,13 @@
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Target/TargetMachine.h>
 
+#include "animation.hh"
 #include "library_instruction.hh"
 #include "machine_code.hh"
 #include "object.hh"
 #include "shared_or_weak.hh"
 #include "status.hh"
+#include "ui_small_buffer_widget.hh"
 
 namespace automat::library {
 
@@ -35,17 +37,23 @@ struct RegisterWidget : public ObjectToy {
     rect.right += 1_cm;  // space for byte values
     return rect;
   }();
-  constexpr static Rect kInnerRect = kBaseRect.Outset(-1_mm);
-  constexpr static float kCellHeight = kInnerRect.Height() / 8;
-  constexpr static float kCellWidth = kInnerRect.Width() / 8;
+  constexpr static float kCellHeight = kBaseRect.Height() / 8;
+  constexpr static float kCellWidth = kBaseRect.Width() / 8;
 
-  RegisterWidget(Widget* parent, Object& reg) : ObjectToy(parent, reg) {}
+  ui::SmallBufferWidget small_buffer_widget;
+
+  animation::SpringV2<float> wrap_position_offset;
+  animation::SpringV2<float> size_offset;
+
+  RegisterWidget(Widget* parent, Object& reg);
   Ptr<Register> LockRegister() const { return LockObject<Register>(); }
   std::string_view Name() const override;
   SkPath Shape() const override;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   void VisitOptions(const OptionsVisitor&) const override;
+
+  void FillChildren(Vec<Widget*>& children) override { children.push_back(&small_buffer_widget); }
 };
 
 struct AssemblerWidget : ObjectToy, ui::DropTarget {
@@ -73,9 +81,12 @@ struct AssemblerWidget : ObjectToy, ui::DropTarget {
   SkMatrix DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point = nullptr) override;
 };
 
-struct Register : Object {
+struct Register : Object, Buffer {
   using Toy = RegisterWidget;
-  int register_index;
+  int register_index;  // index into kRegisters
+  int wrap_position = 8;
+  int size = 64;
+  Buffer::Type type = Buffer::Type::Hexadecimal;
 
   DEF_INTERFACE(Register, ObjectArgument<Assembler>, assembler_arg, "Reg's Assembler")
   static constexpr auto kStyle = Argument::Style::Spotlight;
@@ -89,6 +100,14 @@ struct Register : Object {
 
   unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override {
     return make_unique<RegisterWidget>(parent, *this);
+  }
+
+  void BufferVisit(const BufferVisitor&) override;
+  Type GetBufferType() override { return type; };
+  bool IsBufferTypeMutable() override { return true; }
+  void SetBufferType(Type new_type) override {
+    type = new_type;
+    WakeToys();
   }
 
   INTERFACES(assembler_arg)

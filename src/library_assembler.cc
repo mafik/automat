@@ -3,6 +3,7 @@
 #include "library_assembler.hh"
 
 #include <include/core/SkMatrix.h>
+#include <include/core/SkPathBuilder.h>
 #include <include/core/SkShader.h>
 #include <include/effects/SkGradient.h>
 #include <llvm/MC/MCCodeEmitter.h>
@@ -604,7 +605,20 @@ SkMatrix AssemblerWidget::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2*
   return matrix;
 }
 
-SkPath RegisterWidget::Shape() const { return SkPath::Rect(kBoundingRect.sk); }
+RegisterWidget::RegisterWidget(Widget* parent, Object& reg)
+    : ObjectToy(parent, reg),
+      small_buffer_widget(
+          this, NestedWeakPtr<Buffer>(reg.AcquireWeakPtr(), &static_cast<Register&>(reg))) {
+  small_buffer_widget.fonts[(int)Buffer::Type::Text] = &Instruction::HeavyFont();
+  small_buffer_widget.fonts[(int)Buffer::Type::Unsigned] = &Instruction::HeavyFont();
+  small_buffer_widget.fonts[(int)Buffer::Type::Signed] = &Instruction::HeavyFont();
+  small_buffer_widget.fonts[(int)Buffer::Type::Hexadecimal] = &Instruction::HeavyFont();
+  small_buffer_widget.Measure();
+  small_buffer_widget.local_to_parent.setIdentity();
+  small_buffer_widget.local_to_parent.preTranslate(-small_buffer_widget.width / 2,
+                                                   kBaseRect.bottom - small_buffer_widget.height);
+}
+SkPath RegisterWidget::Shape() const { return SkPath::Rect(kBoundingRect.Outset(1_cm).sk); }
 std::string_view RegisterWidget::Name() const { return "Register"; }
 
 static const SkPath kFlagPole = PathFromSVG(
@@ -659,14 +673,73 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
   }
   SkPaint dark_paint;
   dark_paint.setColor("#dcca85"_color);
-  canvas.drawRect(kBaseRect.sk, dark_paint);
   SkPaint light_paint;
   light_paint.setColor("#fefdfb"_color);
+
+  SkColor4f back_color = "#8d7c60"_color4f;
+
+  constexpr float kBendR = kCellWidth / 4;
+
+  {  // Back side of the flag on the bottom right bit
+    Vec2 center = Vec2(kBaseRect.right, kBaseRect.bottom + kBendR * 3);
+    Vec2 top = center.Up(kBendR);
+    Vec2 bottom = center.Down(kBendR);
+    Vec2 right = center.Right(kBendR);
+    auto path = SkPathBuilder()
+                    .moveTo(bottom)
+                    .lineTo(top)
+                    .arcTo(right.Up(kBendR), right, kBendR)
+                    .arcTo(right.Down(kBendR), bottom, kBendR)
+                    .close()
+                    .detach();
+    SkColor4f colors[2];
+    colors[0] = back_color;
+    colors[1] = color::AdjustLightness(colors[0], -20);
+
+    SkPaint bend_paint;
+    SkPoint points[] = {center, right};
+    bend_paint.setShader(SkShaders::LinearGradient(
+        points, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
+
+    canvas.drawPath(path, bend_paint);
+  }
+
+  {  // Back side of the flag visible above the checkerboard
+    Vec2 bottom = kBaseRect.TopLeftCorner();
+    Vec2 center = bottom.Up(kBendR);
+    Vec2 left = center.Left(kBendR);
+    Vec2 top = center.Up(kBendR);
+    Vec2 end2 = kBaseRect.TopRightCorner().Right(kBendR * 3);
+    Vec2 end1 = end2.Up(kBendR * 2).Right(kBendR * 2);
+    Vec2 end3 = end1.Down(kCellWidth);
+    auto path = SkPathBuilder()
+                    .moveTo(bottom)
+                    .arcTo(left.Down(kBendR), left, kBendR)
+                    .arcTo(left.Up(kBendR), top, kBendR)
+                    .lineTo(end1)
+                    .lineTo(end2)
+                    .lineTo(end3)
+                    .lineTo(top.Down(kCellWidth))
+                    .close()
+                    .detach();
+    SkColor4f colors[2];
+    colors[0] = back_color;
+    colors[1] = color::AdjustLightness(colors[0], -20);
+
+    SkPaint bend_paint;
+    SkPoint points[] = {center, left};
+    bend_paint.setShader(SkShaders::LinearGradient(
+        points, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
+
+    canvas.drawPath(path, bend_paint);
+  }
+
+  canvas.drawRect(kBaseRect.sk, dark_paint);
 
   auto& bit_position_font = BitPositionFont();
   auto& byte_value_font = ByteValueFont();
   for (int row = 0; row < 8; ++row) {
-    float bottom = kInnerRect.bottom + kCellHeight * row;
+    float bottom = kBaseRect.bottom + kCellHeight * row;
     float top = bottom + kCellHeight;
     int byte_value = (reg_value >> (row * 8)) & 0xFF;
     canvas.save();
@@ -675,7 +748,7 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
     byte_value_font.DrawText(canvas, byte_value_str, dark_paint);
     canvas.restore();
     for (int bit = 0; bit < 8; ++bit) {
-      float right = kInnerRect.right - kCellWidth * bit;
+      float right = kBaseRect.right - kCellWidth * bit;
       float left = right - kCellWidth;
       SkPaint* cell_paint = &light_paint;
       if (bit % 2 == row % 2) {
@@ -709,6 +782,50 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
         canvas.drawPath(kFlag, flag_paint);
         canvas.restore();
       }
+
+      if (bit == 7) {
+        // Flag bending on the left
+        auto path = SkPathBuilder()
+                        .moveTo(left, bottom)
+                        .arcTo(SkPoint(left - kBendR, bottom),
+                               SkPoint(left - kBendR, bottom + kBendR), kBendR)
+                        .lineTo(SkPoint(left - kBendR, top + kBendR))
+                        .arcTo(SkPoint(left - kBendR, top), SkPoint(left, top), kBendR)
+                        .close()
+                        .detach();
+        SkColor4f colors[2];
+        colors[0] = cell_paint->getColor4f();
+        colors[1] = color::AdjustLightness(colors[0], -20);
+
+        SkPaint bend_paint;
+        SkPoint points[] = {SkPoint::Make(left, bottom), SkPoint::Make(left - kBendR, bottom)};
+        bend_paint.setShader(SkShaders::LinearGradient(
+            points, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
+
+        canvas.drawPath(path, bend_paint);
+      }
+      if (bit == 0 && row > 0) {
+        // Flag bending on the right
+        auto path =
+            SkPathBuilder()
+                .moveTo(right, bottom)
+                .lineTo(SkPoint(right, top))
+                .arcTo(SkPoint(right + kBendR, top), SkPoint(right + kBendR, top - kBendR), kBendR)
+                .lineTo(SkPoint(right + kBendR, bottom - kBendR))
+                .arcTo(SkPoint(right + kBendR, bottom), SkPoint(right, bottom), kBendR)
+                .close()
+                .detach();
+        SkColor4f colors[2];
+        colors[0] = cell_paint->getColor4f();
+        colors[1] = color::AdjustLightness(colors[0], -20);
+
+        SkPaint bend_paint;
+        SkPoint points[] = {SkPoint::Make(right, bottom), SkPoint::Make(right + kBendR, bottom)};
+        bend_paint.setShader(SkShaders::LinearGradient(
+            points, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
+
+        canvas.drawPath(path, bend_paint);
+      }
     }
   }
 
@@ -717,6 +834,7 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
   canvas.translate(-kRegisterIconWidth / 2, kBaseRect.top - kRegisterIconWidth * 0.15);
   kRegisters[register_index].image.draw(canvas);
   canvas.restore();
+  DrawChildren(canvas);
 }
 
 void RegisterWidget::VisitOptions(const OptionsVisitor& visitor) const {
@@ -734,6 +852,31 @@ Register::Register(WeakPtr<Assembler> assembler_weak, int register_index)
 
 Ptr<Object> Register::Clone() const {
   return MAKE_PTR(Register, assembler_arg->FindObjectWeak(), register_index);
+}
+
+void Register::BufferVisit(const BufferVisitor& visitor) {
+  auto assembler = assembler_arg->FindObject();
+  if (assembler == nullptr) {
+    ReportError("Register is not connected to an assembler");
+    return;
+  }
+  if (assembler->mc_controller == nullptr) {
+    ReportError("Assembler is not connected to a mc_controller");
+    return;
+  }
+  Status status;
+  assembler->mc_controller->ChangeState(
+      [&](mc::Controller::State& state) {
+        uint64_t* ptr = &state.regs[kRegisters[register_index].regs_index];
+        char* char_ptr = reinterpret_cast<char*>(ptr);
+        visitor(span<char>(char_ptr, sizeof(state.regs[0])));
+      },
+      status);
+  if (!OK(status)) {
+    ReportError(status.ToStr());
+    return;
+  }
+  WakeToys();
 }
 
 void Register::SetText(std::string_view text) {

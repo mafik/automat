@@ -26,6 +26,7 @@
 #include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
+#include "ui_enum_knob_widget.hh"
 #include "widget.hh"
 
 #if defined _WIN32
@@ -605,17 +606,76 @@ SkMatrix AssemblerWidget::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2*
   return matrix;
 }
 
+struct RegisterIndexKnobWidget : public ui::EnumKnobWidget {
+  WeakPtr<Register> register_weak;
+
+  RegisterIndexKnobWidget(ui::Widget* parent, WeakPtr<Register> register_weak)
+      : ui::EnumKnobWidget(parent, kGeneralPurposeRegisterCount),
+        register_weak(std::move(register_weak)) {}
+
+  int KnobGet() const override {
+    if (auto reg = register_weak.Lock()) {
+      return reg->register_index;
+    }
+    return 0;
+  }
+
+  void KnobSet(int new_value) override {
+    auto reg = register_weak.Lock();
+    if (!reg) return;
+    int old_value = reg->register_index;
+    if (new_value == old_value) return;
+
+    reg->register_index = new_value;
+
+    if (auto assembler = reg->assembler_arg->FindObject()) {
+      Ptr<Register> moving = assembler->reg_objects_idx[old_value].lock();
+      Ptr<Register> displaced = assembler->reg_objects_idx[new_value].lock();
+      if (displaced && displaced.Get() != reg.Get()) {
+        displaced->register_index = old_value;
+        displaced->WakeToys();
+        assembler->reg_objects_idx[old_value] = std::move(displaced);
+      } else {
+        assembler->reg_objects_idx[old_value].reset();
+      }
+      assembler->reg_objects_idx[new_value] = std::move(moving);
+      assembler->WakeToys();
+    }
+
+    reg->WakeToys();
+  }
+
+  void DrawKnobSymbol(SkCanvas& canvas, int val) const override {
+    canvas.save();
+    constexpr float kIconScale = 0.5f;
+    canvas.scale(kIconScale, kIconScale);
+    canvas.translate(-kRegisterIconWidth / 2, -kRegisterIconWidth / 2);
+    kRegisters[val].image.draw(canvas);
+    canvas.restore();
+  }
+};
+
 RegisterWidget::RegisterWidget(Widget* parent, Object& reg)
     : ObjectToy(parent, reg),
       small_buffer_widget(
-          this, NestedWeakPtr<Buffer>(reg.AcquireWeakPtr(), &static_cast<Register&>(reg))) {
+          this, NestedWeakPtr<Buffer>(reg.AcquireWeakPtr(), &static_cast<Register&>(reg))),
+      register_index_knob(std::make_unique<RegisterIndexKnobWidget>(
+          this, static_cast<Register&>(reg).AcquireWeakPtr())) {
   small_buffer_widget.Measure();
   small_buffer_widget.local_to_parent.setIdentity();
   small_buffer_widget.local_to_parent.preTranslate(-small_buffer_widget.width / 2,
                                                    kBaseRect.bottom - small_buffer_widget.height);
+  register_index_knob->local_to_parent =
+      SkM44::Translate(0, kBaseRect.top + kRegisterIconWidth * 0.35);
 }
+RegisterWidget::~RegisterWidget() = default;
 SkPath RegisterWidget::Shape() const { return SkPath::Rect(kBoundingRect.Outset(1_cm).sk); }
 std::string_view RegisterWidget::Name() const { return "Register"; }
+
+void RegisterWidget::FillChildren(Vec<Widget*>& children) {
+  children.push_back(&small_buffer_widget);
+  children.push_back(register_index_knob.get());
+}
 
 static const SkPath kFlagPole = PathFromSVG(
     "m-.5-.7c-1.8-7.1-2.3-14.5-2.5-21.9-.3.2-.8.3-1.3.4.7-1 1.4-1.8 1.8-3 .3 1.2.8 2 1.6 2.9-.4 "
@@ -652,9 +712,9 @@ animation::Phase RegisterWidget::Tick(time::Timer& timer) {
     auto register_index = register_obj->register_index;
     if (auto assembler = register_obj->assembler_arg->FindObject()) {
       phase = RefreshState(*assembler, timer.now);
-      auto reg_value = assembler->state.regs[kRegisters[register_index].regs_index];
     }
   }
+  small_buffer_widget.WakeAnimation();
   return phase;
 }
 
@@ -825,11 +885,6 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
     }
   }
 
-  canvas.save();
-
-  canvas.translate(-kRegisterIconWidth / 2, kBaseRect.top - kRegisterIconWidth * 0.15);
-  kRegisters[register_index].image.draw(canvas);
-  canvas.restore();
   DrawChildren(canvas);
 }
 

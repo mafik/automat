@@ -98,6 +98,21 @@ sk_sp<SkTypeface> Font::GetPbio() {
   return pbio;
 }
 
+sk_sp<SkTypeface> Font::GetComputerModernConcrete() {
+  static sk_sp<SkTypeface> cmc = LoadTypeface(embedded::assets_cmunorm_ttf);
+  return cmc;
+}
+
+sk_sp<SkTypeface> Font::GetComputerModernRoman() {
+  static sk_sp<SkTypeface> cmr = LoadTypeface(embedded::assets_cmunrm_ttf);
+  return cmr;
+}
+
+sk_sp<SkTypeface> Font::GetComputerModernItalic() {
+  static sk_sp<SkTypeface> cmi = LoadTypeface(embedded::assets_cmunti_ttf);
+  return cmi;
+}
+
 sk_sp<SkTypeface> Font::MakeWeightVariation(sk_sp<SkTypeface> base, float weight) {
   SkFontArguments::VariationPosition::Coordinate coordinates[1];
   coordinates[0].axis = kFontWeightTag;

@@ -3282,10 +3282,6 @@ Instruction::Widget::Widget(ui::Widget* parent, Object& object) : ObjectToy(pare
         NestedWeakPtr<Buffer>(instruction->AcquireWeakPtr<ReferenceCounted>(), instruction.Get());
     imm_widget = std::make_unique<ui::SmallBufferWidget>(this, std::move(buffer_ptr));
     imm_widget->local_to_parent.setIdentity();
-    imm_widget->fonts[(int)Buffer::Type::Text] = &HeavyFont();
-    imm_widget->fonts[(int)Buffer::Type::Unsigned] = &HeavyFont();
-    imm_widget->fonts[(int)Buffer::Type::Signed] = &HeavyFont();
-    imm_widget->fonts[(int)Buffer::Type::Hexadecimal] = &HeavyFont();
     imm_widget->Measure();
   }
   auto tokens = PrintInstruction(instruction->mc_inst);

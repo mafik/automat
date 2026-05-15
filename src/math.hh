@@ -292,6 +292,7 @@ union Rect {
   static constexpr Rect MakeCircleR(float r) { return {-r, -r, r, r}; }
 
   operator SkRect&() { return sk; }
+  operator const SkRect&() const { return sk; }
 
   static constexpr float MinY(const SkRect& r) { return r.fTop; }
   static constexpr float MaxY(const SkRect& r) { return r.fBottom; }
@@ -503,6 +504,9 @@ union RRect {
             .radii = {radii[0], radii[1], radii[2], radii[3]},
             .type = type};
   }
+
+  operator SkRRect&() { return sk; }
+  operator const SkRRect&() const { return sk; }
 };
 
 static_assert(sizeof(RRect) == 52);

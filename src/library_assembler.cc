@@ -477,6 +477,9 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
     child->local_to_parent = SkM44(child_mat);
   }
 
+  // The starfield background twinkles continuously, so keep redrawing.
+  phase |= animation::Animating;
+
   return phase;
 }
 
@@ -498,6 +501,7 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
     assert(effect);
     SkRuntimeEffectBuilder builder(effect);
     builder.uniform("uv_to_pixel") = canvas.getTotalMatrix();
+    builder.uniform("time") = (float)fmod(time::SecondsSinceEpoch(), 1000.0);
     auto shader = builder.makeShader();
     SkPaint paint;
     paint.setShader(shader);

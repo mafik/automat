@@ -1,9 +1,11 @@
 // kind=shader
 
 uniform mat3 uv_to_pixel;
+uniform float time;  // seconds, drives the per-star twinkle
 
 const float kGridSize = 50.0;
 const float kPixelSizeInGrid = 1.0 / kGridSize;
+const float kTwinkleAmplitude = 0.4;  // peak brightness deviation from 1.0
 
 // Convert a 2D position to a pseudo-random value in [0,1)^2.
 vec2 random2(vec2 st) {
@@ -44,9 +46,16 @@ vec4 main(vec2 uv) {
             vec2 cell = grid - vec2(float(i), float(j));
             // Get a pseudo-random value for this cell
             vec2 rnd = random2(cell);
-            float star_radius = rnd.y * 0.03 + 0.05;  // 1..4 pixels
+            // Twinkle: each star pulses around its base brightness at its own
+            // phase and rate, so the field shimmers instead of staying static.
+            float twinkle_phase = rnd.x * 6.2831853;
+            float twinkle_rate = 0.5 + rnd.y * 1.5;
+            float twinkle = 0.6 + kTwinkleAmplitude * sin(time * twinkle_rate + twinkle_phase);
+
+            float star_radius = rnd.y * rnd.y * 0.06 + 0.04;
             // Star center is placed randomly within a 2x2 box.
             vec2 star_center = cell + (2.0 - star_radius) * rnd;
+            star_radius *= twinkle;
             // Calculate distance from our (scaled) pixel to the star center.
             const float kExponent = 0.6666;
             float d = pow(pow(abs(pixel_scaled.x - star_center.x), kExponent) +
@@ -54,7 +63,7 @@ vec4 main(vec2 uv) {
             // Use smoothstep to create a one-pixel soft edge:
             float intensity = 1.0 - smoothstep(star_radius - kPixelSizeInGrid * 2, star_radius, d);
             // Add the star's contribution to our color.
-            color.rgb += vec3(intensity);
+            color.rgb += vec3(intensity * twinkle);
         }
     }
 

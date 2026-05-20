@@ -7,6 +7,7 @@
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPath.h>
 #include <include/core/SkPictureRecorder.h>
+#include <include/effects/SkRuntimeEffect.h>
 
 #include <memory>
 #include <ranges>
@@ -20,6 +21,7 @@
 #include "drag_action.hh"
 #include "embedded.hh"
 #include "font.hh"
+#include "global_resources.hh"
 #include "loading_animation.hh"
 #include "math.hh"
 #include "object.hh"
@@ -249,6 +251,22 @@ void RootWidget::ZoomWarning::Draw(SkCanvas& canvas) const {
 }
 
 static SkColor background_color = SkColorSetRGB(0x80, 0x80, 0x80);
+
+// Fills the whole canvas with the starfield shader shared with the Assembler background.
+static void DrawStarfieldBackground(SkCanvas& canvas) {
+  Status status;
+  static auto effect = resources::CompileShader(embedded::assets_assembler_stars_rt_sksl, status);
+  if (!effect) {
+    canvas.clear(background_color);
+    return;
+  }
+  SkRuntimeEffectBuilder builder(effect);
+  builder.uniform("uv_to_pixel") = canvas.getTotalMatrix();
+  builder.uniform("time") = (float)fmod(time::SecondsSinceEpoch(), 1000.0 * M_PI);
+  SkPaint paint;
+  paint.setShader(builder.makeShader());
+  canvas.drawPaint(paint);
+}
 
 animation::Phase RootWidget::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
@@ -582,7 +600,7 @@ void RootWidget::Draw(SkCanvas& canvas) const {
     anim_guard = std::move(loading_animation->WrapDrawing(canvas));
   }
 
-  canvas.clear(background_color);
+  DrawStarfieldBackground(canvas);
 
   auto children = Children();
   for (auto* child : ranges::reverse_view{children}) {

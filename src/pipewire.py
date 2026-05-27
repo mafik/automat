@@ -18,8 +18,8 @@ hook.FetchFromGit('https://gitlab.freedesktop.org/pipewire/pipewire.git', '1.4.1
 def _patch_echo_cancel_plugin_dependencies(marker):
   path = hook.src_dir / 'src' / 'modules' / 'meson.build'
   text = path.read_text()
-  needle = 'dependencies : [mathlib, dl_lib, pipewire_dep, plugin_dependencies],'
-  replacement = 'dependencies : [mathlib, dl_lib, pipewire_dep],'
+  needle = ', plugin_dependencies'
+  replacement = ''
   if needle in text:
     path.write_text(text.replace(needle, replacement))
   elif replacement not in text:

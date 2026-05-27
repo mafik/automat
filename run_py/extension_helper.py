@@ -185,6 +185,8 @@ class ExtensionHelper:
     elif self.configure == 'meson':
       import meson
       meson_args = meson.ARGS + ['setup']
+      if 'prefer_static' not in self.configure_opts:
+        self.configure_opts['prefer_static'] = 'true'
       for key, value in self.configure_opts.items():
         meson_args.append(f'-D{key}={value}')
       if build.fast:
@@ -193,7 +195,7 @@ class ExtensionHelper:
         meson_args += ['--buildtype=debug']
       elif build.release:
         meson_args += ['--buildtype=release']
-      meson_args += ['--default-library=static', '-Dprefer_static=true', '--prefix', build.PREFIX, '--libdir', 'lib64', build_dir, self.src_dir]
+      meson_args += ['--default-library=static', '--prefix', build.PREFIX, '--libdir', 'lib64', build_dir, self.src_dir]
       makefile = build_dir / 'meson-info' / 'meson-info.json'
 
       recipe.add_step(

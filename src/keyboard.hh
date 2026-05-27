@@ -39,7 +39,7 @@ struct Caret final {
   Keyboard& keyboard;
   CaretOwner* owner = nullptr;
   SkPath shape;
-  Widget* widget;
+  TrackedPtr<Widget> widget;
   Caret(Keyboard& keyboard);
   ~Caret() = default;
   void PlaceIBeam(Vec2 position);

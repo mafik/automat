@@ -48,9 +48,13 @@ hook.ConfigureOptions(**{
   'selinux': 'disabled',
   'gsettings': 'disabled',
   'avahi': 'disabled',
+  'opus': 'disabled',
   'raop': 'disabled',
+  'readline': 'disabled',
   'snap': 'disabled',
   'session-managers': '[]',
+  'support': 'disabled',
+  'prefer_static': 'false',
 })
 hook.InstallWhenIncluded(r'pipewire/pipewire\.h')
 hook.AddCompileArgs(f'-I{build.PREFIX / "include" / "pipewire-0.3"}', f'-I{build.PREFIX / "include" / "spa-0.2"}')

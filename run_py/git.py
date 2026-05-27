@@ -5,6 +5,7 @@
 import os
 import shutil
 import stat
+import glob
 from pathlib import Path
 from functools import partial
 
@@ -36,6 +37,8 @@ if __name__ == '__main__':
       '-c', 'core.autocrlf=false',
       'fetch', '--depth', '1', url, tag], cwd=out_directory, check=True)
     subprocess.run(['git', 'reset', '--hard', 'FETCH_HEAD'], cwd=out_directory, check=True)
+    for marker in glob.glob('*.marker', root_dir = out_directory):
+      os.unlink(out_directory / marker)
     os.utime(out_directory, None)  # bump mtime so make.py sees the update
   else:
     subprocess.run(['git',

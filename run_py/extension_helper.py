@@ -29,11 +29,13 @@ def download_from_url(url : str, filename : Path):
     # Download the file from url
     urllib.request.urlretrieve(url, filename)
 
+# Clears `output` and fills it with archive contents
 def extract_tar(archive : Path, output : Path):
   import tarfile
   import os
   import shutil
 
+  shutil.rmtree(output, ignore_errors=True)
   tmp_dir = output / 'tmp'
   os.makedirs(tmp_dir, exist_ok=True)
 

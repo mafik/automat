@@ -225,6 +225,10 @@ animation::Phase LocationWidget::Tick(time::Timer& timer) {
     // Location is dead — fade out and eventually expire
     phase |= animation::ExponentialApproach(1, timer.d, 0.1, transparency);
     if (phase == animation::Finished) {
+      // Bring our cached ObjectToy with us so it doesn't outlive the path back to RootWidget.
+      if (toy && toy->parent == this) {
+        toy->MarkDead(timer.now);
+      }
       MarkDead(timer.now);
     }
     return phase;

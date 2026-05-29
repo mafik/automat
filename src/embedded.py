@@ -106,7 +106,8 @@ main_step = None
 
 def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
     result = subprocess.run(['git', 'ls-files'], capture_output=True, text=True)
-    paths = [Path(p) for p in result.stdout.splitlines() if Path(p).is_file()]
+    paths = set(Path(p) for p in result.stdout.splitlines() if  Path(p).is_file())
+    paths.update(p.relative_to(fs_utils.project_root) for p in (fs_utils.project_root / 'assets').glob('*') if p.is_file())
 
     # Filter out paths marked `automat-embed=false` in .gitattributes (e.g. docs/**).
     attrs = subprocess.run(['git', 'check-attr', '--stdin', '-z', 'automat-embed'],

@@ -278,7 +278,8 @@ struct ObjectArgument : Argument {
 
   Ptr<T> FindObject() const {
     auto nested_ptr = table->find(*this);
-    return nested_ptr.template Owner<T>()->AcquirePtr();
+    auto* owner = nested_ptr.template Owner<T>();
+    return owner ? owner->AcquirePtr() : Ptr<T>();
   }
 
   WeakPtr<T> FindObjectWeak() const { return state->target; }

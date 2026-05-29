@@ -179,12 +179,14 @@ def generate_transform_matrix(kra_data, layer, layer_snake: str, metadata: dict)
 );"""
 
 
-def parse_svg_path_data(svg_content: str) -> tuple[str, dict, dict]:
-    """Parse SVG file to extract path data, transform, and SVG info.
+def parse_svg_shape(svg_content: str) -> tuple[dict, dict, dict]:
+    """Parse an SVG shape layer to extract its shape, transform, and SVG info.
 
     Returns:
-        tuple of (path_data_string, transform_dict, svg_info_dict)
-        svg_info_dict contains viewBox dimensions and units
+        tuple of (shape_dict, transform_dict, svg_info_dict)
+        shape_dict has 'kind' == 'path' (with a 'd' string) or 'kind' == 'rect'
+        (with 'x', 'y', 'width', 'height', 'rx', 'ry'). svg_info_dict contains
+        viewBox dimensions and units.
     """
     root = ET.fromstring(svg_content)
 
@@ -228,28 +230,58 @@ def parse_svg_path_data(svg_content: str) -> tuple[str, dict, dict]:
     else:
         svg_info['viewBox'] = {'x': 0, 'y': 0, 'width': 0, 'height': 0}
 
-    # Find the path element
-    # SVG uses default namespace
+    # Find the shape element. Krita writes one shape per layer; we support
+    # paths and rectangles. SVG uses a default namespace, so try the namespaced
+    # query first and fall back to the bare tag.
+    # (Element.find returns None when absent; don't use `or`, since an element
+    # with no children is itself falsy.)
     namespaces = {
         'svg': 'http://www.w3.org/2000/svg',
         'sodipodi': 'http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd'
     }
 
-    path_elem = root.find('.//svg:path', namespaces)
-    if path_elem is None:
-        # Try without namespace
-        path_elem = root.find('.//path')
+    shape_elem = root.find('.//svg:path', namespaces)
+    if shape_elem is None:
+        shape_elem = root.find('.//path')
+    if shape_elem is not None:
+        shape = {'kind': 'path', 'd': shape_elem.get('d', '')}
+    else:
+        shape_elem = root.find('.//svg:rect', namespaces)
+        if shape_elem is None:
+            shape_elem = root.find('.//rect')
+        if shape_elem is None:
+            raise ValueError("No path or rect element found in SVG")
+        shape = parse_svg_rect(shape_elem)
 
-    if path_elem is None:
-        raise ValueError("No path element found in SVG")
+    transform = parse_svg_transform(shape_elem.get('transform', ''))
 
-    path_data = path_elem.get('d', '')
-    transform_str = path_elem.get('transform', '')
+    return shape, transform, svg_info
 
-    # Parse the transform
-    transform = parse_svg_transform(transform_str)
 
-    return path_data, transform, svg_info
+def parse_svg_rect(rect_elem) -> dict:
+    """Extract geometry from an SVG <rect>, applying the spec's rx/ry
+    defaulting and clamping rules."""
+    x = float(rect_elem.get('x', '0'))
+    y = float(rect_elem.get('y', '0'))
+    width = float(rect_elem.get('width', '0'))
+    height = float(rect_elem.get('height', '0'))
+
+    rx_attr = rect_elem.get('rx')
+    ry_attr = rect_elem.get('ry')
+    rx = float(rx_attr) if rx_attr is not None else None
+    ry = float(ry_attr) if ry_attr is not None else None
+    if rx is None and ry is None:
+        rx = ry = 0.0
+    elif rx is None:
+        rx = ry
+    elif ry is None:
+        ry = rx
+    # Corner radii are clamped to half the corresponding side.
+    rx = min(rx, width / 2.0)
+    ry = min(ry, height / 2.0)
+
+    return {'kind': 'rect', 'x': x, 'y': y, 'width': width, 'height': height,
+            'rx': rx, 'ry': ry}
 
 
 def parse_svg_transform(transform_str: str) -> dict:
@@ -311,11 +343,11 @@ def parse_svg_transform(transform_str: str) -> dict:
     return result
 
 
-def parse_shape_layer(kra_data, layer) -> tuple[str, dict, dict]:
-    """Parse vector layer and return path data, transform, and SVG info.
+def parse_shape_layer(kra_data, layer) -> tuple[dict, dict, dict]:
+    """Parse a vector layer and return its shape, transform, and SVG info.
 
     Returns:
-        tuple of (svg_path_data, svg_transform_dict, svg_info_dict)
+        tuple of (shape_dict, svg_transform_dict, svg_info_dict)
     """
     kra = kra_data['kra']
 
@@ -324,8 +356,7 @@ def parse_shape_layer(kra_data, layer) -> tuple[str, dict, dict]:
     svg_path = f"{kra_data['name']}/layers/{layer_filename}.shapelayer/content.svg"
 
     svg_content = kra.read(svg_path).decode('utf-8')
-    path_data, transform, svg_info = parse_svg_path_data(svg_content)
-    return path_data, transform, svg_info
+    return parse_svg_shape(svg_content)
 
 
 _SVG_TOKEN_RE = re.compile(r'[MLHVCSQTAZmlhvcsqtaz]|-?\d*\.?\d+(?:[eE][+-]?\d+)?')
@@ -519,25 +550,24 @@ def _bake_svg_path(path: str, sx: float, kx: float, tx: float,
     return verbs, pts
 
 
-def generate_skpath_cc_impl(layer_name: str, path_data: str, svg_transform: dict, svg_info: dict, kra_data: dict, layer: dict) -> str:
-    """Generate C++ code to create an SkPath from SVG path data.
+def _compose_path_transform(svg_transform: dict, svg_info: dict, kra_data: dict, layer: dict) -> tuple:
+    """Compose the affine mapping SVG-local shape coordinates into canvas metric
+    space (meters).
 
-    Uses Skia's SkParsePath::FromSVGString to parse the SVG path,
-    then applies the appropriate transform to convert to canvas metric space.
+    Returns (sx, kx, tx, ky, sy, ty), matching
+    SkMatrix::MakeAll(sx, kx, tx, ky, sy, ty, 0, 0, 1):
+        (x, y) -> (sx*x + kx*y + tx, ky*x + sy*y + ty)
+
+    The composition is: the element's local SVG transform, then centering the
+    viewBox and adding the layer position (in SVG points), then converting points
+    to meters with a flipped Y axis.
     """
     x_res = kra_data['x_res']
     y_res = kra_data['y_res']
-
     layer_x = layer['x']
     layer_y = layer['y']
 
-    # Calculate the combined transform:
-    # 1. SVG local transform from the path element (in SVG point space)
-    # 2. Translate to center the SVG viewBox
-    # 3. Add layer position offset (convert from canvas pixels to SVG points)
-    # 4. Convert from SVG points directly to meters (1 pt = 1/72 inch, 1 inch = 0.0254 m)
-    # 5. Flip Y axis
-
+    # SVG's column-major transform: a=sx, b=ky, c=kx, d=sy, e=tx, f=ty.
     svg_a = svg_transform['a']
     svg_b = svg_transform['b']
     svg_c = svg_transform['c']
@@ -545,52 +575,27 @@ def generate_skpath_cc_impl(layer_name: str, path_data: str, svg_transform: dict
     svg_e = svg_transform['e']
     svg_f = svg_transform['f']
 
-    # Get SVG viewBox dimensions
     svg_viewbox_width = svg_info['viewBox']['width']
     svg_viewbox_height = svg_info['viewBox']['height']
 
-    # Convert points to meters: 1 pt = 1/72 inch, 1 inch = 0.0254 m
-    # So: 1 pt = 0.0254 / 72 meters
+    # Convert points to meters: 1 pt = 1/72 inch, 1 inch = 0.0254 m.
     pt_to_meter = 0.0254 / 72.0
     scale_x = pt_to_meter
-    scale_y = -pt_to_meter  # Negative to flip Y axis
+    scale_y = -pt_to_meter  # Negative to flip the Y axis.
 
-    # Layer position is in canvas pixels, need to convert to SVG points
-    # At x_res DPI: 1 inch = x_res pixels, 1 inch = 72 points
-    # Therefore: pixels_per_point = x_res / 72
-    pixels_per_point_x = x_res / 72.0
-    pixels_per_point_y = y_res / 72.0
-    layer_x_pt = layer_x / pixels_per_point_x
-    layer_y_pt = layer_y / pixels_per_point_y
+    # Layer position is in canvas pixels; convert to SVG points (x_res px = 72 pt).
+    layer_x_pt = layer_x / (x_res / 72.0)
+    layer_y_pt = layer_y / (y_res / 72.0)
 
-    # Build combined transform matrix:
-    # 1. Applies SVG local transform (from path element, in SVG point space)
-    # 2. Centers the viewBox (subtract viewBox_width/2, viewBox_height/2)
-    # 3. Adds layer position offset (in SVG point space)
-    # 4. Converts from points to meters and flips Y
-
-    # Calculate the centering and position offset
+    # Center the viewBox and add the layer position offset (in SVG points).
     translate_x = layer_x_pt - svg_viewbox_width / 2.0
     translate_y = layer_y_pt - svg_viewbox_height / 2.0
 
-    # Precompute the composed affine matrix. SkMatrix::MakeAll(scaleX, skewX, transX,
-    # skewY, scaleY, transY, 0, 0, 1) corresponds to the affine:
-    #     [ sx  kx  tx ]
-    #     [ ky  sy  ty ]
-    # where points are mapped as (x', y') = (sx*x + kx*y + tx, ky*x + sy*y + ty).
-    # Starting from the SVG local transform (svg_a..svg_f with SVG's column-major convention:
-    # a=sx, b=ky, c=kx, d=sy, e=tx, f=ty), we compose postTranslate(tx, ty) then
-    # postScale(scale_x, scale_y):
-    sx = svg_a
-    kx = svg_c
-    tx = svg_e
-    ky = svg_b
-    sy = svg_d
-    ty = svg_f
-    # postTranslate: add (translate_x, translate_y) to (tx, ty).
+    # Start from the SVG local transform, then postTranslate, then postScale.
+    sx, kx, tx = svg_a, svg_c, svg_e
+    ky, sy, ty = svg_b, svg_d, svg_f
     tx += translate_x
     ty += translate_y
-    # postScale: multiply the whole top row by scale_x, bottom row by scale_y.
     sx *= scale_x
     kx *= scale_x
     tx *= scale_x
@@ -598,18 +603,94 @@ def generate_skpath_cc_impl(layer_name: str, path_data: str, svg_transform: dict
     sy *= scale_y
     ty *= scale_y
 
+    return sx, kx, tx, ky, sy, ty
+
+
+def _fmt_scalar(v: float) -> str:
+    """Format a float as a C++ SkScalar literal (e.g. ``-0.033f``)."""
+    s = f"{v:.7g}"
+    if not any(c in s for c in ".eE"):
+        s += ".0"
+    return s + "f"
+
+
+# Control-point offset for approximating a quarter ellipse with a cubic Bézier.
+_KAPPA = 0.5522847498307936
+
+
+def _rect_to_path_data(shape: dict) -> str:
+    """Build an SVG path ``d`` equivalent to an SVG <rect>, using cubic Béziers
+    for rounded corners. Used to bake rectangles whose transform rotates or
+    skews them, since those can't be an axis-aligned SkRect/SkRRect."""
+    x, y = shape['x'], shape['y']
+    w, h = shape['width'], shape['height']
+    rx, ry = shape['rx'], shape['ry']
+
+    if rx <= 0.0 or ry <= 0.0:
+        return f"M{x},{y} H{x + w} V{y + h} H{x} Z"
+
+    cx, cy = _KAPPA * rx, _KAPPA * ry
+    return (
+        f"M{x + rx},{y} "
+        f"H{x + w - rx} "
+        f"C{x + w - rx + cx},{y} {x + w},{y + ry - cy} {x + w},{y + ry} "
+        f"V{y + h - ry} "
+        f"C{x + w},{y + h - ry + cy} {x + w - rx + cx},{y + h} {x + w - rx},{y + h} "
+        f"H{x + rx} "
+        f"C{x + rx - cx},{y + h} {x},{y + h - ry + cy} {x},{y + h - ry} "
+        f"V{y + ry} "
+        f"C{x},{y + ry - cy} {x + rx - cx},{y} {x + rx},{y} "
+        f"Z"
+    )
+
+
+def _generate_rect_decl(layer_name: str, shape: dict,
+                        sx: float, kx: float, tx: float,
+                        ky: float, sy: float, ty: float):
+    """Return a header-side constexpr declaration for an axis-aligned rectangle:
+    a Rect when sharp, an RRect when rounded (math.hh types, so both are
+    compile-time constants). Returns None when the transform rotates or skews the
+    rectangle, so it can't be an axis-aligned Rect/RRect."""
+    if abs(kx) > 1e-9 or abs(ky) > 1e-9:
+        return None
+
+    x0, y0 = shape['x'], shape['y']
+    w, h = shape['width'], shape['height']
+    # Axis-aligned: transforming two opposite corners is enough.
+    ax, ay = sx * x0 + tx, sy * y0 + ty
+    bx, by = sx * (x0 + w) + tx, sy * (y0 + h) + ty
+    min_x, max_x = sorted((ax, bx))
+    min_y, max_y = sorted((ay, by))
+    # math.hh's Rect(left, bottom, right, top) is Y-up (bottom = smaller Y).
+    rect = (f"Rect({_fmt_scalar(min_x)}, {_fmt_scalar(min_y)}, "
+            f"{_fmt_scalar(max_x)}, {_fmt_scalar(max_y)})")
+
+    # Corner radii scale by the (absolute) per-axis scale factors.
+    rrx = abs(sx) * shape['rx']
+    rry = abs(sy) * shape['ry']
+    if rrx <= 0.0 and rry <= 0.0:
+        return f"constexpr Rect {layer_name} = {rect};"
+    if abs(rrx - rry) <= 1e-12:
+        return f"constexpr RRect {layer_name} = RRect::MakeSimple({rect}, {_fmt_scalar(rrx)});"
+    # Uniform but elliptical corners: build the RRect with per-corner radii.
+    radius = f"{{{_fmt_scalar(rrx)}, {_fmt_scalar(rry)}}}"
+    return (f"constexpr RRect {layer_name} = {{.rect = {rect}, "
+            f".radii = {{{radius}, {radius}, {radius}, {radius}}}, "
+            f".type = SkRRect::Type::kSimple_Type}};")
+
+
+def _generate_path_decl_def(layer_name: str, path_data: str,
+                            sx: float, kx: float, tx: float,
+                            ky: float, sy: float, ty: float) -> tuple[str, str]:
+    """Return (declaration, definition) for an arbitrary path baked into an
+    SkPath via SkPath::Raw. SkPath isn't a literal type, so it stays a function
+    rather than an inline constant."""
     verbs, pts = _bake_svg_path(path_data, sx, kx, tx, ky, sy, ty)
 
-    def fmt(v):
-        s = f"{v:.7g}"
-        if not any(c in s for c in ".eE"):
-            s += ".0"
-        return s + "f"
-
-    pts_lines = ',\n        '.join(f"{{{fmt(x)}, {fmt(y)}}}" for x, y in pts)
+    pts_lines = ',\n        '.join(f"{{{_fmt_scalar(x)}, {_fmt_scalar(y)}}}" for x, y in pts)
     verbs_lines = ',\n        '.join(f"SkPathVerb::{_VERB_NAMES[v]}" for v in verbs)
 
-    code = f"""SkPath {layer_name}() {{
+    definition = f"""SkPath {layer_name}() {{
     static constexpr SkPoint kPts[] = {{
         {pts_lines}
     }};
@@ -619,12 +700,43 @@ def generate_skpath_cc_impl(layer_name: str, path_data: str, svg_transform: dict
     return SkPath::Raw(kPts, kVerbs, {{}}, SkPathFillType::kDefault);
 }}"""
 
-    return code
+    return f"SkPath {layer_name}();", definition
+
+
+def generate_vector_layer(layer_name: str, shape: dict, svg_transform: dict,
+                          svg_info: dict, kra_data: dict, layer: dict) -> tuple[str, str | None]:
+    """Return (declaration, definition) C++ for a vector layer.
+
+    Rectangles become inline constexpr Rect / RRect values (math.hh), so even
+    rounded ones are compile-time constants that need no out-of-line definition
+    (definition is None). Rotated or skewed rectangles, and arbitrary paths, are
+    baked into an SkPath function split into a declaration and a definition.
+    """
+    sx, kx, tx, ky, sy, ty = _compose_path_transform(svg_transform, svg_info, kra_data, layer)
+
+    if shape['kind'] == 'rect':
+        decl = _generate_rect_decl(layer_name, shape, sx, kx, tx, ky, sy, ty)
+        if decl is not None:
+            return decl, None
+        path_data = _rect_to_path_data(shape)
+    else:
+        path_data = shape['d']
+
+    return _generate_path_decl_def(layer_name, path_data, sx, kx, tx, ky, sy, ty)
 
 
 def generate_cpp_code(kra_data, file_basename: str, paint_layers_with_metadata, vector_layers_with_data) -> tuple[str, str]:
     """Generate C++ header and source files."""
     namespace = f"automat::krita::{snake_case(file_basename)}"
+
+    # Build each vector layer once: a header declaration plus an optional source
+    # definition (rectangles are inline constexpr constants with no definition).
+    vector_layers = []
+    for layer, shape, svg_transform, svg_info in vector_layers_with_data:
+        layer_name = capitalize_name(snake_case(layer['name']))
+        declaration, definition = generate_vector_layer(
+            layer_name, shape, svg_transform, svg_info, kra_data, layer)
+        vector_layers.append((declaration, definition))
 
     # Generate header
     header_parts = [
@@ -636,6 +748,7 @@ def generate_cpp_code(kra_data, file_basename: str, paint_layers_with_metadata, 
         "#include <include/core/SkMatrix.h>",
         "#include <include/core/SkPath.h>",
         "",
+        "#include \"../../src/math.hh\"",
         "#include \"../../src/textures.hh\"",
         "",
     ]
@@ -660,10 +773,9 @@ def generate_cpp_code(kra_data, file_basename: str, paint_layers_with_metadata, 
     if paint_layers_with_metadata:
         header_parts.append("")
 
-    # Add vector layer function declarations
-    for layer, path_data, svg_transform, svg_info in vector_layers_with_data:
-        layer_name = capitalize_name(snake_case(layer['name']))
-        header_parts.append(f"SkPath {layer_name}();")
+    # Add vector layer declarations (inline constexpr rects, or path prototypes)
+    for declaration, definition in vector_layers:
+        header_parts.append(declaration)
 
     # Close namespace
     header_parts.append("")
@@ -702,11 +814,11 @@ def generate_cpp_code(kra_data, file_basename: str, paint_layers_with_metadata, 
         source_parts.append(f"PersistentImage {layer_snake} = PersistentImage::MakeFromAsset({embedded_name}, {{.matrix = transform_{layer_snake}}});")
         source_parts.append("")
 
-    # Add vector layer function definitions
-    for layer, path_data, svg_transform, svg_info in vector_layers_with_data:
-        layer_name = capitalize_name(snake_case(layer['name']))
-        source_parts.append(generate_skpath_cc_impl(layer_name, path_data, svg_transform, svg_info, kra_data, layer))
-        source_parts.append("")
+    # Add vector layer definitions (only paths need one; rects are header-only)
+    for declaration, definition in vector_layers:
+        if definition is not None:
+            source_parts.append(definition)
+            source_parts.append("")
 
     # Close namespace
     source_parts.append(f"}}  // namespace {namespace}")
@@ -750,8 +862,8 @@ def extract_kra_layers(kra_path):
     exported_vector_layers_with_data = []
     for layer in vector_layers:
         try:
-            path_data, svg_transform, svg_info = parse_shape_layer(kra_data, layer)
-            exported_vector_layers_with_data.append((layer, path_data, svg_transform, svg_info))
+            shape, svg_transform, svg_info = parse_shape_layer(kra_data, layer)
+            exported_vector_layers_with_data.append((layer, shape, svg_transform, svg_info))
         except Exception as e:
             print(f"Warning: Failed to export vector layer {layer['name']}: {e}")
 
@@ -788,6 +900,7 @@ def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
         recipe.generated.add(str(cc_path))
 
         hh_file = src.File(hh_path)
+        hh_file.direct_includes.append(str(fs_utils.src_dir / 'math.hh'))
         hh_file.direct_includes.append(str(fs_utils.src_dir / 'textures.hh'))
         srcs[str(hh_path)] = hh_file
         cc_file = src.File(cc_path)

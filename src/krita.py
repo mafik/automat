@@ -857,6 +857,7 @@ def extract_kra_layers(kra_path):
         metadata = export_paint_layer(kra_data, layer, output_path)
         if metadata is not None:
             exported_paint_layers_with_metadata.append((layer, metadata))
+            embedded.inject(output_path)
 
     # Export vector layers (parse SVG data)
     exported_vector_layers_with_data = []
@@ -913,5 +914,4 @@ def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
                         desc=f'Exporting {kra_path.name} layers',
                         shortcut=f'krita {file_snake}')
 
-        embedded.main_step.inputs.add(str(hh_path))
-        embedded.main_step.inputs.add(str(cc_path))
+        embedded.embed_after(hh_path, cc_path)

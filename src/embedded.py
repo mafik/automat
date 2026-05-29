@@ -30,6 +30,9 @@ shard_hh_path = [fs_utils.generated_dir / f'{shard_names[i]}.hh' for i in range(
 shard_cc_path = [fs_utils.generated_dir / f'{shard_names[i]}.cc' for i in range(n_shards)]
 embedded_paths_file = fs_utils.generated_dir / 'embedded_paths'
 
+paths = []        # embed list; reset in hook_srcs, extended via inject()
+embed_steps = []  # steps that read paths/shard_embeds; see embed_after()
+
 def gen_hh():
     with hh_path.open('w') as hh:
         print('#pragma once', file=hh)
@@ -45,7 +48,7 @@ def gen_hh():
         print('', file=hh)
         print('}  // namespace automat::embedded', file=hh)
 
-def gen_cc(all_paths):
+def gen_cc():
     with cc_path.open('w') as cc:
         print('#include "embedded.hh"', file=cc)
         print('', file=cc)
@@ -56,7 +59,7 @@ def gen_cc(all_paths):
         print('namespace automat::embedded {', file=cc)
         print('', file=cc)
         print('std::unordered_map<StrView, VFile*> index = {', file=cc)
-        for path in all_paths:
+        for path in paths:
             slug = slug_from_path(path)
             print(f'  {{ {slug}.path, &{slug} }},', file=cc)
         print('};', file=cc)
@@ -101,20 +104,38 @@ VFile {slug} = {{
         print('}  // namespace automat::embedded', file=cc)
 
 
-main_step = None
+def inject(path):
+    '''Add a file to the embed list at execution time (idempotent).'''
+    path = Path(path)
+    if path in paths:
+        return
+    paths.append(path)
+    shard_embeds[hash(path) % n_shards].append(path)
+
+
+def embed_after(*deps):
+    '''Make the embed generator steps depend on `deps` (i.e. run after them).'''
+    for step in embed_steps:
+        step.inputs.update(str(d) for d in deps)
 
 
 def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
+    # hook_srcs reruns on every --live reconfigure, so reset the live state.
+    paths.clear()
+    embed_steps.clear()
+    for bucket in shard_embeds:
+        bucket.clear()
+
     result = subprocess.run(['git', 'ls-files'], capture_output=True, text=True)
-    paths = set(Path(p) for p in result.stdout.splitlines() if  Path(p).is_file())
-    paths.update(p.relative_to(fs_utils.project_root) for p in (fs_utils.project_root / 'assets').glob('*') if p.is_file())
+    path_set = set(Path(p) for p in result.stdout.splitlines() if  Path(p).is_file())
+    path_set.update(p.relative_to(fs_utils.project_root) for p in (fs_utils.project_root / 'assets').glob('*') if p.is_file())
 
     # Filter out paths marked `automat-embed=false` in .gitattributes (e.g. docs/**).
     attrs = subprocess.run(['git', 'check-attr', '--stdin', '-z', 'automat-embed'],
-                           input='\0'.join(p.as_posix() for p in paths),
+                           input='\0'.join(p.as_posix() for p in path_set),
                            capture_output=True, text=True).stdout.split('\0')
     excluded = {attrs[i] for i in range(0, len(attrs) - 2, 3) if attrs[i + 2] == 'false'}
-    paths = [p for p in paths if p.as_posix() not in excluded]
+    paths.extend(p for p in path_set if p.as_posix() not in excluded)
 
     fs_utils.generated_dir.mkdir(exist_ok=True)
 
@@ -131,28 +152,26 @@ def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
         hh_file.direct_includes.append(str(h))
     srcs[str(hh_path)] = hh_file
 
-    global main_step
     recipe.generated.add(str(cc_path))
-    main_step = recipe.add_step(partial(gen_cc, paths), [cc_path],
+    embed_steps.append(recipe.add_step(gen_cc, [cc_path],
                                 [Path(__file__), embedded_paths_file],
                                 desc='Writing embedded.cc',
-                                shortcut='embedded.cc')
+                                shortcut='embedded.cc'))
     cc_file = src.File(cc_path)
     cc_file.direct_includes.append(str(hh_path))
     srcs[str(cc_path)] = cc_file
 
-    global shard_embeds
     for path in paths:
         shard_embeds[hash(path) % n_shards].append(path)
 
     for i in range(n_shards):
         recipe.generated.add(str(shard_hh_path[i]))
         recipe.generated.add(str(shard_cc_path[i]))
-        recipe.add_step(partial(gen_shard, i),
+        embed_steps.append(recipe.add_step(partial(gen_shard, i),
                         [shard_hh_path[i], shard_cc_path[i]],
                         [Path(__file__), embedded_paths_file],
                         desc=f'Writing embedded shard {i}',
-                        shortcut=f'embedded_{i}')
+                        shortcut=f'embedded_{i}'))
 
         sh_hh_file = src.File(shard_hh_path[i])
         sh_hh_file.direct_includes.append(str(fs_utils.src_dir / 'virtual_fs.hh'))

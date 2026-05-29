@@ -184,8 +184,8 @@ def scan() -> dict[str, File]:
 #
 # The point is to allow "derived extensions" to build upon "base extensions".
 #
-# For example the 'embedded' base extension exposes 'main_step' that is then used as a dependency
-# by the 'krita' derived extension.
+# For example the 'embedded' base extension exposes inject()/embed_after(), used by
+# the 'krita' derived extension.
 
 loaded_extensions = {}
 extensions_list: list[ModuleType] | None = None

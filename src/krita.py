@@ -52,6 +52,8 @@ def parse_kra_file(kra_path: Path):
     height = int(image.get('height'))
     x_res = float(image.get('x-res', '72'))
     y_res = float(image.get('y-res', '72'))
+    # Krita stores layer data under a top-level directory named after the image.
+    name = image.get('name', 'Unnamed')
 
     # Find all layers
     layers_elem = image.find('.//{http://www.calligra.org/DTD/krita}layers')
@@ -76,6 +78,7 @@ def parse_kra_file(kra_path: Path):
         'x_res': x_res,
         'y_res': y_res,
         'layers': layers,
+        'name': name,
         'kra': kra
     }
 
@@ -87,8 +90,8 @@ def export_paint_layer(kra_data, layer, output_path: Path):
     """
     kra = kra_data['kra']
 
-    # The layer data is stored in Unnamed/layers/<filename>
-    layer_filename = f"Unnamed/layers/{layer['filename']}"
+    # The layer data is stored in <image name>/layers/<filename>
+    layer_filename = f"{kra_data['name']}/layers/{layer['filename']}"
 
     try:
         layer_data = kra.read(layer_filename)
@@ -318,7 +321,7 @@ def parse_shape_layer(kra_data, layer) -> tuple[str, dict, dict]:
 
     # Shape layers are stored as .shapelayer directories with content.svg
     layer_filename = layer['filename']
-    svg_path = f"Unnamed/layers/{layer_filename}.shapelayer/content.svg"
+    svg_path = f"{kra_data['name']}/layers/{layer_filename}.shapelayer/content.svg"
 
     svg_content = kra.read(svg_path).decode('utf-8')
     path_data, transform, svg_info = parse_svg_path_data(svg_content)

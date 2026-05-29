@@ -26,7 +26,6 @@
 
 namespace automat::ui {
 
-struct CaretOwner;
 struct Keyboard;
 struct RootWidget;
 struct Widget;
@@ -37,30 +36,15 @@ void SendKeyEvent(AnsiKey physical, bool down);
 
 struct Caret final {
   Keyboard& keyboard;
-  CaretOwner* owner = nullptr;
+  TrackedPtr<Widget> owner;  // also the coordinate space `shape` is expressed in
   SkPath shape;
-  TrackedPtr<Widget> widget;
   Caret(Keyboard& keyboard);
   ~Caret() = default;
   void PlaceIBeam(Vec2 position);
   SkPath MakeRootShape() const;
 
-  // Called by the CaretOwner to release this Caret.
-  //
-  // This also calls CaretOwner::ReleaseCaret and deletes the Caret itself.
+  // Notifies the owner via Widget::ReleaseCaret and deletes this Caret.
   void Release();
-};
-
-struct CaretOwner {
-  std::vector<Caret*> carets;
-  virtual ~CaretOwner();
-
-  // Called by the Keyboard infrastructure to make the CaretOwner release all resources related to
-  // the caret. This ends the key input coming from this Caret.
-  virtual void ReleaseCaret(Caret&) = 0;
-
-  virtual void KeyDown(Caret&, Key);
-  virtual void KeyUp(Caret&, Key);
 };
 
 struct KeyboardGrab;
@@ -203,8 +187,9 @@ struct Keyboard final : Widget {
   Keyboard(RootWidget&);
   ~Keyboard();
 
-  // Called by a CaretOwner that wants to start receiving keyboard input.
-  Caret& RequestCaret(CaretOwner&, Widget* widget, Vec2 position);
+  // Called by a Widget that wants to start receiving keyboard input.
+  // `position` is in `owner`'s local coordinates.
+  Caret& RequestCaret(Widget& owner, Vec2 position);
 
   // Called by a KeyboardGrabber that wants to grab all keyboard events.
   KeyboardGrab& RequestGrab(KeyboardGrabber&);

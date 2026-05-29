@@ -36,6 +36,7 @@ namespace automat::ui {
 
 struct Widget;
 struct RootWidget;
+struct Caret;
 
 Str ToStr(Ptr<Widget> widget);
 
@@ -188,6 +189,12 @@ struct Widget : Trackable, OptionsProvider {
 
   virtual void PointerOver(Pointer&) {}
   virtual void PointerLeave(Pointer&) {}
+
+  // Caret events. A widget that requests a Caret (via Keyboard::RequestCaret) overrides these
+  // to receive keyboard input and a release notification.
+  virtual void ReleaseCaret(Caret&) {}
+  virtual void KeyDown(Caret&, Key) {}
+  virtual void KeyUp(Caret&, Key) {}
 
   // Called when the widget's total transform (any of the `local_to_parent` in its ancestry) has
   // changed.

@@ -149,7 +149,7 @@ struct TextSelectAction : Action {
       Vec2 local = pointer.PositionWithin(text_field);
       int index = text_field.IndexFromPosition(local.x);
       Vec2 pos = text_field.PositionFromIndex(index);
-      caret = &pointer.keyboard->RequestCaret(text_field, pointer.hover, pos);
+      caret = &pointer.keyboard->RequestCaret(text_field, pos);
       text_field.caret_positions[caret] = {.index = index};
     }
   }

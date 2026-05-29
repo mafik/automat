@@ -128,7 +128,7 @@ struct KeyPresserButton : KeyButton {
   float PressRatio() const override { return is_pressed ? 1 : 0; }
 };
 
-struct KeyPresserWidget : ObjectToy, ui::CaretOwner {
+struct KeyPresserWidget : ObjectToy {
   mutable std::unique_ptr<KeyPresserButton> shortcut_button;
 
   // This is used to select the pressed key
@@ -141,9 +141,10 @@ struct KeyPresserWidget : ObjectToy, ui::CaretOwner {
       if (key_selector) {
         key_selector->Release();
       } else if (pointer.keyboard) {
-        Vec2 caret_position = shortcut_button->child->TextureBounds()->TopLeftCorner();
-        key_selector =
-            &pointer.keyboard->RequestCaret(*this, shortcut_button->child.get(), caret_position);
+        auto* child = shortcut_button->child.get();
+        Vec2 caret_position =
+            TransformBetween(*child, *this).mapPoint(child->TextureBounds()->TopLeftCorner());
+        key_selector = &pointer.keyboard->RequestCaret(*this, caret_position);
       }
       WakeAnimation();
       shortcut_button->WakeAnimation();

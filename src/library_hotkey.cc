@@ -168,7 +168,7 @@ bool HotKey::DeserializeKey(ObjectDeserializer& d, StrView keyName) {
 
 // HotKeyWidget
 
-struct HotKeyWidget : ObjectToy, ui::CaretOwner {
+struct HotKeyWidget : ObjectToy {
   unique_ptr<ui::PowerButton> power_button;
   unique_ptr<KeyButton> ctrl_button;
   unique_ptr<KeyButton> alt_button;
@@ -276,7 +276,7 @@ struct HotKeyWidget : ObjectToy, ui::CaretOwner {
         auto bounds = *label->TextureBounds();
         Vec2 caret_position = shortcut_button->RRect().rect().center();
         caret_position.x += bounds.left;
-        hotkey_selector = &pointer.keyboard->RequestCaret(*this, this, caret_position);
+        hotkey_selector = &pointer.keyboard->RequestCaret(*this, caret_position);
       }
       WakeAnimation();
       shortcut_button->WakeAnimation();

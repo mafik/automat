@@ -73,10 +73,6 @@ void Caret::PlaceIBeam(Vec2 position) {
 void Caret::Release() {
   if (owner) {
     owner->ReleaseCaret(*this);
-    if (auto it = std::find(owner->carets.begin(), owner->carets.end(), this);
-        it != owner->carets.end()) {
-      owner->carets.erase(it);
-    }
     owner = nullptr;
   }
   for (auto it = keyboard.carets.begin(); it != keyboard.carets.end(); ++it) {
@@ -88,10 +84,10 @@ void Caret::Release() {
 }
 
 SkPath Caret::MakeRootShape() const {
-  if (!widget) return shape;
-  auto* mw = widget->ToyStore().FindOrNull(*vm.root_board);
+  if (!owner) return shape;
+  auto* mw = owner->ToyStore().FindOrNull(*vm.root_board);
   if (!mw) return shape;
-  SkMatrix text_to_root = TransformBetween(*widget, *mw);
+  SkMatrix text_to_root = TransformBetween(*owner, *mw);
   return shape.makeTransform(text_to_root);
 }
 
@@ -272,6 +268,9 @@ animation::Phase Keyboard::Tick(time::Timer& timer) {
   // Animations may result in a Caret being removed.
   // After a Caret has been removed, its CaretAnimation is kept around for some
   // time to animate its disappearance.
+  // Drop carets whose owner widget has been destroyed — leaves their anim entry behind so the
+  // disappear animation toward the pointer ibeam plays.
+  std::erase_if(carets, [](const std::unique_ptr<Caret>& c) { return !c->owner; });
   auto anim_it = anim.carets.begin();
   auto caret_it = carets.begin();
   while (anim_it != anim.carets.end() && caret_it != carets.end()) {
@@ -477,12 +476,16 @@ void Keyboard::KeyDown(Key key) {
     grab->grabber.KeyboardGrabberKeyDown(*grab, key);
   } else if (key.physical == AnsiKey::Escape) {
     // Release the carets when Escape is pressed
-    DeleteSafeForEach(carets, [](Caret& caret) { caret.owner->ReleaseCaret(caret); });
+    DeleteSafeForEach(carets, [](Caret& caret) {
+      if (caret.owner) caret.owner->ReleaseCaret(caret);
+    });
     carets.clear();
   } else if (!carets.empty()) {
     // The list of carets may be modified by the KeyDown. Because of that we have to iterate over
     // the list of carets in a very careful way.
-    DeleteSafeForEach(carets, [key](Caret& caret) { caret.owner->KeyDown(caret, key); });
+    DeleteSafeForEach(carets, [key](Caret& caret) {
+      if (caret.owner) caret.owner->KeyDown(caret, key);
+    });
   } else {
     size_t i = static_cast<int>(key.physical);
     if (actions[i] == nullptr && pointer && pointer->hover) {
@@ -505,7 +508,9 @@ void Keyboard::KeyUp(Key key) {
   if (grab) {
     grab->grabber.KeyboardGrabberKeyUp(*grab, key);
   } else if (!carets.empty()) {
-    DeleteSafeForEach(carets, [key](Caret& caret) { caret.owner->KeyUp(caret, key); });
+    DeleteSafeForEach(carets, [key](Caret& caret) {
+      if (caret.owner) caret.owner->KeyUp(caret, key);
+    });
   } else {
     size_t i = static_cast<int>(key.physical);
     if (actions[i]) {
@@ -573,13 +578,7 @@ void SendKeyEvent(AnsiKey physical, bool down) {
 
 Caret::Caret(Keyboard& keyboard) : keyboard(keyboard) {}
 
-CaretOwner::~CaretOwner() {
-  for (auto caret : carets) {
-    caret->Release();
-  }
-}
-
-Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, Widget* widget, Vec2 position) {
+Caret& Keyboard::RequestCaret(Widget& caret_owner, Vec2 position) {
   std::set<std::unique_ptr<Caret>>::iterator it;
   if (carets.empty()) {
     it = carets.emplace(std::make_unique<Caret>(*this)).first;
@@ -589,19 +588,12 @@ Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, Widget* widget, Vec2 posi
   Caret& caret = **it;
   if (caret.owner) {
     caret.owner->ReleaseCaret(caret);
-    caret.owner->carets.erase(
-        std::find(caret.owner->carets.begin(), caret.owner->carets.end(), &caret));
   }
   caret.owner = &caret_owner;
-  caret.widget = widget;
   caret.PlaceIBeam(position);
-  caret_owner.carets.emplace_back(&caret);
   WakeAnimation();
   return caret;
 }
-
-void CaretOwner::KeyDown(Caret& caret, Key) {}
-void CaretOwner::KeyUp(Caret& caret, Key) {}
 
 Keyboard::Keyboard(RootWidget& root_widget) : Widget(&root_widget), root_widget(root_widget) {
 #if defined(__linux__)

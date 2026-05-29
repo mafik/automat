@@ -24,7 +24,7 @@ struct CaretPosition {
 // Returns true if the value has been modified
 using TextVisitor = std::function<bool(std::string&)>;
 
-struct TextFieldBase : Widget, CaretOwner {
+struct TextFieldBase : Widget {
   std::unordered_map<Caret*, CaretPosition> caret_positions;
   NestedWeakPtr<Argument::Table> argument;
   Optional<Pointer::IconOverride> ibeam_icon;

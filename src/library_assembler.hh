@@ -50,6 +50,10 @@ struct RegisterWidget : public ObjectToy {
   animation::SpringV2<float> size_offset;
   mutable SkPath cached_shape;
 
+  // Cached during Tick:
+  int register_index = 0;
+  uint64_t reg_value = 0;
+
   RegisterWidget(Widget* parent, Object& reg);
   ~RegisterWidget();
   Ptr<Register> LockRegister() const { return LockObject<Register>(); }
@@ -64,20 +68,13 @@ struct RegisterWidget : public ObjectToy {
   float HexWidth() const;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
-  void VisitOptions(const OptionsVisitor&) const override;
   void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override;
 
   void FillChildren(Vec<Widget*>& children) override;
 };
 
-struct AssemblerWidget : ObjectToy, ui::DropTarget {
-  constexpr static float kWidth = 8_cm;
-  constexpr static float kHeight = 8_cm;
-  constexpr static float kRadius = 1_cm;
-  constexpr static RRect kRRect =
-      RRect::MakeSimple(Rect::MakeAtZero<CenterX, CenterY>(kWidth, kHeight), kRadius);
-
-  Vec<RegisterWidget*> reg_widgets;
+struct AssemblerWidget : ObjectToy {
+  std::array<unique_ptr<RegisterWidget>, kGeneralPurposeRegisterCount> reg_widgets;
 
   AssemblerWidget(Widget* parent, Assembler&);
   std::string_view Name() const override;
@@ -86,13 +83,6 @@ struct AssemblerWidget : ObjectToy, ui::DropTarget {
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   void VisitOptions(const OptionsVisitor&) const override;
-  void TransformUpdated() override;
-  void OnChildReparentedAway(ui::Widget& child) override;
-
-  DropTarget* AsDropTarget() override { return this; }
-  bool CanDrop(Location&) const override;
-  void DropLocation(Ptr<Location>&&) override;
-  SkMatrix DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point = nullptr) override;
 };
 
 struct Register : Object, Buffer {
@@ -134,7 +124,7 @@ struct Register : Object, Buffer {
 // Combines functions of Assembler and Thread.
 // Assembler part takes care of emitting machine code to an executable memory region.
 // Thread part maintains register state across executions.
-struct Assembler : Object, Container {
+struct Assembler : Object {
   using PrologueFn = uintptr_t (*)(void*);
   using Toy = AssemblerWidget;
 
@@ -158,8 +148,9 @@ struct Assembler : Object, Container {
   std::unique_ptr<mc::Controller> mc_controller;
   time::SteadyPoint last_state_refresh = {};
   mc::Controller::State state;
-  std::array<SharedOrWeakPtr<Register>, kGeneralPurposeRegisterCount> reg_objects_idx;
+  std::array<Ptr<Register>, kGeneralPurposeRegisterCount> regs;
   std::vector<WeakPtr<Instruction>> instructions_weak;
+  std::vector<WeakPtr<Register>> external_regs;
 
   void UpdateMachineCode();
 
@@ -168,10 +159,6 @@ struct Assembler : Object, Container {
   unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override {
     return make_unique<AssemblerWidget>(parent, *this);
   }
-
-  Container* AsContainer() override { return this; }
-
-  Ptr<Location> Extract(Object& descendant) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

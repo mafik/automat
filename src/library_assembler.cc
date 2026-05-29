@@ -19,6 +19,7 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/lib/Target/X86/X86Subtarget.h>
 
+#include "../build/generated/krita_assembler.hh"
 #include "animation.hh"
 #include "automat.hh"
 #include "drawing.hh"
@@ -27,6 +28,7 @@
 #include "global_resources.hh"
 #include "library_instruction.hh"
 #include "machine_code.hh"
+#include "make_object_option.hh"
 #include "math.hh"
 #include "root_widget.hh"
 #include "status.hh"
@@ -45,46 +47,6 @@ using namespace std;
 
 namespace automat::library {
 
-struct ShowRegisterOption : TextOption {
-  WeakPtr<Assembler> weak;
-  int register_index;  // Must be < kGeneralPurposeRegisterCount
-
-  ShowRegisterOption(WeakPtr<Assembler> weak, int register_index)
-      : TextOption("Show"), weak(weak), register_index(register_index) {}
-
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<ShowRegisterOption>(weak, register_index);
-  }
-
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    if (auto assembler = weak.lock()) {
-      assembler->reg_objects_idx[register_index] = MAKE_PTR(Register, weak, register_index);
-      assembler->WakeToys();
-    }
-    return nullptr;
-  }
-};
-
-struct HideRegisterOption : TextOption {
-  WeakPtr<Assembler> weak;
-  int register_index;  // Must be < kGeneralPurposeRegisterCount
-
-  HideRegisterOption(WeakPtr<Assembler> weak, int register_index)
-      : TextOption("Hide"), weak(weak), register_index(register_index) {}
-
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<HideRegisterOption>(weak, register_index);
-  }
-
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    if (auto assembler = weak.lock()) {
-      assembler->reg_objects_idx[register_index].reset();
-      assembler->WakeToys();
-    }
-    return nullptr;
-  }
-};
-
 struct ImageWidget : ui::Widget {
   PersistentImage& image;
   ImageWidget(ui::Widget* parent, PersistentImage& image) : ui::Widget(parent), image(image) {}
@@ -97,37 +59,6 @@ struct ImageWidget : ui::Widget {
   void Draw(SkCanvas& canvas) const override { image.draw(canvas); }
 };
 
-struct RegisterMenuOption : Option, OptionsProvider {
-  WeakPtr<Assembler> weak;
-  int register_index;
-
-  RegisterMenuOption(WeakPtr<Assembler> weak, int register_index)
-      : weak(weak), register_index(register_index) {}
-
-  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
-    return std::make_unique<ImageWidget>(parent, kRegisters[register_index].image);
-  }
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<RegisterMenuOption>(weak, register_index);
-  }
-  void VisitOptions(const OptionsVisitor& visitor) const override {
-    auto assembler = weak.lock();
-    auto& reg = assembler->reg_objects_idx[register_index];
-    if (reg.is_shared || reg.weak.IsExpired()) {
-      if (assembler->reg_objects_idx[register_index] == nullptr) {
-        ShowRegisterOption show{weak, register_index};
-        visitor(show);
-      } else {
-        HideRegisterOption hide{weak, register_index};
-        visitor(hide);
-      }
-    }
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    return OpenMenu(pointer);
-  }
-};
-
 struct RegistersMenuOption : TextOption, OptionsProvider {
   WeakPtr<Assembler> weak;
   RegistersMenuOption(WeakPtr<Assembler> weak) : TextOption("Registers"), weak(weak) {}
@@ -135,8 +66,10 @@ struct RegistersMenuOption : TextOption, OptionsProvider {
     return std::make_unique<RegistersMenuOption>(weak);
   }
   void VisitOptions(const OptionsVisitor& visitor) const override {
+    auto assembler = weak.Lock();
+    if (!assembler) return;
     for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-      RegisterMenuOption opt{weak, i};
+      MakeObjectOption opt(assembler->regs[i]);
       visitor(opt);
     }
   }
@@ -158,6 +91,9 @@ Assembler::Assembler() {
   if (!OK(status)) {
     ERROR << "Failed to create Assembler: " << status;
   }
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+    regs[i] = MAKE_PTR(Register, WeakPtr<Assembler>(this), i);
+  }
 }
 
 static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now) {
@@ -169,10 +105,11 @@ static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now
     Status ignore;
     assembler.mc_controller->GetState(assembler.state, ignore);
     // Wake all registers widgets where values have changed.
+    // TODO: external registers
     for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
       int regs_idx = kRegisters[i].regs_index;
       if (old_regs[regs_idx] != assembler.state.regs[regs_idx]) {
-        if (auto reg = assembler.reg_objects_idx[i].lock()) {
+        if (auto reg = assembler.regs[i]) {
           reg->WakeToys();
         }
       }
@@ -307,19 +244,6 @@ void Assembler::RunMachineCode(library::Instruction* entry_point,
   }
 }
 
-Ptr<Location> Assembler::Extract(Object& descendant) {
-  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    auto* reg = reg_objects_idx[i].get();
-    if (reg != &descendant) continue;
-    auto loc = MAKE_PTR(Location, vm.root_location);
-    loc->InsertHere(reg_objects_idx[i].borrow());
-    audio::Play(embedded::assets_SFX_toolbar_pick_wav);
-    WakeToys();
-    return loc;
-  }
-  return nullptr;
-}
-
 void Assembler::SerializeState(ObjectSerializer& writer) const {
   mc::Controller::State mc_state = {};
   {
@@ -365,15 +289,32 @@ bool Assembler::DeserializeKey(ObjectDeserializer& d, StrView key) {
 }
 
 AssemblerWidget::AssemblerWidget(Widget* parent, Assembler& assembler)
-    : ObjectToy(parent, assembler) {}
+    : ObjectToy(parent, assembler) {
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+    reg_widgets[i] = std::make_unique<RegisterWidget>(this, *assembler.regs[i]);
+
+    reg_widgets[i]->local_to_parent.preScale(0.5, 0.5);
+  }
+#define POS_REG(idx)                                                    \
+  reg_widgets[idx]->local_to_parent =                                   \
+      SkM44(*SkMatrix::Rect2Rect(reg_widgets[idx]->Shape().getBounds(), \
+                                 krita::assembler::Reg##idx, SkMatrix::kCenter_ScaleToFit));
+  POS_REG(0);
+  POS_REG(1);
+  POS_REG(2);
+  POS_REG(3);
+  POS_REG(4);
+  POS_REG(5);
+  POS_REG(6);
+  POS_REG(7);
+#undef POS_REG
+}
 
 std::string_view AssemblerWidget::Name() const { return "Assembler"; }
-SkPath AssemblerWidget::Shape() const { return SkPath::RRect(kRRect); }
-
-static constexpr float kFlatBorderWidth = 3_mm;
-static constexpr RRect kBorderLightsRRect = AssemblerWidget::kRRect.Outset(-kFlatBorderWidth / 2);
-static constexpr RRect kBorderMidRRect = AssemblerWidget::kRRect.Outset(-kFlatBorderWidth);
-static constexpr RRect kInnerRRect = kBorderMidRRect.Outset(-kFlatBorderWidth);
+SkPath AssemblerWidget::Shape() const {
+  static SkPath shape = krita::assembler::Shape();
+  return shape;
+}
 
 animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   auto assembler = LockObject<Assembler>();
@@ -381,113 +322,24 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
     return animation::Finished;
   }
   animation::Phase phase = RefreshState(*assembler, timer.now);
-  // Register widgets indexed by register index.
-  std::array<RegisterWidget*, kGeneralPurposeRegisterCount> reg_widgets_idx = {};
 
-  // Index register widgets by register index. Delete them if their register object is gone or if
-  // they're no longer owned by the assembler.
-  for (int i = 0; i < reg_widgets.size(); ++i) {
-    auto* reg_widget = reg_widgets[i];
-    auto register_obj = reg_widget->LockRegister();
-    int register_index = -1;
-    if (register_obj != nullptr) {
-      register_index = register_obj->register_index;
-      auto assembler_reg = assembler->reg_objects_idx[register_index].get();
-      if (assembler_reg == nullptr) {
-        register_index = -1;
-      }
-    }
-    if (register_index == -1) {
-      reg_widgets.EraseIndex(i);
-      --i;
-    } else {
-      reg_widgets_idx[register_index] = reg_widget;
-    }
-  }
-  // Create new register objects for registers that have non-zero values.
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    if (assembler->state.regs[kRegisters[i].regs_index] == 0) continue;
-    if (assembler->reg_objects_idx[i] != nullptr) continue;
-    assembler->reg_objects_idx[i] = MAKE_PTR(Register, owner.Copy<Assembler>(), i);
+    reg_widgets[i]->Tick(timer);
   }
-
-  // Create new register widgets for register objects that don't have a widget.
-  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    auto assembler_reg = assembler->reg_objects_idx[i].get();
-    if (assembler_reg) {
-      if (reg_widgets_idx[i] != nullptr) continue;
-      if (ToyStore().FindOrNull(*assembler_reg) != nullptr) continue;
-      auto* register_widget = &ToyStore().FindOrMake(*assembler_reg, this);
-      register_widget->local_to_parent = SkM44::Translate(0, 10_cm);
-      reg_widgets_idx[i] = register_widget;
-      reg_widgets.InsertSorted(i, register_widget,
-                               [](auto* w) { return w->LockRegister()->register_index; });
-      register_widget->WakeAnimation();
-      register_widget->ValidateHierarchy();
-    }
-  }
-
-  int n = reg_widgets.size();
-  int columns = std::ceil(std::sqrt(n));
-  int rows = n ? (n + columns - 1) / columns : 0;
-  int total_cells = columns * rows;
-  int empty_cells_in_first_row = total_cells - n;
-
-  constexpr float kMargin = 1_cm;
-
-  constexpr float kCellMarginWidth = RegisterWidget::kBaseRect.Width() + kMargin;
-
-  float total_width = RegisterWidget::kBaseRect.Width() * columns + kMargin * (columns + 1);
-  float available_width = kInnerRRect.rect.Width();
-  float target_scale = available_width / total_width;
-
-  for (int child_i = 0; child_i < reg_widgets.size(); ++child_i) {
-    auto* child = reg_widgets[child_i];
-
-    int effective_i = child_i + empty_cells_in_first_row;
-    int row = effective_i / columns;
-    int column;
-    int columns_in_row;
-    if (row == 0) {
-      column = child_i;
-      columns_in_row = columns - empty_cells_in_first_row;
-    } else {
-      column = effective_i % columns;
-      columns_in_row = columns;
-    }
-    float x = column * (RegisterWidget::kBaseRect.Width() + kMargin) -
-              ((columns_in_row - 1) / 2.f) * (RegisterWidget::kBaseRect.Width() + kMargin);
-    float y = -row * (RegisterWidget::kBaseRect.Height() + kMargin) +
-              ((rows - 1) / 2.f) * (RegisterWidget::kBaseRect.Height() + kMargin);
-
-    SkMatrix child_mat = child->local_to_parent.asM33();
-
-    SkMatrix target_mat = SkMatrix::Scale(target_scale, target_scale);
-    target_mat.preTranslate(x, y);
-
-    phase |=
-        animation::ExponentialApproach(target_scale, timer.d, 0.2, child_mat[SkMatrix::kMScaleX]);
-    phase |=
-        animation::ExponentialApproach(target_scale, timer.d, 0.2, child_mat[SkMatrix::kMScaleY]);
-    phase |= animation::ExponentialApproach(target_mat[SkMatrix::kMTransX], timer.d, 0.2,
-                                            child_mat[SkMatrix::kMTransX]);
-    phase |= animation::ExponentialApproach(target_mat[SkMatrix::kMTransY], timer.d, 0.2,
-                                            child_mat[SkMatrix::kMTransY]);
-
-    child->local_to_parent = SkM44(child_mat);
-  }
-
-  // The starfield background twinkles continuously, so keep redrawing.
-  phase |= animation::Animating;
 
   return phase;
 }
 
 void AssemblerWidget::Draw(SkCanvas& canvas) const {
+  krita::assembler::slab.draw(canvas);
+  DrawChildren(canvas);
+  /*
   float one_pixel = 1.0f / canvas.getTotalMatrix().getScaleX();
   SkPaint flat_border_paint;
   flat_border_paint.setColor("#9b252a"_color);
   canvas.drawDRRect(kRRect, kBorderMidRRect, flat_border_paint);
+
+
   SkPaint bevel_border_paint;
   bevel_border_paint.setColor("#7d2627"_color);
   SetRRectShader(bevel_border_paint, kBorderMidRRect, "#3a2021"_color4f, "#7e2627"_color4f,
@@ -555,66 +407,14 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
     canvas.restore();
   }
   canvas.restore();
+  */
 }
 
 void AssemblerWidget::FillChildren(Vec<ui::Widget*>& children) {
-  for (auto* child : reg_widgets) {
-    children.emplace_back(child);
+  // TODO: Draw registers
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+    children.push_back(reg_widgets[i].get());
   }
-}
-
-void AssemblerWidget::OnChildReparentedAway(ui::Widget& child) { std::erase(reg_widgets, &child); }
-
-void AssemblerWidget::TransformUpdated() {
-  WakeAnimation();
-  RedrawThisFrame();
-}
-
-bool AssemblerWidget::CanDrop(Location& loc) const {
-  if (auto reg = loc.As<Register>()) {
-    if (auto my_assembler = LockObject<Assembler>()) {
-      if (auto my_reg = my_assembler->reg_objects_idx[reg->register_index].lock()) {
-        return my_reg.get() == reg;
-      }
-    }
-  }
-  return false;
-}
-
-void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
-  if (auto reg = loc->As<Register>()) {
-    if (auto my_assembler = LockObject<Assembler>()) {
-      if (auto* register_widget = ToyStore().FindOrNull(*reg)) {
-        register_widget->Reparent(*this);
-        if (std::ranges::find(reg_widgets, register_widget) == reg_widgets.end()) {
-          reg_widgets.InsertSorted(reg->register_index, register_widget,
-                                   [](auto* w) { return w->LockRegister()->register_index; });
-        }
-      }
-      my_assembler->reg_objects_idx[reg->register_index] = loc->Take().Cast<Register>();
-      my_assembler->WakeToys();
-    }
-  }
-}
-SkMatrix AssemblerWidget::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point) {
-  auto* mw = ToyStore().FindOrNull(*vm.root_board);
-  auto local_to_machine = mw ? TransformBetween(*this, *mw) : SkMatrix::I();
-  auto my_rect = kRRect.rect.Outset(-2 * kFlatBorderWidth);
-  local_to_machine.mapRect(&my_rect.sk);
-  SkMatrix matrix;
-  if (bounds.left < my_rect.left) {
-    matrix.postTranslate(my_rect.left - bounds.left, 0);
-  }
-  if (bounds.right > my_rect.right) {
-    matrix.postTranslate(my_rect.right - bounds.right, 0);
-  }
-  if (bounds.bottom < my_rect.bottom) {
-    matrix.postTranslate(0, my_rect.bottom - bounds.bottom);
-  }
-  if (bounds.top > my_rect.top) {
-    matrix.postTranslate(0, my_rect.top - bounds.top);
-  }
-  return matrix;
 }
 
 struct RegisterIndexKnobWidget : public ui::EnumKnobWidget {
@@ -636,23 +436,7 @@ struct RegisterIndexKnobWidget : public ui::EnumKnobWidget {
     if (!reg) return;
     int old_value = reg->register_index;
     if (new_value == old_value) return;
-
     reg->register_index = new_value;
-
-    if (auto assembler = reg->assembler_arg->FindObject()) {
-      Ptr<Register> moving = assembler->reg_objects_idx[old_value].lock();
-      Ptr<Register> displaced = assembler->reg_objects_idx[new_value].lock();
-      if (displaced && displaced.Get() != reg.Get()) {
-        displaced->register_index = old_value;
-        displaced->WakeToys();
-        assembler->reg_objects_idx[old_value] = std::move(displaced);
-      } else {
-        assembler->reg_objects_idx[old_value].reset();
-      }
-      assembler->reg_objects_idx[new_value] = std::move(moving);
-      assembler->WakeToys();
-    }
-
     reg->WakeToys();
   }
 
@@ -839,11 +623,13 @@ static constexpr float kBitPositionFontShiftUp =
 animation::Phase RegisterWidget::Tick(time::Timer& timer) {
   animation::Phase phase = animation::Finished;
   if (auto register_obj = LockRegister()) {
-    auto register_index = register_obj->register_index;
+    register_index = register_obj->register_index;
     if (auto assembler = register_obj->assembler_arg->FindObject()) {
       phase = RefreshState(*assembler, timer.now);
+      reg_value = assembler->state.regs[kRegisters[register_index].regs_index];
     }
   }
+
   small_buffer_widget.WakeAnimation();
   return phase;
 }
@@ -914,14 +700,6 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
     }
   }
 
-  int register_index = 0;
-  uint64_t reg_value = 0;
-  if (auto register_obj = LockRegister()) {
-    register_index = register_obj->register_index;
-    if (auto assembler = register_obj->assembler_arg->FindObject()) {
-      reg_value = assembler->state.regs[kRegisters[register_index].regs_index];
-    }
-  }
   SkPaint dark_paint;
   dark_paint.setColor("#dcca85"_color);
   SkPaint light_paint;
@@ -1098,14 +876,6 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
   }
 
   DrawChildren(canvas);
-}
-
-void RegisterWidget::VisitOptions(const OptionsVisitor& visitor) const {
-  ObjectToy::VisitOptions(visitor);
-  auto register_obj = LockRegister();
-  RegisterMenuOption register_menu_option = {register_obj->assembler_arg->FindObjectWeak(),
-                                             register_obj->register_index};
-  register_menu_option.VisitOptions(visitor);
 }
 
 Register::Register(WeakPtr<Assembler> assembler_weak, int register_index)

@@ -12,7 +12,7 @@ base_dir = Path(__file__).parent
 os.environ.setdefault('PYTHONHASHSEED', '0')
 exit_code = 0
 try:
-  completed_process = run(['python', str(base_dir / 'run_py')] + sys.argv[1:], cwd=base_dir)
+  completed_process = run([sys.executable, str(base_dir / 'run_py')] + sys.argv[1:], cwd=base_dir)
   exit_code = completed_process.returncode
 except KeyboardInterrupt:
   pass

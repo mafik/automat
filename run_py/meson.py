@@ -5,6 +5,7 @@
 # TODO: move this to src/ and remove the empty hook_recipe function
 
 import shutil
+import sys
 from pathlib import Path
 
 BIN_STR = shutil.which('meson')
@@ -19,7 +20,7 @@ else:
 
   DIR = fs_utils.third_party_dir / 'meson'
   BIN = DIR / 'meson.py'
-  ARGS = ['python', str(BIN)]
+  ARGS = [sys.executable, str(BIN)]
 
   def hook_recipe(recipe):
     recipe.add_step(

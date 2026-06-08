@@ -6,6 +6,7 @@ import os
 import shutil
 import stat
 import glob
+import sys
 from pathlib import Path
 from functools import partial
 
@@ -53,4 +54,4 @@ else: # for importing as a module
   import make
 
   def clone(url, out_directory, tag):
-    return partial(make.Popen, ['python', __file__, tag, url, out_directory])
+    return partial(make.Popen, [sys.executable, __file__, tag, url, out_directory])

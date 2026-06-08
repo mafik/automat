@@ -3,6 +3,7 @@
 
 import build
 import shutil
+import sys
 import cmake
 import git
 import ninja
@@ -239,7 +240,7 @@ class ExtensionHelper:
       for key, value in self.configure_opts.items():
         gn_args += f'{key}={value} '
       recipe.add_step(
-          partial(Popen, [depot_tools.GN, 'gen', build_dir, '--script-executable=python', '--args=' + gn_args], cwd=self.src_dir, env=env),
+          partial(Popen, [depot_tools.GN, 'gen', build_dir, '--script-executable=' + sys.executable, '--args=' + gn_args], cwd=self.src_dir, env=env),
           outputs=[makefile],
           inputs=configure_inputs + [depot_tools.GN],
           desc=f'Configuring {self.name}',

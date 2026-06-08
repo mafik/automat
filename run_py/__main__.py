@@ -5,17 +5,18 @@
 '''Run Automat.'''
 
 from args import args
-from sys import platform, exit
+from sys import platform, exit, executable
 
 if platform == 'win32':
     import windows_deps
     windows_deps.check_and_install()
 
-import build
 import subprocess
 
 import debian_deps
 debian_deps.check_and_install()
+
+import build
 
 recipe = build.recipe()
 
@@ -40,7 +41,7 @@ while True:
     recipe.set_target(args.target, *extra_targets)
     if args.live:
         watcher = subprocess.Popen(
-            ['python', 'run_py/inotify.py', 'src/', 'assets/'], stdout=subprocess.DEVNULL)
+            [executable, 'run_py/inotify.py', 'src/', 'assets/'], stdout=subprocess.DEVNULL)
     else:
         watcher = None
 

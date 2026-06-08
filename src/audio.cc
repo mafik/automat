@@ -202,12 +202,24 @@ void Init(int* argc, char*** argv) {
     struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
 
     data.loop = pw_main_loop_new(NULL);
+    if (data.loop == nullptr) {
+      ERROR << "Audio disabled: couldn't create a PipeWire main loop.";
+      running = false;
+      return;
+    }
 
     data.stream =
         pw_stream_new_simple(pw_main_loop_get_loop(data.loop), "Automat",
                              pw_properties_new(PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_CATEGORY,
                                                "Playback", PW_KEY_MEDIA_ROLE, "Game", NULL),
                              &stream_events, &data);
+    if (data.stream == nullptr) {
+      ERROR << "Audio disabled: couldn't create a PipeWire stream "
+               "(no PipeWire server? this machine may be running PulseAudio).";
+      running = false;
+      pw_main_loop_destroy(data.loop);
+      return;
+    }
 
     auto info = SPA_AUDIO_INFO_RAW_INIT(.format = SPA_AUDIO_FORMAT_S16, .rate = kDefaultRate,
                                         .channels = kDefaultChannels);

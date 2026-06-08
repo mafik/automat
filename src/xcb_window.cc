@@ -202,9 +202,16 @@ std::unique_ptr<automat::ui::Window> XCBWindow::Make(automat::ui::RootWidget& ro
                                                     XCB_EVENT_MASK_STRUCTURE_NOTIFY |
                                                     XCB_EVENT_MASK_PROPERTY_CHANGE};
 
-  xcb_create_window(connection, XCB_COPY_FROM_PARENT, window->xcb_window, screen->root, 0, 0,
-                    window->client_width, window->client_height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT,
-                    screen->root_visual, value_mask, value_list);
+  {
+    xcb_void_cookie_t cookie = xcb_create_window(
+        connection, XCB_COPY_FROM_PARENT, window->xcb_window, screen->root, 0, 0,
+        window->client_width, window->client_height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT,
+        screen->root_visual, value_mask, value_list);
+    if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(connection, cookie)}) {
+      AppendErrorMessage(status) += f("Failed to create window: {}", error->error_code);
+      return nullptr;
+    }
+  }
 
   WM_STATE wm_state = WM_STATE::Get(window->xcb_window);
   wm_state.MAXIMIZED_HORZ = root.maximized_horizontally;

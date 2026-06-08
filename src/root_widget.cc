@@ -17,6 +17,7 @@
 #include "argument.hh"
 #include "automat.hh"
 #include "black_hole.hh"
+#include "build_variant.hh"
 #include "casting.hh"
 #include "drag_action.hh"
 #include "embedded.hh"
@@ -65,19 +66,20 @@ void VulkanPaint(RootWidget& rw) {
     // TODO: Adjust next_frame to minimize input latency
     // VK_EXT_present_timing
     // https://github.com/KhronosGroup/Vulkan-Docs/pull/1364
+    auto period = time::Duration(1s) / rw.window->screen_refresh_rate;
     if (next_frame <= now) {
-      auto frame_count = time::ToSeconds(now - next_frame) / rw.window->screen_refresh_rate;
-      next_frame = now + time::Duration(1s) / rw.window->screen_refresh_rate;
+      int skipped_frames = (int)(time::ToSeconds(now - next_frame) / time::ToSeconds(period)) + 1;
+      next_frame = now + period;
       constexpr bool kLogSkippedFrames = false;
-      if (kLogSkippedFrames && frame_count > 1) {
-        LOG << "Skipped " << (uint64_t)(frame_count - 1) << " frames";
+      if (kLogSkippedFrames && skipped_frames > 1) {
+        LOG << "Skipped " << (uint64_t)(skipped_frames - 1) << " frames";
       }
     } else {
       // This normally sleeps until T + ~10ms.
       // With timeBeginPeriod(1) it's T + ~1ms.
       // TODO: try condition_variable instead
       std::this_thread::sleep_until(next_frame);
-      next_frame += time::Duration(1s) / rw.window->screen_refresh_rate;
+      next_frame += period;
     }
   }
 
@@ -196,7 +198,10 @@ void RootWidget::Init() {
 
   render_thread = std::jthread(RenderThread, std::ref(*this), stop_source.get_token());
 
-  loading_animation = std::make_unique<HypnoRect>();
+  // Only show loading animation in release builds.
+  if (build_variant::Release) {
+    loading_animation = std::make_unique<HypnoRect>();
+  }
 
   BuildToolbar(*this);
 }

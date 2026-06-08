@@ -147,7 +147,9 @@ int Main() {
 
   StartWorkerThreads(stop_source.get_token());
 
-  root_widget->loading_animation->LoadingCompleted();
+  if (root_widget->loading_animation) {
+    root_widget->loading_animation->LoadingCompleted();
+  }
 
   //////////////////
   // Main Loop - processes OS events

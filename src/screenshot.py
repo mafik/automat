@@ -28,7 +28,7 @@ def take_screenshot(automat_binary_path, screenshot_output_path):
 
     try:
         # Wait for Automat to start up (longer delay for debug builds)
-        startup_delay = 10.0 if build.debug else 2.0
+        startup_delay = 10.0
         print(f"Waiting {startup_delay} seconds for automat to start...")
         time.sleep(startup_delay)
 

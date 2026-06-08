@@ -2,11 +2,16 @@
 # SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 # SPDX-License-Identifier: MIT
 
-import os
+import os, shutil
 from subprocess import run
 from sys import platform
 
 path_to_package = {
+    "/usr/bin/python": "python-is-python3",
+    "/usr/bin/clang": "clang",
+    "/usr/bin/ld.lld": "lld",
+    "/usr/bin/ninja": "ninja-build",
+    "/usr/bin/cmake": "cmake",
     "/usr/include/zlib.h": "zlib1g-dev",
     "/usr/include/openssl/ssl.h": "libssl-dev",
     "/usr/include/gmock": "libgmock-dev",
@@ -19,12 +24,17 @@ path_to_package = {
     "/usr/include/GL/gl.h": "libgl-dev",
     "/usr/include/fontconfig/fontconfig.h": "libfontconfig-dev",
     "/usr/bin/gperf": "gperf",
-    "/usr/include/sys/capability.h": "libcap-dev"
+    "/usr/bin/bison": "bison",  # xkbcommon meson keymap parser (YACC)
+    "/usr/include/sys/capability.h": "libcap-dev",
+    "/usr/lib/python3/dist-packages/jinja2/__init__.py": "python3-jinja2"  # libsystemd meson codegen
 }
 
 
 def check_and_install():
     if platform != 'linux':
+        return
+    if shutil.which('apt-get') == None:
+        # We don't auto-install system dependencies on non-Debian systems (yet)
         return
     missing_packages = set()
     for path, package in path_to_package.items():
@@ -39,7 +49,7 @@ def check_and_install():
             input()
         except EOFError:
             print("Got EOF - batch job detected. Continuing with the installation.")
-        command = ["apt", "-y", "install"] + list(missing_packages)
+        command = ["apt-get", "-y", "install"] + list(missing_packages)
         if os.geteuid() != 0:  # non-root users need `sudo` to install stuff
             command = ["sudo"] + command
         print(" ".join(command) + "\n")

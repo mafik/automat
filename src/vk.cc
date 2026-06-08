@@ -811,9 +811,16 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
   VkColorSpaceKHR colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
   for (uint32_t i = 0; i < surfaceFormatCount; ++i) {
     VkFormat format = surfaceFormats[i].format;
-    surfaceFormat = format;
-    colorSpace = surfaceFormats[i].colorSpace;
-    break;
+    if (format == VK_FORMAT_B8G8R8A8_UNORM || format == VK_FORMAT_R8G8B8A8_UNORM) {
+      surfaceFormat = format;
+      colorSpace = surfaceFormats[i].colorSpace;
+      break;
+    }
+  }
+  // Fall back to the first advertised format if no preferred UNORM one exists.
+  if (VK_FORMAT_UNDEFINED == surfaceFormat && surfaceFormatCount > 0) {
+    surfaceFormat = surfaceFormats[0].format;
+    colorSpace = surfaceFormats[0].colorSpace;
   }
 
   if (VK_FORMAT_UNDEFINED == surfaceFormat) {

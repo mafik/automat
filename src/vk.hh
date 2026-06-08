@@ -11,8 +11,6 @@
 #include <include/gpu/vk/VulkanMemoryAllocator.h>
 #include <vulkan/vulkan_core.h>
 
-#include <vector>
-
 #include "status.hh"
 
 namespace automat::vk {

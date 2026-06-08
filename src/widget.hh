@@ -129,7 +129,7 @@ struct Widget : Trackable, OptionsProvider {
 
   sk_sp<SkDrawable> sk_drawable;  // holds a WidgetDrawable
   mutable uint32_t id = 0;
-  float average_draw_millis = NAN;
+  float smooth_render_millis = NAN;
 
   // TODO: remove / clean up
   Optional<SkRect> pack_frame_texture_bounds;
@@ -139,7 +139,6 @@ struct Widget : Trackable, OptionsProvider {
   Optional<Rect> rendered_bounds;
   SkMatrix rendered_matrix;
   bool rendering = false;  // Whether the widget is currently being rendered by the client.
-  bool rendering_to_screen = false;  // Whether the current render job is going to be presented.
 
   // Set to true if the widget should be redrawn (without the need for animation `Tick`).
   // This may be the case when its children are changed but its animation state is otherwise

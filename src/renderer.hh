@@ -15,12 +15,14 @@ struct RootWidget;
 
 struct RenderResult {
   uint32_t id;
-  float render_time;
+  float approx_render_millis;
 };
 
 struct PackFrameRequest {
   // Must be sorted by ID!
   std::vector<RenderResult> render_results;
+
+  float real_render_millis = 0;
 };
 
 // Create a SkDrawable that will draw the given widget. The drawable may cache the rendered widget

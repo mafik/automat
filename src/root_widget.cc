@@ -49,8 +49,6 @@ using namespace std;
 
 namespace automat::ui {
 
-constexpr bool kPowersave = true;
-
 std::vector<RootWidget*> root_widgets;
 unique_ptr<RootWidget> root_widget;
 
@@ -58,29 +56,6 @@ void VulkanPaint(RootWidget& rw) {
   ZoneScoped;
   if (!vk::initialized) {
     return;
-  }
-  static time::SteadyPoint next_frame = time::kZeroSteady;
-  if (kPowersave) {
-    ZoneScopedN("Powersave");
-    time::SteadyPoint now = time::SteadyNow();
-    // TODO: Adjust next_frame to minimize input latency
-    // VK_EXT_present_timing
-    // https://github.com/KhronosGroup/Vulkan-Docs/pull/1364
-    auto period = time::Duration(1s) / rw.window->screen_refresh_rate;
-    if (next_frame <= now) {
-      int skipped_frames = (int)(time::ToSeconds(now - next_frame) / time::ToSeconds(period)) + 1;
-      next_frame = now + period;
-      constexpr bool kLogSkippedFrames = false;
-      if (kLogSkippedFrames && skipped_frames > 1) {
-        LOG << "Skipped " << (uint64_t)(skipped_frames - 1) << " frames";
-      }
-    } else {
-      // This normally sleeps until T + ~10ms.
-      // With timeBeginPeriod(1) it's T + ~1ms.
-      // TODO: try condition_variable instead
-      std::this_thread::sleep_until(next_frame);
-      next_frame += period;
-    }
   }
 
   {
@@ -104,10 +79,7 @@ void VulkanPaint(RootWidget& rw) {
   if (canvas == nullptr) {
     return;
   }
-  {
-    ZoneScopedN("RenderFrame");
-    RenderFrame(*canvas, rw);
-  }
+  RenderFrame(*canvas, rw);
   FrameMark;
 }
 
@@ -129,7 +101,6 @@ void RenderThread(RootWidget& rw, std::stop_token stop_token) {
         rw.toolbar.reset();
         rw.sk_drawable.reset();
         rw.rendering = false;
-        rw.rendering_to_screen = false;
         rw.rendered_bounds.reset();
         RendererShutdown();
         vk::Destroy();

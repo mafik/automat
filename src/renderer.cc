@@ -25,6 +25,7 @@
 #include <vulkan/vulkan_core.h>
 
 #include <cmath>
+#include <cstdint>
 #include <map>
 #include <ranges>
 #include <tracy/Tracy.hpp>
@@ -35,7 +36,7 @@
 #include "font.hh"
 #include "global_resources.hh"
 #include "log.hh"
-#include "log_skia.hh"
+#include "render_cost_model.hh"
 #include "root_widget.hh"
 #include "textures.hh"
 #include "thread_name.hh"
@@ -44,6 +45,7 @@
 #include "vm.hh"
 #include "widget.hh"
 
+// TODO: move render_cost_model.txt into a more appropriate location
 // TODO: replace `root_canvas` with surface properties
 // TODO: move the "rendering" logic of Widget into a separate class (intended to run in the Client)
 // TODO: use correct bounds in SkPictureRecorder::beginRecording
@@ -51,6 +53,7 @@
 
 constexpr bool kDebugRendering = false;
 constexpr bool kDebugRenderEvents = false;
+constexpr bool kDebugPackFrame = false;
 
 using namespace automat::ui;
 using namespace std;
@@ -86,11 +89,12 @@ string debug_render_events;
 
 PackFrameRequest next_frame_request = {};
 
-time::SteadyPoint paint_start;
+time::SteadyPoint frame_start = time::kZeroSteady;
+static CostModel cost_model;
+static std::vector<CostModel::Obs> cost_model_obs;
+static const std::string cost_model_path = "render_cost_model.txt";
 
 struct WidgetDrawable;
-
-deque<WidgetDrawable*> overflow_queue;
 
 struct WidgetDrawableHolder {
   sk_sp<SkDrawable> sk_drawable;
@@ -142,33 +146,22 @@ struct WidgetDrawable : SkDrawableRTTI {
     // full pixels) or smaller (due too clipping).
     Rect surface_bounds_local;
     SkImageInfo image_info;
-    time::Duration cpu_time;
+    float snap_millis = 0;
 
     ~Rendered() {
       if (texture.isValid()) {
         surface->recorder()->deleteBackendTexture(texture);
       }
     }
-  } frame_a, frame_b;
+  } frame_a;
 
-  // These values should be set before the image is sent to VkRecorderThread.
-  bool frame_a_is_rendered = true;
-  bool render_in_background = false;
+  // Time spent in insertRecording().
+  float insert_recording_millis = 0;
 
-  Rendered& rendered() { return frame_a_is_rendered ? frame_a : frame_b; }
-  Rendered& in_progress() {
-    if (render_in_background) {
-      return frame_a_is_rendered ? frame_b : frame_a;
-    } else {
-      return frame_a_is_rendered ? frame_a : frame_b;
-    }
-  }
-
-  void Present() {
-    if (render_in_background) {
-      frame_a_is_rendered = !frame_a_is_rendered;
-    }
-  }
+  // Note: these were used for multi-buffering but are no longer necessary. Kept around since it may
+  // actually be a good idea to reintroduce it in the future.
+  Rendered& rendered() { return frame_a; }
+  Rendered& in_progress() { return frame_a; }
 
   std::unique_ptr<skgpu::graphite::Recording> graphite_recording;
   void InsertRecording();
@@ -309,8 +302,7 @@ const skgpu::graphite::TextureInfo kTextureInfo = [] {
 moodycamel::BlockingConcurrentQueue<WidgetDrawable*> recording_queue;
 moodycamel::BlockingConcurrentQueue<WidgetDrawable*> recorded_queue;
 
-void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> fg_recorder,
-                      std::unique_ptr<skgpu::graphite::Recorder> bg_recorder) {
+void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> recorder) {
   SetThreadName("VkRecorder" + std::to_string(thread_id), 1);
 
   while (true) {
@@ -321,7 +313,6 @@ void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> 
     ZoneScopedN("Recording");
     ZoneName(w->name.c_str(), w->name.size());
 
-    auto* recorder = w->render_in_background ? bg_recorder.get() : fg_recorder.get();
     auto cpu_started = time::SteadyNow();
     auto& frame = w->in_progress();
     auto graphite_canvas = recorder->makeDeferredCanvas(frame.image_info, kTextureInfo);
@@ -343,7 +334,7 @@ void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> 
     }
 
     w->graphite_recording = recorder->snap();
-    frame.cpu_time = (time::SteadyNow() - cpu_started);
+    frame.snap_millis = time::ToSeconds(time::SteadyNow() - cpu_started) * 1000;
 
     recorded_queue.enqueue(w);
   }
@@ -354,7 +345,6 @@ constexpr int kNumVkRecorderThreads = 4;
 std::jthread vk_recorder_threads[kNumVkRecorderThreads];
 
 std::unique_ptr<skgpu::graphite::Recorder> global_foreground_recorder;
-std::unique_ptr<skgpu::graphite::Recorder> global_background_recorder;
 
 bool renderer_initialized = false;
 
@@ -373,18 +363,13 @@ void RendererInit() {
   options.fRequireOrderedRecordings = false;
   for (int i = 0; i < kNumVkRecorderThreads; ++i) {
     auto fg_recorder = vk::graphite_context->makeRecorder(options);
-    auto bg_recorder = vk::background_context->makeRecorder(options);
-    vk_recorder_threads[i] =
-        std::jthread(VkRecorderThread, i, std::move(fg_recorder), std::move(bg_recorder));
+    vk_recorder_threads[i] = std::jthread(VkRecorderThread, i, std::move(fg_recorder));
   }
   global_foreground_recorder = vk::graphite_context->makeRecorder(options);
-  global_background_recorder = vk::background_context->makeRecorder(options);
   renderer_initialized = true;
 }
 
 int foreground_rendering_jobs = 0;
-int background_rendering_jobs = 0;
-
 void RendererShutdown() {
   if (!renderer_initialized) return;
 
@@ -396,14 +381,12 @@ void RendererShutdown() {
   }
 
   cached_widget_drawables.clear();
-  overflow_queue.clear();
   next_frame_request.render_results.clear();
   if (image_provider) {
     image_provider->cache.clear();
   }
 
   global_foreground_recorder.reset();
-  global_background_recorder.reset();
   vk::graphite_context->submit({skgpu::graphite::SyncToCpu::kYes});
   vk::background_context->submit({skgpu::graphite::SyncToCpu::kYes});
 
@@ -431,47 +414,36 @@ void WidgetDrawable::InsertRecording() {
     insert_recording_info.fNumWaitSemaphores = wait_list_vec.size();
   }
 
-  insert_recording_info.fGpuStatsFlags = skgpu::GpuStatsFlags::kElapsedTime;
+  // Note: Do not use "FinishedWithStats"! On some drivers (lavapipe) it makes submissions 30x more
+  // expensive by requireing extra synchronizations.
   insert_recording_info.fFinishedContext = this;
-  insert_recording_info.fFinishedWithStatsProc = [](skgpu::graphite::GpuFinishedContext context,
-                                                    skgpu::CallbackResult result,
-                                                    const skgpu::GpuStats& stats) {
+  insert_recording_info.fFinishedProc = [](skgpu::graphite::GpuFinishedContext context,
+                                           skgpu::CallbackResult result) {
     auto* w = static_cast<WidgetDrawable*>(context);
     if (result == skgpu::CallbackResult::kFailed) {
       ERROR << "Failed to insert recording for " << w->name;
     }
     auto& frame = w->in_progress();
-
-    float gpu_time = stats.elapsedTime * 1e-9f;  // ns → s
-    float render_time = max<float>(gpu_time, time::ToSeconds(frame.cpu_time));
-    w->Present();
-    next_frame_request.render_results.emplace_back(RenderResult{w->id, render_time});
-    if (w->render_in_background) {
-      --background_rendering_jobs;
-    } else {
-      --foreground_rendering_jobs;
-    }
+    float approx_render_millis = frame.snap_millis + w->insert_recording_millis;
+    next_frame_request.render_results.emplace_back(RenderResult{w->id, approx_render_millis});
+    --foreground_rendering_jobs;
     if constexpr (kDebugRendering && kDebugRenderEvents) {
       debug_render_events += "Finished(";
       debug_render_events += w->name;
       debug_render_events += ") ";
     }
   };
-  skgpu::graphite::Context* context;
-  if (render_in_background) {
-    ++background_rendering_jobs;
-    context = vk::background_context.get();
-  } else {
-    ++foreground_rendering_jobs;
-    context = vk::graphite_context.get();
-  }
+  ++foreground_rendering_jobs;
+  skgpu::graphite::Context* context = vk::graphite_context.get();
   if constexpr (kDebugRendering && kDebugRenderEvents) {
     debug_render_events += "InsertRecording(";
     debug_render_events += name;
     debug_render_events += ") ";
   }
+  auto _t_ins = time::SteadyNow();
   context->insertRecording(insert_recording_info);
-  context->submit();  // necessary to send the semaphores to the GPU
+  insert_recording_millis = time::ToSeconds(time::SteadyNow() - _t_ins) * 1000;
+  // submit() is deferred and batched to preserve semaphore ordering
 }
 
 void WidgetDrawable::onDraw(SkCanvas* canvas) {
@@ -696,7 +668,6 @@ WidgetDrawable::WidgetDrawable(uint32_t id) : id(id) {}
 
 struct PackedFrame {
   vector<WidgetDrawable::Update> frame;
-  vector<WidgetDrawable::Update> overflow;
   map<uint32_t, Vec<Vec2>> fresh_texture_anchors;
   map<uint32_t, SkMatrix> fresh_matrices;
   animation::Phase animation_phase;
@@ -741,6 +712,9 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     bool same_scale;
     bool wants_to_draw = false;
     bool surface_reusable = false;  // set to true if existing surface covers the visible area
+    float render_px = 0;            // texture resolution (pixels rasterized if re-rendered)
+    float model_render_ms = 0;
+    int type_id = -1;
     SkMatrix window_to_local;
     SkIRect surface_bounds_root;  // copied over to Widget, if drawn
     Vec<Vec2> pack_frame_texture_anchors;
@@ -763,13 +737,20 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     return time::ToSeconds(max<time::Duration>(0s, now - tree_entry.widget->wake_time));
   };
 
-  auto GetRenderTime = [](WidgetTree& tree_entry) {
-    return isnan(tree_entry.widget->average_draw_millis)
-               ? 0
-               : tree_entry.widget->average_draw_millis / 1000;
-  };
+  auto GetRenderMillis = [](WidgetTree& tree_entry) -> float { return tree_entry.model_render_ms; };
 
   {  // Step 1 - update the cache entries for widgets rendered by the client
+
+    Optional<LOG_IndentGuard> indent;
+    if constexpr (kDebugPackFrame) {
+      LOG << "PackFrameRequest:";
+      indent.emplace();
+      LOG << "measured_render_millis: " << request.real_render_millis << "ms";
+    }
+
+    float sum_approx_millis = 0;
+    for (auto& rr : request.render_results) sum_approx_millis += rr.approx_render_millis;
+    bool calibrate = request.real_render_millis > 0 && sum_approx_millis > 0;
     for (auto& render_result : request.render_results) {
       Widget* widget = Widget::Find(render_result.id);
       if (widget == nullptr) {
@@ -781,32 +762,35 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
           FATAL << "Widget " << widget->Name() << " has been returned by client multiple times!";
         }
       }
-      float draw_millis = render_result.render_time * 1000;
-      if (isnan(widget->average_draw_millis)) {
-        widget->average_draw_millis = draw_millis;
-      } else {
-        widget->average_draw_millis = 0.9 * widget->average_draw_millis + 0.1 * draw_millis;
+      float render_millis = calibrate ? request.real_render_millis *
+                                            (render_result.approx_render_millis / sum_approx_millis)
+                                      : render_result.approx_render_millis;
+      if constexpr (kDebugPackFrame) {
+        LOG << widget->Name() << ": render_time = " << render_result.approx_render_millis
+            << "ms, calibrated_millis = " << render_millis << "ms";
       }
-
-      if (widget->rendering_to_screen == false) {
-        // Find the closest ancestor that can be rendered to texture.
-        Widget* ancestor_with_texture = widget->parent;
-        while (ancestor_with_texture &&
-               !ancestor_with_texture->pack_frame_texture_bounds.has_value()) {
-          // RootWidget can always be rendered to texture so we don't need any extra stop
-          // condition here.
-          ancestor_with_texture = ancestor_with_texture->parent;
-        }
-        if (ancestor_with_texture == nullptr) {
-          ERROR << "Widget " << widget->Name()
-                << " (which just finished background rendering) has no parent to wake up!";
-        } else {
-          ancestor_with_texture->needs_draw = true;
-        }
+      if (isnan(widget->smooth_render_millis)) {
+        widget->smooth_render_millis = render_millis;
+      } else {
+        widget->smooth_render_millis = 0.9 * widget->smooth_render_millis + 0.1 * render_millis;
       }
 
       widget->rendering = false;
-      widget->rendering_to_screen = false;
+    }
+  }
+
+  {                            // Step 1.5 - update the render model
+    if (!cost_model.loaded) {  // warm-start from the persisted weights
+      cost_model.loaded = true;
+      cost_model.Load(cost_model_path);
+    }
+
+    float predicted = cost_model.TrainStep(cost_model_obs, request.real_render_millis);
+    cost_model_obs.clear();
+    static time::SteadyPoint last_save = time::SteadyNow();
+    if (time::ToSeconds(time::SteadyNow() - last_save) > 10.0) {
+      last_save = time::SteadyNow();
+      cost_model.Save(cost_model_path);
     }
   }
 
@@ -910,6 +894,9 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
         }
 
         root_bounds.roundOut(&node.surface_bounds_root);
+
+        node.render_px =
+            (float)node.surface_bounds_root.width() * node.surface_bounds_root.height();
 
         // TODO: this is overestimating the visible area when window_to_local contains a rotation!
         node.window_to_local.mapRect(&node.new_visible_bounds.sk, root_bounds);
@@ -1032,10 +1019,28 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       first_job = i;
     }
 
-    float remaining_time = 1.0f / 60;
+    for (auto& node : tree) {
+      if (node.verdict == Verdict::Skip_NoTexture || node.verdict == Verdict::Skip_Clipped)
+        continue;
+      node.type_id = cost_model.TypeId(std::string(node.widget->Name()));
+      node.model_render_ms = cost_model.RenderCostMs(node.type_id, node.render_px);
+    }
+
+    Optional<LOG_IndentGuard> indent;
+    if constexpr (kDebugPackFrame) {
+      LOG << "PackFrame()";
+      indent.emplace();
+    }
+
+    float remaining_millis = 1000.0f / (rw.window ? rw.window->screen_refresh_rate : 60);
+    if constexpr (kDebugPackFrame) LOG << "frame millis: " << remaining_millis;
+    remaining_millis -= 3.0f * cost_model.mae;  // 3 standard deviations of margin
+    if constexpr (kDebugPackFrame) LOG << "after stddev margin: " << remaining_millis;
+    remaining_millis -= cost_model.floor_millis;  // learned floor of our render costs
+    if constexpr (kDebugPackFrame) LOG << "after floor margin: " << remaining_millis;
 
     auto Pack = [&](int pack_i) {
-      float render_time = 0;
+      float millis = 0;
       for (int i = pack_i; true; i = tree[i].parent) {
         if (tree[i].verdict == Verdict::Pack) {
           break;
@@ -1043,8 +1048,9 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
         if (tree[i].verdict == Verdict::Skip_NoTexture) {
           continue;
         }
-        render_time += GetRenderTime(tree[i]);
+        millis += GetRenderMillis(tree[i]);
         tree[i].SetVerdict(Verdict::Pack);
+        // Remove this node from the job list
         if (tree[i].prev_job != -1) {
           tree[tree[i].prev_job].next_job = tree[i].next_job;
         } else if (i == first_job) {
@@ -1057,10 +1063,11 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
           break;
         }
       }
-      remaining_time -= render_time;
+      remaining_millis -= millis;
     };
 
     Pack(0);
+    if constexpr (kDebugPackFrame) LOG << "after RootWidget: " << remaining_millis;
 
     for (int i = first_job; i != -1; i = tree[i].next_job) {
       if (tree[i].widget->redraw_this_frame) {
@@ -1068,44 +1075,37 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
         Pack(i);
       }
     }
+    if constexpr (kDebugPackFrame) LOG << "after redraw_this_frame: " << remaining_millis;
 
+    // Always render a widget on its very FIRST frame.
+    for (int i = first_job; i != -1; i = tree[i].next_job) {
+      if (!tree[i].widget->rendered_bounds.has_value()) {
+        Pack(i);
+      }
+    }
+    if constexpr (kDebugPackFrame) LOG << "after first frame widgets: " << remaining_millis;
+
+    bool something_packed = false;
     while (first_job != -1) {
       int best_i = -1;
       float best_factor = -1;
-      float best_render_time = 0;
       for (int i = first_job; i != -1; i = tree[i].next_job) {
-        float self_lag = GetLag(tree[i]);
-        float self_render_time = GetRenderTime(tree[i]);
+        float total_lag = GetLag(tree[i]);
+        float millis = GetRenderMillis(tree[i]);
 
-        float total_lag = self_lag;
-        float total_render_time = self_render_time;
-        bool ancestor_rendering = false;
-
-        for (int i_parent = tree[i].parent; true; i_parent = tree[i_parent].parent) {
+        for (int i_parent = tree[i].parent; i_parent; i_parent = tree[i_parent].parent) {
           if (tree[i_parent].verdict == Verdict::Pack) {
-            break;
-          }
-          if (tree[i_parent].verdict == Verdict::Overflow || tree[i_parent].widget->rendering) {
-            // An ancestor widget may be already rendering in background - if that's the case
-            // then we'll render a child widget in background as well and once it's finished,
-            // ask the parent widget to composite it (by re-rendering itself).
-            ancestor_rendering = true;
             break;
           }
           if (tree[i_parent].verdict == Verdict::Skip_NoTexture) {
             continue;
           }
           total_lag += GetLag(tree[i_parent]);
-          total_render_time += GetRenderTime(tree[i_parent]);
-          if (i_parent == 0) {
-            break;
-          }
+          millis += GetRenderMillis(tree[i_parent]);
         }
 
-        total_render_time = max(total_render_time, 0.000001f);
-
-        if (ancestor_rendering || total_render_time > remaining_time) {
-          tree[i].SetVerdict(Verdict::Overflow);
+        if (something_packed && millis > remaining_millis) {
+          // Doesn't fit the budget: drop from the job list.
           if (tree[i].prev_job != -1) {
             tree[tree[i].prev_job].next_job = tree[i].next_job;
           } else {
@@ -1114,13 +1114,13 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
           if (tree[i].next_job != -1) {
             tree[tree[i].next_job].prev_job = tree[i].prev_job;
           }
-        } else {
-          float factor = total_lag / total_render_time;
-          if (factor > best_factor) {
-            best_factor = factor;
-            best_i = i;
-            best_render_time = total_render_time;
-          }
+          continue;
+        }
+
+        float factor = total_lag / millis;
+        if (factor > best_factor) {
+          best_factor = factor;
+          best_i = i;
         }
       }
 
@@ -1130,18 +1130,20 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
 
       // Pack this job
       Pack(best_i);
-
-    }  // while (!jobs.empty())
+      something_packed = true;
+      if constexpr (kDebugPackFrame)
+        LOG << "after packing " << tree[best_i].widget->Name() << ": " << remaining_millis;
+    }
   }
 
   // Step 4 - walk through the tree and record the draw commands into drawables.
   for (int i = tree.size() - 1; i >= 0; --i) {
-    auto packed = tree[i].verdict == Verdict::Pack;
-    auto overflowed = tree[i].verdict == Verdict::Overflow;
-    if (!packed && !overflowed) {
+    if (tree[i].verdict != Verdict::Pack) {
       continue;
     }
     auto& node = tree[i];
+    cost_model_obs.push_back({node.type_id, node.render_px, node.widget->smooth_render_millis});
+
     auto& widget = *node.widget;
 
     if (widget.rendering) {
@@ -1156,7 +1158,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       update.parent_id = tree[node.parent_with_texture].widget->ID();
     }
 
-    update.average_draw_millis = widget.average_draw_millis;
+    update.average_draw_millis = widget.smooth_render_millis;
     update.name = widget.Name();
     update.last_tick_time = widget.last_tick_time;
 
@@ -1182,26 +1184,17 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     update.pack_frame_texture_anchors = node.pack_frame_texture_anchors;
 
     widget.rendering = true;
-    widget.rendering_to_screen = packed;
     widget.rendered_matrix = widget.local_to_window;
     widget.rendered_bounds = node.new_visible_bounds;
-    if (packed) {
-      pack.frame.push_back(update);
-    } else {
-      pack.overflow.push_back(update);
-    }
+    pack.frame.push_back(update);
   }
 
   {  // Update Pack::fresh_matrices
     for (int i = 0; i < tree.size(); ++i) {
       auto& node = tree[i];
-      bool include = false;
-      include |= node.verdict == Verdict::Pack;
-      include |= node.verdict == Verdict::Overflow;
+      bool include = node.verdict == Verdict::Pack;
       if (node.parent != i) {
-        auto& parent = tree[node.parent];
-        include |= parent.verdict == Verdict::Pack;
-        include |= parent.verdict == Verdict::Overflow;
+        include |= tree[node.parent].verdict == Verdict::Pack;
       }
       if (include) {
         pack.fresh_matrices[node.widget->ID()] = node.widget->local_to_window;
@@ -1212,7 +1205,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
   // Update fresh_texture_anchors for all widgets that will be drawn & their children.
   // This allows WidgetDrawable::onDraw to properly deform the texture.
   {
-    for (auto& update : Concat(pack.frame, pack.overflow)) {
+    for (auto& update : pack.frame) {
       if (pack.fresh_texture_anchors.find(update.id) != pack.fresh_texture_anchors.end()) {
         continue;
       }
@@ -1237,36 +1230,57 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       packed_widgets += " ";
     }
     LOG << "Packed widgets: " << packed_widgets;
-    Str overflow_widgets;
-    for (auto& update : pack.overflow) {
-      overflow_widgets += update.name;
-      overflow_widgets += " ";
-    }
-    LOG << "Overflow widgets: " << overflow_widgets;
     LOG_Unindent();
   }
 }
 
+constexpr bool kPowersave = true;
+
 void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
+  ZoneScoped;
   if constexpr (kDebugRendering && kDebugRenderEvents) {
     debug_render_events += "WaitingStart(";
     debug_render_events += to_string(foreground_rendering_jobs);
-    debug_render_events += "/";
-    debug_render_events += to_string(background_rendering_jobs);
-    debug_render_events += " fg/bg jobs) ";
+    debug_render_events += " fg jobs) ";
   }
-  // Spinlock on this:
+  {  // Spinlock while GPU is working:
+    ZoneScopedN("checkAsyncWorkCompletion");
 
-  while (foreground_rendering_jobs) {
-    vk::graphite_context->checkAsyncWorkCompletion();
+    while (foreground_rendering_jobs) {
+      vk::graphite_context->checkAsyncWorkCompletion();
+    }
   }
-  vk::background_context->checkAsyncWorkCompletion();
   if constexpr (kDebugRendering && kDebugRenderEvents) {
-    debug_render_events += "WaitingEnd(";
-    debug_render_events += to_string(background_rendering_jobs);
-    debug_render_events += " bg jobs) ";
+    debug_render_events += "WaitingEnd ";
   }
-  paint_start = time::SteadyNow();
+
+  next_frame_request.real_render_millis = time::ToSeconds(time::SteadyNow() - frame_start) * 1000;
+
+  if (kPowersave) {
+    static time::SteadyPoint next_frame = time::kZeroSteady;
+    ZoneScopedN("Powersave");
+    time::SteadyPoint now = time::SteadyNow();
+    // TODO: Adjust next_frame to minimize input latency
+    // VK_EXT_present_timing
+    // https://github.com/KhronosGroup/Vulkan-Docs/pull/1364
+    auto period = time::Duration(1s) / rw.window->screen_refresh_rate;
+    if (next_frame <= now) {
+      int skipped_frames = (int)(time::ToSeconds(now - next_frame) / time::ToSeconds(period)) + 1;
+      next_frame = now + period;
+      constexpr bool kLogSkippedFrames = false;
+      if (kLogSkippedFrames && skipped_frames > 1) {
+        LOG << "Skipped " << (uint64_t)(skipped_frames - 1) << " frames";
+      }
+    } else {
+      // This normally sleeps until T + ~10ms.
+      // With timeBeginPeriod(1) it's T + ~1ms.
+      // TODO: try condition_variable instead
+      std::this_thread::sleep_until(next_frame);
+      next_frame += period;
+    }
+  }
+
+  frame_start = time::SteadyNow();
 
   PackedFrame pack;
   PackFrameRequest request;
@@ -1304,7 +1318,6 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
 
   for (auto& update : pack.frame) {
     auto widget_drawable = WidgetDrawable::FindOrNull(update.id);
-    widget_drawable->render_in_background = false;
     frame.push_back(widget_drawable);
 
     if (update.parent_id) {
@@ -1325,15 +1338,10 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
       parent->wait_count++;
     }
   }
-  for (auto& update : pack.overflow) {
-    auto widget_drawable = WidgetDrawable::FindOrNull(update.id);
-    widget_drawable->render_in_background = true;
-    overflow_queue.push_back(widget_drawable);
-  }
 
   auto props = canvas.getBaseProps();
 
-  for (auto& update : Concat(pack.frame, pack.overflow)) {
+  for (auto& update : pack.frame) {
     WidgetDrawableHolder& ref = WidgetDrawableHolder::FindOrMake(update.id);
     auto* w = ref.widget_drawable;
     w->UpdateState(update);
@@ -1350,8 +1358,7 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
       if (frame.texture.isValid()) {
         frame.surface->recorder()->deleteBackendTexture(frame.texture);
       }
-      auto* recorder = w->render_in_background ? global_background_recorder.get()
-                                               : global_foreground_recorder.get();
+      auto* recorder = global_foreground_recorder.get();
       frame.texture = recorder->createBackendTexture(frame.image_info.dimensions(), kTextureInfo);
       frame.surface = SkSurfaces::WrapBackendTexture(recorder, frame.texture,
                                                      kBGRA_8888_SkColorType, nullptr, &props);
@@ -1363,28 +1370,6 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
     auto w = WidgetDrawable::FindOrNull(update.id);
     recording_queue.enqueue(w);
     ++pending_recordings;
-  }
-
-  {  // Render overflow widgets
-    // Render at least one widget from the overflow queue.
-    if (!overflow_queue.empty()) {
-      recording_queue.enqueue(overflow_queue.front());
-      ++pending_recordings;
-      overflow_queue.pop_front();
-    }
-    for (int i = 0; i < overflow_queue.size(); ++i) {
-      auto cached_widget_drawable = overflow_queue[i];
-      auto expected_total_paint_time =
-          time::SteadyNow() - paint_start +
-          time::FloatDuration(cached_widget_drawable->average_draw_millis / 1000);
-      if (expected_total_paint_time > 16.6ms) {
-        continue;
-      }
-      recording_queue.enqueue(cached_widget_drawable);
-      ++pending_recordings;
-      overflow_queue.erase(overflow_queue.begin() + i);
-      --i;
-    }
   }
 
   // Wait for all of the WidgetDrawables with their recordings to be ready.
@@ -1399,19 +1384,31 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
     }
   }
 
+  // Submit the child→parent DAG one wave at a time. Every widget that is ready simultaneously is
+  // mutually independent (a waiter only becomes ready once all the children it waits on have been
+  // processed), so a whole wave shares a single vkQueueSubmit without a parent ever waiting on a
+  // sibling in the same batch. Each wave is submitted before the next is inserted, so a parent's
+  // wait semaphores resolve against children whose signals are already queued. This collapses the
+  // submits from one-per-widget to one-per-DAG-level.
+  vector<WidgetDrawable*> wave;
   while (!ready_for_gpu.empty()) {
-    auto* w = ready_for_gpu.back();
-    assert(w->wait_count == 0);
-    ready_for_gpu.pop_back();
-    w->InsertRecording();
-    for (auto* then : w->then_list) {
-      if ((--then->wait_count) == 0) {
-        ready_for_gpu.push_back(then);
-      }
+    wave.swap(ready_for_gpu);
+    ready_for_gpu.clear();
+    for (auto* w : wave) {
+      assert(w->wait_count == 0);
+      w->InsertRecording();
     }
-    w->then_list.clear();
-    w->wait_list.clear();
-    w->signal_semaphore = false;
+    vk::graphite_context->submit();
+    for (auto* w : wave) {
+      for (auto* then : w->then_list) {
+        if ((--then->wait_count) == 0) {
+          ready_for_gpu.push_back(then);
+        }
+      }
+      w->then_list.clear();
+      w->wait_list.clear();
+      w->signal_semaphore = false;
+    }
   }
 
   if constexpr (kDebugRendering) {

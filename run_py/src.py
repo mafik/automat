@@ -61,7 +61,7 @@ class File:
         self.manifest = False
 
         if_stack = [True]
-        current_defines = clang.default_defines.copy()
+        current_defines = set(clang.default_defines)
 
         for line in self.path.open(encoding='utf-8').readlines():
 

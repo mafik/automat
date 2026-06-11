@@ -106,6 +106,7 @@ Objects (multi-threaded) notify Toys (UI-thread) via `wake_counter`:
 
 Documentation maintained using stochastic parrots should be placed in `docs/parrots/` and indexed below. They record numerous small decisions made during development which are necessary for maintaining parrot consistency.
 
+- `docs/parrots/Clone Pile.md` - describes how elements that create a new object when touched present themselves
 - `docs/parrots/Leptonica Language.md` - documents the visual language of Leptonica objects
 - `docs/parrots/Slop Brand.md` - describes the visual identification for Toys made with stochastic parrots
 

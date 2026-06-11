@@ -24,7 +24,7 @@ Automat is continuously developed. Its roadmap can be found [here](https://www.t
 
 Automat can be downloaded from the [releases page](https://github.com/mafik/automat/releases/latest/).
 
-[Release Process.md](docs/design/Release%20Process.md) contains some more notes about Automat's release schedule.
+[Release Process.md](docs/Release%20Process.md) contains some more notes about Automat's release schedule.
 
 # Talks / Videos
 

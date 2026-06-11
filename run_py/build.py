@@ -385,11 +385,4 @@ def recipe() -> make.Recipe:
                shortcut='compile_commands.json')
     r.generated.add(str(COMPILE_COMMANDS_PATH))
 
-    def deploy():
-        return make.Popen(['rsync', '--protect-args', '-av', '--delete', '--exclude', 'builds', '--exclude', 'assets', '-og', '--chown=maf:www-data', 'www/', 'protectli:/var/www/automat.org/'], shell=False)
-
-
-    r.add_step(deploy, [], ['www/'], desc='Uploading WWW contents to server')
-
-
     return r

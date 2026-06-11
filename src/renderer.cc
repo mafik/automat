@@ -127,7 +127,7 @@ struct WidgetDrawable : SkDrawableRTTI {
   Vec<Vec2> pack_frame_texture_anchors;
 
   Vec<Vec2> fresh_texture_anchors;
-  time::SteadyPoint last_tick_time;
+  time::SteadyPoint last_tick;
 
   Widget::Compositor compositor;
 
@@ -186,7 +186,7 @@ struct WidgetDrawable : SkDrawableRTTI {
     // Debugging
     float average_draw_millis;
     Str name;
-    time::SteadyPoint last_tick_time;
+    time::SteadyPoint last_tick;
 
     // Rendering
     SkIRect surface_bounds_root;
@@ -269,7 +269,7 @@ void WidgetDrawable::UpdateState(const Update& update) {
   update_surface_bounds_root = update.surface_bounds_root;
 
   name = update.name;
-  last_tick_time = update.last_tick_time;
+  last_tick = update.last_tick;
 
   if (update.recording_drawable) {
     recording = std::move(update.recording_drawable);
@@ -574,7 +574,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       constexpr int kNumColors = 10;
       SkColor4f colors[kNumColors];
       float pos[kNumColors];
-      double fraction = time::ToSeconds(last_tick_time.time_since_epoch() % 4s);
+      double fraction = time::ToSeconds(last_tick.time_since_epoch() % 4s);
       SkMatrix shader_matrix = SkMatrix::RotateDeg(fraction * -360.0f, surface_size.center());
       for (int i = 0; i < kNumColors; ++i) {
         float hsv[] = {i * 360.0f / kNumColors, 1.0f, 1.0f};
@@ -734,7 +734,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
   vector<WidgetTree> tree;
 
   auto GetLag = [now](WidgetTree& tree_entry) -> float {
-    return time::ToSeconds(max<time::Duration>(0s, now - tree_entry.widget->wake_time));
+    return time::ToSeconds(max<time::Duration>(0s, now - tree_entry.widget->invalidated));
   };
 
   auto GetRenderMillis = [](WidgetTree& tree_entry) -> float { return tree_entry.model_render_ms; };
@@ -836,32 +836,21 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       }
 
       // TICK
-      if (node.verdict == Verdict::Unknown && widget->wake_time != time::SteadyPoint::max()) {
+      if (node.verdict == Verdict::Unknown && widget->next_tick <= now) {
         node.wants_to_draw = true;
         auto true_d = rw.timer.d;
-        auto fake_d = min(1.0, time::ToSeconds(now - widget->last_tick_time));
-        if (widget->wake_time == time::SteadyPoint::min()) {
-          // This is the first time this widget is being rendered - use `true_d` to animate it.
+        auto fake_d = min(1.0, time::ToSeconds(now - widget->last_tick));
+        if (widget->last_tick == time::SteadyPoint::min()) {
+          // This is the first time this widget is being ticked - use `true_d` to animate it.
           fake_d = true_d;
         }
         rw.timer.d = fake_d;
         auto animation_phase = widget->Tick(rw.timer);
         rw.timer.d = true_d;
-        widget->last_tick_time = now;
+        widget->last_tick = now;
         if (animation_phase == animation::Finished) {
-          widget->wake_time = time::SteadyPoint::max();
-        } else {
-          widget->wake_time = now;
+          widget->next_tick = time::SteadyPoint::max();
         }
-      }
-
-      if (node.verdict == Verdict::Unknown && widget->needs_draw) {
-        node.wants_to_draw = true;
-        widget->needs_draw = false;
-      }
-
-      if (node.verdict == Verdict::Unknown && widget->redraw_this_frame) {
-        node.wants_to_draw = true;
       }
 
       widget->pack_frame_texture_bounds = widget->TextureBounds();
@@ -1007,10 +996,14 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       if (node.verdict == Verdict::Skip_Rendering) {
         continue;
       }
-      if (node.same_scale && node.surface_reusable && !node.wants_to_draw) {
+      if (node.same_scale && node.surface_reusable && !node.wants_to_draw &&
+          widget.invalidated == time::SteadyPoint::max()) {
         continue;
       }
 
+      if (widget.invalidated == time::SteadyPoint::max()) {
+        widget.invalidated = now;
+      }
       node.next_job = first_job;
       node.prev_job = -1;
       if (first_job != -1) {
@@ -1069,21 +1062,14 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     Pack(0);
     if constexpr (kDebugPackFrame) LOG << "after RootWidget: " << remaining_millis;
 
+    // Widgets whose texture was never valid - never rendered, or invalidated through
+    // RedrawThisFrame - render unconditionally, regardless of the budget.
     for (int i = first_job; i != -1; i = tree[i].next_job) {
-      if (tree[i].widget->redraw_this_frame) {
-        tree[i].widget->redraw_this_frame = false;
+      if (tree[i].widget->invalidated == time::SteadyPoint::min()) {
         Pack(i);
       }
     }
-    if constexpr (kDebugPackFrame) LOG << "after redraw_this_frame: " << remaining_millis;
-
-    // Always render a widget on its very FIRST frame.
-    for (int i = first_job; i != -1; i = tree[i].next_job) {
-      if (!tree[i].widget->rendered_bounds.has_value()) {
-        Pack(i);
-      }
-    }
-    if constexpr (kDebugPackFrame) LOG << "after first frame widgets: " << remaining_millis;
+    if constexpr (kDebugPackFrame) LOG << "after never-valid widgets: " << remaining_millis;
 
     bool something_packed = false;
     while (first_job != -1) {
@@ -1160,7 +1146,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
 
     update.average_draw_millis = widget.smooth_render_millis;
     update.name = widget.Name();
-    update.last_tick_time = widget.last_tick_time;
+    update.last_tick = widget.last_tick;
 
     update.surface_bounds_root = node.surface_bounds_root;
 
@@ -1184,6 +1170,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     update.pack_frame_texture_anchors = node.pack_frame_texture_anchors;
 
     widget.rendering = true;
+    widget.invalidated = time::SteadyPoint::max();
     widget.rendered_matrix = widget.local_to_window;
     widget.rendered_bounds = node.new_visible_bounds;
     pack.frame.push_back(update);

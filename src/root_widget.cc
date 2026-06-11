@@ -341,7 +341,7 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
   }
 
   zoom_warning.WakeAnimation();
-  zoom_warning.last_tick_time = last_tick_time;
+  zoom_warning.last_tick = last_tick;
 
   phase |= animation::ExponentialApproach(camera_target.x, timer.d, 0.1, camera_pos.x);
   phase |= animation::ExponentialApproach(camera_target.y, timer.d, 0.1, camera_pos.y);

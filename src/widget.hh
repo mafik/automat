@@ -109,20 +109,19 @@ struct Widget : Trackable, OptionsProvider {
   // widgets to react to changes in their screen position.
   SkMatrix local_to_window = {};
 
-  // The time when the animation should wake up.
-  // Initially this is set to 0 (meaning it should wake up immediately).
-  // When the widget's animation finishes, set this to max value.
-  mutable time::SteadyPoint wake_time = time::SteadyPoint::min();
-  // The time when the Tick was last called. Updated right after Tick.
-  mutable time::SteadyPoint last_tick_time;
+  // When the next Tick is due. The renderer ticks this widget once `now` reaches this
+  // point; max means no tick is scheduled. Initially due immediately.
+  mutable time::SteadyPoint next_tick = time::SteadyPoint::min();
+  // When Tick last ran; the basis for the animation time delta. min means never.
+  mutable time::SteadyPoint last_tick = time::SteadyPoint::min();
 
-  bool IsAnimating() const { return wake_time != time::SteadyPoint::max(); }
+  bool IsAnimating() const { return next_tick != time::SteadyPoint::max(); }
 
-  // Force the widget to be redrawn ASAP (without offscreen rendering).
+  // Force the widget to be re-rendered this frame, regardless of the render budget.
   //
   // This will not call `Tick`. Also call `WakeAnimation` if you want to wake up the animation.
   //
-  // Sets force_packing to true on either this widget or (if it has no texture) its children.
+  // Marks this widget (or, if it has no texture, its children) as never valid.
   void RedrawThisFrame();
 
   // Things updated in PackFrame (& Draw)
@@ -139,13 +138,8 @@ struct Widget : Trackable, OptionsProvider {
   Optional<Rect> rendered_bounds;
   SkMatrix rendered_matrix;
   bool rendering = false;  // Whether the widget is currently being rendered by the client.
-
-  // Set to true if the widget should be redrawn (without the need for animation `Tick`).
-  // This may be the case when its children are changed but its animation state is otherwise
-  // unaffected.
-  bool needs_draw = false;
-
-  bool redraw_this_frame = false;
+  // Moment when the on-screen texture stopped matching this widget's content.
+  time::SteadyPoint invalidated = time::SteadyPoint::min();
 
   // Set to true by `MarkDead`.
   bool dead = false;

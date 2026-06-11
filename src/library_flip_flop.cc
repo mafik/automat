@@ -134,7 +134,7 @@ struct FlipFlopWidget : ObjectToy {
     if (ptr) {
       current_state = ptr->current_state;
     }
-    button->WakeAnimationAt(wake_time);
+    button->WakeAnimationAt(next_tick);
     return animation::LinearApproach(current_state, timer.d, 10, light);
   }
   void Draw(SkCanvas& canvas) const override {

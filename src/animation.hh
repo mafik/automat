@@ -94,7 +94,7 @@ inline Phase LinearApproach(float target, float delta_time, float speed, float& 
     // When another thread wakes the animation, then it's probably ok to set delta_time to 0.
     // When a widget's parents wake the child widgets then it's animation should probably already
     // progress. Otherwise we're adding a frame of latency. One workaround is for the parent to set
-    // child.last_tick_time to its own value - so that the child animation starts earlier.
+    // child.last_tick to its own value - so that the child animation starts earlier.
     // TODO: make the animation more responsive when a parent wakes a child widget
     delta_time = 0;
   }

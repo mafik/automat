@@ -96,13 +96,13 @@ void Widget::WakeAnimation() const {
   WakeAnimationAt(now);
 }
 
-void Widget::WakeAnimationAt(time::SteadyPoint now) const {
-  if (wake_time == time::SteadyPoint::max()) {
+void Widget::WakeAnimationAt(time::SteadyPoint when) const {
+  if (next_tick == time::SteadyPoint::max()) {
     // When a widget is woken up after a long sleep, we assume that it was just rendered. This
     // prevents the animation from thinking that the initial frame took a very long time.
-    last_tick_time = now;
+    last_tick = when;
   }
-  wake_time = min(wake_time, now);
+  next_tick = min(next_tick, when);
 }
 
 void Widget::DrawChildCached(SkCanvas& canvas, const Widget& child) const {
@@ -265,7 +265,7 @@ void Widget::CheckAllWidgetsReleased() {
 
 void Widget::RedrawThisFrame() {
   if (pack_frame_texture_bounds) {
-    redraw_this_frame = true;
+    invalidated = time::SteadyPoint::min();
   } else {
     for (auto* child : Children()) {
       child->RedrawThisFrame();

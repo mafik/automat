@@ -7,6 +7,7 @@
 #include "library_hotkey.hh"
 #include "library_instruction_library.hh"
 #include "library_key_presser.hh"
+#include "library_leptonica.hh"
 #include "library_macro_recorder.hh"
 #include "library_mouse.hh"
 #include "library_number.hh"
@@ -67,6 +68,33 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<TesseractOCR>();
   index.Register<Sources>();
   index.Register<Gear, HideInToolbar>();
+  {  // The Leptonica tools are reached through the shelf, not the toolbar.
+    index.Register<LeptonicaShelf>();
+    index.Register<LeptonicaImage, HideInToolbar>();
+    index.Register<Generate, HideInToolbar>();
+    index.Register<Threshold, HideInToolbar>();
+    index.Register<Morphology, HideInToolbar>();
+    index.Register<Tone, HideInToolbar>();
+    index.Register<Geometry, HideInToolbar>();
+    index.Register<Channel, HideInToolbar>();
+    index.Register<Convolve, HideInToolbar>();
+    index.Register<Blend, HideInToolbar>();
+    index.Register<Quantize, HideInToolbar>();
+    index.Register<Flatten, HideInToolbar>();
+    index.Register<Posterize, HideInToolbar>();
+    index.Register<Dither, HideInToolbar>();
+    index.Register<Deskew, HideInToolbar>();
+    index.Register<Seedfill, HideInToolbar>();
+    index.Register<CropRegion, HideInToolbar>();
+    index.Register<FindLevel, HideInToolbar>();
+    index.Register<Count, HideInToolbar>();
+    index.Register<Color, HideInToolbar>();
+    index.Register<Warp, HideInToolbar>();
+    index.Register<Measure, HideInToolbar>();
+    index.Register<Select, HideInToolbar>();
+    index.Register<Fade, HideInToolbar>();
+    index.Register<Reduce, HideInToolbar>();
+  }
 }
 
 Object* PrototypeLibrary::Find(const std::type_info& type) {

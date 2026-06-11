@@ -1,1 +1,1 @@
-CLAUDE.md
+docs/STOCHASTIC_PARROTS.md

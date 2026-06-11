@@ -1,1 +1,1 @@
-docs/STOCHASTIC_PARROTS.md
+docs/Stochastic Parrots.md

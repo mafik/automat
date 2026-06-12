@@ -544,30 +544,6 @@ Span<const PhotoTool::ParamInfo> Threshold::ParamInfos() const {
 
 struct PhotoToolWidget;
 
-// The shared develop/run button used by every leptonica object.
-struct RunButton : ui::Widget {
-  ui::Clickable clickable;
-  std::function<void()> on_run;
-  constexpr static float kGlassR = 4_mm;
-
-  RunButton(ui::Widget* parent, std::function<void()> on_run);
-
-  StrView Name() const override { return "RunButton"; }
-  bool CenteredAtZero() const override { return true; }
-  SkPath Shape() const override { return SkPath::Circle(0, 0, kGlassR); }
-  // Outset so the outline overshoot and the offset shadow aren't clipped.
-  Optional<Rect> TextureBounds() const override {
-    return Shape().getBounds().makeOutset(4.0_mm, 4.0_mm);
-  }
-  void PointerOver(ui::Pointer& p) override { clickable.PointerOver(p); }
-  void PointerLeave(ui::Pointer& p) override { clickable.PointerLeave(p); }
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger a) override {
-    return clickable.FindAction(p, a);
-  }
-  animation::Phase Tick(time::Timer& t) override { return clickable.Tick(t); }
-  void Draw(SkCanvas& canvas) const override;
-};
-
 // A knob bound to one continuous tool parameter, quantised into discrete steps.
 struct ParamKnob : ui::EnumKnobWidget {
   PhotoToolWidget& tool_widget;
@@ -606,7 +582,12 @@ struct PhotoToolWidget : ObjectToy {
   constexpr static float kRowH = 1.75_cm;
   constexpr static float kRailH = 1.8_cm;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
+  Vec2AndDir ArgStart(const Interface::Table& arg) override {
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
+  }
+
   Vec<std::unique_ptr<ParamKnob>> knobs;
   Vec<std::string> param_names;
   Vec<Vec2> knob_pos;
@@ -618,7 +599,7 @@ struct PhotoToolWidget : ObjectToy {
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   PhotoToolWidget(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto tool = LockObject<PhotoTool>()) tool->develop->ScheduleRun();
     });
 
@@ -640,15 +621,15 @@ struct PhotoToolWidget : ObjectToy {
       int chars_per_line = std::max(1, (int)((plate_w - 6_mm) / avg_glyph));
       expl_lines =
           std::clamp((int)((explanation.size() + chars_per_line - 1) / chars_per_line), 1, 8);
-      float explanation_h = expl_lines * 3.2_mm + 0.5_cm;
+      // The explanation column plus clearance for the run disc straddling the
+      // bottom border.
+      float explanation_h = expl_lines * 3.2_mm + 0.9_cm;
       float rail_h = kRailH + std::max(0, rows - 1) * kRowH;
       plate_h = 0.4_cm + preview_h + rail_h + explanation_h + 0.3_cm;
 
       Rect plate = Rect::MakeCenterZero(plate_w, plate_h);
       float preview_top = plate.top - 0.4_cm;
 
-      glass->local_to_parent =
-          SkM44::Translate(plate_w / 2 - 1.1_cm, preview_top - preview_h + 1.1_cm);
 
       preview_rect =
           Rect::MakeCenter({0, preview_top - preview_h / 2}, plate_w - 6_mm, preview_h - 6_mm);
@@ -874,7 +855,7 @@ struct PhotoToolWidget : ObjectToy {
     exp_paint.setAntiAlias(true);
     exp_paint.setColor("#bdae9b"_color);
     float max_w = plate_w - 6_mm;
-    float y = plate.bottom + 0.35_cm + (expl_lines - 1) * 3.2_mm;
+    float y = plate.bottom + 0.75_cm + (expl_lines - 1) * 3.2_mm;
 
     std::string line, word;
     auto flush_line = [&]() {
@@ -913,59 +894,7 @@ struct PhotoToolWidget : ObjectToy {
   }
 };
 
-RunButton::RunButton(ui::Widget* parent, std::function<void()> on_run)
-    : ui::Widget(parent), clickable(*this), on_run(std::move(on_run)) {
-  clickable.activate = [this](ui::Pointer&) {
-    if (this->on_run) this->on_run();
-  };
-}
 
-void RunButton::Draw(SkCanvas& canvas) const {
-  bool hover = clickable.pointers_over > 0;
-  bool pressed = clickable.pointers_pressing > 0;
-  float glow = std::clamp(clickable.highlight, 0.f, 1.f);  // smooth hover/press intensity
-
-  SlopHere g(canvas, {0, 0});
-  auto PX = [&](float m) { return m / kPxToMetric; };
-
-  constexpr uint32_t kSeed = 0x60D;
-  float r = PX(kGlassR);  // disc radius in slop pixels
-
-  SkColor green = pressed ? color::MixColors(SkColor4f::FromColor(slop::kGreen),
-                                             SkColor4f::FromColor(slop::kInk), 0.12f)
-                                .toSkColor()
-                          : slop::kGreen;
-  SkPath body = slop::WobbleEllipse({0, 0}, r, r * 0.97f, slop::kWonk, kSeed, 56);
-
-  float push = pressed ? PX(0.6_mm) : 0.f;
-  if (!pressed)
-    slop::HandShadow(canvas, body, {slop::kShadowDX, slop::kShadowDY}, slop::kShadow, kSeed);
-  canvas.save();
-  canvas.translate(push, -push);  // +Y is up here (flipped), so "down" on screen is -Y
-
-  slop::MisregFill(canvas, body, green, kSeed);
-  slop::SketchyStroke(canvas, body, slop::kInk, slop::kStroke, kSeed, 2);
-
-  if (hover && glow > 0.02f) {
-    SkPaint trace = slop::InkPaint(slop::kYellow, slop::kStroke);
-    trace.setAlphaf(glow);
-    canvas.drawPath(slop::WobblePath(body, slop::kWonk, slop::kSeg, slop::Hash2(kSeed, 0x21u)),
-                    trace);
-  }
-
-  float tw = r * 0.62f;  // triangle half-extent
-  SkPath tri = SkPathBuilder()
-                   .moveTo(-tw * 0.62f, -tw)
-                   .lineTo(tw, 0)
-                   .lineTo(-tw * 0.62f, tw)
-                   .close()
-                   .detach();
-  tri = slop::WobblePath(tri, slop::kWonk * 0.9f, slop::kSeg, slop::Hash2(kSeed, 0x37u));
-  slop::FillPath(canvas, tri, slop::kPaper);
-  slop::SketchyStroke(canvas, tri, slop::kInk, slop::kStroke, slop::Hash2(kSeed, 0x38u), 1);
-
-  canvas.restore();
-}
 
 ParamKnob::ParamKnob(ui::Widget* parent, PhotoToolWidget& tw, int index, PhotoTool::ParamInfo info)
     : ui::EnumKnobWidget(parent, StepsFor(info)),
@@ -1422,7 +1351,8 @@ struct ThresholdToy : ObjectToy {
   float level = 128.f;  // mirror of params[0]
   bool dragging = false;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string label, fn_credit;
 
   constexpr static float kHalfW = 2.9_cm;
@@ -1432,7 +1362,7 @@ struct ThresholdToy : ObjectToy {
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   ThresholdToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto tool = LockObject<PhotoTool>()) tool->develop->ScheduleRun();
     });
     if (auto tool = LockTool()) {
@@ -1441,7 +1371,6 @@ struct ThresholdToy : ObjectToy {
       auto lock = std::lock_guard(tool->mutex);
       level = tool->params[0];
     }
-    glass->local_to_parent = SkM44::Translate(kHalfW - RunButton::kGlassR - 0.35_cm, RunCenterY());
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -1462,8 +1391,8 @@ struct ThresholdToy : ObjectToy {
     float top = kBaseY - 1.25_cm;  // clearance for the ramp + value chip under the baseline
     return Rect(-kHalfW + 0.34_cm, top - 2.7_cm, kHalfW - 0.34_cm, top);
   }
-  float RunCenterY() const { return PreviewRectM().bottom - 0.2_cm - RunButton::kGlassR; }
-  float CardBottomM() const { return RunCenterY() - RunButton::kGlassR - 0.3_cm; }
+  float RunCenterY() const { return PreviewRectM().bottom - 0.2_cm - ui::slop::RunButton::kRadius; }
+  float CardBottomM() const { return RunCenterY() - ui::slop::RunButton::kRadius - 0.3_cm; }
 
   float MarkerXM() const {
     return HistXL() + std::clamp((level - 1.f) / 253.f, 0.f, 1.f) * (HistXR() - HistXL());
@@ -1507,7 +1436,7 @@ struct ThresholdToy : ObjectToy {
       Rect p = PreviewRectM();
       return {.pos = {-kHalfW, p.CenterY() - 1.1_cm}, .dir = 180_deg};
     }
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   Rect MethodCellM(int which) const {
@@ -2164,7 +2093,8 @@ struct MorphologyToy : ObjectToy {
   bool color = false;
   uint8_t cells[Morphology::kMaxN * Morphology::kMaxN] = {};
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.3_cm;
@@ -2175,7 +2105,7 @@ struct MorphologyToy : ObjectToy {
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   MorphologyToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto tool = LockObject<PhotoTool>()) tool->develop->ScheduleRun();
     });
     if (auto m = LockMorph()) {
@@ -2186,7 +2116,6 @@ struct MorphologyToy : ObjectToy {
       op_mode = m->op_mode;
       for (int i = 0; i < Morphology::kMaxN * Morphology::kMaxN; ++i) cells[i] = m->cells[i];
     }
-    glass->local_to_parent = SkM44::Translate(kHalfW - 1.3_cm, RunCenterY());
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -2205,7 +2134,7 @@ struct MorphologyToy : ObjectToy {
   bool SelApplies() const { return (op_mode <= 3 && !color) || op_mode == 6; }
   bool ColorApplies() const { return op_mode <= 3; }
   float TitleY() const { return -3.88_cm; }
-  float FaceBottom() const { return -4.6_cm; }
+  float FaceBottom() const { return -5.3_cm; }
   float HandleCY() const { return kFaceTop + 0.55_cm + kHandleR; }
 
   SkRect GridRectPx() const {
@@ -2244,7 +2173,7 @@ struct MorphologyToy : ObjectToy {
       Rect p = PreviewRectM();
       return {.pos = {p.left, p.CenterY()}, .dir = 180_deg};
     }
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t MorphHash() const {
@@ -2681,7 +2610,8 @@ struct ToneToy : ObjectToy {
   uint8_t lut[256] = {};
   int dragging = -1;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.7_cm;
@@ -2693,7 +2623,7 @@ struct ToneToy : ObjectToy {
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   ToneToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockTone()) {
@@ -2705,7 +2635,6 @@ struct ToneToy : ObjectToy {
       invert = t->invert;
     }
     RebuildLUT();
-    glass->local_to_parent = SkM44::Translate(kHalfW - 1.2_cm, RunCenterY());
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -2773,7 +2702,7 @@ struct ToneToy : ObjectToy {
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&PhotoTool::image_tbl))
       return {.pos = {-kHalfW, 1.0_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t ToneHash() const {
@@ -3198,12 +3127,13 @@ struct GeometryToy : ObjectToy {
   bool flip = false;
   int dragging = 0;  // 0 none, 1 dial, 2 scale slider, 3 on-image ring, 4 corner grip
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.6_cm;
   constexpr static float kFaceTop = 2.85_cm;
-  constexpr static float kFaceBottom = -2.5_cm;
+  constexpr static float kFaceBottom = -3.2_cm;
   constexpr static float kDialCX = -2.0_cm;
   constexpr static float kDialCY = 1.3_cm;
   constexpr static float kDialR = 1.35_cm;
@@ -3212,7 +3142,7 @@ struct GeometryToy : ObjectToy {
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   GeometryToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockGeo()) {
@@ -3221,7 +3151,6 @@ struct GeometryToy : ObjectToy {
       angle_deg = t->angle_deg;
       scale = t->scale;
     }
-    glass->local_to_parent = SkM44::Translate(kHalfW - 1.1_cm, -1.3_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -3277,7 +3206,7 @@ struct GeometryToy : ObjectToy {
       return {.pos = {kHalfW, 1.0_cm}, .dir = 0_deg};
     if (&arg == static_cast<const Interface::Table*>(&Geometry::angle_src_tbl))
       return {.pos = {kDialCX - 1.55_cm, kDialCY}, .dir = 180_deg};  // into the dial's left edge
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   // scale <-> slider t (log: t=0.5 -> 1.0x, range 0.25..4)
@@ -3829,7 +3758,8 @@ struct ChannelToy : ObjectToy {
 
   int channel = 0;
   float wr = 0.30f, wg = 0.59f, wb = 0.11f;
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.0_cm;
@@ -3842,7 +3772,7 @@ struct ChannelToy : ObjectToy {
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   ChannelToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockChannel()) {
@@ -3850,7 +3780,6 @@ struct ChannelToy : ObjectToy {
       auto lock = std::lock_guard(t->mutex);
       channel = t->channel;
     }
-    glass->local_to_parent = SkM44::Translate(kHalfW - 1.0_cm, -1.55_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -3890,7 +3819,7 @@ struct ChannelToy : ObjectToy {
       Rect p = PreviewRectM();
       return {.pos = {-kHalfW, p.CenterY()}, .dir = 180_deg};
     }
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t ChanHash() const {
@@ -4254,12 +4183,13 @@ struct ConvolveToy : ObjectToy {
   float rank = 0.5f;
   bool dragging = false;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kFaceTop = 1.3_cm;
-  constexpr static float kFaceBottom = -3.0_cm;
+  constexpr static float kFaceBottom = -3.7_cm;
   constexpr static float kLensCY = 1.55_cm;
   constexpr static float kLensR = 1.5_cm;
   constexpr static int kMaxR = 15;
@@ -4268,7 +4198,7 @@ struct ConvolveToy : ObjectToy {
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   ConvolveToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockConv()) {
@@ -4277,7 +4207,6 @@ struct ConvolveToy : ObjectToy {
       mode = t->mode;
       radius = t->radius;
     }
-    glass->local_to_parent = SkM44::Translate(kHalfW - 0.55_cm, -2.85_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -4306,7 +4235,7 @@ struct ConvolveToy : ObjectToy {
       return {.pos = {-kHalfW, kLensCY}, .dir = 180_deg};
     if (&arg == static_cast<const Interface::Table*>(&Convolve::radius_src_tbl))
       return {.pos = {-kHalfW, kLensCY - 1.0_cm}, .dir = 180_deg};  // input, below Paper
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t ConvHash() const {
@@ -4787,18 +4716,19 @@ struct BlendToy : ObjectToy {
   float amount = 0.5f;
   bool dragging = false;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.3_cm;
   constexpr static float kFaceTop = 2.0_cm;
-  constexpr static float kFaceBottom = -1.9_cm;
+  constexpr static float kFaceBottom = -2.6_cm;
 
   Ptr<Blend> LockBlend() const { return LockObject<Blend>(); }
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   BlendToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockBlend()) {
@@ -4807,7 +4737,6 @@ struct BlendToy : ObjectToy {
       mode = t->mode;
       amount = t->amount;
     }
-    glass->local_to_parent = SkM44::Translate(kHalfW - 1.0_cm, -1.3_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -4838,7 +4767,7 @@ struct BlendToy : ObjectToy {
       return {.pos = {-kHalfW, 1.0_cm}, .dir = 180_deg};
     if (&arg == static_cast<const Interface::Table*>(&Blend::paperB_tbl))
       return {.pos = {-kHalfW, -0.2_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t BId() const {
@@ -5246,13 +5175,14 @@ struct QuantizeToy : ObjectToy {
   int tab_count = 8;  // chips drawn across the top; tracks ncolors (capped)
   bool dragging = false;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kTabTop = 2.2_cm;    // silhouette top edge (chip tips)
   constexpr static float kBodyTop = 1.45_cm;  // where the chips meet the card body
-  constexpr static float kBottom = -3.2_cm;
+  constexpr static float kBottom = -3.90_cm;
   constexpr static float kTabInset = 0.18_cm;
   constexpr static float kTabGap = 0.06_cm;
   constexpr static int kMaxTabs = 12;
@@ -5261,7 +5191,7 @@ struct QuantizeToy : ObjectToy {
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   QuantizeToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockQuant()) {
@@ -5271,7 +5201,6 @@ struct QuantizeToy : ObjectToy {
       dither = t->dither;
     }
     tab_count = std::clamp(ncolors, 2, kMaxTabs);
-    glass->local_to_parent = SkM44::Translate(2.55_cm, -3.0_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -5311,7 +5240,7 @@ struct QuantizeToy : ObjectToy {
       return {.pos = {-kHalfW, -0.3_cm}, .dir = 180_deg};
     if (&arg == static_cast<const Interface::Table*>(&Quantize::ncolors_src_tbl))
       return {.pos = {-kHalfW, -0.9_cm}, .dir = 180_deg};  // input, below Palette
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t QuantHash() const {
@@ -5776,12 +5705,13 @@ struct FlattenToy : ObjectToy {
   bool show_map = false;
   bool dragging = false;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kBodyTop = 1.0_cm;
-  constexpr static float kBottom = -4.6_cm;
+  constexpr static float kBottom = -5.30_cm;
   constexpr static float kShadeTop = 2.45_cm;
   constexpr static float kShadeBottom = 1.75_cm;
   constexpr static float kShadeTopHalf = 0.5_cm;
@@ -5793,7 +5723,7 @@ struct FlattenToy : ObjectToy {
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   FlattenToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockFlat()) {
@@ -5802,7 +5732,6 @@ struct FlattenToy : ObjectToy {
       bgval = t->bgval;
       tilesize = t->tilesize;
     }
-    glass->local_to_parent = SkM44::Translate(2.2_cm, -1.32_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -5851,7 +5780,7 @@ struct FlattenToy : ObjectToy {
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&PhotoTool::image_tbl))
       return {.pos = {-kHalfW, -0.1_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t FlattenHash() const {
@@ -6182,12 +6111,13 @@ struct PosterizeToy : ObjectToy {
 
   int levels = 4;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kBodyTop = 0.95_cm;  // where the treads stand on the body
-  constexpr static float kBottom = -3.3_cm;
+  constexpr static float kBottom = -4.00_cm;
   constexpr static float kStairLow = 1.45_cm;  // top of the first (black) tread
   constexpr static float kStairHigh = 2.5_cm;  // top of the last (white) tread
 
@@ -6195,7 +6125,7 @@ struct PosterizeToy : ObjectToy {
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   PosterizeToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockPoster()) {
@@ -6203,7 +6133,6 @@ struct PosterizeToy : ObjectToy {
       auto lock = std::lock_guard(t->mutex);
       levels = t->levels;
     }
-    glass->local_to_parent = SkM44::Translate(2.1_cm, -1.95_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -6234,7 +6163,7 @@ struct PosterizeToy : ObjectToy {
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&PhotoTool::image_tbl))
       return {.pos = {-kHalfW, 0.0_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t PosterHash() const {
@@ -6470,19 +6399,20 @@ struct DitherToy : ObjectToy {
   int clip_white = 10;
   int dragging_marker = -1;  // 0/1 while a DitherClipDrag is live
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kBodyTop = 1.0_cm;
-  constexpr static float kBottom = -3.3_cm;
+  constexpr static float kBottom = -4.00_cm;
   constexpr static int kBumps = 7;
 
   Ptr<Dither> LockDither() const { return LockObject<Dither>(); }
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   DitherToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockDither()) {
@@ -6491,7 +6421,6 @@ struct DitherToy : ObjectToy {
       clip_black = t->clip_black;
       clip_white = t->clip_white;
     }
-    glass->local_to_parent = SkM44::Translate(2.3_cm, -1.85_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -6525,7 +6454,7 @@ struct DitherToy : ObjectToy {
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&PhotoTool::image_tbl))
       return {.pos = {-kHalfW, 0.0_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t DitherHash() const {
@@ -6819,12 +6748,13 @@ struct DeskewToy : ObjectToy {
   uintptr_t last_push_target = 0;
   int last_pushed_centi = INT_MIN;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kBodyTop = 0.95_cm;
-  constexpr static float kBottom = -3.45_cm;
+  constexpr static float kBottom = -4.15_cm;
   constexpr static float kTabL = -0.6_cm, kTabR = 1.1_cm;
   constexpr static float kTabB = 0.93_cm, kTabT = 2.05_cm;
   constexpr static float kGhostDeg = 18.f;
@@ -6833,7 +6763,7 @@ struct DeskewToy : ObjectToy {
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   DeskewToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockObject<Deskew>()) {
@@ -6841,7 +6771,6 @@ struct DeskewToy : ObjectToy {
       auto lock = std::lock_guard(t->mutex);
       mode = t->mode;
     }
-    glass->local_to_parent = SkM44::Translate(2.3_cm, -1.95_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -6875,7 +6804,7 @@ struct DeskewToy : ObjectToy {
     // stack it on the Next nub).
     if (&arg == static_cast<const Interface::Table*>(&Deskew::fix_out_tbl))
       return {.pos = {-kHalfW, GaugeM().CenterY()}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   void RecomputePreview() {
@@ -7269,23 +7198,23 @@ struct FindLevelToy : ObjectToy {
   uintptr_t last_push_target = 0;
   int last_pushed = -1;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kBodyTop = 0.95_cm;
-  constexpr static float kBottom = -3.3_cm;
+  constexpr static float kBottom = -4.00_cm;
 
   Ptr<FindLevel> LockFind() const { return LockObject<FindLevel>(); }
 
   FindLevelToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockFind()) t->measure->ScheduleRun();
     });
     if (auto t = LockFind()) {
       auto lock = std::lock_guard(t->mutex);
       scorefract = t->scorefract;
     }
-    glass->local_to_parent = SkM44::Translate(2.3_cm, -1.95_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -7322,7 +7251,7 @@ struct FindLevelToy : ObjectToy {
       return {.pos = {-kHalfW, 0.5_cm}, .dir = 180_deg};
     if (&arg == static_cast<const Interface::Table*>(&FindLevel::level_tbl))
       return {.pos = {-kHalfW, -0.5_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   void RecomputeMeasure() {
@@ -7645,23 +7574,23 @@ struct CountToy : ObjectToy {
   uintptr_t last_push_target = 0;
   int last_pushed = -1;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kBodyTop = 0.95_cm;
-  constexpr static float kBottom = -3.3_cm;
+  constexpr static float kBottom = -4.00_cm;
 
   Ptr<Count> LockCount() const { return LockObject<Count>(); }
 
   CountToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockCount()) t->measure->ScheduleRun();
     });
     if (auto t = LockCount()) {
       auto lock = std::lock_guard(t->mutex);
       eight = t->eight;
     }
-    glass->local_to_parent = SkM44::Translate(2.3_cm, -1.95_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -7694,7 +7623,7 @@ struct CountToy : ObjectToy {
       return {.pos = {-kHalfW, 0.5_cm}, .dir = 180_deg};
     if (&arg == static_cast<const Interface::Table*>(&Count::count_tbl))
       return {.pos = {-kHalfW, -0.5_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   void RecomputeMeasure() {
@@ -8003,12 +7932,13 @@ struct SelectToy : ObjectToy {
   bool inside = true;
   int dragging_marker = -1;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kBodyTop = 0.95_cm;
-  constexpr static float kBottom = -4.1_cm;
+  constexpr static float kBottom = -4.80_cm;
   constexpr static float kPlateauTop = 1.9_cm;
 
   int AxisAMax() const { return (axes == 1 || axes == 2) ? 239 : 255; }
@@ -8019,7 +7949,7 @@ struct SelectToy : ObjectToy {
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   SelectToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockSel()) {
@@ -8032,7 +7962,6 @@ struct SelectToy : ObjectToy {
       hi2 = t->hi2;
       inside = t->inside;
     }
-    glass->local_to_parent = SkM44::Translate(2.45_cm, -3.95_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -8066,7 +7995,7 @@ struct SelectToy : ObjectToy {
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&PhotoTool::image_tbl))
       return {.pos = {-kHalfW, 0.0_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t SelHash() const {
@@ -8498,18 +8427,19 @@ struct FadeToy : ObjectToy {
   float reach = 0.4f;
   float strength = 0.9f;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kTop = 1.1_cm;
-  constexpr static float kBottom = -4.3_cm;
+  constexpr static float kBottom = -5.00_cm;
 
   Ptr<Fade> LockFade() const { return LockObject<Fade>(); }
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   FadeToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockFade()) {
@@ -8518,7 +8448,6 @@ struct FadeToy : ObjectToy {
       dir = t->dir;
       to_black = t->to_black;
     }
-    glass->local_to_parent = SkM44::Translate(2.3_cm, -3.55_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -8567,7 +8496,7 @@ struct FadeToy : ObjectToy {
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&PhotoTool::image_tbl))
       return {.pos = {-kHalfW, 0.2_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t FadeHash() const {
@@ -8896,19 +8825,20 @@ struct ReduceToy : ObjectToy {
   int rule = 0;
   int rank = 2;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kShelf = 0.95_cm;  // body top; the steps rise from here
   constexpr static float kTop = 1.95_cm;    // tallest step
-  constexpr static float kBottom = -3.65_cm;
+  constexpr static float kBottom = -4.35_cm;
 
   Ptr<Reduce> LockRed() const { return LockObject<Reduce>(); }
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   ReduceToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockRed()) {
@@ -8917,7 +8847,6 @@ struct ReduceToy : ObjectToy {
       factor_idx = t->factor_idx;
       rule = t->rule;
     }
-    glass->local_to_parent = SkM44::Translate(2.55_cm, -3.1_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -8948,7 +8877,7 @@ struct ReduceToy : ObjectToy {
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&PhotoTool::image_tbl))
       return {.pos = {-kHalfW, 0.2_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t RedHash() const {
@@ -9331,16 +9260,17 @@ struct MeasureToy : ObjectToy {
   uintptr_t last_push_target = 0;
   int last_pushed = -1;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kBodyTop = 0.95_cm;
-  constexpr static float kBottom = -3.3_cm;
+  constexpr static float kBottom = -4.00_cm;
 
   Ptr<Measure> LockMeasure() const { return LockObject<Measure>(); }
 
   MeasureToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockMeasure()) t->measure->ScheduleRun();
     });
     if (auto t = LockMeasure()) {
@@ -9351,7 +9281,6 @@ struct MeasureToy : ObjectToy {
       v1 = t->v1;
       stat = t->stat;
     }
-    glass->local_to_parent = SkM44::Translate(2.3_cm, -1.95_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -9398,7 +9327,7 @@ struct MeasureToy : ObjectToy {
       return {.pos = {-kHalfW, 0.5_cm}, .dir = 180_deg};
     if (&arg == static_cast<const Interface::Table*>(&Measure::value_tbl))
       return {.pos = {-kHalfW, -0.5_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t MeasureHash() const {
@@ -9774,18 +9703,19 @@ struct WarpToy : ObjectToy {
   float amount = 0.5f;
   bool dragging = false;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kBodyTop = 0.95_cm;
-  constexpr static float kBottom = -3.3_cm;
+  constexpr static float kBottom = -4.00_cm;
 
   Ptr<Warp> LockWarp() const { return LockObject<Warp>(); }
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   WarpToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockWarp()) {
@@ -9794,7 +9724,6 @@ struct WarpToy : ObjectToy {
       mode = t->mode;
       amount = t->amount;
     }
-    glass->local_to_parent = SkM44::Translate(2.55_cm, -2.75_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -9829,7 +9758,7 @@ struct WarpToy : ObjectToy {
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&PhotoTool::image_tbl))
       return {.pos = {-kHalfW, 0.0_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t WarpHash() const {
@@ -10119,19 +10048,20 @@ struct ColorToy : ObjectToy {
   float hue = 0.f, sat = 0.f, r_shift = 0.f, g_shift = 0.f, b_shift = 0.f;
   int dragging = -1;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kBodyTop = 0.95_cm;
-  constexpr static float kBottom = -3.45_cm;
+  constexpr static float kBottom = -4.15_cm;
   constexpr static float kWheelR = 1.5_cm;  // the hue half-disc on the top edge
 
   Ptr<Color> LockColor() const { return LockObject<Color>(); }
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   ColorToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockColor()) {
@@ -10143,7 +10073,6 @@ struct ColorToy : ObjectToy {
       g_shift = t->g_shift;
       b_shift = t->b_shift;
     }
-    glass->local_to_parent = SkM44::Translate(2.3_cm, -2.2_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -10176,7 +10105,7 @@ struct ColorToy : ObjectToy {
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&PhotoTool::image_tbl))
       return {.pos = {-kHalfW, 0.0_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t ColorHash() const {
@@ -10561,18 +10490,19 @@ struct SeedfillToy : ObjectToy {
   bool emit_mask = false;
   bool dragging = false;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kBodyTop = 0.95_cm;
-  constexpr static float kBottom = -3.45_cm;
+  constexpr static float kBottom = -4.15_cm;
 
   Ptr<Seedfill> LockSeed() const { return LockObject<Seedfill>(); }
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   SeedfillToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockSeed()) {
@@ -10582,7 +10512,6 @@ struct SeedfillToy : ObjectToy {
       seed_v = t->seed_v;
       eight = t->eight;
     }
-    glass->local_to_parent = SkM44::Translate(2.38_cm, -2.05_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -10634,7 +10563,7 @@ struct SeedfillToy : ObjectToy {
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&PhotoTool::image_tbl))
       return {.pos = {-kHalfW, 0.0_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t SeedHash() const {
@@ -11063,18 +10992,19 @@ struct GenerateToy : ObjectToy {
 
   int mode = 0, scale = 2, stdev = 20;
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kBodyTop = 0.95_cm;
-  constexpr static float kBottom = -3.45_cm;
+  constexpr static float kBottom = -4.15_cm;
 
   Ptr<Generate> LockGen() const { return LockObject<Generate>(); }
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   GenerateToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockGen()) {
@@ -11083,7 +11013,6 @@ struct GenerateToy : ObjectToy {
       scale = t->scale;
       stdev = t->stdev;
     }
-    glass->local_to_parent = SkM44::Translate(2.55_cm, -2.75_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -11113,7 +11042,7 @@ struct GenerateToy : ObjectToy {
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&PhotoTool::image_tbl))
       return {.pos = {-kHalfW, 0.3_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t GenHash() const {
@@ -11428,18 +11357,19 @@ struct CropToy : ObjectToy {
   float u0 = 0.15f, v0 = 0.15f, u1 = 0.85f, v1 = 0.85f;
   int dragging = 0;  // CropDrag's `which` while live
 
-  std::unique_ptr<RunButton> glass;
+  std::unique_ptr<ui::slop::RunButton> glass;
+
   std::string fn_credit;
 
   constexpr static float kHalfW = 3.1_cm;
   constexpr static float kBodyTop = 0.95_cm;
-  constexpr static float kBottom = -3.45_cm;
+  constexpr static float kBottom = -4.15_cm;
 
   Ptr<CropRegion> LockCrop() const { return LockObject<CropRegion>(); }
   Ptr<PhotoTool> LockTool() const { return LockObject<PhotoTool>(); }
 
   CropToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
-    glass = std::make_unique<RunButton>(this, [this] {
+    glass = std::make_unique<ui::slop::RunButton>(this, [this] {
       if (auto t = LockObject<PhotoTool>()) t->develop->ScheduleRun();
     });
     if (auto t = LockCrop()) {
@@ -11450,7 +11380,6 @@ struct CropToy : ObjectToy {
       u1 = t->u1;
       v1 = t->v1;
     }
-    glass->local_to_parent = SkM44::Translate(2.3_cm, -2.0_cm);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -11484,7 +11413,7 @@ struct CropToy : ObjectToy {
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&PhotoTool::image_tbl))
       return {.pos = {-kHalfW, 0.0_cm}, .dir = 180_deg};
-    return ObjectToy::ArgStart(arg);
+    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   uint32_t CropHash() const {

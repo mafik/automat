@@ -1060,4 +1060,84 @@ void Highlight(SkCanvas& canvas, const SkRect& r, SkColor color, uint32_t seed) 
   }
 }
 
+// ----------------------------------------------------------------- widgets ---
+
+RunButton::RunButton(Widget* parent, std::function<void()> on_click)
+    : Widget(parent), clickable(*this), on_click(std::move(on_click)) {
+  clickable.activate = [this](Pointer&) {
+    if (enabled && this->on_click) this->on_click();
+  };
+}
+
+animation::Phase RunButton::Tick(time::Timer& t) {
+  if (parent) {
+    // Lower center, dipping slightly past the border - aligned with where the
+    // "next" connector leaves the object.
+    SkRect bounds = parent->Shape().getBounds();
+    local_to_parent = SkM44::Translate(bounds.centerX(), bounds.fTop + kRadius - kOverhang);
+  }
+  return clickable.Tick(t);
+}
+
+void RunButton::Draw(SkCanvas& canvas) const {
+  bool hover = clickable.pointers_over > 0;
+  bool pressed = clickable.pointers_pressing > 0;
+  float glow = std::clamp(clickable.highlight, 0.f, 1.f);
+
+  // The kit draws in pixels with +Y down; bridge from the metric canvas.
+  constexpr float kPxToMetric = 7_cm / 480.f;
+  canvas.save();
+  canvas.scale(kPxToMetric, -kPxToMetric);
+  auto PX = [&](float m) { return m / kPxToMetric; };
+
+  constexpr uint32_t kSeed = 0x60D;
+  float r = PX(kRadius);
+
+  SkColor base = !enabled ? kGray : running ? kRed : kGreen;
+  SkColor fill = pressed && enabled ? MixColor(base, kInk, 0.12f) : base;
+  SkPath body = WobbleEllipse({0, 0}, r, r * 0.97f, kWonk, kSeed, 56);
+
+  float push = pressed ? PX(0.6_mm) : 0.f;
+  if (!pressed && enabled) {
+    HandShadow(canvas, body, {kShadowDX, kShadowDY}, kShadow, kSeed);
+  }
+  canvas.save();
+  canvas.translate(push, push);
+
+  MisregFill(canvas, body, fill, kSeed);
+  SketchyStroke(canvas, body, !enabled ? kInkSoft : kInk, kStroke, kSeed, 2);
+  if (!enabled) {
+    canvas.save();
+    canvas.clipPath(body, true);
+    HatchRect(canvas, body.getBounds(), kInkSoft, 8.f, Hash2(kSeed, 0x44));
+    canvas.restore();
+  }
+
+  if (hover && glow > 0.02f && enabled) {
+    SkPaint trace = InkPaint(kYellow, kStroke);
+    trace.setAlphaf(glow);
+    canvas.drawPath(WobblePath(body, kWonk, kSeg, Hash2(kSeed, 0x21u)), trace);
+  }
+
+  SkPath symbol;
+  if (running) {  // stop square
+    float s = r * 0.52f;
+    symbol = SkPath::Rect(SkRect::MakeLTRB(-s, -s, s, s));
+  } else {  // play triangle
+    float tw = r * 0.62f;
+    symbol = SkPathBuilder()
+                 .moveTo(-tw * 0.62f, -tw)
+                 .lineTo(tw, 0)
+                 .lineTo(-tw * 0.62f, tw)
+                 .close()
+                 .detach();
+  }
+  symbol = WobblePath(symbol, kWonk * 0.9f, kSeg, Hash2(kSeed, 0x37u));
+  FillPath(canvas, symbol, !enabled ? kGray : kPaper);
+  SketchyStroke(canvas, symbol, !enabled ? kInkSoft : kInk, kStroke, Hash2(kSeed, 0x38u), 1);
+
+  canvas.restore();
+  canvas.restore();
+}
+
 }  // namespace automat::ui::slop

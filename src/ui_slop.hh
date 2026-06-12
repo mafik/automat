@@ -21,7 +21,12 @@
 
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <string_view>
+
+#include "ui_button.hh"
+#include "units.hh"
+#include "widget.hh"
 
 namespace automat::ui::slop {
 
@@ -227,5 +232,47 @@ void Spinner(SkCanvas& canvas, SkPoint c, float r, float phase,
 void Grip(SkCanvas& canvas, const SkRect& r, bool resize, uint32_t seed = 0);
 
 void Highlight(SkCanvas& canvas, const SkRect& r, SkColor color = kBlue, uint32_t seed = 0);
+
+// -------------------------------------------------------------------- widgets --
+
+// The run button of slop-styled objects: a hand-drawn disc with a play
+// triangle. It seats ITSELF at its parent's lower center with a slight
+// overhang past the border - the spot that matches the "next" connector -
+// so objects never position it manually. While `running` it shows a stop
+// square on red; while not `enabled` it grays out and ignores clicks.
+struct RunButton : Widget {
+  Clickable clickable;
+  std::function<void()> on_click;
+  bool running = false;
+  bool enabled = true;
+
+  constexpr static float kRadius = 4_mm;
+  constexpr static float kOverhang = 2_mm;  // how far the disc dips below the border
+
+  // For the owning toy's ArgStart override: a connector that would start at
+  // the bottom center must begin at the disc's bottom edge, not under it.
+  static Vec2AndDir AdjustArgStart(Vec2AndDir start) {
+    start.pos.y -= kOverhang;
+    return start;
+  }
+
+  RunButton(Widget* parent, std::function<void()> on_click);
+
+  StrView Name() const override { return "RunButton"; }
+  bool CenteredAtZero() const override { return true; }
+  SkPath Shape() const override { return SkPath::Circle(0, 0, kRadius); }
+  // Outset so the outline overshoot and the offset shadow aren't clipped.
+  Optional<Rect> TextureBounds() const override {
+    return Shape().getBounds().makeOutset(4_mm, 4_mm);
+  }
+  void PointerOver(Pointer& p) override { clickable.PointerOver(p); }
+  void PointerLeave(Pointer& p) override { clickable.PointerLeave(p); }
+  std::unique_ptr<Action> FindAction(Pointer& p, ActionTrigger a) override {
+    if (!enabled) return nullptr;
+    return clickable.FindAction(p, a);
+  }
+  animation::Phase Tick(time::Timer& t) override;
+  void Draw(SkCanvas& canvas) const override;
+};
 
 }  // namespace automat::ui::slop

@@ -268,10 +268,10 @@ void FillPath(SkCanvas& canvas, const SkPath& path, SkColor color) {
 void MisregFill(SkCanvas& canvas, const SkPath& outline, SkColor fill, uint32_t seed) {
   SkRect b = outline.getBounds();
   SkPoint cen{b.centerX(), b.centerY()};
-  float ox = U11(Hash2(seed, 11u)) * (kStroke * 1.9f);
-  float oy = (0.4f + 0.6f * U01(Hash2(seed, 15u))) * (kStroke * 1.9f);
-  float sx = 1.0f + U11(Hash2(seed, 13u)) * 0.035f;
-  float sy = 1.0f + U11(Hash2(seed, 14u)) * 0.035f;
+  float ox = U11(Hash2(seed, 11u)) * (kStroke * 0.95f);
+  float oy = (0.4f + 0.6f * U01(Hash2(seed, 15u))) * (kStroke * 0.95f);
+  float sx = 1.0f + U11(Hash2(seed, 13u)) * 0.018f;
+  float sy = 1.0f + U11(Hash2(seed, 14u)) * 0.018f;
   SkMatrix m = SkMatrix::Translate(ox, oy);
   m.preTranslate(cen.fX, cen.fY);
   m.preScale(sx, sy);
@@ -651,23 +651,28 @@ void Button(SkCanvas& canvas, const SkRect& r, std::string_view label, SkColor c
   bool hover = state == State::Hover;
   SkColor fill = disabled ? kGray
                           : (pressed ? MixColor(color, kInk, 0.12f)
-                                     : (hover ? MixColor(color, kPaper, 0.10f) : color));
+                                     : (hover ? MixColor(color, kPaper, 0.25f) : color));
   SkColor ink = disabled ? kInkSoft : kInk;
-  float push = pressed ? 4.f : 0.f;
   SkPath key = WonkyRoundRect(r, kCornerR, kWonk, seed);
-  if (!disabled && !pressed) HandShadow(canvas, key, {kShadowDX, kShadowDY}, kShadow, seed);
-  canvas.save();
-  canvas.translate(push, push);
   MisregFill(canvas, key, fill, seed);
   SketchyStroke(canvas, key, ink, kStrokeBold, seed, 2);
   if (disabled) HatchRect(canvas, r, kInkSoft, 8.f, Hash2(seed, 23u));
-  if (hover && !disabled) {
-    canvas.drawPath(WobblePath(key, kWonk, kSeg, Hash2(seed, 21u)), InkPaint(kYellow, kStrokeHair));
-  }
   SkRect lbl = r.makeInset(kPadM, kPadS);
   DrawTextIn(canvas, label, lbl, kBodySize + 1, disabled ? kInkSoft : TextOn(fill),
              TextAlign::Center, true, Hash2(seed, 22u));
-  canvas.restore();
+  if (!disabled && !pressed) {
+    float x0 = r.fLeft + r.width() * 0.16f, x1 = r.fRight - r.width() * 0.16f;
+    float yb = r.fTop + r.height() * 0.34f, ya = r.fTop + r.height() * 0.10f;
+    SkPath shine = SkPathBuilder()
+                       .moveTo(x0, yb)
+                       .quadTo({(x0 + x1) * 0.5f, ya}, {x1, yb})
+                       .quadTo({(x0 + x1) * 0.5f, yb + r.height() * 0.05f}, {x0, yb})
+                       .close()
+                       .detach();
+    SkPaint gloss = Filler(kPaper);
+    gloss.setAlphaf(0.6f);
+    canvas.drawPath(WobblePath(shine, kWonk * 0.5f, kSeg, Hash2(seed, 25u)), gloss);
+  }
 }
 
 void Toggle(SkCanvas& canvas, const SkRect& r, bool on, State state, uint32_t seed) {
@@ -691,6 +696,7 @@ void Toggle(SkCanvas& canvas, const SkRect& r, bool on, State state, uint32_t se
                   : SkRect::MakeLTRB(kx + kr, r.fTop, r.fRight, r.fBottom);
   DrawTextIn(canvas, on ? "ON" : "OFF", lbl, kMicroSize, (on && !disabled) ? kPaper : ink,
              TextAlign::Center, false, Hash2(seed, 32u));
+  if (state == State::Hover && !disabled) Highlight(canvas, r, kBlue, Hash2(seed, 35u));
 }
 
 void Checkbox(SkCanvas& canvas, const SkRect& r, bool checked, State state, uint32_t seed) {
@@ -713,6 +719,7 @@ void Checkbox(SkCanvas& canvas, const SkRect& r, bool checked, State state, uint
     canvas.drawPath(b, p);
   }
   if (disabled) HatchRect(canvas, r, kInkSoft, 6.f, Hash2(seed, 43u));
+  if (state == State::Hover && !disabled) Highlight(canvas, r, kBlue, Hash2(seed, 45u));
 }
 
 void Radio(SkCanvas& canvas, SkPoint c, float r, bool selected, State state, uint32_t seed) {
@@ -725,6 +732,9 @@ void Radio(SkCanvas& canvas, SkPoint c, float r, bool selected, State state, uin
     SkPoint off{c.fX + U11(Hash2(seed, 52u)) * r * 0.12f, c.fY + U11(Hash2(seed, 53u)) * r * 0.12f};
     FillAndInk(canvas, WobbleEllipse(off, r * 0.45f, r * 0.45f, 0.8f, Hash2(seed, 54u)),
                disabled ? kInkSoft : kBlue, kStrokeHair);
+  }
+  if (state == State::Hover && !disabled) {
+    Highlight(canvas, SkRect::MakeXYWH(c.fX - r, c.fY - r, 2 * r, 2 * r), kBlue, Hash2(seed, 55u));
   }
 }
 
@@ -779,7 +789,8 @@ void Knob(SkCanvas& canvas, SkPoint c, float radius, float t, State state, uint3
   }
   SkPoint tip{c.fX + std::cos(ang) * radius * 0.82f, c.fY + std::sin(ang) * radius * 0.82f};
   canvas.drawPath(WobbleLine(c, tip, 1.0f, 10.f, Hash2(seed, 72u)), InkPaint(ink, kStrokeBold));
-  canvas.drawCircle(tip.fX, tip.fY, kStroke, Filler(ink));
+  canvas.drawCircle(tip.fX, tip.fY, kStroke + 1.5f, Filler(disabled ? kGray : kYellow));
+  canvas.drawCircle(tip.fX, tip.fY, kStroke + 1.5f, InkPaint(ink, kStrokeHair));
   canvas.drawCircle(c.fX, c.fY, kStrokeHair, Filler(ink));
 }
 
@@ -1076,13 +1087,15 @@ animation::Phase RunButton::Tick(time::Timer& t) {
     SkRect bounds = parent->Shape().getBounds();
     local_to_parent = SkM44::Translate(bounds.centerX(), bounds.fTop + kRadius - kOverhang);
   }
+  if (enabled && clickable.pointers_over > 0 && clickable.pointers_pressing == 0) {
+    wiggle = static_cast<uint32_t>(t.NowSeconds() * 5.0);
+  }
   return clickable.Tick(t);
 }
 
 void RunButton::Draw(SkCanvas& canvas) const {
-  bool hover = clickable.pointers_over > 0;
   bool pressed = clickable.pointers_pressing > 0;
-  float glow = std::clamp(clickable.highlight, 0.f, 1.f);
+  bool hover = clickable.pointers_over > 0;
 
   // The kit draws in pixels with +Y down; bridge from the metric canvas.
   constexpr float kPxToMetric = 7_cm / 480.f;
@@ -1090,19 +1103,19 @@ void RunButton::Draw(SkCanvas& canvas) const {
   canvas.scale(kPxToMetric, -kPxToMetric);
   auto PX = [&](float m) { return m / kPxToMetric; };
 
-  const uint32_t kSeed = Hash2(0x60D, seed);
+  bool shimmer = enabled && hover && !pressed;
+  // The shimmer runs on scheduled wakes, not continuous animation: each
+  // drawn step requests the next one.
+  if (shimmer) WakeAnimationAt(time::SteadyFromSeconds((wiggle + 1) / 5.0));
+  const uint32_t kSeed = shimmer ? Hash3(0x60D, seed, wiggle) : Hash2(0x60D, seed);
   float r = PX(kRadius);
 
   SkColor base = !enabled ? kGray : running ? kRed : kGreen;
-  SkColor fill = pressed && enabled ? MixColor(base, kInk, 0.12f) : base;
+  SkColor fill = !enabled  ? base
+                 : pressed ? MixColor(base, kInk, 0.12f)
+                 : hover   ? MixColor(base, kPaper, 0.25f)
+                           : base;
   SkPath body = WobbleEllipse({0, 0}, r, r * 0.97f, kWonk, kSeed, 56);
-
-  float push = pressed ? PX(0.6_mm) : 0.f;
-  if (!pressed && enabled) {
-    HandShadow(canvas, body, {kShadowDX, kShadowDY}, kShadow, kSeed);
-  }
-  canvas.save();
-  canvas.translate(push, push);
 
   MisregFill(canvas, body, fill, kSeed);
   SketchyStroke(canvas, body, !enabled ? kInkSoft : kInk, kStroke, kSeed, 2);
@@ -1113,18 +1126,12 @@ void RunButton::Draw(SkCanvas& canvas) const {
     canvas.restore();
   }
 
-  if (hover && glow > 0.02f && enabled) {
-    SkPaint trace = InkPaint(kYellow, kStroke);
-    trace.setAlphaf(glow);
-    canvas.drawPath(WobblePath(body, kWonk, kSeg, Hash2(kSeed, 0x21u)), trace);
-  }
-
   SkPath symbol;
   if (running) {  // stop square
-    float s = r * 0.52f;
+    float s = r * 0.46f;
     symbol = SkPath::Rect(SkRect::MakeLTRB(-s, -s, s, s));
   } else {  // play triangle
-    float tw = r * 0.62f;
+    float tw = r * 0.52f;
     symbol = SkPathBuilder()
                  .moveTo(-tw * 0.62f, -tw)
                  .lineTo(tw, 0)
@@ -1132,11 +1139,23 @@ void RunButton::Draw(SkCanvas& canvas) const {
                  .close()
                  .detach();
   }
-  symbol = WobblePath(symbol, kWonk * 0.9f, kSeg, Hash2(kSeed, 0x37u));
+  // Half wonk: full strength mangles the small glyphs.
+  symbol = WobblePath(symbol, kWonk * 0.45f, kSeg, Hash2(kSeed, 0x37u));
   FillPath(canvas, symbol, !enabled ? kGray : kPaper);
   SketchyStroke(canvas, symbol, !enabled ? kInkSoft : kInk, kStroke, Hash2(kSeed, 0x38u), 1);
 
-  canvas.restore();
+  if (enabled && !pressed) {
+    SkPath shine = SkPathBuilder()
+                       .moveTo(-r * 0.45f, -r * 0.60f)
+                       .quadTo({0, -r * 0.95f}, {r * 0.45f, -r * 0.60f})
+                       .quadTo({0, -r * 0.60f}, {-r * 0.45f, -r * 0.60f})
+                       .close()
+                       .detach();
+    SkPaint gloss = Filler(kPaper);
+    gloss.setAlphaf(0.75f);
+    canvas.drawPath(WobblePath(shine, kWonk * 0.5f, kSeg, Hash2(kSeed, 0x5Fu)), gloss);
+  }
+
   canvas.restore();
 }
 

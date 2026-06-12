@@ -256,7 +256,8 @@ struct ObjectToy : automat::ObjectToy {
 struct RunButton : Widget {
   Clickable clickable;
   std::function<void()> on_click;
-  uint32_t seed;  // per-object wobble; owners pass their Seed(site)
+  uint32_t seed;        // per-object wobble; owners pass their Seed(site)
+  uint32_t wiggle = 0;  // hover shimmer phase
   bool running = false;
   bool enabled = true;
 

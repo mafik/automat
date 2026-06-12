@@ -139,8 +139,7 @@ void DrawLevel(SkCanvas& canvas, const SkRect& band, float value, float vmin, fl
   MisregFill(canvas, knob, knob_fill, Hash2(seed, 16));
   SketchyStroke(canvas, knob, kInk, kStrokeBold, Hash2(seed, 17), 2);
   if (hover && !disabled) {
-    SkPaint trace = InkPaint(kRose, kStrokeHair);
-    canvas.drawPath(WobblePath(knob, kWonk, kSeg, Hash2(seed, 18)), trace);
+    SketchyStroke(canvas, knob, kInk, kStrokeBold * 1.4f, Hash2(seed, 18), 1);
   }
   if (show_comparator && !disabled) {
     float dir = keep_above ? 1.f : -1.f;
@@ -275,8 +274,7 @@ void DrawWindow(SkCanvas& canvas, const SkRect& band, float lo, float hi, float 
     MisregFill(canvas, knob, knob_fill, Hash2(mseed, 16));
     SketchyStroke(canvas, knob, kInk, kStrokeBold, Hash2(mseed, 17), 2);
     if (mhover && !mdis) {
-      SkPaint trace = InkPaint(kRose, kStrokeHair);
-      canvas.drawPath(WobblePath(knob, kWonk, kSeg, Hash2(mseed, 18)), trace);
+      SketchyStroke(canvas, knob, kInk, kStrokeBold * 1.4f, Hash2(mseed, 18), 1);
     }
     if (!mdis) {
       SkPath beak = SkPathBuilder()

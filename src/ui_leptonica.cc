@@ -40,8 +40,8 @@ bool LevelGrabsMarker(const SkRect& band, SkPoint p, float value, float vmin, fl
 
 void DrawLevel(SkCanvas& canvas, const SkRect& band, float value, float vmin, float vmax,
                const uint32_t* histogram, float max_log_count, bool keep_above,
-               bool show_comparator, slop::State state, uint32_t seed) {
-  using namespace slop;
+               bool show_comparator, beta::State state, uint32_t seed) {
+  using namespace beta;
   const bool disabled = state == State::Disabled;
   const bool pressed = state == State::Pressed || state == State::Active;
   const bool hover = state == State::Hover;
@@ -177,9 +177,9 @@ void DrawLevel(SkCanvas& canvas, const SkRect& band, float value, float vmin, fl
 }
 
 void DrawWindow(SkCanvas& canvas, const SkRect& band, float lo, float hi, float vmin, float vmax,
-                const uint32_t* histogram, float max_log_count, slop::State state_lo,
-                slop::State state_hi, uint32_t seed) {
-  using namespace slop;
+                const uint32_t* histogram, float max_log_count, beta::State state_lo,
+                beta::State state_hi, uint32_t seed) {
+  using namespace beta;
   const bool disabled = state_lo == State::Disabled && state_hi == State::Disabled;
   const float H = band.height();
   const float lox = LevelValueToX(band, lo, vmin, vmax);
@@ -248,7 +248,7 @@ void DrawWindow(SkCanvas& canvas, const SkRect& band, float lo, float hi, float 
   SketchyStroke(canvas, WonkyRoundRect(band, H * 0.10f, kWonk * 0.6f, Hash2(seed, 1)), kInk,
                 kStroke, Hash2(seed, 2), 1);
 
-  auto marker = [&](float mx, float value, slop::State st, float beak_dir, uint32_t mseed) {
+  auto marker = [&](float mx, float value, beta::State st, float beak_dir, uint32_t mseed) {
     const bool mdis = st == State::Disabled;
     const bool mpress = st == State::Pressed || st == State::Active;
     const bool mhover = st == State::Hover;
@@ -321,9 +321,9 @@ int ConnectivityHit(const SkRect& r, SkPoint p) {
   if (p.fX < r.fLeft || p.fX > r.fRight || p.fY < r.fTop || p.fY > r.fBottom) return 0;
   return p.fX < r.centerX() ? 4 : 8;
 }
-void DrawConnectivity(SkCanvas& canvas, const SkRect& r, bool eight, slop::State state,
+void DrawConnectivity(SkCanvas& canvas, const SkRect& r, bool eight, beta::State state,
                       uint32_t seed) {
-  using namespace slop;
+  using namespace beta;
   const bool disabled = state == State::Disabled;
   for (int which = 0; which < 2; ++which) {
     SkRect cell = ConnectivityCell(r, which);
@@ -363,9 +363,9 @@ int RegionHit(const SkRect& mq, SkPoint p, float grip) {
   if (p.fX >= mq.fLeft && p.fX <= mq.fRight && p.fY >= mq.fTop && p.fY <= mq.fBottom) return 5;
   return 0;
 }
-void DrawRegion(SkCanvas& canvas, const SkRect& fit, const SkRect& mq, slop::State state,
+void DrawRegion(SkCanvas& canvas, const SkRect& fit, const SkRect& mq, beta::State state,
                 uint32_t seed) {
-  using namespace slop;
+  using namespace beta;
   const bool active = state == State::Pressed || state == State::Active;
   {
     SkPaint dim;
@@ -412,8 +412,8 @@ float TransformRingAngleAt(SkPoint c, SkPoint p) {
   return std::atan2(p.fX - c.fX, -(p.fY - c.fY)) * 57.29578f;
 }
 void DrawTransformRing(SkCanvas& canvas, SkPoint c, float radius, float angle_deg,
-                       slop::State state, uint32_t seed) {
-  using namespace slop;
+                       beta::State state, uint32_t seed) {
+  using namespace beta;
   const bool active = state == State::Pressed || state == State::Active;
   const int kSegs = 36;
   for (int i = 0; i < kSegs; i += 2) {
@@ -442,9 +442,9 @@ bool PolarityHit(const SkRect& r, SkPoint p) {
   return p.fX >= r.fLeft - 4.f && p.fX <= r.fRight + 4.f && p.fY >= r.fTop - 4.f &&
          p.fY <= r.fBottom + 4.f;
 }
-void DrawPolarity(SkCanvas& canvas, const SkRect& r, bool bright_hot, slop::State state,
+void DrawPolarity(SkCanvas& canvas, const SkRect& r, bool bright_hot, beta::State state,
                   uint32_t seed) {
-  using namespace slop;
+  using namespace beta;
   const bool disabled = state == State::Disabled;
   float rad = r.height() / 2.f;
   SkPoint dark{r.fLeft + rad, r.centerY()}, bright{r.fRight - rad, r.centerY()};
@@ -478,9 +478,9 @@ int PaletteHit(const SkRect& r, SkPoint p) {
   int row = std::clamp((int)((p.fY - r.fTop) / (r.height() / 2.f)), 0, 1);
   return row * 5 + col;
 }
-void DrawPalette(SkCanvas& canvas, const SkRect& r, int selected, slop::State state,
+void DrawPalette(SkCanvas& canvas, const SkRect& r, int selected, beta::State state,
                  uint32_t seed) {
-  using namespace slop;
+  using namespace beta;
   const bool disabled = state == State::Disabled;
   for (int i = 0; i < kPaletteCount; ++i) {
     SkRect cell = PaletteCell(r, i);
@@ -493,9 +493,9 @@ void DrawPalette(SkCanvas& canvas, const SkRect& r, int selected, slop::State st
   if (disabled) HatchRect(canvas, r, kInkSoft, r.height() * 0.25f, Hash2(seed, 80));
 }
 
-void DrawDepthChip(SkCanvas& canvas, const SkRect& r, int depth, bool has_cmap, slop::State state,
+void DrawDepthChip(SkCanvas& canvas, const SkRect& r, int depth, bool has_cmap, beta::State state,
                    uint32_t seed) {
-  using namespace slop;
+  using namespace beta;
   const bool disabled = state == State::Disabled;
   SkPath chip = WonkyRoundRect(r, r.height() * 0.22f, kWonk * 0.5f, Hash2(seed, 1));
   MisregFill(canvas, chip, disabled ? kGray : kPaper, Hash2(seed, 2));
@@ -595,8 +595,8 @@ void StampPresetDisk(uint8_t* cells, int w, int h) {
 }
 
 void DrawStamp(SkCanvas& canvas, const SkRect& rect, const uint8_t* cells, int w, int h, int ox,
-               int oy, slop::State state, uint32_t seed) {
-  using namespace slop;
+               int oy, beta::State state, uint32_t seed) {
+  using namespace beta;
   bool disabled = state == State::Disabled;
   float cell, gx, gy;
   StampGridMetrics(rect, w, h, cell, gx, gy);
@@ -651,8 +651,8 @@ int ModeWheelHit(SkPoint c, float radius, SkPoint p, int n) {
 }
 
 void DrawModeWheel(SkCanvas& canvas, SkPoint c, float radius, const char* const* labels, int n,
-                   int selected, slop::State state, uint32_t seed, const SkPath* glyphs) {
-  using namespace slop;
+                   int selected, beta::State state, uint32_t seed, const SkPath* glyphs) {
+  using namespace beta;
   bool disabled = state == State::Disabled;
   SkPath dial = WobbleEllipse(c, radius, radius * 0.96f, kWonk, seed, 48);
   if (!disabled) HandShadow(canvas, dial, {kShadowDX * 0.6f, kShadowDY * 0.6f}, kShadow, seed);
@@ -697,9 +697,9 @@ void DrawModeWheel(SkCanvas& canvas, SkPoint c, float radius, const char* const*
   SketchyStroke(canvas, hub, kInk, kStroke, Hash2(seed, 94), 1);
 }
 
-void DrawCurveLUT(SkCanvas& canvas, const SkRect& rect, const uint8_t* lut, slop::State state,
+void DrawCurveLUT(SkCanvas& canvas, const SkRect& rect, const uint8_t* lut, beta::State state,
                   uint32_t seed) {
-  using namespace slop;
+  using namespace beta;
   bool disabled = state == State::Disabled;
   float w = rect.width(), h = rect.height();
   SkPaint paper;
@@ -738,9 +738,9 @@ float DialAngleAt(SkPoint c, SkPoint p) {
   if (a < 0) a += 360.f;
   return a;
 }
-void DrawDial(SkCanvas& canvas, SkPoint c, float radius, float angle_deg, slop::State state,
+void DrawDial(SkCanvas& canvas, SkPoint c, float radius, float angle_deg, beta::State state,
               uint32_t seed) {
-  using namespace slop;
+  using namespace beta;
   bool disabled = state == State::Disabled;
   for (int d = 0; d < 360; d += 30) {
     float rad = d * 0.0174533f;
@@ -767,9 +767,9 @@ int ChannelTapAt(const SkRect& r, SkPoint p, int n) {
   if (p.fY < r.fTop || p.fY > r.fBottom || p.fX < r.fLeft || p.fX > r.fRight) return -1;
   return std::clamp((int)((p.fX - r.fLeft) / (r.width() / n)), 0, n - 1);
 }
-void DrawChannelTap(SkCanvas& canvas, const SkRect& r, int selected, slop::State state,
+void DrawChannelTap(SkCanvas& canvas, const SkRect& r, int selected, beta::State state,
                     uint32_t seed, const char* const* labels, const SkColor* colors, int n) {
-  using namespace slop;
+  using namespace beta;
   bool disabled = state == State::Disabled;
   static constexpr SkColor kDefCols[4] = {0xff8a8a8a, kRed, kGreen, kBlue};
   static const char* const kDefLabs[4] = {"LUM", "R", "G", "B"};

@@ -51,7 +51,7 @@ the plate it scales down uniformly rather than hiding anything.
 
 Layout follows the DRAKON grammar used across Automat: title and credit on
 top, the data row under them, readouts in the lower-left corner. The run
-control is the shared `ui::slop::RunButton` — a hand-drawn disc with a play
+control is the shared `ui::beta::RunButton` — a hand-drawn disc with a play
 triangle (a stop square on red while the child runs) that seats itself at
 the plate's lower center, dipping slightly past the border, where the
 "next" connector leaves the object. The disc splits the bottom row: status
@@ -61,7 +61,7 @@ entire glossary a novice needs.
 
 ## States
 
-Every state change shows on two channels (the Slop rule):
+Every state change shows on two channels (the Beta rule):
 
 - The program tile wears a red outline and squiggle while its text does not
   resolve to an executable (`$PATH` search, same rules as `execvp`), and RUN

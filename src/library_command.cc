@@ -15,8 +15,8 @@
 #include "format.hh"
 #include "text_field.hh"
 #include "thread_name.hh"
+#include "ui_beta.hh"
 #include "ui_button.hh"
-#include "ui_slop.hh"
 #include "units.hh"
 #include "wayland_compositor.hh"
 
@@ -34,7 +34,7 @@ extern "C" char** environ;
 
 namespace automat::library {
 
-using ui::slop::Hash2;
+using ui::beta::Hash2;
 
 // ============================================================================
 // Object
@@ -270,10 +270,10 @@ static bool ResolvesOnPath(const Str& prog) {
 
 namespace {
 
-constexpr float kPx = 7_cm / 480.f;  // one slop pixel, in meters
+constexpr float kPx = 7_cm / 480.f;  // one beta pixel, in meters
 
 constexpr float kPlateWPx = 480.f;
-constexpr float kBandPx = ui::slop::kTitleSize + 2 * ui::slop::kPadS + 3;  // Panel's title band
+constexpr float kBandPx = ui::beta::kTitleSize + 2 * ui::beta::kPadS + 3;  // Panel's title band
 constexpr float kCreditRowPx = 14.f;
 constexpr float kFieldHPx = 62.f;
 constexpr float kCaptionRowPx = 16.f;
@@ -296,16 +296,16 @@ constexpr float kBaselinePx = kFieldHPx * 0.5f + kTileTextPx * 0.36f;  // within
 
 constexpr uint32_t kSeed = 0xC3D;
 
-// The slop kit draws in pixels with +Y down; widget canvases are metric with
-// +Y up. Anchor at a metric point, then draw in raw slop pixels.
-struct SlopHere {
+// The beta kit draws in pixels with +Y down; widget canvases are metric with
+// +Y up. Anchor at a metric point, then draw in raw beta pixels.
+struct BetaHere {
   SkCanvas& canvas;
-  SlopHere(SkCanvas& c, SkPoint anchor_m) : canvas(c) {
+  BetaHere(SkCanvas& c, SkPoint anchor_m) : canvas(c) {
     c.save();
     c.translate(anchor_m.fX, anchor_m.fY);
     c.scale(kPx, -kPx);
   }
-  ~SlopHere() { canvas.restore(); }
+  ~BetaHere() { canvas.restore(); }
 };
 
 // Caret coordinates are flat byte offsets into the canonical join of argv
@@ -400,10 +400,10 @@ ArgvLayout LayoutArgv(const Vec<Str>& argv) {
         l.char_x[flat + k] = glyph_base + prev;
         continue;
       }
-      prev = ui::slop::TextWidth(StrView(word).substr(0, k), kTileTextPx);
+      prev = ui::beta::TextWidth(StrView(word).substr(0, k), kTileTextPx);
       l.char_x[flat + k] = glyph_base + prev;
     }
-    float w = ui::slop::TextWidth(word, kTileTextPx);
+    float w = ui::beta::TextWidth(word, kTileTextPx);
     l.char_x[flat + (int)word.size()] = glyph_base + w;
     float x1 = x + w + 2 * kTilePadPx;
     if (word.empty()) x1 += 10.f;  // a small tile, forming
@@ -438,9 +438,9 @@ struct ArgvField : ui::TextFieldBase {
   Vec<Str> Snapshot() const;
 };
 
-struct CommandToy : ui::slop::ObjectToy {
+struct CommandToy : ui::beta::ObjectToy {
   std::unique_ptr<ArgvField> field;
-  std::unique_ptr<ui::slop::RunButton> button;
+  std::unique_ptr<ui::beta::RunButton> button;
 
   // Tick-cached object state (UI thread only):
   Vec<Str> argv_;
@@ -457,9 +457,9 @@ struct CommandToy : ui::slop::ObjectToy {
   Str resolve_query_;
   bool resolve_answer_ = false;
 
-  CommandToy(ui::Widget* parent, Object& obj) : ui::slop::ObjectToy(parent, obj) {
+  CommandToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     field = std::make_unique<ArgvField>(this, *this);
-    button = std::make_unique<ui::slop::RunButton>(this, [this] { OnButton(); }, Seed(0x12B));
+    button = std::make_unique<ui::beta::RunButton>(this, [this] { OnButton(); }, Seed(0x12B));
     UpdateFromObject();
   }
 
@@ -477,7 +477,7 @@ struct CommandToy : ui::slop::ObjectToy {
     children.push_back(button.get());
   }
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
-    return ui::slop::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
+    return ui::beta::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
   void UpdateFromObject() {
@@ -551,26 +551,26 @@ struct CommandToy : ui::slop::ObjectToy {
 
   void Draw(SkCanvas& canvas) const override {
     {
-      SlopHere g(canvas, {-kPlateW / 2, kPlateH / 2});
+      BetaHere g(canvas, {-kPlateW / 2, kPlateH / 2});
       SkRect plate = SkRect::MakeWH(kPlateWPx, kPlateHPx);
-      ui::slop::Panel(canvas, plate, "Command", ui::slop::kBlue, ui::slop::State::Default,
+      ui::beta::Panel(canvas, plate, "Command", ui::beta::kBlue, ui::beta::State::Default,
                       Seed(kSeed), true);
 
       {
         StrView credit = "posix_spawnp()";
-        float w = ui::slop::TextWidth(credit, ui::slop::kMicroSize);
-        ui::slop::DrawText(canvas, credit, {kPlateWPx - kSidePx - w, kBandPx + 11.f},
-                           ui::slop::kMicroSize, ui::slop::kInkSoft, false, Seed(kSeed));
+        float w = ui::beta::TextWidth(credit, ui::beta::kMicroSize);
+        ui::beta::DrawText(canvas, credit, {kPlateWPx - kSidePx - w, kBandPx + 11.f},
+                           ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
       }
 
       {
         float cap_y = kBandPx + kCreditRowPx + kFieldHPx + 11.f;
-        ui::slop::DrawText(canvas, "program", {kSidePx + 4.f, cap_y}, ui::slop::kMicroSize,
-                           ui::slop::kInkSoft, false, Seed(kSeed));
+        ui::beta::DrawText(canvas, "program", {kSidePx + 4.f, cap_y}, ui::beta::kMicroSize,
+                           ui::beta::kInkSoft, false, Seed(kSeed));
         if (has_args_) {
           float ax = kSidePx + (first_tile_x1_px_ + kTileGapPx) * field_scale_;
-          ui::slop::DrawText(canvas, "arguments...", {ax, cap_y}, ui::slop::kMicroSize,
-                             ui::slop::kInkSoft, false, Seed(kSeed));
+          ui::beta::DrawText(canvas, "arguments...", {ax, cap_y}, ui::beta::kMicroSize,
+                             ui::beta::kInkSoft, false, Seed(kSeed));
         }
       }
 
@@ -579,10 +579,10 @@ struct CommandToy : ui::slop::ObjectToy {
       // readouts left of it, the right side free for future affordances.)
       float row_mid = kPlateHPx - kBottomPadPx - kStatusRowPx * 0.5f;
       if (running_) {
-        ui::slop::Spinner(canvas, {kSidePx + 12.f, row_mid}, 11.f, spinner_phase_,
+        ui::beta::Spinner(canvas, {kSidePx + 12.f, row_mid}, 11.f, spinner_phase_,
                           Seed(Hash2(kSeed, 0x59)));
-        ui::slop::DrawText(canvas, f("pid {}", pid_), {kSidePx + 32.f, row_mid + 5.f},
-                           ui::slop::kMicroSize + 2, ui::slop::kInk, false, Seed(kSeed));
+        ui::beta::DrawText(canvas, f("pid {}", pid_), {kSidePx + 32.f, row_mid + 5.f},
+                           ui::beta::kMicroSize + 2, ui::beta::kInk, false, Seed(kSeed));
       } else if (ever_ran_) {
         Str label;
         SkColor color;
@@ -590,27 +590,27 @@ struct CommandToy : ui::slop::ObjectToy {
         if (WIFEXITED(wait_status_)) {
           int code = WEXITSTATUS(wait_status_);
           label = f("exit {}", code);
-          color = code == 0 ? ui::slop::kGreen : ui::slop::kRed;
+          color = code == 0 ? ui::beta::kGreen : ui::beta::kRed;
         } else if (WIFSIGNALED(wait_status_)) {
           int sig = WTERMSIG(wait_status_);
           const char* abbr = sigabbrev_np(sig);
           label = abbr ? f("SIG{}", abbr) : f("signal {}", sig);
-          color = ui::slop::kRed;
+          color = ui::beta::kRed;
         } else
 #endif
         {
           label = "done";
-          color = ui::slop::kGreen;
+          color = ui::beta::kGreen;
         }
-        float w = ui::slop::TextWidth(label, ui::slop::kMicroSize + 2) + 18.f;
+        float w = ui::beta::TextWidth(label, ui::beta::kMicroSize + 2) + 18.f;
         SkRect chip = SkRect::MakeXYWH(kSidePx, row_mid - 11.f, w, 22.f);
         uint32_t cs = Seed(Hash2(kSeed, 0xC1));
-        SkPath path = ui::slop::WonkyRoundRect(chip, 8.f, ui::slop::kWonk * 0.8f, cs);
-        ui::slop::HandShadow(canvas, path, {2.f, 2.f}, ui::slop::kShadow, cs);
-        ui::slop::MisregFill(canvas, path, color, cs);
-        ui::slop::SketchyStroke(canvas, path, ui::slop::kInk, ui::slop::kStroke * 0.8f, cs, 1);
-        ui::slop::DrawTextIn(canvas, label, chip, ui::slop::kMicroSize + 2, ui::slop::TextOn(color),
-                             ui::slop::TextAlign::Center, false, cs);
+        SkPath path = ui::beta::WonkyRoundRect(chip, 8.f, ui::beta::kWonk * 0.8f, cs);
+        ui::beta::HandShadow(canvas, path, {2.f, 2.f}, ui::beta::kShadow, cs);
+        ui::beta::MisregFill(canvas, path, color, cs);
+        ui::beta::SketchyStroke(canvas, path, ui::beta::kInk, ui::beta::kStroke * 0.8f, cs, 1);
+        ui::beta::DrawTextIn(canvas, label, chip, ui::beta::kMicroSize + 2, ui::beta::TextOn(color),
+                             ui::beta::TextAlign::Center, false, cs);
       }
     }
     DrawChildren(canvas);
@@ -777,14 +777,14 @@ void ArgvField::KeyDown(ui::Caret& caret, ui::Key k) {
 void ArgvField::Draw(SkCanvas& canvas) const {
   Vec<Str> argv = Snapshot();
   ArgvLayout l = LayoutArgv(argv);
-  SlopHere g(canvas, {0, kFieldHPx * kPx});
+  BetaHere g(canvas, {0, kFieldHPx * kPx});
 
   if (l.tiles.empty()) {  // the empty program slot, waiting for a name
     SkRect r = SkRect::MakeLTRB(0, 6, kEmptyTilePx, kFieldHPx - 6);
     uint32_t s = toy.Seed(Hash2(kSeed, 1));
-    SkPath outline = ui::slop::WonkyRoundRect(r, 7.f, ui::slop::kWonk, s);
-    ui::slop::MisregFill(canvas, outline, ui::slop::kPaper, s);
-    ui::slop::SketchyStroke(canvas, outline, ui::slop::kInkSoft, ui::slop::kStroke, s, 1);
+    SkPath outline = ui::beta::WonkyRoundRect(r, 7.f, ui::beta::kWonk, s);
+    ui::beta::MisregFill(canvas, outline, ui::beta::kPaper, s);
+    ui::beta::SketchyStroke(canvas, outline, ui::beta::kInkSoft, ui::beta::kStroke, s, 1);
     return;
   }
 
@@ -794,27 +794,27 @@ void ArgvField::Draw(SkCanvas& canvas) const {
     float inset = first ? 3.f : 7.f;  // the program tile stands taller than the args
     SkRect r = SkRect::MakeLTRB(tile.x0, inset, tile.x1, kFieldHPx - inset);
     uint32_t s = toy.Seed(Hash2(kSeed, (uint32_t)tile.tile + 2));
-    SkPath outline = ui::slop::WonkyRoundRect(r, 7.f, ui::slop::kWonk, s);
+    SkPath outline = ui::beta::WonkyRoundRect(r, 7.f, ui::beta::kWonk, s);
     bool bad = first && !toy.program_resolves_;
-    ui::slop::MisregFill(canvas, outline, ui::slop::kPaper, s);
-    ui::slop::SketchyStroke(canvas, outline, bad ? ui::slop::kRed : ui::slop::kInk,
-                            first ? ui::slop::kStrokeBold : ui::slop::kStroke, s, first ? 2 : 1);
-    ui::slop::DrawText(canvas, word, {tile.x0 + kTilePadPx, kBaselinePx}, kTileTextPx,
-                       ui::slop::kInk, false, s);
+    ui::beta::MisregFill(canvas, outline, ui::beta::kPaper, s);
+    ui::beta::SketchyStroke(canvas, outline, bad ? ui::beta::kRed : ui::beta::kInk,
+                            first ? ui::beta::kStrokeBold : ui::beta::kStroke, s, first ? 2 : 1);
+    ui::beta::DrawText(canvas, word, {tile.x0 + kTilePadPx, kBaselinePx}, kTileTextPx,
+                       ui::beta::kInk, false, s);
     // A literal space inside the element: content stays ink, structure gets a
     // gray midline dot so the invisible byte is visibly NOT a tile boundary.
     for (int k = 0; k < (int)word.size(); ++k) {
       if (word[k] != ' ') continue;
       float cx = (l.char_x[tile.flat_begin + k] + l.char_x[tile.flat_begin + k + 1]) * 0.5f;
       SkPaint dot;
-      dot.setColor(ui::slop::kGrayDark);
+      dot.setColor(ui::beta::kGrayDark);
       dot.setAntiAlias(true);
       canvas.drawCircle(cx, kBaselinePx - kTileTextPx * 0.28f, 2.2f, dot);
     }
     if (bad) {  // not found on PATH: the brand error squiggle
-      canvas.drawPath(ui::slop::WobbleLine({tile.x0 + kTilePadPx, kBaselinePx + 7.f},
+      canvas.drawPath(ui::beta::WobbleLine({tile.x0 + kTilePadPx, kBaselinePx + 7.f},
                                            {tile.x1 - kTilePadPx, kBaselinePx + 7.f}, 3.f, 5.f, s),
-                      ui::slop::InkPaint(ui::slop::kRed, ui::slop::kStrokeHair));
+                      ui::beta::InkPaint(ui::beta::kRed, ui::beta::kStrokeHair));
     }
   }
 }

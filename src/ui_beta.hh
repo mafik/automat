@@ -29,7 +29,7 @@
 #include "units.hh"
 #include "widget.hh"
 
-namespace automat::ui::slop {
+namespace automat::ui::beta {
 
 // ------------------------------------------------------------------ palette --
 constexpr SkColor kInk = 0xff1a1a1a;
@@ -175,7 +175,7 @@ void DrawArrow(SkCanvas& canvas, SkPoint from, SkPoint to, SkColor color, float 
                uint32_t seed);
 void DrawHeart(SkCanvas& canvas, SkPoint c, float r, SkColor fill, uint32_t seed);
 
-void DrawSlopStamp(SkCanvas& canvas, SkPoint c, float r, float rotation_deg, uint32_t seed,
+void DrawBetaStamp(SkCanvas& canvas, SkPoint c, float r, float rotation_deg, uint32_t seed,
                    std::string_view label = "BETA");
 
 // ------------------------------------------------------------- components ---
@@ -236,7 +236,7 @@ void Highlight(SkCanvas& canvas, const SkRect& r, SkColor color = kBlue, uint32_
 
 // -------------------------------------------------------------------- widgets --
 
-// Base for toys of slop-styled objects. Drawing code passes Seed(site) as the
+// Base for toys of beta-styled objects. Drawing code passes Seed(site) as the
 // seed argument: the site constant keeps shapes within one object distinct,
 // the owner's address keeps the same site distinct between objects.
 struct ObjectToy : automat::ObjectToy {
@@ -248,7 +248,7 @@ struct ObjectToy : automat::ObjectToy {
   }
 };
 
-// The run button of slop-styled objects: a hand-drawn disc with a play
+// The run button of beta-styled objects: a hand-drawn disc with a play
 // triangle. It seats ITSELF at its parent's lower center with a slight
 // overhang past the border - the spot that matches the "next" connector -
 // so objects never position it manually. While `running` it shows a stop
@@ -289,4 +289,4 @@ struct RunButton : Widget {
   void Draw(SkCanvas& canvas) const override;
 };
 
-}  // namespace automat::ui::slop
+}  // namespace automat::ui::beta

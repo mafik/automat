@@ -1,4 +1,4 @@
-# Slop Brand
+# Beta Brand
 
 ## The problem this style solves
 
@@ -15,8 +15,8 @@ their edges, hard offset shadows, lopsided ornaments and hand-printed
 lettering. The style itself is the identification — an honest visual
 admission of machine manufacture, worn cheerfully. The sloppiness is only a
 skin: underneath it the layout, affordances and contrast stay disciplined.
-The style is implemented as the drawing kit in `src/ui_slop.hh` and
-`src/ui_slop.cc` (namespace `automat::ui::slop`); colors, stroke weights and
+The style is implemented as the drawing kit in `src/ui_beta.hh` and
+`src/ui_beta.cc` (namespace `automat::ui::beta`); colors, stroke weights and
 sizes are the constants defined there.
 
 Three redundant signs make the identification survive cropping and zoom: the

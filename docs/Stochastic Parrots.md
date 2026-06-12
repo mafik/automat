@@ -109,7 +109,7 @@ Documentation maintained using stochastic parrots should be placed in `docs/parr
 - `docs/parrots/Clone Pile.md` - describes how elements that create a new object when touched present themselves
 - `docs/parrots/Command Launcher.md` - the Command object: argv tiles, no shell, run states, composition points
 - `docs/parrots/Leptonica Language.md` - documents the visual language of Leptonica objects
-- `docs/parrots/Slop Brand.md` - describes the visual identification for Toys made with stochastic parrots
+- `docs/parrots/Beta Brand.md` - describes the visual identification for Toys made with stochastic parrots
 - `docs/parrots/Wayland Client Persistence.md` - options for saving/cloning windows backed by live processes; why recipes won
 - `docs/parrots/Wayland Compositor.md` - Automat as a Wayland compositor: Hyprland stack, threading, protocol surface, input pass-through, window lifetime
 

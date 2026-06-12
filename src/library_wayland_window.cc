@@ -14,7 +14,7 @@
 #include "keyboard.hh"
 #include "library_command.hh"
 #include "pointer.hh"
-#include "ui_slop.hh"
+#include "ui_beta.hh"
 #include "units.hh"
 #include "wayland_compositor.hh"
 
@@ -79,21 +79,21 @@ constexpr float kFrame = 0.8_mm;      // ink frame around the client pixels
 constexpr float kMinContentW = 4_cm;  // placeholder size before the first buffer
 constexpr float kMinContentH = 3_cm;
 
-constexpr float kSlopPx = 7_cm / 480.f;  // slop kit pixel, as elsewhere
+constexpr float kBetaPx = 7_cm / 480.f;  // beta kit pixel, as elsewhere
 
 // Linux evdev button codes (input-event-codes.h), used by wl_pointer.button.
 constexpr uint32_t kBtnLeft = 0x110;
 constexpr uint32_t kBtnRight = 0x111;
 constexpr uint32_t kBtnMiddle = 0x112;
 
-struct SlopHere {
+struct BetaHere {
   SkCanvas& canvas;
-  SlopHere(SkCanvas& c, SkPoint anchor_m) : canvas(c) {
+  BetaHere(SkCanvas& c, SkPoint anchor_m) : canvas(c) {
     c.save();
     c.translate(anchor_m.fX, anchor_m.fY);
-    c.scale(kSlopPx, -kSlopPx);
+    c.scale(kBetaPx, -kBetaPx);
   }
-  ~SlopHere() { canvas.restore(); }
+  ~BetaHere() { canvas.restore(); }
 };
 
 }  // namespace
@@ -104,7 +104,7 @@ Vec2 WindowBoardSize(int width, int height) {
   return Vec2(content_w + 2 * kFrame, content_h + 2 * kFrame + kTitleH);
 }
 
-struct WaylandWindowToy : ui::slop::ObjectToy {
+struct WaylandWindowToy : ui::beta::ObjectToy {
   sk_sp<SkImage> image;
   uint64_t image_serial = 0;
   Str title_;
@@ -112,7 +112,7 @@ struct WaylandWindowToy : ui::slop::ObjectToy {
   float content_w = kMinContentW, content_h = kMinContentH;
   ui::Caret* caret_ = nullptr;  // present while the keyboard flows into the client
 
-  WaylandWindowToy(ui::Widget* parent, Object& obj) : ui::slop::ObjectToy(parent, obj) {
+  WaylandWindowToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     PullState();
   }
   ~WaylandWindowToy() override {
@@ -223,39 +223,39 @@ struct WaylandWindowToy : ui::slop::ObjectToy {
   void Draw(SkCanvas& canvas) const override {
     float w = TotalW(), h = TotalH();
     float left = -w / 2, top = h / 2;
-    // Hand-drawn chrome in slop pixels.
+    // Hand-drawn chrome in beta pixels.
     {
-      SlopHere g(canvas, {left, top});
-      float w_px = w / kSlopPx;
-      float h_px = h / kSlopPx;
-      float title_px = kTitleH / kSlopPx;
-      uint32_t seed = Seed(ui::slop::Hash2(0x3A11D, (uint32_t)(title_.size() + 1)));
+      BetaHere g(canvas, {left, top});
+      float w_px = w / kBetaPx;
+      float h_px = h / kBetaPx;
+      float title_px = kTitleH / kBetaPx;
+      uint32_t seed = Seed(ui::beta::Hash2(0x3A11D, (uint32_t)(title_.size() + 1)));
       SkRect body = SkRect::MakeWH(w_px, h_px);
-      SkPath base = ui::slop::WonkyRoundRect(body, 7.f, ui::slop::kWonk, seed);
-      ui::slop::HandShadow(canvas, base, {ui::slop::kShadowDX, ui::slop::kShadowDY},
-                           ui::slop::kShadow, seed);
-      ui::slop::MisregFill(canvas, base, ui::slop::kPaperCream, seed);
+      SkPath base = ui::beta::WonkyRoundRect(body, 7.f, ui::beta::kWonk, seed);
+      ui::beta::HandShadow(canvas, base, {ui::beta::kShadowDX, ui::beta::kShadowDY},
+                           ui::beta::kShadow, seed);
+      ui::beta::MisregFill(canvas, base, ui::beta::kPaperCream, seed);
       SkRect band = SkRect::MakeLTRB(0, 0, w_px, title_px);
       canvas.save();
       canvas.clipPath(base, true);
       canvas.drawPath(
-          ui::slop::WobbleRect(band, ui::slop::kWonk, ui::slop::kSeg, ui::slop::Hash2(seed, 3)),
-          ui::slop::InkPaint(ui::slop::kBlue, 1.f, true));
+          ui::beta::WobbleRect(band, ui::beta::kWonk, ui::beta::kSeg, ui::beta::Hash2(seed, 3)),
+          ui::beta::InkPaint(ui::beta::kBlue, 1.f, true));
       SkPaint band_fill;
-      band_fill.setColor(ui::slop::kBlue);
+      band_fill.setColor(ui::beta::kBlue);
       band_fill.setAntiAlias(true);
       canvas.drawPath(
-          ui::slop::WobbleRect(band, ui::slop::kWonk, ui::slop::kSeg, ui::slop::Hash2(seed, 3)),
+          ui::beta::WobbleRect(band, ui::beta::kWonk, ui::beta::kSeg, ui::beta::Hash2(seed, 3)),
           band_fill);
       canvas.restore();
-      ui::slop::DrawTextIn(canvas, title_.empty() ? "Wayland Window" : title_,
-                           SkRect::MakeLTRB(8, 0, w_px - 8, title_px), ui::slop::kBodySize,
-                           ui::slop::TextOn(ui::slop::kBlue), ui::slop::TextAlign::Left, true,
+      ui::beta::DrawTextIn(canvas, title_.empty() ? "Wayland Window" : title_,
+                           SkRect::MakeLTRB(8, 0, w_px - 8, title_px), ui::beta::kBodySize,
+                           ui::beta::TextOn(ui::beta::kBlue), ui::beta::TextAlign::Left, true,
                            seed);
-      ui::slop::SketchyStroke(canvas, base, ui::slop::kInk, ui::slop::kStroke, seed, 2);
+      ui::beta::SketchyStroke(canvas, base, ui::beta::kInk, ui::beta::kStroke, seed, 2);
       if (client_gone_ || !image) {
         SkRect inner = SkRect::MakeLTRB(6, title_px + 4, w_px - 6, h_px - 6);
-        ui::slop::HatchRect(canvas, inner, ui::slop::kGray, 11.f, seed);
+        ui::beta::HatchRect(canvas, inner, ui::beta::kGray, 11.f, seed);
       }
     }
     if (image) {

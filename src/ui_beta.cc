@@ -3,7 +3,7 @@
 
 // Warning: coded with a stochastic parrot
 
-#include "ui_slop.hh"
+#include "ui_beta.hh"
 
 #include <include/core/SkData.h>
 #include <include/core/SkFont.h>
@@ -26,7 +26,7 @@
 
 #pragma comment(lib, "skia")
 
-namespace automat::ui::slop {
+namespace automat::ui::beta {
 
 // ============================================================ color helpers ==
 static SkColor WithAlpha(SkColor c, float a01) {
@@ -570,7 +570,7 @@ void DrawArrow(SkCanvas& canvas, SkPoint from, SkPoint to, SkColor color, float 
   canvas.drawPath(ArrowPath(from, to, hl, hh, seed), InkPaint(color, width));
 }
 
-void DrawSlopStamp(SkCanvas& canvas, SkPoint c, float r, float rotation_deg, uint32_t seed,
+void DrawBetaStamp(SkCanvas& canvas, SkPoint c, float r, float rotation_deg, uint32_t seed,
                    std::string_view label) {
   canvas.save();
   canvas.translate(c.fX, c.fY);
@@ -640,7 +640,7 @@ void Panel(SkCanvas& canvas, const SkRect& r, std::string_view title, SkColor ac
     canvas.restore();
   }
   if (active && !disabled) Highlight(canvas, r, error ? kRed : kBlue, Hash2(seed, 9u));
-  if (sticker) DrawSlopStamp(canvas, {r.fRight - 4, r.fTop + 6}, 21.f, -12.f, Hash2(seed, 12u));
+  if (sticker) DrawBetaStamp(canvas, {r.fRight - 4, r.fTop + 6}, 21.f, -12.f, Hash2(seed, 12u));
   if (error) BangChip(canvas, {r.fRight - (sticker ? 50.f : 18.f), r.fTop + titleH * 0.5f}, 9.f);
 }
 
@@ -1140,4 +1140,4 @@ void RunButton::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-}  // namespace automat::ui::slop
+}  // namespace automat::ui::beta

@@ -83,7 +83,7 @@ meaning. The forms are drawn by `src/ui_leptonica.hh`; the reasoning:
 - The **Depth chip** is a readout, not a control: a corner badge stating the
   image's bits per pixel, because depth gates what each operation can accept.
 
-Small integer counts use the Stepper from the slop kit. Seedfill's seed point
+Small integer counts use the Stepper from the beta kit. Seedfill's seed point
 is a pin placed directly on the preview. When adding a parameter, the
 defaults are: a continuous magnitude becomes a Level, drawn over the histogram
 when the operation reads pixel statistics; a value remap becomes a Curve; a
@@ -141,7 +141,7 @@ guess.
 
 ## States
 
-Every control inherits the slop state model and shows each state on two
+Every control inherits the beta state model and shows each state on two
 redundant channels. Disabled, cable-driven and not-applicable all read as
 gray plus hatching; errors are a red outline with an exclamation chip;
 pressed controls sink; selection wears the dashed ring. Meaning rides on

@@ -176,7 +176,7 @@ void DrawArrow(SkCanvas& canvas, SkPoint from, SkPoint to, SkColor color, float 
 void DrawHeart(SkCanvas& canvas, SkPoint c, float r, SkColor fill, uint32_t seed);
 
 void DrawSlopStamp(SkCanvas& canvas, SkPoint c, float r, float rotation_deg, uint32_t seed,
-                   std::string_view label = "SLOP");
+                   std::string_view label = "BETA");
 
 // ------------------------------------------------------------- components ---
 void Panel(SkCanvas& canvas, const SkRect& r, std::string_view title, SkColor accent = kBlue,

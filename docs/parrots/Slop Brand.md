@@ -20,7 +20,7 @@ The style is implemented as the drawing kit in `src/ui_slop.hh` and
 sizes are the constants defined there.
 
 Three redundant signs make the identification survive cropping and zoom: the
-tilted red starburst sticker reading "SLOP", half off the panel's top-right
+tilted red starburst sticker reading "BETA", half off the panel's top-right
 corner, which is the primary mark; the outline with mismatched corner radii
 and bowed edges; and the fill that misregisters against its outline. At low
 zoom the sticker is the signal that remains.

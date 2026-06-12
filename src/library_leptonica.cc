@@ -1236,7 +1236,7 @@ struct LeptonicaShelfWidget : slop::ObjectToy {
       SlopHere g(canvas, {0, 0});
       auto P = [&](float mx, float my) { return SkPoint{mx / kPxToMetric, -my / kPxToMetric}; };
       slop::DrawSlopStamp(canvas, P(sheet.right - 0.6_cm, sheet.top - 0.6_cm), 2.2_cm / kPxToMetric,
-                          -15.f, Seed(0xA1), "SLOP");
+                          -15.f, Seed(0xA1), "BETA");
     }
   }
 

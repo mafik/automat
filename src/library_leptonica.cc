@@ -97,7 +97,6 @@ constexpr SkColor4f kPlateTop = "#3b322c"_color4f;
 constexpr SkColor4f kPlateBottom = "#211c19"_color4f;
 constexpr SkColor kAmber = "#ef9f37"_color;
 constexpr SkColor kAmberBright = "#ffd089"_color;
-constexpr SkColor kSafelight = "#c43b1f"_color;
 constexpr SkColor kPaper = "#f4efe4"_color;
 constexpr SkColor kInk = "#241f1c"_color;
 
@@ -1121,7 +1120,7 @@ struct LeptonicaShelfWidget : ObjectToy {
 
   LeptonicaShelfWidget(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
     static const GroupSpec kRow1[] = {
-        {"PAPER", slop::kYellow, {"LeptonicaImage", "Generate"}},
+        {"PAPER", slop::kGold, {"LeptonicaImage", "Generate"}},
         {"LOOK", slop::kCyan, {"Tone", "Color", "Channel", "Flatten", "Fade"}},
         {"NEIGHBORS", slop::kPurple, {"Convolve", "Blend"}},
     };
@@ -1197,33 +1196,36 @@ struct LeptonicaShelfWidget : ObjectToy {
 
   void Draw(SkCanvas& canvas) const override {
     Rect sheet = Rect::MakeCenterZero(sheet_w, sheet_h);
-    SkRRect rr = RRect::MakeSimple(sheet, 4_mm).sk;
+    SkPath body = Shape();
     SkPaint bg;
     bg.setAntiAlias(true);
-    SkPoint pts[2] = {{0, sheet.top}, {0, sheet.bottom}};
-    SkColor4f cgrad[2] = {"#2a2420"_color4f, "#181513"_color4f};
+    // The full HSV wheel on a diagonal; pastel (low saturation) so the
+    // section outlines and the paper-colored minis stay readable on top.
+    SkPoint pts[2] = {{sheet.left, sheet.top}, {sheet.right, sheet.bottom}};
+    SkColor4f rainbow[7];
+    for (int i = 0; i < 7; ++i) {
+      float hsv[3] = {i * 60.f, 0.28f, 1.f};
+      rainbow[i] = SkColor4f::FromColor(SkHSVToColor(hsv));
+    }
     bg.setShader(SkShaders::LinearGradient(
-        pts, SkGradient{SkGradient::Colors{cgrad, SkTileMode::kClamp}, {}}));
-    canvas.drawRRect(rr, bg);
-    SkPaint border;
-    border.setAntiAlias(true);
-    border.setStyle(SkPaint::kStroke_Style);
-    border.setStrokeWidth(1_mm);
-    border.setColor(kAmber);
-    canvas.drawRRect(rr, border);
+        pts, SkGradient{SkGradient::Colors{rainbow, SkTileMode::kClamp}, {}}));
+    canvas.drawPath(body, bg);
 
     {
       SlopHere g(canvas, {0, 0});
       auto P = [&](float mx, float my) { return SkPoint{mx / kPxToMetric, -my / kPxToMetric}; };
       auto PX = [&](float m) { return m / kPxToMetric; };
 
+      SkPath body_px = body.makeTransform(SkMatrix::Scale(1.f / kPxToMetric, -1.f / kPxToMetric));
+      slop::SketchyStroke(canvas, body_px, slop::kInk, slop::kStroke, 0x1D, 1);
+
       const char* heading = "LEPTONICA";
       float hpx = slop::TextWidth(heading, 56.f);
       SkPoint hb = P(-hpx * kPxToMetric * 0.5f, sheet.top - 1.75_cm);
-      slop::DrawText(canvas, heading, hb, 56.f, kAmberBright, true, 0x1E);
+      slop::DrawText(canvas, heading, hb, 56.f, slop::kInk, true, 0x1E);
       canvas.drawPath(slop::WobbleLine({hb.fX - 6, hb.fY + 16}, {hb.fX + hpx + 6, hb.fY + 16},
                                        slop::kWonk, slop::kSeg, 0x1F),
-                      slop::InkPaint(kAmber, slop::kStrokeBold));
+                      slop::InkPaint(slop::kGold, slop::kStrokeBold));
 
       for (auto& pg : groups) {
         SkRect fr = SkRect::MakeLTRB(pg.frame.left / kPxToMetric, -pg.frame.top / kPxToMetric,
@@ -1237,15 +1239,15 @@ struct LeptonicaShelfWidget : ObjectToy {
         SkRect tab = SkRect::MakeXYWH(fr.fLeft + 10.f, fr.fTop - fs * 0.78f, lw + 12.f, fs * 1.35f);
         SkPath tabp = slop::WonkyRoundRect(tab, 4.f, slop::kWonk * 0.5f,
                                            slop::Hash2(0x72, (uint32_t)(intptr_t)pg.label));
-        slop::FillPath(canvas, tabp, "#241f1b"_color);
-        slop::SketchyStroke(canvas, tabp, pg.accent, slop::kStrokeHair,
+        slop::MisregFill(canvas, tabp, pg.accent, slop::Hash2(0x74, (uint32_t)(intptr_t)pg.label));
+        slop::SketchyStroke(canvas, tabp, slop::kInk, slop::kStrokeHair,
                             slop::Hash2(0x73, (uint32_t)(intptr_t)pg.label), 1);
-        slop::DrawText(canvas, pg.label, {tab.fLeft + 6.f, tab.fBottom - fs * 0.28f}, fs, pg.accent,
-                       false, 0);
+        slop::DrawText(canvas, pg.label, {tab.fLeft + 6.f, tab.fBottom - fs * 0.28f}, fs,
+                       slop::TextOn(pg.accent), false, 0);
       }
 
-      slop::DrawSparkle(canvas, P(sheet.right - 3.6_cm, sheet.top - 1.0_cm), PX(5_mm),
-                        slop::kYellow, 0x41);
+      slop::DrawSparkle(canvas, P(sheet.right - 3.6_cm, sheet.top - 1.0_cm), PX(5_mm), slop::kCyan,
+                        0x41);
       slop::DrawSparkle(canvas, P(-0.16f * sheet_w, sheet.top - 1.5_cm), PX(3.5_mm), slop::kRose,
                         0x42);
     }

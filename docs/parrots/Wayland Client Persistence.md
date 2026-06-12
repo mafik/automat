@@ -22,7 +22,7 @@ Save the argv that produced the window (as a JSON array — one element is one
 argument, spaces and all), plus where the window sits on the board.
 Deserializing re-runs it against Automat's compositor; cloning runs a second
 instance. Runtime state — terminal scrollback, an unsaved document, a
-half-played video — is honestly lost.
+half-played video — is lost, and nothing pretends otherwise.
 
 A subtlety worth keeping: when the re-run client maps its first window, it
 must become *the same object* on the board, not a second one. Automat does
@@ -63,9 +63,10 @@ Identical to the recipe, plus the last committed buffer saved as an image.
 The deserialized window shows the frozen picture until the user re-runs it —
 the board "looks right" immediately after loading.
 
-The risk is dishonesty: a screenshot of a terminal looks exactly like a
-terminal. The ghost must be visibly dead (desaturated, hatched, or wearing a
-"frozen" sign) or users will type into a corpse. Automat currently draws
+The risk is that a screenshot of a terminal looks exactly like a live
+terminal. The ghost must be visibly dead (desaturated, hatched, or marked
+with a "frozen" sign) or users will type into a window that no longer
+exists. Automat currently draws
 recipe-less ghosts with a gray hatch instead of content; adding the frozen
 frame would be a small extension (serialize `pixels` as a sidecar image, the
 way `LeptonicaImage` persists its bitmap).
@@ -95,7 +96,7 @@ The hard parts are exactly the resources that cross Automat's boundary:
 
 CRIU fits best as an *optional* deep-save for cooperative, self-contained
 processes, layered on top of the recipe (if restore fails, fall back to
-re-running). The fit with Automat's "expose the low level honestly"
+re-running). The fit with Automat's expose-the-low-level
 philosophy is good; the engineering cost is the reason it is not built.
 
 ## Option 4: Virtual machine snapshot — change the unit of persistence
@@ -138,7 +139,7 @@ pays off for slow-starting applications.
 
 ## Where this leaves Automat
 
-The recipe with adoption is implemented and is the right default: honest,
+The recipe with adoption is implemented and is the right default: simple,
 cheap, composable. The natural next steps, in order of value per effort:
 
 1. **Ghost snapshot** (option 2) — small, makes loaded boards legible.

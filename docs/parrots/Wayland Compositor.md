@@ -68,9 +68,9 @@ Two protocol rules earned through debugging:
   `xdg_surface.configure` before that bundle. The decoration object
   confirming a mode pre-map must send only its own configure event; GLFW
   clients (kitty) tear down silently otherwise.
-- Frame callbacks are completed immediately on commit. This is honest
-  enough for terminals; pacing tied to actual board presentation is the
-  natural refinement if animating clients ever matter.
+- Frame callbacks are completed immediately on commit. This is sufficient
+  for terminals; pacing tied to actual board presentation is the natural
+  refinement if animating clients ever matter.
 
 GPU buffer import (`zwp_linux_dmabuf_v1` + Vulkan external memory) is
 deliberately absent: the development host is all-software (llvmpipe/lavapipe
@@ -91,7 +91,7 @@ of the press, so drags select text in a terminal instead of moving the
 object); the title bar and frame fall through to the standard object
 behaviors (drag, menu).
 
-Keyboard focus rides Automat's caret system. Clicking the content requests a
+Keyboard focus uses Automat's caret system. Clicking the content requests a
 caret owned by the window toy; the familiar blinking I-beam then morphs into
 an underline inside the title band — carets draw black, so the focus shape
 lives on guaranteed-light chrome, never on client pixels, which are
@@ -100,8 +100,8 @@ are forwarded to the client; focus moves the way carets always move —
 clicking any text field steals it (a keyboard leave is sent), and Escape
 releases it. Escape therefore never reaches the client today. Candidate
 future treatments, in rough order of appeal: a compositor-reserved chord
-(Super belongs to the compositor in the Hyprland tradition, so Super+Esc
-could mean "send a literal Escape"), holding focus through the *first*
+(the compositor reserves Super for itself, following Hyprland, so
+Super+Esc could mean "send a literal Escape"), holding focus through the *first*
 Escape and forwarding it while a quick second press defocuses, or a
 per-window passthrough toggle on the title bar.
 

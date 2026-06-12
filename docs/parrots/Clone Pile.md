@@ -50,8 +50,8 @@ without any replenishment animation.
   shadow and occlusion, not in ink.
 - **The projection stays top-down.** Layers are fanned by rotation alone,
   with no translation offsets between them, because offset layers read as an
-  oblique camera angle and Automat's board has none. The honest top-down
-  depth cues are the rotation slivers, the occlusion darkening and the shadow
+  oblique camera angle and Automat's board has none. The top-down depth
+  cues are the rotation slivers, the occlusion darkening and the shadow
   spread.
 - **Bottoms rest, tops move.** The only element that ever animates is the
   top copy. The pile beneath never slides, fans or breathes, exactly as a
@@ -64,12 +64,12 @@ shelf cell (`ShelfButton` in `src/library_leptonica.cc`), or a future spawn
 menu entry — draws the under-copies from the prototype's own rendering,
 rotated about its centroid, so no object needs any per-object support.
 
-The pickup feel belongs to Location, not to the pile. Piles live at reduced
-scale, so the standard Location scale animation already enlarges the taken
-object, and Location's elevation shadow — new objects start shadowless and
+Pickup behavior is implemented by Location, not by the pile. Piles are
+drawn at reduced scale, so the standard Location scale animation already
+enlarges the taken object, and Location's elevation shadow — new objects start shadowless and
 gain shadow as they rise — already supplies the transition from a flat pile
 element to a grabbed object. The pile therefore adds no jump, pop or
 overshoot of its own; doubling the existing animation would read as a
 malfunction.
 
-Placed objects never wear the pile.
+Placed objects are never drawn with the pile presentation.

@@ -141,9 +141,10 @@ guess.
 
 ## States
 
-Every control inherits the beta state model and shows each state on two
-redundant channels. Disabled, cable-driven and not-applicable all read as
-gray plus hatching; errors are a red outline with an exclamation chip;
-pressed controls sink; selection wears the dashed ring. Meaning rides on
-shape, glyph and label rather than color alone, so every control reads in
-grayscale.
+Every control follows the beta state model and shows each state on two
+redundant channels. Disabled, cable-driven and not-applicable are all shown
+as gray plus hatching; errors are shown with a red outline and an
+exclamation chip; pressed controls have a darker fill and no shine;
+selected controls are marked with a dashed ring. Meaning is conveyed by
+shape, glyph and label rather than color alone, so every control is
+readable in grayscale.

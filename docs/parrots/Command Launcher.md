@@ -61,17 +61,17 @@ entire glossary a novice needs.
 
 ## States
 
-Every state change shows on two channels (the Beta rule):
+Every state change is shown on two channels (the Beta rule):
 
-- The program tile wears a red outline and squiggle while its text does not
-  resolve to an executable (`$PATH` search, same rules as `execvp`), and RUN
-  is gray and hatched. When it resolves, RUN turns green.
+- The program tile is marked with a red outline and squiggle while its text
+  does not resolve to an executable (`$PATH` search, same rules as
+  `execvp`), and RUN is gray and hatched. When it resolves, RUN turns green.
 - While the child runs, the button becomes a red STOP, the lower-left corner
   shows the spinner and the live `pid` readout.
-- After exit, a chip reports the child's truth: green `exit 0`, red
-  `exit N`, or the signal name if the child died by signal. STOP sends
-  SIGTERM; a child that handles it and exits cleanly therefore shows its own
-  exit code, not the signal.
+- After exit, a chip reports the result: green `exit 0`, red `exit N`, or
+  the signal name if the child died by signal. STOP sends SIGTERM; a child
+  that handles it and exits cleanly therefore shows its own exit code, not
+  the signal.
 
 Pressing Enter inside the tiles is equivalent to pressing RUN.
 

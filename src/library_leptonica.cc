@@ -1217,7 +1217,7 @@ struct LeptonicaShelfWidget : ObjectToy {
       auto P = [&](float mx, float my) { return SkPoint{mx / kPxToMetric, -my / kPxToMetric}; };
       auto PX = [&](float m) { return m / kPxToMetric; };
 
-      const char* heading = "THE LEPTONICA";
+      const char* heading = "LEPTONICA";
       float hpx = slop::TextWidth(heading, 56.f);
       SkPoint hb = P(-hpx * kPxToMetric * 0.5f, sheet.top - 1.75_cm);
       slop::DrawText(canvas, heading, hb, 56.f, kAmberBright, true, 0x1E);

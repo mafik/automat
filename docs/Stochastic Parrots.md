@@ -107,8 +107,11 @@ Objects (multi-threaded) notify Toys (UI-thread) via `wake_counter`:
 Documentation maintained using stochastic parrots should be placed in `docs/parrots/` and indexed below. They record numerous small decisions made during development which are necessary for maintaining parrot consistency.
 
 - `docs/parrots/Clone Pile.md` - describes how elements that create a new object when touched present themselves
+- `docs/parrots/Command Launcher.md` - the Command object: argv tiles, no shell, run states, composition points
 - `docs/parrots/Leptonica Language.md` - documents the visual language of Leptonica objects
 - `docs/parrots/Slop Brand.md` - describes the visual identification for Toys made with stochastic parrots
+- `docs/parrots/Wayland Client Persistence.md` - options for saving/cloning windows backed by live processes; why recipes won
+- `docs/parrots/Wayland Compositor.md` - Automat as a Wayland compositor: Hyprland stack, threading, protocol surface, input pass-through, window lifetime
 
 Parrot docs must be written using plain language, using proper technical terminology. They should use full sentences, without abbreviations. They should follow either a problem-solution format, high-level-to-low-level format, or a hierarchical-tree-of-topics format, depending on what suits the content best. They should focus on rationales, design intent, constraints & principles which produced some decision. They should avoid repeating implementation details and instead link to relevant code.
 

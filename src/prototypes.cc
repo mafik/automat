@@ -3,6 +3,7 @@
 #include "prototypes.hh"
 
 #include "library_assembler.hh"
+#include "library_command.hh"
 #include "library_flip_flop.hh"
 #include "library_hotkey.hh"
 #include "library_instruction_library.hh"
@@ -15,6 +16,7 @@
 #include "library_tesseract_ocr.hh"
 #include "library_timeline.hh"
 #include "library_timer.hh"
+#include "library_wayland_window.hh"
 #include "library_window.hh"
 #include "object.hh"
 #include "sync.hh"
@@ -48,6 +50,7 @@ PrototypeLibrary::PrototypeLibrary() {
   IndexHelper index(*this);
 
   index.Register<FlipFlop>();
+  index.Register<Command>();
   index.Register<MacroRecorder>();
   index.Register<Timer>();
   index.Register<HotKey>();
@@ -68,6 +71,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<TesseractOCR>();
   index.Register<Sources>();
   index.Register<Gear, HideInToolbar>();
+  index.Register<WaylandWindow, HideInToolbar>();
   {  // The Leptonica tools are reached through the shelf, not the toolbar.
     index.Register<LeptonicaShelf>();
     index.Register<LeptonicaImage, HideInToolbar>();

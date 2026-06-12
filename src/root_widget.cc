@@ -42,6 +42,7 @@
 #include "win32.hh"
 #include "win32_window.hh"
 #elif defined(__linux__)
+#include "wayland_compositor.hh"
 #include "xcb_window.hh"
 #endif
 
@@ -246,6 +247,10 @@ static void DrawStarfieldBackground(SkCanvas& canvas) {
 
 animation::Phase RootWidget::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
+
+#if defined(__linux__)
+  wayland::UIFrame();
+#endif
 
   if (loading_animation) {
     phase |= loading_animation->Tick(timer);

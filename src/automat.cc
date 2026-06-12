@@ -31,6 +31,7 @@
 #include "timer_thread.hh"
 #include "tracy_client.hh"  // IWYU pragma: keep
 #include "vk.hh"
+#include "wayland_compositor.hh"
 
 using namespace automat::ui;
 
@@ -43,8 +44,7 @@ std::thread::id main_thread_id;
 
 static std::optional<system_tray::Icon> tray_icon;
 static bool tray_hidden = false;
-static PersistentImage favicon =
-    PersistentImage::MakeFromAsset(embedded::assets_favicon_184_png);
+static PersistentImage favicon = PersistentImage::MakeFromAsset(embedded::assets_favicon_184_png);
 
 void RefreshTrayIcon() {
   auto toggle_hidden = []() {
@@ -147,6 +147,10 @@ int Main() {
 
   StartWorkerThreads(stop_source.get_token());
 
+#if defined(__linux__)
+  wayland::Start();
+#endif
+
   if (root_widget->loading_animation) {
     root_widget->loading_animation->LoadingCompleted();
   }
@@ -158,6 +162,10 @@ int Main() {
 
   // Shutdown
   stop_source.request_stop();
+
+#if defined(__linux__)
+  wayland::Stop();
+#endif
 
   tray_icon.reset();
 

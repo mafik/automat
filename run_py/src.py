@@ -104,7 +104,7 @@ class File:
                 continue
 
 
-            match = re.match(r'^#include \"([a-zA-Z0-9_/\.\-+]+\.hh?)\"', line)
+            match = re.match(r'^#include \"([a-zA-Z0-9_/\.\-+]+\.(?:hh?|hpp))\"', line)
             if match:
                 dep = self.path.parent / match.group(1)
                 dep = dep.resolve()

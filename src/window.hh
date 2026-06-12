@@ -22,12 +22,17 @@ struct Window {
   int client_height;
   int screen_refresh_rate = 60;
   std::unique_ptr<Pointer> mouse;
+  // `mouse` while it's outside the window
+  std::unique_ptr<Pointer> mouse_away;
+
+  Pointer& GetMouse();  // un-parks `mouse_away` or creates a new Pointer
+  Pointer* MouseOrNull() { return mouse ? mouse.get() : mouse_away.get(); }
 
   virtual ~Window() = default;
 
   virtual void MainLoop(std::stop_token) = 0;
 
-  virtual Pointer& GetMouse() = 0;
+  virtual std::unique_ptr<Pointer> MakeMouse() = 0;
 
   // Converts a point from screen to window pixel coordinates.
   // In pixel coordinates the origin is at the top left and Y goes down.

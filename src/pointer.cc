@@ -42,21 +42,15 @@ Pointer::Pointer(RootWidget& root_widget, Vec2 position)
       button_down_position(),
       button_down_time(),
       pointer_widget(new PointerWidget(&root_widget, *this)) {
-  root_widget.pointers.push_back(this);
+  Enter();
   keyboard = &root_widget.keyboard;
   keyboard->pointer = this;
   pointer_widget->local_to_parent = SkM44(root_widget.CanvasToWindow());
 }
 Pointer::~Pointer() {
-  if (hover) {
-    hover->PointerLeave(*this);
-  }
+  Leave();
   if (keyboard) {
     keyboard->pointer = nullptr;
-  }
-  auto it = std::find(root_widget.pointers.begin(), root_widget.pointers.end(), this);
-  if (it != root_widget.pointers.end()) {
-    root_widget.pointers.erase(it);
   }
 }
 
@@ -146,6 +140,22 @@ void Pointer::Move(Vec2 position) {
   for (auto* cb : move_callbacks) {
     cb->PointerMove(*this, position);
   }
+}
+void Pointer::Enter() { root_widget.pointers.push_back(this); }
+void Pointer::Leave() {
+  auto old_path = std::move(path);
+  path.clear();
+  hover.Reset();
+  for (auto& w : old_path) {
+    if (w) {
+      w->PointerLeave(*this);
+    }
+  }
+  auto it = std::find(root_widget.pointers.begin(), root_widget.pointers.end(), this);
+  if (it != root_widget.pointers.end()) {
+    root_widget.pointers.erase(it);
+  }
+  pointer_widget->WakeAnimation();
 }
 void Pointer::Wheel(float delta) {
   if (grab) {

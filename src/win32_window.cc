@@ -711,17 +711,16 @@ void Win32Window::PostToMainLoop(function<void()> f) {
   PostMessage(hwnd, WM_USER, 0, (LPARAM) new function<void()>(std::move(f)));
 }
 
-ui::Pointer& Win32Window::GetMouse() {
-  if (!mouse) {
-    mouse = std::make_unique<Win32Pointer>(*root_widget, ScreenToWindowPx(mouse_position), *this);
-    TRACKMOUSEEVENT track_mouse_event = {
-        .cbSize = sizeof(TRACKMOUSEEVENT),
-        .dwFlags = TME_LEAVE,
-        .hwndTrack = hwnd,
-    };
-    TrackMouseEvent(&track_mouse_event);
-  }
-  return *mouse;
+std::unique_ptr<ui::Pointer> Win32Window::MakeMouse() {
+  auto pointer =
+      std::make_unique<Win32Pointer>(*root_widget, ScreenToWindowPx(mouse_position), *this);
+  TRACKMOUSEEVENT track_mouse_event = {
+      .cbSize = sizeof(TRACKMOUSEEVENT),
+      .dwFlags = TME_LEAVE,
+      .hwndTrack = hwnd,
+  };
+  TrackMouseEvent(&track_mouse_event);
+  return pointer;
 }
 
 Vec2 Win32Window::ScreenToWindowPx(Vec2 screen) {

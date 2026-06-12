@@ -9,6 +9,18 @@ namespace automat::ui {
 
 std::lock_guard<std::mutex> Window::Lock() { return std::lock_guard(root.mutex); }
 
+Pointer& Window::GetMouse() {
+  if (!mouse) {
+    if (mouse_away) {
+      mouse = std::move(mouse_away);
+      mouse->Enter();
+    } else {
+      mouse = MakeMouse();
+    }
+  }
+  return *mouse;
+}
+
 void Window::BeginLogging(Keylogger* keylogger, Keylogging** keylogging,
                           Pointer::Logger* pointer_logger, Pointer::Logging** pointer_logging) {
   assert((keylogger != nullptr) == (keylogging != nullptr));
@@ -19,15 +31,19 @@ void Window::BeginLogging(Keylogger* keylogger, Keylogging** keylogging,
         root.keyboard.keyloggings.emplace_back(new Keylogging(root.keyboard, *keylogger)).get();
   }
   if (pointer_logging != nullptr) {
-    auto& mouse_ref = GetMouse();
+    Pointer* device = MouseOrNull();
+    if (device == nullptr) {
+      device = &GetMouse();
+    }
     *pointer_logging =
-        mouse_ref.loggings.emplace_back(new Pointer::Logging(mouse_ref, *pointer_logger)).get();
+        device->loggings.emplace_back(new Pointer::Logging(*device, *pointer_logger)).get();
   }
   RegisterInput();
 }
 
 void Window::RegisterInput() {
-  OnRegisterInput(!root.keyboard.keyloggings.empty(), mouse && !mouse->loggings.empty());
+  Pointer* device = MouseOrNull();
+  OnRegisterInput(!root.keyboard.keyloggings.empty(), device && !device->loggings.empty());
 }
 
 void Window::BeginWindowWatching(WindowWatcher* watcher, WindowWatching** watching) {

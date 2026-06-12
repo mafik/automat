@@ -467,11 +467,8 @@ struct XCBPointer : automat::ui::Pointer {
   }
 };
 
-automat::ui::Pointer& XCBWindow::GetMouse() {
-  if (!mouse) {
-    mouse = std::make_unique<XCBPointer>(root, ScreenToWindowPx(mouse_position_on_screen), *this);
-  }
-  return *mouse;
+std::unique_ptr<automat::ui::Pointer> XCBWindow::MakeMouse() {
+  return std::make_unique<XCBPointer>(root, ScreenToWindowPx(mouse_position_on_screen), *this);
 }
 
 Vec2 XCBWindow::ScreenToWindowPx(Vec2 screen) { return screen - window_position_on_screen; }
@@ -822,7 +819,11 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
               case XCB_INPUT_RAW_BUTTON_PRESS: {
                 xcb_input_raw_button_press_event_t* ev = (xcb_input_raw_button_press_event_t*)event;
                 xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
-                auto& pointer = GetMouse();
+                auto* device = MouseOrNull();
+                if (!device) {
+                  break;
+                }
+                auto& pointer = *device;
                 auto btn = EventDetailToButton(ev->detail);
                 if (btn == automat::ui::PointerButton::Unknown) {
                   break;
@@ -836,7 +837,11 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                 xcb_input_raw_button_release_event_t* ev =
                     (xcb_input_raw_button_release_event_t*)event;
                 xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
-                auto& pointer = GetMouse();
+                auto* device = MouseOrNull();
+                if (!device) {
+                  break;
+                }
+                auto& pointer = *device;
                 auto btn = EventDetailToButton(ev->detail);
                 if (btn == automat::ui::PointerButton::Unknown) {
                   break;
@@ -850,7 +855,11 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                 xcb_input_raw_motion_event_t* ev = (xcb_input_raw_motion_event_t*)event;
                 xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
                 auto lock = Lock();
-                auto& pointer = GetMouse();
+                auto* device = MouseOrNull();
+                if (!device) {
+                  break;
+                }
+                auto& pointer = *device;
                 auto valuators = RawButtonValuators(*ev);
                 if (auto delta = valuators.GetVerticalScrollDelta(false)) {
                   for (auto& logging : pointer.loggings) {
@@ -895,6 +904,13 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                 break;
               }
               case XCB_INPUT_LEAVE: {
+                xcb_input_leave_event_t* ev = (xcb_input_leave_event_t*)event;
+                xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
+                if (ev->mode == XCB_INPUT_NOTIFY_MODE_NORMAL && mouse) {
+                  auto lock = Lock();
+                  mouse->Leave();
+                  mouse_away = std::move(mouse);
+                }
                 break;
               }
               case XCB_INPUT_FOCUS_IN: {

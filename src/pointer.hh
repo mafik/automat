@@ -65,6 +65,8 @@ struct Pointer {
   Pointer(RootWidget&, Vec2 position);
   ~Pointer();
   void Move(Vec2 position);
+  void Enter();
+  void Leave();
   void Wheel(float delta);
   void ButtonDown(PointerButton);
   void ButtonUp(PointerButton);

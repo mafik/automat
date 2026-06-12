@@ -28,7 +28,7 @@ If along the way you execute some command, it doesn't work and then you figure o
 - `python run.py "link automat"` - Build automat binary without running it (for testing compilation) (build/fast/automat)
 - `python run.py "link automat" --variant=debug` - Build debug variant - for running under GDB (build/debug/automat)
 - `python run.py "link automat" --variant=release` - Build release variant - fastest variant to build for testing (build/release/automat)
-- `python run.py compile-commands.json` - Generate `compile_commands.json` for LSP support
+- `python run.py compile_commands.json` - Generate `compile_commands.json` for LSP support. The output is cached: after include-graph changes, `rm compile_commands.json` first or entries keep stale flags.
 - `python run.py screenshot` - Take a screenshot of running automat (saved to `build/{variant}/screenshot.png`). If the invoking shell has no `DISPLAY` (headless/SSH), prefix with `DISPLAY=:0` — both automat and gnome-screenshot need the X session.
 - Build dashboard available at http://localhost:8000/ when running build commands
 - Custom build system written in Python, located in `run_py/` directory

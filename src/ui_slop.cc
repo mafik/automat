@@ -1062,8 +1062,8 @@ void Highlight(SkCanvas& canvas, const SkRect& r, SkColor color, uint32_t seed) 
 
 // ----------------------------------------------------------------- widgets ---
 
-RunButton::RunButton(Widget* parent, std::function<void()> on_click)
-    : Widget(parent), clickable(*this), on_click(std::move(on_click)) {
+RunButton::RunButton(Widget* parent, std::function<void()> on_click, uint32_t seed)
+    : Widget(parent), clickable(*this), on_click(std::move(on_click)), seed(seed) {
   clickable.activate = [this](Pointer&) {
     if (enabled && this->on_click) this->on_click();
   };
@@ -1090,7 +1090,7 @@ void RunButton::Draw(SkCanvas& canvas) const {
   canvas.scale(kPxToMetric, -kPxToMetric);
   auto PX = [&](float m) { return m / kPxToMetric; };
 
-  constexpr uint32_t kSeed = 0x60D;
+  const uint32_t kSeed = Hash2(0x60D, seed);
   float r = PX(kRadius);
 
   SkColor base = !enabled ? kGray : running ? kRed : kGreen;

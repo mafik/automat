@@ -438,7 +438,7 @@ struct ArgvField : ui::TextFieldBase {
   Vec<Str> Snapshot() const;
 };
 
-struct CommandToy : ObjectToy {
+struct CommandToy : ui::slop::ObjectToy {
   std::unique_ptr<ArgvField> field;
   std::unique_ptr<ui::slop::RunButton> button;
 
@@ -457,9 +457,9 @@ struct CommandToy : ObjectToy {
   Str resolve_query_;
   bool resolve_answer_ = false;
 
-  CommandToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {
+  CommandToy(ui::Widget* parent, Object& obj) : ui::slop::ObjectToy(parent, obj) {
     field = std::make_unique<ArgvField>(this, *this);
-    button = std::make_unique<ui::slop::RunButton>(this, [this] { OnButton(); });
+    button = std::make_unique<ui::slop::RunButton>(this, [this] { OnButton(); }, Seed(0x12B));
     UpdateFromObject();
   }
 
@@ -553,24 +553,24 @@ struct CommandToy : ObjectToy {
     {
       SlopHere g(canvas, {-kPlateW / 2, kPlateH / 2});
       SkRect plate = SkRect::MakeWH(kPlateWPx, kPlateHPx);
-      ui::slop::Panel(canvas, plate, "Command", ui::slop::kBlue, ui::slop::State::Default, kSeed,
-                      true);
+      ui::slop::Panel(canvas, plate, "Command", ui::slop::kBlue, ui::slop::State::Default,
+                      Seed(kSeed), true);
 
       {
         StrView credit = "posix_spawnp()";
         float w = ui::slop::TextWidth(credit, ui::slop::kMicroSize);
         ui::slop::DrawText(canvas, credit, {kPlateWPx - kSidePx - w, kBandPx + 11.f},
-                           ui::slop::kMicroSize, ui::slop::kInkSoft, false, kSeed);
+                           ui::slop::kMicroSize, ui::slop::kInkSoft, false, Seed(kSeed));
       }
 
       {
         float cap_y = kBandPx + kCreditRowPx + kFieldHPx + 11.f;
         ui::slop::DrawText(canvas, "program", {kSidePx + 4.f, cap_y}, ui::slop::kMicroSize,
-                           ui::slop::kInkSoft, false, kSeed);
+                           ui::slop::kInkSoft, false, Seed(kSeed));
         if (has_args_) {
           float ax = kSidePx + (first_tile_x1_px_ + kTileGapPx) * field_scale_;
           ui::slop::DrawText(canvas, "arguments...", {ax, cap_y}, ui::slop::kMicroSize,
-                             ui::slop::kInkSoft, false, kSeed);
+                             ui::slop::kInkSoft, false, Seed(kSeed));
         }
       }
 
@@ -580,9 +580,9 @@ struct CommandToy : ObjectToy {
       float row_mid = kPlateHPx - kBottomPadPx - kStatusRowPx * 0.5f;
       if (running_) {
         ui::slop::Spinner(canvas, {kSidePx + 12.f, row_mid}, 11.f, spinner_phase_,
-                          Hash2(kSeed, 0x59));
+                          Seed(Hash2(kSeed, 0x59)));
         ui::slop::DrawText(canvas, f("pid {}", pid_), {kSidePx + 32.f, row_mid + 5.f},
-                           ui::slop::kMicroSize + 2, ui::slop::kInk, false, kSeed);
+                           ui::slop::kMicroSize + 2, ui::slop::kInk, false, Seed(kSeed));
       } else if (ever_ran_) {
         Str label;
         SkColor color;
@@ -604,13 +604,13 @@ struct CommandToy : ObjectToy {
         }
         float w = ui::slop::TextWidth(label, ui::slop::kMicroSize + 2) + 18.f;
         SkRect chip = SkRect::MakeXYWH(kSidePx, row_mid - 11.f, w, 22.f);
-        uint32_t cs = Hash2(kSeed, 0xC1);
+        uint32_t cs = Seed(Hash2(kSeed, 0xC1));
         SkPath path = ui::slop::WonkyRoundRect(chip, 8.f, ui::slop::kWonk * 0.8f, cs);
         ui::slop::HandShadow(canvas, path, {2.f, 2.f}, ui::slop::kShadow, cs);
         ui::slop::MisregFill(canvas, path, color, cs);
         ui::slop::SketchyStroke(canvas, path, ui::slop::kInk, ui::slop::kStroke * 0.8f, cs, 1);
-        ui::slop::DrawTextIn(canvas, label, chip, ui::slop::kMicroSize + 2,
-                             ui::slop::TextOn(color), ui::slop::TextAlign::Center, false, cs);
+        ui::slop::DrawTextIn(canvas, label, chip, ui::slop::kMicroSize + 2, ui::slop::TextOn(color),
+                             ui::slop::TextAlign::Center, false, cs);
       }
     }
     DrawChildren(canvas);
@@ -781,7 +781,7 @@ void ArgvField::Draw(SkCanvas& canvas) const {
 
   if (l.tiles.empty()) {  // the empty program slot, waiting for a name
     SkRect r = SkRect::MakeLTRB(0, 6, kEmptyTilePx, kFieldHPx - 6);
-    uint32_t s = Hash2(kSeed, 1);
+    uint32_t s = toy.Seed(Hash2(kSeed, 1));
     SkPath outline = ui::slop::WonkyRoundRect(r, 7.f, ui::slop::kWonk, s);
     ui::slop::MisregFill(canvas, outline, ui::slop::kPaper, s);
     ui::slop::SketchyStroke(canvas, outline, ui::slop::kInkSoft, ui::slop::kStroke, s, 1);
@@ -793,7 +793,7 @@ void ArgvField::Draw(SkCanvas& canvas) const {
     const Str& word = argv[tile.tile];
     float inset = first ? 3.f : 7.f;  // the program tile stands taller than the args
     SkRect r = SkRect::MakeLTRB(tile.x0, inset, tile.x1, kFieldHPx - inset);
-    uint32_t s = Hash2(kSeed, (uint32_t)tile.tile + 2);
+    uint32_t s = toy.Seed(Hash2(kSeed, (uint32_t)tile.tile + 2));
     SkPath outline = ui::slop::WonkyRoundRect(r, 7.f, ui::slop::kWonk, s);
     bool bad = first && !toy.program_resolves_;
     ui::slop::MisregFill(canvas, outline, ui::slop::kPaper, s);

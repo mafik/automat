@@ -24,6 +24,7 @@
 #include <functional>
 #include <string_view>
 
+#include "object.hh"
 #include "ui_button.hh"
 #include "units.hh"
 #include "widget.hh"
@@ -235,6 +236,18 @@ void Highlight(SkCanvas& canvas, const SkRect& r, SkColor color = kBlue, uint32_
 
 // -------------------------------------------------------------------- widgets --
 
+// Base for toys of slop-styled objects. Drawing code passes Seed(site) as the
+// seed argument: the site constant keeps shapes within one object distinct,
+// the owner's address keeps the same site distinct between objects.
+struct ObjectToy : automat::ObjectToy {
+  using automat::ObjectToy::ObjectToy;
+  uint32_t Seed(uint32_t site) const {
+    uintptr_t a = reinterpret_cast<uintptr_t>(owner.GetUnsafe());
+    uint32_t id = static_cast<uint32_t>(a >> 4) * 2654435761u;  // skip alignment zeros, spread
+    return Hash2(site, id ? id : 1u);
+  }
+};
+
 // The run button of slop-styled objects: a hand-drawn disc with a play
 // triangle. It seats ITSELF at its parent's lower center with a slight
 // overhang past the border - the spot that matches the "next" connector -
@@ -243,6 +256,7 @@ void Highlight(SkCanvas& canvas, const SkRect& r, SkColor color = kBlue, uint32_
 struct RunButton : Widget {
   Clickable clickable;
   std::function<void()> on_click;
+  uint32_t seed;  // per-object wobble; owners pass their Seed(site)
   bool running = false;
   bool enabled = true;
 
@@ -256,7 +270,7 @@ struct RunButton : Widget {
     return start;
   }
 
-  RunButton(Widget* parent, std::function<void()> on_click);
+  RunButton(Widget* parent, std::function<void()> on_click, uint32_t seed = 0);
 
   StrView Name() const override { return "RunButton"; }
   bool CenteredAtZero() const override { return true; }

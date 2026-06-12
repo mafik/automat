@@ -75,7 +75,7 @@ namespace {
 
 constexpr float kClientPx = 0.20_mm;  // one client pixel on the board
 constexpr float kTitleH = 7_mm;
-constexpr float kFrame = 0.8_mm;     // ink frame around the client pixels
+constexpr float kFrame = 0.8_mm;      // ink frame around the client pixels
 constexpr float kMinContentW = 4_cm;  // placeholder size before the first buffer
 constexpr float kMinContentH = 3_cm;
 
@@ -104,7 +104,7 @@ Vec2 WindowBoardSize(int width, int height) {
   return Vec2(content_w + 2 * kFrame, content_h + 2 * kFrame + kTitleH);
 }
 
-struct WaylandWindowToy : ObjectToy {
+struct WaylandWindowToy : ui::slop::ObjectToy {
   sk_sp<SkImage> image;
   uint64_t image_serial = 0;
   Str title_;
@@ -112,7 +112,9 @@ struct WaylandWindowToy : ObjectToy {
   float content_w = kMinContentW, content_h = kMinContentH;
   ui::Caret* caret_ = nullptr;  // present while the keyboard flows into the client
 
-  WaylandWindowToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) { PullState(); }
+  WaylandWindowToy(ui::Widget* parent, Object& obj) : ui::slop::ObjectToy(parent, obj) {
+    PullState();
+  }
   ~WaylandWindowToy() override {
     if (caret_) caret_->Release();
   }
@@ -151,8 +153,7 @@ struct WaylandWindowToy : ObjectToy {
     float w = TotalW(), h = TotalH();
     float left = -w / 2 + kFrame, right = w / 2 - kFrame;
     float top = h / 2 - kTitleH - kFrame, bottom = -h / 2 + kFrame;
-    bool inside =
-        local.x >= left && local.x <= right && local.y >= bottom && local.y <= top;
+    bool inside = local.x >= left && local.x <= right && local.y >= bottom && local.y <= top;
     float cx = std::clamp(local.x, left, right);
     float cy = std::clamp(local.y, bottom, top);
     sx = (cx - left) / kClientPx;
@@ -169,8 +170,8 @@ struct WaylandWindowToy : ObjectToy {
   SkPath FocusCaretShape() const {
     float w = TotalW(), h = TotalH();
     float band_bottom = h / 2 - kTitleH;
-    return SkPath::Rect(
-        SkRect::MakeLTRB(-w / 2 + 1.5_mm, band_bottom + 1.1_mm, w / 2 - 6_mm, band_bottom + 1.9_mm));
+    return SkPath::Rect(SkRect::MakeLTRB(-w / 2 + 1.5_mm, band_bottom + 1.1_mm, w / 2 - 6_mm,
+                                         band_bottom + 1.9_mm));
   }
 
   void FocusClient(ui::Pointer& p) {
@@ -228,7 +229,7 @@ struct WaylandWindowToy : ObjectToy {
       float w_px = w / kSlopPx;
       float h_px = h / kSlopPx;
       float title_px = kTitleH / kSlopPx;
-      uint32_t seed = ui::slop::Hash2(0x3A11D, (uint32_t)(title_.size() + 1));
+      uint32_t seed = Seed(ui::slop::Hash2(0x3A11D, (uint32_t)(title_.size() + 1)));
       SkRect body = SkRect::MakeWH(w_px, h_px);
       SkPath base = ui::slop::WonkyRoundRect(body, 7.f, ui::slop::kWonk, seed);
       ui::slop::HandShadow(canvas, base, {ui::slop::kShadowDX, ui::slop::kShadowDY},
@@ -237,9 +238,9 @@ struct WaylandWindowToy : ObjectToy {
       SkRect band = SkRect::MakeLTRB(0, 0, w_px, title_px);
       canvas.save();
       canvas.clipPath(base, true);
-      canvas.drawPath(ui::slop::WobbleRect(band, ui::slop::kWonk, ui::slop::kSeg,
-                                           ui::slop::Hash2(seed, 3)),
-                      ui::slop::InkPaint(ui::slop::kBlue, 1.f, true));
+      canvas.drawPath(
+          ui::slop::WobbleRect(band, ui::slop::kWonk, ui::slop::kSeg, ui::slop::Hash2(seed, 3)),
+          ui::slop::InkPaint(ui::slop::kBlue, 1.f, true));
       SkPaint band_fill;
       band_fill.setColor(ui::slop::kBlue);
       band_fill.setAntiAlias(true);

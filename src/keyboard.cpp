@@ -601,7 +601,11 @@ Keyboard::Keyboard(RootWidget& root_widget) : Widget(&root_widget), root_widget(
 #endif
 }
 
-Keyboard::~Keyboard() = default;
+Keyboard::~Keyboard() {
+  while (!carets.empty()) {
+    (*carets.begin())->Release();
+  }
+}
 
 #if defined(_WIN32)
 

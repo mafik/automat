@@ -127,14 +127,14 @@ Ptr<Object> LockWindow(Toplevel& t) { return t.window_weak.Lock(); }
 // signals, dispatch its ready events once (non-blocking) and flush replies.
 struct WaylandListener : epoll::Listener {
   Server* server = nullptr;
-  const char* Name() const override { return "Wayland"; }
+  StrView Name() const override { return "Wayland"sv; }
   void NotifyRead(Status&) override;
 };
 
 // The eventfd that carries cross-thread work posted onto the wayland thread.
 struct PostListener : epoll::Listener {
   Server* server = nullptr;
-  const char* Name() const override { return "Post"; }
+  StrView Name() const override { return "Post"sv; }
   void NotifyRead(Status&) override;
 };
 
@@ -144,7 +144,7 @@ struct ProcessWatch : epoll::Listener {
   Server* server = nullptr;
   pid_t pid = 0;
   std::function<void(int)> on_exit;
-  const char* Name() const override { return "ProcessWatch"; }
+  StrView Name() const override { return "ProcessWatch"sv; }
   void NotifyRead(Status&) override;
 };
 
@@ -154,7 +154,7 @@ struct CloseTimer : epoll::Listener {
   Server* server = nullptr;
   pid_t pid = 0;
   Toplevel* owner = nullptr;
-  const char* Name() const override { return "CloseTimer"; }
+  StrView Name() const override { return "CloseTimer"sv; }
   void NotifyRead(Status&) override;
 };
 

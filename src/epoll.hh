@@ -4,8 +4,7 @@
 
 #include "fd.hh"
 #include "status.hh"
-
-// TODO: Migrate const char* Name() to str Name()
+#include "str.hh"
 
 // C++ wrappers around the Linux epoll facility.
 namespace automat::epoll {
@@ -34,7 +33,7 @@ struct Listener {
   // writing.
   virtual void NotifyWrite(Status&) {};
 
-  virtual const char* Name() const = 0;
+  virtual StrView Name() const = 0;
 
   // Less-than operator for use in std::set.
   bool operator<(const Listener& other) const { return fd < other.fd; }

@@ -158,7 +158,6 @@ struct Server {
   std::thread thread;
   WaylandListener wayland_listener;
   mux::Epoll epoll;
-  std::stop_source stop_source;
   uint32_t serial = 1;
 
   // Protocol objects; wayland thread only.
@@ -677,16 +676,53 @@ void BindXdgWmBase(wl_client* client, void* data, uint32_t version, uint32_t id)
   s.wm_bases.push_back(std::move(res));
 }
 
-void WaylandThread(Server* s) {
+void WaylandThread(Server* s, std::stop_token stop) {
   SetThreadName("Wayland");
+  s->display = wl_display_create();
+  if (!s->display) {
+    ERROR << "Wayland compositor disabled: wl_display_create failed.";
+    return;
+  }
+  s->loop = wl_display_get_event_loop(s->display);
+  // The socket is optional: without it clients can't connect, but the event
+  // loop still runs and drives process watching.
+  if (getenv("XDG_RUNTIME_DIR")) {
+    if (const char* socket = wl_display_add_socket_auto(s->display)) {
+      s->socket_name = socket;
+    } else {
+      ERROR << "Wayland: couldn't open a socket; clients can't connect.";
+    }
+  } else {
+    ERROR << "Wayland: XDG_RUNTIME_DIR unset; clients can't connect.";
+  }
+  wl_display_init_shm(s->display);
+  wl_global_create(s->display, &wl_compositor_interface, 6, s, BindCompositor);
+  wl_global_create(s->display, &wl_subcompositor_interface, 1, s, BindSubcompositor);
+  wl_global_create(s->display, &wl_output_interface, 4, s, BindOutput);
+  wl_global_create(s->display, &wl_seat_interface, 5, s, BindSeat);
+  wl_global_create(s->display, &wl_data_device_manager_interface, 3, s, BindDataDeviceManager);
+  wl_global_create(s->display, &xdg_wm_base_interface, 6, s, BindXdgWmBase);
+  wl_global_create(s->display, &zxdg_decoration_manager_v1_interface, 1, s, BindDecorationManager);
+  InitKeymap(*s);
+
   Status status;
   s->epoll.Init(status);
   s->wayland_listener.server = s;
   s->wayland_listener.fd = wl_event_loop_get_fd(s->loop);
   s->epoll.Add(&s->wayland_listener, status);
-  if (OK(status)) s->epoll.Loop(status, s->stop_source.get_token());
+
+  // Published last: a non-null g_server means the compositor is ready. Wake the
+  // UI so UIFrame runs now that it exists (deserialized windows respawn there).
+  g_server = s;
+  vm.WakeToys();
+  if (!s->socket_name.empty()) LOG << "Wayland compositor listening on " << s->socket_name;
+
+  if (OK(status)) s->epoll.Loop(status, stop);
   if (!OK(status)) ERROR << "Wayland epoll loop stopped: " << status.ToStr();
   wl_display_flush_clients(s->display);
+  wl_display_destroy_clients(s->display);
+  wl_display_destroy(s->display);
+  if (s->keymap_fd >= 0) close(s->keymap_fd);
 }
 
 Toplevel* FindToplevel(Server& s, void* handle) {
@@ -713,57 +749,19 @@ void PostInput(WaylandWindow& w, Fn&& fn) {
 
 }  // namespace
 
-void Start() {
+void Start(std::stop_token stop) {
   if (g_server) return;
   auto* s = new Server();
-  s->display = wl_display_create();
-  if (!s->display) {
-    ERROR << "Wayland compositor disabled: wl_display_create failed.";
-    delete s;
-    return;
-  }
-  s->loop = wl_display_get_event_loop(s->display);
-  // The socket is optional: without it clients can't connect, but the event
-  // loop still runs and drives process watching.
-  if (getenv("XDG_RUNTIME_DIR")) {
-    if (const char* socket = wl_display_add_socket_auto(s->display)) {
-      s->socket_name = socket;
-    } else {
-      ERROR << "Wayland: couldn't open a socket; clients can't connect.";
-    }
-  } else {
-    ERROR << "Wayland: XDG_RUNTIME_DIR unset; clients can't connect.";
-  }
-  wl_display_init_shm(s->display);
-  wl_global_create(s->display, &wl_compositor_interface, 6, s, BindCompositor);
-  wl_global_create(s->display, &wl_subcompositor_interface, 1, s, BindSubcompositor);
-  wl_global_create(s->display, &wl_output_interface, 4, s, BindOutput);
-  wl_global_create(s->display, &wl_seat_interface, 5, s, BindSeat);
-  wl_global_create(s->display, &wl_data_device_manager_interface, 3, s, BindDataDeviceManager);
-  wl_global_create(s->display, &xdg_wm_base_interface, 6, s, BindXdgWmBase);
-  wl_global_create(s->display, &zxdg_decoration_manager_v1_interface, 1, s, BindDecorationManager);
-  InitKeymap(*s);
-  s->thread = std::thread(WaylandThread, s);
-  g_server = s;
-  // Frames may have already run and gone idle before the server existed; wake
-  // the UI so UIFrame sees it (deserialized windows wait there to respawn).
-  vm.WakeToys();
-  if (!s->socket_name.empty()) LOG << "Wayland compositor listening on " << s->socket_name;
+  s->thread = std::thread(WaylandThread, s, std::move(stop));
 }
 
-void Stop() {
-  if (!g_server) return;
+void Join() {
   auto* s = g_server;
+  if (!s) return;
+  // Null first so a straggler UIFrame/input call no-ops; the Server stays leaked
+  // so a g_server snapshot already taken keeps pointing at valid memory.
   g_server = nullptr;
-  s->stop_source.request_stop();
   s->thread.join();
-  wl_display_destroy_clients(s->display);
-  wl_display_destroy(s->display);
-  if (s->keymap_fd >= 0) close(s->keymap_fd);
-  // The Server allocation is deliberately leaked: the render thread may race
-  // one last UIFrame/input call against this shutdown, and a dangling
-  // g_server snapshot must still point at valid memory. Stop only runs once,
-  // at process exit.
 }
 
 bool Running() { return g_server != nullptr; }

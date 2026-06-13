@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <stop_token>
 
 #include "status.hh"
 #include "str.hh"
@@ -28,11 +29,11 @@ struct WaylandWindow;
 namespace automat::wayland {
 
 // Starts the compositor thread. Somehow it's also responsible for process watching.
-// Safe to call once at startup.
-void Start();
+// Safe to call once at startup; the thread's loop runs until `stop` is requested.
+void Start(std::stop_token stop);
 
-// Disconnects clients and joins the compositor thread.
-void Stop();
+// Waits for the compositor thread to finish its teardown after `stop`.
+void Join();
 
 bool Running();
 

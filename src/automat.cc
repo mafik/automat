@@ -148,7 +148,7 @@ int Main() {
   StartWorkerThreads(stop_source.get_token());
 
 #if defined(__linux__)
-  wayland::Start();
+  wayland::Start(stop_source.get_token());
 #endif
 
   if (root_widget->loading_animation) {
@@ -164,7 +164,7 @@ int Main() {
   stop_source.request_stop();
 
 #if defined(__linux__)
-  wayland::Stop();
+  wayland::Join();
 #endif
 
   tray_icon.reset();

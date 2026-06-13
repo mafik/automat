@@ -31,8 +31,15 @@ translation unit rather than being `#include`d into another.
 
 ## Threading
 
-A dedicated wayland thread owns the `wl_display` and every protocol object.
-Cross-thread work is posted onto it through an eventfd queue (`Server::Post`).
+A dedicated wayland thread owns the `wl_display` and every protocol object. It
+runs one epoll loop that multiplexes every descriptor the subsystem cares about, each wrapped as an
+`epoll::Listener`:
+
+- the `wl_display` event loop
+- cross-thread work posted onto the thread (`Server::Post`)
+- one pidfd per child process started by a Command
+- one timerfd per pending window-close escalation
+
 Pixels flow out through the window object as a ready `sk_sp<SkImage>`: each
 committed `wl_shm` buffer is row-copied once into a pooled allocation (the
 pool entry is reclaimed when the previous frame's image lets go) and the

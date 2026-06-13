@@ -12,15 +12,17 @@
 #include <linux/input-event-codes.h>
 #include <sys/eventfd.h>
 #include <sys/mman.h>
+#include <sys/syscall.h>
+#include <sys/timerfd.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <wayland-server.h>
 #include <xkbcommon/xkbcommon-x11.h>
 #include <xkbcommon/xkbcommon.h>
 
+#include <cerrno>
 #include <csignal>
-
-#include "xcb.hh"
-
+#include <cstring>
 #include <functional>
 #include <mutex>
 #include <thread>
@@ -28,11 +30,14 @@
 #include <vector>
 
 #include "automat.hh"
+#include "epoll.hh"
+#include "format.hh"
 #include "library_command.hh"
 #include "library_wayland_window.hh"
 #include "log.hh"
 #include "thread_name.hh"
 #include "time.hh"
+#include "xcb.hh"
 
 // The generated headers #define F std::function; they must come after all
 // Automat headers.
@@ -56,6 +61,8 @@ namespace {
 // when an xdg-shell role chain is built on top of it.
 
 struct Toplevel;
+struct Server;
+struct CloseTimer;
 
 // A wl_surface: the client's pixel container. We track only what commit
 // needs - the buffer attached since the last commit, the frame callbacks the
@@ -103,8 +110,8 @@ struct Toplevel {
   Str title;
   Str app_id;
   bool mapped = false;
-  pid_t pid = 0;                           // client process, for close escalation
-  wl_event_source* close_timer = nullptr;  // armed when a close was requested
+  pid_t pid = 0;                      // client process, for close escalation
+  CloseTimer* close_timer = nullptr;  // armed when a close was requested
   WeakPtr<Object> window_weak;
   // Recycled frame allocations: an entry is reclaimed once nothing else
   // (the window's SkImage, the renderer) still references it.
@@ -116,13 +123,49 @@ struct Toplevel {
 
 Ptr<Object> LockWindow(Toplevel& t) { return t.window_weak.Lock(); }
 
+// Drives libwayland from our epoll loop: when the wl_display's event loop fd
+// signals, dispatch its ready events once (non-blocking) and flush replies.
+struct WaylandListener : epoll::Listener {
+  Server* server = nullptr;
+  const char* Name() const override { return "Wayland"; }
+  void NotifyRead(Status&) override;
+};
+
+// The eventfd that carries cross-thread work posted onto the wayland thread.
+struct PostListener : epoll::Listener {
+  Server* server = nullptr;
+  const char* Name() const override { return "Post"; }
+  void NotifyRead(Status&) override;
+};
+
+// One spawned child watched for exit. The pidfd becomes readable when the
+// child is reapable; we waitpid for the raw status and hand it to on_exit.
+struct ProcessWatch : epoll::Listener {
+  Server* server = nullptr;
+  pid_t pid = 0;
+  std::function<void(int)> on_exit;
+  const char* Name() const override { return "ProcessWatch"; }
+  void NotifyRead(Status&) override;
+};
+
+// Armed when the user deletes a window: SIGTERMs the client if it ignores the
+// xdg_toplevel.close request for two seconds.
+struct CloseTimer : epoll::Listener {
+  Server* server = nullptr;
+  pid_t pid = 0;
+  Toplevel* owner = nullptr;
+  const char* Name() const override { return "CloseTimer"; }
+  void NotifyRead(Status&) override;
+};
+
 struct Server {
   wl_display* display = nullptr;
   wl_event_loop* loop = nullptr;
   int post_fd = -1;
   Str socket_name;
   std::thread thread;
-  bool quit = false;  // wayland thread only
+  WaylandListener wayland_listener;
+  PostListener post_listener;
   uint32_t serial = 1;
 
   std::mutex post_mutex;
@@ -150,6 +193,11 @@ struct Server {
   std::unordered_map<wl_resource*, Surface*> surface_by_res;
   std::unordered_map<wl_resource*, Toplevel*> toplevel_by_res;
 
+  // Child processes watched for exit via pidfd, and pending close-escalation
+  // timers; both are epoll Listeners owned and touched only on the wayland thread.
+  std::vector<std::unique_ptr<ProcessWatch>> process_watches;
+  std::vector<std::unique_ptr<CloseTimer>> close_timers;
+
   // The xkb keymap advertised to clients (matches the compositor host's
   // default layout); built once at startup.
   int keymap_fd = -1;
@@ -173,6 +221,10 @@ struct Server {
     uint64_t one = 1;
     (void)!write(post_fd, &one, sizeof(one));
   }
+
+  // Removes every Listener so epoll::Loop returns; called on the wayland thread
+  // at shutdown via Post.
+  void Shutdown();
 };
 
 Server* g_server = nullptr;
@@ -185,6 +237,60 @@ void EraseOwned(std::vector<std::unique_ptr<T>>& v, T* p) {
       return;
     }
   }
+}
+
+void WaylandListener::NotifyRead(Status&) {
+  wl_event_loop_dispatch(server->loop, 0);
+  wl_display_flush_clients(server->display);
+}
+
+void PostListener::NotifyRead(Status&) {
+  uint64_t value;
+  (void)!read(fd, &value, sizeof(value));
+  std::vector<std::function<void()>> fns;
+  {
+    auto lock = std::lock_guard(server->post_mutex);
+    fns.swap(server->posted);
+  }
+  for (auto& fn : fns) fn();
+  // Input injection and request handling queue protocol events; flush before
+  // the loop blocks again so clients see them.
+  wl_display_flush_clients(server->display);
+}
+
+void ProcessWatch::NotifyRead(Status&) {
+  // pidfd readability means the child is reapable; waitpid yields the raw
+  // status the Command toy decodes, exactly as the old reaper thread did.
+  int wstatus = 0;
+  while (waitpid(pid, &wstatus, 0) < 0 && errno == EINTR) {
+  }
+  auto cb = std::move(on_exit);
+  Server* s = server;
+  Status local;
+  epoll::Del(this, local);
+  EraseOwned(s->process_watches, this);  // frees `this`; its FD closes the pidfd
+  if (cb) cb(wstatus);
+}
+
+void CloseTimer::NotifyRead(Status&) {
+  uint64_t value;
+  (void)!read(fd, &value, sizeof(value));
+  if (pid > 0) kill(pid, SIGTERM);
+  if (owner) owner->close_timer = nullptr;
+  Server* s = server;
+  Status local;
+  epoll::Del(this, local);
+  EraseOwned(s->close_timers, this);  // frees `this`; its FD closes the timerfd
+}
+
+void Server::Shutdown() {
+  Status local;
+  epoll::Del(&wayland_listener, local);
+  for (auto& w : process_watches) epoll::Del(w.get(), local);
+  process_watches.clear();  // FD destructors close the pidfds
+  for (auto& t : close_timers) epoll::Del(t.get(), local);
+  close_timers.clear();  // FD destructors close the timerfds
+  epoll::Del(&post_listener, local);
 }
 
 uint32_t NowMs() {
@@ -400,7 +506,13 @@ void NewToplevel(Server& s, XdgSurf& xs, uint32_t id) {
   });
   res->setOnDestroy([&s, tp](CXdgToplevel* r) {
     UnmapToplevel(s, *tp);
-    if (tp->close_timer) wl_event_source_remove(tp->close_timer);
+    if (tp->close_timer) {
+      Status st;
+      epoll::Del(tp->close_timer, st);
+      close(tp->close_timer->fd);
+      EraseOwned(s.close_timers, tp->close_timer);
+      tp->close_timer = nullptr;
+    }
     s.toplevel_by_res.erase(r->resource());
     if (tp->xdg) tp->xdg->toplevel = nullptr;
     if (tp->xdg && tp->xdg->surface) tp->xdg->surface->toplevel = nullptr;
@@ -434,9 +546,8 @@ void BindCompositor(wl_client* client, void* data, uint32_t version, uint32_t id
   auto& s = *(Server*)data;
   auto res = std::make_unique<CWlCompositor>(client, version, id);
   CWlCompositor* rp = res.get();
-  rp->setCreateSurface([&s](CWlCompositor* r, uint32_t id) {
-    NewSurface(s, r->client(), r->version(), id);
-  });
+  rp->setCreateSurface(
+      [&s](CWlCompositor* r, uint32_t id) { NewSurface(s, r->client(), r->version(), id); });
   rp->setCreateRegion([&s](CWlCompositor* r, uint32_t id) {
     auto region = std::make_unique<CWlRegion>(r->client(), r->version(), id);
     CWlRegion* gp = region.get();
@@ -510,9 +621,8 @@ void InitKeymap(Server& s) {
   xkb_keymap* keymap = nullptr;
   if (xcb::connection) {
     xkb_x11_setup_xkb_extension(xcb::connection, XKB_X11_MIN_MAJOR_XKB_VERSION,
-                                XKB_X11_MIN_MINOR_XKB_VERSION,
-                                XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS, nullptr, nullptr, nullptr,
-                                nullptr);
+                                XKB_X11_MIN_MINOR_XKB_VERSION, XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS,
+                                nullptr, nullptr, nullptr, nullptr);
     int32_t device = xkb_x11_get_core_keyboard_device_id(xcb::connection);
     if (device >= 0) {
       keymap =
@@ -615,25 +725,18 @@ void BindXdgWmBase(wl_client* client, void* data, uint32_t version, uint32_t id)
   s.wm_bases.push_back(std::move(res));
 }
 
-int PostFdDispatch(int fd, uint32_t mask, void* data) {
-  auto& s = *(Server*)data;
-  uint64_t value;
-  (void)!read(fd, &value, sizeof(value));
-  std::vector<std::function<void()>> fns;
-  {
-    auto lock = std::lock_guard(s.post_mutex);
-    fns.swap(s.posted);
-  }
-  for (auto& fn : fns) fn();
-  return 0;
-}
-
 void WaylandThread(Server* s) {
   SetThreadName("Wayland");
-  while (!s->quit) {
-    wl_display_flush_clients(s->display);
-    wl_event_loop_dispatch(s->loop, -1);
-  }
+  epoll::Init();
+  s->wayland_listener.server = s;
+  s->wayland_listener.fd = wl_event_loop_get_fd(s->loop);
+  s->post_listener.server = s;
+  s->post_listener.fd = s->post_fd;
+  Status status;
+  epoll::Add(&s->wayland_listener, status);
+  epoll::Add(&s->post_listener, status);
+  if (OK(status)) epoll::Loop(status);
+  if (!OK(status)) ERROR << "Wayland epoll loop stopped: " << status.ToStr();
   wl_display_flush_clients(s->display);
 }
 
@@ -663,21 +766,25 @@ void PostInput(WaylandWindow& w, Fn&& fn) {
 
 void Start() {
   if (g_server) return;
-  if (!getenv("XDG_RUNTIME_DIR")) {
-    ERROR << "Wayland compositor disabled: XDG_RUNTIME_DIR is not set.";
-    return;
-  }
   auto* s = new Server();
   s->display = wl_display_create();
-  const char* socket = wl_display_add_socket_auto(s->display);
-  if (!socket) {
-    ERROR << "Wayland compositor disabled: couldn't open a socket.";
-    wl_display_destroy(s->display);
+  if (!s->display) {
+    ERROR << "Wayland compositor disabled: wl_display_create failed.";
     delete s;
     return;
   }
-  s->socket_name = socket;
   s->loop = wl_display_get_event_loop(s->display);
+  // The socket is optional: without it clients can't connect, but the event
+  // loop still runs and drives process watching.
+  if (getenv("XDG_RUNTIME_DIR")) {
+    if (const char* socket = wl_display_add_socket_auto(s->display)) {
+      s->socket_name = socket;
+    } else {
+      ERROR << "Wayland: couldn't open a socket; clients can't connect.";
+    }
+  } else {
+    ERROR << "Wayland: XDG_RUNTIME_DIR unset; clients can't connect.";
+  }
   wl_display_init_shm(s->display);
   wl_global_create(s->display, &wl_compositor_interface, 6, s, BindCompositor);
   wl_global_create(s->display, &wl_subcompositor_interface, 1, s, BindSubcompositor);
@@ -685,24 +792,22 @@ void Start() {
   wl_global_create(s->display, &wl_seat_interface, 5, s, BindSeat);
   wl_global_create(s->display, &wl_data_device_manager_interface, 3, s, BindDataDeviceManager);
   wl_global_create(s->display, &xdg_wm_base_interface, 6, s, BindXdgWmBase);
-  wl_global_create(s->display, &zxdg_decoration_manager_v1_interface, 1, s,
-                   BindDecorationManager);
+  wl_global_create(s->display, &zxdg_decoration_manager_v1_interface, 1, s, BindDecorationManager);
   InitKeymap(*s);
   s->post_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
-  wl_event_loop_add_fd(s->loop, s->post_fd, WL_EVENT_READABLE, PostFdDispatch, s);
   s->thread = std::thread(WaylandThread, s);
   g_server = s;
   // Frames may have already run and gone idle before the server existed; wake
   // the UI so UIFrame sees it (deserialized windows wait there to respawn).
   vm.WakeToys();
-  LOG << "Wayland compositor listening on " << s->socket_name;
+  if (!s->socket_name.empty()) LOG << "Wayland compositor listening on " << s->socket_name;
 }
 
 void Stop() {
   if (!g_server) return;
   auto* s = g_server;
   g_server = nullptr;
-  s->Post([s] { s->quit = true; });
+  s->Post([s] { s->Shutdown(); });
   s->thread.join();
   wl_display_destroy_clients(s->display);
   wl_display_destroy(s->display);
@@ -769,9 +874,9 @@ void UIFrame() {
       // aligned; siblings cascade slightly so they stay distinguishable.
       Vec2 plate = library::CommandPlateSize();
       Vec2 size = library::WindowBoardSize(win_w, win_h);
-      loc.position = command_location->position +
-                     Vec2(plate.x / 2 + 0.008f + size.x / 2 + 0.006f * (n % 3),
-                          plate.y / 2 - size.y / 2 - 0.012f * (n % 3));
+      loc.position =
+          command_location->position + Vec2(plate.x / 2 + 0.008f + size.x / 2 + 0.006f * (n % 3),
+                                            plate.y / 2 - size.y / 2 - 0.012f * (n % 3));
     } else {
       loc.position = Vec2(0.17f + 0.01f * (n % 3), 0.04f - 0.02f * (n % 5));
     }
@@ -839,18 +944,55 @@ void NotifyWindowDestroyed(void* handle) {
     auto* t = FindToplevel(*s, handle);
     if (!t) return;
     t->res.sendClose();
-    // A client that ignores the request gets SIGTERM shortly after.
+    // A client that ignores the request gets SIGTERM after a grace period.
     if (!t->close_timer) {
-      t->close_timer = wl_event_loop_add_timer(
-          s->loop,
-          [](void* data) -> int {
-            auto* t = (Toplevel*)data;
-            if (t->pid > 0) kill(t->pid, SIGTERM);
-            return 0;
-          },
-          t);
-      if (t->close_timer) wl_event_source_timer_update(t->close_timer, 2000);
+      int tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
+      if (tfd < 0) return;
+      itimerspec spec = {};
+      spec.it_value.tv_sec = 2;
+      timerfd_settime(tfd, 0, &spec, nullptr);
+      auto timer = std::make_unique<CloseTimer>();
+      timer->fd = tfd;
+      timer->server = s;
+      timer->pid = t->pid;
+      timer->owner = t;
+      Status st;
+      epoll::Add(timer.get(), st);
+      if (!OK(st)) return;  // timer's FD closes the timerfd
+      t->close_timer = timer.get();
+      s->close_timers.push_back(std::move(timer));
     }
+  });
+}
+
+void WatchProcess(pid_t pid, std::function<void(int)> on_exit, Status& status) {
+  // pidfd_open lacks a guaranteed glibc wrapper across versions, so go through
+  // the syscall. The pid is still our unreaped child, so it is valid here.
+  int pidfd = (int)syscall(SYS_pidfd_open, pid, 0);
+  if (pidfd < 0) {
+    AppendErrorMessage(status) += f("pidfd_open(pid={}): {}", (int)pid, strerror(errno));
+    return;
+  }
+  auto* s = g_server;
+  if (!s) {
+    close(pidfd);
+    AppendErrorMessage(status) += "Wayland compositor is not running.";
+    return;
+  }
+  // Registration must happen on the wayland thread (the epoll instance lives there).
+  s->Post([s, pidfd, pid, cb = std::move(on_exit)]() mutable {
+    auto w = std::make_unique<ProcessWatch>();
+    w->fd = pidfd;
+    w->server = s;
+    w->pid = pid;
+    w->on_exit = std::move(cb);
+    Status st;
+    epoll::Add(w.get(), st);
+    if (!OK(st)) {
+      ERROR << "Wayland: couldn't watch pid " << (int)pid << ": " << st.ToStr();
+      return;  // w's FD closes the pidfd
+    }
+    s->process_watches.push_back(std::move(w));
   });
 }
 
@@ -929,8 +1071,8 @@ void SendKeyboardLeave(WaylandWindow& w) {
 
 void SendKey(WaylandWindow& w, uint32_t evdev_keycode, bool pressed, bool ctrl, bool alt,
              bool shift, bool super) {
-  PostInput(w, [evdev_keycode, pressed, ctrl, alt, shift,
-                super](Server& s, Toplevel&, wl_resource* surf) {
+  PostInput(w, [evdev_keycode, pressed, ctrl, alt, shift, super](Server& s, Toplevel&,
+                                                                 wl_resource* surf) {
     wl_client* c = wl_resource_get_client(surf);
     uint32_t mods = (ctrl ? s.mod_ctrl : 0) | (alt ? s.mod_alt : 0) | (shift ? s.mod_shift : 0) |
                     (super ? s.mod_super : 0);

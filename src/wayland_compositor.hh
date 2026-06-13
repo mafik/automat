@@ -13,8 +13,12 @@
 // through WaylandWindow::pixels (object mutex + wake_counter); board
 // mutations happen in UIFrame(), called once per frame on the UI thread.
 
-#include <cstdint>
+#include <sys/types.h>
 
+#include <cstdint>
+#include <functional>
+
+#include "status.hh"
 #include "str.hh"
 
 namespace automat::library {
@@ -23,8 +27,8 @@ struct WaylandWindow;
 
 namespace automat::wayland {
 
-// Starts the compositor thread and opens the socket. Safe to call once at
-// startup; logs and disables itself on failure.
+// Starts the compositor thread. Somehow it's also responsible for process watching.
+// Safe to call once at startup.
 void Start();
 
 // Disconnects clients and joins the compositor thread.
@@ -43,6 +47,10 @@ void UIFrame();
 // hole, bubble menu), so ask the client to close; SIGTERM follows if it
 // ignores the request. Safe from any thread.
 void NotifyWindowDestroyed(void* toplevel_handle);
+
+// Watches a spawned child for exit. `on_exit` runs on the compositor
+// thread with the raw waitpid() status. Safe to call from any thread.
+void WatchProcess(pid_t pid, std::function<void(int wait_status)> on_exit, Status& status);
 
 // UI-thread input injection. Coordinates are client-surface pixels. All of
 // these are asynchronous and become no-ops when the window's client is gone.

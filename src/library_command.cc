@@ -7,14 +7,11 @@
 
 #include <include/core/SkCanvas.h>
 
-#include <cerrno>
 #include <cmath>
-#include <thread>
 
 #include "animation.hh"
 #include "format.hh"
 #include "text_field.hh"
-#include "thread_name.hh"
 #include "ui_beta.hh"
 #include "ui_button.hh"
 #include "units.hh"
@@ -166,22 +163,24 @@ I64 SpawnArgv(const Vec<Str>& argv_in, Status& status) {
   return pid;
 }
 
-static void StartReaper(Command& cmd, I64 pid) {
-  std::thread([weak = cmd.AcquireWeakPtr(), pid] {
-    SetThreadName("Command reaper");
-    int status = 0;
-    while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
-    }
-    if (auto obj = weak.Lock()) {
-      auto& cmd = static_cast<Command&>(*obj);
-      auto lock = std::lock_guard(cmd.mutex);
-      cmd.child_pid = 0;
-      cmd.wait_status = status;
-      // Cancel() may have already consumed the task; Done() requires one.
-      if (cmd.running->IsRunning()) cmd.running->Done();
-      cmd.WakeToys();
-    }
-  }).detach();
+// Watches the child for exit on the compositor's epoll loop (pidfd), instead of
+// a blocking thread. The callback runs on the compositor thread.
+static void WatchChild(Command& cmd, I64 pid) {
+  Status status;
+  wayland::WatchProcess((pid_t)pid,
+                        [weak = cmd.AcquireWeakPtr(), pid](int wait_status) {
+                          if (auto obj = weak.Lock()) {
+                            auto& cmd = static_cast<Command&>(*obj);
+                            auto lock = std::lock_guard(cmd.mutex);
+                            if (cmd.child_pid == pid) cmd.child_pid = 0;
+                            cmd.wait_status = wait_status;
+                            // Cancel() may have already consumed the task; Done() requires one.
+                            if (cmd.running->IsRunning()) cmd.running->Done();
+                            cmd.WakeToys();
+                          }
+                        },
+                        status);
+  if (!OK(status)) cmd.ReportError(status.ToStr());
 }
 
 void Command::Launch(std::unique_ptr<RunTask>& task) {
@@ -205,7 +204,7 @@ void Command::Launch(std::unique_ptr<RunTask>& task) {
   }
   ClearOwnError();
   WakeToys();
-  StartReaper(*this, pid);
+  WatchChild(*this, pid);
 }
 
 I64 Command::AdoptiveLaunch(Status& status) {
@@ -228,7 +227,7 @@ I64 Command::AdoptiveLaunch(Status& status) {
   }
   ClearOwnError();
   WakeToys();
-  StartReaper(*this, pid);
+  WatchChild(*this, pid);
   return pid;
 }
 

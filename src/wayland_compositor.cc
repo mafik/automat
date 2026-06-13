@@ -10,7 +10,6 @@
 #include <include/core/SkData.h>
 #include <include/core/SkImage.h>
 #include <linux/input-event-codes.h>
-#include <sys/eventfd.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/timerfd.h>
@@ -25,16 +24,17 @@
 #include <cstring>
 #include <functional>
 #include <mutex>
+#include <stop_token>
 #include <thread>
 #include <unordered_map>
 #include <vector>
 
 #include "automat.hh"
-#include "epoll.hh"
 #include "format.hh"
 #include "library_command.hh"
 #include "library_wayland_window.hh"
 #include "log.hh"
+#include "mux_epoll.hh"
 #include "thread_name.hh"
 #include "time.hh"
 #include "xcb.hh"
@@ -125,22 +125,15 @@ Ptr<Object> LockWindow(Toplevel& t) { return t.window_weak.Lock(); }
 
 // Drives libwayland from our epoll loop: when the wl_display's event loop fd
 // signals, dispatch its ready events once (non-blocking) and flush replies.
-struct WaylandListener : epoll::Listener {
+struct WaylandListener : mux::Epoll::Listener {
   Server* server = nullptr;
   StrView Name() const override { return "Wayland"sv; }
   void NotifyRead(Status&) override;
 };
 
-// The eventfd that carries cross-thread work posted onto the wayland thread.
-struct PostListener : epoll::Listener {
-  Server* server = nullptr;
-  StrView Name() const override { return "Post"sv; }
-  void NotifyRead(Status&) override;
-};
-
 // One spawned child watched for exit. The pidfd becomes readable when the
 // child is reapable; we waitpid for the raw status and hand it to on_exit.
-struct ProcessWatch : epoll::Listener {
+struct ProcessWatch : mux::Epoll::Listener {
   Server* server = nullptr;
   pid_t pid = 0;
   std::function<void(int)> on_exit;
@@ -150,7 +143,7 @@ struct ProcessWatch : epoll::Listener {
 
 // Armed when the user deletes a window: SIGTERMs the client if it ignores the
 // xdg_toplevel.close request for two seconds.
-struct CloseTimer : epoll::Listener {
+struct CloseTimer : mux::Epoll::Listener {
   Server* server = nullptr;
   pid_t pid = 0;
   Toplevel* owner = nullptr;
@@ -161,15 +154,12 @@ struct CloseTimer : epoll::Listener {
 struct Server {
   wl_display* display = nullptr;
   wl_event_loop* loop = nullptr;
-  int post_fd = -1;
   Str socket_name;
   std::thread thread;
   WaylandListener wayland_listener;
-  PostListener post_listener;
+  mux::Epoll epoll;
+  std::stop_source stop_source;
   uint32_t serial = 1;
-
-  std::mutex post_mutex;
-  std::vector<std::function<void()>> posted;
 
   // Protocol objects; wayland thread only.
   std::vector<std::unique_ptr<CWlCompositor>> compositor_resources;
@@ -212,19 +202,6 @@ struct Server {
   // Respawned clients waiting to be adopted into their board objects.
   std::mutex adoption_mutex;
   std::vector<std::pair<pid_t, WeakPtr<Object>>> adoptions;
-
-  void Post(std::function<void()> fn) {
-    {
-      auto lock = std::lock_guard(post_mutex);
-      posted.push_back(std::move(fn));
-    }
-    uint64_t one = 1;
-    (void)!write(post_fd, &one, sizeof(one));
-  }
-
-  // Removes every Listener so epoll::Loop returns; called on the wayland thread
-  // at shutdown via Post.
-  void Shutdown();
 };
 
 Server* g_server = nullptr;
@@ -244,20 +221,6 @@ void WaylandListener::NotifyRead(Status&) {
   wl_display_flush_clients(server->display);
 }
 
-void PostListener::NotifyRead(Status&) {
-  uint64_t value;
-  (void)!read(fd, &value, sizeof(value));
-  std::vector<std::function<void()>> fns;
-  {
-    auto lock = std::lock_guard(server->post_mutex);
-    fns.swap(server->posted);
-  }
-  for (auto& fn : fns) fn();
-  // Input injection and request handling queue protocol events; flush before
-  // the loop blocks again so clients see them.
-  wl_display_flush_clients(server->display);
-}
-
 void ProcessWatch::NotifyRead(Status&) {
   // pidfd readability means the child is reapable; waitpid yields the raw
   // status the Command toy decodes, exactly as the old reaper thread did.
@@ -267,7 +230,7 @@ void ProcessWatch::NotifyRead(Status&) {
   auto cb = std::move(on_exit);
   Server* s = server;
   Status local;
-  epoll::Del(this, local);
+  s->epoll.Del(this, local);
   EraseOwned(s->process_watches, this);  // frees `this`; its FD closes the pidfd
   if (cb) cb(wstatus);
 }
@@ -279,18 +242,8 @@ void CloseTimer::NotifyRead(Status&) {
   if (owner) owner->close_timer = nullptr;
   Server* s = server;
   Status local;
-  epoll::Del(this, local);
+  s->epoll.Del(this, local);
   EraseOwned(s->close_timers, this);  // frees `this`; its FD closes the timerfd
-}
-
-void Server::Shutdown() {
-  Status local;
-  epoll::Del(&wayland_listener, local);
-  for (auto& w : process_watches) epoll::Del(w.get(), local);
-  process_watches.clear();  // FD destructors close the pidfds
-  for (auto& t : close_timers) epoll::Del(t.get(), local);
-  close_timers.clear();  // FD destructors close the timerfds
-  epoll::Del(&post_listener, local);
 }
 
 uint32_t NowMs() {
@@ -508,8 +461,7 @@ void NewToplevel(Server& s, XdgSurf& xs, uint32_t id) {
     UnmapToplevel(s, *tp);
     if (tp->close_timer) {
       Status st;
-      epoll::Del(tp->close_timer, st);
-      close(tp->close_timer->fd);
+      s.epoll.Del(tp->close_timer, st);
       EraseOwned(s.close_timers, tp->close_timer);
       tp->close_timer = nullptr;
     }
@@ -727,15 +679,12 @@ void BindXdgWmBase(wl_client* client, void* data, uint32_t version, uint32_t id)
 
 void WaylandThread(Server* s) {
   SetThreadName("Wayland");
-  epoll::Init();
+  Status status;
+  s->epoll.Init(status);
   s->wayland_listener.server = s;
   s->wayland_listener.fd = wl_event_loop_get_fd(s->loop);
-  s->post_listener.server = s;
-  s->post_listener.fd = s->post_fd;
-  Status status;
-  epoll::Add(&s->wayland_listener, status);
-  epoll::Add(&s->post_listener, status);
-  if (OK(status)) epoll::Loop(status);
+  s->epoll.Add(&s->wayland_listener, status);
+  if (OK(status)) s->epoll.Loop(status, s->stop_source.get_token());
   if (!OK(status)) ERROR << "Wayland epoll loop stopped: " << status.ToStr();
   wl_display_flush_clients(s->display);
 }
@@ -755,7 +704,7 @@ void PostInput(WaylandWindow& w, Fn&& fn) {
   if (!s) return;
   void* handle = w.toplevel_handle.load();
   if (!handle) return;
-  s->Post([s, handle, fn = std::forward<Fn>(fn)] {
+  s->epoll.Post([s, handle, fn = std::forward<Fn>(fn)] {
     auto* t = FindToplevel(*s, handle);
     if (!t || !t->xdg || !t->xdg->surface) return;
     fn(*s, *t, t->xdg->surface->res.resource());
@@ -794,7 +743,6 @@ void Start() {
   wl_global_create(s->display, &xdg_wm_base_interface, 6, s, BindXdgWmBase);
   wl_global_create(s->display, &zxdg_decoration_manager_v1_interface, 1, s, BindDecorationManager);
   InitKeymap(*s);
-  s->post_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
   s->thread = std::thread(WaylandThread, s);
   g_server = s;
   // Frames may have already run and gone idle before the server existed; wake
@@ -807,11 +755,10 @@ void Stop() {
   if (!g_server) return;
   auto* s = g_server;
   g_server = nullptr;
-  s->Post([s] { s->Shutdown(); });
+  s->stop_source.request_stop();
   s->thread.join();
   wl_display_destroy_clients(s->display);
   wl_display_destroy(s->display);
-  close(s->post_fd);
   if (s->keymap_fd >= 0) close(s->keymap_fd);
   // The Server allocation is deliberately leaked: the render thread may race
   // one last UIFrame/input call against this shutdown, and a dangling
@@ -940,7 +887,7 @@ void UIFrame() {
 void NotifyWindowDestroyed(void* handle) {
   auto* s = g_server;
   if (!s || !handle) return;
-  s->Post([s, handle] {
+  s->epoll.Post([s, handle] {
     auto* t = FindToplevel(*s, handle);
     if (!t) return;
     t->res.sendClose();
@@ -957,7 +904,7 @@ void NotifyWindowDestroyed(void* handle) {
       timer->pid = t->pid;
       timer->owner = t;
       Status st;
-      epoll::Add(timer.get(), st);
+      s->epoll.Add(timer.get(), st);
       if (!OK(st)) return;  // timer's FD closes the timerfd
       t->close_timer = timer.get();
       s->close_timers.push_back(std::move(timer));
@@ -980,14 +927,14 @@ void WatchProcess(pid_t pid, std::function<void(int)> on_exit, Status& status) {
     return;
   }
   // Registration must happen on the wayland thread (the epoll instance lives there).
-  s->Post([s, pidfd, pid, cb = std::move(on_exit)]() mutable {
+  s->epoll.Post([s, pidfd, pid, cb = std::move(on_exit)]() mutable {
     auto w = std::make_unique<ProcessWatch>();
     w->fd = pidfd;
     w->server = s;
     w->pid = pid;
     w->on_exit = std::move(cb);
     Status st;
-    epoll::Add(w.get(), st);
+    s->epoll.Add(w.get(), st);
     if (!OK(st)) {
       ERROR << "Wayland: couldn't watch pid " << (int)pid << ": " << st.ToStr();
       return;  // w's FD closes the pidfd

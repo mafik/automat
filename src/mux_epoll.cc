@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: Copyright 2026 Automat Authors
 // SPDX-License-Identifier: MIT
-#include "epoll.hh"
+#include "mux_epoll.hh"
 
-#include <fcntl.h>
-#include <sys/epoll.h>
+#include <sys/eventfd.h>
+#include <unistd.h>
 
+#include <cerrno>
 #include <cstring>
 
 //  #define DEBUG_EPOLL
@@ -13,18 +14,23 @@
 #include "log.hh"
 #endif
 
-namespace automat::epoll {
+namespace automat::mux {
 
-thread_local int fd = 0;
-thread_local int listener_count = 0;
+void Epoll::Init(Status& status) {
+  fd = epoll_create1(EPOLL_CLOEXEC);
+  if (fd < 0) {
+    status() += "epoll_create1";
+    return;
+  }
+  wakeup.epoll = this;
+  wakeup.fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+  epoll_event ev = {.events = EPOLLIN, .data = {.ptr = &wakeup}};
+  if (epoll_ctl(fd, EPOLL_CTL_ADD, wakeup.fd, &ev) == -1) {
+    status() += "epoll_ctl(EPOLL_CTL_ADD) wakeup";
+  }
+}
 
-static constexpr int kMaxEpollEvents = 10;
-static epoll_event events[kMaxEpollEvents];
-static int events_count = 0;
-
-void Init() { fd = epoll_create1(EPOLL_CLOEXEC); }
-
-static epoll_event MakeEpollEvent(Listener* listener) {
+static epoll_event MakeEpollEvent(Epoll::Listener* listener) {
   epoll_event ev = {.events = 0, .data = {.ptr = listener}};
   if (listener->notify_read) {
     ev.events |= EPOLLIN;
@@ -35,9 +41,9 @@ static epoll_event MakeEpollEvent(Listener* listener) {
   return ev;
 }
 
-void Add(Listener* listener, Status& status) {
+void Epoll::Add(Listener* listener, Status& status) {
   if (fd == 0) {
-    status() += "epoll::Init() was not called";
+    status() += "Epoll::Init() was not called";
     return;
   }
   epoll_event ev = MakeEpollEvent(listener);
@@ -52,7 +58,7 @@ void Add(Listener* listener, Status& status) {
 #endif
 }
 
-void Mod(Listener* listener, Status& status) {
+void Epoll::Mod(Listener* listener, Status& status) {
   epoll_event ev = MakeEpollEvent(listener);
 #ifdef DEBUG_EPOLL
   LOG << "epoll_ctl " << listener->Name() << listener->fd << " "
@@ -63,7 +69,7 @@ void Mod(Listener* listener, Status& status) {
   }
 }
 
-void Del(Listener* l, Status& status) {
+void Epoll::Del(Listener* l, Status& status) {
   if (int r = epoll_ctl(fd, EPOLL_CTL_DEL, l->fd, nullptr); r == -1) {
     status() += "epoll_ctl(EPOLL_CTL_DEL)";
     return;
@@ -80,9 +86,34 @@ void Del(Listener* l, Status& status) {
 #endif
 }
 
-void Loop(Status& status) {
+void Epoll::Wake() {
+  uint64_t one = 1;
+  (void)!write(wakeup.fd, &one, sizeof(one));
+}
+
+void Epoll::Post(std::move_only_function<void()> fn) {
+  {
+    auto lock = std::lock_guard(post_mutex);
+    posted.push_back(std::move(fn));
+  }
+  Wake();
+}
+
+void Epoll::Wakeup::NotifyRead(Status&) {
+  uint64_t value;
+  (void)!read(fd, &value, sizeof(value));
+  std::vector<std::move_only_function<void()>> drain;
+  {
+    auto lock = std::lock_guard(epoll->post_mutex);
+    drain.swap(epoll->posted);
+  }
+  for (auto& fn : drain) fn();
+}
+
+void Epoll::Loop(Status& status, std::stop_token stop) {
+  std::stop_callback on_stop(stop, [this] { Wake(); });
   for (;;) {
-    if (listener_count == 0) {
+    if (listener_count == 0 || stop.stop_requested()) {
       break;
     }
     events_count = epoll_wait(fd, events, kMaxEpollEvents, -1);
@@ -141,4 +172,4 @@ void Loop(Status& status) {
   }
 }
 
-}  // namespace automat::epoll
+}  // namespace automat::mux

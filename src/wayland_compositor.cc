@@ -231,10 +231,9 @@ void ProcessWatch::NotifyRead(Status&) {
   while (waitpid(pid, &wstatus, 0) < 0 && errno == EINTR) {
   }
   auto cb = std::move(on_exit);
-  Impl* s = impl;
   Status local;
-  s->epoll.Del(this, local);
-  EraseOwned(s->process_watches, this);  // frees `this`; its FD closes the pidfd
+  impl->epoll.Del(this, local);
+  EraseOwned(impl->process_watches, this);  // frees `this`; its FD closes the pidfd
   if (cb) cb(wstatus);
 }
 
@@ -243,10 +242,9 @@ void CloseTimer::NotifyRead(Status&) {
   (void)!read(fd, &value, sizeof(value));
   if (pid > 0) kill(pid, SIGTERM);
   if (owner) owner->close_timer = nullptr;
-  Impl* s = impl;
   Status local;
-  s->epoll.Del(this, local);
-  EraseOwned(s->close_timers, this);  // frees `this`; its FD closes the timerfd
+  impl->epoll.Del(this, local);
+  EraseOwned(impl->close_timers, this);  // frees `this`; its FD closes the timerfd
 }
 
 uint32_t NowMs() {
@@ -742,11 +740,10 @@ void PostInput(Impl& impl, WaylandWindow& w, Fn&& fn) {
   if (!impl.ready) return;
   void* handle = w.toplevel_handle.load();
   if (!handle) return;
-  Impl* s = &impl;
-  s->epoll.Post([s, handle, fn = std::forward<Fn>(fn)] {
-    auto* t = FindToplevel(*s, handle);
+  impl.epoll.Post([&impl, handle, fn = std::forward<Fn>(fn)] {
+    auto* t = FindToplevel(impl, handle);
     if (!t || !t->xdg || !t->xdg->surface) return;
-    fn(*s, *t, t->xdg->surface->res.resource());
+    fn(impl, *t, t->xdg->surface->res.resource());
   });
 }
 
@@ -877,9 +874,8 @@ void Server::UIFrame() {
 
 void Server::NotifyWindowDestroyed(void* handle) {
   if (!handle || !impl->ready) return;
-  Impl* s = impl.get();
-  s->epoll.Post([s, handle] {
-    auto* t = FindToplevel(*s, handle);
+  impl->epoll.Post([this, handle] {
+    auto* t = FindToplevel(*impl, handle);
     if (!t) return;
     t->res.sendClose();
     // A client that ignores the request gets SIGTERM after a grace period.
@@ -891,14 +887,14 @@ void Server::NotifyWindowDestroyed(void* handle) {
       timerfd_settime(tfd, 0, &spec, nullptr);
       auto timer = std::make_unique<CloseTimer>();
       timer->fd = tfd;
-      timer->impl = s;
+      timer->impl = impl.get();
       timer->pid = t->pid;
       timer->owner = t;
       Status st;
-      s->epoll.Add(timer.get(), st);
+      impl->epoll.Add(timer.get(), st);
       if (!OK(st)) return;  // timer's FD closes the timerfd
       t->close_timer = timer.get();
-      s->close_timers.push_back(std::move(timer));
+      impl->close_timers.push_back(std::move(timer));
     }
   });
 }
@@ -915,21 +911,20 @@ void Server::WatchProcess(pid_t pid, std::function<void(int)> on_exit, Status& s
     AppendErrorMessage(status) += f("pidfd_open(pid={}): {}", (int)pid, strerror(errno));
     return;
   }
-  Impl* s = impl.get();
   // Registration must happen on the wayland thread (the epoll instance lives there).
-  s->epoll.Post([s, pidfd, pid, cb = std::move(on_exit)]() mutable {
+  impl->epoll.Post([this, pidfd, pid, cb = std::move(on_exit)]() mutable {
     auto w = std::make_unique<ProcessWatch>();
     w->fd = pidfd;
-    w->impl = s;
+    w->impl = impl.get();
     w->pid = pid;
     w->on_exit = std::move(cb);
     Status st;
-    s->epoll.Add(w.get(), st);
+    impl->epoll.Add(w.get(), st);
     if (!OK(st)) {
       ERROR << "Wayland: couldn't watch pid " << (int)pid << ": " << st.ToStr();
       return;  // w's FD closes the pidfd
     }
-    s->process_watches.push_back(std::move(w));
+    impl->process_watches.push_back(std::move(w));
   });
 }
 

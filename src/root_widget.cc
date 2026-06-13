@@ -249,7 +249,7 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
 
 #if defined(__linux__)
-  wayland::UIFrame();
+  if (wayland::server) wayland::server->UIFrame();
 #endif
 
   if (loading_animation) {

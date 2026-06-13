@@ -7,18 +7,15 @@
 // Automat's own Wayland compositor. Processes launched by the Command object
 // connect to it as their display server; every mapped toplevel becomes a
 // "Wayland Window" object on the board.
-//
-// Threading: a dedicated wayland thread owns the wl_display and all protocol
-// state. Cross-thread work is posted onto it via Post(). Pixels flow out
-// through WaylandWindow::pixels (object mutex + wake_counter); board
-// mutations happen in UIFrame(), called once per frame on the UI thread.
 
 #include <sys/types.h>
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <stop_token>
 
+#include "optional.hh"
 #include "status.hh"
 #include "str.hh"
 
@@ -28,40 +25,32 @@ struct WaylandWindow;
 
 namespace automat::wayland {
 
-// Starts the compositor thread. Somehow it's also responsible for process watching.
-// Safe to call once at startup; the thread's loop runs until `stop` is requested.
-void Start(std::stop_token stop);
+struct Server {
+  struct Impl;
 
-// Waits for the compositor thread to finish its teardown after `stop`.
-void Join();
+  Server(std::stop_token stop);
+  ~Server();
+  Server(const Server&) = delete;
+  Server& operator=(const Server&) = delete;
 
-bool Running();
+  bool Running();
+  Str SocketName();
+  void UIFrame();
+  void NotifyWindowDestroyed(void* toplevel_handle);
+  void WatchProcess(pid_t pid, std::function<void(int wait_status)> on_exit, Status& status);
+  void SendPointerEnter(library::WaylandWindow&, float sx, float sy);
+  void SendPointerMotion(library::WaylandWindow&, float sx, float sy);
+  void SendPointerButton(library::WaylandWindow&, uint32_t button, bool pressed);
+  void SendPointerLeave(library::WaylandWindow&);
+  void SendKeyboardEnter(library::WaylandWindow&);
+  void SendKeyboardLeave(library::WaylandWindow&);
+  void SendKey(library::WaylandWindow&, uint32_t evdev_keycode, bool pressed, bool ctrl, bool alt,
+               bool shift, bool super);
 
-// The WAYLAND_DISPLAY value clients should use; empty when not running.
-Str SocketName();
+ private:
+  std::unique_ptr<Impl> impl;
+};
 
-// UI-thread, once per frame: inserts newly mapped windows into the root
-// board and removes windows whose client went away.
-void UIFrame();
-
-// Called from ~WaylandWindow: the user deleted the window object (black
-// hole, bubble menu), so ask the client to close; SIGTERM follows if it
-// ignores the request. Safe from any thread.
-void NotifyWindowDestroyed(void* toplevel_handle);
-
-// Watches a spawned child for exit. `on_exit` runs on the compositor
-// thread with the raw waitpid() status. Safe to call from any thread.
-void WatchProcess(pid_t pid, std::function<void(int wait_status)> on_exit, Status& status);
-
-// UI-thread input injection. Coordinates are client-surface pixels. All of
-// these are asynchronous and become no-ops when the window's client is gone.
-void SendPointerEnter(library::WaylandWindow&, float sx, float sy);
-void SendPointerMotion(library::WaylandWindow&, float sx, float sy);
-void SendPointerButton(library::WaylandWindow&, uint32_t button, bool pressed);  // BTN_* codes
-void SendPointerLeave(library::WaylandWindow&);
-void SendKeyboardEnter(library::WaylandWindow&);
-void SendKeyboardLeave(library::WaylandWindow&);
-void SendKey(library::WaylandWindow&, uint32_t evdev_keycode, bool pressed, bool ctrl, bool alt,
-             bool shift, bool super);
+extern Optional<Server> server;
 
 }  // namespace automat::wayland

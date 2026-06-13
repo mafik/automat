@@ -148,7 +148,7 @@ int Main() {
   StartWorkerThreads(stop_source.get_token());
 
 #if defined(__linux__)
-  wayland::Start(stop_source.get_token());
+  wayland::server.emplace(stop_source.get_token());
 #endif
 
   if (root_widget->loading_animation) {
@@ -163,10 +163,6 @@ int Main() {
   // Shutdown
   stop_source.request_stop();
 
-#if defined(__linux__)
-  wayland::Join();
-#endif
-
   tray_icon.reset();
 
   JoinWorkerThreads();
@@ -179,6 +175,11 @@ int Main() {
   vm.root_board->locations.clear();
 
   root_widget.reset();
+
+#if defined(__linux__)
+  wayland::server.reset();
+#endif
+
   vm.root_board.reset();
   vm.root_location.reset();
 

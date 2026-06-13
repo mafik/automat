@@ -140,7 +140,7 @@ I64 SpawnArgv(const Vec<Str>& argv_in, Status& status) {
   // Children talk to Automat's own Wayland compositor: WAYLAND_DISPLAY points
   // at our socket and DISPLAY is dropped so toolkits don't fall back to the
   // host X server.
-  Str wayland_socket = wayland::Running() ? wayland::SocketName() : Str{};
+  Str wayland_socket = wayland::server ? wayland::server->SocketName() : Str{};
   Str wayland_entry = "WAYLAND_DISPLAY=" + wayland_socket;
   std::vector<char*> envp;
   for (char** e = environ; *e; ++e) {
@@ -167,19 +167,24 @@ I64 SpawnArgv(const Vec<Str>& argv_in, Status& status) {
 // a blocking thread. The callback runs on the compositor thread.
 static void WatchChild(Command& cmd, I64 pid) {
   Status status;
-  wayland::WatchProcess((pid_t)pid,
-                        [weak = cmd.AcquireWeakPtr(), pid](int wait_status) {
-                          if (auto obj = weak.Lock()) {
-                            auto& cmd = static_cast<Command&>(*obj);
-                            auto lock = std::lock_guard(cmd.mutex);
-                            if (cmd.child_pid == pid) cmd.child_pid = 0;
-                            cmd.wait_status = wait_status;
-                            // Cancel() may have already consumed the task; Done() requires one.
-                            if (cmd.running->IsRunning()) cmd.running->Done();
-                            cmd.WakeToys();
-                          }
-                        },
-                        status);
+  if (wayland::server) {
+    wayland::server->WatchProcess((pid_t)pid,
+                                  [weak = cmd.AcquireWeakPtr(), pid](int wait_status) {
+                                    if (auto obj = weak.Lock()) {
+                                      auto& cmd = static_cast<Command&>(*obj);
+                                      auto lock = std::lock_guard(cmd.mutex);
+                                      if (cmd.child_pid == pid) cmd.child_pid = 0;
+                                      cmd.wait_status = wait_status;
+                                      // Cancel() may have already consumed the task; Done()
+                                      // requires one.
+                                      if (cmd.running->IsRunning()) cmd.running->Done();
+                                      cmd.WakeToys();
+                                    }
+                                  },
+                                  status);
+  } else {
+    AppendErrorMessage(status) += "Wayland compositor is not running.";
+  }
   if (!OK(status)) cmd.ReportError(status.ToStr());
 }
 

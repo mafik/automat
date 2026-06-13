@@ -28,7 +28,7 @@ WaylandWindow::~WaylandWindow() {
 #if defined(__linux__)
   // The only strong reference lives in this window's Location; its
   // destruction means the user deleted the window.
-  wayland::NotifyWindowDestroyed(toplevel_handle.load());
+  if (wayland::server) wayland::server->NotifyWindowDestroyed(toplevel_handle.load());
 #endif
 }
 
@@ -179,13 +179,13 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
     float w = TotalW(), h = TotalH();
     caret_ = &p.keyboard->RequestCaret(*this, Vec2(-w / 2 + kFrame, -h / 2 + kFrame));
     caret_->shape = FocusCaretShape();
-    if (auto win = LockWindow()) wayland::SendKeyboardEnter(*win);
+    if (auto win = LockWindow()) wayland::server->SendKeyboardEnter(*win);
     WakeAnimation();
   }
 
   void ReleaseCaret(ui::Caret&) override {
     caret_ = nullptr;
-    if (auto win = LockWindow()) wayland::SendKeyboardLeave(*win);
+    if (auto win = LockWindow()) wayland::server->SendKeyboardLeave(*win);
     WakeAnimation();
   }
 
@@ -195,7 +195,8 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
     if (keycode <= 8) return;
     if (auto win = LockWindow()) {
       // Wayland keyboards speak evdev; X11 keycodes are evdev + 8.
-      wayland::SendKey(*win, keycode - 8, pressed, key.ctrl, key.alt, key.shift, key.windows);
+      wayland::server->SendKey(*win, keycode - 8, pressed, key.ctrl, key.alt, key.shift,
+                               key.windows);
     }
 #endif
   }
@@ -205,10 +206,10 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
   void PointerOver(ui::Pointer& p) override {
     float sx, sy;
     ClientPos(p.PositionWithin(*this), sx, sy);
-    if (auto w = LockWindow()) wayland::SendPointerEnter(*w, sx, sy);
+    if (auto w = LockWindow()) wayland::server->SendPointerEnter(*w, sx, sy);
   }
   void PointerLeave(ui::Pointer&) override {
-    if (auto w = LockWindow()) wayland::SendPointerLeave(*w);
+    if (auto w = LockWindow()) wayland::server->SendPointerLeave(*w);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
@@ -281,17 +282,17 @@ struct ClientInputAction : Action {
       : Action(p), toy(toy), button(button) {
     toy.FocusClient(p);
     if (auto w = toy.LockWindow()) {
-      wayland::SendPointerMotion(*w, sx, sy);
-      wayland::SendPointerButton(*w, button, true);
+      wayland::server->SendPointerMotion(*w, sx, sy);
+      wayland::server->SendPointerButton(*w, button, true);
     }
   }
   void Update() override {
     float sx, sy;
     toy.ClientPos(pointer.PositionWithin(toy), sx, sy);
-    if (auto w = toy.LockWindow()) wayland::SendPointerMotion(*w, sx, sy);
+    if (auto w = toy.LockWindow()) wayland::server->SendPointerMotion(*w, sx, sy);
   }
   ~ClientInputAction() override {
-    if (auto w = toy.LockWindow()) wayland::SendPointerButton(*w, button, false);
+    if (auto w = toy.LockWindow()) wayland::server->SendPointerButton(*w, button, false);
   }
 };
 

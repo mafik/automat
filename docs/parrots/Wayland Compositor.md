@@ -36,7 +36,7 @@ runs one epoll loop that multiplexes every descriptor the subsystem cares about,
 `epoll::Listener`:
 
 - the `wl_display` event loop
-- cross-thread work posted onto the thread (`Server::Post`)
+- cross-thread work posted onto the thread (`Epoll::Post`)
 - one pidfd per child process started by a Command
 - one timerfd per pending window-close escalation
 

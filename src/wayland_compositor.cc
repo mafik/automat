@@ -19,6 +19,7 @@
 #include <xkbcommon/xkbcommon-x11.h>
 #include <xkbcommon/xkbcommon.h>
 
+#include <atomic>
 #include <cerrno>
 #include <csignal>
 #include <cstring>
@@ -48,6 +49,7 @@
 namespace automat::wayland {
 
 using library::WaylandWindow;
+using Impl = Server::Impl;
 
 namespace {
 
@@ -61,7 +63,6 @@ namespace {
 // when an xdg-shell role chain is built on top of it.
 
 struct Toplevel;
-struct Server;
 struct CloseTimer;
 
 // A wl_surface: the client's pixel container. We track only what commit
@@ -126,7 +127,7 @@ Ptr<Object> LockWindow(Toplevel& t) { return t.window_weak.Lock(); }
 // Drives libwayland from our epoll loop: when the wl_display's event loop fd
 // signals, dispatch its ready events once (non-blocking) and flush replies.
 struct WaylandListener : mux::Epoll::Listener {
-  Server* server = nullptr;
+  Impl* impl = nullptr;
   StrView Name() const override { return "Wayland"sv; }
   void NotifyRead(Status&) override;
 };
@@ -134,7 +135,7 @@ struct WaylandListener : mux::Epoll::Listener {
 // One spawned child watched for exit. The pidfd becomes readable when the
 // child is reapable; we waitpid for the raw status and hand it to on_exit.
 struct ProcessWatch : mux::Epoll::Listener {
-  Server* server = nullptr;
+  Impl* impl = nullptr;
   pid_t pid = 0;
   std::function<void(int)> on_exit;
   StrView Name() const override { return "ProcessWatch"sv; }
@@ -144,18 +145,21 @@ struct ProcessWatch : mux::Epoll::Listener {
 // Armed when the user deletes a window: SIGTERMs the client if it ignores the
 // xdg_toplevel.close request for two seconds.
 struct CloseTimer : mux::Epoll::Listener {
-  Server* server = nullptr;
+  Impl* impl = nullptr;
   pid_t pid = 0;
   Toplevel* owner = nullptr;
   StrView Name() const override { return "CloseTimer"sv; }
   void NotifyRead(Status&) override;
 };
 
-struct Server {
+}  // namespace
+
+struct Server::Impl {
   wl_display* display = nullptr;
   wl_event_loop* loop = nullptr;
   Str socket_name;
   std::thread thread;
+  std::atomic<bool> ready = false;
   WaylandListener wayland_listener;
   mux::Epoll epoll;
   uint32_t serial = 1;
@@ -203,7 +207,7 @@ struct Server {
   std::vector<std::pair<pid_t, WeakPtr<Object>>> adoptions;
 };
 
-Server* g_server = nullptr;
+namespace {
 
 template <typename T>
 void EraseOwned(std::vector<std::unique_ptr<T>>& v, T* p) {
@@ -216,8 +220,8 @@ void EraseOwned(std::vector<std::unique_ptr<T>>& v, T* p) {
 }
 
 void WaylandListener::NotifyRead(Status&) {
-  wl_event_loop_dispatch(server->loop, 0);
-  wl_display_flush_clients(server->display);
+  wl_event_loop_dispatch(impl->loop, 0);
+  wl_display_flush_clients(impl->display);
 }
 
 void ProcessWatch::NotifyRead(Status&) {
@@ -227,7 +231,7 @@ void ProcessWatch::NotifyRead(Status&) {
   while (waitpid(pid, &wstatus, 0) < 0 && errno == EINTR) {
   }
   auto cb = std::move(on_exit);
-  Server* s = server;
+  Impl* s = impl;
   Status local;
   s->epoll.Del(this, local);
   EraseOwned(s->process_watches, this);  // frees `this`; its FD closes the pidfd
@@ -239,7 +243,7 @@ void CloseTimer::NotifyRead(Status&) {
   (void)!read(fd, &value, sizeof(value));
   if (pid > 0) kill(pid, SIGTERM);
   if (owner) owner->close_timer = nullptr;
-  Server* s = server;
+  Impl* s = impl;
   Status local;
   s->epoll.Del(this, local);
   EraseOwned(s->close_timers, this);  // frees `this`; its FD closes the timerfd
@@ -253,7 +257,7 @@ uint32_t NowMs() {
 
 // ----------------------------------------------------------------- surfaces --
 
-void UnmapToplevel(Server& s, Toplevel& t) {
+void UnmapToplevel(Impl& s, Toplevel& t) {
   if (!t.mapped) return;
   t.mapped = false;
   if (auto win_obj = LockWindow(t)) {
@@ -273,7 +277,7 @@ void UnmapToplevel(Server& s, Toplevel& t) {
   t.window_weak = {};
 }
 
-void Commit(Server& s, Surface& surf) {
+void Commit(Impl& s, Surface& surf) {
   Toplevel* t = surf.toplevel;
 
   if (t && t->xdg && !t->xdg->initial_configure_sent) {
@@ -400,7 +404,7 @@ void Commit(Server& s, Surface& surf) {
   surf.frame_cbs.clear();
 }
 
-void NewSurface(Server& s, wl_client* client, int version, uint32_t id) {
+void NewSurface(Impl& s, wl_client* client, int version, uint32_t id) {
   auto surf = std::make_unique<Surface>(client, version, id);
   Surface* sp = surf.get();
   auto* res = &surf->res;
@@ -425,7 +429,7 @@ void NewSurface(Server& s, wl_client* client, int version, uint32_t id) {
 
 // ---------------------------------------------------------------- xdg-shell --
 
-void NewToplevel(Server& s, XdgSurf& xs, uint32_t id) {
+void NewToplevel(Impl& s, XdgSurf& xs, uint32_t id) {
   auto top = std::make_unique<Toplevel>(xs.res.client(), xs.res.version(), id);
   Toplevel* tp = top.get();
   top->xdg = &xs;
@@ -473,8 +477,7 @@ void NewToplevel(Server& s, XdgSurf& xs, uint32_t id) {
   s.toplevels.push_back(std::move(top));
 }
 
-void NewXdgSurface(Server& s, wl_client* client, int version, uint32_t id,
-                   wl_resource* surface_res) {
+void NewXdgSurface(Impl& s, wl_client* client, int version, uint32_t id, wl_resource* surface_res) {
   auto xs = std::make_unique<XdgSurf>(client, version, id);
   XdgSurf* xp = xs.get();
   auto it = s.surface_by_res.find(surface_res);
@@ -494,7 +497,7 @@ void NewXdgSurface(Server& s, wl_client* client, int version, uint32_t id,
 // ------------------------------------------------------------------ globals --
 
 void BindCompositor(wl_client* client, void* data, uint32_t version, uint32_t id) {
-  auto& s = *(Server*)data;
+  auto& s = *(Impl*)data;
   auto res = std::make_unique<CWlCompositor>(client, version, id);
   CWlCompositor* rp = res.get();
   rp->setCreateSurface(
@@ -510,7 +513,7 @@ void BindCompositor(wl_client* client, void* data, uint32_t version, uint32_t id
 }
 
 void BindSubcompositor(wl_client* client, void* data, uint32_t version, uint32_t id) {
-  auto& s = *(Server*)data;
+  auto& s = *(Impl*)data;
   auto res = std::make_unique<CWlSubcompositor>(client, version, id);
   CWlSubcompositor* rp = res.get();
   rp->setGetSubsurface(
@@ -526,7 +529,7 @@ void BindSubcompositor(wl_client* client, void* data, uint32_t version, uint32_t
 }
 
 void BindDataDeviceManager(wl_client* client, void* data, uint32_t version, uint32_t id) {
-  auto& s = *(Server*)data;
+  auto& s = *(Impl*)data;
   auto res = std::make_unique<CWlDataDeviceManager>(client, version, id);
   CWlDataDeviceManager* rp = res.get();
   // Clipboard plumbing comes later; the objects exist so clients are happy.
@@ -547,7 +550,7 @@ void BindDataDeviceManager(wl_client* client, void* data, uint32_t version, uint
 }
 
 void BindOutput(wl_client* client, void* data, uint32_t version, uint32_t id) {
-  auto& s = *(Server*)data;
+  auto& s = *(Impl*)data;
   auto res = std::make_unique<CWlOutput>(client, version, id);
   CWlOutput* rp = res.get();
   rp->setOnDestroy([&s, rp](CWlOutput*) { EraseOwned(s.outputs, rp); });
@@ -567,7 +570,7 @@ void BindOutput(wl_client* client, void* data, uint32_t version, uint32_t id) {
 // wl_keyboard.keymap event shares. Keycodes pass through Automat verbatim
 // (AnsiKey round-trips through the fixed x11 tables), so clients must see the
 // HOST's real keymap - the X server's - or every non-qwerty layout garbles.
-void InitKeymap(Server& s) {
+void InitKeymap(Impl& s) {
   xkb_context* ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
   xkb_keymap* keymap = nullptr;
   if (xcb::connection) {
@@ -608,7 +611,7 @@ void InitKeymap(Server& s) {
 }
 
 void BindSeat(wl_client* client, void* data, uint32_t version, uint32_t id) {
-  auto& s = *(Server*)data;
+  auto& s = *(Impl*)data;
   auto res = std::make_unique<CWlSeat>(client, version, id);
   CWlSeat* rp = res.get();
   rp->setGetPointer([&s](CWlSeat* r, uint32_t id) {
@@ -635,7 +638,7 @@ void BindSeat(wl_client* client, void* data, uint32_t version, uint32_t id) {
 }
 
 void BindDecorationManager(wl_client* client, void* data, uint32_t version, uint32_t id) {
-  auto& s = *(Server*)data;
+  auto& s = *(Impl*)data;
   auto res = std::make_unique<CZxdgDecorationManagerV1>(client, version, id);
   CZxdgDecorationManagerV1* rp = res.get();
   rp->setGetToplevelDecoration(
@@ -659,7 +662,7 @@ void BindDecorationManager(wl_client* client, void* data, uint32_t version, uint
 }
 
 void BindXdgWmBase(wl_client* client, void* data, uint32_t version, uint32_t id) {
-  auto& s = *(Server*)data;
+  auto& s = *(Impl*)data;
   auto res = std::make_unique<CXdgWmBase>(client, version, id);
   CXdgWmBase* rp = res.get();
   rp->setGetXdgSurface([&s](CXdgWmBase* r, uint32_t id, wl_resource* surface) {
@@ -676,7 +679,7 @@ void BindXdgWmBase(wl_client* client, void* data, uint32_t version, uint32_t id)
   s.wm_bases.push_back(std::move(res));
 }
 
-void WaylandThread(Server* s, std::stop_token stop) {
+void WaylandThread(Impl* s, std::stop_token stop) {
   SetThreadName("Wayland");
   s->display = wl_display_create();
   if (!s->display) {
@@ -707,39 +710,39 @@ void WaylandThread(Server* s, std::stop_token stop) {
 
   Status status;
   s->epoll.Init(status);
-  s->wayland_listener.server = s;
+  s->wayland_listener.impl = s;
   s->wayland_listener.fd = wl_event_loop_get_fd(s->loop);
   s->epoll.Add(&s->wayland_listener, status);
 
-  // Published last: a non-null g_server means the compositor is ready. Wake the
-  // UI so UIFrame runs now that it exists (deserialized windows respawn there).
-  g_server = s;
+  s->ready = true;
   vm.WakeToys();
   if (!s->socket_name.empty()) LOG << "Wayland compositor listening on " << s->socket_name;
 
   if (OK(status)) s->epoll.Loop(status, stop);
   if (!OK(status)) ERROR << "Wayland epoll loop stopped: " << status.ToStr();
+  s->ready = false;
   wl_display_flush_clients(s->display);
   wl_display_destroy_clients(s->display);
+  s->wayland_listener.fd.fd = -1;
   wl_display_destroy(s->display);
   if (s->keymap_fd >= 0) close(s->keymap_fd);
 }
 
-Toplevel* FindToplevel(Server& s, void* handle) {
+Toplevel* FindToplevel(Impl& s, void* handle) {
   for (auto& t : s.toplevels) {
     if (t.get() == handle) return t.get();
   }
   return nullptr;
 }
 
-// Runs `fn(server, toplevel, surface_resource)` on the wayland thread if the
+// Runs `fn(impl, toplevel, surface_resource)` on the wayland thread if the
 // window's toplevel is still alive.
 template <typename Fn>
-void PostInput(WaylandWindow& w, Fn&& fn) {
-  auto* s = g_server;
-  if (!s) return;
+void PostInput(Impl& impl, WaylandWindow& w, Fn&& fn) {
+  if (!impl.ready) return;
   void* handle = w.toplevel_handle.load();
   if (!handle) return;
+  Impl* s = &impl;
   s->epoll.Post([s, handle, fn = std::forward<Fn>(fn)] {
     auto* t = FindToplevel(*s, handle);
     if (!t || !t->xdg || !t->xdg->surface) return;
@@ -749,33 +752,23 @@ void PostInput(WaylandWindow& w, Fn&& fn) {
 
 }  // namespace
 
-void Start(std::stop_token stop) {
-  if (g_server) return;
-  auto* s = new Server();
-  s->thread = std::thread(WaylandThread, s, std::move(stop));
+Server::Server(std::stop_token stop) : impl(std::make_unique<Impl>()) {
+  impl->thread = std::thread(WaylandThread, impl.get(), std::move(stop));
 }
 
-void Join() {
-  auto* s = g_server;
-  if (!s) return;
-  // Null first so a straggler UIFrame/input call no-ops; the Server stays leaked
-  // so a g_server snapshot already taken keeps pointing at valid memory.
-  g_server = nullptr;
-  s->thread.join();
-}
+Server::~Server() { impl->thread.join(); }
 
-bool Running() { return g_server != nullptr; }
+bool Server::Running() { return impl->ready; }
 
-Str SocketName() { return g_server ? g_server->socket_name : Str{}; }
+Str Server::SocketName() { return impl->ready ? impl->socket_name : Str{}; }
 
-void UIFrame() {
-  auto* s = g_server;
-  if (!s) return;
+void Server::UIFrame() {
+  if (!impl->ready) return;
   std::vector<Ptr<Object>> appeared, disappeared;
   {
-    auto lock = std::lock_guard(s->ui_mutex);
-    appeared.swap(s->ui_appeared);
-    disappeared.swap(s->ui_disappeared);
+    auto lock = std::lock_guard(impl->ui_mutex);
+    appeared.swap(impl->ui_appeared);
+    disappeared.swap(impl->ui_disappeared);
   }
   static int spawn_count = 0;
   for (auto& w : appeared) {
@@ -862,8 +855,8 @@ void UIFrame() {
       win->client_pid = pid;
     }
     {
-      auto lock = std::lock_guard(s->adoption_mutex);
-      s->adoptions.emplace_back((pid_t)pid, win->AcquireWeakPtr());
+      auto lock = std::lock_guard(impl->adoption_mutex);
+      impl->adoptions.emplace_back((pid_t)pid, win->AcquireWeakPtr());
     }
   }
   for (auto& w : disappeared) {
@@ -882,9 +875,9 @@ void UIFrame() {
   }
 }
 
-void NotifyWindowDestroyed(void* handle) {
-  auto* s = g_server;
-  if (!s || !handle) return;
+void Server::NotifyWindowDestroyed(void* handle) {
+  if (!handle || !impl->ready) return;
+  Impl* s = impl.get();
   s->epoll.Post([s, handle] {
     auto* t = FindToplevel(*s, handle);
     if (!t) return;
@@ -898,7 +891,7 @@ void NotifyWindowDestroyed(void* handle) {
       timerfd_settime(tfd, 0, &spec, nullptr);
       auto timer = std::make_unique<CloseTimer>();
       timer->fd = tfd;
-      timer->server = s;
+      timer->impl = s;
       timer->pid = t->pid;
       timer->owner = t;
       Status st;
@@ -910,7 +903,11 @@ void NotifyWindowDestroyed(void* handle) {
   });
 }
 
-void WatchProcess(pid_t pid, std::function<void(int)> on_exit, Status& status) {
+void Server::WatchProcess(pid_t pid, std::function<void(int)> on_exit, Status& status) {
+  if (!impl->ready) {
+    AppendErrorMessage(status) += "Wayland compositor is not running.";
+    return;
+  }
   // pidfd_open lacks a guaranteed glibc wrapper across versions, so go through
   // the syscall. The pid is still our unreaped child, so it is valid here.
   int pidfd = (int)syscall(SYS_pidfd_open, pid, 0);
@@ -918,17 +915,12 @@ void WatchProcess(pid_t pid, std::function<void(int)> on_exit, Status& status) {
     AppendErrorMessage(status) += f("pidfd_open(pid={}): {}", (int)pid, strerror(errno));
     return;
   }
-  auto* s = g_server;
-  if (!s) {
-    close(pidfd);
-    AppendErrorMessage(status) += "Wayland compositor is not running.";
-    return;
-  }
+  Impl* s = impl.get();
   // Registration must happen on the wayland thread (the epoll instance lives there).
   s->epoll.Post([s, pidfd, pid, cb = std::move(on_exit)]() mutable {
     auto w = std::make_unique<ProcessWatch>();
     w->fd = pidfd;
-    w->server = s;
+    w->impl = s;
     w->pid = pid;
     w->on_exit = std::move(cb);
     Status st;
@@ -943,8 +935,8 @@ void WatchProcess(pid_t pid, std::function<void(int)> on_exit, Status& status) {
 
 // ----------------------------------------------------------- input senders --
 
-void SendPointerEnter(WaylandWindow& w, float sx, float sy) {
-  PostInput(w, [sx, sy](Server& s, Toplevel&, wl_resource* surf) {
+void Server::SendPointerEnter(WaylandWindow& w, float sx, float sy) {
+  PostInput(*impl, w, [sx, sy](Impl& s, Toplevel&, wl_resource* surf) {
     wl_client* c = wl_resource_get_client(surf);
     for (auto& p : s.pointers) {
       if (p->client() != c) continue;
@@ -954,8 +946,8 @@ void SendPointerEnter(WaylandWindow& w, float sx, float sy) {
   });
 }
 
-void SendPointerMotion(WaylandWindow& w, float sx, float sy) {
-  PostInput(w, [sx, sy](Server& s, Toplevel&, wl_resource* surf) {
+void Server::SendPointerMotion(WaylandWindow& w, float sx, float sy) {
+  PostInput(*impl, w, [sx, sy](Impl& s, Toplevel&, wl_resource* surf) {
     wl_client* c = wl_resource_get_client(surf);
     uint32_t time = NowMs();
     for (auto& p : s.pointers) {
@@ -966,8 +958,8 @@ void SendPointerMotion(WaylandWindow& w, float sx, float sy) {
   });
 }
 
-void SendPointerButton(WaylandWindow& w, uint32_t button, bool pressed) {
-  PostInput(w, [button, pressed](Server& s, Toplevel&, wl_resource* surf) {
+void Server::SendPointerButton(WaylandWindow& w, uint32_t button, bool pressed) {
+  PostInput(*impl, w, [button, pressed](Impl& s, Toplevel&, wl_resource* surf) {
     wl_client* c = wl_resource_get_client(surf);
     uint32_t time = NowMs();
     for (auto& p : s.pointers) {
@@ -979,8 +971,8 @@ void SendPointerButton(WaylandWindow& w, uint32_t button, bool pressed) {
   });
 }
 
-void SendPointerLeave(WaylandWindow& w) {
-  PostInput(w, [](Server& s, Toplevel&, wl_resource* surf) {
+void Server::SendPointerLeave(WaylandWindow& w) {
+  PostInput(*impl, w, [](Impl& s, Toplevel&, wl_resource* surf) {
     wl_client* c = wl_resource_get_client(surf);
     for (auto& p : s.pointers) {
       if (p->client() != c) continue;
@@ -990,8 +982,8 @@ void SendPointerLeave(WaylandWindow& w) {
   });
 }
 
-void SendKeyboardEnter(WaylandWindow& w) {
-  PostInput(w, [](Server& s, Toplevel&, wl_resource* surf) {
+void Server::SendKeyboardEnter(WaylandWindow& w) {
+  PostInput(*impl, w, [](Impl& s, Toplevel&, wl_resource* surf) {
     wl_client* c = wl_resource_get_client(surf);
     wl_array keys;
     wl_array_init(&keys);
@@ -1004,8 +996,8 @@ void SendKeyboardEnter(WaylandWindow& w) {
   });
 }
 
-void SendKeyboardLeave(WaylandWindow& w) {
-  PostInput(w, [](Server& s, Toplevel&, wl_resource* surf) {
+void Server::SendKeyboardLeave(WaylandWindow& w) {
+  PostInput(*impl, w, [](Impl& s, Toplevel&, wl_resource* surf) {
     wl_client* c = wl_resource_get_client(surf);
     for (auto& k : s.keyboards) {
       if (k->client() != c) continue;
@@ -1014,22 +1006,25 @@ void SendKeyboardLeave(WaylandWindow& w) {
   });
 }
 
-void SendKey(WaylandWindow& w, uint32_t evdev_keycode, bool pressed, bool ctrl, bool alt,
-             bool shift, bool super) {
-  PostInput(w, [evdev_keycode, pressed, ctrl, alt, shift, super](Server& s, Toplevel&,
-                                                                 wl_resource* surf) {
-    wl_client* c = wl_resource_get_client(surf);
-    uint32_t mods = (ctrl ? s.mod_ctrl : 0) | (alt ? s.mod_alt : 0) | (shift ? s.mod_shift : 0) |
-                    (super ? s.mod_super : 0);
-    uint32_t time = NowMs();
-    for (auto& k : s.keyboards) {
-      if (k->client() != c) continue;
-      k->sendModifiers(s.serial++, mods, 0, 0, 0);
-      k->sendKey(s.serial++, time, evdev_keycode,
-                 pressed ? WL_KEYBOARD_KEY_STATE_PRESSED : WL_KEYBOARD_KEY_STATE_RELEASED);
-    }
-  });
+void Server::SendKey(WaylandWindow& w, uint32_t evdev_keycode, bool pressed, bool ctrl, bool alt,
+                     bool shift, bool super) {
+  PostInput(
+      *impl, w,
+      [evdev_keycode, pressed, ctrl, alt, shift, super](Impl& s, Toplevel&, wl_resource* surf) {
+        wl_client* c = wl_resource_get_client(surf);
+        uint32_t mods = (ctrl ? s.mod_ctrl : 0) | (alt ? s.mod_alt : 0) |
+                        (shift ? s.mod_shift : 0) | (super ? s.mod_super : 0);
+        uint32_t time = NowMs();
+        for (auto& k : s.keyboards) {
+          if (k->client() != c) continue;
+          k->sendModifiers(s.serial++, mods, 0, 0, 0);
+          k->sendKey(s.serial++, time, evdev_keycode,
+                     pressed ? WL_KEYBOARD_KEY_STATE_PRESSED : WL_KEYBOARD_KEY_STATE_RELEASED);
+        }
+      });
 }
+
+Optional<Server> server;
 
 }  // namespace automat::wayland
 

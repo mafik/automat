@@ -59,8 +59,8 @@ without any replenishment animation.
 
 ## Integration
 
-The host — a toolbar slot (`PrototypeButton` in `src/library_toolbar.cc`), a
-shelf cell (`ShelfButton` in `src/library_leptonica.cc`), or a future spawn
+The host — a toolbar slot (`PrototypeButton` in `src/library_toolbar.cpp`), a
+shelf cell (`ShelfButton` in `src/library_leptonica.cpp`), or a future spawn
 menu entry — draws the under-copies from the prototype's own rendering,
 rotated about its centroid, so no object needs any per-object support.
 

@@ -3,8 +3,8 @@
 This document records the design language of the Leptonica image-processing
 objects: the intent behind their shapes, the control vocabulary, and the rules
 that keep new work consistent. The objects are implemented in
-`src/library_leptonica.hh` and `src/library_leptonica.cc`; the controls in
-`src/ui_leptonica.hh` and `src/ui_leptonica.cc`. This document records the
+`src/library_leptonica.hpp` and `src/library_leptonica.cpp`; the controls in
+`src/ui_leptonica.hpp` and `src/ui_leptonica.cpp`. This document records the
 reasoning; the implementation details live in the code.
 
 ## The model
@@ -48,7 +48,7 @@ object.
 ## The control vocabulary
 
 Each control's form is chosen so that the form itself teaches the parameter's
-meaning. The forms are drawn by `src/ui_leptonica.hh`; the reasoning:
+meaning. The forms are drawn by `src/ui_leptonica.hpp`; the reasoning:
 
 - **Level** sets one value on the intensity axis (a threshold, a clip point, a
   fraction). It is a marker riding a band drawn over the image's own
@@ -121,7 +121,7 @@ These rules hold for every object; each exists for a reason.
   anything interactive must be part of the silhouette itself, because the
   pointer only reaches a widget where its shape contains the point. The
   constraint and its mechanics are recorded at the texture-bounds override in
-  `src/library_leptonica.cc`.
+  `src/library_leptonica.cpp`.
 - The live preview never stretches the image. The preview is a measurement,
   and a stretched measurement is a lie; the shared preview helper centres the
   image at its true aspect ratio.

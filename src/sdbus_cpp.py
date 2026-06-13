@@ -15,9 +15,9 @@ if sys.platform == 'linux':
 
     def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
         for xml in (fs_utils.src_dir / 'dbus').glob('*.xml'):
-            # For each .xml file in the dbus directory, generate _proxy.hh & _adaptor.hh
+            # For each .xml file in the dbus directory, generate _proxy.hpp & _adaptor.hpp
             for variant in ('proxy', 'adaptor'):
-              path = (fs_utils.generated_dir / (xml.stem + f'_{variant}.hh'))
+              path = (fs_utils.generated_dir / (xml.stem + f'_{variant}.hpp'))
               recipe.add_step(
                   partial(make.Popen, [xml2cpp, f'--{variant}={path}', xml]),
                   [path],

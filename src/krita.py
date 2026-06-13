@@ -648,7 +648,7 @@ def _generate_rect_decl(layer_name: str, shape: dict,
                         sx: float, kx: float, tx: float,
                         ky: float, sy: float, ty: float):
     """Return a header-side constexpr declaration for an axis-aligned rectangle:
-    a Rect when sharp, an RRect when rounded (math.hh types, so both are
+    a Rect when sharp, an RRect when rounded (math.hpp types, so both are
     compile-time constants). Returns None when the transform rotates or skews the
     rectangle, so it can't be an axis-aligned Rect/RRect."""
     if abs(kx) > 1e-9 or abs(ky) > 1e-9:
@@ -661,7 +661,7 @@ def _generate_rect_decl(layer_name: str, shape: dict,
     bx, by = sx * (x0 + w) + tx, sy * (y0 + h) + ty
     min_x, max_x = sorted((ax, bx))
     min_y, max_y = sorted((ay, by))
-    # math.hh's Rect(left, bottom, right, top) is Y-up (bottom = smaller Y).
+    # math.hpp's Rect(left, bottom, right, top) is Y-up (bottom = smaller Y).
     rect = (f"Rect({_fmt_scalar(min_x)}, {_fmt_scalar(min_y)}, "
             f"{_fmt_scalar(max_x)}, {_fmt_scalar(max_y)})")
 
@@ -707,7 +707,7 @@ def generate_vector_layer(layer_name: str, shape: dict, svg_transform: dict,
                           svg_info: dict, kra_data: dict, layer: dict) -> tuple[str, str | None]:
     """Return (declaration, definition) C++ for a vector layer.
 
-    Rectangles become inline constexpr Rect / RRect values (math.hh), so even
+    Rectangles become inline constexpr Rect / RRect values (math.hpp), so even
     rounded ones are compile-time constants that need no out-of-line definition
     (definition is None). Rotated or skewed rectangles, and arbitrary paths, are
     baked into an SkPath function split into a declaration and a definition.
@@ -748,8 +748,8 @@ def generate_cpp_code(kra_data, file_basename: str, paint_layers_with_metadata, 
         "#include <include/core/SkMatrix.h>",
         "#include <include/core/SkPath.h>",
         "",
-        "#include \"../../src/math.hh\"",
-        "#include \"../../src/textures.hh\"",
+        "#include \"../../src/math.hpp\"",
+        "#include \"../../src/textures.hpp\"",
         "",
     ]
 
@@ -788,9 +788,9 @@ def generate_cpp_code(kra_data, file_basename: str, paint_layers_with_metadata, 
         "// SPDX-FileCopyrightText: Copyright 2025 Automat Authors",
         "// SPDX-License-Identifier: MIT",
         "",
-        f'#include "krita_{snake_case(file_basename)}.hh"',
+        f'#include "krita_{snake_case(file_basename)}.hpp"',
         "",
-        '#include "embedded.hh"',
+        '#include "embedded.hpp"',
         "",
         '#include <include/core/SkPathTypes.h>',
         "",
@@ -877,8 +877,8 @@ def extract_kra_layers(kra_path):
             kra_data, file_basename, exported_paint_layers_with_metadata, exported_vector_layers_with_data
         )
 
-        header_path = output_dir / f"krita_{snake_case(file_basename)}.hh"
-        source_path = output_dir / f"krita_{snake_case(file_basename)}.cc"
+        header_path = output_dir / f"krita_{snake_case(file_basename)}.hpp"
+        source_path = output_dir / f"krita_{snake_case(file_basename)}.cpp"
 
         header_path.write_text(header_code)
         source_path.write_text(source_code)
@@ -894,24 +894,24 @@ def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
             continue
 
         file_snake = snake_case(kra_path.stem)
-        hh_path = fs_utils.generated_dir / f'krita_{file_snake}.hh'
-        cc_path = fs_utils.generated_dir / f'krita_{file_snake}.cc'
+        hpp_path = fs_utils.generated_dir / f'krita_{file_snake}.hpp'
+        cpp_path = fs_utils.generated_dir / f'krita_{file_snake}.cpp'
 
-        recipe.generated.add(str(hh_path))
-        recipe.generated.add(str(cc_path))
+        recipe.generated.add(str(hpp_path))
+        recipe.generated.add(str(cpp_path))
 
-        hh_file = src.File(hh_path)
-        hh_file.direct_includes.append(str(fs_utils.src_dir / 'math.hh'))
-        hh_file.direct_includes.append(str(fs_utils.src_dir / 'textures.hh'))
-        srcs[str(hh_path)] = hh_file
-        cc_file = src.File(cc_path)
-        cc_file.direct_includes.append(str(hh_path))
-        cc_file.direct_includes.append(str(fs_utils.generated_dir / 'embedded.hh'))
-        srcs[str(cc_path)] = cc_file
+        hpp_file = src.File(hpp_path)
+        hpp_file.direct_includes.append(str(fs_utils.src_dir / 'math.hpp'))
+        hpp_file.direct_includes.append(str(fs_utils.src_dir / 'textures.hpp'))
+        srcs[str(hpp_path)] = hpp_file
+        cpp_file = src.File(cpp_path)
+        cpp_file.direct_includes.append(str(hpp_path))
+        cpp_file.direct_includes.append(str(fs_utils.generated_dir / 'embedded.hpp'))
+        srcs[str(cpp_path)] = cpp_file
 
-        recipe.add_step(partial(extract_kra_layers, kra_path), [hh_path, cc_path],
+        recipe.add_step(partial(extract_kra_layers, kra_path), [hpp_path, cpp_path],
                         [kra_path, krita_layer_to_webp, Path(__file__)],
                         desc=f'Exporting {kra_path.name} layers',
                         shortcut=f'krita {file_snake}')
 
-        embedded.embed_after(hh_path, cc_path)
+        embedded.embed_after(hpp_path, cpp_path)

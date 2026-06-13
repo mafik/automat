@@ -9,7 +9,7 @@ kernel — quoting rules, expansion surprises, the gap between what was typed
 and what the program receives. The Command object removes the shell entirely
 and makes the one structure that matters — the argv array — directly visible.
 
-Implementation: `src/library_command.{hh,cc}`. The object follows Automat's
+Implementation: `src/library_command.*`. The object follows Automat's
 device-noun naming (Timer, Key Presser): the object *is* a command; its RUN
 button supplies the verb.
 
@@ -46,7 +46,7 @@ selection, with caret positions expressed as flat byte offsets into the
 canonical single-separator join of the vector — a coordinate that stays
 well-defined and bijective with (tile, offset) pairs even when elements
 contain spaces. Key handling operates directly on the vector
-(`ArgvField::KeyDown` in `src/library_command.cc`). When the row outgrows
+(`ArgvField::KeyDown` in `src/library_command.cpp`). When the row outgrows
 the plate it scales down uniformly rather than hiding anything.
 
 Layout follows the DRAKON grammar used across Automat: title and credit on

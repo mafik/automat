@@ -1,4 +1,4 @@
-'''Generates embedded*.hh and embedded*.cc, with contents of all the static files.'''
+'''Generates embedded*.hpp and embedded*.cpp, with contents of all the static files.'''
 # SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 # SPDX-License-Identifier: MIT
 
@@ -21,74 +21,74 @@ def escape_string(s):
     return s.replace('\\', '\\\\').replace('"', '\\"')
 
 
-hh_path = fs_utils.generated_dir / 'embedded.hh'
-cc_path = fs_utils.generated_dir / 'embedded.cc'
+hpp_path = fs_utils.generated_dir / 'embedded.hpp'
+cpp_path = fs_utils.generated_dir / 'embedded.cpp'
 n_shards = 16
 shard_names = [f'embedded_{i}' for i in range(n_shards)]
 shard_embeds = [[] for _ in range(n_shards)]
-shard_hh_path = [fs_utils.generated_dir / f'{shard_names[i]}.hh' for i in range(n_shards)]
-shard_cc_path = [fs_utils.generated_dir / f'{shard_names[i]}.cc' for i in range(n_shards)]
+shard_hpp_path = [fs_utils.generated_dir / f'{shard_names[i]}.hpp' for i in range(n_shards)]
+shard_cpp_path = [fs_utils.generated_dir / f'{shard_names[i]}.cpp' for i in range(n_shards)]
 embedded_paths_file = fs_utils.generated_dir / 'embedded_paths'
 
 paths = []        # embed list; reset in hook_srcs, extended via inject()
 embed_steps = []  # steps that read paths/shard_embeds; see embed_after()
 
-def gen_hh():
-    with hh_path.open('w') as hh:
-        print('#pragma once', file=hh)
-        print('#include <unordered_map>', file=hh)
-        print('', file=hh)
-        print('#include "../../src/virtual_fs.hh"', file=hh)
+def gen_hpp():
+    with hpp_path.open('w') as hpp:
+        print('#pragma once', file=hpp)
+        print('#include <unordered_map>', file=hpp)
+        print('', file=hpp)
+        print('#include "../../src/virtual_fs.hpp"', file=hpp)
         for i in range(n_shards):
-            print(f'#include "{shard_names[i]}.hh"  // IWYU pragma: export', file=hh)
-        print('', file=hh)
-        print('namespace automat::embedded {', file=hh)
-        print('', file=hh)
-        print('extern std::unordered_map<StrView, fs::VFile*> index;', file=hh)
-        print('', file=hh)
-        print('}  // namespace automat::embedded', file=hh)
+            print(f'#include "{shard_names[i]}.hpp"  // IWYU pragma: export', file=hpp)
+        print('', file=hpp)
+        print('namespace automat::embedded {', file=hpp)
+        print('', file=hpp)
+        print('extern std::unordered_map<StrView, fs::VFile*> index;', file=hpp)
+        print('', file=hpp)
+        print('}  // namespace automat::embedded', file=hpp)
 
-def gen_cc():
-    with cc_path.open('w') as cc:
-        print('#include "embedded.hh"', file=cc)
-        print('', file=cc)
-        print('using namespace std::string_literals;', file=cc)
-        print('using namespace automat;', file=cc)
-        print('using namespace automat::fs;', file=cc)
-        print('', file=cc)
-        print('namespace automat::embedded {', file=cc)
-        print('', file=cc)
-        print('std::unordered_map<StrView, VFile*> index = {', file=cc)
+def gen_cpp():
+    with cpp_path.open('w') as cpp:
+        print('#include "embedded.hpp"', file=cpp)
+        print('', file=cpp)
+        print('using namespace std::string_literals;', file=cpp)
+        print('using namespace automat;', file=cpp)
+        print('using namespace automat::fs;', file=cpp)
+        print('', file=cpp)
+        print('namespace automat::embedded {', file=cpp)
+        print('', file=cpp)
+        print('std::unordered_map<StrView, VFile*> index = {', file=cpp)
         for path in paths:
             slug = slug_from_path(path)
-            print(f'  {{ {slug}.path, &{slug} }},', file=cc)
-        print('};', file=cc)
-        print('', file=cc)
-        print('}  // namespace automat::embedded', file=cc)
+            print(f'  {{ {slug}.path, &{slug} }},', file=cpp)
+        print('};', file=cpp)
+        print('', file=cpp)
+        print('}  // namespace automat::embedded', file=cpp)
 
 
 def gen_shard(i):
-    with shard_hh_path[i].open('w') as hh:
-        print('#pragma once', file=hh)
-        print('', file=hh)
-        print('#include "../../src/virtual_fs.hh"', file=hh)
-        print('', file=hh)
-        print('namespace automat::embedded {', file=hh)
-        print('', file=hh)
+    with shard_hpp_path[i].open('w') as hpp:
+        print('#pragma once', file=hpp)
+        print('', file=hpp)
+        print('#include "../../src/virtual_fs.hpp"', file=hpp)
+        print('', file=hpp)
+        print('namespace automat::embedded {', file=hpp)
+        print('', file=hpp)
         for embed in shard_embeds[i]:
             slug = slug_from_path(embed)
-            print(f'extern fs::VFile {slug};', file=hh)
-        print('', file=hh)
-        print('}  // namespace automat::embedded', file=hh)
+            print(f'extern fs::VFile {slug};', file=hpp)
+        print('', file=hpp)
+        print('}  // namespace automat::embedded', file=hpp)
 
-    with shard_cc_path[i].open('w') as cc:
-        print(f'#include "{shard_names[i]}.hh"', file=cc)
-        print('', file=cc)
-        print('using namespace std::string_literals;', file=cc)
-        print('using namespace automat;', file=cc)
-        print('using namespace automat::fs;', file=cc)
-        print('', file=cc)
-        print('namespace automat::embedded {', file=cc)
+    with shard_cpp_path[i].open('w') as cpp:
+        print(f'#include "{shard_names[i]}.hpp"', file=cpp)
+        print('', file=cpp)
+        print('using namespace std::string_literals;', file=cpp)
+        print('using namespace automat;', file=cpp)
+        print('using namespace automat::fs;', file=cpp)
+        print('', file=cpp)
+        print('namespace automat::embedded {', file=cpp)
         for path in shard_embeds[i]:
             slug = slug_from_path(path)
             escaped_path = escape_string(str(path))
@@ -99,9 +99,9 @@ static constexpr char {slug}_content[] = {{
 VFile {slug} = {{
   .path = "{escaped_path}"sv,
   .content = std::string_view({slug}_content, sizeof({slug}_content))
-}};''', file=cc)
-        print('', file=cc)
-        print('}  // namespace automat::embedded', file=cc)
+}};''', file=cpp)
+        print('', file=cpp)
+        print('}  // namespace automat::embedded', file=cpp)
 
 
 def inject(path):
@@ -141,44 +141,44 @@ def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
 
     embedded_paths_file.write_text('\n'.join(str(p) for p in paths))
 
-    recipe.generated.add(str(hh_path))
-    recipe.add_step(gen_hh, [hh_path],
+    recipe.generated.add(str(hpp_path))
+    recipe.add_step(gen_hpp, [hpp_path],
                             [Path(__file__), embedded_paths_file],
-                            desc='Writing embedded.hh',
-                            shortcut='embedded.hh')
-    hh_file = src.File(hh_path)
-    hh_file.direct_includes.append(str(fs_utils.src_dir / 'virtual_fs.hh'))
-    for h in shard_hh_path:
-        hh_file.direct_includes.append(str(h))
-    srcs[str(hh_path)] = hh_file
+                            desc='Writing embedded.hpp',
+                            shortcut='embedded.hpp')
+    hpp_file = src.File(hpp_path)
+    hpp_file.direct_includes.append(str(fs_utils.src_dir / 'virtual_fs.hpp'))
+    for h in shard_hpp_path:
+        hpp_file.direct_includes.append(str(h))
+    srcs[str(hpp_path)] = hpp_file
 
-    recipe.generated.add(str(cc_path))
-    embed_steps.append(recipe.add_step(gen_cc, [cc_path],
+    recipe.generated.add(str(cpp_path))
+    embed_steps.append(recipe.add_step(gen_cpp, [cpp_path],
                                 [Path(__file__), embedded_paths_file],
-                                desc='Writing embedded.cc',
-                                shortcut='embedded.cc'))
-    cc_file = src.File(cc_path)
-    cc_file.direct_includes.append(str(hh_path))
-    srcs[str(cc_path)] = cc_file
+                                desc='Writing embedded.cpp',
+                                shortcut='embedded.cpp'))
+    cpp_file = src.File(cpp_path)
+    cpp_file.direct_includes.append(str(hpp_path))
+    srcs[str(cpp_path)] = cpp_file
 
     for path in paths:
         shard_embeds[hash(path) % n_shards].append(path)
 
     for i in range(n_shards):
-        recipe.generated.add(str(shard_hh_path[i]))
-        recipe.generated.add(str(shard_cc_path[i]))
+        recipe.generated.add(str(shard_hpp_path[i]))
+        recipe.generated.add(str(shard_cpp_path[i]))
         embed_steps.append(recipe.add_step(partial(gen_shard, i),
-                        [shard_hh_path[i], shard_cc_path[i]],
+                        [shard_hpp_path[i], shard_cpp_path[i]],
                         [Path(__file__), embedded_paths_file],
                         desc=f'Writing embedded shard {i}',
                         shortcut=f'embedded_{i}'))
 
-        sh_hh_file = src.File(shard_hh_path[i])
-        sh_hh_file.direct_includes.append(str(fs_utils.src_dir / 'virtual_fs.hh'))
-        srcs[str(shard_hh_path[i])] = sh_hh_file
+        sh_hpp_file = src.File(shard_hpp_path[i])
+        sh_hpp_file.direct_includes.append(str(fs_utils.src_dir / 'virtual_fs.hpp'))
+        srcs[str(shard_hpp_path[i])] = sh_hpp_file
 
-        sh_cc_file = src.File(shard_cc_path[i])
-        sh_cc_file.direct_includes.append(str(shard_hh_path[i]))
+        sh_cpp_file = src.File(shard_cpp_path[i])
+        sh_cpp_file.direct_includes.append(str(shard_hpp_path[i]))
         for embed in shard_embeds[i]:
-            sh_cc_file.embeds.append(str(embed))
-        srcs[str(shard_cc_path[i])] = sh_cc_file
+            sh_cpp_file.embeds.append(str(embed))
+        srcs[str(shard_cpp_path[i])] = sh_cpp_file

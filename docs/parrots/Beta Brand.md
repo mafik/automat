@@ -15,7 +15,7 @@ exactly match their outlines, hard offset shadows, irregular ornaments and
 hand-printed lettering. The style itself is the identification. Only the
 rendering is sloppy; the layout, affordances and contrast follow the usual
 interface rules. The style is implemented as the drawing kit in
-`src/ui_beta.hh` and `src/ui_beta.cc` (namespace `automat::ui::beta`);
+`src/ui_beta.hpp` and `src/ui_beta.cpp` (namespace `automat::ui::beta`);
 colors, stroke weights and sizes are the constants defined there.
 
 Three redundant signs make the identification survive cropping and zoom: the

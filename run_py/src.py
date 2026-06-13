@@ -38,10 +38,10 @@ class File:
         self.manifest = False
 
     def is_header(self) -> bool:
-        return self.path.suffix in ('.h', '.hh', '.hpp')
+        return self.path.suffix in ('.h', '.hpp')
 
     def is_source(self) -> bool:
-        return self.path.suffix in ('.c', '.cc', '.cpp')
+        return self.path.suffix in ('.c', '.cpp')
 
     def build_link_args(self, build_type: str) -> list[str]:
         return self.link_args.get(build_type, []) + (self.link_args.get('', []) if build_type else [])
@@ -104,7 +104,7 @@ class File:
                 continue
 
 
-            match = re.match(r'^#include \"([a-zA-Z0-9_/\.\-+]+\.(?:hh?|hpp))\"', line)
+            match = re.match(r'^#include \"([a-zA-Z0-9_/\.\-+]+\.(?:hpp|h))\"', line)
             if match:
                 dep = self.path.parent / match.group(1)
                 dep = dep.resolve()
@@ -168,7 +168,7 @@ class File:
 def scan() -> dict[str, File]:
     result = dict()
     paths = []
-    for ext in ['.cc', '.hh', '.h', '.c']:
+    for ext in ['.cpp', '.hpp', '.h', '.c']:
         paths.extend(fs_utils.src_dir.glob(f'**/*{ext}'))
 
     for path in paths:

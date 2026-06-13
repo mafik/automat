@@ -23,7 +23,7 @@ IMPORTANT: Note that the terminology we use here distinguishes between "drawing"
 
 Widgets are accessed from multiple threads, each of which is related to the same Window - (1) the render thread and (2) the event loop thread (there is also third thread that controls audio, but it's only receiving commands to play audio and doesn't care about widgets themselves). Since the Widgets are accessed from two threads, their access is protected by a mutex. Right now Automat displays only one window but its design allows for concurrent access from multiple clients (for example a potential web-based client for remote access).
 
-The event loop thread is responsible for receiving and responding to the OS events. To do so it may invoke the appropriate Widget or Object APIs. The event loops are platform specific and can be found in `*_window.hh` files (types derived from `gui::Window`).
+The event loop thread is responsible for receiving and responding to the OS events. To do so it may invoke the appropriate Widget or Object APIs. The event loops are platform specific and can be found in `*_window.hpp` files (types derived from `gui::Window`).
 
 The render thread is responsible for smooth *rendering* of the UI. This is done by a an algorithm that analyzes the tree of widgets and selectively choses which widgets to render in the next frame and which ones should be rendered in the background. Some diagrams of the algorithm (called "Frame Packing") can be found [here](https://www.tldraw.com/ro/3d97dFMiuM0MLgqyyP0SG?d=v0.0.1369.751.oabcxxQj34hFXH8A6_75W).
 
@@ -45,7 +45,7 @@ Because of their irregular lifetimes, Tasks are managed through raw pointers and
 
 ## Timer thread
 
-Automat also has a timer thread - a dedicated thread that ensures that events are delivered with accurate timing. See `timer_thread.hh` for details. There is only one timer thread per Automat's instance.
+Automat also has a timer thread - a dedicated thread that ensures that events are delivered with accurate timing. See `timer_thread.hpp` for details. There is only one timer thread per Automat's instance.
 
 ## Summary
 

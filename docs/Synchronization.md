@@ -1,6 +1,6 @@
 # Synchronization
 
-TODO: explain the idea behind interfaces.hh
+TODO: explain the idea behind interfaces.hpp
 
 ## One-way sync
 

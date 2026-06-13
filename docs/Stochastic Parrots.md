@@ -13,7 +13,7 @@ In this codebase LLMs are referred to as "Stochastic Parrots". Files which are m
 ## Working in this codebase
 
 - **Do not use sub-agents (Agent / Task / Explore) for codebase exploration.** Read the actual source files yourself with Read/Grep/Glob. Sub-agent summaries are lossy and have introduced factual errors about this codebase (inventing globals, misreading init order, misattributing ownership). When in doubt, open the file.
-- The authoritative list of process-wide state lives in `src/automat.hh` and `src/root_widget.hh`. Init and teardown order is explicit in `automat::Main()` in `src/automat.cc`.
+- The authoritative list of process-wide state lives in `src/automat.hpp` and `src/root_widget.hpp`. Init and teardown order is explicit in `automat::Main()` in `src/automat.cpp`.
 
 ## Common Development Commands
 
@@ -53,33 +53,33 @@ Automat is a C++ application for semi-autonomous automation with a layered archi
 ### Core Architecture Layers
 
 1. **Objects Layer** - Heart of Automat containing virtual devices that can connect to each other
-   - Located in `src/library*.cc/hh`
+   - Located in `src/library*.cpp/hpp`
    - Objects use typed connections defined by `Argument` class
    - Objects inherit `ReferenceCounted` (thread-safe ref-counted via `Ptr<T>`) and `ToyMakerMixin`
-   - Key files: `src/object.hh`, `src/argument.hh`, `src/base.hh`
+   - Key files: `src/object.hpp`, `src/argument.hpp`, `src/base.hpp`
 
 2. **Toys Layer** - UI display widgets, separated from Object logic
-   - **`automat::Toy`** (`src/toy.hh`) — base for all display widgets, inherits `ui::Widget`
-   - **`ObjectToy`** (`src/object.hh`) — base for Object-specific widgets (Shape, Draw, ArgStart, etc.)
-   - **`ToyStore`** (`src/toy.hh`) — manages Toy lifetimes, keyed by `(WeakPtr<owner>, Atom*)`
+   - **`automat::Toy`** (`src/toy.hpp`) — base for all display widgets, inherits `ui::Widget`
+   - **`ObjectToy`** (`src/object.hpp`) — base for Object-specific widgets (Shape, Draw, ArgStart, etc.)
+   - **`ToyStore`** (`src/toy.hpp`) — manages Toy lifetimes, keyed by `(WeakPtr<owner>, Atom*)`
    - **`ToyMaker`** concept — any `Part` with a `Toy` type and `MakeToy(Widget*)` method
-   - Widget struct definitions typically live in .cc files; headers only declare `MakeToy`
-   - `ConnectionWidget` (`src/ui_connection_widget.hh/cc`) — displays argument connections
-   - `SyncConnectionWidget` (`src/sync.hh/cc`) — displays sync belts between Gear and members
-   - `LocationWidget` (`src/location.cc`) — manages position/scale animation for a Location
+   - Widget struct definitions typically live in .cpp files; headers only declare `MakeToy`
+   - `ConnectionWidget` (`src/ui_connection_widget.hpp/cpp`) — displays argument connections
+   - `SyncConnectionWidget` (`src/sync.hpp/cpp`) — displays sync belts between Gear and members
+   - `LocationWidget` (`src/location.cpp`) — manages position/scale animation for a Location
 
 3. **Platform Frontends** - OS-specific window management
-   - Windows: `src/win32_window.cc`
-   - Linux: `src/xcb_window.cc`
-   - Entry point: `src/automat.cc`
+   - Windows: `src/win32_window.cpp`
+   - Linux: `src/xcb_window.cpp`
+   - Entry point: `src/automat.cpp`
 
 ### Key Components
 
-- **Location** (`src/location.hh`) - Owns an Object and tracks its position/scale within a Board
-- **Board** (`src/base.hh`) - Container for Locations; provides canvas, drop target, connection routing
-- **ToyStore** (`src/toy.hh`) - Maps `(owner, atom)` keys to Toy widgets; lives on `RootWidget`
-- **Argument** (`src/argument.hh`) - Typed connection between Objects; `ArgumentOf` is its ToyMaker
-- **Syncable** (`src/sync.hh`) - Sync interface allowing Objects to act as one via a shared Gear
+- **Location** (`src/location.hpp`) - Owns an Object and tracks its position/scale within a Board
+- **Board** (`src/base.hpp`) - Container for Locations; provides canvas, drop target, connection routing
+- **ToyStore** (`src/toy.hpp`) - Maps `(owner, atom)` keys to Toy widgets; lives on `RootWidget`
+- **Argument** (`src/argument.hpp`) - Typed connection between Objects; `ArgumentOf` is its ToyMaker
+- **Syncable** (`src/sync.hpp`) - Sync interface allowing Objects to act as one via a shared Gear
 - **Custom Build System** - Python-based build system in `run_py/`
 - **Extensions** - Python modules in `src/*.py` that extend the build system
 
@@ -95,8 +95,8 @@ Objects (multi-threaded) notify Toys (UI-thread) via `wake_counter`:
 ### Source Code Organization
 
 - `src/` - All C++ source files
-- `src/library_*.cc/hh` - Object implementations for different functionality
-- `src/*_test.cc` - Unit tests using Google Test
+- `src/library_*.cpp/hpp` - Object implementations for different functionality
+- `src/*_test.cpp` - Unit tests using Google Test
 - `assets/` - Resources, textures, fonts, and SKSL shaders
 - `third_party/` - External dependencies (Skia, Tesseract, LLVM, etc.)
 - `docs/` - Design documents
@@ -149,7 +149,7 @@ All references to previous versions (e.g. v1, "old design", "before the rewrite"
 - Uses custom smart pointers (`Ptr<T>`, `WeakPtr<T>`, `NestedPtr<T>`) and containers (`Vec<T>`)
 - Files use `#pragma maf` directives for build system integration
 - Static linking preferred for single-binary distribution
-- **Build Variant Detection**: Include `src/build_variant.hh` to access compile-time build variant constants:
+- **Build Variant Detection**: Include `src/build_variant.hpp` to access compile-time build variant constants:
   - `automat::build_variant::Debug` - true for debug builds
   - `automat::build_variant::Release` - true for release builds
   - `automat::build_variant::Fast` - true for fast builds
@@ -170,7 +170,7 @@ All references to previous versions (e.g. v1, "old design", "before the rewrite"
 ### Testing
 
 - Use Google Test framework for unit tests
-- Test files should be named `*_test.cc` and include `gtest.hh`
+- Test files should be named `*_test.cpp` and include `gtest.hpp`
 - Tests are automatically discovered and built by the build system
 - Each test file becomes an individual binary that can be run separately
 - Available test targets: `ptr_test`, `arcline_test`, `fmt_test`, `llvm_test`
@@ -184,8 +184,8 @@ All references to previous versions (e.g. v1, "old design", "before the rewrite"
 
 ### Renderer & Widget Lifecycle Gotchas
 
-- **`TextureAnchors()` can call `Tick()`**: Some widgets (e.g. `SyncBelt`) call `Tick()` from their `TextureAnchors()` override to compute positions. `TextureAnchors()` is called up to 3 times per frame (renderer.cc lines 924, 1195, 1200). Any side effects in `Tick()` (like `MarkDead`) will fire multiple times. Be aware of this when adding stateful logic to `Tick()`.
-- **Renderer tree build and Tick are interleaved**: The renderer builds the widget tree and ticks each widget in the same loop (renderer.cc step 2). RootWidget is ticked first, which rebuilds `children`. Then `Children()` returns the fresh list for tree expansion. Widgets are NOT ticked from `RootWidget::Tick` — only from the renderer's tree traversal.
+- **`TextureAnchors()` can call `Tick()`**: Some widgets (e.g. `SyncBelt`) call `Tick()` from their `TextureAnchors()` override to compute positions. `TextureAnchors()` is called up to 3 times per frame (renderer.cpp lines 924, 1195, 1200). Any side effects in `Tick()` (like `MarkDead`) will fire multiple times. Be aware of this when adding stateful logic to `Tick()`.
+- **Renderer tree build and Tick are interleaved**: The renderer builds the widget tree and ticks each widget in the same loop (renderer.cpp step 2). RootWidget is ticked first, which rebuilds `children`. Then `Children()` returns the fresh list for tree expansion. Widgets are NOT ticked from `RootWidget::Tick` — only from the renderer's tree traversal.
 - **`Syncable::Table::DefaultFind` returns a `NestedPtr` with null `Interface::Table*`**: Because Gears are top-level Objects, not interfaces. `NestedPtr::operator bool()` checks the nested pointer (null), not the owner. So `(bool)arg.Find()` returns false even when connected to a Gear. Use `Argument::IsConnected()` instead.
 - **ToyStore is UI-thread only**: Not synchronized. VM threads must not call `FindOrMake` or modify ToyStore. Signal via `wake_counter` instead.
 - **`ToyStore::Tick` runs before widget tree is built**: Dead entries should be cleaned here. But widgets that call `MarkDead` during the tree traversal (after `ToyStore::Tick`) won't be cleaned until the next frame.

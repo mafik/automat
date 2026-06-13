@@ -1,0 +1,18 @@
+// SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+// SPDX-License-Identifier: MIT
+#pragma once
+
+#include "widget.hpp"
+
+namespace automat::ui {
+
+struct Text : Widget, PaintMixin {
+  std::string text;
+  Text(Widget* parent, std::string_view text = "");
+  SkPath Shape() const override;
+  void Draw(SkCanvas&) const override;
+  StrView Name() const override { return "Text"; }
+  Optional<Rect> TextureBounds() const override;
+};
+
+}  // namespace automat::ui

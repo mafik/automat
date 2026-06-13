@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 # SPDX-License-Identifier: MIT
 
-# The job of this extension is to generate `include/automat/x86.hh` with all the LLVM x86 instructions
+# The job of this extension is to generate `include/automat/x86.hpp` with all the LLVM x86 instructions
 # that Automat supports.
 #
 # There are many classes of instructions which are not supported. In all cases this is due to lack of
@@ -49,13 +49,13 @@ IRRELEVANT_FIELDS = ['!anonymous', '!fields', '!name', 'AddedComplexity', 'ExeDo
                      'OpPrefixBits', 'OpSizeBits', 'Opcode', 'TSFlags', 'VectSize',
                      'explicitOpPrefix', 'explicitOpPrefixBits', 'AsmMatchConverter']
 
-# x86.hh is generated to PREFIX rather than `build/generated` because it depends on llvm-tblgen,
+# x86.hpp is generated to PREFIX rather than `build/generated` because it depends on llvm-tblgen,
 # which exists in three different PREFIX-es.
-x86_hh = build.PREFIX / 'include' / 'automat' / 'x86.hh'
+x86_hpp = build.PREFIX / 'include' / 'automat' / 'x86.hpp'
 x86_json = build.BASE / 'x86.json'
 
-def gen_x86_hh():
-  x86_hh.parent.mkdir(parents=True, exist_ok=True)
+def gen_x86_hpp():
+  x86_hpp.parent.mkdir(parents=True, exist_ok=True)
 
   x = json.load(x86_json.open())
 
@@ -356,8 +356,8 @@ def gen_x86_hh():
         print(f'- {group_name:25s} ({len(group.opcodes)} instructions)')
       print()
 
-  # --- Generate x86.hh below ---
-  f = x86_hh.open('w', encoding='utf-8')
+  # --- Generate x86.hpp below ---
+  f = x86_hpp.open('w', encoding='utf-8')
   # First, emit the header and struct definitions.
   print(f'''#pragma once
 
@@ -458,22 +458,22 @@ def hook_recipe(r: make.Recipe):
               desc='Generating x86.json',
               shortcut='x86.json')
 
-  r.add_step(gen_x86_hh,
-              outputs=[x86_hh],
+  r.add_step(gen_x86_hpp,
+              outputs=[x86_hpp],
               inputs=[x86_json, __file__] + llvm.hook.beam,
-              desc='Generating x86.hh',
-              shortcut='x86.hh')
+              desc='Generating x86.hpp',
+              shortcut='x86.hpp')
 
-# Hook x86.hh into the build graph
+# Hook x86.hpp into the build graph
 
-files_using_x86_hh = set()
+files_using_x86_hpp = set()
 
 def hook_srcs(srcs: dict[str, src.File], r: make.Recipe):
   for file in srcs.values():
-    if 'automat/x86.hh' in file.system_includes:
-      files_using_x86_hh.add(file)
+    if 'automat/x86.hpp' in file.system_includes:
+      files_using_x86_hpp.add(file)
 
 def hook_plan(srcs: dict[str, src.File], objs: list[build.ObjectFile], bins: list[build.Binary], r: make.Recipe):
   for obj in objs:
-    if obj.source in files_using_x86_hh:
-      obj.deps.add(str(x86_hh))
+    if obj.source in files_using_x86_hpp:
+      obj.deps.add(str(x86_hpp))

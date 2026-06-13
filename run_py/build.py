@@ -230,9 +230,8 @@ def plan(srcs) -> tuple[list[ObjectFile], list[Binary]]:
                 if f_obj not in bin_file.objects:
                     bin_file.objects.append(f_obj)
             queue.extend(f.transitive_includes)
-            for source_suffix in ('.cc', '.cpp'):
-                if f_cc := srcs.get(str(f.path.with_suffix(source_suffix)), None):
-                    queue.append(f_cc)
+            if f_cc := srcs.get(str(f.path.with_suffix('.cpp')), None):
+                queue.append(f_cc)
 
     return list(objs.values()), binaries
 

@@ -129,29 +129,29 @@ layer. The project is evolving quickly so any documentation about those layers
 is likely going to be outdated soon. Instead, here is a list of key source
 files, that should help you find your way around the codebase:
 
-- `src/library*.hh` - those are Automat's objects. Feel free to spot-check some
+- `src/library*.hpp` - those are Automat's objects. Feel free to spot-check some
 of them to see how things are implemented but keep in mind that due to constant
 evolution some APIs used by objects may have gotten obsolete. It's a mix of good
 and bad stuff. Use your own judgement of which tricks are worth learning.
 
-- `src/object.hh`, `src/argument.hh`, `src/connection.hh` - the basic types.
+- `src/object.hpp`, `src/argument.hpp`, `src/connection.hpp` - the basic types.
 Note that objects themselves use C++ OOP mechanisms to define their types and
 interfaces, but connections can be typed using the `Argument` class, which makes
 it possible to introduce new connection types dynamically, at runtime.
 
-- `src/base.hh` - defines a couple interfaces used by objects to do their work &
+- `src/base.hpp` - defines a couple interfaces used by objects to do their work &
 communicate with each other.
 
-- `src/board.hh` - defines the *Board* class. It's a kind of object that can combine
+- `src/board.hpp` - defines the *Board* class. It's a kind of object that can combine
 several other objects into a single one.
 
-- `src/location.hh` - *Location* is responsible for storing objects and
+- `src/location.hpp` - *Location* is responsible for storing objects and
 providing them with API for finding other objects and interacting with them.
 It's pretty inconspicuous but also probably the most important class in the
 whole project.
 
-- `src/automat.cc` - this is where the *main* function is located. Good place to
+- `src/automat.cpp` - this is where the *main* function is located. Good place to
 start if you want to see how the Automat interacts with the OS windowing system.
 
-- `src/window.hh` - a cross-platform abstraction for a window. This is where all
+- `src/window.hpp` - a cross-platform abstraction for a window. This is where all
 of the platform-specific frontends (Win32, XCB) become one.

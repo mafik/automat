@@ -29,8 +29,8 @@ struct LoadingAnimation {
 
   operator bool() { return state != kDone; }
 
-  virtual ui::Tick Tock(time::Timer& timer) {
-    return state == kDone ? ui::Tick::Draw : ui::Tick::Drawing;
+  virtual ui::Tock Tick(time::Timer& timer) {
+    return state == kDone ? ui::Tock::Draw : ui::Tock::Drawing;
   }
   virtual void PreDraw(SkCanvas& canvas) { canvas.saveLayer(nullptr, nullptr); }
   virtual void PostDraw(SkCanvas& canvas) { canvas.restore(); }
@@ -85,7 +85,7 @@ struct HypnoRect : public LoadingAnimation {
 
   HypnoRect();
 
-  ui::Tick Tock(time::Timer&) override;
+  ui::Tock Tick(time::Timer&) override;
   void PreDraw(SkCanvas&) override;
   void PostDraw(SkCanvas&) override;
 };

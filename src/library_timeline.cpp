@@ -965,33 +965,33 @@ struct TimelineWidget : ObjectToy {
                                                 i * (kTrackMargin + kTrackHeight));
     }
   }
-  Tick Tock(time::Timer& timer) override {
+  Tock Tick(time::Timer& timer) override {
     auto timeline = LockObject<Timeline>();
-    if (!timeline) return Tick::Draw;
+    if (!timeline) return Tock::Draw;
     auto lock = std::lock_guard(timeline->mutex);
 
     state = timeline->state;
 
     run_button->WakeAnimationAt(timer.last);
 
-    Tick tick;
+    Tock tock;
     if ((state == Timeline::kPlaying) || (state == Timeline::kRecording)) {
-      tick |= Tick::Drawing;
+      tock |= Tock::Drawing;
     }
-    tick.drawing |= animation::ExponentialApproach(timeline->zoom, timer.d, 0.1, zoom);
-    tick.drawing |= splice_wiggle.SpringTowards(0, timer.d, 0.3, 0.1);
+    tock.drawing |= animation::ExponentialApproach(timeline->zoom, timer.d, 0.1, zoom);
+    tock.drawing |= splice_wiggle.SpringTowards(0, timer.d, 0.3, 0.1);
     if (splice_action) {
-      tick |= Tick::Drawing;
+      tock |= Tock::Drawing;
       splice_x = XAtTime(splice_action->splice_to) + splice_wiggle.value;
     }
-    tick.drawing |= animation::ExponentialApproach(0, timer.d, 0.05, bridge_wiggle_s);
+    tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.05, bridge_wiggle_s);
 
-    if (tick.ing) {
+    if (tock.ing) {
       WakeAnimationResponsively(*timeline, timer.now);
     } else {
       PullTimelineState(*timeline, timer.now);
     }
-    return tick;
+    return tock;
   }
   void Draw(SkCanvas& canvas) const override {
     int track_count = track_widgets.size();
@@ -1900,7 +1900,7 @@ struct TrackBaseWidget : ObjectToy {
   time::FloatDuration distance_to_seconds;
   Rect shape;
 
-  Tick Tock(time::Timer& timer) override {
+  Tock Tick(time::Timer& timer) override {
     Context ctx(*this);
     distance_to_seconds = ctx.distance_to_seconds;
 
@@ -1920,7 +1920,7 @@ struct TrackBaseWidget : ObjectToy {
       shape.left = max<float>(
           shape.left, ctx.timeline_widget->TimeAtX(-kWindowWidth / 2) / distance_to_seconds);
     }
-    return Tock(timer, ctx);
+    return Tick(timer, ctx);
   }
 
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
@@ -1931,7 +1931,7 @@ struct TrackBaseWidget : ObjectToy {
     return ObjectToy::ArgStart(arg);
   }
 
-  virtual Tick Tock(time::Timer& timer, Context& ctx) { return Tick::Draw; }
+  virtual Tock Tick(time::Timer& timer, Context& ctx) { return Tock::Draw; }
 
   SkPath Shape() const override { return SkPath::Rect(shape.sk); }
 
@@ -1962,7 +1962,7 @@ struct OnOffTrackWidget : TrackBaseWidget {
   time::Duration on_at_end = 0s;
   Timeline::State timeline_state = Timeline::kPaused;
 
-  Tick Tock(time::Timer& timer, Context& ctx) override {
+  Tock Tick(time::Timer& timer, Context& ctx) override {
     auto* track = ctx.GetTrack<OnOffTrack>();
     if (track) {
       timestamps = track->timestamps;
@@ -1976,7 +1976,7 @@ struct OnOffTrackWidget : TrackBaseWidget {
     } else {
       on_at_end = timestamps.back();
     }
-    return Tick::Draw;
+    return Tock::Draw;
   }
   void Draw(SkCanvas& canvas) const override {
     TrackBaseWidget::Draw(canvas);
@@ -2023,7 +2023,7 @@ struct Vec2TrackWidget : TrackBaseWidget {
   Vec<Vec2> values;
   time::Duration current_offset_raw = 0s;
 
-  Tick Tock(time::Timer& timer, Context& ctx) override {
+  Tock Tick(time::Timer& timer, Context& ctx) override {
     if (auto* track = ctx.GetTrack<Vec2Track>()) {
       timestamps = track->timestamps;
       values = track->values;
@@ -2031,7 +2031,7 @@ struct Vec2TrackWidget : TrackBaseWidget {
     if (ctx.timeline_widget) {
       current_offset_raw = ctx.timeline_widget->current_offset_raw;
     }
-    return Tick::Draw;
+    return Tock::Draw;
   }
   void Draw(SkCanvas& canvas) const override {
     TrackBaseWidget::Draw(canvas);
@@ -2334,11 +2334,11 @@ struct Float64TrackWidget : TrackBaseWidget {
 
   using TrackBaseWidget::TrackBaseWidget;
 
-  Tick Tock(time::Timer& t, Context& ctx) override {
-    Tick tick;
+  Tock Tick(time::Timer& t, Context& ctx) override {
+    Tock tock;
     auto* track = ctx.GetTrack<Float64Track>();
     if (!track) {
-      return Tick::Draw;
+      return Tock::Draw;
     }
     auto* timeline_widget = ctx.timeline_widget;
     auto& timestamps = track->timestamps;
@@ -2375,8 +2375,8 @@ struct Float64TrackWidget : TrackBaseWidget {
     }
     trail_builder.lineTo(shape.right, last_y);
 
-    tick.drawing |= y_min.SineTowards(y_min_target, t.d, 0.5);
-    tick.drawing |= y_max.SineTowards(y_max_target, t.d, 0.5);
+    tock.drawing |= y_min.SineTowards(y_min_target, t.d, 0.5);
+    tock.drawing |= y_max.SineTowards(y_max_target, t.d, 0.5);
 
     double trail_height = y_max - y_min;
     double trail_middle = (y_max + y_min) / 2;
@@ -2388,7 +2388,7 @@ struct Float64TrackWidget : TrackBaseWidget {
     }
     trail = trail_builder.detach(&m);
 
-    return tick;
+    return tock;
   }
 
   void Draw(SkCanvas& canvas) const override {

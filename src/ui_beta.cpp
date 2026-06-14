@@ -1106,20 +1106,20 @@ RunButton::RunButton(Widget* parent, std::function<void()> on_click, uint32_t se
   };
 }
 
-ui::Tick RunButton::Tock(time::Timer& t) {
+ui::Tock RunButton::Tick(time::Timer& t) {
   if (parent) {
     // Lower center, dipping slightly past the border - aligned with where the
     // "next" connector leaves the object.
     Rect bounds{parent->Shape().getBounds()};
     local_to_parent = SkM44::Translate(bounds.CenterX(), bounds.bottom + kRadius - kOverhang);
   }
-  Tick tick = clickable.Tock(t);
+  Tock tock = clickable.Tick(t);
   if (enabled && clickable.pointers_over > 0 && clickable.pointers_pressing == 0) {
     wiggle = static_cast<uint32_t>(t.NowSeconds() * 5.0);
-    tick.draw = true;
-    tick.next_tock = min(tick.next_tock, t.now + 200ms);
+    tock.draw = true;
+    tock.next_tick = min(tock.next_tick, t.now + 200ms);
   }
-  return tick;
+  return tock;
 }
 
 void RunButton::Draw(SkCanvas& canvas) const {

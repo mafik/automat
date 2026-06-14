@@ -96,9 +96,9 @@ Assembler::Assembler() {
   }
 }
 
-static ui::Tick RefreshState(Assembler& assembler, time::SteadyPoint now) {
+static ui::Tock RefreshState(Assembler& assembler, time::SteadyPoint now) {
   if (assembler.mc_controller == nullptr) {
-    return ui::Tick::Draw;
+    return ui::Tock::Draw;
   }
   if (now > assembler.last_state_refresh) {
     auto old_regs = assembler.state.regs;
@@ -117,9 +117,9 @@ static ui::Tick RefreshState(Assembler& assembler, time::SteadyPoint now) {
     assembler.last_state_refresh = now;
   }
   if (assembler.running->IsRunning()) {
-    return ui::Tick::Drawing;
+    return ui::Tock::Drawing;
   } else {
-    return ui::Tick::Draw;
+    return ui::Tock::Draw;
   }
 }
 
@@ -316,18 +316,18 @@ SkPath AssemblerWidget::Shape() const {
   return shape;
 }
 
-ui::Tick AssemblerWidget::Tock(time::Timer& timer) {
+ui::Tock AssemblerWidget::Tick(time::Timer& timer) {
   auto assembler = LockObject<Assembler>();
   if (!assembler || assembler->mc_controller == nullptr) {
-    return Tick::Draw;
+    return Tock::Draw;
   }
-  Tick tick = RefreshState(*assembler, timer.now);
+  Tock tock = RefreshState(*assembler, timer.now);
 
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    reg_widgets[i]->Tock(timer);
+    reg_widgets[i]->Tick(timer);
   }
 
-  return tick;
+  return tock;
 }
 
 void AssemblerWidget::Draw(SkCanvas& canvas) const {
@@ -620,18 +620,18 @@ static constexpr float kByteValueFontShiftUp =
 static constexpr float kBitPositionFontShiftUp =
     RegisterWidget::kCellHeight / 2 - kBitPositionFontSize;
 
-ui::Tick RegisterWidget::Tock(time::Timer& timer) {
-  Tick tick;
+ui::Tock RegisterWidget::Tick(time::Timer& timer) {
+  Tock tock;
   if (auto register_obj = LockRegister()) {
     register_index = register_obj->register_index;
     if (auto assembler = register_obj->assembler_arg->FindObject()) {
-      tick = RefreshState(*assembler, timer.now);
+      tock = RefreshState(*assembler, timer.now);
       reg_value = assembler->state.regs[kRegisters[register_index].regs_index];
     }
   }
 
   small_buffer_widget.WakeAnimation();
-  return tick;
+  return tock;
 }
 
 void RegisterWidget::Draw(SkCanvas& canvas) const {

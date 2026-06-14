@@ -283,7 +283,7 @@ struct HotKeyWidget : ObjectToy {
     };
   }
 
-  Tick Tock(time::Timer& t) override {
+  Tock Tick(time::Timer& t) override {
     if (hotkey_selector) {
       shortcut_button->fg = kKeyGrabbingColor;
     } else {
@@ -297,7 +297,7 @@ struct HotKeyWidget : ObjectToy {
       shortcut_button->SetLabel(ToStr(hk->key));
     }
     power_button->WakeAnimationAt(t.last);
-    return Tick::Draw;
+    return Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {

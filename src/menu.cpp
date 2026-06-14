@@ -276,7 +276,7 @@ struct Menu : ui::Widget {
   Optional<Rect> TextureBounds() const override {
     return Rect::MakeAtZero(kMenuSize * 3, kMenuSize * 3);
   }
-  Tick Tock(time::Timer& timer) override;
+  Tock Tick(time::Timer& timer) override;
   void FillChildren(Vec<ui::Widget*>& children) override {
     for (auto& opt : options) {
       if (opt == nullptr) continue;
@@ -361,7 +361,7 @@ struct MenuAction : Action {
   ui::Widget* Widget() override { return menu_widget.get(); }
 };
 
-ui::Tick Menu::Tock(time::Timer& timer) {
+ui::Tock Menu::Tick(time::Timer& timer) {
   size.SpringTowards(kMenuSize, timer.d, 0.2, 0.05);
   if (action) {
     Vec2 pos = action->pointer.PositionWithin(*this);
@@ -416,7 +416,7 @@ ui::Tick Menu::Tock(time::Timer& timer) {
     opt->local_to_parent = SkM44(
         SkMatrix::RectToRect(bounds, desired_size, SkMatrix::kCenter_ScaleToFit).postScale(s, s));
   }
-  return Tick::Drawing;
+  return Tock::Drawing;
 }
 
 Vec<std::unique_ptr<Option>> OptionsProvider::CloneOptions() const {

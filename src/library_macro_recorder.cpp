@@ -430,17 +430,17 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
     }
   }
 
-  Tick Tock(time::Timer& timer) override {
+  Tock Tick(time::Timer& timer) override {
     if (auto mr = LockMacroRecorder()) {
       is_recording = mr->keylogging != nullptr;
     }
 
     record_button->WakeAnimationAt(timer.last);
 
-    Tick tick;
-    if (is_recording) tick |= Tick::Drawing;
+    Tock tock;
+    if (is_recording) tock |= Tock::Drawing;
 
-    tick.drawing |= animation::ExponentialApproach(is_recording ? 1 : 0, timer.d, 0.2,
+    tock.drawing |= animation::ExponentialApproach(is_recording ? 1 : 0, timer.d, 0.2,
                                                    animation_state.eye_rotation_speed);
 
     animation_state.eye_rotation -= timer.d * 360 * animation_state.eye_rotation_speed;
@@ -457,7 +457,7 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
       eyes_open_target = 0;
     }
 
-    tick.drawing |=
+    tock.drawing |=
         animation::ExponentialApproach(eyes_open_target, timer.d, 0.2, animation_state.eyes_open);
 
     auto local_to_window = TransformUp(*this);
@@ -478,10 +478,10 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
       Vec2 target = Vec2(eye_dir.x * dist, -eye_dir.y * dist);
       return googly.SpringTowards(target, timer.d, 0.5, 0.2);
     };
-    tick.drawing |= UpdateEye(kLeftEyeCenter, animation_state.googly_left);
-    tick.drawing |= UpdateEye(kRightEyeCenter, animation_state.googly_right);
+    tock.drawing |= UpdateEye(kLeftEyeCenter, animation_state.googly_left);
+    tock.drawing |= UpdateEye(kRightEyeCenter, animation_state.googly_right);
 
-    return tick;
+    return tock;
   }
 
   void Draw(SkCanvas& canvas) const override {

@@ -27,7 +27,7 @@ struct TypeButton : ShapeWidget {
 
   void PointerOver(Pointer& p) override { clickable.PointerOver(p); }
   void PointerLeave(Pointer& p) override { clickable.PointerLeave(p); }
-  Tick Tock(time::Timer& t) override { return clickable.Tock(t); }
+  Tock Tick(time::Timer& t) override { return clickable.Tick(t); }
   std::unique_ptr<Action> FindAction(Pointer& p, ActionTrigger a) override {
     return clickable.FindAction(p, a);
   }
@@ -210,14 +210,14 @@ static void RefreshText(SmallBufferWidget& widget) {
   }
 }
 
-ui::Tick SmallBufferWidget::Tock(time::Timer&) {
+ui::Tock SmallBufferWidget::Tick(time::Timer&) {
   RefreshText(*this);
   auto shape = Shape();
   auto bounds = shape.getBounds();
 
   type_button->local_to_parent =
       SkM44::Translate(bounds.right() - 4_mm, bounds.centerY()).preScale(0.666, 0.666);
-  return Tick::Draw;
+  return Tock::Draw;
 }
 
 void SmallBufferWidget::Draw(SkCanvas& canvas) const {

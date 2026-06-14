@@ -500,8 +500,8 @@ struct TimerWidget : ObjectToy {
     text_field->SetNumber(n);
   }
 
-  Tick Tock(time::Timer& timer) override {
-    auto tick = ObjectToy::Tock(timer);
+  Tock Tick(time::Timer& timer) override {
+    auto tock = ObjectToy::Tick(timer);
 
     // Refresh cached Object state
     if (auto t = LockTimer()) {
@@ -513,13 +513,13 @@ struct TimerWidget : ObjectToy {
     }
     UpdateTextField();
 
-    tick |= is_running ? Tick::Drawing : Tick{};
-    tick.drawing |= animation::ExponentialApproach(0, timer.d, 0.2, start_pusher_depression);
-    tick.drawing |= animation::ExponentialApproach(0, timer.d, 0.2, left_pusher_depression);
-    tick.drawing |= animation::ExponentialApproach(0, timer.d, 0.2, right_pusher_depression);
+    tock |= is_running ? Tock::Drawing : Tock{};
+    tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.2, start_pusher_depression);
+    tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.2, left_pusher_depression);
+    tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.2, right_pusher_depression);
     int range_end = (int)Timer::Range::EndGuard;
     animation::WrapModulo(range_dial.value, (float)range, range_end);
-    tick.drawing |= range_dial.SpringTowards((float)range, timer.d, 0.4, 0.05);
+    tock.drawing |= range_dial.SpringTowards((float)range, timer.d, 0.4, 0.05);
     double circles;
     float duration_handle_rotation_target =
         M_PI * 2.5 -
@@ -527,7 +527,7 @@ struct TimerWidget : ObjectToy {
     duration_handle_rotation_target =
         modf(duration_handle_rotation_target / (2 * M_PI), &circles) * 2 * M_PI;
     animation::WrapModulo(duration_handle_rotation, duration_handle_rotation_target, M_PI * 2);
-    tick.drawing |= animation::ExponentialApproach(duration_handle_rotation_target, timer.d, 0.05,
+    tock.drawing |= animation::ExponentialApproach(duration_handle_rotation_target, timer.d, 0.05,
                                                    duration_handle_rotation);
 
     if (hand_draggers) {
@@ -540,10 +540,10 @@ struct TimerWidget : ObjectToy {
         hand_target = 90;
       }
       animation::WrapModulo(hand_degrees.value, hand_target, 360);
-      tick.drawing |=
+      tock.drawing |=
           hand_degrees.SpringTowards(hand_target, timer.d, time::ToSeconds(kHandPeriod), 0.05);
     }
-    return tick;
+    return tock;
   }
 
   void Draw(SkCanvas& canvas) const override {

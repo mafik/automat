@@ -229,7 +229,7 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
 
   SkPath Shape() const override { return SkPath::RRect(CoarseBounds().sk); }
 
-  Tick Tock(time::Timer& timer) override {
+  Tock Tick(time::Timer& timer) override {
     if (auto window = LockWindow()) {
       auto lock = std::unique_lock<std::mutex>(window->mutex);
       if (window_name != window->title) {
@@ -248,10 +248,10 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
 
     // Continue animation if not fully decayed
     if (t < 1.0f) {
-      return Tick::Drawing;
+      return Tock::Drawing;
     }
 
-    return Tick::Draw;
+    return Tock::Draw;
   }
 
   struct LayoutData {

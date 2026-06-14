@@ -720,7 +720,7 @@ struct PhotoToolWidget : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer& timer) override {
+  Tock Tick(time::Timer& timer) override {
     bool has_source = false;
     if (auto tool = LockTool()) {
       std::string l(tool->Label());
@@ -742,7 +742,7 @@ struct PhotoToolWidget : beta::ObjectToy {
 
     // With a source connected keep polling so upstream edits are picked up; with
     // none, idle instead of re-recording the static shelf previews every frame.
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -949,7 +949,7 @@ struct LeptonicaImageWidget : beta::ObjectToy {
     return Rect(p.left - 1_mm, p.bottom - 7_mm, p.right + 1.5_mm, p.top + 1_mm);
   }
 
-  Tick Tock(time::Timer& timer) override {
+  Tock Tick(time::Timer& timer) override {
     if (auto surface = LockImage()) {
       auto lock = std::lock_guard(surface->mutex);
       surface->EnsurePixLocked();
@@ -964,9 +964,9 @@ struct LeptonicaImageWidget : beta::ObjectToy {
     }
     if (translucent) {
       backdrop_phase = (float)std::fmod(timer.NowSeconds() * 0.06, 1.0);
-      return Tick::Drawing;
+      return Tock::Drawing;
     }
-    return Tick::Draw;
+    return Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -1513,7 +1513,7 @@ struct ThresholdToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto tool = LockTool()) {
       std::string l(tool->Label());
@@ -1563,7 +1563,7 @@ struct ThresholdToy : beta::ObjectToy {
       }
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -2189,7 +2189,7 @@ struct MorphologyToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto m = LockMorph()) {
       uint32_t h = MorphHash();
@@ -2213,7 +2213,7 @@ struct MorphologyToy : beta::ObjectToy {
       fn_credit = std::string(m->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -2694,7 +2694,7 @@ struct ToneToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockTone()) {
       uint32_t h = ToneHash();
@@ -2715,7 +2715,7 @@ struct ToneToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -3207,7 +3207,7 @@ struct GeometryToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockGeo()) {
       uint32_t h = GeoHash();
@@ -3240,7 +3240,7 @@ struct GeometryToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -3785,7 +3785,7 @@ struct ChannelToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockChannel()) {
       uint32_t h = ChanHash();
@@ -3805,7 +3805,7 @@ struct ChannelToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -4202,7 +4202,7 @@ struct ConvolveToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockConv()) {
       uint32_t h = ConvHash();
@@ -4229,7 +4229,7 @@ struct ConvolveToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -4734,7 +4734,7 @@ struct BlendToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockBlend()) {
       uint32_t h = BlendHash();
@@ -4754,7 +4754,7 @@ struct BlendToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -5212,7 +5212,7 @@ struct QuantizeToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockQuant()) {
       uint32_t h = QuantHash();
@@ -5241,7 +5241,7 @@ struct QuantizeToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -5721,7 +5721,7 @@ struct FlattenToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockFlat()) {
       uint32_t h = FlattenHash();
@@ -5741,7 +5741,7 @@ struct FlattenToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -6083,7 +6083,7 @@ struct PosterizeToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockPoster()) {
       uint32_t h = PosterHash();
@@ -6100,7 +6100,7 @@ struct PosterizeToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -6391,7 +6391,7 @@ struct DitherToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockDither()) {
       uint32_t h = DitherHash();
@@ -6409,7 +6409,7 @@ struct DitherToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -6722,7 +6722,7 @@ struct DeskewToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockObject<Deskew>()) {
       int m;
@@ -6755,7 +6755,7 @@ struct DeskewToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -7170,7 +7170,7 @@ struct FindLevelToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockFind()) {
       float sf;
@@ -7207,7 +7207,7 @@ struct FindLevelToy : beta::ObjectToy {
       }
       has_source = true;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -7526,7 +7526,7 @@ struct CountToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     if (auto t = LockCount()) {
       bool e;
       {
@@ -7557,7 +7557,7 @@ struct CountToy : beta::ObjectToy {
         }
       }
     }
-    return Tick::Drawing;  // finder: keep ticking while unconnected (the FindLevel lesson)
+    return Tock::Drawing;  // finder: keep ticking while unconnected (the FindLevel lesson)
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -7923,7 +7923,7 @@ struct SelectToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockSel()) {
       uint32_t h = SelHash();
@@ -7946,7 +7946,7 @@ struct SelectToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -8376,7 +8376,7 @@ struct FadeToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockFade()) {
       uint32_t h = FadeHash();
@@ -8396,7 +8396,7 @@ struct FadeToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -8745,7 +8745,7 @@ struct ReduceToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockRed()) {
       uint32_t h = RedHash();
@@ -8764,7 +8764,7 @@ struct ReduceToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -9195,7 +9195,7 @@ struct MeasureToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     if (auto t = LockMeasure()) {
       uint32_t h = MeasureHash();
       if (h != preview_hash) {
@@ -9230,7 +9230,7 @@ struct MeasureToy : beta::ObjectToy {
         }
       }
     }
-    return Tick::Drawing;  // finder: keep ticking while unconnected
+    return Tock::Drawing;  // finder: keep ticking while unconnected
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -9613,7 +9613,7 @@ struct WarpToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockWarp()) {
       uint32_t h = WarpHash();
@@ -9631,7 +9631,7 @@ struct WarpToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -9953,7 +9953,7 @@ struct ColorToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockColor()) {
       uint32_t h = ColorHash();
@@ -9974,7 +9974,7 @@ struct ColorToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -10463,7 +10463,7 @@ struct SeedfillToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockSeed()) {
       uint32_t h = SeedHash();
@@ -10484,7 +10484,7 @@ struct SeedfillToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -10882,7 +10882,7 @@ struct GenerateToy : beta::ObjectToy {
     }
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     if (auto t = LockGen()) {
       fn_credit = std::string(t->LeptonicaFn());
       auto lock = std::lock_guard(t->mutex);
@@ -10904,7 +10904,7 @@ struct GenerateToy : beta::ObjectToy {
       RecomputePreview();
       preview_dirty = false;
     }
-    return Tick::Draw;
+    return Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -11239,7 +11239,7 @@ struct CropToy : beta::ObjectToy {
     preview_dirty = false;
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     bool has_source = false;
     if (auto t = LockCrop()) {
       uint32_t h = CropHash();
@@ -11259,7 +11259,7 @@ struct CropToy : beta::ObjectToy {
       fn_credit = std::string(t->LeptonicaFn());
       has_source = preview_source_id != 0;
     }
-    return has_source ? Tick::Drawing : Tick::Draw;
+    return has_source ? Tock::Drawing : Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {

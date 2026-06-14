@@ -37,10 +37,10 @@ void Clickable::PointerLeave(Pointer& pointer) {
   widget.WakeAnimation();
 }
 
-Widget::Tick Clickable::Tock(time::Timer& timer) {
-  Tick tick;
-  tick.drawing |= animation::LinearApproach(pointers_over ? 1 : 0, timer.d, 10, highlight);
-  return tick;
+Widget::Tock Clickable::Tick(time::Timer& timer) {
+  Tock tock;
+  tock.drawing |= animation::LinearApproach(pointers_over ? 1 : 0, timer.d, 10, highlight);
+  return tock;
 }
 
 namespace {
@@ -151,8 +151,8 @@ void Button::DrawButtonFace(SkCanvas& canvas, SkColor4f bg, SkColor4f fg) const 
   canvas.drawRRect(pressed_oval, border);
 }
 
-Widget::Tick Button::Tock(time::Timer& timer) {
-  Tick tick = clickable.Tock(timer);
+Widget::Tock Button::Tick(time::Timer& timer) {
+  Tock tock = clickable.Tick(timer);
 
   auto fg = ForegroundColor();
 
@@ -163,11 +163,11 @@ Widget::Tick Button::Tock(time::Timer& timer) {
       }
       paint->setColor(fg);
       paint->setAntiAlias(true);
-      tick |= Tick::Draw;  // foreground color changed — repaint
+      tock |= Tock::Draw;  // foreground color changed — repaint
     }
   }
 
-  return tick;
+  return tock;
 }
 
 void Button::PreDraw(SkCanvas& canvas) const {
@@ -183,11 +183,11 @@ void Button::Draw(SkCanvas& canvas) const {
   DrawChildren(canvas);
 }
 
-Widget::Tick ToggleButton::Tock(time::Timer& timer) {
+Widget::Tock ToggleButton::Tick(time::Timer& timer) {
   time_seconds = timer.NowSeconds();
-  Tick tick;
-  tick.drawing |= animation::ExponentialApproach(Filled() ? 1 : 0, timer.d, 0.15, filling);
-  return tick;
+  Tock tock;
+  tock.drawing |= animation::ExponentialApproach(Filled() ? 1 : 0, timer.d, 0.15, filling);
+  return tock;
 }
 
 void ToggleButton::DrawChildCached(SkCanvas& canvas, const Widget& child) const {

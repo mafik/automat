@@ -835,19 +835,19 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       }
 
       // TICK
-      if (node.verdict == Verdict::Unknown && widget->next_tock <= now) {
+      if (node.verdict == Verdict::Unknown && widget->next_tick <= now) {
         auto true_d = rw.timer.d;
-        auto fake_d = min(1.0, time::ToSeconds(now - widget->last_tock));
-        if (widget->last_tock == time::SteadyPoint::min()) {
+        auto fake_d = min(1.0, time::ToSeconds(now - widget->last_tick));
+        if (widget->last_tick == time::SteadyPoint::min()) {
           // This is the first time this widget is being ticked - use `true_d` to animate it.
           fake_d = true_d;
         }
         rw.timer.d = fake_d;
-        auto tick = widget->Tock(rw.timer);
+        auto tock = widget->Tick(rw.timer);
         rw.timer.d = true_d;
-        widget->last_tock = now;
-        widget->next_tock = tick.next_tock;
-        node.wants_to_draw = tick.draw;
+        widget->last_tick = now;
+        widget->next_tick = tock.next_tick;
+        node.wants_to_draw = tock.draw;
       }
 
       widget->pack_frame_texture_bounds = widget->TextureBounds();
@@ -1143,7 +1143,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
 
     update.average_draw_millis = widget.smooth_render_millis;
     update.name = widget.Name();
-    update.last_tick = widget.last_tock;
+    update.last_tick = widget.last_tick;
 
     update.surface_bounds_root = node.surface_bounds_root;
 

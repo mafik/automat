@@ -66,7 +66,7 @@ struct EnumKnobWidget : ui::Widget {
   virtual int KnobGet() const = 0;
   virtual void KnobSet(int value) = 0;
 
-  Tick Tock(time::Timer& timer) override;
+  Tock Tick(time::Timer& timer) override;
 
   virtual void DrawKnobBackground(SkCanvas& canvas, int value) const;
   virtual void DrawKnobSymbol(SkCanvas& canvas, int value) const = 0;

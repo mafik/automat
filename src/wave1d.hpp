@@ -18,7 +18,7 @@ struct Wave1D final {
 
   Wave1D(int n, float wave_speed, float column_spacing, float damping_half_time = 0);
 
-  ui::Tick Tock(time::Timer& timer);
+  ui::Tock Tick(time::Timer& timer);
 
   std::span<const float> Amplitudes() const;
   std::span<float> Amplitude();

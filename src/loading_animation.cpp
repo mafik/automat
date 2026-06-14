@@ -44,7 +44,7 @@ static float Twist(HypnoRect& a, SkMatrix& transform, float factor) {
   return scale;
 }
 
-ui::Tick HypnoRect::Tock(time::Timer& timer) {
+ui::Tock HypnoRect::Tick(time::Timer& timer) {
   t = time::ToSeconds(time::SteadyNow() - start);
 
   if (state == kPostLoading) {
@@ -76,7 +76,7 @@ ui::Tick HypnoRect::Tock(time::Timer& timer) {
   if (state == kPostLoading && base_twist > 25) {
     state = kDone;
   }
-  return LoadingAnimation::Tock(timer);
+  return LoadingAnimation::Tick(timer);
 }
 
 void HypnoRect::PreDraw(SkCanvas& canvas) {

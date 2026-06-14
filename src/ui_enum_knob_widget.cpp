@@ -38,8 +38,8 @@ EnumKnobWidget::EnumKnobWidget(ui::Widget* parent, int n_options)
 
 SkPath EnumKnobWidget::Shape() const { return SkPath::Circle(0, 0, kGaugeRadius); }
 
-ui::Tick EnumKnobWidget::Tock(time::Timer& timer) {
-  Tick tick;
+ui::Tock EnumKnobWidget::Tick(time::Timer& timer) {
+  Tock tock;
   value = KnobGet();
   auto old_value = value;
   if (std::isnan(knob.value) || std::isinf(knob.value)) {
@@ -64,11 +64,11 @@ ui::Tick EnumKnobWidget::Tock(time::Timer& timer) {
   if (value != old_value) {
     KnobSet(value);
   }
-  tick.drawing |= click_wiggle.SpringTowards(0, timer.d, time::ToSeconds(kClickWigglePeriod),
+  tock.drawing |= click_wiggle.SpringTowards(0, timer.d, time::ToSeconds(kClickWigglePeriod),
                                              time::ToSeconds(kClickWiggleHalfTime));
   cond_code_float = (float)value + knob.value + click_wiggle.value;
 
-  return tick;
+  return tock;
 }
 
 void EnumKnobWidget::DrawKnobBackground(SkCanvas& canvas, int value) const {

@@ -259,7 +259,7 @@ struct GearWidget : ObjectToy {
   float angle = 0;
   float target_angle = 0;
 
-  Tick Tock(time::Timer& t) override {
+  Tock Tick(time::Timer& t) override {
     if (auto gear = LockOwner<Gear>()) {
       auto wake_counter = gear->wake_counter.load(std::memory_order_relaxed);
       if (wake_counter != last_wake_counter) {
@@ -272,9 +272,9 @@ struct GearWidget : ObjectToy {
       }
     }
 
-    Tick tick;
-    tick.drawing |= animation::LowLevelSineTowards(target_angle, t.d, 0.6, angle, angular_velocity);
-    return tick;
+    Tock tock;
+    tock.drawing |= animation::LowLevelSineTowards(target_angle, t.d, 0.6, angle, angular_velocity);
+    return tock;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -324,21 +324,21 @@ std::unique_ptr<Action> SyncBelt::FindAction(ui::Pointer& pointer, ui::ActionTri
   return nullptr;
 }
 
-ui::Tick SyncBelt::Tock(time::Timer& t) {
-  Tick tick;
+ui::Tock SyncBelt::Tick(time::Timer& t) {
+  Tock tock;
   auto& toy_store = ToyStore();
 
   // Check if the object of this connection still exists.
   auto syncable = LockBind<Syncable>();
   if (!syncable) {
-    tick.drawing |=
+    tock.drawing |=
         animation::LowLevelSpringTowards(pinion.x, t.d, 0.3, 0.05, origin.x, origin_velocity.x);
-    tick.drawing |=
+    tock.drawing |=
         animation::LowLevelSpringTowards(pinion.y, t.d, 0.3, 0.05, origin.y, origin_velocity.y);
-    if (!tick.ing) {
+    if (!tock.ing) {
       MarkDead(t.now);
     }
-    return tick;
+    return tock;
   }
 
   auto sync_balance = syncable.state->sync_balance;
@@ -348,7 +348,7 @@ ui::Tick SyncBelt::Tock(time::Timer& t) {
     last_sync_balance = sync_balance;
   }
 
-  tick.drawing |= animation::LowLevelSineTowards(target_scroll_ratio, t.d, 0.6, scroll_ratio,
+  tock.drawing |= animation::LowLevelSineTowards(target_scroll_ratio, t.d, 0.6, scroll_ratio,
                                                  scroll_ratio_velocity);
   // Keeping the animation close to 0 makes it smoother.
   if (fabs(scroll_ratio) > 0) {
@@ -359,7 +359,7 @@ ui::Tick SyncBelt::Tock(time::Timer& t) {
 
   // Find the owner object widget
   auto* owner_widget = toy_store.FindOrNull(*syncable.object_ptr);
-  if (!owner_widget) return Tick::Draw;
+  if (!owner_widget) return Tock::Draw;
 
   auto origin_shape = owner_widget->Shape().makeTransform(TransformBetween(*owner_widget, *this));
   origin = origin_shape.getBounds().center();
@@ -406,14 +406,14 @@ ui::Tick SyncBelt::Tock(time::Timer& t) {
     if (gear_widget) {
       angle = gear_widget->angle;
       if (gear_widget->IsAnimating()) {
-        tick |= Tick::Drawing;
+        tock |= Tock::Drawing;
       }
       auto gear_matrix = TransformBetween(*gear_widget, *this);
       Vec2 gear_origin = gear_matrix.mapOrigin();
       float new_scale = gear_matrix.mapRadius(1);
       if (new_scale != scale) {
         scale = new_scale;
-        tick |= Tick::Drawing;
+        tock |= Tock::Drawing;
       }
       auto dir = Normalize(origin - gear_origin);
       float gear_dist = (kPrimaryGearRadius + kSecondaryGearRadius) * scale;
@@ -431,25 +431,25 @@ ui::Tick SyncBelt::Tock(time::Timer& t) {
         if (v_dot_n < 0) {
           pinion_deflection.velocity -= normal * v_dot_n;  // sticky collision
         }
-        tick |= Tick::Drawing;
+        tock |= Tock::Drawing;
       }
     }
   } else if (is_dragged) {
-    tick.drawing |= animation::ExponentialApproach(1, t.d, 0.1, scale);
+    tock.drawing |= animation::ExponentialApproach(1, t.d, 0.1, scale);
   } else {
     pinion_deflection.SmoothTargetUpdate(pinion, origin);
   }
 
-  tick.drawing |= animation::LowLevelSineTowards(pinion.x <= origin.x ? 0 : 1, t.d, 0.5,
+  tock.drawing |= animation::LowLevelSineTowards(pinion.x <= origin.x ? 0 : 1, t.d, 0.5,
                                                  label_rotation_ratio, label_rotation_velocity);
 
-  tick.drawing |= pinion_deflection.SpringTowards({}, t.d, 0.3, 0.05);
+  tock.drawing |= pinion_deflection.SpringTowards({}, t.d, 0.3, 0.05);
 
-  if (!gear && !is_dragged && !tick.ing) {
+  if (!gear && !is_dragged && !tock.ing) {
     MarkDead(t.now);
   }
 
-  return tick;
+  return tock;
 }
 
 Vec<Vec2> SyncBelt::TextureAnchors() {

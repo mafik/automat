@@ -243,7 +243,7 @@ struct NumberWidget : ObjectToy {
     }
   }
 
-  Tick Tock(time::Timer&) override {
+  Tock Tick(time::Timer&) override {
     if (auto num = LockNumber()) {
       auto text = num->GetText();
       if (text_field->text != text) {
@@ -251,7 +251,7 @@ struct NumberWidget : ObjectToy {
         text_field->WakeAnimation();
       }
     }
-    return Tick::Draw;
+    return Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {

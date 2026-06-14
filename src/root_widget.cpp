@@ -178,19 +178,19 @@ void RootWidget::Init() {
   BuildToolbar(*this);
 }
 
-ui::Tick RootWidget::ZoomWarning::Tock(time::Timer& timer) {
-  Tick tick;
+ui::Tock RootWidget::ZoomWarning::Tick(time::Timer& timer) {
+  Tock tock;
   if (root_widget->zoom > 1e7) {
     root_widget->zoom = 1e7;
   }
-  tick.drawing |= animation::LinearApproach(root_widget->zoom >= 1e7, timer.d, 1, zoom_limit_alpha);
+  tock.drawing |= animation::LinearApproach(root_widget->zoom >= 1e7, timer.d, 1, zoom_limit_alpha);
   if (zoom_limit_alpha > 0.f) {
     zoom_limit_scroll += timer.d / zoom_limit_alpha / zoom_limit_alpha * 0.1;
     float ignore;
     zoom_limit_scroll = modf(zoom_limit_scroll, &ignore);
-    tick |= Tick::Drawing;
+    tock |= Tock::Drawing;
   }
-  return tick;
+  return tock;
 }
 
 void RootWidget::ZoomWarning::Draw(SkCanvas& canvas) const {
@@ -245,15 +245,15 @@ static void DrawStarfieldBackground(SkCanvas& canvas) {
   canvas.drawPaint(paint);
 }
 
-ui::Tick RootWidget::Tock(time::Timer& timer) {
-  Tick tick;
+ui::Tock RootWidget::Tick(time::Timer& timer) {
+  Tock tock;
 
 #if defined(__linux__)
   if (wayland::server) wayland::server->UIFrame();
 #endif
 
   if (loading_animation) {
-    tick |= loading_animation->Tock(timer);
+    tock |= loading_animation->Tick(timer);
   }
 
   // Record camera movement timeline. This is used to create inertia effect.
@@ -314,7 +314,7 @@ ui::Tick RootWidget::Tock(time::Timer& timer) {
   }
 
   if (inertia) {
-    tick |= Tick::Drawing;
+    tock |= Tock::Drawing;
   }
 
   float rx = camera_target.x - camera_pos.x;
@@ -329,7 +329,7 @@ ui::Tick RootWidget::Tock(time::Timer& timer) {
       Pointer* first_pointer = *pointers.begin();
       Vec2 mouse_position = TransformDown(*this).mapPoint(first_pointer->pointer_position);
       Vec2 focus_pre = WindowToCanvas().mapPoint(mouse_position);
-      tick.drawing |= animation::ExponentialApproach(zoom_target, timer.d, 1.0 / 15, zoom);
+      tock.drawing |= animation::ExponentialApproach(zoom_target, timer.d, 1.0 / 15, zoom);
       Vec2 focus_post = WindowToCanvas().mapPoint(mouse_position);
       Vec2 focus_delta = focus_pre - focus_post;
       camera_pos += focus_delta;
@@ -339,31 +339,31 @@ ui::Tick RootWidget::Tock(time::Timer& timer) {
     Vec2 focus_pre = camera_target;
 
     Vec2 target_screen = CanvasToWindow().mapPoint(focus_pre);
-    tick.drawing |= animation::ExponentialApproach(zoom_target, timer.d, 1.0 / 15, zoom);
+    tock.drawing |= animation::ExponentialApproach(zoom_target, timer.d, 1.0 / 15, zoom);
     Vec2 focus_post = WindowToCanvas().mapPoint(target_screen);
     Vec2 focus_delta = focus_post - focus_pre;
     camera_pos -= focus_delta;
   }
 
   zoom_warning.WakeAnimation();
-  zoom_warning.last_tock = last_tock;
+  zoom_warning.last_tick = last_tick;
 
-  tick.drawing |= animation::ExponentialApproach(camera_target.x, timer.d, 0.1, camera_pos.x);
-  tick.drawing |= animation::ExponentialApproach(camera_target.y, timer.d, 0.1, camera_pos.y);
+  tock.drawing |= animation::ExponentialApproach(camera_target.x, timer.d, 0.1, camera_pos.x);
+  tock.drawing |= animation::ExponentialApproach(camera_target.y, timer.d, 0.1, camera_pos.y);
 
   if (move_velocity.x != 0) {
     float shift_x = move_velocity.x * timer.d;
     camera_pos.x += shift_x;
     camera_target.x += shift_x;
     inertia = false;
-    tick |= Tick::Drawing;
+    tock |= Tock::Drawing;
   }
   if (move_velocity.y != 0) {
     float shift_y = move_velocity.y * timer.d;
     camera_pos.y += shift_y;
     camera_target.y += shift_y;
     inertia = false;
-    tick |= Tick::Drawing;
+    tock |= Tock::Drawing;
   }
 
   SkRect work_area = SkRect::MakeXYWH(-0.5, -0.5, 1, 1);
@@ -398,7 +398,7 @@ ui::Tick RootWidget::Tock(time::Timer& timer) {
     }
   }
 
-  if (tick.ing) {
+  if (tock.ing) {
     for (auto& each_pointer : pointers) {
       each_pointer->UpdatePath();
     }
@@ -567,7 +567,7 @@ ui::Tick RootWidget::Tock(time::Timer& timer) {
     }
   }
 
-  return tick;
+  return tock;
 }
 
 void RootWidget::OnChildDead(Widget& child, time::SteadyPoint now) {

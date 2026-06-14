@@ -2766,11 +2766,11 @@ struct ConditionCodeWidget : public EnumKnobWidget {
     }
   }
 
-  Tick Tock(time::Timer& timer) override {
-    Tick tick = EnumKnobWidget::Tock(timer);
+  Tock Tick(time::Timer& timer) override {
+    Tock tock = EnumKnobWidget::Tick(timer);
 
-    tick.drawing |= water_level.SineTowards((float)(value == X86::CondCode::COND_O), timer.d, 2);
-    tick.drawing |= spill_tween.SineTowards(
+    tock.drawing |= water_level.SineTowards((float)(value == X86::CondCode::COND_O), timer.d, 2);
+    tock.drawing |= spill_tween.SineTowards(
         (water_level == 1) || (water_level > 0 && spill_tween == 1), timer.d, 5);
     if (water_level > 0 && !wave.has_value()) {
       wave = Wave1D(30, 0.5, 0.005, 1);
@@ -2855,10 +2855,10 @@ struct ConditionCodeWidget : public EnumKnobWidget {
         }
       }
 
-      tick |= wave->Tock(timer);
+      tock |= wave->Tick(timer);
       wave->ZeroMeanAmplitude();
     }
-    return tick;
+    return tock;
   }
 
   void DrawKnobBackground(SkCanvas& canvas, int val) const override {
@@ -3040,10 +3040,10 @@ PersistentImage reverse = PersistentImage::MakeFromAsset(
     PersistentImage::MakeArgs{.width = Instruction::Widget::kWidth -
                                        Instruction::Widget::kBorderMargin * 2});
 
-ui::Tick Instruction::Widget::Tock(time::Timer& timer) {
+ui::Tock Instruction::Widget::Tick(time::Timer& timer) {
   auto instruction = this->LockObject<Instruction>();
   if (!instruction) {
-    return Tick::Draw;
+    return Tock::Draw;
   }
   inst = instruction->mc_inst;
 
@@ -3162,7 +3162,7 @@ ui::Tick Instruction::Widget::Tock(time::Timer& timer) {
   assembly_text = AssemblyText(inst);
   machine_text = MachineText(inst);
 
-  return Tick::Draw;
+  return Tock::Draw;
 }
 
 void Instruction::Widget::Draw(SkCanvas& canvas) const {

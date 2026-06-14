@@ -108,7 +108,7 @@ struct InstructionLibrary : Object {
 
     std::string_view Name() const override { return "Instruction Library Widget"; }
     SkPath Shape() const override;
-    Tick Tock(time::Timer&) override;
+    Tock Tick(time::Timer&) override;
     void Draw(SkCanvas&) const override;
     std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
 

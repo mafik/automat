@@ -53,7 +53,7 @@ struct RootWidget final : Widget, DropTarget {
     ZoomWarning(RootWidget* root_widget) : Widget(root_widget), root_widget(root_widget) {}
     SkPath Shape() const override { return SkPath(); }
     Optional<Rect> TextureBounds() const override { return std::nullopt; }
-    Tick Tock(time::Timer&) override;
+    Tock Tick(time::Timer&) override;
     void Draw(SkCanvas&) const override;
   } zoom_warning;
 
@@ -128,7 +128,7 @@ struct RootWidget final : Widget, DropTarget {
     return SkPath::Rect(SkRect::MakeXYWH(0, 0, size.width, size.height));
   }
 
-  Tick Tock(time::Timer&) override;
+  Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   void OnChildDead(Widget& child, time::SteadyPoint now) override;
   Compositor GetCompositor() const override { return Compositor::COPY_RAW; }

@@ -183,7 +183,7 @@ struct PointerWidget : Widget {
   std::vector<HighlightState> highlight_current;
   double time_seconds = 0;  // used to animate dashed lines
 
-  Tick Tock(time::Timer&) override;
+  Tock Tick(time::Timer&) override;
   void Draw(SkCanvas& canvas) const override;
 
   void FillChildren(Vec<Widget*>& children) override {

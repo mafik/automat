@@ -140,15 +140,15 @@ vec4 main( float2 fragCoord ) {
       FATAL << "Failed to compile shader: " << status;
     }
   }
-  Tick Tock(time::Timer& timer) override {
-    LOG << FormatTime(timer.d) << " SlowWidget::Tock";
+  Tock Tick(time::Timer& timer) override {
+    LOG << FormatTime(timer.d) << " SlowWidget::Tick";
     local_to_parent =
         SkM44(SkMatrix::RotateDeg(fmod(timer.NowSeconds() * 360 / 5, 360), root_widget->size / 2));
 
     float time = time::ToSeconds(timer.now - test_start);
     auto uniforms = SkData::MakeWithCopy(&time, sizeof(time));
     paint.setShader(runtime_effect->makeShader(uniforms, nullptr, 0));
-    return Tick::Drawing;
+    return Tock::Drawing;
   }
   void Draw(SkCanvas& canvas) const override {
     auto shape = Shape();

@@ -51,7 +51,7 @@ SkPath Toolbar::Shape() const {
   return SkPath::Rect(rect);
 }
 
-ui::Tick Toolbar::Tock(time::Timer& timer) {
+ui::Tock Toolbar::Tick(time::Timer& timer) {
   float width_targets[buttons.size()];
   for (size_t i = 0; i < buttons.size(); ++i) {
     width_targets[i] = buttons[i]->natural_width;
@@ -110,12 +110,12 @@ ui::Tick Toolbar::Tock(time::Timer& timer) {
     audio::Play(*sounds[RandomInt<0, 2>(rng)]);
   }
 
-  Tick tick;
+  Tock tock;
   for (int i = 0; i < buttons.size(); ++i) {
-    tick.drawing |= buttons[i]->width.SineTowards(width_targets[i], timer.d, 0.4);
+    tock.drawing |= buttons[i]->width.SineTowards(width_targets[i], timer.d, 0.4);
   }
   UpdateChildTransform();
-  return tick;
+  return tock;
 }
 
 void Toolbar::Draw(SkCanvas& canvas) const {

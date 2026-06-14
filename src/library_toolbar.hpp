@@ -54,7 +54,7 @@ struct Toolbar : ui::Widget, ui::PointerMoveCallback {
 
   StrView Name() const override;
   SkPath Shape() const override;
-  Tick Tock(time::Timer&) override;
+  Tock Tick(time::Timer&) override;
   void Draw(SkCanvas& canvas) const override;
   void FillChildren(Vec<Widget*>& children) override;
   void UpdateChildTransform();

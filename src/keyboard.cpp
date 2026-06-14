@@ -262,7 +262,7 @@ static CaretAnimAction UpdateCaret(time::Timer& timer, CaretAnimation& anim, Car
 CaretAnimation::CaretAnimation(const Keyboard& keyboard)
     : keyboard(keyboard), shape(PointerIBeam(keyboard)), last_blink(time::SteadyNow()) {}
 
-ui::Tick Keyboard::Tock(time::Timer& timer) {
+ui::Tock Keyboard::Tick(time::Timer& timer) {
   // Iterate through each Caret & CaretAnimation, and update their animations.
   // Animations may result in a Caret being removed.
   // After a Caret has been removed, its CaretAnimation is kept around for some
@@ -310,9 +310,9 @@ ui::Tick Keyboard::Tock(time::Timer& timer) {
     ++caret_it;
   }
   if (anim.carets.empty()) {
-    return Tick::Draw;
+    return Tock::Draw;
   } else {
-    return Tick::Drawing;
+    return Tock::Drawing;
   }
 }
 

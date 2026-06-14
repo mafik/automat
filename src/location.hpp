@@ -221,7 +221,7 @@ struct LocationWidget : ObjectToy {
   Vec2 LocalAnchor() const override;
 
   // Widget overrides
-  Tick Tock(time::Timer& timer) override;
+  Tock Tick(time::Timer& timer) override;
   void PreDraw(SkCanvas&) const override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;

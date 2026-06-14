@@ -83,7 +83,7 @@ struct SmallBufferWidget : TextFieldBase {
 
   RRect CoarseBounds() const override;
   SkPath Shape() const override;
-  Tick Tock(time::Timer&) override;
+  Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
 
   void FillChildren(Vec<Widget*>& children) override;

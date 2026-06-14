@@ -288,7 +288,7 @@ struct RunButton : Widget {
     if (!enabled) return nullptr;
     return clickable.FindAction(p, a);
   }
-  Tick Tock(time::Timer& t) override;
+  Tock Tick(time::Timer& t) override;
   void Draw(SkCanvas& canvas) const override;
 };
 

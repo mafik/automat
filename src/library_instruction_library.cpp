@@ -284,26 +284,26 @@ void InstructionLibrary::Widget::FillChildren(Vec<ui::Widget*>& children) {
   }
 }
 
-ui::Tick InstructionLibrary::Widget::Tock(time::Timer& timer) {
-  Tick tick;
+ui::Tock InstructionLibrary::Widget::Tick(time::Timer& timer) {
+  Tock tock;
 
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    tick.drawing |= animation::LinearApproach(read_from[i].hovered, timer.d, 10,
+    tock.drawing |= animation::LinearApproach(read_from[i].hovered, timer.d, 10,
                                               read_from[i].hovered_animation);
-    tick.drawing |=
+    tock.drawing |=
         animation::LinearApproach(write_to[i].hovered, timer.d, 10, write_to[i].hovered_animation);
 
-    tick.drawing |=
+    tock.drawing |=
         animation::LinearApproach(read_from[i].pressed, timer.d, 5, read_from[i].pressed_animation);
-    tick.drawing |=
+    tock.drawing |=
         animation::LinearApproach(write_to[i].pressed, timer.d, 5, write_to[i].pressed_animation);
   }
 
   auto object_Ptr = LockOwner<Object>();
-  if (!object_Ptr) return Tick::Draw;
+  if (!object_Ptr) return Tock::Draw;
 
   auto* library = dynamic_cast<InstructionLibrary*>(object_Ptr.get());
-  if (!library) return Tick::Draw;
+  if (!library) return Tock::Draw;
 
   lock_guard lock(library->mutex);
   auto& instructions = library->instructions;
@@ -322,7 +322,7 @@ ui::Tick InstructionLibrary::Widget::Tock(time::Timer& timer) {
   }
 
   float helix_tween_target = (helix_hovered && isnan(new_cards_dir_deg)) ? 1 : 0;
-  tick.drawing |= helix_hover_tween.SineTowards(helix_tween_target, timer.d, 0.5);
+  tock.drawing |= helix_hover_tween.SineTowards(helix_tween_target, timer.d, 0.5);
 
   for (int i = 0; i < n; ++i) {
     llvm::MCInst& inst = library->instructions[i];
@@ -377,11 +377,11 @@ ui::Tick InstructionLibrary::Widget::Tock(time::Timer& timer) {
       } else {
         if (j < card.library_index) {
           // We should move the card deeper into the deck (reordered)
-          tick.drawing |=
+          tock.drawing |=
               animation::LinearApproach(1, timer.d, kDebugAnimation ? 1 : 5, card.throw_t);
         } else {
           // Card is moving back to the deck
-          tick.drawing |=
+          tock.drawing |=
               animation::LinearApproach(0, timer.d, kDebugAnimation ? 1 : 5, card.throw_t);
           if (card.throw_t == 0) {
             card.throw_direction_deg = NAN;
@@ -392,7 +392,7 @@ ui::Tick InstructionLibrary::Widget::Tock(time::Timer& timer) {
       if (isnan(card.throw_direction_deg)) {
         card.throw_direction_deg = rng.RollFloat(-180, 180);
       }
-      tick.drawing |= animation::LinearApproach(1, timer.d, kDebugAnimation ? 1 : 5, card.throw_t);
+      tock.drawing |= animation::LinearApproach(1, timer.d, kDebugAnimation ? 1 : 5, card.throw_t);
       if (card.throw_t >= 1) {
         // Delete the card
         instruction_helix.erase(instruction_helix.begin() + j);
@@ -423,7 +423,7 @@ ui::Tick InstructionLibrary::Widget::Tock(time::Timer& timer) {
     }
   }
 
-  tick.drawing |= rotation_offset_t.SineTowards(rotation_offset_t_target, timer.d, 0.2);
+  tock.drawing |= rotation_offset_t.SineTowards(rotation_offset_t_target, timer.d, 0.2);
 
   for (int i = 0; i < category_states.size(); ++i) {
     auto& category = x86::kCategories[i];
@@ -435,8 +435,8 @@ ui::Tick InstructionLibrary::Widget::Tock(time::Timer& timer) {
     if (i == library->selected_category) {
       target_length = 1;
     }
-    tick.drawing |= category_state.growth.SineTowards(target_length, timer.d, 1);
-    tick.drawing |= category_state.shake.SpringTowards(0, timer.d, 0.2, 0.5);
+    tock.drawing |= category_state.growth.SineTowards(target_length, timer.d, 1);
+    tock.drawing |= category_state.shake.SpringTowards(0, timer.d, 0.2, 0.5);
 
     for (int j = 0; j < category.groups.size(); ++j) {
       auto& leaf_state = category_state.leaves[j];
@@ -455,11 +455,11 @@ ui::Tick InstructionLibrary::Widget::Tock(time::Timer& timer) {
           target_hue_rotate = -0.15;
         }
       }
-      tick.drawing |=
+      tock.drawing |=
           leaf_state.growth.SineTowards(target_growth, timer.d, animation_period_seconds);
-      tick.drawing |=
+      tock.drawing |=
           animation::LinearApproach(target_hue_rotate, timer.d, 0.3, leaf_state.hue_rotate);
-      tick.drawing |= leaf_state.shake.SpringTowards(0, timer.d, 0.1, 0.5);
+      tock.drawing |= leaf_state.shake.SpringTowards(0, timer.d, 0.1, 0.5);
       Vec2 leaf_base_position;
       Vec2 stalk_tangent;
       (void)path_measure.getPosTan(group_distance, &leaf_base_position.sk, &stalk_tangent.sk);
@@ -495,7 +495,7 @@ ui::Tick InstructionLibrary::Widget::Tock(time::Timer& timer) {
     card.widget->local_to_parent = SkM44(transform);
   }
 
-  return tick;
+  return tock;
 }
 
 PersistentImage rose0 = PersistentImage::MakeFromAsset(embedded::assets_rose_0_webp,

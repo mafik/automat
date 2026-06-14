@@ -290,28 +290,28 @@ static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
   }
 }
 
-ui::Tick ConnectionWidget::Tock(time::Timer& timer) {
+ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
   ConnectionWidgetLocker a(*this);
 
   if (!a.start_arg) {
-    Tick tick;
-    tick.drawing |= animation::ExponentialApproach(0, timer.d, 0.1, alpha);
-    if (!tick.ing) {
+    Tock tock;
+    tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.1, alpha);
+    if (!tock.ing) {
       MarkDead(timer.now);
     }
-    return tick;
+    return tock;
   }
   Argument arg = a.start_arg;
 
   style = arg.table->style;
   tint = arg.table->tint.toSkColor();
   if (style == Argument::Style::Invisible || style == Argument::Style::Spotlight) {
-    return Tick::Draw;
+    return Tock::Draw;
   }
 
   if (a.start_widget == nullptr) {
-    LOG << "ConnectionWidget::Tock: start widget not found for object " << a.StartObj()->Name();
-    return Tick::Draw;
+    LOG << "ConnectionWidget::Tick: start widget not found for object " << a.StartObj()->Name();
+    return Tock::Draw;
   }
 
   auto* start_base_widget = a.start_widget->BaseToy();
@@ -375,8 +375,8 @@ ui::Tick ConnectionWidget::Tock(time::Timer& timer) {
     state->hidden = should_be_hidden;
   }
 
-  Tick tick;
-  tick.drawing |= animation::LinearApproach(should_be_hidden ? 1 : 0, timer.d, 5, transparency);
+  Tock tock;
+  tock.drawing |= animation::LinearApproach(should_be_hidden ? 1 : 0, timer.d, 5, transparency);
 
   float loc_transparency = (a.StartObj()->here && a.StartObj()->here->widget)
                                ? a.StartObj()->here->widget->transparency
@@ -389,7 +389,7 @@ ui::Tick ConnectionWidget::Tock(time::Timer& timer) {
     if (new_length > length + 2_cm) {
       alpha = 0;
       transparency = 1;
-      tick |= Tick::Drawing;
+      tock |= Tock::Drawing;
     }
     length = new_length;
   }
@@ -412,7 +412,7 @@ ui::Tick ConnectionWidget::Tock(time::Timer& timer) {
     } else {
       state->steel_insert_hidden.target = 0;
     }
-    tick.drawing |= state->steel_insert_hidden.Tick(timer);
+    tock.drawing |= state->steel_insert_hidden.Tick(timer);
 
     uint32_t last_activity = arg.state->last_activity.load(std::memory_order_relaxed);
     if (state->last_activity != last_activity) {
@@ -420,19 +420,19 @@ ui::Tick ConnectionWidget::Tock(time::Timer& timer) {
       state->last_activity = last_activity;
     }
 
-    tick.drawing |= SimulateCablePhysics(timer, *state, pos_dir, to_points);
+    tock.drawing |= SimulateCablePhysics(timer, *state, pos_dir, to_points);
   } else if (style != Argument::Style::Arrow) {
     cable_width.target = a.end_iface ? 2_mm : 0;
     cable_width.speed = 5;
-    tick.drawing |= cable_width.Tick(timer);
+    tock.drawing |= cable_width.Tick(timer);
   }
 
   if (arg.table->autoconnect_radius > 0) {
     auto& anim = animation_state;
-    tick.drawing |=
+    tock.drawing |=
         animation::LinearApproach(anim.radar_alpha_target, timer.d, 2.f, anim.radar_alpha);
     if (anim.radar_alpha >= 0.01f) {
-      tick |= Tick::Drawing;
+      tock |= Tock::Drawing;
       anim.time_seconds = timer.NowSeconds();
     }
 
@@ -440,17 +440,17 @@ ui::Tick ConnectionWidget::Tock(time::Timer& timer) {
     if (a.end_iface) {
       prototype_alpha_target = 0;
     }
-    tick.drawing |=
+    tock.drawing |=
         animation::LinearApproach(prototype_alpha_target, timer.d, 2.f, anim.prototype_alpha);
     if (anim.prototype_alpha > 0) {
       if (!prototype_widget) {
         auto proto = arg.table->prototype();
         prototype_widget = proto->MakeToy(this);
       }
-      tick |= prototype_widget->Tock(timer);
+      tock |= prototype_widget->Tick(timer);
     }
   }
-  return tick;
+  return tock;
 }
 
 void ConnectionWidget::Draw(SkCanvas& canvas) const {

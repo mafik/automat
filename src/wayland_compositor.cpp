@@ -266,7 +266,7 @@ void UnmapToplevel(Impl& s, Toplevel& t) {
       auto lock = std::lock_guard(s.ui_mutex);
       s.ui_disappeared.push_back(std::move(win_obj));
     }
-    vm.WakeToys();  // wakes RootWidget::Tock (via PackFrame) so UIFrame drains
+    vm.WakeToys();  // wakes RootWidget::Tick (via PackFrame) so UIFrame drains
   }
   t.window_weak = {};
 }

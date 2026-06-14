@@ -64,7 +64,9 @@ Once Automat builds, feel free to tweak its sources to your hearts content. Runn
 
 If you'd like to share your tweaks, you can do so through the GitHub's pull request system. To use it you'll have to "fork" this repository & apply your changes to the fork. It's a good opportunity to clean up the code. Once your changes are pushed to GitHub, you can use GitHub's website to create & send a pull request.
 
-Over the course of this process you may encounter some issues. If you do - don't hesitate to ask AI chatbots for help. If you manage to fix some of these issues - then your fixes would be an amazing contribution for others that will follow your steps. Coding is hard - don't be discouraged by small failures - because ultimately it is those failures that will make you better at coding!
+If you cloned the repository with git, run `git config core.hooksPath .githooks` once to enable the pre-commit checks (they validate the SPDX license headers before each commit).
+
+Over the course of this process you may encounter some issues. If you do - don't hesitate to ask AI chatbots for help. If you manage to fix some of these issues - then your fixes might be a valuable contribution for others. Coding is hard - don't be discouraged by small failures - because ultimately it is those failures that will make you better at coding!
 
 # License
 

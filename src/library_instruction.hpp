@@ -1,6 +1,6 @@
+#pragma once
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
-#pragma once
 
 #include <llvm/MC/MCInst.h>
 #include <llvm/lib/Target/X86/X86Subtarget.h>

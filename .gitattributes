@@ -1,1 +1,11 @@
 web/**  automat-embed=false
+
+# Vendored third-party sources: exempt from the Automat SPDX-header rule; their
+# license is LICENSES/LICENSE_<name>.txt (enforced by .githooks/pre-commit).
+src/hidapi*                      automat-licensed=HIDAPI
+src/linux_hidapi.c               automat-licensed=HIDAPI
+src/win_hidapi.c                 automat-licensed=HIDAPI
+src/concurrentqueue.hpp          automat-licensed=concurrentqueue
+src/blockingconcurrentqueue.hpp  automat-licensed=concurrentqueue
+src/lightweightsemaphore.hpp     automat-licensed=concurrentqueue
+src/plf_colony.h                 automat-licensed=plf_colony

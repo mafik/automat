@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright 2026 Automat Authors
+// SPDX-License-Identifier: MIT
 #include "make_object_option.hpp"
 
 #include "drag_action.hpp"

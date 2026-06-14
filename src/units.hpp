@@ -1,6 +1,6 @@
+#pragma once
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
-#pragma once
 
 constexpr float operator""_mm(long double x) { return x / 1000; }
 constexpr float operator""_mm(unsigned long long x) { return x / 1000.f; }

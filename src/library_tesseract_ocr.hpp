@@ -1,6 +1,6 @@
+#pragma once
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
-#pragma once
 
 #include <include/core/SkImage.h>
 #include <tesseract/baseapi.h>

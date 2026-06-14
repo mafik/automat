@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright 2026 Automat Authors
+# SPDX-License-Identifier: MIT
+"""Every source under src/ and run_py/ must, within its first 3 lines, carry an
+MIT + "Copyright <year> Automat Authors" SPDX header (and .hpp/.hh must start
+with `#pragma once` on line 1), OR be declared in .gitattributes as
+`automat-licensed=<name>` with a matching LICENSES/LICENSE_<name>.txt. Only the
+first few bytes of each file are read. Checks staged files when run as the
+pre-commit hook; pass --all to audit the whole tree (e.g. from CI)."""
+
+import os
+import re
+import subprocess
+import sys
+
+SOURCE_DIRS = ("src/", "run_py/")
+SOURCE_EXTS = (".c", ".h", ".cc", ".hh", ".cpp", ".hpp", ".py")
+PRAGMA_EXTS = (".hpp", ".hh")
+HEADER_LINES = 3  # the SPDX lines must appear within this many leading lines
+READ_BYTES = 512  # comfortably holds those lines; the file is never read past this
+
+SPDX_COPYRIGHT = re.compile(
+    r"SPDX-FileCopyrightText:\s*Copyright\s+\d{4}(?:-\d{4})?\s+Automat Authors")
+SPDX_MIT = re.compile(r"SPDX-License-Identifier:\s*MIT\b")
+
+
+def git(*args):
+    return subprocess.run(("git", *args), capture_output=True, text=True, check=True).stdout
+
+
+root = git("rev-parse", "--show-toplevel").strip()
+
+
+def is_source(path):
+    return path.startswith(SOURCE_DIRS) and path.endswith(SOURCE_EXTS)
+
+
+def sources(check_all):
+    if check_all:
+        listing = git("ls-files", "-z", "--", *SOURCE_DIRS)
+    else:
+        listing = git("diff", "--cached", "-z", "--name-only", "--diff-filter=ACM")
+    return [p for p in listing.split("\0") if p and is_source(p)]
+
+
+def licensed_names(paths):
+    fields = git("check-attr", "-z", "automat-licensed", "--", *paths).split("\0")
+    names = {}
+    for i in range(0, len(fields) - 2, 3):
+        names[fields[i]] = None if fields[i + 2] in ("unspecified", "unset") else fields[i + 2]
+    return names
+
+
+def head_lines(path, check_all):
+    """The first few bytes of the file's content, split into lines."""
+    if check_all:
+        with open(os.path.join(root, path), "rb") as f:
+            data = f.read(READ_BYTES)
+    else:
+        proc = subprocess.Popen(("git", "show", f":{path}"), stdout=subprocess.PIPE, cwd=root)
+        data = proc.stdout.read(READ_BYTES)  # the staged blob, leading bytes only
+        proc.stdout.close()
+        proc.wait()
+    return data.decode("utf-8", "replace").splitlines()
+
+
+def main():
+    check_all = "--all" in sys.argv[1:]
+    paths = sources(check_all)
+    if not paths:
+        return 0
+    names = licensed_names(paths)
+    problems = []
+    for path in paths:
+        name = names.get(path)
+        if name:
+            if not os.path.isfile(os.path.join(root, "LICENSES", f"LICENSE_{name}.txt")):
+                problems.append(
+                    f"{path}: automat-licensed={name}, but LICENSES/LICENSE_{name}.txt is missing")
+            continue
+        lines = head_lines(path, check_all)
+        top = "\n".join(lines[:HEADER_LINES])
+        if not (SPDX_COPYRIGHT.search(top) and SPDX_MIT.search(top)):
+            problems.append(f"{path}: SPDX header must appear within the first {HEADER_LINES} lines")
+        if path.endswith(PRAGMA_EXTS) and not (lines and lines[0].rstrip() == "#pragma once"):
+            problems.append(f"{path}: must start with '#pragma once' on line 1")
+    if not problems:
+        return 0
+    sys.stderr.write("License-header check failed:\n")
+    for p in problems:
+        sys.stderr.write(f"  {p}\n")
+    sys.stderr.write(
+        "\nEach source under src/ or run_py/ needs, within its first 3 lines:\n"
+        "  - an SPDX header (after `#pragma once` for .hpp/.hh):\n"
+        "      // SPDX-FileCopyrightText: Copyright <year> Automat Authors\n"
+        "      // SPDX-License-Identifier: MIT\n"
+        "  - or, for vendored third-party files, a .gitattributes line:\n"
+        "      <path>  automat-licensed=<name>\n"
+        "    with LICENSES/LICENSE_<name>.txt present.\n")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,6 +1,6 @@
+#pragma once
 // SPDX-FileCopyrightText: Copyright 2026 Automat Authors
 // SPDX-License-Identifier: MIT
-#pragma once
 
 #include "os_window.hpp"
 

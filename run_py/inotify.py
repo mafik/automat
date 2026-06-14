@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+# SPDX-License-Identifier: MIT
 '''Cross-platform inotify replacement.
 
 Does not support recursion - just watches on the provided directory.'''
-# SPDX-FileCopyrightText: Copyright 2024 Automat Authors
-# SPDX-License-Identifier: MIT
 
 import ctypes, sys
 

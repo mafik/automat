@@ -1,6 +1,6 @@
+#pragma once
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
-#pragma once
 
 #pragma maf add debug compile argument "-DAUTOMAT_BUILD_VARIANT=1"
 #pragma maf add release compile argument "-DAUTOMAT_BUILD_VARIANT=2"

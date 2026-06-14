@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright 2025 Automat Authors
+// SPDX-License-Identifier: MIT
 #include "drawing.hpp"
 
 #include <include/core/SkShader.h>

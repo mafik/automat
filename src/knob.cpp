@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright 2025 Automat Authors
+// SPDX-License-Identifier: MIT
 #include "knob.hpp"
 
 #include <cmath>   // For std::abs, sqrtf, isinf, isnan

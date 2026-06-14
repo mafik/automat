@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright 2025 Automat Authors
+// SPDX-License-Identifier: MIT
 #include "wave1d.hpp"
 
 #include "math_constants.hpp"

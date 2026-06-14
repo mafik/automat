@@ -1,6 +1,6 @@
+#pragma once
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
-#pragma once
 
 // This header provides a multimap which uses std::string as the key but can
 // also be efficiently queried using std::string_view.

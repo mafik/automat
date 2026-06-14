@@ -1,3 +1,6 @@
+#pragma once
+// SPDX-FileCopyrightText: Copyright 2025 Automat Authors
+// SPDX-License-Identifier: MIT
 #include <algorithm>
 #include <bit>
 #include <climits>

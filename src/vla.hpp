@@ -1,4 +1,6 @@
 #pragma once
+// SPDX-FileCopyrightText: Copyright 2025 Automat Authors
+// SPDX-License-Identifier: MIT
 // Header with structures that keep their data on stack
 
 namespace automat {

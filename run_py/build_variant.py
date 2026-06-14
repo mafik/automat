@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: Copyright 2025 Automat Authors
+# SPDX-License-Identifier: MIT
 from typing import Callable
 import fs_utils
 from pathlib import Path

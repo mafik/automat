@@ -384,15 +384,15 @@ float TextWidth(std::string_view text, float size) {
   return w * (size / kRasterEm);
 }
 
-void DrawText(SkCanvas& canvas, std::string_view text, Vec2 baseline_left, float size,
-              SkColor color, bool wonk, uint32_t seed) {
+// Lays out `text` at `baseline_left` (metric, +Y up) and paints each glyph with `paint`.
+// The canvas is scaled from kRasterEm down to the metric `size` (negative Y so a
+// +Y-up baseline reads upright); a stroke width on `paint` is in raster-em units
+// like the pen, so it is rescaled here to land at the metric width requested.
+static void DrawGlyphs(SkCanvas& canvas, std::string_view text, Vec2 baseline_left, float size,
+                       SkPaint paint, bool wonk, uint32_t seed) {
   if (text.empty()) return;
-  SkPaint paint = Filler(color);
-  // Glyphs are rasterized at kRasterEm and the canvas is scaled to the metric
-  // `size`; the negative Y of the scale flips Skia's downward-growing glyphs so
-  // callers pass a +Y-up baseline and read upright text. Pen advances in
-  // raster-em units.
   float s = size / kRasterEm;
+  if (paint.getStyle() == SkPaint::kStroke_Style) paint.setStrokeWidth(paint.getStrokeWidth() / s);
   canvas.save();
   canvas.translate(baseline_left.x, baseline_left.y);
   canvas.scale(s, -s);
@@ -434,8 +434,12 @@ void DrawText(SkCanvas& canvas, std::string_view text, Vec2 baseline_left, float
   canvas.restore();
 }
 
-void DrawTextIn(SkCanvas& canvas, std::string_view text, const Rect& b, float size, SkColor color,
-                TextAlign align, bool wonk, uint32_t seed) {
+void DrawText(SkCanvas& canvas, std::string_view text, Vec2 baseline_left, float size,
+              SkColor color, bool wonk, uint32_t seed) {
+  DrawGlyphs(canvas, text, baseline_left, size, Filler(color), wonk, seed);
+}
+
+static Vec2 BaselineIn(std::string_view text, const Rect& b, float size, TextAlign align) {
   SkFont f = MakeFont(kRasterEm);
   SkFontMetrics fm;
   f.getMetrics(&fm);
@@ -447,20 +451,20 @@ void DrawTextIn(SkCanvas& canvas, std::string_view text, const Rect& b, float si
     x = b.right - w;
   // Metrics are in raster-em units; scale to metric. With +Y up the centering
   // offset keeps the sign of (ascent+descent) once scaled.
-  float y = b.CenterY() + (fm.fAscent + fm.fDescent) * 0.5f * (size / kRasterEm);
-  DrawText(canvas, text, {x, y}, size, color, wonk, seed);
+  return {x, b.CenterY() + (fm.fAscent + fm.fDescent) * 0.5f * (size / kRasterEm)};
 }
 
-static void HaloTextIn(SkCanvas& canvas, std::string_view text, const SkRect& box, float size,
-                       SkColor fill, SkColor halo, TextAlign align, bool wonk, uint32_t seed) {
-  for (int i = 0; i < 8; ++i) {
-    Vec2 off = Vec2::Polar(SinCos::FromRadians(i / 8.f * kPi * 2), 0.25_mm);
-    canvas.save();
-    canvas.translate(off.x, off.y);
-    DrawTextIn(canvas, text, box, size, halo, align, wonk, seed);
-    canvas.restore();
-  }
-  DrawTextIn(canvas, text, box, size, fill, align, wonk, seed);
+void DrawTextIn(SkCanvas& canvas, std::string_view text, const Rect& b, float size, SkColor color,
+                TextAlign align, bool wonk, uint32_t seed) {
+  DrawGlyphs(canvas, text, BaselineIn(text, b, size, align), size, Filler(color), wonk, seed);
+}
+
+static void OutlineTextIn(SkCanvas& canvas, std::string_view text, const Rect& box, float size,
+                          SkColor fill, SkColor outline, TextAlign align, bool wonk, uint32_t seed,
+                          float outline_w = kStroke) {
+  Vec2 baseline = BaselineIn(text, box, size, align);
+  DrawGlyphs(canvas, text, baseline, size, InkPaint(outline, outline_w), wonk, seed);
+  DrawGlyphs(canvas, text, baseline, size, Filler(fill), wonk, seed);
 }
 
 // =================================================================== motifs ==
@@ -599,8 +603,8 @@ void DrawBetaStamp(SkCanvas& canvas, Vec2 c, float r, float rotation_deg, uint32
   canvas.drawPath(burst, InkPaint(kInkPure, kStroke));
   Rect box = Rect::MakeCenterZero(r * 1.9f, r * 0.84f);
   float tsize = std::min(r * 0.56f, (r * 1.7f) / std::max<size_t>(1, label.size()) * 1.3f);
-  HaloTextIn(canvas, label, box, tsize, kPaper, kInkPure, TextAlign::Center, true,
-             Hash2(seed, 11u));
+  OutlineTextIn(canvas, label, box, tsize, kPaper, kInkPure, TextAlign::Center, true,
+                Hash2(seed, 11u));
   canvas.restore();
 }
 
@@ -616,7 +620,7 @@ static void BangChip(SkCanvas& canvas, SkPoint center, float r) {
   canvas.drawPath(disc, Filler(kRed));
   canvas.drawPath(disc, InkPaint(kInkPure, kStroke));
   Rect b = Rect::MakeCircleR(r).MoveBy({center.fX, center.fY});
-  HaloTextIn(canvas, "!", b, r * 1.5f, kPaper, kInkPure, TextAlign::Center, false, seed);
+  OutlineTextIn(canvas, "!", b, r * 1.5f, kPaper, kInkPure, TextAlign::Center, false, seed);
 }
 
 void Panel(SkCanvas& canvas, const Rect& r, std::string_view title, SkColor accent, State state,

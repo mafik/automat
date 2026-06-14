@@ -30,10 +30,10 @@ static ui::DropTarget* FindDropTarget(DragLocationAction& a, Widget& widget) {
       return drop_target;
     }
   }
-  Vec2 point = a.pointer.PositionWithin(widget);
-  auto shape = widget.Shape();
-  if (shape.isEmpty() || shape.contains(point.x, point.y)) {
-    if (auto drop_target = widget.AsDropTarget()) {
+  if (auto drop_target = widget.AsDropTarget()) {
+    Vec2 point = a.pointer.PositionWithin(widget);
+    auto shape = widget.Shape();
+    if (shape.isEmpty() || shape.contains(point.x, point.y)) {
       if (drop_target->CanDrop(*a.locations.back())) {
         return drop_target;
       }

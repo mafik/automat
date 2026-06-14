@@ -1106,17 +1106,20 @@ RunButton::RunButton(Widget* parent, std::function<void()> on_click, uint32_t se
   };
 }
 
-animation::Phase RunButton::Tick(time::Timer& t) {
+ui::Tick RunButton::Tock(time::Timer& t) {
   if (parent) {
     // Lower center, dipping slightly past the border - aligned with where the
     // "next" connector leaves the object.
     Rect bounds{parent->Shape().getBounds()};
     local_to_parent = SkM44::Translate(bounds.CenterX(), bounds.bottom + kRadius - kOverhang);
   }
+  Tick tick = clickable.Tock(t);
   if (enabled && clickable.pointers_over > 0 && clickable.pointers_pressing == 0) {
     wiggle = static_cast<uint32_t>(t.NowSeconds() * 5.0);
+    tick.draw = true;
+    tick.next_tock = min(tick.next_tock, t.now + 200ms);
   }
-  return clickable.Tick(t);
+  return tick;
 }
 
 void RunButton::Draw(SkCanvas& canvas) const {
@@ -1124,9 +1127,6 @@ void RunButton::Draw(SkCanvas& canvas) const {
   bool hover = clickable.pointers_over > 0;
 
   bool shimmer = enabled && hover && !pressed;
-  // The shimmer runs on scheduled wakes, not continuous animation: each
-  // drawn step requests the next one.
-  if (shimmer) WakeAnimationAt(time::SteadyFromSeconds((wiggle + 1) / 5.0));
   const uint32_t kSeed = shimmer ? Hash3(0x60D, seed, wiggle) : Hash2(0x60D, seed);
   float r = kRadius;
 

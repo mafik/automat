@@ -66,7 +66,7 @@ struct RegisterWidget : public ObjectToy {
   SkPath FlagFront() const;
   SkPath FlagBack() const;
   float HexWidth() const;
-  animation::Phase Tick(time::Timer&) override;
+  Tick Tock(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override;
 
@@ -80,7 +80,7 @@ struct AssemblerWidget : ObjectToy {
   std::string_view Name() const override;
   void FillChildren(Vec<ui::Widget*>& children) override;
   SkPath Shape() const override;
-  animation::Phase Tick(time::Timer&) override;
+  Tick Tock(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   void VisitOptions(const OptionsVisitor&) const override;
 };

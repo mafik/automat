@@ -4,14 +4,16 @@
 
 namespace automat::animation {
 
-Phase LowLevelSineTowards(float target, float delta_time, float period_time, float& value,
-                          float& velocity) {
+Progress LowLevelSineTowards(float target, float delta_time, float period_time, float& value,
+                             float& velocity) {
   float D = value - target;
   if (fabsf(D) < 0.00001f) {
+    bool value_changed = value != target || velocity != 0;
     value = target;
     velocity = 0;
-    return Finished;
+    return {.value_changed = value_changed, .settled = true};
   } else {
+    float before = value;
     // Use the cosine tweening here.
     // D = A * (cos(t) / 2 + 0.5)
     // V = - A * sin(t) / 2
@@ -36,11 +38,11 @@ Phase LowLevelSineTowards(float target, float delta_time, float period_time, flo
     }
     value = A * (cos(x2) / 2 + 0.5) + target;
     velocity = -A * sin(x2) / 2;
-    return Animating;
+    return {.value_changed = value != before, .settled = false};
   }
 }
-Phase LowLevelSpringTowards(float target, float delta_time, float period_time, float half_time,
-                            float& value, float& velocity) {
+Progress LowLevelSpringTowards(float target, float delta_time, float period_time, float half_time,
+                               float& value, float& velocity) {
   float initial_value = value;
   float Q = 2 * M_PI / period_time;
   float D = value - target;
@@ -54,9 +56,10 @@ Phase LowLevelSpringTowards(float target, float delta_time, float period_time, f
     amplitude = D / powf(2, -t / H) / cosf(t * Q);
   } else {
     if (fabsf(V) < 1e-6f) {
+      bool value_changed = value != target || velocity != 0;
       value = target;
       velocity = 0;
-      return Finished;
+      return {.value_changed = value_changed, .settled = true};
     }
     t = period_time / 4;
     amplitude = -velocity * powf(2.f, t / H) / Q;
@@ -70,12 +73,13 @@ Phase LowLevelSpringTowards(float target, float delta_time, float period_time, f
   // small. If animation is done using double precision, this section can be probably removed.
   float value_change = value - initial_value;
   if (fabsf(value_change) < (delta_time * 1e-4f) && fabsf(velocity) < 1e-3f) {
+    bool value_changed = value != target || velocity != 0;
     value = target;
     velocity = 0;
-    return Finished;
+    return {.value_changed = value_changed, .settled = true};
   }
 
-  return Animating;
+  return {.value_changed = value != initial_value, .settled = false};
 }
 
 float SinInterp(float x, float x0, float y0, float x1, float y1) {

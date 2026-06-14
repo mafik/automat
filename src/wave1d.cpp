@@ -40,7 +40,7 @@ static void Thomas(const int X, float x[X], const float a[X], const float b[X], 
   for (int ix = X - 2; ix >= 0; ix--) x[ix] -= scratch[ix] * x[ix + 1];
 }
 
-animation::Phase Wave1D::Tick(time::Timer& timer) {
+ui::Tick Wave1D::Tock(time::Timer& timer) {
   const int kColumnCount = n + 2;
 
   // Note that the `height` & `velocity` vectors have size n, but all the calculations use n+2
@@ -181,9 +181,9 @@ animation::Phase Wave1D::Tick(time::Timer& timer) {
     for (int i = 0; i < n; ++i) {
       height[i] = height_sum;
     }
-    return animation::Finished;
+    return ui::Tick::Draw;
   }
-  return animation::Animating;
+  return ui::Tick::Drawing;
 }
 
 std::span<const float> Wave1D::Amplitudes() const { return std::span(state).subspan(0, n); }

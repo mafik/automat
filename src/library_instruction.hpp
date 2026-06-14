@@ -144,7 +144,7 @@ struct Instruction : Object, Buffer {
 
     std::string_view Name() const override { return "Instruction Widget"; }
     SkPath Shape() const override;
-    animation::Phase Tick(time::Timer&) override;
+    Tick Tock(time::Timer&) override;
     void Draw(SkCanvas&) const override;
     Vec2AndDir ArgStart(const Interface::Table&) override;
     void FillChildren(Vec<ui::Widget*>& children) override;

@@ -96,9 +96,9 @@ Assembler::Assembler() {
   }
 }
 
-static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now) {
+static ui::Tick RefreshState(Assembler& assembler, time::SteadyPoint now) {
   if (assembler.mc_controller == nullptr) {
-    return animation::Finished;
+    return ui::Tick::Draw;
   }
   if (now > assembler.last_state_refresh) {
     auto old_regs = assembler.state.regs;
@@ -117,9 +117,9 @@ static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now
     assembler.last_state_refresh = now;
   }
   if (assembler.running->IsRunning()) {
-    return animation::Animating;
+    return ui::Tick::Drawing;
   } else {
-    return animation::Finished;
+    return ui::Tick::Draw;
   }
 }
 
@@ -316,18 +316,18 @@ SkPath AssemblerWidget::Shape() const {
   return shape;
 }
 
-animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
+ui::Tick AssemblerWidget::Tock(time::Timer& timer) {
   auto assembler = LockObject<Assembler>();
   if (!assembler || assembler->mc_controller == nullptr) {
-    return animation::Finished;
+    return Tick::Draw;
   }
-  animation::Phase phase = RefreshState(*assembler, timer.now);
+  Tick tick = RefreshState(*assembler, timer.now);
 
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    reg_widgets[i]->Tick(timer);
+    reg_widgets[i]->Tock(timer);
   }
 
-  return phase;
+  return tick;
 }
 
 void AssemblerWidget::Draw(SkCanvas& canvas) const {
@@ -620,18 +620,18 @@ static constexpr float kByteValueFontShiftUp =
 static constexpr float kBitPositionFontShiftUp =
     RegisterWidget::kCellHeight / 2 - kBitPositionFontSize;
 
-animation::Phase RegisterWidget::Tick(time::Timer& timer) {
-  animation::Phase phase = animation::Finished;
+ui::Tick RegisterWidget::Tock(time::Timer& timer) {
+  Tick tick;
   if (auto register_obj = LockRegister()) {
     register_index = register_obj->register_index;
     if (auto assembler = register_obj->assembler_arg->FindObject()) {
-      phase = RefreshState(*assembler, timer.now);
+      tick = RefreshState(*assembler, timer.now);
       reg_value = assembler->state.regs[kRegisters[register_index].regs_index];
     }
   }
 
   small_buffer_widget.WakeAnimation();
-  return phase;
+  return tick;
 }
 
 void RegisterWidget::Draw(SkCanvas& canvas) const {

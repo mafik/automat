@@ -202,7 +202,7 @@ struct Keyboard final : Widget {
   KeyGrab& RequestKeyGrab(KeyGrabber&, AnsiKey key, bool ctrl, bool alt, bool shift, bool windows,
                           Fn<void(Status&)> cb);
 
-  animation::Phase Tick(time::Timer&) override;
+  Tick Tock(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   Optional<Rect> TextureBounds() const override { return std::nullopt; }

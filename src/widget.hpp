@@ -9,7 +9,9 @@
 #include <src/core/SkReadBuffer.h>
 #include <src/core/SkWriteBuffer.h>
 
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <memory>
 #include <source_location>
 
@@ -101,25 +103,25 @@ struct Widget : Trackable, OptionsProvider {
   TrackedPtr<Widget> parent;
   SkM44 local_to_parent = SkM44();
 
-  // This is updated by renderer, right before the call to Tick.
+  // This is updated by renderer, right before the call to Tock.
   //
   // This is same as the CTM in the SkCanvas passed to Draw().
   //
-  // If this matrix changes, TransformUpdated() will also be called (also before Tick). This allows
+  // If this matrix changes, TransformUpdated() will also be called (also before Tock). This allows
   // widgets to react to changes in their screen position.
   SkMatrix local_to_window = {};
 
-  // When the next Tick is due. The renderer ticks this widget once `now` reaches this
+  // When the next Tock is due. The renderer ticks this widget once `now` reaches this
   // point; max means no tick is scheduled. Initially due immediately.
-  mutable time::SteadyPoint next_tick = time::SteadyPoint::min();
-  // When Tick last ran; the basis for the animation time delta. min means never.
-  mutable time::SteadyPoint last_tick = time::SteadyPoint::min();
+  mutable time::SteadyPoint next_tock = time::SteadyPoint::min();
+  // When Tock last ran; the basis for the animation time delta. min means never.
+  mutable time::SteadyPoint last_tock = time::SteadyPoint::min();
 
-  bool IsAnimating() const { return next_tick != time::SteadyPoint::max(); }
+  bool IsAnimating() const { return next_tock != time::SteadyPoint::max(); }
 
   // Force the widget to be re-rendered this frame, regardless of the render budget.
   //
-  // This will not call `Tick`. Also call `WakeAnimation` if you want to wake up the animation.
+  // This will not call `Tock`. Also call `WakeAnimation` if you want to wake up the animation.
   //
   // Marks this widget (or, if it has no texture, its children) as never valid.
   void RedrawThisFrame();
@@ -200,11 +202,36 @@ struct Widget : Trackable, OptionsProvider {
   void WakeAnimation() const;
   void WakeAnimationAt(time::SteadyPoint) const;
 
+  // Encodes decisions whether to (1) draw and/or (2) to keep ticking.
+  struct Tick {
+    struct DrawingProxy {
+      void operator|=(animation::Progress);
+      void operator|=(bool keep_going);
+    } drawing [[no_unique_address]];  // bool-like adapter that sets both `next_tock` & `draw`
+    struct TickingProxy {
+      void operator|=(bool keep_going);
+      explicit operator bool() const;
+    } ing [[no_unique_address]];  // bool-like adapter for whether widget is animating
+    time::SteadyPoint next_tock = time::SteadyPoint::max();
+    bool draw = false;
+
+    Tick& operator|=(Tick o) {
+      draw |= o.draw;
+      next_tock = std::min(next_tock, o.next_tock);
+      return *this;
+    }
+    friend Tick operator|(Tick a, Tick b) { return a |= b; }
+
+    static const Tick Draw;     // repaint once, then sleep
+    static const Tick Drawing;  // repaint and tick again next frame
+    static const Tick Ing;      // tick again next frame without repainting
+  };
+
   // Called for visible widgets while they're being animated.
   // Use this function to update the widget's animation state.
-  // Once a widget finishes its animation, it's Tick is no longer being called. Wake it up again by
+  // Once a widget finishes its animation, it's Tock is no longer being called. Wake it up again by
   // calling WakeAnimation.
-  virtual animation::Phase Tick(time::Timer&) { return animation::Finished; }
+  virtual Tick Tock(time::Timer&) { return {}; }
 
   virtual void Draw(SkCanvas& canvas) const { return DrawChildren(canvas); }
 
@@ -361,6 +388,36 @@ struct Widget : Trackable, OptionsProvider {
   // avoid it if possible.
   static bool Intersects(const Widget& a, const Widget& b);
 };
+
+using Tick = Widget::Tick;
+
+static_assert(offsetof(Tick, drawing) == 0, "DrawingProxy assumes offset = 0");
+inline void Tick::DrawingProxy::operator|=(animation::Progress p) {
+  auto& t = *reinterpret_cast<Tick*>(this);
+  if (p.value_changed) t.draw = true;
+  if (!p.settled) t.next_tock = time::SteadyPoint::min();
+}
+inline void Tick::DrawingProxy::operator|=(bool keep_going) {
+  if (!keep_going) return;
+  auto& t = *reinterpret_cast<Tick*>(this);
+  t.draw = true;
+  t.next_tock = time::SteadyPoint::min();
+}
+
+static_assert(offsetof(Tick, ing) == 0, "TickingProxy assumes offset = 0");
+inline void Tick::TickingProxy::operator|=(bool keep_going) {
+  if (!keep_going) return;
+  auto& t = *reinterpret_cast<Tick*>(this);
+  t.next_tock = time::SteadyPoint::min();
+}
+inline Tick::TickingProxy::operator bool() const {
+  auto& t = *reinterpret_cast<const Tick*>(this);
+  return t.next_tock != time::SteadyPoint::max();
+}
+
+inline const Tick Tick::Draw{.draw = true};
+inline const Tick Tick::Drawing{.next_tock = time::SteadyPoint::min(), .draw = true};
+inline const Tick Tick::Ing{.next_tock = time::SteadyPoint::min()};
 
 template <typename T>
 T* Closest(Widget& widget) {

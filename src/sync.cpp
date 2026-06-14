@@ -259,7 +259,7 @@ struct GearWidget : ObjectToy {
   float angle = 0;
   float target_angle = 0;
 
-  animation::Phase Tick(time::Timer& t) override {
+  Tick Tock(time::Timer& t) override {
     if (auto gear = LockOwner<Gear>()) {
       auto wake_counter = gear->wake_counter.load(std::memory_order_relaxed);
       if (wake_counter != last_wake_counter) {
@@ -272,7 +272,9 @@ struct GearWidget : ObjectToy {
       }
     }
 
-    return animation::LowLevelSineTowards(target_angle, t.d, 0.6, angle, angular_velocity);
+    Tick tick;
+    tick.drawing |= animation::LowLevelSineTowards(target_angle, t.d, 0.6, angle, angular_velocity);
+    return tick;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -322,21 +324,21 @@ std::unique_ptr<Action> SyncBelt::FindAction(ui::Pointer& pointer, ui::ActionTri
   return nullptr;
 }
 
-animation::Phase SyncBelt::Tick(time::Timer& t) {
-  auto phase = animation::Finished;
+ui::Tick SyncBelt::Tock(time::Timer& t) {
+  Tick tick;
   auto& toy_store = ToyStore();
 
   // Check if the object of this connection still exists.
   auto syncable = LockBind<Syncable>();
   if (!syncable) {
-    phase |=
+    tick.drawing |=
         animation::LowLevelSpringTowards(pinion.x, t.d, 0.3, 0.05, origin.x, origin_velocity.x);
-    phase |=
+    tick.drawing |=
         animation::LowLevelSpringTowards(pinion.y, t.d, 0.3, 0.05, origin.y, origin_velocity.y);
-    if (phase == animation::Finished) {
+    if (!tick.ing) {
       MarkDead(t.now);
     }
-    return phase;
+    return tick;
   }
 
   auto sync_balance = syncable.state->sync_balance;
@@ -346,8 +348,8 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
     last_sync_balance = sync_balance;
   }
 
-  phase |= animation::LowLevelSineTowards(target_scroll_ratio, t.d, 0.6, scroll_ratio,
-                                          scroll_ratio_velocity);
+  tick.drawing |= animation::LowLevelSineTowards(target_scroll_ratio, t.d, 0.6, scroll_ratio,
+                                                 scroll_ratio_velocity);
   // Keeping the animation close to 0 makes it smoother.
   if (fabs(scroll_ratio) > 0) {
     float wholes = truncf(scroll_ratio);
@@ -357,10 +359,9 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
 
   // Find the owner object widget
   auto* owner_widget = toy_store.FindOrNull(*syncable.object_ptr);
-  if (!owner_widget) return animation::Finished;
+  if (!owner_widget) return Tick::Draw;
 
-  auto origin_shape =
-      owner_widget->Shape().makeTransform(TransformBetween(*owner_widget, *this));
+  auto origin_shape = owner_widget->Shape().makeTransform(TransformBetween(*owner_widget, *this));
   origin = origin_shape.getBounds().center();
   if (auto new_label = syncable.Name(); label != new_label) {
     label = new_label;
@@ -405,14 +406,14 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
     if (gear_widget) {
       angle = gear_widget->angle;
       if (gear_widget->IsAnimating()) {
-        phase |= animation::Animating;
+        tick |= Tick::Drawing;
       }
       auto gear_matrix = TransformBetween(*gear_widget, *this);
       Vec2 gear_origin = gear_matrix.mapOrigin();
       float new_scale = gear_matrix.mapRadius(1);
       if (new_scale != scale) {
         scale = new_scale;
-        phase |= animation::Animating;
+        tick |= Tick::Drawing;
       }
       auto dir = Normalize(origin - gear_origin);
       float gear_dist = (kPrimaryGearRadius + kSecondaryGearRadius) * scale;
@@ -430,25 +431,25 @@ animation::Phase SyncBelt::Tick(time::Timer& t) {
         if (v_dot_n < 0) {
           pinion_deflection.velocity -= normal * v_dot_n;  // sticky collision
         }
-        phase |= animation::Animating;
+        tick |= Tick::Drawing;
       }
     }
   } else if (is_dragged) {
-    phase |= animation::ExponentialApproach(1, t.d, 0.1, scale);
+    tick.drawing |= animation::ExponentialApproach(1, t.d, 0.1, scale);
   } else {
     pinion_deflection.SmoothTargetUpdate(pinion, origin);
   }
 
-  phase |= animation::LowLevelSineTowards(pinion.x <= origin.x ? 0 : 1, t.d, 0.5,
-                                          label_rotation_ratio, label_rotation_velocity);
+  tick.drawing |= animation::LowLevelSineTowards(pinion.x <= origin.x ? 0 : 1, t.d, 0.5,
+                                                 label_rotation_ratio, label_rotation_velocity);
 
-  phase |= pinion_deflection.SpringTowards({}, t.d, 0.3, 0.05);
+  tick.drawing |= pinion_deflection.SpringTowards({}, t.d, 0.3, 0.05);
 
-  if (!gear && !is_dragged && phase == animation::Finished) {
+  if (!gear && !is_dragged && !tick.ing) {
     MarkDead(t.now);
   }
 
-  return phase;
+  return tick;
 }
 
 Vec<Vec2> SyncBelt::TextureAnchors() {

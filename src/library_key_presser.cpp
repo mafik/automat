@@ -151,13 +151,13 @@ struct KeyPresserWidget : ObjectToy {
     };
   }
 
-  animation::Phase Tick(time::Timer& timer) override {
+  Tick Tock(time::Timer& timer) override {
     shortcut_button->fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
     if (auto key_presser = LockObject<KeyPresser>()) {
       shortcut_button->is_pressed = key_presser->key_pressed;
     }
     shortcut_button->WakeAnimationAt(timer.last);
-    return animation::Finished;
+    return Tick::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {

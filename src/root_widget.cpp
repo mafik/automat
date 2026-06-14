@@ -178,19 +178,19 @@ void RootWidget::Init() {
   BuildToolbar(*this);
 }
 
-animation::Phase RootWidget::ZoomWarning::Tick(time::Timer& timer) {
-  animation::Phase phase = animation::Finished;
+ui::Tick RootWidget::ZoomWarning::Tock(time::Timer& timer) {
+  Tick tick;
   if (root_widget->zoom > 1e7) {
     root_widget->zoom = 1e7;
   }
-  phase |= animation::LinearApproach(root_widget->zoom >= 1e7, timer.d, 1, zoom_limit_alpha);
+  tick.drawing |= animation::LinearApproach(root_widget->zoom >= 1e7, timer.d, 1, zoom_limit_alpha);
   if (zoom_limit_alpha > 0.f) {
     zoom_limit_scroll += timer.d / zoom_limit_alpha / zoom_limit_alpha * 0.1;
     float ignore;
     zoom_limit_scroll = modf(zoom_limit_scroll, &ignore);
-    phase = animation::Animating;
+    tick |= Tick::Drawing;
   }
-  return phase;
+  return tick;
 }
 
 void RootWidget::ZoomWarning::Draw(SkCanvas& canvas) const {
@@ -245,15 +245,15 @@ static void DrawStarfieldBackground(SkCanvas& canvas) {
   canvas.drawPaint(paint);
 }
 
-animation::Phase RootWidget::Tick(time::Timer& timer) {
-  auto phase = animation::Finished;
+ui::Tick RootWidget::Tock(time::Timer& timer) {
+  Tick tick;
 
 #if defined(__linux__)
   if (wayland::server) wayland::server->UIFrame();
 #endif
 
   if (loading_animation) {
-    phase |= loading_animation->Tick(timer);
+    tick |= loading_animation->Tock(timer);
   }
 
   // Record camera movement timeline. This is used to create inertia effect.
@@ -314,7 +314,7 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
   }
 
   if (inertia) {
-    phase = animation::Animating;
+    tick |= Tick::Drawing;
   }
 
   float rx = camera_target.x - camera_pos.x;
@@ -329,7 +329,7 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
       Pointer* first_pointer = *pointers.begin();
       Vec2 mouse_position = TransformDown(*this).mapPoint(first_pointer->pointer_position);
       Vec2 focus_pre = WindowToCanvas().mapPoint(mouse_position);
-      phase |= animation::ExponentialApproach(zoom_target, timer.d, 1.0 / 15, zoom);
+      tick.drawing |= animation::ExponentialApproach(zoom_target, timer.d, 1.0 / 15, zoom);
       Vec2 focus_post = WindowToCanvas().mapPoint(mouse_position);
       Vec2 focus_delta = focus_pre - focus_post;
       camera_pos += focus_delta;
@@ -339,31 +339,31 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
     Vec2 focus_pre = camera_target;
 
     Vec2 target_screen = CanvasToWindow().mapPoint(focus_pre);
-    phase |= animation::ExponentialApproach(zoom_target, timer.d, 1.0 / 15, zoom);
+    tick.drawing |= animation::ExponentialApproach(zoom_target, timer.d, 1.0 / 15, zoom);
     Vec2 focus_post = WindowToCanvas().mapPoint(target_screen);
     Vec2 focus_delta = focus_post - focus_pre;
     camera_pos -= focus_delta;
   }
 
   zoom_warning.WakeAnimation();
-  zoom_warning.last_tick = last_tick;
+  zoom_warning.last_tock = last_tock;
 
-  phase |= animation::ExponentialApproach(camera_target.x, timer.d, 0.1, camera_pos.x);
-  phase |= animation::ExponentialApproach(camera_target.y, timer.d, 0.1, camera_pos.y);
+  tick.drawing |= animation::ExponentialApproach(camera_target.x, timer.d, 0.1, camera_pos.x);
+  tick.drawing |= animation::ExponentialApproach(camera_target.y, timer.d, 0.1, camera_pos.y);
 
   if (move_velocity.x != 0) {
     float shift_x = move_velocity.x * timer.d;
     camera_pos.x += shift_x;
     camera_target.x += shift_x;
     inertia = false;
-    phase = animation::Animating;
+    tick |= Tick::Drawing;
   }
   if (move_velocity.y != 0) {
     float shift_y = move_velocity.y * timer.d;
     camera_pos.y += shift_y;
     camera_target.y += shift_y;
     inertia = false;
-    phase = animation::Animating;
+    tick |= Tick::Drawing;
   }
 
   SkRect work_area = SkRect::MakeXYWH(-0.5, -0.5, 1, 1);
@@ -398,7 +398,7 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
     }
   }
 
-  if (phase == animation::Animating) {
+  if (tick.ing) {
     for (auto& each_pointer : pointers) {
       each_pointer->UpdatePath();
     }
@@ -567,7 +567,7 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
     }
   }
 
-  return phase;
+  return tick;
 }
 
 void RootWidget::OnChildDead(Widget& child, time::SteadyPoint now) {

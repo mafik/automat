@@ -125,9 +125,9 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
     }
   }
 
-  animation::Phase Tick(time::Timer&) override {
+  Tick Tock(time::Timer&) override {
     PullState();
-    return animation::Finished;
+    return Tick::Draw;
   }
 
   bool CenteredAtZero() const override { return true; }

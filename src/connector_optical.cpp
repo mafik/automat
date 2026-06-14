@@ -337,8 +337,8 @@ static bool SimulateDispenser(CablePhysicsSimulation& state, float dt, Size anch
   return pulling;
 }
 
-animation::Phase SimulateCablePhysics(time::Timer& timer, CablePhysicsSimulation& state,
-                                      Vec2AndDir dispenser, Span<Vec2AndDir> end_candidates) {
+animation::Progress SimulateCablePhysics(time::Timer& timer, CablePhysicsSimulation& state,
+                                         Vec2AndDir dispenser, Span<Vec2AndDir> end_candidates) {
   SkCanvas* debug_canvas = nullptr;
   if constexpr (kDebugCable) {
     // TODO: actually display this recording
@@ -360,12 +360,12 @@ animation::Phase SimulateCablePhysics(time::Timer& timer, CablePhysicsSimulation
     }
   }
 
-  animation::Phase phase = animation::Finished;
+  animation::Progress progress;
   float dt = timer.d;
   if (auto on_off = dyn_cast<OnOff>(state.argument); on_off && on_off.IsOn()) {
     state.lightness_pct = 100;
   } else {
-    phase |= animation::ExponentialApproach(0, timer.d, 0.1, state.lightness_pct);
+    progress |= animation::ExponentialApproach(0, timer.d, 0.1, state.lightness_pct);
   }
 
   for (auto& end : end_candidates) {
@@ -390,9 +390,10 @@ animation::Phase SimulateCablePhysics(time::Timer& timer, CablePhysicsSimulation
   }
 
   if (simulate_physics) {
-    phase |= animation::Animating;
+    progress.value_changed = true;  // the cable is still settling — redraw and keep ticking
+    progress.settled = false;
   } else {
-    return phase;
+    return progress;
   }
 
   if (!end_candidates.empty()) {  // Create the arcline & pull the cable towards it
@@ -641,7 +642,7 @@ animation::Phase SimulateCablePhysics(time::Timer& timer, CablePhysicsSimulation
       chain.back().pos = dispenser.pos;
     }
   }
-  return phase;
+  return progress;
 }
 
 Vec2 CablePhysicsSimulation::PlugTopCenter() const { return sections.front().pos; }

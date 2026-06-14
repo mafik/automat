@@ -128,8 +128,7 @@ SkPaint InkPaint(SkColor color = kInk, float width = kStroke, bool antialias = t
 // Endpoints are preserved; deviation tapers to zero at the ends of open contours.
 SkPath WobbleLine(Vec2 a, Vec2 b, float amp, float seg, uint32_t seed);
 SkPath WobbleRect(const Rect& r, float amp, float seg, uint32_t seed);
-SkPath WobbleEllipse(Vec2 center, float rx, float ry, float amp, uint32_t seed,
-                     int samples = 48);
+SkPath WobbleEllipse(Vec2 center, float rx, float ry, float amp, uint32_t seed, int samples = 48);
 SkPath WobblePath(const SkPath& src, float amp, float seg, uint32_t seed);
 
 SkPath WonkyRoundRect(const Rect& r, float baseRadius, float wobAmp, uint32_t seed);
@@ -175,8 +174,7 @@ void DrawStar(SkCanvas& canvas, Vec2 c, float r, SkColor fill, uint32_t seed);
 void DrawSun(SkCanvas& canvas, Vec2 c, float core_r, float ray_len, SkColor fill, uint32_t seed);
 void DrawSparkle(SkCanvas& canvas, Vec2 c, float r, SkColor fill, uint32_t seed);
 void DrawSmiley(SkCanvas& canvas, Vec2 c, float r, SkColor fill, uint32_t seed);
-void DrawArrow(SkCanvas& canvas, Vec2 from, Vec2 to, SkColor color, float width,
-               uint32_t seed);
+void DrawArrow(SkCanvas& canvas, Vec2 from, Vec2 to, SkColor color, float width, uint32_t seed);
 void DrawHeart(SkCanvas& canvas, Vec2 c, float r, SkColor fill, uint32_t seed);
 
 void DrawBetaStamp(SkCanvas& canvas, Vec2 c, float r, float rotation_deg, uint32_t seed,
@@ -209,8 +207,8 @@ void Field(SkCanvas& canvas, const Rect& r, std::string_view text, bool focused 
 void Dropdown(SkCanvas& canvas, const Rect& r, std::string_view value, SkColor accent = kBlue,
               State state = State::Default, uint32_t seed = 0);
 
-void Stepper(SkCanvas& canvas, const Rect& r, std::string_view value,
-             State state = State::Default, uint32_t seed = 0);
+void Stepper(SkCanvas& canvas, const Rect& r, std::string_view value, State state = State::Default,
+             uint32_t seed = 0);
 
 void Port(SkCanvas& canvas, Vec2 c, float r, bool is_output, SkColor type = kBlue,
           bool connected = true, State state = State::Default, uint32_t seed = 0);
@@ -290,7 +288,7 @@ struct RunButton : Widget {
     if (!enabled) return nullptr;
     return clickable.FindAction(p, a);
   }
-  animation::Phase Tick(time::Timer& t) override;
+  Tick Tock(time::Timer& t) override;
   void Draw(SkCanvas& canvas) const override;
 };
 

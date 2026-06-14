@@ -19,7 +19,7 @@ struct BlackHole : Widget, DropTarget {
   BlackHole(RootWidget* parent);
   RootWidget& ParentRootWidget() const;
   SkPath Shape() const override;
-  animation::Phase Tick(time::Timer&) override;
+  Tick Tock(time::Timer&) override;
   Optional<Rect> TextureBounds() const override { return std::nullopt; }
   void Draw(SkCanvas&) const override;
 
@@ -27,7 +27,8 @@ struct BlackHole : Widget, DropTarget {
   DropTarget* AsDropTarget() override { return this; }
 
   bool CanDrop(Location&) const override;
-  SkMatrix DropSnap(const Rect& bounds_local, Vec2 bounds_origin, Vec2* fixed_point = nullptr) override;
+  SkMatrix DropSnap(const Rect& bounds_local, Vec2 bounds_origin,
+                    Vec2* fixed_point = nullptr) override;
 
   // When a location is being dragged around, its still owned by its original Board. Only when
   // this method is called, the location may be re-parented into the new drop target.

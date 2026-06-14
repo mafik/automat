@@ -311,7 +311,7 @@ void Pointer::Logging::Release() {
   window.RegisterInput();
 }
 
-animation::Phase PointerWidget::Tick(time::Timer& timer) {
+ui::Tick PointerWidget::Tock(time::Timer& timer) {
   struct Highlighted {
     ObjectToy* widget;
     Interface::Table* iface;
@@ -361,13 +361,13 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
 
   std::vector<HighlightState> highlight_next;
 
-  auto phase = animation::Finished;
+  Tick tick;
 
   auto HighlightTick = [&](ObjectToy* obj, Interface::Table* iface, float current, float target) {
-    phase |= animation::ExponentialApproach(target, timer.d, 0.1, current);
+    tick.drawing |= animation::ExponentialApproach(target, timer.d, 0.1, current);
     if (current > 0.01f) {
       highlight_next.emplace_back(obj, iface, current);
-      phase = animation::Animating;
+      tick |= Tick::Drawing;
     }
   };
 
@@ -408,11 +408,11 @@ animation::Phase PointerWidget::Tick(time::Timer& timer) {
 
   highlight_current = std::move(highlight_next);
 
-  if (phase != animation::Finished) {
+  if (tick.ing) {
     time_seconds = timer.NowSeconds();
   }
 
-  return phase;
+  return tick;
 }
 
 SkPath Outset(const SkPath& path, float distance) {

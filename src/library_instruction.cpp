@@ -2766,12 +2766,12 @@ struct ConditionCodeWidget : public EnumKnobWidget {
     }
   }
 
-  animation::Phase Tick(time::Timer& timer) override {
-    auto phase = EnumKnobWidget::Tick(timer);
+  Tick Tock(time::Timer& timer) override {
+    Tick tick = EnumKnobWidget::Tock(timer);
 
-    phase |= water_level.SineTowards((float)(value == X86::CondCode::COND_O), timer.d, 2);
-    phase |= spill_tween.SineTowards((water_level == 1) || (water_level > 0 && spill_tween == 1),
-                                     timer.d, 5);
+    tick.drawing |= water_level.SineTowards((float)(value == X86::CondCode::COND_O), timer.d, 2);
+    tick.drawing |= spill_tween.SineTowards(
+        (water_level == 1) || (water_level > 0 && spill_tween == 1), timer.d, 5);
     if (water_level > 0 && !wave.has_value()) {
       wave = Wave1D(30, 0.5, 0.005, 1);
       if (auto* _mw = ToyStore().FindOrNull(*vm.root_board)) {
@@ -2855,10 +2855,10 @@ struct ConditionCodeWidget : public EnumKnobWidget {
         }
       }
 
-      phase |= wave->Tick(timer);
+      tick |= wave->Tock(timer);
       wave->ZeroMeanAmplitude();
     }
-    return phase;
+    return tick;
   }
 
   void DrawKnobBackground(SkCanvas& canvas, int val) const override {
@@ -3040,10 +3040,10 @@ PersistentImage reverse = PersistentImage::MakeFromAsset(
     PersistentImage::MakeArgs{.width = Instruction::Widget::kWidth -
                                        Instruction::Widget::kBorderMargin * 2});
 
-animation::Phase Instruction::Widget::Tick(time::Timer& timer) {
+ui::Tick Instruction::Widget::Tock(time::Timer& timer) {
   auto instruction = this->LockObject<Instruction>();
   if (!instruction) {
-    return animation::Finished;
+    return Tick::Draw;
   }
   inst = instruction->mc_inst;
 
@@ -3162,7 +3162,7 @@ animation::Phase Instruction::Widget::Tick(time::Timer& timer) {
   assembly_text = AssemblyText(inst);
   machine_text = MachineText(inst);
 
-  return animation::Finished;
+  return Tick::Draw;
 }
 
 void Instruction::Widget::Draw(SkCanvas& canvas) const {

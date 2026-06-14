@@ -511,13 +511,13 @@ struct CommandToy : ui::beta::ObjectToy {
     }
   }
 
-  animation::Phase Tick(time::Timer& t) override {
+  Tick Tock(time::Timer& t) override {
     UpdateFromObject();
     if (running_) {
       spinner_phase_ = fmodf(spinner_phase_ + (float)t.d * 0.7f, 1.f);
-      return animation::Animating;
+      return Tick::Drawing;
     }
-    return animation::Finished;
+    return Tick::Draw;
   }
 
   void ScheduleRunIfReady() {

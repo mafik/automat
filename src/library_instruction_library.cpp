@@ -284,26 +284,26 @@ void InstructionLibrary::Widget::FillChildren(Vec<ui::Widget*>& children) {
   }
 }
 
-animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
-  animation::Phase phase = animation::Finished;
+ui::Tick InstructionLibrary::Widget::Tock(time::Timer& timer) {
+  Tick tick;
 
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    phase |= animation::LinearApproach(read_from[i].hovered, timer.d, 10,
-                                       read_from[i].hovered_animation);
-    phase |=
+    tick.drawing |= animation::LinearApproach(read_from[i].hovered, timer.d, 10,
+                                              read_from[i].hovered_animation);
+    tick.drawing |=
         animation::LinearApproach(write_to[i].hovered, timer.d, 10, write_to[i].hovered_animation);
 
-    phase |=
+    tick.drawing |=
         animation::LinearApproach(read_from[i].pressed, timer.d, 5, read_from[i].pressed_animation);
-    phase |=
+    tick.drawing |=
         animation::LinearApproach(write_to[i].pressed, timer.d, 5, write_to[i].pressed_animation);
   }
 
   auto object_Ptr = LockOwner<Object>();
-  if (!object_Ptr) return animation::Finished;
+  if (!object_Ptr) return Tick::Draw;
 
   auto* library = dynamic_cast<InstructionLibrary*>(object_Ptr.get());
-  if (!library) return animation::Finished;
+  if (!library) return Tick::Draw;
 
   lock_guard lock(library->mutex);
   auto& instructions = library->instructions;
@@ -322,7 +322,7 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
   }
 
   float helix_tween_target = (helix_hovered && isnan(new_cards_dir_deg)) ? 1 : 0;
-  phase |= helix_hover_tween.SineTowards(helix_tween_target, timer.d, 0.5);
+  tick.drawing |= helix_hover_tween.SineTowards(helix_tween_target, timer.d, 0.5);
 
   for (int i = 0; i < n; ++i) {
     llvm::MCInst& inst = library->instructions[i];
@@ -377,10 +377,12 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
       } else {
         if (j < card.library_index) {
           // We should move the card deeper into the deck (reordered)
-          phase |= animation::LinearApproach(1, timer.d, kDebugAnimation ? 1 : 5, card.throw_t);
+          tick.drawing |=
+              animation::LinearApproach(1, timer.d, kDebugAnimation ? 1 : 5, card.throw_t);
         } else {
           // Card is moving back to the deck
-          phase |= animation::LinearApproach(0, timer.d, kDebugAnimation ? 1 : 5, card.throw_t);
+          tick.drawing |=
+              animation::LinearApproach(0, timer.d, kDebugAnimation ? 1 : 5, card.throw_t);
           if (card.throw_t == 0) {
             card.throw_direction_deg = NAN;
           }
@@ -390,7 +392,7 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
       if (isnan(card.throw_direction_deg)) {
         card.throw_direction_deg = rng.RollFloat(-180, 180);
       }
-      phase |= animation::LinearApproach(1, timer.d, kDebugAnimation ? 1 : 5, card.throw_t);
+      tick.drawing |= animation::LinearApproach(1, timer.d, kDebugAnimation ? 1 : 5, card.throw_t);
       if (card.throw_t >= 1) {
         // Delete the card
         instruction_helix.erase(instruction_helix.begin() + j);
@@ -421,7 +423,7 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
     }
   }
 
-  phase |= rotation_offset_t.SineTowards(rotation_offset_t_target, timer.d, 0.2);
+  tick.drawing |= rotation_offset_t.SineTowards(rotation_offset_t_target, timer.d, 0.2);
 
   for (int i = 0; i < category_states.size(); ++i) {
     auto& category = x86::kCategories[i];
@@ -433,8 +435,8 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
     if (i == library->selected_category) {
       target_length = 1;
     }
-    phase |= category_state.growth.SineTowards(target_length, timer.d, 1);
-    phase |= category_state.shake.SpringTowards(0, timer.d, 0.2, 0.5);
+    tick.drawing |= category_state.growth.SineTowards(target_length, timer.d, 1);
+    tick.drawing |= category_state.shake.SpringTowards(0, timer.d, 0.2, 0.5);
 
     for (int j = 0; j < category.groups.size(); ++j) {
       auto& leaf_state = category_state.leaves[j];
@@ -453,9 +455,11 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
           target_hue_rotate = -0.15;
         }
       }
-      phase |= leaf_state.growth.SineTowards(target_growth, timer.d, animation_period_seconds);
-      phase |= animation::LinearApproach(target_hue_rotate, timer.d, 0.3, leaf_state.hue_rotate);
-      phase |= leaf_state.shake.SpringTowards(0, timer.d, 0.1, 0.5);
+      tick.drawing |=
+          leaf_state.growth.SineTowards(target_growth, timer.d, animation_period_seconds);
+      tick.drawing |=
+          animation::LinearApproach(target_hue_rotate, timer.d, 0.3, leaf_state.hue_rotate);
+      tick.drawing |= leaf_state.shake.SpringTowards(0, timer.d, 0.1, 0.5);
       Vec2 leaf_base_position;
       Vec2 stalk_tangent;
       (void)path_measure.getPosTan(group_distance, &leaf_base_position.sk, &stalk_tangent.sk);
@@ -491,7 +495,7 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
     card.widget->local_to_parent = SkM44(transform);
   }
 
-  return phase;
+  return tick;
 }
 
 PersistentImage rose0 = PersistentImage::MakeFromAsset(embedded::assets_rose_0_webp,
@@ -947,24 +951,24 @@ void InstructionLibrary::Widget::PointerOver(ui::Pointer& p) {
 
 void InstructionLibrary::Widget::PointerLeave(ui::Pointer& p) {
   StopWatching(p);
-  animation::Phase phase = animation::Finished;
+  bool changed = false;
 
   if (helix_hovered) {
     helix_hovered = false;
-    phase |= animation::Animating;
+    changed = true;
   }
 
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     if (read_from[i].hovered) {
       read_from[i].hovered = false;
-      phase |= animation::Animating;
+      changed = true;
     }
     if (write_to[i].hovered) {
       write_to[i].hovered = false;
-      phase |= animation::Animating;
+      changed = true;
     }
   }
-  if (phase != animation::Finished) {
+  if (changed) {
     WakeAnimation();
   }
 }

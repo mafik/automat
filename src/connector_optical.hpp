@@ -73,8 +73,8 @@ struct CablePhysicsSimulation {
 // TODO: remove all other calls and cache the arcline in `Tick()`
 ArcLine RouteCable(Vec2AndDir start, Span<const Vec2AndDir> ends, SkCanvas* debug_canvas = nullptr);
 
-animation::Phase SimulateCablePhysics(time::Timer&, CablePhysicsSimulation&, Vec2AndDir start,
-                                      Span<Vec2AndDir> end_candidates);
+animation::Progress SimulateCablePhysics(time::Timer&, CablePhysicsSimulation&, Vec2AndDir start,
+                                         Span<Vec2AndDir> end_candidates);
 
 void DrawOpticalConnector(SkCanvas&, const CablePhysicsSimulation&, Widget* icon);
 

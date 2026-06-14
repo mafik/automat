@@ -430,17 +430,18 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
     }
   }
 
-  animation::Phase Tick(time::Timer& timer) override {
+  Tick Tock(time::Timer& timer) override {
     if (auto mr = LockMacroRecorder()) {
       is_recording = mr->keylogging != nullptr;
     }
 
     record_button->WakeAnimationAt(timer.last);
 
-    auto phase = is_recording ? animation::Animating : animation::Finished;
+    Tick tick;
+    if (is_recording) tick |= Tick::Drawing;
 
-    phase |= animation::ExponentialApproach(is_recording ? 1 : 0, timer.d, 0.2,
-                                            animation_state.eye_rotation_speed);
+    tick.drawing |= animation::ExponentialApproach(is_recording ? 1 : 0, timer.d, 0.2,
+                                                   animation_state.eye_rotation_speed);
 
     animation_state.eye_rotation -= timer.d * 360 * animation_state.eye_rotation_speed;
     if (animation_state.eye_rotation < 0) {
@@ -456,14 +457,14 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
       eyes_open_target = 0;
     }
 
-    phase |=
+    tick.drawing |=
         animation::ExponentialApproach(eyes_open_target, timer.d, 0.2, animation_state.eyes_open);
 
     auto local_to_window = TransformUp(*this);
     auto& rw = FindRootWidget();
     auto main_pointer_screen = *rw.window->MousePositionScreenPx();
 
-    auto UpdateEye = [&](Vec2 center, animation::SpringV2<Vec2>& googly) -> animation::Phase {
+    auto UpdateEye = [&](Vec2 center, animation::SpringV2<Vec2>& googly) -> animation::Progress {
       auto eye_window = local_to_window.mapPoint(center.sk);
       auto eye_screen = rw.window->WindowPxToScreen(eye_window);
       auto eye_delta = main_pointer_screen - eye_screen;
@@ -477,10 +478,10 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
       Vec2 target = Vec2(eye_dir.x * dist, -eye_dir.y * dist);
       return googly.SpringTowards(target, timer.d, 0.5, 0.2);
     };
-    phase |= UpdateEye(kLeftEyeCenter, animation_state.googly_left);
-    phase |= UpdateEye(kRightEyeCenter, animation_state.googly_right);
+    tick.drawing |= UpdateEye(kLeftEyeCenter, animation_state.googly_left);
+    tick.drawing |= UpdateEye(kRightEyeCenter, animation_state.googly_right);
 
-    return phase;
+    return tick;
   }
 
   void Draw(SkCanvas& canvas) const override {

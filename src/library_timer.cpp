@@ -500,8 +500,8 @@ struct TimerWidget : ObjectToy {
     text_field->SetNumber(n);
   }
 
-  animation::Phase Tick(time::Timer& timer) override {
-    auto phase = ObjectToy::Tick(timer);
+  Tick Tock(time::Timer& timer) override {
+    auto tick = ObjectToy::Tock(timer);
 
     // Refresh cached Object state
     if (auto t = LockTimer()) {
@@ -513,13 +513,13 @@ struct TimerWidget : ObjectToy {
     }
     UpdateTextField();
 
-    phase |= is_running ? animation::Animating : animation::Finished;
-    phase |= animation::ExponentialApproach(0, timer.d, 0.2, start_pusher_depression);
-    phase |= animation::ExponentialApproach(0, timer.d, 0.2, left_pusher_depression);
-    phase |= animation::ExponentialApproach(0, timer.d, 0.2, right_pusher_depression);
+    tick |= is_running ? Tick::Drawing : Tick{};
+    tick.drawing |= animation::ExponentialApproach(0, timer.d, 0.2, start_pusher_depression);
+    tick.drawing |= animation::ExponentialApproach(0, timer.d, 0.2, left_pusher_depression);
+    tick.drawing |= animation::ExponentialApproach(0, timer.d, 0.2, right_pusher_depression);
     int range_end = (int)Timer::Range::EndGuard;
     animation::WrapModulo(range_dial.value, (float)range, range_end);
-    phase |= range_dial.SpringTowards((float)range, timer.d, 0.4, 0.05);
+    tick.drawing |= range_dial.SpringTowards((float)range, timer.d, 0.4, 0.05);
     double circles;
     float duration_handle_rotation_target =
         M_PI * 2.5 -
@@ -527,8 +527,8 @@ struct TimerWidget : ObjectToy {
     duration_handle_rotation_target =
         modf(duration_handle_rotation_target / (2 * M_PI), &circles) * 2 * M_PI;
     animation::WrapModulo(duration_handle_rotation, duration_handle_rotation_target, M_PI * 2);
-    phase |= animation::ExponentialApproach(duration_handle_rotation_target, timer.d, 0.05,
-                                            duration_handle_rotation);
+    tick.drawing |= animation::ExponentialApproach(duration_handle_rotation_target, timer.d, 0.05,
+                                                   duration_handle_rotation);
 
     if (hand_draggers) {
       // do nothing...
@@ -540,9 +540,10 @@ struct TimerWidget : ObjectToy {
         hand_target = 90;
       }
       animation::WrapModulo(hand_degrees.value, hand_target, 360);
-      phase |= hand_degrees.SpringTowards(hand_target, timer.d, time::ToSeconds(kHandPeriod), 0.05);
+      tick.drawing |=
+          hand_degrees.SpringTowards(hand_target, timer.d, time::ToSeconds(kHandPeriod), 0.05);
     }
-    return phase;
+    return tick;
   }
 
   void Draw(SkCanvas& canvas) const override {

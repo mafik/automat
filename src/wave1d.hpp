@@ -5,7 +5,7 @@
 #include <span>
 #include <vector>
 
-#include "animation.hpp"
+#include "widget.hpp"
 
 namespace automat {
 
@@ -18,7 +18,7 @@ struct Wave1D final {
 
   Wave1D(int n, float wave_speed, float column_spacing, float damping_half_time = 0);
 
-  animation::Phase Tick(time::Timer& timer);
+  ui::Tick Tock(time::Timer& timer);
 
   std::span<const float> Amplitudes() const;
   std::span<float> Amplitude();

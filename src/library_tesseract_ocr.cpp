@@ -334,8 +334,8 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
 
   void TransformUpdated() override { WakeAnimation(); }
 
-  animation::Phase Tick(time::Timer& timer) override {
-    auto phase = animation::Finished;
+  Tick Tock(time::Timer& timer) override {
+    Tick tick;
     // Copy source image from connected image provider
     if (auto tesseract = LockTesseract()) {
       if (tesseract->status_mutex.try_lock()) {
@@ -346,10 +346,10 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
       }
       laser_phase = fmod(timer.NowSeconds(), 1.0f);
       if (status_progress_ratio.has_value()) {
-        phase |= animation::Animating;
+        tick |= Tick::Drawing;
         laser_alpha = 1.0f;
       } else {
-        phase |= animation::LinearApproach(0, timer.d, 2, laser_alpha);
+        tick.drawing |= animation::LinearApproach(0, timer.d, 2, laser_alpha);
       }
       region_rect.left = tesseract->x_min_ratio;
       region_rect.right = tesseract->x_max_ratio;
@@ -396,7 +396,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
         target_aspect_ratio = 1.618f;
       }
 
-      phase |= aspect_ratio.SineTowards(target_aspect_ratio, timer.d, 0.3);
+      tick.drawing |= aspect_ratio.SineTowards(target_aspect_ratio, timer.d, 0.3);
 
       layout = Layout(aspect_ratio, region_rect);
 
@@ -418,10 +418,10 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
         float dist = eye_dist_2d / eye_dist_3d;
 
         Vec2 iris_dir_target = Vec2(eye_dir.x * dist, eye_dir.y * dist);
-        phase |= iris_dir.SineTowards(iris_dir_target, timer.d, 1);
+        tick.drawing |= iris_dir.SineTowards(iris_dir_target, timer.d, 1);
       }
     }
-    return phase;
+    return tick;
   }
 
   void Draw(SkCanvas& canvas) const override {

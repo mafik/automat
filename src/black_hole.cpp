@@ -23,14 +23,15 @@ SkPath BlackHole::Shape() const {
 
 RootWidget& BlackHole::ParentRootWidget() const { return static_cast<RootWidget&>(*parent); }
 
-animation::Phase BlackHole::Tick(time::Timer& timer) {
+Tick BlackHole::Tock(time::Timer& timer) {
   auto& root_widget = ParentRootWidget();
   float target_radius = root_widget.drag_action_count > 0 ? kMaxRadius : 0;
-  auto phase = animation::ExponentialApproach(target_radius, timer.d, 0.1, radius);
+  Tick tick;
+  tick.drawing |= animation::ExponentialApproach(target_radius, timer.d, 0.1, radius);
   if (radius > 0) {
-    phase |= animation::Animating;
+    tick |= Tick::Drawing;
   }
-  return phase;
+  return tick;
 }
 void BlackHole::Draw(SkCanvas& canvas) const {
   if (radius == 0) {

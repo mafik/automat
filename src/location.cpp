@@ -213,8 +213,8 @@ void LocationWidget::FillChildren(Vec<Widget*>& children) {
 
 Optional<Rect> LocationWidget::TextureBounds() const { return nullopt; }
 
-animation::Phase LocationWidget::Tick(time::Timer& timer) {
-  auto phase = animation::Finished;
+ui::Tick LocationWidget::Tock(time::Timer& timer) {
+  Tick tick;
   auto loc = LockLocation();
 
   if (toy && toy->parent != this) {
@@ -223,18 +223,18 @@ animation::Phase LocationWidget::Tick(time::Timer& timer) {
 
   if (!loc) {
     // Location is dead — fade out and eventually expire
-    phase |= animation::ExponentialApproach(1, timer.d, 0.1, transparency);
-    if (phase == animation::Finished) {
+    tick.drawing |= animation::ExponentialApproach(1, timer.d, 0.1, transparency);
+    if (!tick.ing) {
       // Bring our cached ObjectToy with us so it doesn't outlive the path back to RootWidget.
       if (toy && toy->parent == this) {
         toy->MarkDead(timer.now);
       }
       MarkDead(timer.now);
     }
-    return phase;
+    return tick;
   }
 
-  phase |= animation::ExponentialApproach(0, timer.d, 0.1, transparency);
+  tick.drawing |= animation::ExponentialApproach(0, timer.d, 0.1, transparency);
 
   ToyForObject();  // fills toy
 
@@ -244,12 +244,12 @@ animation::Phase LocationWidget::Tick(time::Timer& timer) {
     float scale_curr;
     Location::FromMatrix(toy->local_to_parent.asM33(), local_pivot, position_curr, scale_curr);
 
-    phase |= animation::LowLevelSpringTowards(loc->scale, timer.d, kScaleSpringPeriod,
-                                              kSpringHalfTime, scale_curr, scale_vel);
-    phase |= animation::LowLevelSineTowards(loc->position.x, timer.d, kPositionSpringPeriod,
-                                            position_curr.x, position_vel.x);
-    phase |= animation::LowLevelSineTowards(loc->position.y, timer.d, kPositionSpringPeriod,
-                                            position_curr.y, position_vel.y);
+    tick.drawing |= animation::LowLevelSpringTowards(loc->scale, timer.d, kScaleSpringPeriod,
+                                                     kSpringHalfTime, scale_curr, scale_vel);
+    tick.drawing |= animation::LowLevelSineTowards(loc->position.x, timer.d, kPositionSpringPeriod,
+                                                   position_curr.x, position_vel.x);
+    tick.drawing |= animation::LowLevelSineTowards(loc->position.y, timer.d, kPositionSpringPeriod,
+                                                   position_curr.y, position_vel.y);
 
     toy->local_to_parent = SkM44(Location::ToMatrix(position_curr, scale_curr, local_pivot));
   }
@@ -259,12 +259,12 @@ animation::Phase LocationWidget::Tick(time::Timer& timer) {
 
   {
     float target_elevation = IsDragged(*this) ? 1 : 0;
-    phase |= elevation.SineTowards(target_elevation, timer.d, 0.2);
+    tick.drawing |= elevation.SineTowards(target_elevation, timer.d, 0.2);
   }
   if (HasError(*loc->object)) {
-    phase |= animation::Animating;
+    tick |= Tick::Drawing;
   }
-  return phase;
+  return tick;
 }
 
 void LocationWidget::Draw(SkCanvas& canvas) const {

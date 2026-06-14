@@ -162,7 +162,7 @@ struct MouseWidgetCommon {
     return MatrixMix(presser_widget_iconified, presser_widget_normal, size_ratio);
   }
 
-  static animation::Phase Tick(time::Timer& timer, ui::Widget& widget, ui::PointerButton button,
+  static ui::Tick Tock(time::Timer& timer, ui::Widget& widget, ui::PointerButton button,
                                Optional<bool> down_opt, PresserWidget* presser_widget) {
     SkPath mask = ButtonShape(button);
     float lod = FindLoD(TransformUp(widget), krita::mouse::base.height(), 40, 80);
@@ -176,7 +176,7 @@ struct MouseWidgetCommon {
       presser_widget->local_to_parent = SkM44(transform_mix);
       presser_widget->WakeAnimation();
     }
-    return animation::Finished;
+    return ui::Tick::Draw;
   }
 
   static void Draw(SkCanvas& canvas, ui::PointerButton button, Optional<bool> down_opt,
@@ -290,8 +290,8 @@ struct MouseIcon : ui::Widget {
 
   Optional<Rect> TextureBounds() const override { return MouseWidgetCommon::TextureBounds(); }
 
-  animation::Phase Tick(time::Timer& timer) override {
-    return MouseWidgetCommon::Tick(timer, *this, button, std::nullopt, presser_widget.get());
+  Tick Tock(time::Timer& timer) override {
+    return MouseWidgetCommon::Tock(timer, *this, button, std::nullopt, presser_widget.get());
   }
 
   void TransformUpdated() override { WakeAnimation(); }
@@ -429,12 +429,12 @@ struct MouseButtonEventWidget : MouseWidgetBase {
   ui::PointerButton button;
   bool down;
 
-  animation::Phase Tick(time::Timer&) override {
+  Tick Tock(time::Timer&) override {
     if (auto object = LockObject<MouseButtonEvent>()) {
       button = object->button;
       down = object->down;
     }
-    return animation::Finished;
+    return Tick::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -676,11 +676,13 @@ struct MouseScrollYWidget : MouseWidgetBase {
   SinCos target;
   animation::SpringV2<SinCos> rotation;
 
-  animation::Phase Tick(time::Timer& t) override {
+  Tick Tock(time::Timer& t) override {
     if (auto o = LockObject<MouseScrollY>()) {
       target = o->rotation;
     }
-    return rotation.SineTowards(target, t.d, 0.6);
+    Tick tick;
+    tick.drawing |= rotation.SineTowards(target, t.d, 0.6);
+    return tick;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -726,11 +728,8 @@ struct MouseScrollYWidget : MouseWidgetBase {
         // s0 and s1 are the arc control points
         Vec2 s0 = Vec2(wheel_bounds.centerX(), cy + x0);
         Vec2 s1 = Vec2(wheel_bounds.centerX(), cy + x1);
-        SkPath path = SkPathBuilder()
-                          .moveTo(left)
-                          .arcTo(s0, right, r0)
-                          .arcTo(s1, left, r1)
-                          .detach();
+        SkPath path =
+            SkPathBuilder().moveTo(left).arcTo(s0, right, r0).arcTo(s1, left, r1).detach();
         canvas.drawPath(path, paint);
       }
       alpha = alpha + 30_deg;
@@ -746,11 +745,13 @@ struct MouseScrollXWidget : MouseWidgetBase {
   SinCos target;
   animation::SpringV2<SinCos> rotation;
 
-  animation::Phase Tick(time::Timer& t) override {
+  Tick Tock(time::Timer& t) override {
     if (auto o = LockObject<MouseScrollY>()) {
       target = o->rotation;
     }
-    return rotation.SineTowards(target, t.d, 0.6);
+    Tick tick;
+    tick.drawing |= rotation.SineTowards(target, t.d, 0.6);
+    return tick;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -793,11 +794,8 @@ struct MouseScrollXWidget : MouseWidgetBase {
         float x1 = 2 * a1 * c * c / (c * c - a1 * a1);
         Vec2 s0 = Vec2(cx + x0, wheel_bounds.centerY());
         Vec2 s1 = Vec2(cx + x1, wheel_bounds.centerY());
-        SkPath path = SkPathBuilder()
-                          .moveTo(bottom)
-                          .arcTo(s0, top, r0)
-                          .arcTo(s1, bottom, r1)
-                          .detach();
+        SkPath path =
+            SkPathBuilder().moveTo(bottom).arcTo(s0, top, r0).arcTo(s1, bottom, r1).detach();
         canvas.drawPath(path, paint);
       }
       alpha = alpha + 30_deg;
@@ -877,12 +875,12 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
 
   SkPath Shape() const override { return shape; }
 
-  animation::Phase Tick(time::Timer& timer) override {
+  Tick Tock(time::Timer& timer) override {
     if (auto object = LockObject<MouseButtonPresser>()) {
       button = object->button;
       presser_widget.is_on = object->state->IsOn();
     }
-    return MouseWidgetCommon::Tick(timer, *this, button, std::nullopt, &presser_widget);
+    return MouseWidgetCommon::Tock(timer, *this, button, std::nullopt, &presser_widget);
   }
 
   void TransformUpdated() override { WakeAnimation(); }

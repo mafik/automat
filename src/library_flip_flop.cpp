@@ -129,13 +129,15 @@ struct FlipFlopWidget : ObjectToy {
                                                rect.CenterY() - kYingYangButtonRadius);
   }
 
-  animation::Phase Tick(time::Timer& timer) override {
+  Tick Tock(time::Timer& timer) override {
     auto ptr = LockObject<FlipFlop>();
     if (ptr) {
       current_state = ptr->current_state;
     }
-    button->WakeAnimationAt(next_tick);
-    return animation::LinearApproach(current_state, timer.d, 10, light);
+    button->WakeAnimationAt(next_tock);
+    Tick tick;
+    tick.drawing |= animation::LinearApproach(current_state, timer.d, 10, light);
+    return tick;
   }
   void Draw(SkCanvas& canvas) const override {
     FlipFlopColor().draw(canvas);

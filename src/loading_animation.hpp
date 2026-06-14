@@ -10,6 +10,7 @@
 #include "color.hpp"
 #include "time.hpp"
 #include "units.hpp"
+#include "widget.hpp"
 
 namespace automat {
 
@@ -28,8 +29,8 @@ struct LoadingAnimation {
 
   operator bool() { return state != kDone; }
 
-  virtual animation::Phase Tick(time::Timer& timer) {
-    return state == kDone ? animation::Finished : animation::Animating;
+  virtual ui::Tick Tock(time::Timer& timer) {
+    return state == kDone ? ui::Tick::Draw : ui::Tick::Drawing;
   }
   virtual void PreDraw(SkCanvas& canvas) { canvas.saveLayer(nullptr, nullptr); }
   virtual void PostDraw(SkCanvas& canvas) { canvas.restore(); }
@@ -84,7 +85,7 @@ struct HypnoRect : public LoadingAnimation {
 
   HypnoRect();
 
-  animation::Phase Tick(time::Timer&) override;
+  ui::Tick Tock(time::Timer&) override;
   void PreDraw(SkCanvas&) override;
   void PostDraw(SkCanvas&) override;
 };

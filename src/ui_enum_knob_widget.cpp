@@ -38,8 +38,8 @@ EnumKnobWidget::EnumKnobWidget(ui::Widget* parent, int n_options)
 
 SkPath EnumKnobWidget::Shape() const { return SkPath::Circle(0, 0, kGaugeRadius); }
 
-animation::Phase EnumKnobWidget::Tick(time::Timer& timer) {
-  auto phase = animation::Finished;
+ui::Tick EnumKnobWidget::Tock(time::Timer& timer) {
+  Tick tick;
   value = KnobGet();
   auto old_value = value;
   if (std::isnan(knob.value) || std::isinf(knob.value)) {
@@ -64,11 +64,11 @@ animation::Phase EnumKnobWidget::Tick(time::Timer& timer) {
   if (value != old_value) {
     KnobSet(value);
   }
-  phase |= click_wiggle.SpringTowards(0, timer.d, time::ToSeconds(kClickWigglePeriod),
-                                      time::ToSeconds(kClickWiggleHalfTime));
+  tick.drawing |= click_wiggle.SpringTowards(0, timer.d, time::ToSeconds(kClickWigglePeriod),
+                                             time::ToSeconds(kClickWiggleHalfTime));
   cond_code_float = (float)value + knob.value + click_wiggle.value;
 
-  return phase;
+  return tick;
 }
 
 void EnumKnobWidget::DrawKnobBackground(SkCanvas& canvas, int value) const {
@@ -145,8 +145,7 @@ void EnumKnobWidget::Draw(SkCanvas& canvas) const {
       canvas.save();
       RRect clip = RRect::MakeSimple(kGaugeOval, kGaugeRadius);
       canvas.clipRRect(clip.sk);
-      SkPath path =
-          SkPath::Circle(0, -kBorderWidth * 2, kGaugeRadius).makeToggleInverseFillType();
+      SkPath path = SkPath::Circle(0, -kBorderWidth * 2, kGaugeRadius).makeToggleInverseFillType();
       canvas.drawPath(path, paint);
       canvas.restore();
     }

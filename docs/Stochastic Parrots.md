@@ -12,8 +12,8 @@ In this codebase LLMs are referred to as "Stochastic Parrots". Files which are m
 
 ## Working in this codebase
 
-- **Do not use sub-agents (Agent / Task / Explore) for codebase exploration.** Read the actual source files yourself with Read/Grep/Glob. Sub-agent summaries are lossy and have introduced factual errors about this codebase (inventing globals, misreading init order, misattributing ownership). When in doubt, open the file.
 - The authoritative list of process-wide state lives in `src/automat.hpp` and `src/root_widget.hpp`. Init and teardown order is explicit in `automat::Main()` in `src/automat.cpp`.
+- Before you finish your work, go over the code (also the code that you didn't change, but is affected by your changes) and clean it up. Any rough edges that appear during editing should be smoothened out. It should read as if it was written with the end-state in mind in the first place. Remember this especially during your critique.
 
 ## Common Development Commands
 
@@ -112,6 +112,7 @@ Documentation maintained using stochastic parrots should be placed in `docs/parr
 - `docs/parrots/Beta Brand.md` - describes the visual identification for Toys made with stochastic parrots
 - `docs/parrots/Wayland Client Persistence.md` - options for saving/cloning windows backed by live processes; why recipes won
 - `docs/parrots/Wayland Compositor.md` - Automat as a Wayland compositor: Hyprland stack, the epoll event loop, protocol surface, input pass-through, window lifetime
+- `docs/parrots/Fable Mode.md` - (`/fable-mode` skill) enforces staged execution discipline on large tasks
 
 Parrot docs must be written using plain language, using proper technical terminology. Plain language means plain declarative sentences: no personification ("selection wears the dashed ring" — write "selected controls are marked with a dashed ring"), no figurative phrasing, no tone words such as "honest" or "cheerful". State facts without decorating them. They should use full sentences, without abbreviations. They should follow either a problem-solution format, high-level-to-low-level format, or a hierarchical-tree-of-topics format, depending on what suits the content best. They should focus on rationales, design intent, constraints & principles which produced some decision. They should avoid repeating implementation details and instead link to relevant code.
 

@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "automat.hpp"
+#include "colony.hpp"
 #include "format.hpp"
 #include "library_command.hpp"
 #include "library_wayland_window.hpp"
@@ -75,7 +76,7 @@ struct Surface {
   CWlSurface res;  // address-pinned: the wl_resource and its destroy listener point back at it
   wl_resource* pending_buffer = nullptr;
   bool buffer_attached = false;  // attach happened since the last commit (may be null = unmap)
-  std::vector<std::unique_ptr<CWlCallback>> frame_cbs;
+  Colony<CWlCallback> frame_cbs;
   Toplevel* toplevel = nullptr;
 
   Surface(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
@@ -165,31 +166,31 @@ struct Server::Impl {
   uint32_t serial = 1;
 
   // Protocol objects; wayland thread only.
-  std::vector<std::unique_ptr<CWlCompositor>> compositor_resources;
-  std::vector<std::unique_ptr<CWlSubcompositor>> subcompositors;
-  std::vector<std::unique_ptr<CWlSubsurface>> subsurfaces;
-  std::vector<std::unique_ptr<CWlRegion>> regions;
-  std::vector<std::unique_ptr<CWlDataDeviceManager>> data_device_managers;
-  std::vector<std::unique_ptr<CWlDataDevice>> data_devices;
-  std::vector<std::unique_ptr<CWlDataSource>> data_sources;
-  std::vector<std::unique_ptr<CWlOutput>> outputs;
-  std::vector<std::unique_ptr<CWlSeat>> seats;
-  std::vector<std::unique_ptr<CWlPointer>> pointers;
-  std::vector<std::unique_ptr<CWlKeyboard>> keyboards;
-  std::vector<std::unique_ptr<CXdgWmBase>> wm_bases;
-  std::vector<std::unique_ptr<CXdgPositioner>> positioners;
-  std::vector<std::unique_ptr<CZxdgDecorationManagerV1>> decoration_managers;
-  std::vector<std::unique_ptr<CZxdgToplevelDecorationV1>> decorations;
-  std::vector<std::unique_ptr<Surface>> surfaces;
-  std::vector<std::unique_ptr<XdgSurf>> xdg_surfaces;
-  std::vector<std::unique_ptr<Toplevel>> toplevels;
+  Colony<CWlCompositor> compositor_resources;
+  Colony<CWlSubcompositor> subcompositors;
+  Colony<CWlSubsurface> subsurfaces;
+  Colony<CWlRegion> regions;
+  Colony<CWlDataDeviceManager> data_device_managers;
+  Colony<CWlDataDevice> data_devices;
+  Colony<CWlDataSource> data_sources;
+  Colony<CWlOutput> outputs;
+  Colony<CWlSeat> seats;
+  Colony<CWlPointer> pointers;
+  Colony<CWlKeyboard> keyboards;
+  Colony<CXdgWmBase> wm_bases;
+  Colony<CXdgPositioner> positioners;
+  Colony<CZxdgDecorationManagerV1> decoration_managers;
+  Colony<CZxdgToplevelDecorationV1> decorations;
+  Colony<Surface> surfaces;
+  Colony<XdgSurf> xdg_surfaces;
+  Colony<Toplevel> toplevels;
   std::unordered_map<wl_resource*, Surface*> surface_by_res;
   std::unordered_map<wl_resource*, Toplevel*> toplevel_by_res;
 
   // Child processes watched for exit via pidfd, and pending close-escalation
   // timers; both are epoll Listeners owned and touched only on the wayland thread.
-  std::vector<std::unique_ptr<ProcessWatch>> process_watches;
-  std::vector<std::unique_ptr<CloseTimer>> close_timers;
+  Colony<ProcessWatch> process_watches;
+  Colony<CloseTimer> close_timers;
 
   // The xkb keymap advertised to clients (matches the compositor host's
   // default layout); built once at startup.
@@ -210,13 +211,8 @@ struct Server::Impl {
 namespace {
 
 template <typename T>
-void EraseOwned(std::vector<std::unique_ptr<T>>& v, T* p) {
-  for (auto it = v.begin(); it != v.end(); ++it) {
-    if (it->get() == p) {
-      v.erase(it);
-      return;
-    }
-  }
+void EraseOwned(Colony<T>& v, T* p) {
+  v.erase(v.get_iterator(p));
 }
 
 void WaylandListener::NotifyRead(Status&) {
@@ -397,48 +393,43 @@ void Commit(Impl& s, Surface& surf) {
   // pacing (tied to board presentation) if animating clients ever matter.
   uint32_t now = NowMs();
   for (auto& cb : surf.frame_cbs) {
-    cb->sendDone(now);
+    cb.sendDone(now);
   }
   surf.frame_cbs.clear();
 }
 
 void NewSurface(Impl& s, wl_client* client, int version, uint32_t id) {
-  auto surf = std::make_unique<Surface>(client, version, id);
-  Surface* sp = surf.get();
-  auto* res = &surf->res;
+  Surface* sp = &*s.surfaces.emplace(client, version, id);
+  auto* res = &sp->res;
   s.surface_by_res[res->resource()] = sp;
 
   res->setAttach([&s, sp](CWlSurface*, wl_resource* buffer, int32_t, int32_t) {
     sp->pending_buffer = buffer;
     sp->buffer_attached = true;
   });
-  res->setFrame([&s, sp](CWlSurface* r, uint32_t cb_id) {
-    sp->frame_cbs.push_back(std::make_unique<CWlCallback>(r->client(), 1, cb_id));
-  });
+  res->setFrame(
+      [&s, sp](CWlSurface* r, uint32_t cb_id) { sp->frame_cbs.emplace(r->client(), 1, cb_id); });
   res->setCommit([&s, sp](CWlSurface*) { Commit(s, *sp); });
   res->setOnDestroy([&s, sp](CWlSurface* r) {
     if (sp->toplevel && sp->toplevel->xdg) sp->toplevel->xdg->surface = nullptr;
     s.surface_by_res.erase(r->resource());
     EraseOwned(s.surfaces, sp);
   });
-
-  s.surfaces.push_back(std::move(surf));
 }
 
 // ---------------------------------------------------------------- xdg-shell --
 
 void NewToplevel(Impl& s, XdgSurf& xs, uint32_t id) {
-  auto top = std::make_unique<Toplevel>(xs.res.client(), xs.res.version(), id);
-  Toplevel* tp = top.get();
-  top->xdg = &xs;
+  Toplevel* tp = &*s.toplevels.emplace(xs.res.client(), xs.res.version(), id);
+  tp->xdg = &xs;
   xs.toplevel = tp;
   if (xs.surface) xs.surface->toplevel = tp;
   uid_t uid;
   gid_t gid;
   wl_client_get_credentials(xs.res.client(), &tp->pid, &uid, &gid);
-  s.toplevel_by_res[top->res.resource()] = tp;
+  s.toplevel_by_res[tp->res.resource()] = tp;
 
-  auto* res = &top->res;
+  auto* res = &tp->res;
   res->setSetTitle([&s, tp](CXdgToplevel*, const char* title) {
     tp->title = title;
     if (auto win_obj = LockWindow(*tp)) {
@@ -471,86 +462,66 @@ void NewToplevel(Impl& s, XdgSurf& xs, uint32_t id) {
     if (tp->xdg && tp->xdg->surface) tp->xdg->surface->toplevel = nullptr;
     EraseOwned(s.toplevels, tp);
   });
-
-  s.toplevels.push_back(std::move(top));
 }
 
 void NewXdgSurface(Impl& s, wl_client* client, int version, uint32_t id, wl_resource* surface_res) {
-  auto xs = std::make_unique<XdgSurf>(client, version, id);
-  XdgSurf* xp = xs.get();
+  XdgSurf* xp = &*s.xdg_surfaces.emplace(client, version, id);
   auto it = s.surface_by_res.find(surface_res);
-  xs->surface = it == s.surface_by_res.end() ? nullptr : it->second;
+  xp->surface = it == s.surface_by_res.end() ? nullptr : it->second;
 
-  auto* res = &xs->res;
+  auto* res = &xp->res;
   res->setGetToplevel([&s, xp](CXdgSurface*, uint32_t id) { NewToplevel(s, *xp, id); });
   res->setAckConfigure([](CXdgSurface*, uint32_t) {});
   res->setOnDestroy([&s, xp](CXdgSurface*) {
     if (xp->toplevel) xp->toplevel->xdg = nullptr;
     EraseOwned(s.xdg_surfaces, xp);
   });
-
-  s.xdg_surfaces.push_back(std::move(xs));
 }
 
 // ------------------------------------------------------------------ globals --
 
 void BindCompositor(wl_client* client, void* data, uint32_t version, uint32_t id) {
   auto& s = *(Impl*)data;
-  auto res = std::make_unique<CWlCompositor>(client, version, id);
-  CWlCompositor* rp = res.get();
+  CWlCompositor* rp = &*s.compositor_resources.emplace(client, version, id);
   rp->setCreateSurface(
       [&s](CWlCompositor* r, uint32_t id) { NewSurface(s, r->client(), r->version(), id); });
   rp->setCreateRegion([&s](CWlCompositor* r, uint32_t id) {
-    auto region = std::make_unique<CWlRegion>(r->client(), r->version(), id);
-    CWlRegion* gp = region.get();
+    CWlRegion* gp = &*s.regions.emplace(r->client(), r->version(), id);
     gp->setOnDestroy([&s, gp](CWlRegion*) { EraseOwned(s.regions, gp); });
-    s.regions.push_back(std::move(region));
   });
   rp->setOnDestroy([&s, rp](CWlCompositor*) { EraseOwned(s.compositor_resources, rp); });
-  s.compositor_resources.push_back(std::move(res));
 }
 
 void BindSubcompositor(wl_client* client, void* data, uint32_t version, uint32_t id) {
   auto& s = *(Impl*)data;
-  auto res = std::make_unique<CWlSubcompositor>(client, version, id);
-  CWlSubcompositor* rp = res.get();
+  CWlSubcompositor* rp = &*s.subcompositors.emplace(client, version, id);
   rp->setGetSubsurface(
       [&s](CWlSubcompositor* r, uint32_t id, wl_resource* surface, wl_resource* parent) {
         // Accepted so clients can use them; their content is not composited yet.
-        auto sub = std::make_unique<CWlSubsurface>(r->client(), r->version(), id);
-        CWlSubsurface* sp = sub.get();
+        CWlSubsurface* sp = &*s.subsurfaces.emplace(r->client(), r->version(), id);
         sp->setOnDestroy([&s, sp](CWlSubsurface*) { EraseOwned(s.subsurfaces, sp); });
-        s.subsurfaces.push_back(std::move(sub));
       });
   rp->setOnDestroy([&s, rp](CWlSubcompositor*) { EraseOwned(s.subcompositors, rp); });
-  s.subcompositors.push_back(std::move(res));
 }
 
 void BindDataDeviceManager(wl_client* client, void* data, uint32_t version, uint32_t id) {
   auto& s = *(Impl*)data;
-  auto res = std::make_unique<CWlDataDeviceManager>(client, version, id);
-  CWlDataDeviceManager* rp = res.get();
+  CWlDataDeviceManager* rp = &*s.data_device_managers.emplace(client, version, id);
   // Clipboard plumbing comes later; the objects exist so clients are happy.
   rp->setCreateDataSource([&s](CWlDataDeviceManager* r, uint32_t id) {
-    auto src = std::make_unique<CWlDataSource>(r->client(), r->version(), id);
-    CWlDataSource* dp = src.get();
+    CWlDataSource* dp = &*s.data_sources.emplace(r->client(), r->version(), id);
     dp->setOnDestroy([&s, dp](CWlDataSource*) { EraseOwned(s.data_sources, dp); });
-    s.data_sources.push_back(std::move(src));
   });
   rp->setGetDataDevice([&s](CWlDataDeviceManager* r, uint32_t id, wl_resource*) {
-    auto dev = std::make_unique<CWlDataDevice>(r->client(), r->version(), id);
-    CWlDataDevice* dp = dev.get();
+    CWlDataDevice* dp = &*s.data_devices.emplace(r->client(), r->version(), id);
     dp->setOnDestroy([&s, dp](CWlDataDevice*) { EraseOwned(s.data_devices, dp); });
-    s.data_devices.push_back(std::move(dev));
   });
   rp->setOnDestroy([&s, rp](CWlDataDeviceManager*) { EraseOwned(s.data_device_managers, rp); });
-  s.data_device_managers.push_back(std::move(res));
 }
 
 void BindOutput(wl_client* client, void* data, uint32_t version, uint32_t id) {
   auto& s = *(Impl*)data;
-  auto res = std::make_unique<CWlOutput>(client, version, id);
-  CWlOutput* rp = res.get();
+  CWlOutput* rp = &*s.outputs.emplace(client, version, id);
   rp->setOnDestroy([&s, rp](CWlOutput*) { EraseOwned(s.outputs, rp); });
   rp->sendGeometry(0, 0, 600, 340, WL_OUTPUT_SUBPIXEL_UNKNOWN, "Automat", "Board",
                    WL_OUTPUT_TRANSFORM_NORMAL);
@@ -561,7 +532,6 @@ void BindOutput(wl_client* client, void* data, uint32_t version, uint32_t id) {
     rp->sendScale(1);
     rp->sendDone();
   }
-  s.outputs.push_back(std::move(res));
 }
 
 // Builds the xkb keymap once, serialized into a memfd that every
@@ -610,39 +580,31 @@ void InitKeymap(Impl& s) {
 
 void BindSeat(wl_client* client, void* data, uint32_t version, uint32_t id) {
   auto& s = *(Impl*)data;
-  auto res = std::make_unique<CWlSeat>(client, version, id);
-  CWlSeat* rp = res.get();
+  CWlSeat* rp = &*s.seats.emplace(client, version, id);
   rp->setGetPointer([&s](CWlSeat* r, uint32_t id) {
-    auto ptr = std::make_unique<CWlPointer>(r->client(), r->version(), id);
-    CWlPointer* pp = ptr.get();
+    CWlPointer* pp = &*s.pointers.emplace(r->client(), r->version(), id);
     pp->setOnDestroy([&s, pp](CWlPointer*) { EraseOwned(s.pointers, pp); });
-    s.pointers.push_back(std::move(ptr));
   });
   rp->setGetKeyboard([&s](CWlSeat* r, uint32_t id) {
-    auto kbd = std::make_unique<CWlKeyboard>(r->client(), r->version(), id);
-    CWlKeyboard* kp = kbd.get();
+    CWlKeyboard* kp = &*s.keyboards.emplace(r->client(), r->version(), id);
     kp->setOnDestroy([&s, kp](CWlKeyboard*) { EraseOwned(s.keyboards, kp); });
     if (s.keymap_fd >= 0) {
       kp->sendKeymap(WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1, s.keymap_fd, s.keymap_size);
     }
     if (kp->version() >= 4) kp->sendRepeatInfo(30, 500);
-    s.keyboards.push_back(std::move(kbd));
   });
   rp->setOnDestroy([&s, rp](CWlSeat*) { EraseOwned(s.seats, rp); });
   rp->sendCapabilities(
       (wl_seat_capability)(WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_KEYBOARD));
   if (version >= 2) rp->sendName("automat");
-  s.seats.push_back(std::move(res));
 }
 
 void BindDecorationManager(wl_client* client, void* data, uint32_t version, uint32_t id) {
   auto& s = *(Impl*)data;
-  auto res = std::make_unique<CZxdgDecorationManagerV1>(client, version, id);
-  CZxdgDecorationManagerV1* rp = res.get();
+  CZxdgDecorationManagerV1* rp = &*s.decoration_managers.emplace(client, version, id);
   rp->setGetToplevelDecoration(
       [&s](CZxdgDecorationManagerV1* r, uint32_t id, wl_resource* toplevel_res) {
-        auto deco = std::make_unique<CZxdgToplevelDecorationV1>(r->client(), r->version(), id);
-        CZxdgToplevelDecorationV1* dp = deco.get();
+        CZxdgToplevelDecorationV1* dp = &*s.decorations.emplace(r->client(), r->version(), id);
         // Automat always draws the chrome; every mode request gets server-side.
         // (No xdg_surface.configure here: the initial commit handshake sends
         // the only legal pre-map configure bundle.)
@@ -653,28 +615,22 @@ void BindDecorationManager(wl_client* client, void* data, uint32_t version, uint
         dp->setUnsetMode(confirm);
         dp->sendConfigure(ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
         dp->setOnDestroy([&s, dp](CZxdgToplevelDecorationV1*) { EraseOwned(s.decorations, dp); });
-        s.decorations.push_back(std::move(deco));
       });
   rp->setOnDestroy([&s, rp](CZxdgDecorationManagerV1*) { EraseOwned(s.decoration_managers, rp); });
-  s.decoration_managers.push_back(std::move(res));
 }
 
 void BindXdgWmBase(wl_client* client, void* data, uint32_t version, uint32_t id) {
   auto& s = *(Impl*)data;
-  auto res = std::make_unique<CXdgWmBase>(client, version, id);
-  CXdgWmBase* rp = res.get();
+  CXdgWmBase* rp = &*s.wm_bases.emplace(client, version, id);
   rp->setGetXdgSurface([&s](CXdgWmBase* r, uint32_t id, wl_resource* surface) {
     NewXdgSurface(s, r->client(), r->version(), id, surface);
   });
   rp->setCreatePositioner([&s](CXdgWmBase* r, uint32_t id) {
-    auto pos = std::make_unique<CXdgPositioner>(r->client(), r->version(), id);
-    CXdgPositioner* pp = pos.get();
+    CXdgPositioner* pp = &*s.positioners.emplace(r->client(), r->version(), id);
     pp->setOnDestroy([&s, pp](CXdgPositioner*) { EraseOwned(s.positioners, pp); });
-    s.positioners.push_back(std::move(pos));
   });
   rp->setPong([](CXdgWmBase*, uint32_t) {});
   rp->setOnDestroy([&s, rp](CXdgWmBase*) { EraseOwned(s.wm_bases, rp); });
-  s.wm_bases.push_back(std::move(res));
 }
 
 void WaylandThread(Impl* s, std::stop_token stop) {
@@ -728,7 +684,7 @@ void WaylandThread(Impl* s, std::stop_token stop) {
 
 Toplevel* FindToplevel(Impl& s, void* handle) {
   for (auto& t : s.toplevels) {
-    if (t.get() == handle) return t.get();
+    if (&t == handle) return &t;
   }
   return nullptr;
 }
@@ -885,16 +841,18 @@ void Server::NotifyWindowDestroyed(void* handle) {
       itimerspec spec = {};
       spec.it_value.tv_sec = 2;
       timerfd_settime(tfd, 0, &spec, nullptr);
-      auto timer = std::make_unique<CloseTimer>();
+      CloseTimer* timer = &*impl->close_timers.emplace();
       timer->fd = tfd;
       timer->impl = impl.get();
       timer->pid = t->pid;
       timer->owner = t;
       Status st;
-      impl->epoll.Add(timer.get(), st);
-      if (!OK(st)) return;  // timer's FD closes the timerfd
-      t->close_timer = timer.get();
-      impl->close_timers.push_back(std::move(timer));
+      impl->epoll.Add(timer, st);
+      if (!OK(st)) {
+        impl->close_timers.erase(impl->close_timers.get_iterator(timer));  // closes the timerfd
+        return;
+      }
+      t->close_timer = timer;
     }
   });
 }
@@ -913,18 +871,18 @@ void Server::WatchProcess(pid_t pid, std::function<void(int)> on_exit, Status& s
   }
   // Registration must happen on the wayland thread (the epoll instance lives there).
   impl->epoll.Post([this, pidfd, pid, cb = std::move(on_exit)]() mutable {
-    auto w = std::make_unique<ProcessWatch>();
+    ProcessWatch* w = &*impl->process_watches.emplace();
     w->fd = pidfd;
     w->impl = impl.get();
     w->pid = pid;
     w->on_exit = std::move(cb);
     Status st;
-    impl->epoll.Add(w.get(), st);
+    impl->epoll.Add(w, st);
     if (!OK(st)) {
       ERROR << "Wayland: couldn't watch pid " << (int)pid << ": " << st.ToStr();
-      return;  // w's FD closes the pidfd
+      impl->process_watches.erase(impl->process_watches.get_iterator(w));  // closes the pidfd
+      return;
     }
-    impl->process_watches.push_back(std::move(w));
   });
 }
 
@@ -934,9 +892,9 @@ void Server::SendPointerEnter(WaylandWindow& w, float sx, float sy) {
   PostInput(*impl, w, [sx, sy](Impl& s, Toplevel&, wl_resource* surf) {
     wl_client* c = wl_resource_get_client(surf);
     for (auto& p : s.pointers) {
-      if (p->client() != c) continue;
-      p->sendEnterRaw(s.serial++, surf, wl_fixed_from_double(sx), wl_fixed_from_double(sy));
-      if (p->version() >= 5) p->sendFrame();
+      if (p.client() != c) continue;
+      p.sendEnterRaw(s.serial++, surf, wl_fixed_from_double(sx), wl_fixed_from_double(sy));
+      if (p.version() >= 5) p.sendFrame();
     }
   });
 }
@@ -946,9 +904,9 @@ void Server::SendPointerMotion(WaylandWindow& w, float sx, float sy) {
     wl_client* c = wl_resource_get_client(surf);
     uint32_t time = NowMs();
     for (auto& p : s.pointers) {
-      if (p->client() != c) continue;
-      p->sendMotion(time, wl_fixed_from_double(sx), wl_fixed_from_double(sy));
-      if (p->version() >= 5) p->sendFrame();
+      if (p.client() != c) continue;
+      p.sendMotion(time, wl_fixed_from_double(sx), wl_fixed_from_double(sy));
+      if (p.version() >= 5) p.sendFrame();
     }
   });
 }
@@ -958,10 +916,10 @@ void Server::SendPointerButton(WaylandWindow& w, uint32_t button, bool pressed) 
     wl_client* c = wl_resource_get_client(surf);
     uint32_t time = NowMs();
     for (auto& p : s.pointers) {
-      if (p->client() != c) continue;
-      p->sendButton(s.serial++, time, button,
-                    pressed ? WL_POINTER_BUTTON_STATE_PRESSED : WL_POINTER_BUTTON_STATE_RELEASED);
-      if (p->version() >= 5) p->sendFrame();
+      if (p.client() != c) continue;
+      p.sendButton(s.serial++, time, button,
+                   pressed ? WL_POINTER_BUTTON_STATE_PRESSED : WL_POINTER_BUTTON_STATE_RELEASED);
+      if (p.version() >= 5) p.sendFrame();
     }
   });
 }
@@ -970,9 +928,9 @@ void Server::SendPointerLeave(WaylandWindow& w) {
   PostInput(*impl, w, [](Impl& s, Toplevel&, wl_resource* surf) {
     wl_client* c = wl_resource_get_client(surf);
     for (auto& p : s.pointers) {
-      if (p->client() != c) continue;
-      p->sendLeaveRaw(s.serial++, surf);
-      if (p->version() >= 5) p->sendFrame();
+      if (p.client() != c) continue;
+      p.sendLeaveRaw(s.serial++, surf);
+      if (p.version() >= 5) p.sendFrame();
     }
   });
 }
@@ -983,9 +941,9 @@ void Server::SendKeyboardEnter(WaylandWindow& w) {
     wl_array keys;
     wl_array_init(&keys);
     for (auto& k : s.keyboards) {
-      if (k->client() != c) continue;
-      k->sendModifiers(s.serial++, 0, 0, 0, 0);
-      k->sendEnterRaw(s.serial++, surf, &keys);
+      if (k.client() != c) continue;
+      k.sendModifiers(s.serial++, 0, 0, 0, 0);
+      k.sendEnterRaw(s.serial++, surf, &keys);
     }
     wl_array_release(&keys);
   });
@@ -995,8 +953,8 @@ void Server::SendKeyboardLeave(WaylandWindow& w) {
   PostInput(*impl, w, [](Impl& s, Toplevel&, wl_resource* surf) {
     wl_client* c = wl_resource_get_client(surf);
     for (auto& k : s.keyboards) {
-      if (k->client() != c) continue;
-      k->sendLeaveRaw(s.serial++, surf);
+      if (k.client() != c) continue;
+      k.sendLeaveRaw(s.serial++, surf);
     }
   });
 }
@@ -1011,10 +969,10 @@ void Server::SendKey(WaylandWindow& w, uint32_t evdev_keycode, bool pressed, boo
                         (shift ? s.mod_shift : 0) | (super ? s.mod_super : 0);
         uint32_t time = NowMs();
         for (auto& k : s.keyboards) {
-          if (k->client() != c) continue;
-          k->sendModifiers(s.serial++, mods, 0, 0, 0);
-          k->sendKey(s.serial++, time, evdev_keycode,
-                     pressed ? WL_KEYBOARD_KEY_STATE_PRESSED : WL_KEYBOARD_KEY_STATE_RELEASED);
+          if (k.client() != c) continue;
+          k.sendModifiers(s.serial++, mods, 0, 0, 0);
+          k.sendKey(s.serial++, time, evdev_keycode,
+                    pressed ? WL_KEYBOARD_KEY_STATE_PRESSED : WL_KEYBOARD_KEY_STATE_RELEASED);
         }
       });
 }

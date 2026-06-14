@@ -5,6 +5,7 @@
 #include <list>
 
 #include "action.hpp"
+#include "colony.hpp"
 #include "math.hpp"
 #include "object.hpp"
 #include "ptr.hpp"
@@ -165,7 +166,7 @@ struct Pointer {
     void Release();
   };
 
-  Vec<std::unique_ptr<Logging>> loggings;
+  Colony<Logging> loggings;
 };
 
 struct PointerWidget : Widget {

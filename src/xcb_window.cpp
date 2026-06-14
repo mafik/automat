@@ -829,7 +829,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                   break;
                 }
                 for (auto& logging : pointer.loggings) {
-                  logging->logger.PointerLoggerButtonDown(*logging, btn);
+                  logging.logger.PointerLoggerButtonDown(logging,btn);
                 }
                 break;
               }
@@ -847,7 +847,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                   break;
                 }
                 for (auto& logging : pointer.loggings) {
-                  logging->logger.PointerLoggerButtonUp(*logging, btn);
+                  logging.logger.PointerLoggerButtonUp(logging,btn);
                 }
                 break;
               }
@@ -863,12 +863,12 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                 auto valuators = RawButtonValuators(*ev);
                 if (auto delta = valuators.GetVerticalScrollDelta(false)) {
                   for (auto& logging : pointer.loggings) {
-                    logging->logger.PointerLoggerScrollY(*logging, *delta);
+                    logging.logger.PointerLoggerScrollY(logging,*delta);
                   }
                 }
                 if (auto xy = valuators.GetRelativeXY()) {
                   for (auto& logging : pointer.loggings) {
-                    logging->logger.PointerLoggerMove(*logging, *xy);
+                    logging.logger.PointerLoggerMove(logging,*xy);
                   }
                 }
                 break;
@@ -971,11 +971,11 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
           };
           bool handled = false;
           for (auto& key_grab : root.keyboard.key_grabs) {
-            if (key_grab->key == key) {
+            if (key_grab.key == key) {
               if (opcode == XCB_KEY_PRESS) {
-                key_grab->grabber.KeyGrabberKeyDown(*key_grab);
+                key_grab.grabber.KeyGrabberKeyDown(key_grab);
               } else {
-                key_grab->grabber.KeyGrabberKeyUp(*key_grab);
+                key_grab.grabber.KeyGrabberKeyUp(key_grab);
               }
               handled = true;
               break;

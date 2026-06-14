@@ -441,23 +441,23 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           if (ev.usButtonFlags & flags) {
             for (auto& logging : mouse.loggings) {
               if (down) {
-                logging->logger.PointerLoggerButtonDown(*logging, button);
+                logging.logger.PointerLoggerButtonDown(logging, button);
               } else {
-                logging->logger.PointerLoggerButtonUp(*logging, button);
+                logging.logger.PointerLoggerButtonUp(logging, button);
               }
             }
           }
         }
         if (ev.usButtonFlags & RI_MOUSE_WHEEL) {
           for (auto& logging : mouse.loggings) {
-            logging->logger.PointerLoggerScrollY(*logging,
+            logging.logger.PointerLoggerScrollY(logging,
                                                  (float)(int16_t)ev.usButtonData / WHEEL_DELTA);
           }
         }
 
         if (ev.usButtonFlags & RI_MOUSE_HWHEEL) {
           for (auto& logging : mouse.loggings) {
-            logging->logger.PointerLoggerScrollX(*logging,
+            logging.logger.PointerLoggerScrollX(logging,
                                                  (float)(int16_t)ev.usButtonData / WHEEL_DELTA);
           }
         }
@@ -500,7 +500,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           if (ok) {
             for (auto& logging : mouse.loggings) {
               // We're logging relative mouse positions
-              logging->logger.PointerLoggerMove(*logging, pos);
+              logging.logger.PointerLoggerMove(logging, pos);
             }
           }
         }

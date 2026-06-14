@@ -13,6 +13,7 @@
 
 #include "action.hpp"
 #include "animation.hpp"
+#include "colony.hpp"
 #include "fn.hpp"
 #include "key.hpp"
 #include "math.hpp"
@@ -178,8 +179,8 @@ struct Keyboard final : Widget {
 
   std::unique_ptr<KeyboardGrab> grab;
 
-  std::vector<std::unique_ptr<KeyGrab>> key_grabs;
-  std::vector<std::unique_ptr<Keylogging>> keyloggings;
+  Colony<KeyGrab> key_grabs;
+  Colony<Keylogging> keyloggings;
   bool keyloggings_locked = false;
 
   std::unique_ptr<Action> actions[static_cast<size_t>(AnsiKey::Count)];

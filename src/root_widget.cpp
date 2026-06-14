@@ -141,7 +141,7 @@ RootWidget::~RootWidget() {
     root_widgets.erase(it);
   }
   while (!keyboard.keyloggings.empty()) {
-    keyboard.keyloggings.back()->Release();
+    keyboard.keyloggings.begin()->Release();
   }
 }
 

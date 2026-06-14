@@ -6,6 +6,7 @@
 #include <mutex>
 #include <stop_token>
 
+#include "colony.hpp"
 #include "keyboard.hpp"
 #include "math.hpp"
 #include "pointer.hpp"
@@ -60,7 +61,7 @@ struct Window {
                     Pointer::Logging** pointer_logging);
 
   // Window watching - for tracking foreground window changes.
-  Vec<std::unique_ptr<WindowWatching>> window_watchings;
+  Colony<WindowWatching> window_watchings;
 
   void BeginWindowWatching(WindowWatcher* watcher, WindowWatching** watching);
 

@@ -7,19 +7,10 @@
 namespace automat::ui {
 
 void WindowWatching::Release() {
-  auto it = window.window_watchings.begin();
-  for (; it != window.window_watchings.end(); ++it) {
-    if (it->get() == this) {
-      break;
-    }
-  }
-  if (it == window.window_watchings.end()) {
-    return;
-  }
   watcher.WindowWatcherOnRelease(*this);
-  // local variable because `this` is deleted after `window.window_watchings.erase(it)`.
+  // local variable because `this` is deleted by the erase below.
   auto& win = window;
-  win.window_watchings.erase(it);
+  win.window_watchings.erase(win.window_watchings.get_iterator(this));
   win.OnWindowWatchingChanged();
 }
 

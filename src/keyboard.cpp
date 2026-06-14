@@ -123,12 +123,12 @@ KeyboardGrab& Keyboard::RequestGrab(KeyboardGrabber& grabber) {
 
 KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctrl, bool alt,
                                   bool shift, bool windows, Fn<void(Status&)> cb) {
-  auto key_grab = std::make_unique<KeyGrab>(*this, key_grabber, key, ctrl, alt, shift, windows);
+  KeyGrab& key_grab = *key_grabs.emplace(*this, key_grabber, key, ctrl, alt, shift, windows);
 #if defined(_WIN32)
   // See https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey
   static int id_counter = 0;
   id_counter = (id_counter + 1) % 0xC000;
-  key_grab->id = id_counter;
+  key_grab.id = id_counter;
   U32 modifiers = MOD_NOREPEAT;
   if (ctrl) {
     modifiers |= MOD_CONTROL;
@@ -143,11 +143,11 @@ KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctr
     modifiers |= MOD_WIN;
   }
   U8 vk = KeyToVirtualKey(key);
-  key_grab->cb = new KeyGrab::RegistrationCallback(key_grab.get(), std::move(cb));
+  key_grab.cb = new KeyGrab::RegistrationCallback(&key_grab, std::move(cb));
 
   auto& win32_window = dynamic_cast<Win32Window&>(*root_widget.window);
   win32_window.PostToMainLoop(
-      [id = key_grab->id, modifiers, vk, cb = key_grab->cb, hwnd = win32_window.hwnd]() {
+      [id = key_grab.id, modifiers, vk, cb = key_grab.cb, hwnd = win32_window.hwnd]() {
         bool success = RegisterHotKey(hwnd, id, modifiers, vk);
         if (!success) {
           AppendErrorMessage(cb->status) = "Failed to register hotkey: " + win32::GetLastErrorStr();
@@ -193,8 +193,7 @@ KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctr
     }
   }
 #endif
-  key_grabs.emplace_back(std::move(key_grab));
-  return *key_grabs.back().get();
+  return key_grab;
 }
 
 enum class CaretAnimAction { Keep, Delete };
@@ -525,11 +524,13 @@ static void KeyloggingsGC(Keyboard& keyboard) {
     return;
   }
   // Remove all released keyloggings.
-  keyboard.keyloggings.erase(
-      std::remove_if(
-          keyboard.keyloggings.begin(), keyboard.keyloggings.end(),
-          [](const std::unique_ptr<Keylogging>& keylogging) { return keylogging->released; }),
-      keyboard.keyloggings.end());
+  for (auto it = keyboard.keyloggings.begin(); it != keyboard.keyloggings.end();) {
+    if (it->released) {
+      it = keyboard.keyloggings.erase(it);
+    } else {
+      ++it;
+    }
+  }
   if (keyboard.keyloggings.empty()) {
     keyboard.root_widget.window->RegisterInput();
   }
@@ -538,7 +539,7 @@ static void KeyloggingsGC(Keyboard& keyboard) {
 void Keyboard::LogKeyDown(Key key) {
   keyloggings_locked = true;
   for (auto& keylogging : keyloggings) {
-    keylogging->keylogger.KeyloggerKeyDown(key);
+    keylogging.keylogger.KeyloggerKeyDown(key);
   }
   keyloggings_locked = false;
   KeyloggingsGC(*this);
@@ -547,7 +548,7 @@ void Keyboard::LogKeyDown(Key key) {
 void Keyboard::LogKeyUp(Key key) {
   keyloggings_locked = true;
   for (auto& keylogging : keyloggings) {
-    keylogging->keylogger.KeyloggerKeyUp(key);
+    keylogging.keylogger.KeyloggerKeyUp(key);
   }
   keyloggings_locked = false;
   KeyloggingsGC(*this);
@@ -613,9 +614,9 @@ void OnHotKeyDown(int id) {
   if (root_widget) {
     bool handled = false;
     for (auto& key_grab : root_widget->keyboard.key_grabs) {
-      if (key_grab->id == id) {
-        key_grab->grabber.KeyGrabberKeyDown(*key_grab);
-        key_grab->grabber.KeyGrabberKeyUp(*key_grab);
+      if (key_grab.id == id) {
+        key_grab.grabber.KeyGrabberKeyDown(key_grab);
+        key_grab.grabber.KeyGrabberKeyUp(key_grab);
         handled = true;
         break;
       }
@@ -665,12 +666,7 @@ void KeyGrab::Release() {
   }
 #endif
   grabber.ReleaseKeyGrab(*this);
-  for (auto it = keyboard.key_grabs.begin(); it != keyboard.key_grabs.end(); ++it) {
-    if (it->get() == this) {
-      keyboard.key_grabs.erase(it);  // KeyGrab deletes itself here!
-      break;
-    }
-  }
+  keyboard.key_grabs.erase(keyboard.key_grabs.get_iterator(this));  // KeyGrab deletes itself here!
 }
 
 void Keylogging::Release() {
@@ -679,17 +675,8 @@ void Keylogging::Release() {
   if (keyboard.keyloggings_locked) {
     return;
   }
-  auto it = keyboard.keyloggings.begin();
-  for (; it != keyboard.keyloggings.end(); ++it) {
-    if (it->get() == this) {
-      break;
-    }
-  }
-  if (it == keyboard.keyloggings.end()) {
-    return;
-  }
   auto& window = *keyboard.root_widget.window;
-  keyboard.keyloggings.erase(it);  // After this line `this` is deleted!
+  keyboard.keyloggings.erase(keyboard.keyloggings.get_iterator(this));  // `this` is deleted here!
   window.RegisterInput();
 }
 

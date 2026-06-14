@@ -30,10 +30,10 @@ bool LevelGrabsMarker(const SkRect& band, SkPoint p, float value, float vmin, fl
                       float grip) {
   float mx = LevelValueToX(band, value, vmin, vmax);
   if (grip <= 0.f) grip = band.height() * 0.22f;
-  float knob_y = band.fTop - band.height() * 0.16f;
+  float knob_y = band.fBottom + band.height() * 0.16f;
   float knob_r = band.height() * 0.20f;
-  bool on_line = std::abs(p.fX - mx) <= grip && p.fY >= knob_y - knob_r &&
-                 p.fY <= band.fBottom + band.height() * 0.24f;
+  bool on_line = std::abs(p.fX - mx) <= grip && p.fY <= knob_y + knob_r &&
+                 p.fY >= band.fTop - band.height() * 0.24f;
   bool on_knob = std::hypot(p.fX - mx, p.fY - knob_y) <= knob_r + grip * 0.5f;
   return on_line || on_knob;
 }
@@ -48,7 +48,7 @@ void DrawLevel(SkCanvas& canvas, const SkRect& band, float value, float vmin, fl
 
   const float H = band.height();
   const float mx = LevelValueToX(band, value, vmin, vmax);
-  const float baseline = band.fBottom;
+  const float baseline = band.fTop;
   const SkColor cut_tint = disabled ? 0x14000000 : 0x22101010;
   const SkColor keep_tint = disabled ? 0x10ffffff : 0x26ffffff;
 
@@ -68,7 +68,7 @@ void DrawLevel(SkCanvas& canvas, const SkRect& band, float value, float vmin, fl
   }
 
   if (histogram && max_log_count > 1.0f) {
-    const int N = std::clamp((int)(band.width() / 3.f), 24, 160);
+    const int N = std::clamp((int)(band.width() / 0.45_mm), 24, 160);
     auto sample = [&](int i) {
       float f = (float)i / (float)N;
       int bin = std::clamp((int)std::lround(f * 255.f), 0, 255);
@@ -79,7 +79,7 @@ void DrawLevel(SkCanvas& canvas, const SkRect& band, float value, float vmin, fl
     mb.moveTo(band.fLeft, baseline);
     for (int i = 0; i <= N; ++i) {
       float x = band.fLeft + (float)i / (float)N * band.width();
-      mb.lineTo(x, baseline - sample(i));
+      mb.lineTo(x, baseline + sample(i));
     }
     mb.lineTo(band.fRight, baseline);
     mb.close();
@@ -87,8 +87,9 @@ void DrawLevel(SkCanvas& canvas, const SkRect& band, float value, float vmin, fl
     canvas.save();
     canvas.clipRRect(SkRRect::MakeRectXY(band, H * 0.10f, H * 0.10f), true);
     FillPath(canvas, mountain, disabled ? 0xff9a9a9a : 0xff6f7b80);
-    SkRect keep_half = keep_above ? SkRect::MakeLTRB(mx, band.fTop - H, band.fRight, baseline + H)
-                                  : SkRect::MakeLTRB(band.fLeft, band.fTop - H, mx, baseline + H);
+    SkRect keep_half = keep_above
+                           ? SkRect::MakeLTRB(mx, band.fTop - H, band.fRight, band.fBottom + H)
+                           : SkRect::MakeLTRB(band.fLeft, band.fTop - H, mx, band.fBottom + H);
     canvas.save();
     canvas.clipRect(keep_half, true);
     FillPath(canvas, mountain, disabled ? 0xffbdbdbd : kCyan);
@@ -99,7 +100,7 @@ void DrawLevel(SkCanvas& canvas, const SkRect& band, float value, float vmin, fl
 
   {
     SkRect ramp =
-        SkRect::MakeLTRB(band.fLeft, baseline + H * 0.10f, band.fRight, baseline + H * 0.30f);
+        SkRect::MakeLTRB(band.fLeft, baseline - H * 0.30f, band.fRight, baseline - H * 0.10f);
     const int steps = 8;
     for (int i = 0; i < steps; ++i) {
       float x0 = ramp.fLeft + ramp.width() * i / steps;
@@ -118,19 +119,19 @@ void DrawLevel(SkCanvas& canvas, const SkRect& band, float value, float vmin, fl
 
   const SkColor knob_fill = disabled ? kGray : (pressed ? kRed : kYellow);
   const float knob_r = H * 0.20f;
-  const float knob_y = band.fTop - H * 0.16f;
+  const float knob_y = band.fBottom + H * 0.16f;
   const float push = pressed ? H * 0.04f : 0.f;
   SkPath stem =
-      WobbleLine({mx, knob_y}, {mx, band.fBottom + H * 0.22f}, kWonk * 0.7f, kSeg, Hash2(seed, 11));
+      WobbleLine({mx, knob_y}, {mx, band.fTop - H * 0.22f}, kWonk * 0.7f, kSeg, Hash2(seed, 11));
   if (!disabled)
-    HandShadow(canvas, stem, {kShadowDX * 0.5f, kShadowDY * 0.5f}, kShadow, Hash2(seed, 12));
+    HandShadow(canvas, stem, {kShadowDX * 0.5f, -kShadowDY * 0.5f}, kShadow, Hash2(seed, 12));
   canvas.save();
-  canvas.translate(push, push);
+  canvas.translate(push, -push);
   SketchyStroke(canvas, stem, kInk, kStrokeBold, Hash2(seed, 13), 2);
   SkPath nib = SkPathBuilder()
-                   .moveTo(mx - H * 0.10f, band.fBottom + H * 0.10f)
-                   .lineTo(mx + H * 0.10f, band.fBottom + H * 0.10f)
-                   .lineTo(mx, band.fBottom + H * 0.30f)
+                   .moveTo(mx - H * 0.10f, band.fTop - H * 0.10f)
+                   .lineTo(mx + H * 0.10f, band.fTop - H * 0.10f)
+                   .lineTo(mx, band.fTop - H * 0.30f)
                    .close()
                    .detach();
   nib = WobblePath(nib, kWonk * 0.6f, kSeg, Hash2(seed, 14));
@@ -144,9 +145,9 @@ void DrawLevel(SkCanvas& canvas, const SkRect& band, float value, float vmin, fl
   if (show_comparator && !disabled) {
     float dir = keep_above ? 1.f : -1.f;
     SkPath beak = SkPathBuilder()
-                      .moveTo(mx + dir * knob_r * 0.5f, knob_y - knob_r * 0.5f)
+                      .moveTo(mx + dir * knob_r * 0.5f, knob_y + knob_r * 0.5f)
                       .lineTo(mx + dir * knob_r * 1.5f, knob_y)
-                      .lineTo(mx + dir * knob_r * 0.5f, knob_y + knob_r * 0.5f)
+                      .lineTo(mx + dir * knob_r * 0.5f, knob_y - knob_r * 0.5f)
                       .close()
                       .detach();
     beak = WobblePath(beak, kWonk * 0.5f, kSeg, Hash2(seed, 19));
@@ -158,18 +159,18 @@ void DrawLevel(SkCanvas& canvas, const SkRect& band, float value, float vmin, fl
   {
     char buf[16];
     snprintf(buf, sizeof(buf), "%d", (int)std::lround(value));
-    float fs = std::clamp(H * 0.34f, 10.f, 40.f);
+    float fs = std::clamp(H * 0.34f, 1.5_mm, 5.8_mm);
     float tw = TextWidth(buf, fs);
     float cw = tw + fs * 0.9f, ch = fs * 1.5f;
     float cx = std::clamp(mx, band.fLeft + cw * 0.5f, band.fRight - cw * 0.5f);
-    float cy = knob_y - knob_r - ch * 0.62f;
+    float cy = knob_y + knob_r + ch * 0.62f;
     SkRect chip = SkRect::MakeXYWH(cx - cw / 2, cy - ch / 2, cw, ch);
     SkPath cp = WonkyRoundRect(chip, ch * 0.35f, kWonk, Hash2(seed, 21));
     if (!disabled)
-      HandShadow(canvas, cp, {kShadowDX * 0.5f, kShadowDY * 0.5f}, kShadow, Hash2(seed, 22));
+      HandShadow(canvas, cp, {kShadowDX * 0.5f, -kShadowDY * 0.5f}, kShadow, Hash2(seed, 22));
     MisregFill(canvas, cp, disabled ? kGray : kYellow, Hash2(seed, 23));
     SketchyStroke(canvas, cp, kInk, kStroke, Hash2(seed, 24), 1);
-    DrawText(canvas, buf, {cx - tw / 2, cy + fs * 0.36f}, fs, kInk, false, 0);
+    DrawText(canvas, buf, {cx - tw / 2, cy - fs * 0.36f}, fs, kInk, false, 0);
   }
 
   if (disabled) HatchRect(canvas, band, kInkSoft, H * 0.16f, Hash2(seed, 30));
@@ -183,7 +184,7 @@ void DrawWindow(SkCanvas& canvas, const SkRect& band, float lo, float hi, float 
   const float H = band.height();
   const float lox = LevelValueToX(band, lo, vmin, vmax);
   const float hix = LevelValueToX(band, hi, vmin, vmax);
-  const float baseline = band.fBottom;
+  const float baseline = band.fTop;
 
   {
     SkPaint paper;
@@ -201,7 +202,7 @@ void DrawWindow(SkCanvas& canvas, const SkRect& band, float lo, float hi, float 
   }
 
   if (histogram && max_log_count > 1.0f) {
-    const int N = std::clamp((int)(band.width() / 3.f), 24, 160);
+    const int N = std::clamp((int)(band.width() / 0.45_mm), 24, 160);
     auto sample = [&](int i) {
       float f = (float)i / (float)N;
       int bin = std::clamp((int)std::lround(f * 255.f), 0, 255);
@@ -212,7 +213,7 @@ void DrawWindow(SkCanvas& canvas, const SkRect& band, float lo, float hi, float 
     mb.moveTo(band.fLeft, baseline);
     for (int i = 0; i <= N; ++i) {
       float x = band.fLeft + (float)i / (float)N * band.width();
-      mb.lineTo(x, baseline - sample(i));
+      mb.lineTo(x, baseline + sample(i));
     }
     mb.lineTo(band.fRight, baseline);
     mb.close();
@@ -221,7 +222,7 @@ void DrawWindow(SkCanvas& canvas, const SkRect& band, float lo, float hi, float 
     canvas.clipRRect(SkRRect::MakeRectXY(band, H * 0.10f, H * 0.10f), true);
     FillPath(canvas, mountain, disabled ? 0xff9a9a9a : 0xff6f7b80);
     canvas.save();
-    canvas.clipRect(SkRect::MakeLTRB(lox, band.fTop - H, hix, baseline + H), true);
+    canvas.clipRect(SkRect::MakeLTRB(lox, band.fTop - H, hix, band.fBottom + H), true);
     FillPath(canvas, mountain, disabled ? 0xffbdbdbd : kCyan);
     canvas.restore();
     SketchyStroke(canvas, mountain, kInk, kStrokeHair, Hash2(seed, 8), 1);
@@ -230,7 +231,7 @@ void DrawWindow(SkCanvas& canvas, const SkRect& band, float lo, float hi, float 
 
   {
     SkRect ramp =
-        SkRect::MakeLTRB(band.fLeft, baseline + H * 0.10f, band.fRight, baseline + H * 0.30f);
+        SkRect::MakeLTRB(band.fLeft, baseline - H * 0.30f, band.fRight, baseline - H * 0.10f);
     const int steps = 8;
     for (int i = 0; i < steps; ++i) {
       float x0 = ramp.fLeft + ramp.width() * i / steps;
@@ -253,19 +254,19 @@ void DrawWindow(SkCanvas& canvas, const SkRect& band, float lo, float hi, float 
     const bool mhover = st == State::Hover;
     const SkColor knob_fill = mdis ? kGray : (mpress ? kRed : kYellow);
     const float knob_r = H * 0.20f;
-    const float knob_y = band.fTop - H * 0.16f;
+    const float knob_y = band.fBottom + H * 0.16f;
     const float push = mpress ? H * 0.04f : 0.f;
-    SkPath stem = WobbleLine({mx, knob_y}, {mx, band.fBottom + H * 0.22f}, kWonk * 0.7f, kSeg,
-                             Hash2(mseed, 11));
+    SkPath stem =
+        WobbleLine({mx, knob_y}, {mx, band.fTop - H * 0.22f}, kWonk * 0.7f, kSeg, Hash2(mseed, 11));
     if (!mdis)
-      HandShadow(canvas, stem, {kShadowDX * 0.5f, kShadowDY * 0.5f}, kShadow, Hash2(mseed, 12));
+      HandShadow(canvas, stem, {kShadowDX * 0.5f, -kShadowDY * 0.5f}, kShadow, Hash2(mseed, 12));
     canvas.save();
-    canvas.translate(push, push);
+    canvas.translate(push, -push);
     SketchyStroke(canvas, stem, kInk, kStrokeBold, Hash2(mseed, 13), 2);
     SkPath nib = SkPathBuilder()
-                     .moveTo(mx - H * 0.10f, band.fBottom + H * 0.10f)
-                     .lineTo(mx + H * 0.10f, band.fBottom + H * 0.10f)
-                     .lineTo(mx, band.fBottom + H * 0.30f)
+                     .moveTo(mx - H * 0.10f, band.fTop - H * 0.10f)
+                     .lineTo(mx + H * 0.10f, band.fTop - H * 0.10f)
+                     .lineTo(mx, band.fTop - H * 0.30f)
                      .close()
                      .detach();
     nib = WobblePath(nib, kWonk * 0.6f, kSeg, Hash2(mseed, 14));
@@ -278,9 +279,9 @@ void DrawWindow(SkCanvas& canvas, const SkRect& band, float lo, float hi, float 
     }
     if (!mdis) {
       SkPath beak = SkPathBuilder()
-                        .moveTo(mx + beak_dir * knob_r * 0.5f, knob_y - knob_r * 0.5f)
+                        .moveTo(mx + beak_dir * knob_r * 0.5f, knob_y + knob_r * 0.5f)
                         .lineTo(mx + beak_dir * knob_r * 1.5f, knob_y)
-                        .lineTo(mx + beak_dir * knob_r * 0.5f, knob_y + knob_r * 0.5f)
+                        .lineTo(mx + beak_dir * knob_r * 0.5f, knob_y - knob_r * 0.5f)
                         .close()
                         .detach();
       beak = WobblePath(beak, kWonk * 0.5f, kSeg, Hash2(mseed, 19));
@@ -291,18 +292,18 @@ void DrawWindow(SkCanvas& canvas, const SkRect& band, float lo, float hi, float 
     {
       char buf[16];
       snprintf(buf, sizeof(buf), "%d", (int)std::lround(value));
-      float fs = std::clamp(H * 0.34f, 10.f, 40.f);
+      float fs = std::clamp(H * 0.34f, 1.5_mm, 5.8_mm);
       float tw = TextWidth(buf, fs);
       float cw = tw + fs * 0.9f, ch = fs * 1.5f;
       float cx = std::clamp(mx, band.fLeft + cw * 0.5f, band.fRight - cw * 0.5f);
-      float cy = knob_y - knob_r - ch * 0.62f;
+      float cy = knob_y + knob_r + ch * 0.62f;
       SkRect chip = SkRect::MakeXYWH(cx - cw / 2, cy - ch / 2, cw, ch);
       SkPath cp = WonkyRoundRect(chip, ch * 0.35f, kWonk, Hash2(mseed, 21));
       if (!mdis)
-        HandShadow(canvas, cp, {kShadowDX * 0.5f, kShadowDY * 0.5f}, kShadow, Hash2(mseed, 22));
+        HandShadow(canvas, cp, {kShadowDX * 0.5f, -kShadowDY * 0.5f}, kShadow, Hash2(mseed, 22));
       MisregFill(canvas, cp, mdis ? kGray : kYellow, Hash2(mseed, 23));
       SketchyStroke(canvas, cp, kInk, kStroke, Hash2(mseed, 24), 1);
-      DrawText(canvas, buf, {cx - tw / 2, cy + fs * 0.36f}, fs, kInk, false, 0);
+      DrawText(canvas, buf, {cx - tw / 2, cy - fs * 0.36f}, fs, kInk, false, 0);
     }
   };
   marker(lox, lo, state_lo, +1.f, Hash2(seed, 100));
@@ -313,7 +314,8 @@ void DrawWindow(SkCanvas& canvas, const SkRect& band, float lo, float hi, float 
 
 SkRect ConnectivityCell(const SkRect& r, int which) {
   float w = r.width() / 2.f;
-  return SkRect::MakeXYWH(r.fLeft + which * w + (which ? 3.f : 0.f), r.fTop, w - 3.f, r.height());
+  return SkRect::MakeXYWH(r.fLeft + which * w + (which ? 0.45_mm : 0.f), r.fTop, w - 0.45_mm,
+                          r.height());
 }
 int ConnectivityHit(const SkRect& r, SkPoint p) {
   if (p.fX < r.fLeft || p.fX > r.fRight || p.fY < r.fTop || p.fY > r.fBottom) return 0;
@@ -327,7 +329,7 @@ void DrawConnectivity(SkCanvas& canvas, const SkRect& r, bool eight, beta::State
     SkRect cell = ConnectivityCell(r, which);
     bool sel = ((which == 1) == eight) && !disabled;
     SkPath cp = WonkyRoundRect(cell, cell.height() * 0.18f, kWonk * 0.6f, Hash2(seed, which));
-    if (sel) HandShadow(canvas, cp, {2.f, 2.f}, kShadow, Hash2(seed, 10u + which));
+    if (sel) HandShadow(canvas, cp, {0.29_mm, -0.29_mm}, kShadow, Hash2(seed, 10u + which));
     MisregFill(canvas, cp, sel ? kPaper : kGray, Hash2(seed, 20u + which));
     SketchyStroke(canvas, cp, kInk, sel ? kStroke : kStrokeHair, Hash2(seed, 30u + which),
                   sel ? 2 : 1);
@@ -337,16 +339,16 @@ void DrawConnectivity(SkCanvas& canvas, const SkRect& r, bool eight, beta::State
     int dirs = which == 0 ? 4 : 8;
     for (int d = 0; d < dirs; ++d) {
       float ang = (float)d * (6.2831853f / dirs);
-      SkPoint e{c.fX + L * std::cos(ang), c.fY + L * std::sin(ang)};
-      canvas.drawPath(WobbleLine(c, e, 1.f, 5.f, Hash2(seed, 40u + which * 8u + d)),
+      SkPoint e{c.fX + L * std::cos(ang), c.fY - L * std::sin(ang)};
+      canvas.drawPath(WobbleLine(c, e, 0.15_mm, 0.73_mm, Hash2(seed, 40u + which * 8u + d)),
                       InkPaint(ink, sel ? kStrokeBold : kStroke));
     }
     SkPath body = WobbleEllipse(c, cell.height() * 0.09f, cell.height() * 0.09f, kWonk * 0.5f,
                                 Hash2(seed, 60u + which), 24);
     FillPath(canvas, body, ink);
     const char* num = which == 0 ? "4" : "8";
-    DrawText(canvas, num, {cell.fLeft + 4.f, cell.fBottom - 4.f}, cell.height() * 0.34f, ink, false,
-             0);
+    DrawText(canvas, num, {cell.fLeft + 0.6_mm, cell.fTop + 0.6_mm}, cell.height() * 0.34f, ink,
+             false, 0);
     if (sel) Highlight(canvas, cell, kBlue, Hash2(seed, 70));
   }
   if (disabled) HatchRect(canvas, r, kInkSoft, r.height() * 0.2f, Hash2(seed, 80));
@@ -374,7 +376,7 @@ void DrawRegion(SkCanvas& canvas, const SkRect& fit, const SkRect& mq, beta::Sta
     canvas.drawRect(SkRect::MakeLTRB(mq.fRight, mq.fTop, fit.fRight, mq.fBottom), dim);
   }
   {
-    const float dash = 9.f, gap = 6.f;
+    const float dash = 1.3_mm, gap = 0.9_mm;
     SkColor ink = active ? kRed : kInk;
     auto edge = [&](SkPoint a, SkPoint b, uint32_t eseed) {
       float len = std::hypot(b.fX - a.fX, b.fY - a.fY);
@@ -383,7 +385,7 @@ void DrawRegion(SkCanvas& canvas, const SkRect& fit, const SkRect& mq, beta::Sta
         float t0 = (i * (dash + gap)) / len, t1 = std::min(1.f, t0 + dash / len);
         SkPoint p0{a.fX + (b.fX - a.fX) * t0, a.fY + (b.fY - a.fY) * t0};
         SkPoint p1{a.fX + (b.fX - a.fX) * t1, a.fY + (b.fY - a.fY) * t1};
-        canvas.drawPath(WobbleLine(p0, p1, 1.f, 6.f, Hash2(eseed, (uint32_t)i)),
+        canvas.drawPath(WobbleLine(p0, p1, 0.15_mm, 0.9_mm, Hash2(eseed, (uint32_t)i)),
                         InkPaint(ink, kStroke));
       }
     };
@@ -395,8 +397,8 @@ void DrawRegion(SkCanvas& canvas, const SkRect& fit, const SkRect& mq, beta::Sta
   SkPoint corners[4] = {
       {mq.fLeft, mq.fTop}, {mq.fRight, mq.fTop}, {mq.fLeft, mq.fBottom}, {mq.fRight, mq.fBottom}};
   for (int i = 0; i < 4; ++i) {
-    SkRect g = SkRect::MakeXYWH(corners[i].fX - 6.f, corners[i].fY - 6.f, 12.f, 12.f);
-    SkPath gp = WonkyRoundRect(g, 2.5f, kWonk * 0.5f, Hash2(seed, 10u + i));
+    SkRect g = SkRect::MakeXYWH(corners[i].fX - 0.9_mm, corners[i].fY - 0.9_mm, 1.75_mm, 1.75_mm);
+    SkPath gp = WonkyRoundRect(g, 0.36_mm, kWonk * 0.5f, Hash2(seed, 10u + i));
     MisregFill(canvas, gp, active ? kRed : kYellow, Hash2(seed, 20u + i));
     SketchyStroke(canvas, gp, kInk, kStrokeHair, Hash2(seed, 30u + i), 1);
   }
@@ -407,7 +409,7 @@ bool TransformRingHit(SkPoint c, float radius, SkPoint p, float band) {
   return std::abs(d - radius) <= band;
 }
 float TransformRingAngleAt(SkPoint c, SkPoint p) {
-  return std::atan2(p.fX - c.fX, -(p.fY - c.fY)) * 57.29578f;
+  return std::atan2(p.fX - c.fX, p.fY - c.fY) * 57.29578f;
 }
 void DrawTransformRing(SkCanvas& canvas, SkPoint c, float radius, float angle_deg,
                        beta::State state, uint32_t seed) {
@@ -416,29 +418,30 @@ void DrawTransformRing(SkCanvas& canvas, SkPoint c, float radius, float angle_de
   const int kSegs = 36;
   for (int i = 0; i < kSegs; i += 2) {
     float a0 = (float)i / kSegs * 6.2831853f, a1 = (float)(i + 1) / kSegs * 6.2831853f;
-    SkPoint p0{c.fX + radius * std::sin(a0), c.fY - radius * std::cos(a0)};
-    SkPoint p1{c.fX + radius * std::sin(a1), c.fY - radius * std::cos(a1)};
-    canvas.drawPath(WobbleLine(p0, p1, 1.f, 7.f, Hash2(seed, (uint32_t)i)),
+    SkPoint p0{c.fX + radius * std::sin(a0), c.fY + radius * std::cos(a0)};
+    SkPoint p1{c.fX + radius * std::sin(a1), c.fY + radius * std::cos(a1)};
+    canvas.drawPath(WobbleLine(p0, p1, 0.15_mm, 1.0_mm, Hash2(seed, (uint32_t)i)),
                     InkPaint(kInkSoft, kStrokeHair));
   }
   for (int q = 0; q < 4; ++q) {
     float a = q * 1.5707963f;
-    SkPoint t0{c.fX + (radius - 5.f) * std::sin(a), c.fY - (radius - 5.f) * std::cos(a)};
-    SkPoint t1{c.fX + (radius + 5.f) * std::sin(a), c.fY - (radius + 5.f) * std::cos(a)};
-    canvas.drawPath(WobbleLine(t0, t1, 0.8f, 5.f, Hash2(seed, 50u + q)),
+    SkPoint t0{c.fX + (radius - 0.73_mm) * std::sin(a), c.fY + (radius - 0.73_mm) * std::cos(a)};
+    SkPoint t1{c.fX + (radius + 0.73_mm) * std::sin(a), c.fY + (radius + 0.73_mm) * std::cos(a)};
+    canvas.drawPath(WobbleLine(t0, t1, 0.12_mm, 0.73_mm, Hash2(seed, 50u + q)),
                     InkPaint(kInk, kStrokeHair));
   }
   float rad = angle_deg * 0.017453293f;
-  SkPoint k{c.fX + radius * std::sin(rad), c.fY - radius * std::cos(rad)};
-  canvas.drawPath(WobbleLine(c, k, 1.f, 9.f, Hash2(seed, 60)), InkPaint(kInkSoft, kStrokeHair));
-  SkPath knob = WobbleEllipse(k, 7.5f, 7.f, kWonk * 0.6f, Hash2(seed, 61), 28);
+  SkPoint k{c.fX + radius * std::sin(rad), c.fY + radius * std::cos(rad)};
+  canvas.drawPath(WobbleLine(c, k, 0.15_mm, 1.3_mm, Hash2(seed, 60)),
+                  InkPaint(kInkSoft, kStrokeHair));
+  SkPath knob = WobbleEllipse(k, 1.1_mm, 1.0_mm, kWonk * 0.6f, Hash2(seed, 61), 28);
   MisregFill(canvas, knob, active ? kRed : kYellow, Hash2(seed, 62));
   SketchyStroke(canvas, knob, kInk, kStrokeBold, Hash2(seed, 63), 2);
 }
 
 bool PolarityHit(const SkRect& r, SkPoint p) {
-  return p.fX >= r.fLeft - 4.f && p.fX <= r.fRight + 4.f && p.fY >= r.fTop - 4.f &&
-         p.fY <= r.fBottom + 4.f;
+  return p.fX >= r.fLeft - 0.6_mm && p.fX <= r.fRight + 0.6_mm && p.fY >= r.fTop - 0.6_mm &&
+         p.fY <= r.fBottom + 0.6_mm;
 }
 void DrawPolarity(SkCanvas& canvas, const SkRect& r, bool bright_hot, beta::State state,
                   uint32_t seed) {
@@ -446,9 +449,10 @@ void DrawPolarity(SkCanvas& canvas, const SkRect& r, bool bright_hot, beta::Stat
   const bool disabled = state == State::Disabled;
   float rad = r.height() / 2.f;
   SkPoint dark{r.fLeft + rad, r.centerY()}, bright{r.fRight - rad, r.centerY()};
-  canvas.drawPath(WobbleLine({dark.fX + rad * 0.6f, r.centerY()},
-                             {bright.fX - rad * 0.6f, r.centerY()}, 1.f, 6.f, Hash2(seed, 1)),
-                  InkPaint(disabled ? kInkSoft : kInk, kStroke));
+  canvas.drawPath(
+      WobbleLine({dark.fX + rad * 0.6f, r.centerY()}, {bright.fX - rad * 0.6f, r.centerY()},
+                 0.15_mm, 0.9_mm, Hash2(seed, 1)),
+      InkPaint(disabled ? kInkSoft : kInk, kStroke));
   SkPath dp = WobbleEllipse(dark, rad * 0.78f, rad * 0.74f, kWonk * 0.5f, Hash2(seed, 2), 30);
   FillPath(canvas, dp, disabled ? kGray : kInk);
   SketchyStroke(canvas, dp, kInk, kStrokeHair, Hash2(seed, 3), 1);
@@ -467,13 +471,14 @@ void DrawPolarity(SkCanvas& canvas, const SkRect& r, bool bright_hot, beta::Stat
 
 SkRect PaletteCell(const SkRect& r, int i) {
   float cw = r.width() / 5.f, ch = r.height() / 2.f;
-  return SkRect::MakeXYWH(r.fLeft + (i % 5) * cw + 1.5f, r.fTop + (i / 5) * ch + 1.5f, cw - 3.f,
-                          ch - 3.f);
+  int row = i / 5;
+  return SkRect::MakeXYWH(r.fLeft + (i % 5) * cw + 0.22_mm, r.fBottom - (row + 1) * ch + 0.22_mm,
+                          cw - 0.45_mm, ch - 0.45_mm);
 }
 int PaletteHit(const SkRect& r, SkPoint p) {
   if (p.fX < r.fLeft || p.fX > r.fRight || p.fY < r.fTop || p.fY > r.fBottom) return -1;
   int col = std::clamp((int)((p.fX - r.fLeft) / (r.width() / 5.f)), 0, 4);
-  int row = std::clamp((int)((p.fY - r.fTop) / (r.height() / 2.f)), 0, 1);
+  int row = std::clamp((int)((r.fBottom - p.fY) / (r.height() / 2.f)), 0, 1);
   return row * 5 + col;
 }
 void DrawPalette(SkCanvas& canvas, const SkRect& r, int selected, beta::State state,
@@ -482,7 +487,7 @@ void DrawPalette(SkCanvas& canvas, const SkRect& r, int selected, beta::State st
   const bool disabled = state == State::Disabled;
   for (int i = 0; i < kPaletteCount; ++i) {
     SkRect cell = PaletteCell(r, i);
-    SkPath cp = WonkyRoundRect(cell, 2.5f, kWonk * 0.4f, Hash2(seed, (uint32_t)i));
+    SkPath cp = WonkyRoundRect(cell, 0.36_mm, kWonk * 0.4f, Hash2(seed, (uint32_t)i));
     MisregFill(canvas, cp, disabled ? kGray : kPaletteColors[i], Hash2(seed, 20u + i));
     SketchyStroke(canvas, cp, kInk, i == selected ? kStroke : kStrokeHair, Hash2(seed, 40u + i),
                   i == selected ? 2 : 1);
@@ -506,12 +511,12 @@ void DrawDepthChip(SkCanvas& canvas, const SkRect& r, int depth, bool has_cmap, 
     SkPaint pb;
     pb.setAntiAlias(true);
     pb.setColor(ink);
-    canvas.drawRect(SkRect::MakeXYWH(g.fLeft, g.fTop, c, c), pb);
-    canvas.drawRect(SkRect::MakeXYWH(g.fLeft + c, g.fTop + c, c, c), pb);
+    canvas.drawRect(SkRect::MakeXYWH(g.fLeft, g.fBottom - c, c, c), pb);
+    canvas.drawRect(SkRect::MakeXYWH(g.fLeft + c, g.fTop, c, c), pb);
     SkPaint pr;
     pr.setAntiAlias(true);
     pr.setStyle(SkPaint::kStroke_Style);
-    pr.setStrokeWidth(1.2f);
+    pr.setStrokeWidth(0.17_mm);
     pr.setColor(ink);
     canvas.drawRect(g, pr);
   } else if (depth <= 8 && !has_cmap) {
@@ -526,7 +531,7 @@ void DrawDepthChip(SkCanvas& canvas, const SkRect& r, int depth, bool has_cmap, 
     SkPaint pr;
     pr.setAntiAlias(true);
     pr.setStyle(SkPaint::kStroke_Style);
-    pr.setStrokeWidth(1.2f);
+    pr.setStrokeWidth(0.17_mm);
     pr.setColor(ink);
     canvas.drawRect(g, pr);
   } else if (has_cmap) {
@@ -535,22 +540,22 @@ void DrawDepthChip(SkCanvas& canvas, const SkRect& r, int depth, bool has_cmap, 
       SkPaint ps;
       ps.setAntiAlias(true);
       ps.setColor(disabled ? kGray : cs[i]);
-      SkRect cell =
-          SkRect::MakeXYWH(g.fLeft, g.fTop + i * g.height() / 3, g.width(), g.height() / 3 - 1.f);
+      SkRect cell = SkRect::MakeXYWH(g.fLeft, g.fBottom - (i + 1) * g.height() / 3, g.width(),
+                                     g.height() / 3 - 0.15_mm);
       canvas.drawRect(cell, ps);
     }
     SkPaint pr;
     pr.setAntiAlias(true);
     pr.setStyle(SkPaint::kStroke_Style);
-    pr.setStrokeWidth(1.2f);
+    pr.setStrokeWidth(0.17_mm);
     pr.setColor(ink);
     canvas.drawRect(g, pr);
   } else {
     const SkColor cs[3] = {0xffed1c24, 0xff22b14c, 0xff3f48cc};
     float dr = g.width() * 0.30f;
-    SkPoint centers[3] = {{g.fLeft + dr, g.fTop + dr},
-                          {g.fRight - dr, g.fTop + dr * 1.4f},
-                          {g.centerX(), g.fBottom - dr}};
+    SkPoint centers[3] = {{g.fLeft + dr, g.fBottom - dr},
+                          {g.fRight - dr, g.fBottom - dr * 1.4f},
+                          {g.centerX(), g.fTop + dr}};
     for (int i = 0; i < 3; ++i) {
       SkPaint pd;
       pd.setAntiAlias(true);
@@ -561,7 +566,7 @@ void DrawDepthChip(SkCanvas& canvas, const SkRect& r, int depth, bool has_cmap, 
   char buf[8];
   snprintf(buf, sizeof(buf), "%d", depth);
   float fs = h * 0.52f;
-  DrawText(canvas, buf, {g.fRight + h * 0.18f, r.fBottom - h * 0.26f}, fs, ink, false, 0);
+  DrawText(canvas, buf, {g.fRight + h * 0.18f, r.fTop + h * 0.26f}, fs, ink, false, 0);
 }
 
 void StampGridMetrics(const SkRect& rect, int w, int h, float& cell, float& gx, float& gy) {
@@ -575,7 +580,7 @@ bool StampCellAt(const SkRect& rect, SkPoint p, int w, int h, int& cx, int& cy) 
   StampGridMetrics(rect, w, h, cell, gx, gy);
   if (p.fX < gx || p.fX > gx + cell * w || p.fY < gy || p.fY > gy + cell * h) return false;
   cx = std::clamp((int)((p.fX - gx) / cell), 0, w - 1);
-  cy = std::clamp((int)((p.fY - gy) / cell), 0, h - 1);
+  cy = std::clamp((int)((gy + cell * h - p.fY) / cell), 0, h - 1);
   return true;
 }
 
@@ -603,8 +608,9 @@ void DrawStamp(SkCanvas& canvas, const SkRect& rect, const uint8_t* cells, int w
     for (int i = 0; i < w; ++i) {
       int v = cells ? cells[j * w + i] : 0;
       uint32_t cs = Hash3(seed, (uint32_t)i, (uint32_t)j);
-      SkRect c = SkRect::MakeXYWH(gx + i * cell + cell * 0.09f, gy + j * cell + cell * 0.09f,
-                                  cell * 0.82f, cell * 0.82f);
+      SkRect c =
+          SkRect::MakeXYWH(gx + i * cell + cell * 0.09f, gy + (h - 1 - j) * cell + cell * 0.09f,
+                           cell * 0.82f, cell * 0.82f);
       SkPath cp = WonkyRoundRect(c, cell * 0.16f, kWonk * 0.5f, cs);
       if (v == 1) {
         MisregFill(canvas, cp, disabled ? kGray : kCyan, cs);
@@ -624,13 +630,13 @@ void DrawStamp(SkCanvas& canvas, const SkRect& rect, const uint8_t* cells, int w
     }
   }
   if (ox >= 0 && oy >= 0 && ox < w && oy < h) {
-    SkPoint oc = {gx + (ox + 0.5f) * cell, gy + (oy + 0.5f) * cell};
+    SkPoint oc = {gx + (ox + 0.5f) * cell, gy + (h - 1 - oy + 0.5f) * cell};
     SkPath ring = WobbleEllipse(oc, cell * 0.20f, cell * 0.20f, kWonk * 0.5f, Hash2(seed, 41), 22);
     SketchyStroke(canvas, ring, disabled ? kGrayDark : kRed, kStrokeBold, Hash2(seed, 42), 2);
   }
 }
 
-float ModeWheelAngle(int k, int n) { return -1.57079633f + k * (6.28318531f / n); }
+float ModeWheelAngle(int k, int n) { return 1.57079633f - k * (6.28318531f / n); }
 
 int ModeWheelHit(SkPoint c, float radius, SkPoint p, int n) {
   float dx = p.fX - c.fX, dy = p.fY - c.fY;
@@ -653,7 +659,7 @@ void DrawModeWheel(SkCanvas& canvas, SkPoint c, float radius, const char* const*
   using namespace beta;
   bool disabled = state == State::Disabled;
   SkPath dial = WobbleEllipse(c, radius, radius * 0.96f, kWonk, seed, 48);
-  if (!disabled) HandShadow(canvas, dial, {kShadowDX * 0.6f, kShadowDY * 0.6f}, kShadow, seed);
+  if (!disabled) HandShadow(canvas, dial, {kShadowDX * 0.6f, -kShadowDY * 0.6f}, kShadow, seed);
   MisregFill(canvas, dial, disabled ? kGray : kPaperCream, seed);
   SketchyStroke(canvas, dial, kInk, kStrokeBold, seed, 2);
   if (glyphs && selected >= 0 && selected < n && !glyphs[selected].isEmpty()) {
@@ -682,7 +688,7 @@ void DrawModeWheel(SkCanvas& canvas, SkPoint c, float radius, const char* const*
     // Labels near the bottom pole slide outward so they don't collide under the dial.
     if (std::abs(dir.fY) > 0.5f && std::abs(dir.fX) > 0.15f)
       lp.fX += (dir.fX > 0 ? 1.f : -1.f) * tw * 0.35f;
-    DrawText(canvas, labels[k], {lp.fX - tw / 2, lp.fY + fs * 0.34f}, fs,
+    DrawText(canvas, labels[k], {lp.fX - tw / 2, lp.fY - fs * 0.34f}, fs,
              disabled ? kGray : (sel ? kInk : kInkSoft), false, 0);
   }
   float sa = ModeWheelAngle(selected, n);
@@ -710,15 +716,15 @@ void DrawCurveLUT(SkCanvas& canvas, const SkRect& rect, const uint8_t* lut, beta
     canvas.drawLine(gx, rect.fTop, gx, rect.fBottom, grid);
     canvas.drawLine(rect.fLeft, gy, rect.fRight, gy, grid);
   }
-  canvas.drawLine(rect.fLeft, rect.fBottom, rect.fRight, rect.fTop,
+  canvas.drawLine(rect.fLeft, rect.fTop, rect.fRight, rect.fBottom,
                   InkPaint(disabled ? kGrayDark : kInkSoft, kStrokeHair));
   if (lut) {
-    const int N = std::clamp((int)(w / 4), 24, 128);
+    const int N = std::clamp((int)(w / 0.6_mm), 24, 128);
     SkPathBuilder cb;
     for (int k = 0; k <= N; ++k) {
       int i = std::clamp(k * 255 / N, 0, 255);
       float x = rect.fLeft + w * i / 255.f;
-      float y = rect.fBottom - h * lut[i] / 255.f;
+      float y = rect.fTop + h * lut[i] / 255.f;
       if (k == 0)
         cb.moveTo(x, y);
       else
@@ -732,7 +738,7 @@ void DrawCurveLUT(SkCanvas& canvas, const SkRect& rect, const uint8_t* lut, beta
 }
 
 float DialAngleAt(SkPoint c, SkPoint p) {
-  float a = std::atan2(p.fX - c.fX, -(p.fY - c.fY)) * 57.29578f;
+  float a = std::atan2(p.fX - c.fX, p.fY - c.fY) * 57.29578f;
   if (a < 0) a += 360.f;
   return a;
 }
@@ -742,7 +748,7 @@ void DrawDial(SkCanvas& canvas, SkPoint c, float radius, float angle_deg, beta::
   bool disabled = state == State::Disabled;
   for (int d = 0; d < 360; d += 30) {
     float rad = d * 0.0174533f;
-    SkPoint dir = {std::sin(rad), -std::cos(rad)};
+    SkPoint dir = {std::sin(rad), std::cos(rad)};
     bool major = (d % 90 == 0);
     float t0 = major ? 0.80f : 0.90f;
     canvas.drawPath(WobbleLine({c.fX + dir.fX * radius * t0, c.fY + dir.fY * radius * t0},
@@ -751,7 +757,7 @@ void DrawDial(SkCanvas& canvas, SkPoint c, float radius, float angle_deg, beta::
                     InkPaint(disabled ? kGray : kInkSoft, major ? kStroke : kStrokeHair));
   }
   float arad = angle_deg * 0.0174533f;
-  SkPoint nd = {std::sin(arad), -std::cos(arad)};
+  SkPoint nd = {std::sin(arad), std::cos(arad)};
   SkPath needle = WobbleLine(c, {c.fX + nd.fX * radius * 0.84f, c.fY + nd.fY * radius * 0.84f},
                              kWonk, kSeg, Hash2(seed, 0x91));
   if (!disabled) SketchyStroke(canvas, needle, kRed, kStrokeBold, Hash2(seed, 0x92), 2);

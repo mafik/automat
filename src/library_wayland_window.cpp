@@ -79,22 +79,10 @@ constexpr float kFrame = 0.8_mm;      // ink frame around the client pixels
 constexpr float kMinContentW = 4_cm;  // placeholder size before the first buffer
 constexpr float kMinContentH = 3_cm;
 
-constexpr float kBetaPx = 7_cm / 480.f;  // beta kit pixel, as elsewhere
-
 // Linux evdev button codes (input-event-codes.h), used by wl_pointer.button.
 constexpr uint32_t kBtnLeft = 0x110;
 constexpr uint32_t kBtnRight = 0x111;
 constexpr uint32_t kBtnMiddle = 0x112;
-
-struct BetaHere {
-  SkCanvas& canvas;
-  BetaHere(SkCanvas& c, SkPoint anchor_m) : canvas(c) {
-    c.save();
-    c.translate(anchor_m.fX, anchor_m.fY);
-    c.scale(kBetaPx, -kBetaPx);
-  }
-  ~BetaHere() { canvas.restore(); }
-};
 
 }  // namespace
 
@@ -224,24 +212,21 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
   void Draw(SkCanvas& canvas) const override {
     float w = TotalW(), h = TotalH();
     float left = -w / 2, top = h / 2;
-    // Hand-drawn chrome in beta pixels.
+    // Hand-drawn chrome, in the toy's centered space.
     {
-      BetaHere g(canvas, {left, top});
-      float w_px = w / kBetaPx;
-      float h_px = h / kBetaPx;
-      float title_px = kTitleH / kBetaPx;
       uint32_t seed = Seed(ui::beta::Hash2(0x3A11D, (uint32_t)(title_.size() + 1)));
-      SkRect body = SkRect::MakeWH(w_px, h_px);
-      SkPath base = ui::beta::WonkyRoundRect(body, 7.f, ui::beta::kWonk, seed);
-      ui::beta::HandShadow(canvas, base, {ui::beta::kShadowDX, ui::beta::kShadowDY},
+      SkRect body = SkRect::MakeLTRB(-w / 2, -h / 2, w / 2, h / 2);
+      SkPath base = ui::beta::WonkyRoundRect(body, 1.0_mm, ui::beta::kWonk, seed);
+      ui::beta::HandShadow(canvas, base, {ui::beta::kShadowDX, -ui::beta::kShadowDY},
                            ui::beta::kShadow, seed);
       ui::beta::MisregFill(canvas, base, ui::beta::kPaperCream, seed);
-      SkRect band = SkRect::MakeLTRB(0, 0, w_px, title_px);
+      // The title band sits at the visual top.
+      SkRect band = SkRect::MakeLTRB(-w / 2, h / 2 - kTitleH, w / 2, h / 2);
       canvas.save();
       canvas.clipPath(base, true);
       canvas.drawPath(
           ui::beta::WobbleRect(band, ui::beta::kWonk, ui::beta::kSeg, ui::beta::Hash2(seed, 3)),
-          ui::beta::InkPaint(ui::beta::kBlue, 1.f, true));
+          ui::beta::InkPaint(ui::beta::kBlue, 0.15_mm, true));
       SkPaint band_fill;
       band_fill.setColor(ui::beta::kBlue);
       band_fill.setAntiAlias(true);
@@ -249,18 +234,23 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
           ui::beta::WobbleRect(band, ui::beta::kWonk, ui::beta::kSeg, ui::beta::Hash2(seed, 3)),
           band_fill);
       canvas.restore();
-      ui::beta::DrawTextIn(canvas, title_.empty() ? "Wayland Window" : title_,
-                           SkRect::MakeLTRB(8, 0, w_px - 8, title_px), ui::beta::kBodySize,
-                           ui::beta::TextOn(ui::beta::kBlue), ui::beta::TextAlign::Left, true,
-                           seed);
+      ui::beta::DrawTextIn(
+          canvas, title_.empty() ? "Wayland Window" : title_,
+          SkRect::MakeLTRB(-w / 2 + 1.2_mm, h / 2 - kTitleH, w / 2 - 1.2_mm, h / 2),
+          ui::beta::kBodySize, ui::beta::TextOn(ui::beta::kBlue), ui::beta::TextAlign::Left, true,
+          seed);
       ui::beta::SketchyStroke(canvas, base, ui::beta::kInk, ui::beta::kStroke, seed, 2);
       if (client_gone_ || !image) {
-        SkRect inner = SkRect::MakeLTRB(6, title_px + 4, w_px - 6, h_px - 6);
-        ui::beta::HatchRect(canvas, inner, ui::beta::kGray, 11.f, seed);
+        // The content area below the band, hatched while there is no buffer.
+        SkRect inner = SkRect::MakeLTRB(-w / 2 + 0.9_mm, -h / 2 + 0.9_mm, w / 2 - 0.9_mm,
+                                        h / 2 - kTitleH - 0.6_mm);
+        ui::beta::HatchRect(canvas, inner, ui::beta::kGray, 1.6_mm, seed);
       }
     }
     if (image) {
-      // The client pixels, top row at the top: flip into +Y-down for drawing.
+      // The client surface is top-row-first; in this +Y-up space drawImageRect
+      // would otherwise place row 0 at the visual bottom, so flip Y to keep the
+      // top row at the visual top.
       float content_top = top - kTitleH - kFrame;
       float content_left = left + kFrame;
       canvas.save();

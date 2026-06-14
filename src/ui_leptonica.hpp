@@ -9,7 +9,7 @@
 // structuring-element grid, a mode selector — so the same control appears
 // wherever that parameter does.
 //
-// Everything draws in pixel coordinates with +Y down, inside bounds the caller
+// Everything draws in metric coordinates with +Y up, inside bounds the caller
 // passes in. The functions are stateless: the hosting widget owns the values.
 // Declarations here; bodies in ui_leptonica.cpp.
 
@@ -58,13 +58,13 @@ void DrawConnectivity(SkCanvas& canvas, const SkRect& r, bool eight, beta::State
 // displayed image's rect, `mq` the selection inside it; the area outside the
 // selection is dimmed.
 int RegionHit(const SkRect& mq, SkPoint p,
-              float grip = 10.f);  // 1..4 = TL/TR/BL/BR grip, 5 = inside, 0 = miss
+              float grip = 1.5_mm);  // 1..4 = TL/TR/BL/BR grip, 5 = inside, 0 = miss
 void DrawRegion(SkCanvas& canvas, const SkRect& fit, const SkRect& mq, beta::State state,
                 uint32_t seed);
 
 // Transform ring: an angle handle drawn around the preview — a ring with a
 // knob at `angle_deg` (0 = up, clockwise). Drag anywhere on the ring band.
-bool TransformRingHit(SkPoint c, float radius, SkPoint p, float band = 12.f);
+bool TransformRingHit(SkPoint c, float radius, SkPoint p, float band = 1.75_mm);
 float TransformRingAngleAt(SkPoint c, SkPoint p);  // degrees, 0 = up, clockwise
 void DrawTransformRing(SkCanvas& canvas, SkPoint c, float radius, float angle_deg,
                        beta::State state, uint32_t seed);
@@ -114,7 +114,7 @@ void DrawStamp(SkCanvas& canvas, const SkRect& rect, const uint8_t* cells, int w
 // Mode wheel: selects one of n labelled options arranged around a dial; every
 // option stays visible. `glyphs`, if given, is an array of n paths; the
 // selected option's glyph is drawn on the dial face. Glyph paths are authored
-// in a unit box (x in [-1.4, 1.4], y in [-0.6, 0.6], +Y down).
+// in a unit box (x in [-1.4, 1.4], y in [-0.6, 0.6], +Y up).
 float ModeWheelAngle(int k, int n);
 int ModeWheelHit(SkPoint c, float radius, SkPoint p, int n);  // nearest option, or -1 outside
 void DrawModeWheel(SkCanvas& canvas, SkPoint c, float radius, const char* const* labels, int n,

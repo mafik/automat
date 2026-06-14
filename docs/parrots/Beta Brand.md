@@ -36,8 +36,8 @@ outline. At low zoom the sticker is the sign that remains visible.
 - The irregularity is deterministic. Every wobble is seeded from a stable
   key and renders identically every frame. Changing shapes suggest activity,
   and that suggestion is reserved for actual state changes.
-- Every irregularity parameter is bounded — wobble of a few pixels, fill
-  offset of a few pixels, glyph rotation of a few degrees. Within these
+- Every irregularity parameter is bounded — wobble and fill offset of a
+  fraction of a millimetre, glyph rotation of a few degrees. Within these
   bounds the style looks cheap; beyond them it looks like broken software.
 - Anything a person must read or click stays unambiguous and correctly
   sized. When something has to degrade, it is always the decoration.

@@ -8,7 +8,7 @@
 // with a slight wobble, flat fills that can miss the outline, hard offset
 // shadows and a hand-printed font.
 //
-// All functions draw in pixel coordinates with +Y pointing down. Shape
+// All functions draw in metric coordinates with +Y pointing up. Shape
 // randomness comes only from the `seed` parameters: the same seed always
 // produces the same shape, so nothing shimmers between frames. Derive seeds
 // from stable keys (an object id, a quantized position).
@@ -53,21 +53,23 @@ constexpr SkColor kGrayDark = 0xff7f7f7f;
 constexpr SkColor kShadow = 0x4d000000;
 
 // ------------------------------------------------------------------- tokens --
-constexpr float kStroke = 3.0f;
-constexpr float kStrokeBold = 5.0f;
-constexpr float kStrokeHair = 1.5f;
-constexpr float kWonk = 2.2f;  // max outline deviation, px
-constexpr float kSeg = 11.0f;  // spacing between wobble control points, px
-constexpr float kCornerR = 8.0f;
-constexpr float kShadowDX = 4.0f;
-constexpr float kShadowDY = 4.0f;
-constexpr float kPadS = 4.0f;
-constexpr float kPadM = 8.0f;
-constexpr float kPadL = 14.0f;
-constexpr float kMinTouch = 24.0f;
-constexpr float kTitleSize = 20.0f;
-constexpr float kBodySize = 15.0f;
-constexpr float kMicroSize = 12.0f;
+constexpr float kStroke = 0.45_mm;
+constexpr float kStrokeBold = 0.75_mm;
+constexpr float kStrokeHair = 0.22_mm;
+constexpr float kWonk = 0.32_mm;  // max outline deviation
+constexpr float kSeg = 1.6_mm;    // spacing between wobble control points
+constexpr float kCornerR = 1.2_mm;
+constexpr float kShadowDX = 0.6_mm;
+constexpr float kShadowDY = 0.6_mm;
+constexpr float kPadS = 0.6_mm;
+constexpr float kPadM = 1.2_mm;
+constexpr float kPadL = 2.0_mm;
+constexpr float kMinTouch = 3.5_mm;
+constexpr float kTitleSize = 2.9_mm;
+constexpr float kBodySize = 2.2_mm;
+constexpr float kMicroSize = 1.75_mm;
+// Position quantum for shape seeds, so sub-grid motion doesn't reshuffle wobble.
+constexpr float kSeedGrid = 0.15_mm;
 
 // -------------------------------------------------------------------- noise --
 inline uint32_t Hash(uint32_t x) {
@@ -107,9 +109,11 @@ struct Rng {
   float f11() { return U11(next()); }
 };
 
-// Coordinates are rounded so sub-pixel motion doesn't change the seed.
+// Coordinates are quantized to the beta grid so sub-grid motion doesn't change
+// the seed.
 inline uint32_t SeedFromPos(float x, float y, uint32_t id = 0) {
-  return Hash3((uint32_t)std::lround(x), (uint32_t)std::lround(y), id * 2654435761u + 1u);
+  return Hash3((uint32_t)std::lround(x / kSeedGrid), (uint32_t)std::lround(y / kSeedGrid),
+               id * 2654435761u + 1u);
 }
 
 // ----------------------------------------------------------- state & style --

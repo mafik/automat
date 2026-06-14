@@ -274,43 +274,28 @@ static bool ResolvesOnPath(const Str& prog) {
 
 namespace {
 
-constexpr float kPx = 7_cm / 480.f;  // one beta pixel, in meters
+constexpr float kPlateW = 7_cm;
+// The title band matches what Panel draws internally for the same tokens.
+constexpr float kBand = ui::beta::kTitleSize + 2 * ui::beta::kPadS + 0.45_mm;
+constexpr float kCreditRow = 2.0_mm;
+constexpr float kFieldH = 9.0_mm;
+constexpr float kCaptionRow = 2.3_mm;
+constexpr float kRowGap = 0.9_mm;
+constexpr float kStatusRow = 5.0_mm;
+constexpr float kBottomPad = 1.5_mm;
+constexpr float kSide = 2.0_mm;
+constexpr float kPlateH =
+    kBand + kCreditRow + kFieldH + kCaptionRow + kRowGap + kStatusRow + kBottomPad;
 
-constexpr float kPlateWPx = 480.f;
-constexpr float kBandPx = ui::beta::kTitleSize + 2 * ui::beta::kPadS + 3;  // Panel's title band
-constexpr float kCreditRowPx = 14.f;
-constexpr float kFieldHPx = 62.f;
-constexpr float kCaptionRowPx = 16.f;
-constexpr float kRowGapPx = 6.f;
-constexpr float kStatusRowPx = 34.f;
-constexpr float kBottomPadPx = 10.f;
-constexpr float kSidePx = 14.f;
-constexpr float kPlateHPx =
-    kBandPx + kCreditRowPx + kFieldHPx + kCaptionRowPx + kRowGapPx + kStatusRowPx + kBottomPadPx;
+constexpr float kTileText = 3.5_mm;
+constexpr float kTilePad = 1.5_mm;     // horizontal padding inside a tile
+constexpr float kTileGap = 1.3_mm;     // visual width of the gap between tiles
+constexpr float kEmptyTile = 1.31_cm;  // the empty program slot
 
-constexpr float kPlateW = kPlateWPx * kPx;
-constexpr float kPlateH = kPlateHPx * kPx;
-
-constexpr float kTileTextPx = 24.f;
-constexpr float kTilePadPx = 10.f;    // horizontal padding inside a tile
-constexpr float kTileGapPx = 9.f;     // visual width of the gap between tiles
-constexpr float kEmptyTilePx = 90.f;  // the empty program slot
-
-constexpr float kBaselinePx = kFieldHPx * 0.5f + kTileTextPx * 0.36f;  // within the field, +Y down
+// Text baseline within the field, measured up from the field's bottom edge.
+constexpr float kBaseline = kFieldH - 5.8_mm;
 
 constexpr uint32_t kSeed = 0xC3D;
-
-// The beta kit draws in pixels with +Y down; widget canvases are metric with
-// +Y up. Anchor at a metric point, then draw in raw beta pixels.
-struct BetaHere {
-  SkCanvas& canvas;
-  BetaHere(SkCanvas& c, SkPoint anchor_m) : canvas(c) {
-    c.save();
-    c.translate(anchor_m.fX, anchor_m.fY);
-    c.scale(kPx, -kPx);
-  }
-  ~BetaHere() { canvas.restore(); }
-};
 
 // Caret coordinates are flat byte offsets into the canonical join of argv
 // with single separators: position i sits before byte i. One separator byte
@@ -368,23 +353,23 @@ Str StripControl(StrView text) {
   return out;
 }
 
-// Pixel positions for every caret index, plus one tile span per argv element.
+// Positions for every caret index, plus one tile span per argv element.
 struct ArgvLayout {
   struct Tile {
     int tile;        // index into argv
     int flat_begin;  // caret index of the element's first byte
-    float x0, x1;    // tile span, px
+    float x0, x1;    // tile span
   };
   Vec<Tile> tiles;
-  Vec<float> char_x;  // caret x for flat index 0..JoinLength, px
-  float total = kEmptyTilePx;
+  Vec<float> char_x;  // caret x for flat index 0..JoinLength
+  float total = kEmptyTile;
 };
 
 ArgvLayout LayoutArgv(const Vec<Str>& argv) {
   ArgvLayout l;
   l.char_x.resize(JoinLength(argv) + 1);
   if (argv.empty()) {
-    l.char_x[0] = kTilePadPx;
+    l.char_x[0] = kTilePad;
     return l;
   }
   float x = 0;
@@ -393,24 +378,24 @@ ArgvLayout LayoutArgv(const Vec<Str>& argv) {
     if (t) {
       // The caret position before the separator was already placed at the end
       // of the previous tile; the gap itself holds no caret position.
-      x += kTileGapPx;
+      x += kTileGap;
       flat += 1;
     }
     const Str& word = argv[t];
-    float glyph_base = x + kTilePadPx;
+    float glyph_base = x + kTilePad;
     float prev = 0;
     for (int k = 0; k < (int)word.size(); ++k) {
       if ((word[k] & 0xC0) == 0x80) {  // UTF-8 continuation byte: same caret slot
         l.char_x[flat + k] = glyph_base + prev;
         continue;
       }
-      prev = ui::beta::TextWidth(StrView(word).substr(0, k), kTileTextPx);
+      prev = ui::beta::TextWidth(StrView(word).substr(0, k), kTileText);
       l.char_x[flat + k] = glyph_base + prev;
     }
-    float w = ui::beta::TextWidth(word, kTileTextPx);
+    float w = ui::beta::TextWidth(word, kTileText);
     l.char_x[flat + (int)word.size()] = glyph_base + w;
-    float x1 = x + w + 2 * kTilePadPx;
-    if (word.empty()) x1 += 10.f;  // a small tile, forming
+    float x1 = x + w + 2 * kTilePad;
+    if (word.empty()) x1 += 1.5_mm;  // a small tile, forming
     l.tiles.push_back({t, flat, x, x1});
     x = x1;
     flat += (int)word.size();
@@ -456,7 +441,7 @@ struct CommandToy : ui::beta::ObjectToy {
   int wait_status_ = 0;
   float spinner_phase_ = 0;
   float field_scale_ = 1;
-  float first_tile_x1_px_ = kEmptyTilePx;
+  float first_tile_x1_ = kEmptyTile;
   bool has_args_ = false;
   Str resolve_query_;
   bool resolve_answer_ = false;
@@ -508,13 +493,13 @@ struct CommandToy : ui::beta::ObjectToy {
 
     ArgvLayout l = LayoutArgv(argv_);
     has_args_ = argv_.size() > 1;
-    first_tile_x1_px_ = l.tiles.empty() ? kEmptyTilePx : l.tiles[0].x1;
-    float natural = std::max(l.total, kEmptyTilePx);
-    float avail = kPlateWPx - 2 * kSidePx;
+    first_tile_x1_ = l.tiles.empty() ? kEmptyTile : l.tiles[0].x1;
+    float natural = std::max(l.total, kEmptyTile);
+    float avail = kPlateW - 2 * kSide;
     field_scale_ = std::min(1.f, avail / natural);
 
-    float left = -kPlateW / 2 + kSidePx * kPx;
-    float field_bottom = kPlateH / 2 - (kBandPx + kCreditRowPx + kFieldHPx) * kPx;
+    float left = -kPlateW / 2 + kSide;
+    float field_bottom = kPlateH / 2 - (kBand + kCreditRow + kFieldH);
     field->local_to_parent =
         SkM44::Translate(left, field_bottom) * SkM44::Scale(field_scale_, field_scale_, 1);
 
@@ -554,68 +539,65 @@ struct CommandToy : ui::beta::ObjectToy {
   }
 
   void Draw(SkCanvas& canvas) const override {
+    ui::beta::Panel(canvas, Rect::MakeCenterZero(kPlateW, kPlateH), "Command", ui::beta::kBlue,
+                    ui::beta::State::Default, Seed(kSeed), true);
+
     {
-      BetaHere g(canvas, {-kPlateW / 2, kPlateH / 2});
-      SkRect plate = SkRect::MakeWH(kPlateWPx, kPlateHPx);
-      ui::beta::Panel(canvas, plate, "Command", ui::beta::kBlue, ui::beta::State::Default,
-                      Seed(kSeed), true);
+      StrView credit = "posix_spawnp()";
+      float w = ui::beta::TextWidth(credit, ui::beta::kMicroSize);
+      ui::beta::DrawText(canvas, credit, {kPlateW / 2 - kSide - w, kPlateH / 2 - kBand - 1.6_mm},
+                         ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
+    }
 
-      {
-        StrView credit = "posix_spawnp()";
-        float w = ui::beta::TextWidth(credit, ui::beta::kMicroSize);
-        ui::beta::DrawText(canvas, credit, {kPlateWPx - kSidePx - w, kBandPx + 11.f},
-                           ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
-      }
-
-      {
-        float cap_y = kBandPx + kCreditRowPx + kFieldHPx + 11.f;
-        ui::beta::DrawText(canvas, "program", {kSidePx + 4.f, cap_y}, ui::beta::kMicroSize,
+    {
+      float cap_y = kPlateH / 2 - (kBand + kCreditRow + kFieldH + 1.6_mm);
+      ui::beta::DrawText(canvas, "program", {-kPlateW / 2 + kSide + 0.6_mm, cap_y},
+                         ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
+      if (has_args_) {
+        float ax = -kPlateW / 2 + kSide + (first_tile_x1_ + kTileGap) * field_scale_;
+        ui::beta::DrawText(canvas, "arguments...", {ax, cap_y}, ui::beta::kMicroSize,
                            ui::beta::kInkSoft, false, Seed(kSeed));
-        if (has_args_) {
-          float ax = kSidePx + (first_tile_x1_px_ + kTileGapPx) * field_scale_;
-          ui::beta::DrawText(canvas, "arguments...", {ax, cap_y}, ui::beta::kMicroSize,
-                             ui::beta::kInkSoft, false, Seed(kSeed));
-        }
       }
+    }
 
-      // Status corner, lower-left: pid while alive, exit chip afterwards.
-      // (The run disc sits at the lower center, so the row splits naturally:
-      // readouts left of it, the right side free for future affordances.)
-      float row_mid = kPlateHPx - kBottomPadPx - kStatusRowPx * 0.5f;
-      if (running_) {
-        ui::beta::Spinner(canvas, {kSidePx + 12.f, row_mid}, 11.f, spinner_phase_,
-                          Seed(Hash2(kSeed, 0x59)));
-        ui::beta::DrawText(canvas, f("pid {}", pid_), {kSidePx + 32.f, row_mid + 5.f},
-                           ui::beta::kMicroSize + 2, ui::beta::kInk, false, Seed(kSeed));
-      } else if (ever_ran_) {
-        Str label;
-        SkColor color;
+    // Status corner, lower-left: pid while alive, exit chip afterwards.
+    // (The run disc sits at the lower center, so the row splits naturally:
+    // readouts left of it, the right side free for future affordances.)
+    float row_mid = -kPlateH / 2 + kBottomPad + kStatusRow * 0.5f;
+    if (running_) {
+      ui::beta::Spinner(canvas, {-kPlateW / 2 + kSide + 1.75_mm, row_mid}, 1.6_mm, spinner_phase_,
+                        Seed(Hash2(kSeed, 0x59)));
+      ui::beta::DrawText(canvas, f("pid {}", pid_),
+                         {-kPlateW / 2 + kSide + 4.7_mm, row_mid - 0.7_mm},
+                         ui::beta::kMicroSize + 0.3_mm, ui::beta::kInk, false, Seed(kSeed));
+    } else if (ever_ran_) {
+      Str label;
+      SkColor color;
 #if !defined(_WIN32)
-        if (WIFEXITED(wait_status_)) {
-          int code = WEXITSTATUS(wait_status_);
-          label = f("exit {}", code);
-          color = code == 0 ? ui::beta::kGreen : ui::beta::kRed;
-        } else if (WIFSIGNALED(wait_status_)) {
-          int sig = WTERMSIG(wait_status_);
-          const char* abbr = sigabbrev_np(sig);
-          label = abbr ? f("SIG{}", abbr) : f("signal {}", sig);
-          color = ui::beta::kRed;
-        } else
+      if (WIFEXITED(wait_status_)) {
+        int code = WEXITSTATUS(wait_status_);
+        label = f("exit {}", code);
+        color = code == 0 ? ui::beta::kGreen : ui::beta::kRed;
+      } else if (WIFSIGNALED(wait_status_)) {
+        int sig = WTERMSIG(wait_status_);
+        const char* abbr = sigabbrev_np(sig);
+        label = abbr ? f("SIG{}", abbr) : f("signal {}", sig);
+        color = ui::beta::kRed;
+      } else
 #endif
-        {
-          label = "done";
-          color = ui::beta::kGreen;
-        }
-        float w = ui::beta::TextWidth(label, ui::beta::kMicroSize + 2) + 18.f;
-        SkRect chip = SkRect::MakeXYWH(kSidePx, row_mid - 11.f, w, 22.f);
-        uint32_t cs = Seed(Hash2(kSeed, 0xC1));
-        SkPath path = ui::beta::WonkyRoundRect(chip, 8.f, ui::beta::kWonk * 0.8f, cs);
-        ui::beta::HandShadow(canvas, path, {2.f, 2.f}, ui::beta::kShadow, cs);
-        ui::beta::MisregFill(canvas, path, color, cs);
-        ui::beta::SketchyStroke(canvas, path, ui::beta::kInk, ui::beta::kStroke * 0.8f, cs, 1);
-        ui::beta::DrawTextIn(canvas, label, chip, ui::beta::kMicroSize + 2, ui::beta::TextOn(color),
-                             ui::beta::TextAlign::Center, false, cs);
+      {
+        label = "done";
+        color = ui::beta::kGreen;
       }
+      float w = ui::beta::TextWidth(label, ui::beta::kMicroSize + 0.3_mm) + 2.6_mm;
+      SkRect chip = SkRect::MakeXYWH(-kPlateW / 2 + kSide, row_mid - 1.6_mm, w, 3.2_mm);
+      uint32_t cs = Seed(Hash2(kSeed, 0xC1));
+      SkPath path = ui::beta::WonkyRoundRect(chip, 1.2_mm, ui::beta::kWonk * 0.8f, cs);
+      ui::beta::HandShadow(canvas, path, {0.3_mm, -0.3_mm}, ui::beta::kShadow, cs);
+      ui::beta::MisregFill(canvas, path, color, cs);
+      ui::beta::SketchyStroke(canvas, path, ui::beta::kInk, ui::beta::kStroke * 0.8f, cs, 1);
+      ui::beta::DrawTextIn(canvas, label, chip, ui::beta::kMicroSize + 0.3_mm,
+                           ui::beta::TextOn(color), ui::beta::TextAlign::Center, false, cs);
     }
     DrawChildren(canvas);
   }
@@ -634,8 +616,8 @@ Vec<Str> ArgvField::Snapshot() const {
 }
 
 SkPath ArgvField::Shape() const {
-  float w = std::max(LayoutArgv(Snapshot()).total, kEmptyTilePx);
-  return SkPath::Rect(SkRect::MakeWH(w * kPx, kFieldHPx * kPx));
+  float w = std::max(LayoutArgv(Snapshot()).total, kEmptyTile);
+  return SkPath::Rect(SkRect::MakeWH(w, kFieldH));
 }
 
 void ArgvField::TextVisit(const ui::TextVisitor& visitor) {
@@ -652,14 +634,13 @@ void ArgvField::TextVisit(const ui::TextVisitor& visitor) {
 int ArgvField::IndexFromPosition(float x) const {
   Vec<Str> argv = Snapshot();
   ArgvLayout l = LayoutArgv(argv);
-  float px = x / kPx;
   int join_len = (int)JoinLength(argv);
   int best = 0;
   float best_d = 1e9f;
   for (int i = 0; i <= join_len; ++i) {
     auto [t, off] = ResolveFlat(argv, i);
     if (off < (int)argv[t].size() && (argv[t][off] & 0xC0) == 0x80) continue;  // mid-codepoint
-    float d = fabsf(l.char_x[i] - px);
+    float d = fabsf(l.char_x[i] - x);
     if (d < best_d) {
       best_d = d;
       best = i;
@@ -672,7 +653,7 @@ Vec2 ArgvField::PositionFromIndex(int index) const {
   Vec<Str> argv = Snapshot();
   ArgvLayout l = LayoutArgv(argv);
   index = std::clamp(index, 0, (int)JoinLength(argv));
-  return Vec2(l.char_x[index] * kPx, (kFieldHPx - kBaselinePx) * kPx);
+  return Vec2(l.char_x[index], kBaseline);
 }
 
 void ArgvField::KeyDown(ui::Caret& caret, ui::Key k) {
@@ -781,12 +762,11 @@ void ArgvField::KeyDown(ui::Caret& caret, ui::Key k) {
 void ArgvField::Draw(SkCanvas& canvas) const {
   Vec<Str> argv = Snapshot();
   ArgvLayout l = LayoutArgv(argv);
-  BetaHere g(canvas, {0, kFieldHPx * kPx});
 
   if (l.tiles.empty()) {  // the empty program slot, waiting for a name
-    SkRect r = SkRect::MakeLTRB(0, 6, kEmptyTilePx, kFieldHPx - 6);
+    SkRect r = SkRect::MakeLTRB(0, 0.9_mm, kEmptyTile, kFieldH - 0.9_mm);
     uint32_t s = toy.Seed(Hash2(kSeed, 1));
-    SkPath outline = ui::beta::WonkyRoundRect(r, 7.f, ui::beta::kWonk, s);
+    SkPath outline = ui::beta::WonkyRoundRect(r, 1.0_mm, ui::beta::kWonk, s);
     ui::beta::MisregFill(canvas, outline, ui::beta::kPaper, s);
     ui::beta::SketchyStroke(canvas, outline, ui::beta::kInkSoft, ui::beta::kStroke, s, 1);
     return;
@@ -795,16 +775,17 @@ void ArgvField::Draw(SkCanvas& canvas) const {
   for (auto& tile : l.tiles) {
     bool first = tile.tile == 0;
     const Str& word = argv[tile.tile];
-    float inset = first ? 3.f : 7.f;  // the program tile stands taller than the args
-    SkRect r = SkRect::MakeLTRB(tile.x0, inset, tile.x1, kFieldHPx - inset);
+    // The program tile stands taller than the args (smaller inset).
+    float inset = first ? 0.45_mm : 1.0_mm;
+    SkRect r = SkRect::MakeLTRB(tile.x0, inset, tile.x1, kFieldH - inset);
     uint32_t s = toy.Seed(Hash2(kSeed, (uint32_t)tile.tile + 2));
-    SkPath outline = ui::beta::WonkyRoundRect(r, 7.f, ui::beta::kWonk, s);
+    SkPath outline = ui::beta::WonkyRoundRect(r, 1.0_mm, ui::beta::kWonk, s);
     bool bad = first && !toy.program_resolves_;
     ui::beta::MisregFill(canvas, outline, ui::beta::kPaper, s);
     ui::beta::SketchyStroke(canvas, outline, bad ? ui::beta::kRed : ui::beta::kInk,
                             first ? ui::beta::kStrokeBold : ui::beta::kStroke, s, first ? 2 : 1);
-    ui::beta::DrawText(canvas, word, {tile.x0 + kTilePadPx, kBaselinePx}, kTileTextPx,
-                       ui::beta::kInk, false, s);
+    ui::beta::DrawText(canvas, word, {tile.x0 + kTilePad, kBaseline}, kTileText, ui::beta::kInk,
+                       false, s);
     // A literal space inside the element: content stays ink, structure gets a
     // gray midline dot so the invisible byte is visibly NOT a tile boundary.
     for (int k = 0; k < (int)word.size(); ++k) {
@@ -813,12 +794,13 @@ void ArgvField::Draw(SkCanvas& canvas) const {
       SkPaint dot;
       dot.setColor(ui::beta::kGrayDark);
       dot.setAntiAlias(true);
-      canvas.drawCircle(cx, kBaselinePx - kTileTextPx * 0.28f, 2.2f, dot);
+      canvas.drawCircle(cx, kBaseline + kTileText * 0.28f, 0.32_mm, dot);
     }
     if (bad) {  // not found on PATH: the brand error squiggle
-      canvas.drawPath(ui::beta::WobbleLine({tile.x0 + kTilePadPx, kBaselinePx + 7.f},
-                                           {tile.x1 - kTilePadPx, kBaselinePx + 7.f}, 3.f, 5.f, s),
-                      ui::beta::InkPaint(ui::beta::kRed, ui::beta::kStrokeHair));
+      canvas.drawPath(
+          ui::beta::WobbleLine({tile.x0 + kTilePad, kBaseline - 1.0_mm},
+                               {tile.x1 - kTilePad, kBaseline - 1.0_mm}, 0.45_mm, 0.7_mm, s),
+          ui::beta::InkPaint(ui::beta::kRed, ui::beta::kStrokeHair));
     }
   }
 }

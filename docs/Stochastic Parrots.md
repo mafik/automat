@@ -146,6 +146,7 @@ All references to previous versions (e.g. v1, "old design", "before the rewrite"
 ### Code Style
 
 - **Pragmatic types**: What matters is design intent, memory layout, division of responsibilities, and arrangement of computation in time (static vs runtime, flow of control). Types are tools that make these readable — not a formal sport. Prefer simple constructors taking concrete types over template/concept gymnastics. Avoid SFINAE, requires-clauses, and type traits unless they solve a real problem — not a hypothetical one.
+- **Coordinates, units, and geometry types**: Automat works in metric coordinates (metres) with the Y axis pointing up — not pixels, and not Skia's Y-down. Prefer Automat's wrapper types over raw Skia types in signatures and locals: `Rect` (`math.hpp`) instead of `SkRect` — its `top`/`bottom` are Y-up, `top` being the larger Y — and `Vec2` instead of `SkPoint`/`SkVector`. Both convert to and from the Skia types implicitly, so they pass straight into Skia at the boundary. Write lengths as `_mm`/`_cm` literals (`units.hpp`), never bare floats; bare floats are only for ratios, counts and alphas. Write angles and directions with `SinCos` plus `_deg`/`_rad` literals and `Vec2::Polar` (`sincos.hpp`, `math.hpp`), not raw `std::sin`/`std::cos` or magic multiples of pi. `SkColor` is the codebase's color type (`color.hpp`) and is kept.
 - Modern C++ (C++26) with custom extensions
 - Uses custom smart pointers (`Ptr<T>`, `WeakPtr<T>`, `NestedPtr<T>`) and containers (`Vec<T>`)
 - Files use `#pragma maf` directives for build system integration

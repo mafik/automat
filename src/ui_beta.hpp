@@ -126,16 +126,16 @@ SkColor TextOn(SkColor bg);
 SkPaint InkPaint(SkColor color = kInk, float width = kStroke, bool antialias = true);
 
 // Endpoints are preserved; deviation tapers to zero at the ends of open contours.
-SkPath WobbleLine(SkPoint a, SkPoint b, float amp, float seg, uint32_t seed);
-SkPath WobbleRect(const SkRect& r, float amp, float seg, uint32_t seed);
-SkPath WobbleEllipse(SkPoint center, float rx, float ry, float amp, uint32_t seed,
+SkPath WobbleLine(Vec2 a, Vec2 b, float amp, float seg, uint32_t seed);
+SkPath WobbleRect(const Rect& r, float amp, float seg, uint32_t seed);
+SkPath WobbleEllipse(Vec2 center, float rx, float ry, float amp, uint32_t seed,
                      int samples = 48);
 SkPath WobblePath(const SkPath& src, float amp, float seg, uint32_t seed);
 
-SkPath WonkyRoundRect(const SkRect& r, float baseRadius, float wobAmp, uint32_t seed);
+SkPath WonkyRoundRect(const Rect& r, float baseRadius, float wobAmp, uint32_t seed);
 
 // Offset silhouette copy of `shape`, not a blur.
-void HandShadow(SkCanvas& canvas, const SkPath& shape, SkVector offset, SkColor shadow = kShadow,
+void HandShadow(SkCanvas& canvas, const SkPath& shape, Vec2 offset, SkColor shadow = kShadow,
                 uint32_t seed = 0);
 
 void FillPath(SkCanvas& canvas, const SkPath& path, SkColor color);
@@ -148,95 +148,95 @@ void SketchyStroke(SkCanvas& canvas, const SkPath& outline, SkColor color = kInk
 
 void ScribbleFill(SkCanvas& canvas, const SkPath& shape, SkColor color, float strokeW,
                   float spacing, uint32_t seed);
-void SprayDisc(SkCanvas& canvas, SkPoint center, float radius, int count, SkColor color, float dotR,
+void SprayDisc(SkCanvas& canvas, Vec2 center, float radius, int count, SkColor color, float dotR,
                uint32_t seed);
 
-void HatchRect(SkCanvas& canvas, const SkRect& r, SkColor color, float spacing, uint32_t seed);
+void HatchRect(SkCanvas& canvas, const Rect& r, SkColor color, float spacing, uint32_t seed);
 
 // --------------------------------------------------------------- lettering --
 // `wonk` adds per-glyph baseline bob and rotation; keep it false for numeric
 // readouts.
 enum class TextAlign { Left, Center, Right };
 float TextWidth(std::string_view text, float size);
-void DrawText(SkCanvas& canvas, std::string_view text, SkPoint baseline_left, float size,
+void DrawText(SkCanvas& canvas, std::string_view text, Vec2 baseline_left, float size,
               SkColor color = kInk, bool wonk = false, uint32_t seed = 0);
-void DrawTextIn(SkCanvas& canvas, std::string_view text, const SkRect& box, float size,
+void DrawTextIn(SkCanvas& canvas, std::string_view text, const Rect& box, float size,
                 SkColor color = kInk, TextAlign align = TextAlign::Center, bool wonk = false,
                 uint32_t seed = 0);
 
 // ----------------------------------------------------------------- motifs ---
-SkPath StarPath(SkPoint c, float r_outer, float r_inner, uint32_t seed, int points = 5);
-SkPath SunPath(SkPoint c, float core_r, float ray_len, int rays, uint32_t seed);
-SkPath SparklePath(SkPoint c, float r_outer, uint32_t seed);
-SkPath ArrowPath(SkPoint from, SkPoint to, float head_len, float head_half, uint32_t seed);
-SkPath BurstPath(SkPoint c, float r_outer, float r_inner, int points, uint32_t seed);
+SkPath StarPath(Vec2 c, float r_outer, float r_inner, uint32_t seed, int points = 5);
+SkPath SunPath(Vec2 c, float core_r, float ray_len, int rays, uint32_t seed);
+SkPath SparklePath(Vec2 c, float r_outer, uint32_t seed);
+SkPath ArrowPath(Vec2 from, Vec2 to, float head_len, float head_half, uint32_t seed);
+SkPath BurstPath(Vec2 c, float r_outer, float r_inner, int points, uint32_t seed);
 
-void DrawStar(SkCanvas& canvas, SkPoint c, float r, SkColor fill, uint32_t seed);
-void DrawSun(SkCanvas& canvas, SkPoint c, float core_r, float ray_len, SkColor fill, uint32_t seed);
-void DrawSparkle(SkCanvas& canvas, SkPoint c, float r, SkColor fill, uint32_t seed);
-void DrawSmiley(SkCanvas& canvas, SkPoint c, float r, SkColor fill, uint32_t seed);
-void DrawArrow(SkCanvas& canvas, SkPoint from, SkPoint to, SkColor color, float width,
+void DrawStar(SkCanvas& canvas, Vec2 c, float r, SkColor fill, uint32_t seed);
+void DrawSun(SkCanvas& canvas, Vec2 c, float core_r, float ray_len, SkColor fill, uint32_t seed);
+void DrawSparkle(SkCanvas& canvas, Vec2 c, float r, SkColor fill, uint32_t seed);
+void DrawSmiley(SkCanvas& canvas, Vec2 c, float r, SkColor fill, uint32_t seed);
+void DrawArrow(SkCanvas& canvas, Vec2 from, Vec2 to, SkColor color, float width,
                uint32_t seed);
-void DrawHeart(SkCanvas& canvas, SkPoint c, float r, SkColor fill, uint32_t seed);
+void DrawHeart(SkCanvas& canvas, Vec2 c, float r, SkColor fill, uint32_t seed);
 
-void DrawBetaStamp(SkCanvas& canvas, SkPoint c, float r, float rotation_deg, uint32_t seed,
+void DrawBetaStamp(SkCanvas& canvas, Vec2 c, float r, float rotation_deg, uint32_t seed,
                    std::string_view label = "BETA");
 
 // ------------------------------------------------------------- components ---
-void Panel(SkCanvas& canvas, const SkRect& r, std::string_view title, SkColor accent = kBlue,
+void Panel(SkCanvas& canvas, const Rect& r, std::string_view title, SkColor accent = kBlue,
            State state = State::Default, uint32_t seed = 0, bool sticker = true);
 
-void Button(SkCanvas& canvas, const SkRect& r, std::string_view label, SkColor color = kGreen,
+void Button(SkCanvas& canvas, const Rect& r, std::string_view label, SkColor color = kGreen,
             State state = State::Default, uint32_t seed = 0);
 
-void Toggle(SkCanvas& canvas, const SkRect& r, bool on, State state = State::Default,
+void Toggle(SkCanvas& canvas, const Rect& r, bool on, State state = State::Default,
             uint32_t seed = 0);
 
-void Checkbox(SkCanvas& canvas, const SkRect& r, bool checked, State state = State::Default,
+void Checkbox(SkCanvas& canvas, const Rect& r, bool checked, State state = State::Default,
               uint32_t seed = 0);
-void Radio(SkCanvas& canvas, SkPoint c, float r, bool selected, State state = State::Default,
+void Radio(SkCanvas& canvas, Vec2 c, float r, bool selected, State state = State::Default,
            uint32_t seed = 0);
 
-void Slider(SkCanvas& canvas, const SkRect& r, float t, State state = State::Default,
+void Slider(SkCanvas& canvas, const Rect& r, float t, State state = State::Default,
             uint32_t seed = 0);  // t in [0,1]
 
-void Knob(SkCanvas& canvas, SkPoint c, float radius, float t, State state = State::Default,
+void Knob(SkCanvas& canvas, Vec2 c, float radius, float t, State state = State::Default,
           uint32_t seed = 0);  // t in [0,1]
 
-void Field(SkCanvas& canvas, const SkRect& r, std::string_view text, bool focused = false,
+void Field(SkCanvas& canvas, const Rect& r, std::string_view text, bool focused = false,
            State state = State::Default, uint32_t seed = 0);
 
-void Dropdown(SkCanvas& canvas, const SkRect& r, std::string_view value, SkColor accent = kBlue,
+void Dropdown(SkCanvas& canvas, const Rect& r, std::string_view value, SkColor accent = kBlue,
               State state = State::Default, uint32_t seed = 0);
 
-void Stepper(SkCanvas& canvas, const SkRect& r, std::string_view value,
+void Stepper(SkCanvas& canvas, const Rect& r, std::string_view value,
              State state = State::Default, uint32_t seed = 0);
 
-void Port(SkCanvas& canvas, SkPoint c, float r, bool is_output, SkColor type = kBlue,
+void Port(SkCanvas& canvas, Vec2 c, float r, bool is_output, SkColor type = kBlue,
           bool connected = true, State state = State::Default, uint32_t seed = 0);
 
-void Cable(SkCanvas& canvas, SkPoint a, SkPoint b, SkColor color = kBlue, uint32_t seed = 0);
+void Cable(SkCanvas& canvas, Vec2 a, Vec2 b, SkColor color = kBlue, uint32_t seed = 0);
 
-void Badge(SkCanvas& canvas, SkPoint c, std::string_view label, SkColor color = kRed,
+void Badge(SkCanvas& canvas, Vec2 c, std::string_view label, SkColor color = kRed,
            float rotation_deg = -8.0f, uint32_t seed = 0);
 
-void ThumbWell(SkCanvas& canvas, const SkRect& r, State state = State::Default, uint32_t seed = 0);
+void ThumbWell(SkCanvas& canvas, const Rect& r, State state = State::Default, uint32_t seed = 0);
 
-void Bubble(SkCanvas& canvas, const SkRect& r, std::string_view text, SkPoint tail_to,
+void Bubble(SkCanvas& canvas, const Rect& r, std::string_view text, Vec2 tail_to,
             SkColor color = kYellow, uint32_t seed = 0);
 
-void Divider(SkCanvas& canvas, SkPoint a, SkPoint b, uint32_t seed = 0);
+void Divider(SkCanvas& canvas, Vec2 a, Vec2 b, uint32_t seed = 0);
 
-void Activity(SkCanvas& canvas, const SkRect& r, float t, State state = State::Default,
+void Activity(SkCanvas& canvas, const Rect& r, float t, State state = State::Default,
               uint32_t seed = 0);  // t in [0,1]
 
-void Spinner(SkCanvas& canvas, SkPoint c, float r, float phase,
+void Spinner(SkCanvas& canvas, Vec2 c, float r, float phase,
              uint32_t seed = 0);  // phase in [0,1)
 
 // resize=true draws a corner resize hatch; false draws a move-handle dot cluster.
-void Grip(SkCanvas& canvas, const SkRect& r, bool resize, uint32_t seed = 0);
+void Grip(SkCanvas& canvas, const Rect& r, bool resize, uint32_t seed = 0);
 
-void Highlight(SkCanvas& canvas, const SkRect& r, SkColor color = kBlue, uint32_t seed = 0);
+void Highlight(SkCanvas& canvas, const Rect& r, SkColor color = kBlue, uint32_t seed = 0);
 
 // -------------------------------------------------------------------- widgets --
 

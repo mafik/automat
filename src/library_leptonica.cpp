@@ -480,15 +480,15 @@ bool Threshold::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 void Threshold::DrawSymbol(SkCanvas& canvas) const {
   constexpr float r = 3.4_mm;
-  SkRect oval = Rect::MakeCircleR(r).sk;
+  Rect oval = Rect::MakeCircleR(r);
   SkPaint white;
   white.setAntiAlias(true);
   white.setColor("#ffffff"_color);
   SkPaint black;
   black.setAntiAlias(true);
   black.setColor(kInk);
-  canvas.drawArc(oval, 90, 180, true, white);
-  canvas.drawArc(oval, 270, 180, true, black);
+  canvas.drawArc(oval.sk, 90, 180, true, white);
+  canvas.drawArc(oval.sk, 270, 180, true, black);
   SkPaint rim;
   rim.setAntiAlias(true);
   rim.setStyle(SkPaint::kStroke_Style);
@@ -989,7 +989,7 @@ struct LeptonicaImageWidget : beta::ObjectToy {
       wheel.setShader(SkShaders::SweepGradient(
           {0, 0}, SkGradient{SkGradient::Colors{kWheel, SkTileMode::kClamp}, {}}));
       float r = std::hypot(sheet.Width(), sheet.Height());
-      canvas.drawRect(SkRect::MakeLTRB(-r, -r, r, r), wheel);
+      canvas.drawRect(Rect{-r, -r, r, r}.sk, wheel);
       canvas.restore();
     } else if (!image) {
       SkPaint paper_paint;
@@ -1073,7 +1073,7 @@ struct LeptonicaShelfWidget : beta::ObjectToy {
   struct PlacedGroup {
     const char* label;
     SkColor accent;
-    Rect frame;  // metric, y-up
+    Rect frame;
     int first_button, count;
   };
 
@@ -1180,33 +1180,32 @@ struct LeptonicaShelfWidget : beta::ObjectToy {
 
       const char* heading = "LEPTONICA";
       float hpx = beta::TextWidth(heading, 8.2_mm);
-      SkPoint hb = {-hpx * 0.5f, sheet.top - 1.75_cm};
+      Vec2 hb = {-hpx * 0.5f, sheet.top - 1.75_cm};
       beta::DrawText(canvas, heading, hb, 8.2_mm, beta::kInk, true, Seed(0x1E));
       canvas.drawPath(
-          beta::WobbleLine({hb.fX - 0.9_mm, hb.fY - 2.3_mm}, {hb.fX + hpx + 0.9_mm, hb.fY - 2.3_mm},
+          beta::WobbleLine({hb.x - 0.9_mm, hb.y - 2.3_mm}, {hb.x + hpx + 0.9_mm, hb.y - 2.3_mm},
                            beta::kWonk, beta::kSeg, Seed(0x1F)),
           beta::InkPaint(beta::kGold, beta::kStrokeBold));
 
       for (auto& pg : groups) {
-        SkRect fr = SkRect::MakeLTRB(pg.frame.left, pg.frame.bottom, pg.frame.right, pg.frame.top);
+        const Rect& fr = pg.frame;
         SkPath frame = beta::WonkyRoundRect(fr, 1.5_mm, beta::kWonk * 0.7f,
                                             Seed(beta::Hash2(0x70, (uint32_t)(intptr_t)pg.label)));
         beta::SketchyStroke(canvas, frame, pg.accent, beta::kStroke,
                             Seed(beta::Hash2(0x71, (uint32_t)(intptr_t)pg.label)), 1);
         float fs = 2.2_mm;
         float lw = beta::TextWidth(pg.label, fs);
-        // The tab straddles the frame's top border (visual top = fr.fBottom).
-        float tab_left = fr.fLeft + 1.5_mm;
-        float tab_top = fr.fBottom + fs * 0.78f;
-        SkRect tab =
-            SkRect::MakeLTRB(tab_left, tab_top - fs * 1.35f, tab_left + lw + 1.75_mm, tab_top);
+        // The tab straddles the frame's top border.
+        float tab_left = fr.left + 1.5_mm;
+        float tab_top = fr.top + fs * 0.78f;
+        Rect tab{tab_left, tab_top - fs * 1.35f, tab_left + lw + 1.75_mm, tab_top};
         SkPath tabp = beta::WonkyRoundRect(tab, 0.6_mm, beta::kWonk * 0.5f,
                                            Seed(beta::Hash2(0x72, (uint32_t)(intptr_t)pg.label)));
         beta::MisregFill(canvas, tabp, pg.accent,
                          Seed(beta::Hash2(0x74, (uint32_t)(intptr_t)pg.label)));
         beta::SketchyStroke(canvas, tabp, beta::kInk, beta::kStrokeHair,
                             Seed(beta::Hash2(0x73, (uint32_t)(intptr_t)pg.label)), 1);
-        beta::DrawText(canvas, pg.label, {tab.fLeft + 0.9_mm, tab.fTop + fs * 0.28f}, fs,
+        beta::DrawText(canvas, pg.label, {tab.left + 0.9_mm, tab.bottom + fs * 0.28f}, fs,
                        beta::TextOn(pg.accent), false, Seed(0));
       }
 
@@ -1237,8 +1236,7 @@ std::unique_ptr<ObjectToy> LeptonicaImage::MakeToy(ui::Widget* parent) {
   return std::make_unique<LeptonicaImageWidget>(parent, *this);
 }
 
-// Draws img centred in area (metric, y-up) preserving aspect ratio, with a
-// thin keyline.
+// Draws img centred in area preserving aspect ratio, with a thin keyline.
 static void DrawPreviewFitted(SkCanvas& canvas, const sk_sp<SkImage>& img, const Rect& area) {
   if (!img || img->width() <= 0 || img->height() <= 0) return;
   float s = std::min(area.Width() / img->width(), area.Height() / img->height());
@@ -1263,17 +1261,16 @@ static void DrawPreviewFitted(SkCanvas& canvas, const sk_sp<SkImage>& img, const
   canvas.drawRect(fit.sk, key);
 }
 
-// Drawn just outside the displayed image's lower-left frame edge (metric, y-up).
+// Drawn just outside the displayed image's lower-left frame edge.
 // Lower-left is the output-data position.
-static void DrawFittedDepthChip(SkCanvas& canvas, const SkRect& box, const sk_sp<SkImage>& img,
+static void DrawFittedDepthChip(SkCanvas& canvas, const Rect& box, const sk_sp<SkImage>& img,
                                 int depth, bool has_cmap, uint32_t seed) {
   if (depth <= 0 || !img || img->width() <= 0 || img->height() <= 0) return;
-  float s = std::min(box.width() / img->width(), box.height() / img->height());
+  float s = std::min(box.Width() / img->width(), box.Height() / img->height());
   float fw = img->width() * s, fh = img->height() * s;
-  SkRect fit = SkRect::MakeXYWH(box.centerX() - fw / 2, box.centerY() - fh / 2, fw, fh);
-  SkRect r = SkRect::MakeLTRB(fit.fLeft + 0.6_mm - 7.9_mm, fit.fTop + 0.9_mm, fit.fLeft + 0.6_mm,
-                              fit.fTop + 4.4_mm);
-  if (r.fLeft < box.fLeft + 0.3_mm) r.offset(box.fLeft + 0.3_mm - r.fLeft, 0.f);
+  Rect fit = Rect::MakeCenter({box.CenterX(), box.CenterY()}, fw, fh);
+  Rect r{fit.left + 0.6_mm - 7.9_mm, fit.bottom + 0.9_mm, fit.left + 0.6_mm, fit.bottom + 4.4_mm};
+  if (r.left < box.left + 0.3_mm) r = r.MoveBy({box.left + 0.3_mm - r.left, 0.f});
   ui::leptonica::DrawDepthChip(canvas, r, depth, has_cmap, beta::State::Default, seed);
 }
 
@@ -1609,7 +1606,7 @@ struct ThresholdToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0x7A1), 1);
-      DrawFittedDepthChip(canvas, pr.sk, cached_preview, out_depth, out_cmap, Seed(0x7A9));
+      DrawFittedDepthChip(canvas, pr, cached_preview, out_depth, out_cmap, Seed(0x7A9));
 
       int steps = 12;
       float rTop = kBaseY - 0.06_cm, rBot = kBaseY - 0.24_cm;
@@ -1619,9 +1616,9 @@ struct ThresholdToy : beta::ObjectToy {
         uint8_t gv = (uint8_t)std::lround(255.f * i / (steps - 1));
         SkPaint sp;
         sp.setColor(SkColorSetARGB(255, gv, gv, gv));
-        canvas.drawRect(SkRect::MakeLTRB(x0, rBot, x1, rTop), sp);
+        canvas.drawRect(Rect{x0, rBot, x1, rTop}.sk, sp);
       }
-      canvas.drawRect(SkRect::MakeLTRB(HistXL(), rBot, HistXR(), rTop),
+      canvas.drawRect(Rect{HistXL(), rBot, HistXR(), rTop}.sk,
                       beta::InkPaint(beta::kInk, beta::kStrokeHair));
 
       float topY = CardTopM() + 0.05_cm, knobY = kBaseY - 0.16_cm;
@@ -1648,40 +1645,39 @@ struct ThresholdToy : beta::ObjectToy {
         snprintf(buf, sizeof(buf), "%d", (int)std::lround(level));
       float fs = 3.8_mm, tw = beta::TextWidth(buf, fs), cw = tw + 0.34_cm, ch = fs * 1.5f;
       float cxm = std::clamp(mx, -kHalfW + 0.75_cm, kHalfW - 0.75_cm);
-      SkPoint cc = {cxm, kBaseY - 0.74_cm};
-      SkRect chip = SkRect::MakeXYWH(cc.fX - cw / 2, cc.fY - ch / 2, cw, ch);
+      Vec2 cc = {cxm, kBaseY - 0.74_cm};
+      Rect chip = Rect::MakeCenter({cc.x, cc.y}, cw, ch);
       SkPath cp = beta::WonkyRoundRect(chip, ch * 0.35f, beta::kWonk, Seed(0x7C1));
       beta::HandShadow(canvas, cp, {beta::kShadowDX * 0.5f, -beta::kShadowDY * 0.5f}, beta::kShadow,
                        Seed(0x7C2));
       beta::MisregFill(canvas, cp, (blade_readout || blade_na) ? beta::kGray : beta::kYellow,
                        Seed(0x7C3));
       beta::SketchyStroke(canvas, cp, beta::kInk, beta::kStroke, Seed(0x7C4), 1);
-      beta::DrawText(canvas, buf, {cc.fX - tw / 2, cc.fY - fs * 0.36f}, fs, beta::kInk, false,
+      beta::DrawText(canvas, buf, {cc.x - tw / 2, cc.y - fs * 0.36f}, fs, beta::kInk, false,
                      Seed(0));
       if (driven || method == 1 || method == 2) {
         beta::HatchRect(canvas, chip, beta::kInkSoft, 1.0_mm, Seed(0x7C5));
         const char* dl = method == 2 ? "LOCAL" : (method == 1 ? "FOUND" : "DRIVEN");
         float dw = beta::TextWidth(dl, 1.6_mm);
-        beta::DrawText(canvas, dl, {cc.fX - dw / 2, cc.fY - ch / 2 - 1.75_mm}, 1.6_mm, kLabelInk,
+        beta::DrawText(canvas, dl, {cc.x - dw / 2, cc.y - ch / 2 - 1.75_mm}, 1.6_mm, kLabelInk,
                        false, Seed(0));
       }
 
       {
-        SkRect pill =
-            SkRect::MakeLTRB(kHalfW + 0.12_cm, kBaseY - 0.34_cm, kHalfW + 1.0_cm, kBaseY - 0.02_cm);
+        Rect pill{kHalfW + 0.12_cm, kBaseY - 0.34_cm, kHalfW + 1.0_cm, kBaseY - 0.02_cm};
         ui::leptonica::DrawPolarity(canvas, pill, bright_fg, beta::State::Default, 0x7E0);
         const char* pl = "INK";
         float pw2 = beta::TextWidth(pl, 1.6_mm);
-        beta::DrawText(canvas, pl, {pill.centerX() - pw2 / 2, pill.fBottom + 0.9_mm}, 1.6_mm,
-                       kLabelInk, false, Seed(0));
+        beta::DrawText(canvas, pl, {pill.CenterX() - pw2 / 2, pill.top + 0.9_mm}, 1.6_mm, kLabelInk,
+                       false, Seed(0));
       }
 
       {
         static const char* const kMeth[4] = {"FIXED", "OTSU", "SAUVOLA", "COMPS"};
         for (int which = 0; which < 4; ++which) {
-          SkRect cell = MethodCellM(which).sk;
+          Rect cell = MethodCellM(which);
           bool sel = method == which;
-          SkPath cp = beta::WonkyRoundRect(cell, cell.height() * 0.3f, beta::kWonk * 0.5f,
+          SkPath cp = beta::WonkyRoundRect(cell, cell.Height() * 0.3f, beta::kWonk * 0.5f,
                                            Seed(0x7F0u + (uint32_t)which));
           if (sel)
             beta::HandShadow(canvas, cp, {0.3_mm, -0.3_mm}, beta::kShadow,
@@ -1692,7 +1688,7 @@ struct ThresholdToy : beta::ObjectToy {
                               Seed(0x7FCu + (uint32_t)which), 1);
           float fs2 = 1.6_mm;
           float lw = beta::TextWidth(kMeth[which], fs2);
-          beta::DrawText(canvas, kMeth[which], {cell.centerX() - lw / 2, cell.centerY() - 0.6_mm},
+          beta::DrawText(canvas, kMeth[which], {cell.CenterX() - lw / 2, cell.CenterY() - 0.6_mm},
                          fs2, sel ? beta::kInk : beta::kInkSoft, false, Seed(0));
           if (sel) beta::Highlight(canvas, cell, beta::kBlue, Seed(0x7F2));
         }
@@ -1967,7 +1963,7 @@ static const SkPath* MorphWheelGlyphs() {
       b.close();
     };
     auto sq = [](SkPathBuilder& b, float cx, float half) {
-      b.addRect(SkRect::MakeLTRB(cx - half, -half, cx + half, half));
+      b.addRect(Rect{cx - half, -half, cx + half, half});
     };
     {  // DILATE: small -> big
       SkPathBuilder b;
@@ -1995,15 +1991,15 @@ static const SkPath* MorphWheelGlyphs() {
       SkPathBuilder b;
       b.setFillType(SkPathFillType::kEvenOdd);
       sq(b, -0.85f, 0.5f);
-      b.addRect(SkRect::MakeLTRB(-1.02f, -0.16f, -0.68f, 0.16f));
+      b.addRect(Rect{-1.02f, -0.16f, -0.68f, 0.16f});
       arrow(b);
       sq(b, 0.85f, 0.5f);
       g[3] = b.detach();
     }
     {  // TOPHAT: the hat itself (brim below the crown)
       SkPathBuilder b;
-      b.addRect(SkRect::MakeLTRB(-0.9f, -0.52f, 0.9f, -0.3f));
-      b.addRect(SkRect::MakeLTRB(-0.45f, -0.36f, 0.45f, 0.55f));
+      b.addRect(Rect{-0.9f, -0.52f, 0.9f, -0.3f});
+      b.addRect(Rect{-0.45f, -0.36f, 0.45f, 0.55f});
       g[4] = b.detach();
     }
     {  // DOME: a dome on its base
@@ -2011,7 +2007,7 @@ static const SkPath* MorphWheelGlyphs() {
       b.moveTo(-0.8f, -0.34f);
       b.quadTo(0, 0.9f, 0.8f, -0.34f);
       b.close();
-      b.addRect(SkRect::MakeLTRB(-1.05f, -0.52f, 1.05f, -0.34f));
+      b.addRect(Rect{-1.05f, -0.52f, 1.05f, -0.34f});
       g[5] = b.detach();
     }
     {  // HMT: the matched 3x3 pattern (row 0 is the top row, +Y up)
@@ -2021,15 +2017,15 @@ static const SkPath* MorphWheelGlyphs() {
       for (int r = 0; r < 3; ++r)
         for (int col = 0; col < 3; ++col)
           if (fill[r][col])
-            b.addRect(
-                SkRect::MakeXYWH(-0.54f + col * s, 0.54f - r * s - s * 0.8f, s * 0.8f, s * 0.8f));
+            b.addRect(Rect{-0.54f + col * s, 0.54f - r * s - s * 0.8f, -0.54f + col * s + s * 0.8f,
+                           0.54f - r * s});
       g[6] = b.detach();
     }
     {  // THIN: thick stroke -> thin stroke
       SkPathBuilder b;
-      b.addRect(SkRect::MakeLTRB(-1.1f, -0.5f, -0.6f, 0.5f));
+      b.addRect(Rect{-1.1f, -0.5f, -0.6f, 0.5f});
       arrow(b);
-      b.addRect(SkRect::MakeLTRB(0.78f, -0.5f, 0.92f, 0.5f));
+      b.addRect(Rect{0.78f, -0.5f, 0.92f, 0.5f});
       g[7] = b.detach();
     }
     return g;
@@ -2100,8 +2096,7 @@ struct MorphologyToy : beta::ObjectToy {
   float FaceBottom() const { return -5.3_cm; }
   float HandleCY() const { return kFaceTop + 0.55_cm + kHandleR; }
 
-  SkRect GridRectSk() const { return GridRectM().sk; }
-  SkPoint WheelCenter() const { return {WheelCX(), WheelCY()}; }
+  Vec2 WheelCenter() const { return {WheelCX(), WheelCY()}; }
 
   SkPath Shape() const override {
     SkPathBuilder b;
@@ -2115,7 +2110,7 @@ struct MorphologyToy : beta::ObjectToy {
                       .close()
                       .detach();
     b.addPath(neck);
-    b.addOval(SkRect::MakeXYWH(-kHandleR, HandleCY() - kHandleR, 2 * kHandleR, 2 * kHandleR));
+    b.addOval(Rect::MakeCircleR(kHandleR).MoveBy({0, HandleCY()}));
     SkPath out;
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::RRect(RRect::MakeSimple(Rect(-kHalfW, FaceBottom(), kHalfW, kFaceTop), 4_mm).sk);
@@ -2246,20 +2241,20 @@ struct MorphologyToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0x9A1), 1);
-      DrawFittedDepthChip(canvas, pr.sk, cached_preview, out_depth, out_cmap, Seed(0x9A9));
+      DrawFittedDepthChip(canvas, pr, cached_preview, out_depth, out_cmap, Seed(0x9A9));
       float hy = HandleCY();
       for (int i = -1; i <= 1; ++i)
-        canvas.drawPath(beta::WobbleLine(SkPoint{-0.34_cm, hy + i * 0.18_cm},
-                                         SkPoint{0.34_cm, hy + i * 0.18_cm}, beta::kWonk * 0.5f,
-                                         beta::kSeg, Seed(beta::Hash2(0x9B0, i + 4))),
-                        beta::InkPaint(beta::kInk, beta::kStrokeHair));
+        canvas.drawPath(
+            beta::WobbleLine({-0.34_cm, hy + i * 0.18_cm}, {0.34_cm, hy + i * 0.18_cm},
+                             beta::kWonk * 0.5f, beta::kSeg, Seed(beta::Hash2(0x9B0, i + 4))),
+            beta::InkPaint(beta::kInk, beta::kStrokeHair));
       if (op_mode == 4 || (color && op_mode <= 3)) {
         uint8_t solid[Morphology::kMaxN * Morphology::kMaxN];
         for (int i = 0; i < sel_w * sel_h; ++i) solid[i] = 1;
-        ui::leptonica::DrawStamp(canvas, GridRectSk(), solid, sel_w, sel_h, sel_w / 2, sel_h / 2,
+        ui::leptonica::DrawStamp(canvas, GridRectM(), solid, sel_w, sel_h, sel_w / 2, sel_h / 2,
                                  beta::State::Disabled, 0x9C0);
       } else {
-        ui::leptonica::DrawStamp(canvas, GridRectSk(), cells, sel_w, sel_h, sel_w / 2, sel_h / 2,
+        ui::leptonica::DrawStamp(canvas, GridRectM(), cells, sel_w, sel_h, sel_w / 2, sel_h / 2,
                                  SelApplies() ? beta::State::Default : beta::State::Disabled,
                                  0x9C0);
       }
@@ -2269,22 +2264,22 @@ struct MorphologyToy : beta::ObjectToy {
                          : op_mode == 6                            ? "HIT\xc2\xb7MISS"
                                                                    : "PATTERN";
         float fs = 2.9_mm, tw = beta::TextWidth(gl, fs);
-        beta::DrawText(canvas, gl, SkPoint{gm.CenterX() - tw * 0.5f, gm.bottom - 0.34_cm}, fs,
-                       kLabelInk, false, Seed(0));
+        beta::DrawText(canvas, gl, {gm.CenterX() - tw * 0.5f, gm.bottom - 0.34_cm}, fs, kLabelInk,
+                       false, Seed(0));
       }
       const char* morph[] = {"DILATE", "ERODE", "OPEN", "CLOSE", "TOPHAT", "DOME", "HMT", "THIN"};
       ui::leptonica::DrawModeWheel(canvas, WheelCenter(), WheelR(), morph, 8, op_mode,
                                    beta::State::Default, 0x9D0, MorphWheelGlyphs());
       if (ColorApplies()) {
         Rect pm = PolarityRectM();
-        SkRect tpx = Rect(pm.left, pm.bottom, pm.left + 0.8_cm, pm.top).sk;
+        Rect tpx{pm.left, pm.bottom, pm.left + 0.8_cm, pm.top};
         beta::Toggle(canvas, tpx, color, beta::State::Default, Seed(0x9D9));
-        beta::DrawText(canvas, "COLOR", {tpx.right() + 0.9_mm, tpx.centerY() - 0.73_mm}, 1.9_mm,
+        beta::DrawText(canvas, "COLOR", {tpx.right + 0.9_mm, tpx.CenterY() - 0.73_mm}, 1.9_mm,
                        kLabelInk, false, Seed(0));
       }
       if (PolarityApplies()) {
         Rect pm = PolarityRectM();
-        ui::leptonica::DrawPolarity(canvas, pm.sk, peaks, beta::State::Default, 0x9D5);
+        ui::leptonica::DrawPolarity(canvas, pm, peaks, beta::State::Default, 0x9D5);
       }
       if (op_mode != 7) {
         Rect rm = ParamRowM();
@@ -2300,23 +2295,21 @@ struct MorphologyToy : beta::ObjectToy {
           frac = (std::max(sel_w, 1) - 1) / float(Morphology::kMaxN - 1);
           snprintf(buf, sizeof(buf), "SIZE %dx%d", sel_w, sel_h);
         }
-        beta::Slider(canvas, rm.sk, std::clamp(frac, 0.f, 1.f), beta::State::Default, Seed(0x9D7));
-        beta::DrawText(canvas, buf, SkPoint{rm.left, rm.top + 0.12_cm}, 2.2_mm, kLabelInk, false,
-                       Seed(0));
+        beta::Slider(canvas, rm, std::clamp(frac, 0.f, 1.f), beta::State::Default, Seed(0x9D7));
+        beta::DrawText(canvas, buf, {rm.left, rm.top + 0.12_cm}, 2.2_mm, kLabelInk, false, Seed(0));
       } else {
         Rect rm = ConnRectM();
-        ui::leptonica::DrawConnectivity(canvas, rm.sk, connectivity == 8, beta::State::Default,
-                                        0x9D8);
+        ui::leptonica::DrawConnectivity(canvas, rm, connectivity == 8, beta::State::Default, 0x9D8);
       }
       std::string title = "MORPHOLOGY";
       float tcx = -1.0_cm;
       float tpx = beta::TextWidth(title, kTitleText);
-      beta::DrawText(canvas, title, SkPoint{tcx - tpx * 0.5f, TitleY()}, kTitleText, beta::kInk,
-                     true, Seed(0x9E0));
+      beta::DrawText(canvas, title, {tcx - tpx * 0.5f, TitleY()}, kTitleText, beta::kInk, true,
+                     Seed(0x9E0));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fpx = beta::TextWidth(credit, kCreditText);
-        beta::DrawText(canvas, credit, SkPoint{tcx - fpx * 0.5f, TitleY() - 0.52_cm}, kCreditText,
+        beta::DrawText(canvas, credit, {tcx - fpx * 0.5f, TitleY() - 0.52_cm}, kCreditText,
                        "#8a7d66"_color, false, Seed(0x9E1));
       }
     }
@@ -2327,9 +2320,8 @@ struct MorphologyToy : beta::ObjectToy {
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
     if (btn == ui::PointerButton::Left) {
       Vec2 pos = p.PositionWithin(*this);
-      SkPoint pp = {pos.x, pos.y};
       int cx, cy;
-      if (SelApplies() && ui::leptonica::StampCellAt(GridRectSk(), pp, sel_w, sel_h, cx, cy)) {
+      if (SelApplies() && ui::leptonica::StampCellAt(GridRectM(), pos, sel_w, sel_h, cx, cy)) {
         if (auto m = LockMorph()) {
           {
             auto lock = std::lock_guard(m->mutex);
@@ -2345,7 +2337,7 @@ struct MorphologyToy : beta::ObjectToy {
         }
         return std::make_unique<MorphPoke>(p);
       }
-      int mode = ui::leptonica::ModeWheelHit(WheelCenter(), WheelR(), pp, 8);
+      int mode = ui::leptonica::ModeWheelHit(WheelCenter(), WheelR(), pos, 8);
       if (mode >= 0) {
         if (auto m = LockMorph()) {
           {
@@ -2391,7 +2383,7 @@ struct MorphologyToy : beta::ObjectToy {
           return std::make_unique<MorphLevelDrag>(p, *this);
       } else {
         Rect rm = ConnRectM();
-        int conn = ui::leptonica::ConnectivityHit(rm.sk, pp);
+        int conn = ui::leptonica::ConnectivityHit(rm, pos);
         if (conn) {
           if (auto m = LockMorph()) {
             {
@@ -2618,13 +2610,12 @@ struct ToneToy : beta::ObjectToy {
     Rect g = GraphRectM();
     return g.bottom + g.Height() * std::clamp(v, 0, 255) / 255.f;
   }
-  SkPoint HandlePosM(int which) const {
+  Vec2 HandlePosM(int which) const {
     int in = (which == 0)   ? std::clamp(black, 0, 255)
              : (which == 1) ? std::clamp(white, 0, 255)
                             : (std::clamp(black, 0, 255) + std::clamp(white, 0, 255)) / 2;
     return {InToX(in), OutToY(lut[std::clamp(in, 0, 255)])};
   }
-  SkRect GraphSk() const { return GraphRectM().sk; }
 
   SkPath Shape() const override {
     SkPathBuilder b;
@@ -2752,35 +2743,34 @@ struct ToneToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xA01), 1);
-      DrawFittedDepthChip(canvas, pr.sk, cached_preview, out_depth, out_cmap, Seed(0xA09));
+      DrawFittedDepthChip(canvas, pr, cached_preview, out_depth, out_cmap, Seed(0xA09));
 
-      ui::leptonica::DrawCurveLUT(canvas, GraphSk(), lut, beta::State::Default, 0xA10);
+      ui::leptonica::DrawCurveLUT(canvas, GraphRectM(), lut, beta::State::Default, 0xA10);
       for (int k = 0; k < 3; ++k) {
-        SkPoint hm = HandlePosM(k);
-        SkPoint hp = SkPoint{hm.fX, hm.fY};
+        Vec2 hm = HandlePosM(k);
         float r = 0.22_cm;
         SkColor col = (k == 2) ? beta::kYellow : (k == 0 ? beta::kInk : beta::kPaper);
         SkPath kn =
-            beta::WobbleEllipse(hp, r, r, beta::kWonk * 0.5f, Seed(beta::Hash2(0xA20, k)), 18);
+            beta::WobbleEllipse(hm, r, r, beta::kWonk * 0.5f, Seed(beta::Hash2(0xA20, k)), 18);
         beta::MisregFill(canvas, kn, dragging == k ? beta::kRed : col, Seed(beta::Hash2(0xA21, k)));
         beta::SketchyStroke(canvas, kn, beta::kInk, beta::kStroke, Seed(beta::Hash2(0xA22, k)), 1);
       }
 
       Rect it = InvertToggleM();
-      beta::Toggle(canvas, it.sk, invert, beta::State::Default, Seed(0xA30));
-      beta::DrawText(canvas, "INVERT", SkPoint{it.left, it.top + 0.12_cm}, 2.2_mm, kLabelInk, false,
+      beta::Toggle(canvas, it, invert, beta::State::Default, Seed(0xA30));
+      beta::DrawText(canvas, "INVERT", {it.left, it.top + 0.12_cm}, 2.2_mm, kLabelInk, false,
                      Seed(0));
 
       std::string title = "TONE";
       float tcx = 0.55_cm;
       float tpx = beta::TextWidth(title, kTitleText);
-      beta::DrawText(canvas, title, SkPoint{tcx - tpx * 0.5f, RunCenterY() + 0.2_cm}, kTitleText,
+      beta::DrawText(canvas, title, {tcx - tpx * 0.5f, RunCenterY() + 0.2_cm}, kTitleText,
                      beta::kInk, true, Seed(0xA40));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fpx = beta::TextWidth(credit, kCreditText);
-        beta::DrawText(canvas, credit, SkPoint{tcx - fpx * 0.5f, RunCenterY() - 0.32_cm},
-                       kCreditText, "#8a7d66"_color, false, Seed(0xA41));
+        beta::DrawText(canvas, credit, {tcx - fpx * 0.5f, RunCenterY() - 0.32_cm}, kCreditText,
+                       "#8a7d66"_color, false, Seed(0xA41));
       }
     }
 
@@ -2791,8 +2781,8 @@ struct ToneToy : beta::ObjectToy {
     if (btn == ui::PointerButton::Left) {
       Vec2 pos = p.PositionWithin(*this);
       for (int k = 0; k < 3; ++k) {
-        SkPoint hm = HandlePosM(k);
-        if (std::hypot(pos.x - hm.fX, pos.y - hm.fY) <= 0.4_cm)
+        Vec2 hm = HandlePosM(k);
+        if (std::hypot(pos.x - hm.x, pos.y - hm.y) <= 0.4_cm)
           return std::make_unique<ToneHandleDrag>(p, *this, k);
       }
       Rect it = InvertToggleM();
@@ -2913,7 +2903,7 @@ Pix* Geometry::ApplyOp(Pix* in, const float*) const {
   }
   float a = std::fmod(ang, 360.f);
   if (std::abs(a) > 0.2f && std::abs(a - 360.f) > 0.2f) {
-    float rad = a * 3.14159265f / 180.f;
+    float rad = a / 180.f * kPi;
     int w = pixGetWidth(cur), h = pixGetHeight(cur);
     Pix* r = pixRotate(cur, rad, L_ROTATE_AREA_MAP, L_BRING_IN_WHITE, w, h);
     pixDestroy(&cur);
@@ -3123,12 +3113,12 @@ struct GeometryToy : beta::ObjectToy {
     float s = std::min(area.Width() / iw, area.Height() / ih);
     return Rect::MakeCenter({area.CenterX(), area.CenterY()}, iw * s, ih * s);
   }
-  SkPoint DialCenter() const { return {kDialCX, kDialCY}; }
+  Vec2 DialCenter() const { return {kDialCX, kDialCY}; }
 
   SkPath Shape() const override {
     SkPathBuilder b;
     b.addRRect(RRect::MakeSimple(Rect(kDialCX, kFaceBottom, kHalfW, kFaceTop), 4_mm).sk);
-    b.addOval(SkRect::MakeXYWH(kDialCX - 1.55_cm, kDialCY - 1.55_cm, 3.1_cm, 3.1_cm));
+    b.addOval(Rect::MakeCircleR(1.55_cm).MoveBy({kDialCX, kDialCY}));
     SkPath out;
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::RRect(RRect::MakeSimple(Rect(kDialCX, kFaceBottom, kHalfW, kFaceTop), 4_mm).sk);
@@ -3278,7 +3268,7 @@ struct GeometryToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xB01), 1);
-      DrawFittedDepthChip(canvas, pr.sk, cached_preview, out_depth, out_cmap, Seed(0xB09));
+      DrawFittedDepthChip(canvas, pr, cached_preview, out_depth, out_cmap, Seed(0xB09));
 
       ui::leptonica::DrawDial(canvas, DialCenter(), kDialR, angle_deg,
                               angle_driven ? beta::State::Disabled : beta::State::Default, 0xB10);
@@ -3313,17 +3303,17 @@ struct GeometryToy : beta::ObjectToy {
         else
           snprintf(buf, sizeof(buf), "%d\xC2\xB0", ((int)std::lround(angle_deg)) % 360);
         float fs = 3.2_mm, tw = beta::TextWidth(buf, fs), cw = tw + 0.3_cm, ch = fs * 1.5f;
-        SkPoint cc = SkPoint{kDialCX, kDialCY - kDialR - 0.28_cm};
-        SkRect chip = SkRect::MakeXYWH(cc.fX - cw / 2, cc.fY - ch / 2, cw, ch);
+        Vec2 cc = {kDialCX, kDialCY - kDialR - 0.28_cm};
+        Rect chip = Rect::MakeCenter({cc.x, cc.y}, cw, ch);
         SkPath cp = beta::WonkyRoundRect(chip, ch * 0.35f, beta::kWonk, Seed(0xB21));
         beta::MisregFill(canvas, cp, beta::kPaper, Seed(0xB22));
         beta::SketchyStroke(canvas, cp, beta::kInk, beta::kStroke, Seed(0xB23), 1);
-        beta::DrawText(canvas, buf, {cc.fX - tw / 2, cc.fY - fs * 0.36f}, fs, beta::kInk, false,
+        beta::DrawText(canvas, buf, {cc.x - tw / 2, cc.y - fs * 0.36f}, fs, beta::kInk, false,
                        Seed(0));
       }
 
       Rect ss = ScaleSliderM();
-      beta::Slider(canvas, ss.sk, absolute ? PxToT(target_w) : ScaleToT(), beta::State::Default,
+      beta::Slider(canvas, ss, absolute ? PxToT(target_w) : ScaleToT(), beta::State::Default,
                    Seed(0xB30));
       {
         char buf[16];
@@ -3331,14 +3321,13 @@ struct GeometryToy : beta::ObjectToy {
           snprintf(buf, sizeof(buf), "W %d px", target_w);
         else
           snprintf(buf, sizeof(buf), "SCALE %.2fx", scale);
-        beta::DrawText(canvas, buf, SkPoint{ss.left, ss.top + 0.12_cm}, 2.2_mm, kLabelInk, false,
-                       Seed(0));
+        beta::DrawText(canvas, buf, {ss.left, ss.top + 0.12_cm}, 2.2_mm, kLabelInk, false, Seed(0));
       }
 
       {
         Rect sy = ScaleYSliderM();
         float t2 = absolute ? PxToT(target_h) : (lock_aspect ? ScaleToT() : ScaleYToT());
-        beta::Slider(canvas, sy.sk, t2, lock_aspect ? beta::State::Disabled : beta::State::Default,
+        beta::Slider(canvas, sy, t2, lock_aspect ? beta::State::Disabled : beta::State::Default,
                      Seed(0xB85));
         char buf2[20];
         if (absolute) {
@@ -3349,36 +3338,35 @@ struct GeometryToy : beta::ObjectToy {
         } else {
           snprintf(buf2, sizeof(buf2), "SCALE Y %.2fx", lock_aspect ? scale : scale_y);
         }
-        beta::DrawText(canvas, buf2, SkPoint{sy.left, sy.top + 0.1_cm}, 1.9_mm, kLabelInk, false,
-                       Seed(0));
+        beta::DrawText(canvas, buf2, {sy.left, sy.top + 0.1_cm}, 1.9_mm, kLabelInk, false, Seed(0));
       }
 
-      beta::Toggle(canvas, MirrorToggleM().sk, mirror, beta::State::Default, Seed(0xB80));
-      beta::DrawText(canvas, "MIRROR", SkPoint{MirrorToggleM().left, MirrorToggleM().top + 0.12_cm},
+      beta::Toggle(canvas, MirrorToggleM(), mirror, beta::State::Default, Seed(0xB80));
+      beta::DrawText(canvas, "MIRROR", {MirrorToggleM().left, MirrorToggleM().top + 0.12_cm},
                      1.9_mm, kLabelInk, false, Seed(0));
-      beta::Toggle(canvas, FlipToggleM().sk, flip, beta::State::Default, Seed(0xB81));
-      beta::DrawText(canvas, "FLIP", SkPoint{FlipToggleM().left, FlipToggleM().top + 0.12_cm},
+      beta::Toggle(canvas, FlipToggleM(), flip, beta::State::Default, Seed(0xB81));
+      beta::DrawText(canvas, "FLIP", {FlipToggleM().left, FlipToggleM().top + 0.12_cm}, 1.9_mm,
+                     kLabelInk, false, Seed(0));
+      beta::Toggle(canvas, LockToggleM(), lock_aspect, beta::State::Default, Seed(0xB82));
+      beta::DrawText(canvas, "LOCK", {LockToggleM().left, LockToggleM().top + 0.12_cm}, 1.9_mm,
+                     kLabelInk, false, Seed(0));
+      beta::Toggle(canvas, PixelsToggleM(), pixels, beta::State::Default, Seed(0xB83));
+      beta::DrawText(canvas, "PIXELS", {PixelsToggleM().left, PixelsToggleM().top + 0.12_cm},
                      1.9_mm, kLabelInk, false, Seed(0));
-      beta::Toggle(canvas, LockToggleM().sk, lock_aspect, beta::State::Default, Seed(0xB82));
-      beta::DrawText(canvas, "LOCK", SkPoint{LockToggleM().left, LockToggleM().top + 0.12_cm},
-                     1.9_mm, kLabelInk, false, Seed(0));
-      beta::Toggle(canvas, PixelsToggleM().sk, pixels, beta::State::Default, Seed(0xB83));
-      beta::DrawText(canvas, "PIXELS", SkPoint{PixelsToggleM().left, PixelsToggleM().top + 0.12_cm},
-                     1.9_mm, kLabelInk, false, Seed(0));
-      beta::Toggle(canvas, SizeToggleM().sk, absolute, beta::State::Default, Seed(0xB84));
-      beta::DrawText(canvas, "W\xc2\xb7H", SkPoint{SizeToggleM().left, SizeToggleM().top + 0.12_cm},
+      beta::Toggle(canvas, SizeToggleM(), absolute, beta::State::Default, Seed(0xB84));
+      beta::DrawText(canvas, "W\xc2\xb7H", {SizeToggleM().left, SizeToggleM().top + 0.12_cm},
                      1.9_mm, kLabelInk, false, Seed(0));
 
       std::string title = "GEOMETRY";
       float tcx = -0.3_cm;
       float tpx = beta::TextWidth(title, kTitleText);
-      beta::DrawText(canvas, title, SkPoint{tcx - tpx * 0.5f, -2.0_cm}, kTitleText, beta::kInk,
-                     true, Seed(0xB40));
+      beta::DrawText(canvas, title, {tcx - tpx * 0.5f, -2.0_cm}, kTitleText, beta::kInk, true,
+                     Seed(0xB40));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fpx = beta::TextWidth(credit, kCreditText);
-        beta::DrawText(canvas, credit, SkPoint{tcx - fpx * 0.5f, -2.38_cm}, kCreditText,
-                       "#8a7d66"_color, false, Seed(0xB41));
+        beta::DrawText(canvas, credit, {tcx - fpx * 0.5f, -2.38_cm}, kCreditText, "#8a7d66"_color,
+                       false, Seed(0xB41));
       }
     }
 
@@ -3465,7 +3453,7 @@ GeoDialDrag::~GeoDialDrag() {
 void GeoDialDrag::Update() {
   if (!widget) return;
   Vec2 pos = pointer.PositionWithin(*widget);
-  SkPoint c = {GeometryToy::kDialCX, GeometryToy::kDialCY};
+  Vec2 c = {GeometryToy::kDialCX, GeometryToy::kDialCY};
   float ang = ui::leptonica::DialAngleAt(c, {pos.x, pos.y});
   if (auto t = widget->LockGeo()) {
     {
@@ -3716,7 +3704,6 @@ struct ChannelToy : beta::ObjectToy {
     return Rect(-2.2_cm, top - 0.16_cm, -0.95_cm, top);
   }
   Rect PreviewRectM() const { return Rect(-kHalfW + 0.35_cm, -1.25_cm, kHalfW - 0.35_cm, 1.15_cm); }
-  SkRect TapRectSk() const { return TapRectM().sk; }
 
   SkPath Shape() const override {
     SkPathBuilder b;
@@ -3846,13 +3833,13 @@ struct ChannelToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xC01), 1);
-      DrawFittedDepthChip(canvas, pr.sk, cached_preview, out_depth, out_cmap, Seed(0xC09));
+      DrawFittedDepthChip(canvas, pr, cached_preview, out_depth, out_cmap, Seed(0xC09));
 
       SkColor rays[3] = {beta::kRed, beta::kGreen, beta::kBlue};
       float ang[3] = {-0.5f, 0.0f, 0.5f};
       for (int i = 0; i < 3; ++i) {
-        SkPoint a = SkPoint{kPeakTopX, kPeakTopY};
-        SkPoint b = SkPoint{kPeakTopX + ang[i] * 0.9_cm, kPeakTopY + 0.6_cm};
+        Vec2 a = {kPeakTopX, kPeakTopY};
+        Vec2 b = {kPeakTopX + ang[i] * 0.9_cm, kPeakTopY + 0.6_cm};
         canvas.drawPath(
             beta::WobbleLine(a, b, beta::kWonk * 0.5f, beta::kSeg, Seed(beta::Hash2(0xC10, i))),
             beta::InkPaint(rays[i], beta::kStrokeBold));
@@ -3861,7 +3848,7 @@ struct ChannelToy : beta::ObjectToy {
       static const char* const kTapLabs[8] = {"LUM", "R", "G", "B", "MIN", "MAX", "DIF", "MIX"};
       static constexpr SkColor kTapCols[8] = {0xff8a8a8a, beta::kRed, beta::kGreen,  beta::kBlue,
                                               0xff404040, 0xffd9d9d9, beta::kPurple, beta::kOrange};
-      ui::leptonica::DrawChannelTap(canvas, TapRectSk(), channel, beta::State::Default, 0xC20,
+      ui::leptonica::DrawChannelTap(canvas, TapRectM(), channel, beta::State::Default, 0xC20,
                                     kTapLabs, kTapCols, 8);
 
       if (channel == 7) {
@@ -3870,7 +3857,7 @@ struct ChannelToy : beta::ObjectToy {
         const float ws[3] = {wr, wg, wb};
         for (int i = 0; i < 3; ++i) {
           Rect s = WeightSliderM(i);
-          beta::Slider(canvas, s.sk, std::clamp(ws[i], 0.f, 1.f), beta::State::Default,
+          beta::Slider(canvas, s, std::clamp(ws[i], 0.f, 1.f), beta::State::Default,
                        Seed(0xC40u + (uint32_t)i));
           char buf[16];
           snprintf(buf, sizeof(buf), "%s %.2f", kW[i], ws[i]);
@@ -3882,13 +3869,13 @@ struct ChannelToy : beta::ObjectToy {
       std::string title = "CHANNEL";
       float tcx = -0.3_cm;
       float tpx = beta::TextWidth(title, kTitleText);
-      beta::DrawText(canvas, title, SkPoint{tcx - tpx * 0.5f, -1.5_cm}, kTitleText, beta::kInk,
-                     true, Seed(0xC30));
+      beta::DrawText(canvas, title, {tcx - tpx * 0.5f, -1.5_cm}, kTitleText, beta::kInk, true,
+                     Seed(0xC30));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fpx = beta::TextWidth(credit, kCreditText);
-        beta::DrawText(canvas, credit, SkPoint{tcx - fpx * 0.5f, -1.92_cm}, kCreditText,
-                       "#8a7d66"_color, false, Seed(0xC31));
+        beta::DrawText(canvas, credit, {tcx - fpx * 0.5f, -1.92_cm}, kCreditText, "#8a7d66"_color,
+                       false, Seed(0xC31));
       }
     }
 
@@ -3898,7 +3885,6 @@ struct ChannelToy : beta::ObjectToy {
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
     if (btn == ui::PointerButton::Left) {
       Vec2 pos = p.PositionWithin(*this);
-      SkPoint pp = {pos.x, pos.y};
       if (channel == 7) {
         for (int i = 0; i < 3; ++i) {
           Rect s = WeightSliderM(i);
@@ -3907,7 +3893,7 @@ struct ChannelToy : beta::ObjectToy {
             return std::make_unique<ChannelWeightDrag>(p, *this, i);
         }
       }
-      int ch = ui::leptonica::ChannelTapAt(TapRectSk(), pp, 8);
+      int ch = ui::leptonica::ChannelTapAt(TapRectM(), pos, 8);
       if (ch >= 0) {
         if (auto t = LockChannel()) {
           {
@@ -4138,7 +4124,7 @@ struct ConvolveToy : beta::ObjectToy {
   SkPath Shape() const override {
     SkPathBuilder b;
     b.addRRect(RRect::MakeSimple(Rect(-kHalfW, kFaceBottom, kHalfW, kFaceTop), 4_mm).sk);
-    b.addOval(SkRect::MakeXYWH(-kLensR, kLensCY - kLensR, 2 * kLensR, 2 * kLensR));
+    b.addOval(Rect::MakeCircleR(kLensR).MoveBy({0, kLensCY}));
     SkPath out;
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::RRect(RRect::MakeSimple(Rect(-kHalfW, kFaceBottom, kHalfW, kFaceTop), 4_mm).sk);
@@ -4278,11 +4264,10 @@ struct ConvolveToy : beta::ObjectToy {
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xD01), 1);
       {
-        SkPoint lr = SkPoint{-kLensR, kLensCY - 0.55_cm};
+        Vec2 lr = {-kLensR, kLensCY - 0.55_cm};
         ui::leptonica::DrawDepthChip(
-            canvas,
-            SkRect::MakeLTRB(lr.fX + 0.6_mm - 7.9_mm, lr.fY - 3.5_mm, lr.fX + 0.6_mm, lr.fY),
-            out_depth, out_cmap, beta::State::Default, 0xD09);
+            canvas, Rect{lr.x + 0.6_mm - 7.9_mm, lr.y - 3.5_mm, lr.x + 0.6_mm, lr.y}, out_depth,
+            out_cmap, beta::State::Default, 0xD09);
       }
       beta::SketchyStroke(canvas,
                           beta::WobbleEllipse({0, kLensCY}, kLensR, kLensR, beta::kWonk, 0xD10, 56),
@@ -4293,7 +4278,7 @@ struct ConvolveToy : beta::ObjectToy {
                                    beta::State::Default, 0xD20);
 
       Rect rs = RadiusSliderM();
-      beta::Slider(canvas, rs.sk, std::clamp((float)radius / kMaxR, 0.f, 1.f),
+      beta::Slider(canvas, rs, std::clamp((float)radius / kMaxR, 0.f, 1.f),
                    radius_driven ? beta::State::Disabled : beta::State::Default, Seed(0xD30));
       {
         char buf[28];
@@ -4301,15 +4286,14 @@ struct ConvolveToy : beta::ObjectToy {
           snprintf(buf, sizeof(buf), "RADIUS %d DRIVEN", radius);
         else
           snprintf(buf, sizeof(buf), "RADIUS %d", radius);
-        beta::DrawText(canvas, buf, SkPoint{rs.left, rs.top + 0.12_cm}, 2.2_mm, kLabelInk, false,
-                       Seed(0));
+        beta::DrawText(canvas, buf, {rs.left, rs.top + 0.12_cm}, 2.2_mm, kLabelInk, false, Seed(0));
       }
       // AMOUNT: SHARP's strength; reused as BILAT's tonal RANGE. Greyed elsewhere (a strength
       // could apply but the mode doesn't take one).
       {
         Rect as = AmountSliderM();
         bool active = mode == 1 || mode == 5;
-        beta::Slider(canvas, as.sk, std::clamp(amount, 0.f, 1.f),
+        beta::Slider(canvas, as, std::clamp(amount, 0.f, 1.f),
                      active ? beta::State::Default : beta::State::Disabled, Seed(0xD31));
         char buf2[24];
         if (mode == 5) {
@@ -4317,39 +4301,39 @@ struct ConvolveToy : beta::ObjectToy {
         } else {
           snprintf(buf2, sizeof(buf2), "AMOUNT %.2f", amount);
         }
-        beta::DrawText(canvas, buf2, SkPoint{as.left, as.top + 0.12_cm}, 2.0_mm, kLabelInk, false,
+        beta::DrawText(canvas, buf2, {as.left, as.top + 0.12_cm}, 2.0_mm, kLabelInk, false,
                        Seed(0));
       }
       // RANK: the selection axis (which sorted neighbor wins). It does not exist outside RANK
       // mode, so the whole row hides rather than greys.
       if (mode == 4) {
         Rect ks = RankSliderM();
-        beta::Slider(canvas, ks.sk, std::clamp(rank, 0.f, 1.f), beta::State::Default, Seed(0xD32));
+        beta::Slider(canvas, ks, std::clamp(rank, 0.f, 1.f), beta::State::Default, Seed(0xD32));
         char buf3[24];
         snprintf(buf3, sizeof(buf3), "RANK %.2f", rank);
-        beta::DrawText(canvas, buf3, SkPoint{ks.left, ks.top + 0.12_cm}, 2.0_mm, kLabelInk, false,
+        beta::DrawText(canvas, buf3, {ks.left, ks.top + 0.12_cm}, 2.0_mm, kLabelInk, false,
                        Seed(0));
         float lmy = (ks.top + ks.bottom) * 0.5f - 0.06_cm;
-        beta::DrawText(canvas, "MIN", SkPoint{ks.left + 0.08_cm, lmy}, 1.5_mm, "#8a7d66"_color,
-                       false, Seed(0));
+        beta::DrawText(canvas, "MIN", {ks.left + 0.08_cm, lmy}, 1.5_mm, "#8a7d66"_color, false,
+                       Seed(0));
         float medw = beta::TextWidth("MED", 1.5_mm);
-        beta::DrawText(canvas, "MED", SkPoint{(ks.left + ks.right - medw) * 0.5f, lmy}, 1.5_mm,
+        beta::DrawText(canvas, "MED", {(ks.left + ks.right - medw) * 0.5f, lmy}, 1.5_mm,
                        "#8a7d66"_color, false, Seed(0));
         float maxw = beta::TextWidth("MAX", 1.5_mm);
-        beta::DrawText(canvas, "MAX", SkPoint{ks.right - maxw - 0.08_cm, lmy}, 1.5_mm,
-                       "#8a7d66"_color, false, Seed(0));
+        beta::DrawText(canvas, "MAX", {ks.right - maxw - 0.08_cm, lmy}, 1.5_mm, "#8a7d66"_color,
+                       false, Seed(0));
       }
 
       std::string title = "CONVOLVE";
       float tcx = -1.05_cm;
       float tpx = beta::TextWidth(title, kTitleText);
-      beta::DrawText(canvas, title, SkPoint{tcx - tpx * 0.5f, -2.62_cm}, kTitleText, beta::kInk,
-                     true, Seed(0xD40));
+      beta::DrawText(canvas, title, {tcx - tpx * 0.5f, -2.62_cm}, kTitleText, beta::kInk, true,
+                     Seed(0xD40));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fpx = beta::TextWidth(credit, kCreditText);
-        beta::DrawText(canvas, credit, SkPoint{tcx - fpx * 0.5f, -2.89_cm}, kCreditText,
-                       "#8a7d66"_color, false, Seed(0xD41));
+        beta::DrawText(canvas, credit, {tcx - fpx * 0.5f, -2.89_cm}, kCreditText, "#8a7d66"_color,
+                       false, Seed(0xD41));
       }
     }
 
@@ -4359,8 +4343,7 @@ struct ConvolveToy : beta::ObjectToy {
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
     if (btn == ui::PointerButton::Left) {
       Vec2 pos = p.PositionWithin(*this);
-      SkPoint pp = {pos.x, pos.y};
-      int m = ui::leptonica::ModeWheelHit({WheelCX(), WheelCY()}, WheelR(), pp, 6);
+      int m = ui::leptonica::ModeWheelHit({WheelCX(), WheelCY()}, WheelR(), pos, 6);
       if (m >= 0) {
         if (auto t = LockConv()) {
           {
@@ -4586,26 +4569,26 @@ static const SkPath* BlendWheelGlyphs() {
     {  // MIX: two offset squares, the overlap punched (even-odd) = the sheets interleave
       SkPathBuilder b;
       b.setFillType(SkPathFillType::kEvenOdd);
-      b.addRect(SkRect::MakeLTRB(-0.6f, -0.3f, 0.25f, 0.52f));
-      b.addRect(SkRect::MakeLTRB(-0.25f, -0.52f, 0.6f, 0.3f));
+      b.addRect(Rect{-0.6f, -0.3f, 0.25f, 0.52f});
+      b.addRect(Rect{-0.25f, -0.52f, 0.6f, 0.3f});
       g[0] = b.detach();
     }
     {  // ADD: +
       SkPathBuilder b;
-      b.addRect(SkRect::MakeLTRB(-0.14f, -0.52f, 0.14f, 0.52f));
-      b.addRect(SkRect::MakeLTRB(-0.52f, -0.14f, 0.52f, 0.14f));
+      b.addRect(Rect{-0.14f, -0.52f, 0.14f, 0.52f});
+      b.addRect(Rect{-0.52f, -0.14f, 0.52f, 0.14f});
       g[1] = b.detach();
     }
     {  // MULT: ×
       SkPathBuilder b;
-      SkPath bar = SkPath::Rect(SkRect::MakeLTRB(-0.55f, -0.13f, 0.55f, 0.13f));
+      SkPath bar = SkPath::Rect(Rect{-0.55f, -0.13f, 0.55f, 0.13f});
       b.addPath(bar.makeTransform(SkMatrix::RotateDeg(45.f)));
       b.addPath(bar.makeTransform(SkMatrix::RotateDeg(-45.f)));
       g[2] = b.detach();
     }
     {  // DIFF: −
       SkPathBuilder b;
-      b.addRect(SkRect::MakeLTRB(-0.52f, -0.14f, 0.52f, 0.14f));
+      b.addRect(Rect{-0.52f, -0.14f, 0.52f, 0.14f});
       g[3] = b.detach();
     }
     return g;
@@ -4799,35 +4782,34 @@ struct BlendToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xE01), 1);
-      DrawFittedDepthChip(canvas, pr.sk, cached_preview, out_depth, out_cmap, Seed(0xE09));
+      DrawFittedDepthChip(canvas, pr, cached_preview, out_depth, out_cmap, Seed(0xE09));
 
       const char* modes[] = {"MIX", "ADD", "MULT", "DIFF"};
       ui::leptonica::DrawModeWheel(canvas, {WheelCX(), WheelCY()}, WheelR(), modes, 4, mode,
                                    beta::State::Default, 0xE10, BlendWheelGlyphs());
 
       Rect as = AmountSliderM();
-      beta::Slider(canvas, as.sk, std::clamp(amount, 0.f, 1.f), beta::State::Default, Seed(0xE20));
+      beta::Slider(canvas, as, std::clamp(amount, 0.f, 1.f), beta::State::Default, Seed(0xE20));
       {
         char buf[20];
         snprintf(buf, sizeof(buf), "AMOUNT %d%%", (int)std::lround(amount * 100));
-        beta::DrawText(canvas, buf, SkPoint{as.left, as.top + 0.12_cm}, 2.0_mm, kLabelInk, false,
-                       Seed(0));
+        beta::DrawText(canvas, buf, {as.left, as.top + 0.12_cm}, 2.0_mm, kLabelInk, false, Seed(0));
       }
-      beta::DrawText(canvas, "A", SkPoint{-kHalfW + 0.12_cm, 1.0_cm + 0.12_cm}, 2.3_mm, kLabelInk,
-                     false, Seed(0));
-      beta::DrawText(canvas, "B", SkPoint{-kHalfW + 0.12_cm, -0.2_cm + 0.12_cm}, 2.3_mm, kLabelInk,
-                     false, Seed(0));
+      beta::DrawText(canvas, "A", {-kHalfW + 0.12_cm, 1.0_cm + 0.12_cm}, 2.3_mm, kLabelInk, false,
+                     Seed(0));
+      beta::DrawText(canvas, "B", {-kHalfW + 0.12_cm, -0.2_cm + 0.12_cm}, 2.3_mm, kLabelInk, false,
+                     Seed(0));
 
       std::string title = "BLEND";
       float tcx = -0.2_cm;
       float tpx = beta::TextWidth(title, kTitleText);
-      beta::DrawText(canvas, title, SkPoint{tcx - tpx * 0.5f, -1.25_cm}, kTitleText, beta::kInk,
-                     true, Seed(0xE30));
+      beta::DrawText(canvas, title, {tcx - tpx * 0.5f, -1.25_cm}, kTitleText, beta::kInk, true,
+                     Seed(0xE30));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fpx = beta::TextWidth(credit, kCreditText);
-        beta::DrawText(canvas, credit, SkPoint{tcx - fpx * 0.5f, -1.62_cm}, kCreditText,
-                       "#8a7d66"_color, false, Seed(0xE31));
+        beta::DrawText(canvas, credit, {tcx - fpx * 0.5f, -1.62_cm}, kCreditText, "#8a7d66"_color,
+                       false, Seed(0xE31));
       }
     }
 
@@ -4837,8 +4819,7 @@ struct BlendToy : beta::ObjectToy {
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
     if (btn == ui::PointerButton::Left) {
       Vec2 pos = p.PositionWithin(*this);
-      SkPoint pp = {pos.x, pos.y};
-      int m = ui::leptonica::ModeWheelHit({WheelCX(), WheelCY()}, WheelR(), pp, 4);
+      int m = ui::leptonica::ModeWheelHit({WheelCX(), WheelCY()}, WheelR(), pos, 4);
       if (m >= 0) {
         if (auto t = LockBlend()) {
           {
@@ -5115,7 +5096,7 @@ struct QuantizeToy : beta::ObjectToy {
 
   Rect CountSliderM() const { return Rect(-2.7_cm, -1.4_cm, 0.8_cm, -1.05_cm); }
   Rect GraysSliderM() const { return Rect(-2.7_cm, -1.85_cm, 0.8_cm, -1.55_cm); }
-  SkPoint AlgoWheelCM() const { return {1.05_cm, -2.0_cm}; }
+  Vec2 AlgoWheelCM() const { return {1.05_cm, -2.0_cm}; }
   constexpr static float kAlgoWheelR = 0.55_cm;
   Rect DitherToggleM() const { return Rect(-2.7_cm, -2.35_cm, -1.5_cm, -1.95_cm); }
   Rect PaletteChipM() const { return Rect(-2.7_cm, -3.08_cm, -1.55_cm, -2.72_cm); }
@@ -5294,11 +5275,11 @@ struct QuantizeToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xE01), 1);
-      DrawFittedDepthChip(canvas, PreviewM().sk, cached_preview, out_depth, out_cmap, Seed(0xEA0));
+      DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0xEA0));
 
       Rect cs = CountSliderM();
       float ct = (float)QuantNearestStepIdx(ncolors) / (kQuantNumSteps - 1);
-      beta::Slider(canvas, cs.sk, std::clamp(ct, 0.f, 1.f),
+      beta::Slider(canvas, cs, std::clamp(ct, 0.f, 1.f),
                    colors_driven ? beta::State::Disabled : beta::State::Default, Seed(0xE10));
       {
         char buf[28];
@@ -5306,61 +5287,58 @@ struct QuantizeToy : beta::ObjectToy {
           snprintf(buf, sizeof(buf), "COLORS %d DRIVEN", ncolors);
         else
           snprintf(buf, sizeof(buf), "COLORS %d", ncolors);
-        beta::DrawText(canvas, buf, SkPoint{cs.left, cs.top + 0.14_cm}, 2.2_mm, kLabelInk, false,
-                       Seed(0));
+        beta::DrawText(canvas, buf, {cs.left, cs.top + 0.14_cm}, 2.2_mm, kLabelInk, false, Seed(0));
       }
 
       if (algo == 2) {
         Rect gs = GraysSliderM();
-        beta::Slider(canvas, gs.sk, std::clamp((ngray - 2) / 98.f, 0.f, 1.f), beta::State::Default,
+        beta::Slider(canvas, gs, std::clamp((ngray - 2) / 98.f, 0.f, 1.f), beta::State::Default,
                      Seed(0xE15));
         char gbuf[20];
         snprintf(gbuf, sizeof(gbuf), "GRAYS %d", ngray);
-        beta::DrawText(canvas, gbuf, SkPoint{gs.left, gs.top + 0.12_cm}, 2.0_mm, kLabelInk, false,
+        beta::DrawText(canvas, gbuf, {gs.left, gs.top + 0.12_cm}, 2.0_mm, kLabelInk, false,
                        Seed(0));
       }
 
-      beta::Toggle(canvas, DitherToggleM().sk, dither,
+      beta::Toggle(canvas, DitherToggleM(), dither,
                    algo == 0 ? beta::State::Default : beta::State::Disabled, Seed(0xE20));
-      beta::DrawText(canvas, "DITHER", SkPoint{DitherToggleM().left, DitherToggleM().top + 0.16_cm},
+      beta::DrawText(canvas, "DITHER", {DitherToggleM().left, DitherToggleM().top + 0.16_cm},
                      2.2_mm, kLabelInk, false, Seed(0));
 
       {
         static const char* const kAlgoLabels[] = {"MEDIAN", "OCTREE", "MIXED", "FROM B"};
-        SkPoint wc = SkPoint{AlgoWheelCM().fX, AlgoWheelCM().fY};
+        Vec2 wc = AlgoWheelCM();
         ui::leptonica::DrawModeWheel(canvas, wc, kAlgoWheelR, kAlgoLabels, 4, algo,
                                      beta::State::Default, 0xE60);
         beta::DrawText(
             canvas, "ALGORITHM",
-            {wc.fX - beta::TextWidth("ALGORITHM", 1.75_mm) / 2, wc.fY + kAlgoWheelR + 1.2_mm},
+            {wc.x - beta::TextWidth("ALGORITHM", 1.75_mm) / 2, wc.y + kAlgoWheelR + 1.2_mm},
             1.75_mm, kLabelInk, false, Seed(0));
       }
 
       {
         Rect pc = PaletteChipM();
-        SkRect ppx2 = pc.sk;
-        SkPath chip =
-            beta::WonkyRoundRect(ppx2, ppx2.height() * 0.3f, beta::kWonk * 0.5f, Seed(0xE70));
+        SkPath chip = beta::WonkyRoundRect(pc, pc.Height() * 0.3f, beta::kWonk * 0.5f, Seed(0xE70));
         beta::MisregFill(canvas, chip, emit_palette ? beta::kCyan : beta::kPaper, Seed(0xE71));
         beta::SketchyStroke(canvas, chip, beta::kInk,
                             emit_palette ? beta::kStrokeBold : beta::kStroke, Seed(0xE72),
                             emit_palette ? 2 : 1);
         const char* pl = "PALETTE";
         float pw = beta::TextWidth(pl, 1.75_mm);
-        beta::DrawText(canvas, pl, {ppx2.centerX() - pw * 0.5f, ppx2.centerY() - 0.6_mm}, 1.75_mm,
+        beta::DrawText(canvas, pl, {pc.CenterX() - pw * 0.5f, pc.CenterY() - 0.6_mm}, 1.75_mm,
                        beta::kInk, false, Seed(0));
       }
 
       std::string title = "QUANTIZE";
       float tw = beta::TextWidth(title, kTitleText);
-      SkPoint tc = SkPoint{0, -2.7_cm};
-      beta::DrawText(canvas, title, {tc.fX - tw * 0.5f, tc.fY}, kTitleText, beta::kInk, true,
+      Vec2 tc = {0, -2.7_cm};
+      beta::DrawText(canvas, title, {tc.x - tw * 0.5f, tc.y}, kTitleText, beta::kInk, true,
                      Seed(0xE30));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fw = beta::TextWidth(credit, kCreditText);
-        SkPoint fc = SkPoint{0, -3.02_cm};
-        beta::DrawText(canvas, credit, {fc.fX - fw * 0.5f, fc.fY}, kCreditText, "#8a7d66"_color,
+        Vec2 fc = {0, -3.02_cm};
+        beta::DrawText(canvas, credit, {fc.x - fw * 0.5f, fc.y}, kCreditText, "#8a7d66"_color,
                        false, Seed(0xE31));
       }
     }
@@ -5372,9 +5350,8 @@ struct QuantizeToy : beta::ObjectToy {
     if (btn == ui::PointerButton::Left) {
       Vec2 pos = p.PositionWithin(*this);
       {
-        SkPoint wc = AlgoWheelCM();
-        SkPoint pp{pos.x, pos.y};
-        int hit = ui::leptonica::ModeWheelHit(wc, kAlgoWheelR, pp, 4);
+        Vec2 wc = AlgoWheelCM();
+        int hit = ui::leptonica::ModeWheelHit(wc, kAlgoWheelR, pos, 4);
         if (hit >= 0) {
           if (auto t = LockQuant()) {
             {
@@ -5644,7 +5621,7 @@ struct FlattenToy : beta::ObjectToy {
   Rect BgSliderM() const { return Rect(-2.7_cm, -1.75_cm, 0.7_cm, -1.4_cm); }
   Rect TileSliderM() const { return Rect(-2.7_cm, -2.55_cm, 0.7_cm, -2.2_cm); }
   Rect PreviewM() const { return Rect(-1.75_cm, -1.0_cm, 1.75_cm, 1.0_cm); }
-  SkPoint WheelCM() const { return {1.85_cm, -3.0_cm}; }
+  Vec2 WheelCM() const { return {1.85_cm, -3.0_cm}; }
   float WheelRM() const { return 0.45_cm; }
   Rect MapChipM() const { return Rect(-2.7_cm, -3.3_cm, -1.55_cm, -2.95_cm); }
   // scale slider range per method: TILE px / MORPH close-size / FLEX tiles
@@ -5790,15 +5767,15 @@ struct FlattenToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xF01), 1);
-      DrawFittedDepthChip(canvas, PreviewM().sk, cached_preview, out_depth, out_cmap, Seed(0xF09));
+      DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0xF09));
 
-      beta::SketchyStroke(
-          canvas, beta::WobbleEllipse(SkPoint{0, kBulbCY}, kBulbR, kBulbR, beta::kWonk, 0xF05, 40),
-          beta::kInk, beta::kStroke, Seed(0xF06), 2);
-      SkPoint bulbp = SkPoint{0, kBulbCY - kBulbR};
+      beta::SketchyStroke(canvas,
+                          beta::WobbleEllipse({0, kBulbCY}, kBulbR, kBulbR, beta::kWonk, 0xF05, 40),
+                          beta::kInk, beta::kStroke, Seed(0xF06), 2);
+      Vec2 bulbp = {0, kBulbCY - kBulbR};
       const float ray_dx[] = {-2.0_cm, -1.0_cm, 0.0_cm, 1.0_cm, 2.0_cm};
       for (int i = 0; i < 5; ++i) {
-        SkPoint end = SkPoint{ray_dx[i], 0.15_cm};
+        Vec2 end = {ray_dx[i], 0.15_cm};
         beta::SketchyStroke(
             canvas, beta::WobbleLine(bulbp, end, beta::kWonk * 0.6f, beta::kSeg, 0xF10u + i),
             "#e7c24a"_color, beta::kStrokeHair, Seed(0xF20u + i), 1);
@@ -5807,28 +5784,26 @@ struct FlattenToy : beta::ObjectToy {
       Rect bs = BgSliderM();
       float bt = std::clamp((float)(bgval - 128) / (240 - 128), 0.f, 1.f);
       bool has_bg = method == 0 || method == 1;  // FLEX/CONTRAST have no brightness target
-      beta::Slider(canvas, bs.sk, bt, has_bg ? beta::State::Default : beta::State::Disabled,
+      beta::Slider(canvas, bs, bt, has_bg ? beta::State::Default : beta::State::Disabled,
                    Seed(0xF30));
       {
         char buf[28];
         snprintf(buf, sizeof(buf), "BG VALUE %d", bgval);
-        beta::DrawText(canvas, buf, SkPoint{bs.left, bs.top + 0.14_cm}, 2.2_mm, kLabelInk, false,
-                       Seed(0));
+        beta::DrawText(canvas, buf, {bs.left, bs.top + 0.14_cm}, 2.2_mm, kLabelInk, false, Seed(0));
       }
       Rect ts = TileSliderM();
       int lo, hi;
       ScaleRange(lo, hi);
       int scv = std::clamp(tilesize, lo, hi);
       float tt = std::clamp((float)(scv - lo) / (hi - lo), 0.f, 1.f);
-      beta::Slider(canvas, ts.sk, tt, beta::State::Default, Seed(0xF40));
+      beta::Slider(canvas, ts, tt, beta::State::Default, Seed(0xF40));
       {
         char buf[20];
         if (method == 1)
           snprintf(buf, sizeof(buf), "CLOSE %d", scv | 1);
         else
           snprintf(buf, sizeof(buf), "GRID %d", scv);
-        beta::DrawText(canvas, buf, SkPoint{ts.left, ts.top + 0.14_cm}, 2.2_mm, kLabelInk, false,
-                       Seed(0));
+        beta::DrawText(canvas, buf, {ts.left, ts.top + 0.14_cm}, 2.2_mm, kLabelInk, false, Seed(0));
       }
       {
         const char* methods[] = {"TILE", "MORPH", "FLEX", "CONTRAST"};
@@ -5837,11 +5812,9 @@ struct FlattenToy : beta::ObjectToy {
       }
       {
         Rect mc = MapChipM();
-        SkRect mpx = mc.sk;
         bool na = method >= 2;  // FLEX/CONTRAST expose no illumination map
         bool on = show_map && !na;
-        SkPath chip =
-            beta::WonkyRoundRect(mpx, mpx.height() * 0.3f, beta::kWonk * 0.5f, Seed(0xF70));
+        SkPath chip = beta::WonkyRoundRect(mc, mc.Height() * 0.3f, beta::kWonk * 0.5f, Seed(0xF70));
         if (on)
           beta::MisregFill(canvas, chip, beta::kCyan, Seed(0xF71));
         else
@@ -5850,21 +5823,21 @@ struct FlattenToy : beta::ObjectToy {
                             on ? beta::kStrokeBold : beta::kStroke, Seed(0xF72), on ? 2 : 1);
         const char* ml = "MAP";
         float mw = beta::TextWidth(ml, 2.2_mm);
-        beta::DrawText(canvas, ml, {mpx.centerX() - mw * 0.5f, mpx.centerY() - 0.73_mm}, 2.2_mm,
+        beta::DrawText(canvas, ml, {mc.CenterX() - mw * 0.5f, mc.CenterY() - 0.73_mm}, 2.2_mm,
                        na ? beta::kGrayDark : beta::kInk, false, Seed(0));
-        if (na) beta::HatchRect(canvas, mpx, beta::kInkSoft, mpx.height() * 0.3f, Seed(0xF73));
+        if (na) beta::HatchRect(canvas, mc, beta::kInkSoft, mc.Height() * 0.3f, Seed(0xF73));
       }
 
       std::string title = "FLATTEN";
       float tw = beta::TextWidth(title, kTitleText);
-      SkPoint tc = SkPoint{0, -4.1_cm};
-      beta::DrawText(canvas, title, {tc.fX - tw * 0.5f, tc.fY}, kTitleText, beta::kInk, true,
+      Vec2 tc = {0, -4.1_cm};
+      beta::DrawText(canvas, title, {tc.x - tw * 0.5f, tc.y}, kTitleText, beta::kInk, true,
                      Seed(0xF50));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fw = beta::TextWidth(credit, kCreditText);
-        SkPoint fc = SkPoint{0, -4.4_cm};
-        beta::DrawText(canvas, credit, {fc.fX - fw * 0.5f, fc.fY}, kCreditText, "#8a7d66"_color,
+        Vec2 fc = {0, -4.4_cm};
+        beta::DrawText(canvas, credit, {fc.x - fw * 0.5f, fc.y}, kCreditText, "#8a7d66"_color,
                        false, Seed(0xF51));
       }
     }
@@ -5879,8 +5852,7 @@ struct FlattenToy : beta::ObjectToy {
         return pos.x >= r.left - 0.2_cm && pos.x <= r.right + 0.2_cm &&
                pos.y >= r.bottom - 0.2_cm && pos.y <= r.top + 0.2_cm;
       };
-      SkPoint pp = {pos.x, pos.y};
-      int mhit = ui::leptonica::ModeWheelHit(WheelCM(), WheelRM(), pp, 4);
+      int mhit = ui::leptonica::ModeWheelHit(WheelCM(), WheelRM(), pos, 4);
       if (mhit >= 0) {
         if (auto t = LockFlat()) {
           {
@@ -6160,25 +6132,25 @@ struct PosterizeToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xE61), 1);
-      DrawFittedDepthChip(canvas, PreviewM().sk, cached_preview, out_depth, out_cmap, Seed(0xE90));
+      DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0xE90));
 
       Rect st = StepperM();
       char buf[4];
       snprintf(buf, sizeof(buf), "%d", levels);
-      beta::Stepper(canvas, st.sk, buf, beta::State::Default, Seed(0xE70));
-      beta::DrawText(canvas, "LEVELS", SkPoint{st.left, st.top + 0.14_cm}, 2.2_mm, kLabelInk, false,
+      beta::Stepper(canvas, st, buf, beta::State::Default, Seed(0xE70));
+      beta::DrawText(canvas, "LEVELS", {st.left, st.top + 0.14_cm}, 2.2_mm, kLabelInk, false,
                      Seed(0));
 
       std::string title = "POSTERIZE";
       float tw = beta::TextWidth(title, kTitleText);
-      SkPoint tc = SkPoint{0, -2.85_cm};
-      beta::DrawText(canvas, title, {tc.fX - tw * 0.5f, tc.fY}, kTitleText, beta::kInk, true,
+      Vec2 tc = {0, -2.85_cm};
+      beta::DrawText(canvas, title, {tc.x - tw * 0.5f, tc.y}, kTitleText, beta::kInk, true,
                      Seed(0xE80));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fw = beta::TextWidth(credit, kCreditText);
-        SkPoint fc = SkPoint{0, -3.13_cm};
-        beta::DrawText(canvas, credit, {fc.fX - fw * 0.5f, fc.fY}, kCreditText, "#8a7d66"_color,
+        Vec2 fc = {0, -3.13_cm};
+        beta::DrawText(canvas, credit, {fc.x - fw * 0.5f, fc.y}, kCreditText, "#8a7d66"_color,
                        false, Seed(0xE81));
       }
     }
@@ -6468,34 +6440,33 @@ struct DitherToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xD01), 1);
-      DrawFittedDepthChip(canvas, PreviewM().sk, cached_preview, out_depth, out_cmap, Seed(0xD90));
+      DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0xD90));
 
       // The Window instrument: clip markers bracketing where the dots live, over the live
       // source histogram. lo = clip_black, hi = 255 - clip_white, on the real 0..255 axis.
-      SkRect band = WindowM().sk;
+      Rect band = WindowM();
       ui::leptonica::DrawWindow(
           canvas, band, (float)clip_black, (float)(255 - clip_white), 0.f, 255.f,
           histogram.empty() ? nullptr : histogram.data(), max_log_count,
           dragging_marker == 0 ? beta::State::Pressed : beta::State::Default,
           dragging_marker == 1 ? beta::State::Pressed : beta::State::Default, 0xD10);
-      beta::DrawText(canvas, "SOLID", SkPoint{WindowM().left - 0.02_cm, WindowM().bottom - 0.5_cm},
+      beta::DrawText(canvas, "SOLID", {WindowM().left - 0.02_cm, WindowM().bottom - 0.5_cm},
                      1.75_mm, kLabelInk, false, Seed(0));
-      beta::DrawText(canvas, "DOTS BETWEEN",
-                     SkPoint{WindowM().left + 1.1_cm, WindowM().bottom - 0.5_cm}, 1.75_mm,
-                     kLabelInk, false, Seed(0));
-      beta::DrawText(canvas, "SOLID", SkPoint{WindowM().right - 0.55_cm, WindowM().bottom - 0.5_cm},
+      beta::DrawText(canvas, "DOTS BETWEEN", {WindowM().left + 1.1_cm, WindowM().bottom - 0.5_cm},
+                     1.75_mm, kLabelInk, false, Seed(0));
+      beta::DrawText(canvas, "SOLID", {WindowM().right - 0.55_cm, WindowM().bottom - 0.5_cm},
                      1.75_mm, kLabelInk, false, Seed(0));
 
       std::string title = "DITHER";
       float tw = beta::TextWidth(title, kTitleText);
-      SkPoint tc = SkPoint{0, -2.9_cm};
-      beta::DrawText(canvas, title, {tc.fX - tw * 0.5f, tc.fY}, kTitleText, beta::kInk, true,
+      Vec2 tc = {0, -2.9_cm};
+      beta::DrawText(canvas, title, {tc.x - tw * 0.5f, tc.y}, kTitleText, beta::kInk, true,
                      Seed(0xD20));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fw = beta::TextWidth(credit, kCreditText);
-        SkPoint fc = SkPoint{0, -3.16_cm};
-        beta::DrawText(canvas, credit, {fc.fX - fw * 0.5f, fc.fY}, kCreditText, "#8a7d66"_color,
+        Vec2 fc = {0, -3.16_cm};
+        beta::DrawText(canvas, credit, {fc.x - fw * 0.5f, fc.y}, kCreditText, "#8a7d66"_color,
                        false, Seed(0xD21));
       }
     }
@@ -6506,18 +6477,17 @@ struct DitherToy : beta::ObjectToy {
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
     if (btn == ui::PointerButton::Left) {
       Vec2 pos = p.PositionWithin(*this);
-      SkPoint pp{pos.x, pos.y};
-      SkRect band = WindowM().sk;
-      bool lo_grab = ui::leptonica::LevelGrabsMarker(band, pp, (float)clip_black, 0.f, 255.f);
+      Rect band = WindowM();
+      bool lo_grab = ui::leptonica::LevelGrabsMarker(band, pos, (float)clip_black, 0.f, 255.f);
       bool hi_grab =
-          ui::leptonica::LevelGrabsMarker(band, pp, (float)(255 - clip_white), 0.f, 255.f);
+          ui::leptonica::LevelGrabsMarker(band, pos, (float)(255 - clip_white), 0.f, 255.f);
       if (lo_grab || hi_grab) {
         int which;
         if (lo_grab && hi_grab) {
           // Both in reach: take the nearer marker.
           float lox = ui::leptonica::LevelValueToX(band, (float)clip_black, 0.f, 255.f);
           float hix = ui::leptonica::LevelValueToX(band, (float)(255 - clip_white), 0.f, 255.f);
-          which = std::abs(pp.fX - lox) <= std::abs(pp.fX - hix) ? 0 : 1;
+          which = std::abs(pos.x - lox) <= std::abs(pos.x - hix) ? 0 : 1;
         } else {
           which = lo_grab ? 0 : 1;
         }
@@ -6545,7 +6515,7 @@ DitherClipDrag::~DitherClipDrag() {
 void DitherClipDrag::Update() {
   if (!widget) return;
   Vec2 pos = pointer.PositionWithin(*widget);
-  SkRect band = widget->WindowM().sk;
+  Rect band = widget->WindowM();
   float v = ui::leptonica::LevelXToValue(band, pos.x, 0.f, 255.f);
   if (auto t = widget->LockDither()) {
     {
@@ -6587,7 +6557,7 @@ Pix* Deskew::ApplyOp(Pix* in, const float*) const {
   // NB: this fn's confidence is the margin over the COMPETING orientation - systematically lower
   // than pixFindSkew's ratio; its calibrated floor is conf > 0 (as the upstream usage), not 3.0.
   if (ret || conf <= 0.f || std::abs(angle) < 0.1f) return pixClone(in);
-  return pixRotate(in, angle * 3.14159265f / 180.f, L_ROTATE_AREA_MAP, L_BRING_IN_WHITE, 0, 0);
+  return pixRotate(in, angle / 180.f * kPi, L_ROTATE_AREA_MAP, L_BRING_IN_WHITE, 0, 0);
 }
 void Deskew::PushFix(double deg) {
   if (auto target = fix_out->ObjectOrNull()) {
@@ -6729,8 +6699,7 @@ struct DeskewToy : beta::ObjectToy {
         if (ret) conf = 0.f;
       }
       if (conf > 0.f && std::abs(angle) >= 0.1f) {
-        result =
-            pixRotate(pix, angle * 3.14159265f / 180.f, L_ROTATE_AREA_MAP, L_BRING_IN_WHITE, 0, 0);
+        result = pixRotate(pix, angle / 180.f * kPi, L_ROTATE_AREA_MAP, L_BRING_IN_WHITE, 0, 0);
       } else {
         result = pixClone(pix);
       }
@@ -6823,21 +6792,20 @@ struct DeskewToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xDE01), 1);
-      DrawFittedDepthChip(canvas, PreviewM().sk, cached_preview, out_depth, out_cmap, Seed(0xDE90));
+      DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0xDE90));
 
       {
         SkPoint pivot = SkPoint{kTabR, kTabB};
         canvas.save();
         canvas.rotate(kGhostDeg, pivot.fX, pivot.fY);
-        beta::HatchRect(canvas, tab.sk, beta::kInkSoft, 1.3_mm, Seed(0xDE10));
+        beta::HatchRect(canvas, tab, beta::kInkSoft, 1.3_mm, Seed(0xDE10));
         canvas.restore();
         for (int a = 0; a < 2; ++a) {
           float r = 1.55_cm - a * 0.3_cm;
           SkPathBuilder arc;
           for (int i = 0; i <= 8; ++i) {
             float deg = 124.f + (kGhostDeg + 4.f) * (float)i / 8.f;
-            float rad = deg * 3.14159265f / 180.f;
-            SkPoint pt{pivot.fX + r * std::cos(rad), pivot.fY + r * std::sin(rad)};
+            Vec2 pt = Vec2(pivot) + Vec2::Polar(SinCos::FromDegrees(deg), r);
             if (i == 0)
               arc.moveTo(pt);
             else
@@ -6850,42 +6818,42 @@ struct DeskewToy : beta::ObjectToy {
 
       const float sweep = mode == 1 ? 135.f : kSweepDeg;
       const int tick_step = mode == 1 ? 15 : 1;
-      SkRect gauge = GaugeM().sk;
-      float gh = gauge.height();
+      Rect gauge = GaugeM();
+      float gh = gauge.Height();
       {
         SkPaint gp;
         gp.setAntiAlias(true);
         gp.setColor("#efe9da"_color);
-        canvas.drawRect(gauge, gp);
+        canvas.drawRect(gauge.sk, gp);
         beta::SketchyStroke(canvas, beta::WobbleRect(gauge, beta::kWonk * 0.5f, beta::kSeg, 0xDE31),
                             beta::kInk, beta::kStrokeHair, Seed(0xDE32), 1);
         int n = (int)sweep / tick_step;
         for (int i = -n; i <= n; ++i) {
           int d = i * tick_step;
-          float x = gauge.fLeft + (d + sweep) / (2 * sweep) * gauge.width();
+          float x = gauge.left + (d + sweep) / (2 * sweep) * gauge.Width();
           bool major = d == 0 || (mode == 1 && (d == 90 || d == -90));
           float tick_h = major ? gh * 0.85f : gh * 0.4f;
-          canvas.drawPath(beta::WobbleLine({x, gauge.fTop}, {x, gauge.fTop + tick_h}, 0.12_mm,
+          canvas.drawPath(beta::WobbleLine({x, gauge.bottom}, {x, gauge.bottom + tick_h}, 0.12_mm,
                                            0.9_mm, Seed(0xDE40u + (uint32_t)(i + n))),
                           beta::InkPaint(major ? beta::kInk : beta::kInkSoft, beta::kStrokeHair));
         }
         char lo[8], hi[8];
         snprintf(lo, sizeof(lo), "-%d", (int)sweep);
         snprintf(hi, sizeof(hi), "+%d", (int)sweep);
-        beta::DrawText(canvas, lo, {gauge.fLeft - 3.8_mm, gauge.fTop}, 1.75_mm, kLabelInk, false,
+        beta::DrawText(canvas, lo, {gauge.left - 3.8_mm, gauge.bottom}, 1.75_mm, kLabelInk, false,
                        Seed(0));
-        beta::DrawText(canvas, hi, {gauge.fRight + 0.6_mm, gauge.fTop}, 1.75_mm, kLabelInk, false,
+        beta::DrawText(canvas, hi, {gauge.right + 0.6_mm, gauge.bottom}, 1.75_mm, kLabelInk, false,
                        Seed(0));
       }
-      beta::DrawText(canvas, "MEASURED SKEW", SkPoint{GaugeM().left, GaugeM().top + 0.14_cm},
-                     2.2_mm, kLabelInk, false, Seed(0));
+      beta::DrawText(canvas, "MEASURED SKEW", {GaugeM().left, GaugeM().top + 0.14_cm}, 2.2_mm,
+                     kLabelInk, false, Seed(0));
 
-      beta::DrawText(canvas, "SEARCH", SkPoint{ModeCellM(0).left, ModeCellM(0).top + 0.14_cm},
-                     1.9_mm, kLabelInk, false, Seed(0));
+      beta::DrawText(canvas, "SEARCH", {ModeCellM(0).left, ModeCellM(0).top + 0.14_cm}, 1.9_mm,
+                     kLabelInk, false, Seed(0));
       for (int which = 0; which < 2; ++which) {
-        SkRect cell = ModeCellM(which).sk;
+        Rect cell = ModeCellM(which);
         bool sel = (mode == which);
-        SkPath cp = beta::WonkyRoundRect(cell, cell.height() * 0.18f, beta::kWonk * 0.6f,
+        SkPath cp = beta::WonkyRoundRect(cell, cell.Height() * 0.18f, beta::kWonk * 0.6f,
                                          Seed(0xDEA0u + (uint32_t)which));
         if (sel)
           beta::HandShadow(canvas, cp, {0.3_mm, -0.3_mm}, beta::kShadow,
@@ -6895,43 +6863,41 @@ struct DeskewToy : beta::ObjectToy {
         beta::SketchyStroke(canvas, cp, beta::kInk, sel ? beta::kStroke : beta::kStrokeHair,
                             Seed(0xDEA6u + (uint32_t)which), sel ? 2 : 1);
         SkColor ink = sel ? beta::kInk : beta::kInkSoft;
-        SkPoint c{cell.centerX() - cell.width() * 0.18f, cell.centerY()};
-        float ph = cell.height() * 0.52f, pw = ph * 0.72f;
+        SkPoint c{cell.CenterX() - cell.Width() * 0.18f, cell.CenterY()};
+        float ph = cell.Height() * 0.52f, pw = ph * 0.72f;
         canvas.save();
         canvas.rotate(which == 0 ? 8.f : 90.f, c.fX, c.fY);
-        canvas.drawPath(
-            beta::WobbleRect(SkRect::MakeXYWH(c.fX - pw / 2, c.fY - ph / 2, pw, ph),
-                             beta::kWonk * 0.5f, beta::kSeg, Seed(0xDEA8u + (uint32_t)which)),
-            beta::InkPaint(ink, beta::kStrokeHair));
+        canvas.drawPath(beta::WobbleRect(Rect::MakeCenter({c.fX, c.fY}, pw, ph), beta::kWonk * 0.5f,
+                                         beta::kSeg, Seed(0xDEA8u + (uint32_t)which)),
+                        beta::InkPaint(ink, beta::kStrokeHair));
         canvas.restore();
         const char* lab = which == 0 ? "7" : "90";
-        beta::DrawText(canvas, lab, {cell.centerX() + cell.width() * 0.1f, cell.fTop + 0.9_mm},
-                       cell.height() * 0.4f, ink, false, Seed(0));
+        beta::DrawText(canvas, lab, {cell.CenterX() + cell.Width() * 0.1f, cell.bottom + 0.9_mm},
+                       cell.Height() * 0.4f, ink, false, Seed(0));
         if (sel) beta::Highlight(canvas, cell, beta::kBlue, Seed(0xDEAAu + (uint32_t)which));
       }
 
       if (has_measure && (mode == 1 ? found_conf > 0.f : found_conf >= 3.f)) {
         float a = std::clamp(found_angle, -sweep, sweep);
-        float x = gauge.fLeft + (a + sweep) / (2 * sweep) * gauge.width();
-        canvas.drawPath(
-            beta::WobbleLine({x, gauge.fTop - gh * 0.25f}, {x, gauge.fBottom + gh * 0.3f}, 0.15_mm,
-                             1.0_mm, Seed(0xDE50)),
-            beta::InkPaint(beta::kInk, beta::kStrokeBold));
+        float x = gauge.left + (a + sweep) / (2 * sweep) * gauge.Width();
+        canvas.drawPath(beta::WobbleLine({x, gauge.bottom - gh * 0.25f}, {x, gauge.top + gh * 0.3f},
+                                         0.15_mm, 1.0_mm, Seed(0xDE50)),
+                        beta::InkPaint(beta::kInk, beta::kStrokeBold));
         char buf[24];
         snprintf(buf, sizeof(buf), "%+.1f", found_angle);
         float fs = 2.0_mm;
         float tw = beta::TextWidth(buf, fs);
         float cw = tw + 1.75_mm, ch = fs * 1.5f;
-        float cx = std::clamp(x, gauge.fLeft + cw / 2, gauge.fRight - cw / 2);
-        float cy = gauge.fBottom + gh * 0.55f + ch / 2;
-        SkRect chip = SkRect::MakeXYWH(cx - cw / 2, cy - ch / 2, cw, ch);
+        float cx = std::clamp(x, gauge.left + cw / 2, gauge.right - cw / 2);
+        float cy = gauge.top + gh * 0.55f + ch / 2;
+        Rect chip = Rect::MakeCenter({cx, cy}, cw, ch);
         SkPath cp = beta::WonkyRoundRect(chip, ch * 0.35f, beta::kWonk, Seed(0xDE51));
         beta::HandShadow(canvas, cp, {0.3_mm, -0.3_mm}, beta::kShadow, Seed(0xDE52));
         beta::MisregFill(canvas, cp, beta::kPaper, Seed(0xDE53));
         beta::SketchyStroke(canvas, cp, beta::kInk, beta::kStroke, Seed(0xDE54), 1);
         beta::DrawText(canvas, buf, {cx - tw / 2, cy - fs * 0.36f}, fs, beta::kInk, false, Seed(0));
       } else if (has_measure) {
-        beta::Badge(canvas, {gauge.centerX(), gauge.centerY()}, "LOW CONF - UNCHANGED", beta::kRed,
+        beta::Badge(canvas, {gauge.CenterX(), gauge.CenterY()}, "LOW CONF - UNCHANGED", beta::kRed,
                     4.f, Seed(0xDE60));
       }
       {
@@ -6940,20 +6906,20 @@ struct DeskewToy : beta::ObjectToy {
           snprintf(buf, sizeof(buf), "CONF %.1f", found_conf);
         else
           snprintf(buf, sizeof(buf), "CONF -");
-        beta::DrawText(canvas, buf, SkPoint{GaugeM().left, GaugeM().bottom - 0.42_cm}, 1.9_mm,
-                       kLabelInk, false, Seed(0));
+        beta::DrawText(canvas, buf, {GaugeM().left, GaugeM().bottom - 0.42_cm}, 1.9_mm, kLabelInk,
+                       false, Seed(0));
       }
 
       std::string title = "DESKEW";
       float tw = beta::TextWidth(title, kTitleText);
-      SkPoint tc = SkPoint{0, -3.0_cm};
-      beta::DrawText(canvas, title, {tc.fX - tw * 0.5f, tc.fY}, kTitleText, beta::kInk, true,
+      Vec2 tc = {0, -3.0_cm};
+      beta::DrawText(canvas, title, {tc.x - tw * 0.5f, tc.y}, kTitleText, beta::kInk, true,
                      Seed(0xDE70));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fw = beta::TextWidth(credit, kCreditText);
-        SkPoint fc = SkPoint{0, -3.28_cm};
-        beta::DrawText(canvas, credit, {fc.fX - fw * 0.5f, fc.fY}, kCreditText, "#8a7d66"_color,
+        Vec2 fc = {0, -3.28_cm};
+        beta::DrawText(canvas, credit, {fc.x - fw * 0.5f, fc.y}, kCreditText, "#8a7d66"_color,
                        false, Seed(0xDE71));
       }
     }
@@ -7279,7 +7245,7 @@ struct FindLevelToy : beta::ObjectToy {
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xFD01), 1);
 
-      ui::leptonica::DrawLevel(canvas, BandM().sk, (float)found_thresh, 0.f, 255.f,
+      ui::leptonica::DrawLevel(canvas, BandM(), (float)found_thresh, 0.f, 255.f,
                                histogram.empty() ? nullptr : histogram.data(), max_log_count, true,
                                false, beta::State::Disabled, 0xFD10);
       beta::DrawText(canvas, "FOUND LEVEL", {BandM().left, BandM().top + 0.5_cm}, 2.2_mm, kLabelInk,
@@ -7287,30 +7253,30 @@ struct FindLevelToy : beta::ObjectToy {
 
       {
         char buf[16];
-        SkRect fgs = Rect(-2.7_cm, -1.55_cm, -2.3_cm, -1.25_cm).sk;
+        Rect fgs{-2.7_cm, -1.55_cm, -2.3_cm, -1.25_cm};
         SkPaint sp;
         sp.setAntiAlias(true);
         int v = std::clamp(found_fg, 0, 255);
         sp.setColor(SkColorSetRGB(v, v, v));
-        canvas.drawRect(fgs, sp);
+        canvas.drawRect(fgs.sk, sp);
         canvas.drawPath(beta::WobbleRect(fgs, beta::kWonk * 0.5f, beta::kSeg, Seed(0xFD20)),
                         beta::InkPaint(beta::kInk, beta::kStrokeHair));
         snprintf(buf, sizeof(buf), "FG %d", v);
-        beta::DrawText(canvas, buf, {fgs.fRight + 0.9_mm, fgs.fTop + 0.3_mm}, 1.9_mm, kLabelInk,
+        beta::DrawText(canvas, buf, {fgs.right + 0.9_mm, fgs.bottom + 0.3_mm}, 1.9_mm, kLabelInk,
                        false, Seed(0));
-        SkRect bgs = Rect(-0.9_cm, -1.55_cm, -0.5_cm, -1.25_cm).sk;
+        Rect bgs{-0.9_cm, -1.55_cm, -0.5_cm, -1.25_cm};
         int w2 = std::clamp(found_bg, 0, 255);
         sp.setColor(SkColorSetRGB(w2, w2, w2));
-        canvas.drawRect(bgs, sp);
+        canvas.drawRect(bgs.sk, sp);
         canvas.drawPath(beta::WobbleRect(bgs, beta::kWonk * 0.5f, beta::kSeg, Seed(0xFD21)),
                         beta::InkPaint(beta::kInk, beta::kStrokeHair));
         snprintf(buf, sizeof(buf), "BG %d", w2);
-        beta::DrawText(canvas, buf, {bgs.fRight + 0.9_mm, bgs.fTop + 0.3_mm}, 1.9_mm, kLabelInk,
+        beta::DrawText(canvas, buf, {bgs.right + 0.9_mm, bgs.bottom + 0.3_mm}, 1.9_mm, kLabelInk,
                        false, Seed(0));
       }
 
       Rect fs = FractSliderM();
-      beta::Slider(canvas, fs.sk, std::clamp(scorefract / 0.5f, 0.f, 1.f), beta::State::Default,
+      beta::Slider(canvas, fs, std::clamp(scorefract / 0.5f, 0.f, 1.f), beta::State::Default,
                    Seed(0xFD30));
       {
         char buf[28];
@@ -7614,7 +7580,7 @@ struct CountToy : beta::ObjectToy {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xC001), 1);
 
       {
-        SkRect chip = TotalChipM().sk;
+        Rect chip = TotalChipM();
         beta::MisregFill(canvas, beta::WonkyRoundRect(chip, 1.2_mm, beta::kWonk, 0xC010),
                          beta::kPaper, Seed(0xC011));
         beta::SketchyStroke(canvas, beta::WonkyRoundRect(chip, 1.2_mm, beta::kWonk, 0xC010),
@@ -7626,11 +7592,11 @@ struct CountToy : beta::ObjectToy {
           snprintf(buf, sizeof(buf), "-");
         float fs = 5.8_mm;
         float tw = beta::TextWidth(buf, fs);
-        beta::DrawText(canvas, buf, {chip.centerX() - tw / 2, chip.centerY() - fs * 0.36f}, fs,
+        beta::DrawText(canvas, buf, {chip.CenterX() - tw / 2, chip.CenterY() - fs * 0.36f}, fs,
                        beta::kInk, false, Seed(0));
       }
 
-      ui::leptonica::DrawConnectivity(canvas, ConnM().sk, eight, beta::State::Default, 0xC020);
+      ui::leptonica::DrawConnectivity(canvas, ConnM(), eight, beta::State::Default, 0xC020);
       beta::DrawText(canvas, "CONNECTIVITY", {ConnM().left, ConnM().top + 0.14_cm}, 1.9_mm,
                      kLabelInk, false, Seed(0));
 
@@ -7650,7 +7616,7 @@ struct CountToy : beta::ObjectToy {
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
     if (btn == ui::PointerButton::Left) {
       Vec2 pos = p.PositionWithin(*this);
-      int hit = ui::leptonica::ConnectivityHit(ConnM().sk, {pos.x, pos.y});
+      int hit = ui::leptonica::ConnectivityHit(ConnM(), {pos.x, pos.y});
       if (hit != 0) {
         if (auto t = LockCount()) {
           {
@@ -7837,7 +7803,7 @@ struct SelectToy : beta::ObjectToy {
   Rect PreviewM() const { return Rect(-2.85_cm, -1.05_cm, 2.85_cm, 0.75_cm); }
   Rect WindowM() const { return Rect(-2.7_cm, -2.05_cm, 1.5_cm, -1.55_cm); }
   Rect WindowBM() const { return Rect(-2.7_cm, -2.95_cm, 1.0_cm, -2.45_cm); }
-  SkPoint WheelCM() const { return {2.15_cm, -2.5_cm}; }
+  Vec2 WheelCM() const { return {2.15_cm, -2.5_cm}; }
   float WheelRM() const { return 0.36_cm; }
   Rect InChipM(int which) const {
     return which == 0 ? Rect(1.7_cm, -1.86_cm, 2.1_cm, -1.54_cm)
@@ -8017,9 +7983,9 @@ struct SelectToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0x5E01), 1);
-      DrawFittedDepthChip(canvas, PreviewM().sk, cached_preview, out_depth, out_cmap, Seed(0x5E90));
+      DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0x5E90));
 
-      ui::leptonica::DrawWindow(canvas, WindowM().sk, (float)lo, (float)hi, 0.f, (float)AxisAMax(),
+      ui::leptonica::DrawWindow(canvas, WindowM(), (float)lo, (float)hi, 0.f, (float)AxisAMax(),
                                 histogram.empty() ? nullptr : histogram.data(), max_log_count,
                                 dragging_marker == 0 ? beta::State::Pressed : beta::State::Default,
                                 dragging_marker == 1 ? beta::State::Pressed : beta::State::Default,
@@ -8048,9 +8014,9 @@ struct SelectToy : beta::ObjectToy {
       }
 
       for (int which = 0; which < 2; ++which) {
-        SkRect chip = InChipM(which).sk;
+        Rect chip = InChipM(which);
         bool sel = (which == 1) != inside;
-        SkPath cp = beta::WonkyRoundRect(chip, chip.height() * 0.3f, beta::kWonk * 0.5f,
+        SkPath cp = beta::WonkyRoundRect(chip, chip.Height() * 0.3f, beta::kWonk * 0.5f,
                                          Seed(0x5E20u + (uint32_t)which));
         if (sel)
           beta::HandShadow(canvas, cp, {0.3_mm, -0.3_mm}, beta::kShadow,
@@ -8061,7 +8027,7 @@ struct SelectToy : beta::ObjectToy {
                             Seed(0x5E2Cu + (uint32_t)which), 1);
         const char* lab = which == 0 ? "IN" : "OUT";
         float lw = beta::TextWidth(lab, 1.75_mm);
-        beta::DrawText(canvas, lab, {chip.centerX() - lw / 2, chip.centerY() - 0.6_mm}, 1.75_mm,
+        beta::DrawText(canvas, lab, {chip.CenterX() - lw / 2, chip.CenterY() - 0.6_mm}, 1.75_mm,
                        sel ? beta::kInk : beta::kInkSoft, false, Seed(0));
         if (sel) beta::Highlight(canvas, chip, beta::kBlue, Seed(0x5E30));
       }
@@ -8084,7 +8050,6 @@ struct SelectToy : beta::ObjectToy {
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
     if (btn == ui::PointerButton::Left) {
       Vec2 pos = p.PositionWithin(*this);
-      SkPoint ppx{pos.x, pos.y};
       for (int which = 0; which < 2; ++which) {
         Rect r = InChipM(which);
         if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.bottom && pos.y <= r.top) {
@@ -8098,7 +8063,7 @@ struct SelectToy : beta::ObjectToy {
           return std::make_unique<SelectPoke>(p);
         }
       }
-      int whit = ui::leptonica::ModeWheelHit(WheelCM(), WheelRM(), ppx, 4);
+      int whit = ui::leptonica::ModeWheelHit(WheelCM(), WheelRM(), pos, 4);
       if (whit >= 0) {
         if (auto t = LockSel()) {
           {
@@ -8112,31 +8077,31 @@ struct SelectToy : beta::ObjectToy {
         }
         return std::make_unique<SelectPoke>(p);
       }
-      SkRect band = WindowM().sk;
+      Rect band = WindowM();
       float amax = (float)AxisAMax();
-      bool lo_grab = ui::leptonica::LevelGrabsMarker(band, ppx, (float)lo, 0.f, amax);
-      bool hi_grab = ui::leptonica::LevelGrabsMarker(band, ppx, (float)hi, 0.f, amax);
+      bool lo_grab = ui::leptonica::LevelGrabsMarker(band, pos, (float)lo, 0.f, amax);
+      bool hi_grab = ui::leptonica::LevelGrabsMarker(band, pos, (float)hi, 0.f, amax);
       if (lo_grab || hi_grab) {
         int which;
         if (lo_grab && hi_grab) {
           float lox = ui::leptonica::LevelValueToX(band, (float)lo, 0.f, amax);
           float hix = ui::leptonica::LevelValueToX(band, (float)hi, 0.f, amax);
-          which = std::abs(ppx.fX - lox) <= std::abs(ppx.fX - hix) ? 0 : 1;
+          which = std::abs(pos.x - lox) <= std::abs(pos.x - hix) ? 0 : 1;
         } else {
           which = lo_grab ? 0 : 1;
         }
         return std::make_unique<SelectBandDrag>(p, *this, which);
       }
       if (axes != 0) {
-        SkRect bandb = WindowBM().sk;
-        bool lo2g = ui::leptonica::LevelGrabsMarker(bandb, ppx, (float)lo2, 0.f, 255.f);
-        bool hi2g = ui::leptonica::LevelGrabsMarker(bandb, ppx, (float)hi2, 0.f, 255.f);
+        Rect bandb = WindowBM();
+        bool lo2g = ui::leptonica::LevelGrabsMarker(bandb, pos, (float)lo2, 0.f, 255.f);
+        bool hi2g = ui::leptonica::LevelGrabsMarker(bandb, pos, (float)hi2, 0.f, 255.f);
         if (lo2g || hi2g) {
           int which;
           if (lo2g && hi2g) {
             float lox = ui::leptonica::LevelValueToX(bandb, (float)lo2, 0.f, 255.f);
             float hix = ui::leptonica::LevelValueToX(bandb, (float)hi2, 0.f, 255.f);
-            which = std::abs(ppx.fX - lox) <= std::abs(ppx.fX - hix) ? 2 : 3;
+            which = std::abs(pos.x - lox) <= std::abs(pos.x - hix) ? 2 : 3;
           } else {
             which = lo2g ? 2 : 3;
           }
@@ -8168,7 +8133,7 @@ void SelectBandDrag::Update() {
   bool axis_b = which >= 2;
   Rect wm = axis_b ? widget->WindowBM() : widget->WindowM();
   float vmax = axis_b ? 255.f : (float)widget->AxisAMax();
-  float v = ui::leptonica::LevelXToValue(wm.sk, pos.x, 0.f, vmax);
+  float v = ui::leptonica::LevelXToValue(wm, pos.x, 0.f, vmax);
   if (auto t = widget->LockSel()) {
     {
       auto lock = std::lock_guard(t->mutex);
@@ -8309,7 +8274,7 @@ struct FadeToy : beta::ObjectToy {
   bool CenteredAtZero() const override { return true; }
 
   Rect PreviewM() const { return Rect(-2.7_cm, -1.0_cm, 2.7_cm, 0.9_cm); }
-  SkPoint DirWheelCM() const { return {1.9_cm, -1.75_cm}; }
+  Vec2 DirWheelCM() const { return {1.9_cm, -1.75_cm}; }
   constexpr static float kDirWheelR = 0.4_cm;
   Rect PolarityM() const { return Rect(-2.7_cm, -1.95_cm, -1.2_cm, -1.55_cm); }
   Rect ReachSliderM() const { return Rect(-2.7_cm, -2.85_cm, 0.6_cm, -2.5_cm); }
@@ -8452,7 +8417,7 @@ struct FadeToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xFA01), 1);
-      DrawFittedDepthChip(canvas, PreviewM().sk, cached_preview, out_depth, out_cmap, Seed(0xFA90));
+      DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0xFA90));
 
       {
         static const char* const kDirLabels[] = {"TOP", "RIGHT", "BOT", "LEFT"};
@@ -8463,21 +8428,20 @@ struct FadeToy : beta::ObjectToy {
         ui::leptonica::DrawModeWheel(canvas, DirWheelCM(), kDirWheelR, kDirLabels, 4, sel_pos,
                                      beta::State::Default, 0xFA10);
       }
-      ui::leptonica::DrawPolarity(canvas, PolarityM().sk, !to_black, beta::State::Default, 0xFA20);
+      ui::leptonica::DrawPolarity(canvas, PolarityM(), !to_black, beta::State::Default, 0xFA20);
       beta::DrawText(canvas, "FADE TO", {PolarityM().left, PolarityM().top + 0.12_cm}, 1.9_mm,
                      kLabelInk, false, Seed(0));
 
       {
         Rect rs = ReachSliderM();
-        beta::Slider(canvas, rs.sk, std::clamp(reach, 0.f, 1.f), beta::State::Default,
-                     Seed(0xFA30));
+        beta::Slider(canvas, rs, std::clamp(reach, 0.f, 1.f), beta::State::Default, Seed(0xFA30));
         char buf[20];
         snprintf(buf, sizeof(buf), "REACH %.2f", reach);
         beta::DrawText(canvas, buf, {rs.left, rs.top + 0.12_cm}, 2.0_mm, kLabelInk, false, Seed(0));
       }
       {
         Rect ss = StrengthSliderM();
-        beta::Slider(canvas, ss.sk, std::clamp(strength, 0.f, 1.f), beta::State::Default,
+        beta::Slider(canvas, ss, std::clamp(strength, 0.f, 1.f), beta::State::Default,
                      Seed(0xFA31));
         char buf[24];
         snprintf(buf, sizeof(buf), "STRENGTH %.2f", strength);
@@ -8502,8 +8466,7 @@ struct FadeToy : beta::ObjectToy {
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
     if (btn == ui::PointerButton::Left) {
       Vec2 pos = p.PositionWithin(*this);
-      SkPoint ppx{pos.x, pos.y};
-      int hit = ui::leptonica::ModeWheelHit(DirWheelCM(), kDirWheelR, ppx, 4);
+      int hit = ui::leptonica::ModeWheelHit(DirWheelCM(), kDirWheelR, pos, 4);
       if (hit >= 0) {
         static const int kDirAtPos[] = {2, 1, 3, 0};
         if (auto t = LockFade()) {
@@ -8704,7 +8667,7 @@ struct ReduceToy : beta::ObjectToy {
     float x0 = -2.7_cm + i * 0.62_cm;
     return Rect(x0, -1.65_cm, x0 + 0.52_cm, -1.3_cm);
   }
-  SkPoint RuleWheelCM() const { return {1.9_cm, -1.7_cm}; }
+  Vec2 RuleWheelCM() const { return {1.9_cm, -1.7_cm}; }
   constexpr static float kRuleWheelR = 0.42_cm;
   Rect RankRowM() const { return Rect(-2.7_cm, -2.55_cm, 0.6_cm, -2.2_cm); }
 
@@ -8822,7 +8785,7 @@ struct ReduceToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xDE01), 1);
-      DrawFittedDepthChip(canvas, PreviewM().sk, cached_preview, out_depth, out_cmap, Seed(0xDE90));
+      DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0xDE90));
 
       static const char* const kFactors[] = {
           "\xc3\x97"
@@ -8834,10 +8797,10 @@ struct ReduceToy : beta::ObjectToy {
           "\xc3\x97"
           "8"};
       for (int i = 0; i < 4; ++i) {
-        SkRect chip = FactorChipM(i).sk;
+        Rect chip = FactorChipM(i);
         bool sel = i == factor_idx;
         bool na = rule == 4 && i == 1;  // RANK has no x3 form
-        SkPath cp = beta::WonkyRoundRect(chip, chip.height() * 0.3f, beta::kWonk * 0.5f,
+        SkPath cp = beta::WonkyRoundRect(chip, chip.Height() * 0.3f, beta::kWonk * 0.5f,
                                          Seed(0xDE20u + (uint32_t)i));
         if (sel)
           beta::HandShadow(canvas, cp, {0.3_mm, -0.3_mm}, beta::kShadow,
@@ -8848,12 +8811,12 @@ struct ReduceToy : beta::ObjectToy {
                             sel ? beta::kStroke : beta::kStrokeHair, Seed(0xDE2Cu + (uint32_t)i),
                             1);
         float lw = beta::TextWidth(kFactors[i], 1.9_mm);
-        beta::DrawText(canvas, kFactors[i], {chip.centerX() - lw / 2, chip.centerY() - 0.66_mm},
+        beta::DrawText(canvas, kFactors[i], {chip.CenterX() - lw / 2, chip.CenterY() - 0.66_mm},
                        1.9_mm, na ? beta::kGrayDark : (sel ? beta::kInk : beta::kInkSoft), false,
                        Seed(0));
         if (sel) beta::Highlight(canvas, chip, beta::kBlue, Seed(0xDE34));
         if (na)
-          beta::HatchRect(canvas, chip, beta::kInkSoft, chip.height() * 0.3f,
+          beta::HatchRect(canvas, chip, beta::kInkSoft, chip.Height() * 0.3f,
                           Seed(0xDE38u + (uint32_t)i));
       }
       beta::DrawText(canvas, "FACTOR", {FactorChipM(0).left, FactorChipM(0).top + 0.12_cm}, 1.9_mm,
@@ -8867,7 +8830,7 @@ struct ReduceToy : beta::ObjectToy {
 
       if (rule == 4) {
         Rect rr = RankRowM();
-        beta::Slider(canvas, rr.sk, (rank - 1) / 3.f, beta::State::Default, Seed(0xDE50));
+        beta::Slider(canvas, rr, (rank - 1) / 3.f, beta::State::Default, Seed(0xDE50));
         char buf[16];
         snprintf(buf, sizeof(buf), "RANK %d", rank);
         beta::DrawText(canvas, buf, {rr.left, rr.top + 0.12_cm}, 2.0_mm, kLabelInk, false, Seed(0));
@@ -9149,8 +9112,8 @@ struct MeasureToy : beta::ObjectToy {
     SkPathBuilder fan;
     fan.moveTo(-2.3_cm, 0.9_cm);
     for (int i = 0; i <= 12; ++i) {
-      float a = 3.14159265f * 0.5f + 3.14159265f * 0.5f * (float)i / 12.f;  // 90..180 deg
-      fan.lineTo(-2.3_cm + 1.3_cm * std::cos(a), 0.9_cm + 1.3_cm * std::sin(a));
+      float deg = 90.f + 90.f * (float)i / 12.f;  // 90..180 deg
+      fan.lineTo(Vec2(-2.3_cm, 0.9_cm) + Vec2::Polar(SinCos::FromDegrees(deg), 1.3_cm));
     }
     fan.close();
     b.addPath(fan.detach());
@@ -9279,14 +9242,14 @@ struct MeasureToy : beta::ObjectToy {
 
     {
       float frac = has_measure ? std::clamp(found_value / 255.f, 0.f, 1.f) : 0.5f;
-      float a = 3.14159265f - 3.14159265f * 0.5f * frac;  // 180..90 deg
+      float deg = 180.f - 90.f * frac;  // 180..90 deg
+      Vec2 tip = Vec2(-2.3_cm, 0.9_cm) + Vec2::Polar(SinCos::FromDegrees(deg), 1.15_cm);
       SkPaint np;
       np.setAntiAlias(true);
       np.setStyle(SkPaint::kStroke_Style);
       np.setStrokeWidth(0.06_cm);
       np.setColor("#ed1c24"_color);
-      canvas.drawLine(-2.3_cm, 0.9_cm, -2.3_cm + 1.15_cm * std::cos(a),
-                      0.9_cm + 1.15_cm * std::sin(a), np);
+      canvas.drawLine(-2.3_cm, 0.9_cm, tip.x, tip.y, np);
     }
 
     if (cached_preview) {
@@ -9302,16 +9265,16 @@ struct MeasureToy : beta::ObjectToy {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xE301), 1);
 
       if (cached_preview) {
-        SkRect fit = FittedRectM().sk;
+        Rect fit = FittedRectM();
         // v runs 0..1 from the image's top (max Y) down, so the v1 edge is the lower (min Y) one.
-        SkRect mq = SkRect::MakeLTRB(fit.fLeft + u0 * fit.width(), fit.fBottom - v1 * fit.height(),
-                                     fit.fLeft + u1 * fit.width(), fit.fBottom - v0 * fit.height());
+        Rect mq{fit.left + u0 * fit.Width(), fit.top - v1 * fit.Height(),
+                fit.left + u1 * fit.Width(), fit.top - v0 * fit.Height()};
         ui::leptonica::DrawRegion(canvas, fit, mq,
                                   dragging ? beta::State::Pressed : beta::State::Default, 0xE310);
       }
 
       {
-        SkRect chip = ValueChipM().sk;
+        Rect chip = ValueChipM();
         beta::MisregFill(canvas, beta::WonkyRoundRect(chip, 1.2_mm, beta::kWonk, 0xE320),
                          beta::kPaper, Seed(0xE321));
         beta::SketchyStroke(canvas, beta::WonkyRoundRect(chip, 1.2_mm, beta::kWonk, 0xE320),
@@ -9323,16 +9286,16 @@ struct MeasureToy : beta::ObjectToy {
           snprintf(buf, sizeof(buf), "-");
         float fs = 5.2_mm;
         float tw = beta::TextWidth(buf, fs);
-        beta::DrawText(canvas, buf, {chip.centerX() - tw / 2, chip.centerY() - fs * 0.36f}, fs,
+        beta::DrawText(canvas, buf, {chip.CenterX() - tw / 2, chip.CenterY() - fs * 0.36f}, fs,
                        beta::kInk, false, Seed(0));
       }
 
       {
         static const char* const kStat[3] = {"MEAN", "MIN", "MAX"};
         for (int which = 0; which < 3; ++which) {
-          SkRect cell = StatCellM(which).sk;
+          Rect cell = StatCellM(which);
           bool sel = stat == which;
-          SkPath cp = beta::WonkyRoundRect(cell, cell.height() * 0.3f, beta::kWonk * 0.5f,
+          SkPath cp = beta::WonkyRoundRect(cell, cell.Height() * 0.3f, beta::kWonk * 0.5f,
                                            Seed(0xE330u + (uint32_t)which));
           if (sel)
             beta::HandShadow(canvas, cp, {0.3_mm, -0.3_mm}, beta::kShadow,
@@ -9342,7 +9305,7 @@ struct MeasureToy : beta::ObjectToy {
           beta::SketchyStroke(canvas, cp, beta::kInk, sel ? beta::kStroke : beta::kStrokeHair,
                               Seed(0xE33Cu + (uint32_t)which), 1);
           float lw = beta::TextWidth(kStat[which], 1.75_mm);
-          beta::DrawText(canvas, kStat[which], {cell.centerX() - lw / 2, cell.centerY() - 0.6_mm},
+          beta::DrawText(canvas, kStat[which], {cell.CenterX() - lw / 2, cell.CenterY() - 0.6_mm},
                          1.75_mm, sel ? beta::kInk : beta::kInkSoft, false, Seed(0));
           if (sel) beta::Highlight(canvas, cell, beta::kBlue, Seed(0xE340));
         }
@@ -9378,9 +9341,9 @@ struct MeasureToy : beta::ObjectToy {
         }
       }
       if (cached_preview) {
-        SkRect fit = FittedRectM().sk;
-        SkRect mq = SkRect::MakeLTRB(fit.fLeft + u0 * fit.width(), fit.fBottom - v1 * fit.height(),
-                                     fit.fLeft + u1 * fit.width(), fit.fBottom - v0 * fit.height());
+        Rect fit = FittedRectM();
+        Rect mq{fit.left + u0 * fit.Width(), fit.top - v1 * fit.Height(),
+                fit.left + u1 * fit.Width(), fit.top - v0 * fit.Height()};
         int hit = ui::leptonica::RegionHit(mq, {pos.x, pos.y});
         if (hit != 0) return std::make_unique<MeasureRegionDrag>(p, *this, hit);
       }
@@ -9567,7 +9530,7 @@ struct WarpToy : beta::ObjectToy {
 
   Rect PreviewM() const { return Rect(-2.85_cm, -1.1_cm, 2.85_cm, 0.75_cm); }
   Rect AmountSliderM() const { return Rect(-2.7_cm, -1.95_cm, 0.0_cm, -1.6_cm); }
-  SkPoint ModeWheelCM() const { return {1.0_cm, -2.0_cm}; }
+  Vec2 ModeWheelCM() const { return {1.0_cm, -2.0_cm}; }
   constexpr static float kModeWheelR = 0.55_cm;
 
   SkPath Shape() const override {
@@ -9689,15 +9652,14 @@ struct WarpToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xA201), 1);
-      DrawFittedDepthChip(canvas, PreviewM().sk, cached_preview, out_depth, out_cmap, Seed(0xA290));
+      DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0xA290));
 
       Rect as = AmountSliderM();
-      beta::Slider(canvas, as.sk, std::clamp(amount, 0.f, 1.f), beta::State::Default, Seed(0xA210));
+      beta::Slider(canvas, as, std::clamp(amount, 0.f, 1.f), beta::State::Default, Seed(0xA210));
       {
         char buf[20];
         snprintf(buf, sizeof(buf), "AMOUNT %.2f", amount);
-        beta::DrawText(canvas, buf, SkPoint{as.left, as.top + 0.12_cm}, 2.0_mm, kLabelInk, false,
-                       Seed(0));
+        beta::DrawText(canvas, buf, {as.left, as.top + 0.12_cm}, 2.0_mm, kLabelInk, false, Seed(0));
       }
 
       {
@@ -9708,14 +9670,14 @@ struct WarpToy : beta::ObjectToy {
 
       std::string title = "WARP";
       float tw = beta::TextWidth(title, kTitleText);
-      SkPoint tc = SkPoint{0, -2.85_cm};
-      beta::DrawText(canvas, title, {tc.fX - tw * 0.5f, tc.fY}, kTitleText, beta::kInk, true,
+      Vec2 tc = {0, -2.85_cm};
+      beta::DrawText(canvas, title, {tc.x - tw * 0.5f, tc.y}, kTitleText, beta::kInk, true,
                      Seed(0xA230));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fw = beta::TextWidth(credit, kCreditText);
-        SkPoint fc = SkPoint{0, -3.13_cm};
-        beta::DrawText(canvas, credit, {fc.fX - fw * 0.5f, fc.fY}, kCreditText, "#8a7d66"_color,
+        Vec2 fc = {0, -3.13_cm};
+        beta::DrawText(canvas, credit, {fc.x - fw * 0.5f, fc.y}, kCreditText, "#8a7d66"_color,
                        false, Seed(0xA231));
       }
     }
@@ -9726,8 +9688,7 @@ struct WarpToy : beta::ObjectToy {
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
     if (btn == ui::PointerButton::Left) {
       Vec2 pos = p.PositionWithin(*this);
-      SkPoint pp = {pos.x, pos.y};
-      int m = ui::leptonica::ModeWheelHit(ModeWheelCM(), kModeWheelR, pp, 3);
+      int m = ui::leptonica::ModeWheelHit(ModeWheelCM(), kModeWheelR, pos, 3);
       if (m >= 0) {
         if (auto t = LockWarp()) {
           {
@@ -9921,8 +9882,8 @@ struct ColorToy : beta::ObjectToy {
     SkPathBuilder dome;
     dome.moveTo(-kWheelR, kBodyTop - 0.05_cm);
     for (int i = 0; i <= 24; ++i) {
-      float a = 3.14159265f - 3.14159265f * (float)i / 24.f;  // pi..0
-      dome.lineTo(kWheelR * std::cos(a), kBodyTop - 0.05_cm + kWheelR * std::sin(a));
+      float deg = 180.f - 180.f * (float)i / 24.f;  // 180..0 deg
+      dome.lineTo(Vec2(0, kBodyTop - 0.05_cm) + Vec2::Polar(SinCos::FromDegrees(deg), kWheelR));
     }
     dome.close();
     b.addPath(dome.detach());
@@ -10026,16 +9987,16 @@ struct ColorToy : beta::ObjectToy {
     {
       float cy = kBodyTop - 0.05_cm;
       for (int i = 0; i < 12; ++i) {
-        float a0 = 3.14159265f * (float)i / 12.f;
-        float a1 = 3.14159265f * (float)(i + 1) / 12.f;
+        float d0 = 180.f * (float)i / 12.f;
+        float d1 = 180.f * (float)(i + 1) / 12.f;
         SkPathBuilder w;
         w.moveTo(0, cy);
         for (int k = 0; k <= 4; ++k) {
-          float a = a0 + (a1 - a0) * (float)k / 4.f;
-          w.lineTo((kWheelR - 0.12_cm) * std::cos(a), cy + (kWheelR - 0.12_cm) * std::sin(a));
+          float deg = d0 + (d1 - d0) * (float)k / 4.f;
+          w.lineTo(Vec2(0, cy) + Vec2::Polar(SinCos::FromDegrees(deg), kWheelR - 0.12_cm));
         }
         w.close();
-        float middeg = (a0 + a1) * 0.5f * 57.29578f;
+        float middeg = (d0 + d1) * 0.5f;
         float h = std::fmod(360.f + (180.f - middeg) + hue * 180.f, 360.f);
         SkPaint wp;
         wp.setAntiAlias(true);
@@ -10048,9 +10009,9 @@ struct ColorToy : beta::ObjectToy {
       np.setStyle(SkPaint::kStroke_Style);
       np.setStrokeWidth(0.08_cm);
       np.setColor("#1a1a1a"_color);
-      float ang = 1.5707963f;  // up; the RAINBOW rotates, the needle stays - the wheel turns
-      canvas.drawLine(0, cy, kWheelR * 0.92f * std::cos(ang), cy + kWheelR * 0.92f * std::sin(ang),
-                      np);
+      // up; the RAINBOW rotates, the needle stays - the wheel turns
+      Vec2 tip = Vec2(0, cy) + Vec2::Polar(90_deg, kWheelR * 0.92f);
+      canvas.drawLine(0, cy, tip.x, tip.y, np);
     }
 
     if (cached_preview) {
@@ -10064,22 +10025,22 @@ struct ColorToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xC101), 1);
-      DrawFittedDepthChip(canvas, PreviewM().sk, cached_preview, out_depth, out_cmap, Seed(0xC190));
+      DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0xC190));
 
       static const char* const kLab[4] = {"SAT", "R", "G", "B"};
       static const SkColor kLabCol[4] = {0xff7a6f5c, 0xffed1c24, 0xff22b14c, 0xff3f48cc};
       const float vals[4] = {sat, r_shift, g_shift, b_shift};
       for (int i = 0; i < 4; ++i) {
         Rect s = SliderM(i);
-        beta::Slider(canvas, s.sk, std::clamp((vals[i] + 1.f) * 0.5f, 0.f, 1.f),
-                     beta::State::Default, Seed(0xC110u + (uint32_t)i));
+        beta::Slider(canvas, s, std::clamp((vals[i] + 1.f) * 0.5f, 0.f, 1.f), beta::State::Default,
+                     Seed(0xC110u + (uint32_t)i));
         char buf[20];
         snprintf(buf, sizeof(buf), "%s %+.2f", kLab[i], vals[i]);
-        beta::DrawText(canvas, buf, SkPoint{s.left - 0.62_cm, s.top - 0.02_cm}, 1.75_mm, kLabCol[i],
-                       false, Seed(0));
-        float cx = s.sk.centerX();
-        canvas.drawPath(beta::WobbleLine({cx, s.sk.fBottom + 0.44_mm}, {cx, s.sk.fBottom - 0.73_mm},
-                                         0.12_mm, 0.73_mm, Seed(0xC120u + (uint32_t)i)),
+        beta::DrawText(canvas, buf, {s.left - 0.62_cm, s.top - 0.02_cm}, 1.75_mm, kLabCol[i], false,
+                       Seed(0));
+        float cx = s.CenterX();
+        canvas.drawPath(beta::WobbleLine({cx, s.top + 0.44_mm}, {cx, s.top - 0.73_mm}, 0.12_mm,
+                                         0.73_mm, Seed(0xC120u + (uint32_t)i)),
                         beta::InkPaint(beta::kInkSoft, beta::kStrokeHair));
       }
 
@@ -10087,21 +10048,21 @@ struct ColorToy : beta::ObjectToy {
         char buf[20];
         snprintf(buf, sizeof(buf), "HUE %+.0f", hue * 180.f);
         float fw2 = beta::TextWidth(buf, 1.9_mm);
-        SkPoint hp = SkPoint{0, kBodyTop + 0.18_cm};
-        beta::DrawText(canvas, buf, {hp.fX - fw2 / 2, hp.fY}, 1.9_mm, beta::kInk, false,
+        Vec2 hp = {0, kBodyTop + 0.18_cm};
+        beta::DrawText(canvas, buf, {hp.x - fw2 / 2, hp.y}, 1.9_mm, beta::kInk, false,
                        Seed(0xC130));
       }
 
       std::string title = "COLOR";
       float tw = beta::TextWidth(title, kTitleText);
-      SkPoint tc = SkPoint{0, -3.05_cm};
-      beta::DrawText(canvas, title, {tc.fX - tw * 0.5f, tc.fY}, kTitleText, beta::kInk, true,
+      Vec2 tc = {0, -3.05_cm};
+      beta::DrawText(canvas, title, {tc.x - tw * 0.5f, tc.y}, kTitleText, beta::kInk, true,
                      Seed(0xC140));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fw = beta::TextWidth(credit, kCreditText);
-        SkPoint fc = SkPoint{0, -3.32_cm};
-        beta::DrawText(canvas, credit, {fc.fX - fw * 0.5f, fc.fY}, kCreditText, "#8a7d66"_color,
+        Vec2 fc = {0, -3.32_cm};
+        beta::DrawText(canvas, credit, {fc.x - fw * 0.5f, fc.y}, kCreditText, "#8a7d66"_color,
                        false, Seed(0xC141));
       }
     }
@@ -10586,12 +10547,13 @@ struct SeedfillToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0x5F01), 1);
-      DrawFittedDepthChip(canvas, PreviewM().sk, cached_preview, out_depth, out_cmap, Seed(0x5F90));
+      DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0x5F90));
 
       {
         SkPoint a = SkPoint{1.90_cm, 2.15_cm}, b2 = SkPoint{1.32_cm, 2.97_cm};  // base side corners
         SkPoint mid = {(a.fX + b2.fX) * 0.5f, (a.fY + b2.fY) * 0.5f};
-        SkPoint n = {std::cos(35.f * 0.0174533f), std::sin(35.f * 0.0174533f)};  // outward
+        SinCos n_dir = 35_deg;
+        SkPoint n = {(float)n_dir.cos, (float)n_dir.sin};  // outward
         float bow_px = 0.5_cm;
         SkPathBuilder arc;
         for (int i = 0; i <= 12; ++i) {
@@ -10607,19 +10569,18 @@ struct SeedfillToy : beta::ObjectToy {
         beta::SketchyStroke(canvas, arc.detach(), beta::kInk, beta::kStroke, Seed(0x5F05), 1);
       }
 
-      ui::leptonica::DrawConnectivity(canvas, ConnM().sk, eight, beta::State::Default, 0x5F10);
-      beta::DrawText(canvas, "CONNECTIVITY", SkPoint{ConnM().left, ConnM().top + 0.14_cm}, 1.9_mm,
+      ui::leptonica::DrawConnectivity(canvas, ConnM(), eight, beta::State::Default, 0x5F10);
+      beta::DrawText(canvas, "CONNECTIVITY", {ConnM().left, ConnM().top + 0.14_cm}, 1.9_mm,
                      kLabelInk, false, Seed(0));
 
-      ui::leptonica::DrawPalette(canvas, PaletteM().sk, PaletteIndex(), beta::State::Default,
-                                 0x5FA0);
-      beta::DrawText(canvas, "PAINT", SkPoint{PaletteM().left, PaletteM().top + 0.14_cm}, 1.9_mm,
+      ui::leptonica::DrawPalette(canvas, PaletteM(), PaletteIndex(), beta::State::Default, 0x5FA0);
+      beta::DrawText(canvas, "PAINT", {PaletteM().left, PaletteM().top + 0.14_cm}, 1.9_mm,
                      kLabelInk, false, Seed(0));
 
       for (int which = 0; which < 2; ++which) {
-        SkRect chip = ModeChipM(which).sk;
+        Rect chip = ModeChipM(which);
         bool sel = (which == 1) == emit_mask;
-        SkPath cp = beta::WonkyRoundRect(chip, chip.height() * 0.3f, beta::kWonk * 0.5f,
+        SkPath cp = beta::WonkyRoundRect(chip, chip.Height() * 0.3f, beta::kWonk * 0.5f,
                                          Seed(0x5FB0u + (uint32_t)which));
         if (sel)
           beta::HandShadow(canvas, cp, {0.3_mm, -0.3_mm}, beta::kShadow,
@@ -10630,21 +10591,21 @@ struct SeedfillToy : beta::ObjectToy {
                             Seed(0x5FB6u + (uint32_t)which), 1);
         const char* lab = which == 0 ? "PAINT" : "MASK";
         float lw = beta::TextWidth(lab, 1.6_mm);
-        beta::DrawText(canvas, lab, {chip.centerX() - lw / 2, chip.centerY() - 0.6_mm}, 1.6_mm,
+        beta::DrawText(canvas, lab, {chip.CenterX() - lw / 2, chip.CenterY() - 0.6_mm}, 1.6_mm,
                        sel ? beta::kInk : beta::kInkSoft, false, Seed(0));
         if (sel) beta::Highlight(canvas, chip, beta::kBlue, Seed(0x5FB8));
       }
 
       std::string title = "SEEDFILL";
       float tw = beta::TextWidth(title, kTitleText);
-      SkPoint tc = SkPoint{0, -3.0_cm};
-      beta::DrawText(canvas, title, {tc.fX - tw * 0.5f, tc.fY}, kTitleText, beta::kInk, true,
+      Vec2 tc = {0, -3.0_cm};
+      beta::DrawText(canvas, title, {tc.x - tw * 0.5f, tc.y}, kTitleText, beta::kInk, true,
                      Seed(0x5F30));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fw = beta::TextWidth(credit, kCreditText);
-        SkPoint fc = SkPoint{0, -3.28_cm};
-        beta::DrawText(canvas, credit, {fc.fX - fw * 0.5f, fc.fY}, kCreditText, "#8a7d66"_color,
+        Vec2 fc = {0, -3.28_cm};
+        beta::DrawText(canvas, credit, {fc.x - fw * 0.5f, fc.y}, kCreditText, "#8a7d66"_color,
                        false, Seed(0x5F31));
       }
     }
@@ -10656,8 +10617,7 @@ struct SeedfillToy : beta::ObjectToy {
     if (btn == ui::PointerButton::Left) {
       Vec2 pos = p.PositionWithin(*this);
       {
-        SkPoint ppx{pos.x, pos.y};
-        int hit = ui::leptonica::ConnectivityHit(ConnM().sk, ppx);
+        int hit = ui::leptonica::ConnectivityHit(ConnM(), pos);
         if (hit != 0) {
           if (auto t = LockSeed()) {
             {
@@ -10670,8 +10630,7 @@ struct SeedfillToy : beta::ObjectToy {
         }
       }
       {
-        SkPoint ppx{pos.x, pos.y};
-        int hit = ui::leptonica::PaletteHit(PaletteM().sk, ppx);
+        int hit = ui::leptonica::PaletteHit(PaletteM(), pos);
         if (hit >= 0) {
           if (auto t = LockSeed()) {
             {
@@ -10840,7 +10799,7 @@ struct GenerateToy : beta::ObjectToy {
   bool CenteredAtZero() const override { return true; }
 
   Rect PreviewM() const { return Rect(-2.85_cm, -1.0_cm, 2.85_cm, 0.85_cm); }
-  SkPoint ModeWheelCM() const { return {1.9_cm, -1.75_cm}; }
+  Vec2 ModeWheelCM() const { return {1.9_cm, -1.75_cm}; }
   constexpr static float kModeWheelR = 0.55_cm;
   Rect SliderM() const { return Rect(-2.7_cm, -2.1_cm, 0.6_cm, -1.75_cm); }
 
@@ -10966,7 +10925,7 @@ struct GenerateToy : beta::ObjectToy {
 
     {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0x6E01), 1);
-      DrawFittedDepthChip(canvas, PreviewM().sk, cached_preview, out_depth, out_cmap, Seed(0x6E90));
+      DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0x6E90));
 
       {
         SkPath band =
@@ -10974,16 +10933,16 @@ struct GenerateToy : beta::ObjectToy {
         SkPath band_px = band.makeTransform(CanFrame());
         beta::MisregFill(canvas, band_px, beta::kCyan, Seed(0x6E10));
         beta::SketchyStroke(canvas, band_px, beta::kInk, beta::kStrokeHair, Seed(0x6E11), 1);
-        static const SkPoint kDrops[5] = {{-0.9_cm, kBodyTop + 1.9_cm},
-                                          {-0.45_cm, kBodyTop + 1.65_cm},
-                                          {-0.55_cm, kBodyTop + 2.15_cm},
-                                          {-0.1_cm, kBodyTop + 1.9_cm},
-                                          {0.05_cm, kBodyTop + 1.55_cm}};
+        static const Vec2 kDrops[5] = {{-0.9_cm, kBodyTop + 1.9_cm},
+                                       {-0.45_cm, kBodyTop + 1.65_cm},
+                                       {-0.55_cm, kBodyTop + 2.15_cm},
+                                       {-0.1_cm, kBodyTop + 1.9_cm},
+                                       {0.05_cm, kBodyTop + 1.55_cm}};
         for (int i = 0; i < 5; ++i) {
-          SkPoint d = SkPoint{kDrops[i].fX, kDrops[i].fY};
-          canvas.drawPath(beta::WobbleEllipse(d, (0.66_mm - i * 0.073_mm), (0.58_mm - i * 0.073_mm),
-                                              beta::kWonk * 0.5f, Seed(0x6E20u + (uint32_t)i), 10),
-                          beta::InkPaint(beta::kInk, beta::kStrokeHair));
+          canvas.drawPath(
+              beta::WobbleEllipse(kDrops[i], (0.66_mm - i * 0.073_mm), (0.58_mm - i * 0.073_mm),
+                                  beta::kWonk * 0.5f, Seed(0x6E20u + (uint32_t)i), 10),
+              beta::InkPaint(beta::kInk, beta::kStrokeHair));
         }
       }
 
@@ -11002,21 +10961,20 @@ struct GenerateToy : beta::ObjectToy {
           frac = (stdev - 2) / 78.f;
           snprintf(buf, sizeof(buf), "STDEV %d", stdev);
         }
-        beta::Slider(canvas, s.sk, std::clamp(frac, 0.f, 1.f), beta::State::Default, Seed(0x6E40));
-        beta::DrawText(canvas, buf, SkPoint{s.left, s.top + 0.14_cm}, 2.2_mm, kLabelInk, false,
-                       Seed(0));
+        beta::Slider(canvas, s, std::clamp(frac, 0.f, 1.f), beta::State::Default, Seed(0x6E40));
+        beta::DrawText(canvas, buf, {s.left, s.top + 0.14_cm}, 2.2_mm, kLabelInk, false, Seed(0));
       }
 
       std::string title = "GENERATE";
       float tw = beta::TextWidth(title, kTitleText);
-      SkPoint tc = SkPoint{0, -2.85_cm};
-      beta::DrawText(canvas, title, {tc.fX - tw * 0.5f, tc.fY}, kTitleText, beta::kInk, true,
+      Vec2 tc = {0, -2.85_cm};
+      beta::DrawText(canvas, title, {tc.x - tw * 0.5f, tc.y}, kTitleText, beta::kInk, true,
                      Seed(0x6E50));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fw = beta::TextWidth(credit, kCreditText);
-        SkPoint fc = SkPoint{0, -3.13_cm};
-        beta::DrawText(canvas, credit, {fc.fX - fw * 0.5f, fc.fY}, kCreditText, "#8a7d66"_color,
+        Vec2 fc = {0, -3.13_cm};
+        beta::DrawText(canvas, credit, {fc.x - fw * 0.5f, fc.y}, kCreditText, "#8a7d66"_color,
                        false, Seed(0x6E51));
       }
     }
@@ -11027,8 +10985,7 @@ struct GenerateToy : beta::ObjectToy {
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
     if (btn == ui::PointerButton::Left) {
       Vec2 pos = p.PositionWithin(*this);
-      SkPoint pp = {pos.x, pos.y};
-      int m = ui::leptonica::ModeWheelHit(ModeWheelCM(), kModeWheelR, pp, 2);
+      int m = ui::leptonica::ModeWheelHit(ModeWheelCM(), kModeWheelR, pos, 2);
       if (m >= 0) {
         if (auto t = LockGen()) {
           {
@@ -11325,35 +11282,34 @@ struct CropToy : beta::ObjectToy {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xC701), 1);
 
       {
-        SkRect ap = Rect(-0.88_cm, 1.35_cm, 0.73_cm, 1.71_cm).sk;
+        Rect ap{-0.88_cm, 1.35_cm, 0.73_cm, 1.71_cm};
         const float dash = 1.0_mm, gap = 0.73_mm;
-        auto edge = [&](SkPoint a, SkPoint b, uint32_t es) {
-          float len = std::hypot(b.fX - a.fX, b.fY - a.fY);
+        auto edge = [&](Vec2 a, Vec2 b, uint32_t es) {
+          float len = std::hypot(b.x - a.x, b.y - a.y);
           int n = std::max(1, (int)(len / (dash + gap)));
           for (int i = 0; i < n; ++i) {
             float t0 = (i * (dash + gap)) / len, t1 = std::min(1.f, t0 + dash / len);
-            SkPoint p0{a.fX + (b.fX - a.fX) * t0, a.fY + (b.fY - a.fY) * t0};
-            SkPoint p1{a.fX + (b.fX - a.fX) * t1, a.fY + (b.fY - a.fY) * t1};
+            Vec2 p0 = {a.x + (b.x - a.x) * t0, a.y + (b.y - a.y) * t0};
+            Vec2 p1 = {a.x + (b.x - a.x) * t1, a.y + (b.y - a.y) * t1};
             canvas.drawPath(
                 beta::WobbleLine(p0, p1, 0.12_mm, 0.73_mm, beta::Hash2(es, (uint32_t)i)),
                 beta::InkPaint("#f4efe4"_color, beta::kStrokeHair));
           }
         };
-        edge({ap.fLeft, ap.fTop}, {ap.fRight, ap.fTop}, Seed(0xC730));
-        edge({ap.fRight, ap.fTop}, {ap.fRight, ap.fBottom}, Seed(0xC731));
-        edge({ap.fRight, ap.fBottom}, {ap.fLeft, ap.fBottom}, Seed(0xC732));
-        edge({ap.fLeft, ap.fBottom}, {ap.fLeft, ap.fTop}, Seed(0xC733));
+        edge(ap.BottomLeftCorner(), ap.BottomRightCorner(), Seed(0xC730));
+        edge(ap.BottomRightCorner(), ap.TopRightCorner(), Seed(0xC731));
+        edge(ap.TopRightCorner(), ap.TopLeftCorner(), Seed(0xC732));
+        edge(ap.TopLeftCorner(), ap.BottomLeftCorner(), Seed(0xC733));
       }
 
       if (cached_preview) {
-        SkRect fit = FittedRectM().sk;
+        Rect fit = FittedRectM();
         // v runs 0..1 from the image's top (max Y) down, so the v1 edge is the lower (min Y) one.
-        SkRect mq = SkRect::MakeLTRB(fit.fLeft + u0 * fit.width(), fit.fBottom - v1 * fit.height(),
-                                     fit.fLeft + u1 * fit.width(), fit.fBottom - v0 * fit.height());
+        Rect mq{fit.left + u0 * fit.Width(), fit.top - v1 * fit.Height(),
+                fit.left + u1 * fit.Width(), fit.top - v0 * fit.Height()};
         ui::leptonica::DrawRegion(canvas, fit, mq,
                                   dragging ? beta::State::Pressed : beta::State::Default, 0xC710);
-        DrawFittedDepthChip(canvas, PreviewM().sk, cached_preview, out_depth, out_cmap,
-                            Seed(0xC790));
+        DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0xC790));
       }
 
       // The crop's output size in true source pixels, not preview pixels.
@@ -11362,19 +11318,19 @@ struct CropToy : beta::ObjectToy {
         int oh = std::max(1, (int)std::lround((v1 - v0) * real_h));
         char buf[40];
         snprintf(buf, sizeof(buf), "KEEP %d x %d px", ow, oh);
-        beta::DrawText(canvas, buf, SkPoint{-2.7_cm, -1.78_cm}, 2.0_mm, kLabelInk, false, Seed(0));
+        beta::DrawText(canvas, buf, {-2.7_cm, -1.78_cm}, 2.0_mm, kLabelInk, false, Seed(0));
       }
 
       std::string title = "CROP";
       float tw = beta::TextWidth(title, kTitleText);
-      SkPoint tc = SkPoint{0, -3.0_cm};
-      beta::DrawText(canvas, title, {tc.fX - tw * 0.5f, tc.fY}, kTitleText, beta::kInk, true,
+      Vec2 tc = {0, -3.0_cm};
+      beta::DrawText(canvas, title, {tc.x - tw * 0.5f, tc.y}, kTitleText, beta::kInk, true,
                      Seed(0xC720));
       if (!fn_credit.empty()) {
         std::string credit = fn_credit + "()";
         float fw = beta::TextWidth(credit, kCreditText);
-        SkPoint fc = SkPoint{0, -3.28_cm};
-        beta::DrawText(canvas, credit, {fc.fX - fw * 0.5f, fc.fY}, kCreditText, "#8a7d66"_color,
+        Vec2 fc = {0, -3.28_cm};
+        beta::DrawText(canvas, credit, {fc.x - fw * 0.5f, fc.y}, kCreditText, "#8a7d66"_color,
                        false, Seed(0xC721));
       }
     }
@@ -11385,11 +11341,10 @@ struct CropToy : beta::ObjectToy {
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
     if (btn == ui::PointerButton::Left && cached_preview) {
       Vec2 pos = p.PositionWithin(*this);
-      SkPoint ppx{pos.x, pos.y};
-      SkRect fit = FittedRectM().sk;
-      SkRect mq = SkRect::MakeLTRB(fit.fLeft + u0 * fit.width(), fit.fBottom - v1 * fit.height(),
-                                   fit.fLeft + u1 * fit.width(), fit.fBottom - v0 * fit.height());
-      int hit = ui::leptonica::RegionHit(mq, ppx);
+      Rect fit = FittedRectM();
+      Rect mq{fit.left + u0 * fit.Width(), fit.top - v1 * fit.Height(), fit.left + u1 * fit.Width(),
+              fit.top - v0 * fit.Height()};
+      int hit = ui::leptonica::RegionHit(mq, pos);
       if (hit != 0) return std::make_unique<CropDrag>(p, *this, hit);
     }
     return ObjectToy::FindAction(p, btn);

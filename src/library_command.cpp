@@ -590,7 +590,9 @@ struct CommandToy : ui::beta::ObjectToy {
         color = ui::beta::kGreen;
       }
       float w = ui::beta::TextWidth(label, ui::beta::kMicroSize + 0.3_mm) + 2.6_mm;
-      SkRect chip = SkRect::MakeXYWH(-kPlateW / 2 + kSide, row_mid - 1.6_mm, w, 3.2_mm);
+      float chip_left = -kPlateW / 2 + kSide;
+      float chip_bottom = row_mid - 1.6_mm;
+      Rect chip{chip_left, chip_bottom, chip_left + w, chip_bottom + 3.2_mm};
       uint32_t cs = Seed(Hash2(kSeed, 0xC1));
       SkPath path = ui::beta::WonkyRoundRect(chip, 1.2_mm, ui::beta::kWonk * 0.8f, cs);
       ui::beta::HandShadow(canvas, path, {0.3_mm, -0.3_mm}, ui::beta::kShadow, cs);
@@ -617,7 +619,7 @@ Vec<Str> ArgvField::Snapshot() const {
 
 SkPath ArgvField::Shape() const {
   float w = std::max(LayoutArgv(Snapshot()).total, kEmptyTile);
-  return SkPath::Rect(SkRect::MakeWH(w, kFieldH));
+  return SkPath::Rect(Rect{0, 0, w, kFieldH});
 }
 
 void ArgvField::TextVisit(const ui::TextVisitor& visitor) {
@@ -764,7 +766,7 @@ void ArgvField::Draw(SkCanvas& canvas) const {
   ArgvLayout l = LayoutArgv(argv);
 
   if (l.tiles.empty()) {  // the empty program slot, waiting for a name
-    SkRect r = SkRect::MakeLTRB(0, 0.9_mm, kEmptyTile, kFieldH - 0.9_mm);
+    Rect r{0, 0.9_mm, kEmptyTile, kFieldH - 0.9_mm};
     uint32_t s = toy.Seed(Hash2(kSeed, 1));
     SkPath outline = ui::beta::WonkyRoundRect(r, 1.0_mm, ui::beta::kWonk, s);
     ui::beta::MisregFill(canvas, outline, ui::beta::kPaper, s);
@@ -777,7 +779,7 @@ void ArgvField::Draw(SkCanvas& canvas) const {
     const Str& word = argv[tile.tile];
     // The program tile stands taller than the args (smaller inset).
     float inset = first ? 0.45_mm : 1.0_mm;
-    SkRect r = SkRect::MakeLTRB(tile.x0, inset, tile.x1, kFieldH - inset);
+    Rect r{tile.x0, inset, tile.x1, kFieldH - inset};
     uint32_t s = toy.Seed(Hash2(kSeed, (uint32_t)tile.tile + 2));
     SkPath outline = ui::beta::WonkyRoundRect(r, 1.0_mm, ui::beta::kWonk, s);
     bool bad = first && !toy.program_resolves_;

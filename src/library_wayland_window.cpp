@@ -158,8 +158,8 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
   SkPath FocusCaretShape() const {
     float w = TotalW(), h = TotalH();
     float band_bottom = h / 2 - kTitleH;
-    return SkPath::Rect(SkRect::MakeLTRB(-w / 2 + 1.5_mm, band_bottom + 1.1_mm, w / 2 - 6_mm,
-                                         band_bottom + 1.9_mm));
+    return SkPath::Rect(
+        Rect{-w / 2 + 1.5_mm, band_bottom + 1.1_mm, w / 2 - 6_mm, band_bottom + 1.9_mm});
   }
 
   void FocusClient(ui::Pointer& p) {
@@ -215,13 +215,13 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
     // Hand-drawn chrome, in the toy's centered space.
     {
       uint32_t seed = Seed(ui::beta::Hash2(0x3A11D, (uint32_t)(title_.size() + 1)));
-      SkRect body = SkRect::MakeLTRB(-w / 2, -h / 2, w / 2, h / 2);
+      Rect body = Rect::MakeCenterZero(w, h);
       SkPath base = ui::beta::WonkyRoundRect(body, 1.0_mm, ui::beta::kWonk, seed);
       ui::beta::HandShadow(canvas, base, {ui::beta::kShadowDX, -ui::beta::kShadowDY},
                            ui::beta::kShadow, seed);
       ui::beta::MisregFill(canvas, base, ui::beta::kPaperCream, seed);
       // The title band sits at the visual top.
-      SkRect band = SkRect::MakeLTRB(-w / 2, h / 2 - kTitleH, w / 2, h / 2);
+      Rect band{-w / 2, h / 2 - kTitleH, w / 2, h / 2};
       canvas.save();
       canvas.clipPath(base, true);
       canvas.drawPath(
@@ -234,16 +234,14 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
           ui::beta::WobbleRect(band, ui::beta::kWonk, ui::beta::kSeg, ui::beta::Hash2(seed, 3)),
           band_fill);
       canvas.restore();
-      ui::beta::DrawTextIn(
-          canvas, title_.empty() ? "Wayland Window" : title_,
-          SkRect::MakeLTRB(-w / 2 + 1.2_mm, h / 2 - kTitleH, w / 2 - 1.2_mm, h / 2),
-          ui::beta::kBodySize, ui::beta::TextOn(ui::beta::kBlue), ui::beta::TextAlign::Left, true,
-          seed);
+      ui::beta::DrawTextIn(canvas, title_.empty() ? "Wayland Window" : title_,
+                           Rect{-w / 2 + 1.2_mm, h / 2 - kTitleH, w / 2 - 1.2_mm, h / 2},
+                           ui::beta::kBodySize, ui::beta::TextOn(ui::beta::kBlue),
+                           ui::beta::TextAlign::Left, true, seed);
       ui::beta::SketchyStroke(canvas, base, ui::beta::kInk, ui::beta::kStroke, seed, 2);
       if (client_gone_ || !image) {
         // The content area below the band, hatched while there is no buffer.
-        SkRect inner = SkRect::MakeLTRB(-w / 2 + 0.9_mm, -h / 2 + 0.9_mm, w / 2 - 0.9_mm,
-                                        h / 2 - kTitleH - 0.6_mm);
+        Rect inner{-w / 2 + 0.9_mm, -h / 2 + 0.9_mm, w / 2 - 0.9_mm, h / 2 - kTitleH - 0.6_mm};
         ui::beta::HatchRect(canvas, inner, ui::beta::kGray, 1.6_mm, seed);
       }
     }

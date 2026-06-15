@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 # SPDX-License-Identifier: MIT
 import build
+import build_variant
 from extension_helper import ExtensionHelper
 from sys import platform
 import subprocess
@@ -22,7 +23,11 @@ skia.ConfigureOptions(
   skia_enable_ganesh='false',
   skia_enable_graphite='true')
 
-if build.fast:
+if build.fast or build_variant.tsan:
+  # SK_RELEASE:
+  # - prevents debug assertions (e.g. SkCanvas rect checks) from aborting
+  # - keeps Automat's Skia ABI consistent with this Skia
+  # Keep frame pointers + symbols for readable stacks
   skia.ConfigureOptions(is_debug='false', is_official_build='true', extra_cflags='["-fno-omit-frame-pointer", "-g"]')
   build.compile_args += ['-DSK_RELEASE']
 elif build.debug:

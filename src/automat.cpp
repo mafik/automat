@@ -130,10 +130,11 @@ int Main() {
   prototypes.emplace();
 
   root_widget = make_unique<RootWidget>();
-  root_widget->Init();
 
   vm.root_location = MAKE_PTR(Location);
   vm.root_board = vm.root_location->Create<Board>();
+
+  root_widget->Init();  // needs vm.root_board
   StartTimeThread(stop_source.get_token());
 
   RefreshTrayIcon();

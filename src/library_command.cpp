@@ -26,6 +26,8 @@
 #include <csignal>
 #include <cstring>
 
+#include "mux_epoll.hpp"
+
 extern "C" char** environ;
 #endif
 
@@ -163,28 +165,22 @@ I64 SpawnArgv(const Vec<Str>& argv_in, Status& status) {
   return pid;
 }
 
-// Watches the child for exit on the compositor's epoll loop (pidfd), instead of
-// a blocking thread. The callback runs on the compositor thread.
 static void WatchChild(Command& cmd, I64 pid) {
   Status status;
-  if (wayland::server) {
-    wayland::server->WatchProcess((pid_t)pid,
-                                  [weak = cmd.AcquireWeakPtr(), pid](int wait_status) {
-                                    if (auto obj = weak.Lock()) {
-                                      auto& cmd = static_cast<Command&>(*obj);
-                                      auto lock = std::lock_guard(cmd.mutex);
-                                      if (cmd.child_pid == pid) cmd.child_pid = 0;
-                                      cmd.wait_status = wait_status;
-                                      // Cancel() may have already consumed the task; Done()
-                                      // requires one.
-                                      if (cmd.running->IsRunning()) cmd.running->Done();
-                                      cmd.WakeToys();
-                                    }
-                                  },
-                                  status);
-  } else {
-    AppendErrorMessage(status) += "Wayland compositor is not running.";
-  }
+  mux::WatchProcess((pid_t)pid,
+                    [weak = cmd.AcquireWeakPtr(), pid](int wait_status) {
+                      if (auto obj = weak.Lock()) {
+                        auto& cmd = static_cast<Command&>(*obj);
+                        auto lock = std::lock_guard(cmd.mutex);
+                        if (cmd.child_pid == pid) cmd.child_pid = 0;
+                        cmd.wait_status = wait_status;
+                        // Cancel() may have already consumed the task; Done()
+                        // requires one.
+                        if (cmd.running->IsRunning()) cmd.running->Done();
+                        cmd.WakeToys();
+                      }
+                    },
+                    status);
   if (!OK(status)) cmd.ReportError(status.ToStr());
 }
 

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <sys/epoll.h>
+#include <sys/types.h>
 
 #include <functional>
 #include <mutex>
@@ -65,7 +66,7 @@ struct Epoll {
 
   // Poll events until an error is returned, all listeners drop, or stop is
   // requested.
-  void Loop(Status&, std::stop_token = {});
+  void Loop(Status&, bool stop_when_empty = false, std::stop_token = {});
 
   // Runs fn on the Loop thread; callable from any thread.
   void Post(std::move_only_function<void()> fn);
@@ -93,5 +94,15 @@ struct Epoll {
   std::mutex post_mutex;
   std::vector<std::move_only_function<void()>> posted;
 };
+
+// Process-wide shared reactor.
+extern Epoll epoll;
+
+// Starts a dedicated thread running epoll.Loop().
+void Init(Status&);
+void Stop();
+
+// Watches a child process for its exit status.
+void WatchProcess(pid_t pid, std::function<void(int wait_status)> on_exit, Status&);
 
 }  // namespace automat::mux

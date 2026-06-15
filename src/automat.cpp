@@ -33,6 +33,10 @@
 #include "vk.hpp"
 #include "wayland_compositor.hpp"
 
+#if defined(__linux__)
+#include "mux_epoll.hpp"
+#endif
+
 using namespace automat::ui;
 
 #pragma region Main
@@ -149,6 +153,11 @@ int Main() {
   StartWorkerThreads(stop_source.get_token());
 
 #if defined(__linux__)
+  mux::Init(status);
+  if (!OK(status)) {
+    ERROR << "Couldn't start the epoll thread: " << status;
+    status.Reset();
+  }
   wayland::server.emplace(stop_source.get_token());
 #endif
 
@@ -167,6 +176,12 @@ int Main() {
   tray_icon.reset();
 
   JoinWorkerThreads();
+
+#if defined(__linux__)
+  // Workers are joined, so nothing more will register a watch; stop the shared
+  // epoll thread before objects are torn down so exit callbacks can't race it.
+  mux::Stop();
+#endif
 
   SaveState(*root_widget, status);
   if (!OK(status)) {

@@ -37,7 +37,6 @@ struct Server {
   Str SocketName();
   void UIFrame();
   void NotifyWindowDestroyed(void* toplevel_handle);
-  void WatchProcess(pid_t pid, std::function<void(int wait_status)> on_exit, Status& status);
   void SendPointerEnter(library::WaylandWindow&, float sx, float sy);
   void SendPointerMotion(library::WaylandWindow&, float sx, float sy);
   void SendPointerButton(library::WaylandWindow&, uint32_t button, bool pressed);

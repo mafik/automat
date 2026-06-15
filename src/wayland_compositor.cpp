@@ -15,9 +15,6 @@
 #include <linux/input-event-codes.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <sys/syscall.h>
-#include <sys/timerfd.h>
-#include <sys/wait.h>
 #include <unistd.h>
 #include <wayland-server.h>
 #include <xkbcommon/xkbcommon-x11.h>
@@ -25,7 +22,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <cerrno>
 #include <cmath>
 #include <csignal>
 #include <cstring>
@@ -44,6 +40,7 @@
 #include "library_wayland_window.hpp"
 #include "log.hpp"
 #include "mux_epoll.hpp"
+#include "mux_timer.hpp"
 #include "thread_name.hpp"
 #include "time.hpp"
 #include "vk.hpp"
@@ -75,7 +72,6 @@ namespace {
 // when an xdg-shell role chain is built on top of it.
 
 struct Toplevel;
-struct CloseTimer;
 struct Viewport;
 struct Subsurface;
 
@@ -188,7 +184,7 @@ struct Toplevel {
   Str app_id;
   bool mapped = false;
   pid_t pid = 0;                      // client process, for close escalation
-  CloseTimer* close_timer = nullptr;  // armed when a close was requested
+  mux::Timer* close_timer = nullptr;  // armed when a close was requested
   WeakPtr<Object> window_weak;
 
   Toplevel(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
@@ -251,26 +247,6 @@ struct WaylandListener : mux::Epoll::Listener {
   void NotifyRead(Status&) override;
 };
 
-// One spawned child watched for exit. The pidfd becomes readable when the
-// child is reapable; we waitpid for the raw status and hand it to on_exit.
-struct ProcessWatch : mux::Epoll::Listener {
-  Impl* impl = nullptr;
-  pid_t pid = 0;
-  std::function<void(int)> on_exit;
-  StrView Name() const override { return "ProcessWatch"sv; }
-  void NotifyRead(Status&) override;
-};
-
-// Armed when the user deletes a window: SIGTERMs the client if it ignores the
-// xdg_toplevel.close request for two seconds.
-struct CloseTimer : mux::Epoll::Listener {
-  Impl* impl = nullptr;
-  pid_t pid = 0;
-  Toplevel* owner = nullptr;
-  StrView Name() const override { return "CloseTimer"sv; }
-  void NotifyRead(Status&) override;
-};
-
 }  // namespace
 
 struct Server::Impl {
@@ -327,10 +303,7 @@ struct Server::Impl {
   dev_t dmabuf_main_device = 0;
   bool dmabuf_has_device = false;
 
-  // Child processes watched for exit via pidfd, and pending close-escalation
-  // timers; both are epoll Listeners owned and touched only on the wayland thread.
-  Colony<ProcessWatch> process_watches;
-  Colony<CloseTimer> close_timers;
+  Colony<mux::Timer> close_timers;  // SIGTERMs for naughty children
 
   // The xkb keymap advertised to clients (matches the compositor host's
   // default layout); built once at startup.
@@ -358,29 +331,6 @@ void EraseOwned(Colony<T>& v, T* p) {
 void WaylandListener::NotifyRead(Status&) {
   wl_event_loop_dispatch(impl->loop, 0);
   wl_display_flush_clients(impl->display);
-}
-
-void ProcessWatch::NotifyRead(Status&) {
-  // pidfd readability means the child is reapable; waitpid yields the raw
-  // status the Command toy decodes, exactly as the old reaper thread did.
-  int wstatus = 0;
-  while (waitpid(pid, &wstatus, 0) < 0 && errno == EINTR) {
-  }
-  auto cb = std::move(on_exit);
-  Status local;
-  impl->epoll.Del(this, local);
-  EraseOwned(impl->process_watches, this);  // frees `this`; its FD closes the pidfd
-  if (cb) cb(wstatus);
-}
-
-void CloseTimer::NotifyRead(Status&) {
-  uint64_t value;
-  (void)!read(fd, &value, sizeof(value));
-  if (pid > 0) kill(pid, SIGTERM);
-  if (owner) owner->close_timer = nullptr;
-  Status local;
-  impl->epoll.Del(this, local);
-  EraseOwned(impl->close_timers, this);  // frees `this`; its FD closes the timerfd
 }
 
 uint32_t NowMs() {
@@ -877,8 +827,6 @@ void NewToplevel(Impl& s, XdgSurf& xs, uint32_t id) {
   res->setOnDestroy([&s, tp](CXdgToplevel* r) {
     UnmapToplevel(s, *tp);
     if (tp->close_timer) {
-      Status st;
-      s.epoll.Del(tp->close_timer, st);
       EraseOwned(s.close_timers, tp->close_timer);
       tp->close_timer = nullptr;
     }
@@ -1364,8 +1312,8 @@ void WaylandThread(Impl* s, std::stop_token stop) {
     return;
   }
   s->loop = wl_display_get_event_loop(s->display);
-  // The socket is optional: without it clients can't connect, but the event
-  // loop still runs and drives process watching.
+  // The socket is optional: without it clients can't connect, but the thread
+  // still runs so the Server stays alive until shutdown.
   if (getenv("XDG_RUNTIME_DIR")) {
     if (const char* socket = wl_display_add_socket_auto(s->display)) {
       s->socket_name = socket;
@@ -1398,7 +1346,7 @@ void WaylandThread(Impl* s, std::stop_token stop) {
   vm.WakeToys();
   if (!s->socket_name.empty()) LOG << "Wayland compositor listening on " << s->socket_name;
 
-  if (OK(status)) s->epoll.Loop(status, stop);
+  if (OK(status)) s->epoll.Loop(status, false, stop);
   if (!OK(status)) ERROR << "Wayland epoll loop stopped: " << status.ToStr();
   s->ready = false;
   wl_display_flush_clients(s->display);
@@ -1646,52 +1594,12 @@ void Server::NotifyWindowDestroyed(void* handle) {
     wl_display_flush_clients(impl->display);
     // A client that ignores the request gets SIGTERM after a grace period.
     if (!t->close_timer) {
-      int tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
-      if (tfd < 0) return;
-      itimerspec spec = {};
-      spec.it_value.tv_sec = 2;
-      timerfd_settime(tfd, 0, &spec, nullptr);
-      CloseTimer* timer = &*impl->close_timers.emplace();
-      timer->fd = tfd;
-      timer->impl = impl.get();
-      timer->pid = t->pid;
-      timer->owner = t;
-      Status st;
-      impl->epoll.Add(timer, st);
-      if (!OK(st)) {
-        impl->close_timers.erase(impl->close_timers.get_iterator(timer));  // closes the timerfd
-        return;
-      }
-      t->close_timer = timer;
-    }
-  });
-}
-
-void Server::WatchProcess(pid_t pid, std::function<void(int)> on_exit, Status& status) {
-  if (!impl->ready) {
-    AppendErrorMessage(status) += "Wayland compositor is not running.";
-    return;
-  }
-  // pidfd_open lacks a guaranteed glibc wrapper across versions, so go through
-  // the syscall. The pid is still our unreaped child, so it is valid here.
-  int pidfd = (int)syscall(SYS_pidfd_open, pid, 0);
-  if (pidfd < 0) {
-    AppendErrorMessage(status) += f("pidfd_open(pid={}): {}", (int)pid, strerror(errno));
-    return;
-  }
-  // Registration must happen on the wayland thread (the epoll instance lives there).
-  impl->epoll.Post([this, pidfd, pid, cb = std::move(on_exit)]() mutable {
-    ProcessWatch* w = &*impl->process_watches.emplace();
-    w->fd = pidfd;
-    w->impl = impl.get();
-    w->pid = pid;
-    w->on_exit = std::move(cb);
-    Status st;
-    impl->epoll.Add(w, st);
-    if (!OK(st)) {
-      ERROR << "Wayland: couldn't watch pid " << (int)pid << ": " << st.ToStr();
-      impl->process_watches.erase(impl->process_watches.get_iterator(w));  // closes the pidfd
-      return;
+      auto timer = impl->close_timers.emplace(impl->epoll);
+      timer->handler = [pid = t->pid] {
+        if (pid > 0) kill(pid, SIGTERM);
+      };
+      timer->Arm(2.0);
+      t->close_timer = &*timer;
     }
   });
 }

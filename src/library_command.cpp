@@ -635,6 +635,7 @@ void ArgvField::TextVisit(const ui::TextVisitor& visitor) {
 
 int ArgvField::IndexFromPosition(float x) const {
   Vec<Str> argv = Snapshot();
+  if (argv.empty()) return 0;
   ArgvLayout l = LayoutArgv(argv);
   int join_len = (int)JoinLength(argv);
   int best = 0;

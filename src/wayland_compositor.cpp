@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <include/core/SkData.h>
 #include <include/core/SkImage.h>
+#include <include/core/SkSize.h>
 #include <linux/input-event-codes.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -24,6 +25,7 @@
 
 #include <atomic>
 #include <cerrno>
+#include <cmath>
 #include <csignal>
 #include <cstring>
 #include <functional>
@@ -49,6 +51,7 @@
 // The generated headers #define F std::function; they must come after all
 // Automat headers.
 #include "../build/generated/linux-dmabuf-v1.hpp"
+#include "../build/generated/viewporter.hpp"
 #include "../build/generated/wayland.hpp"
 #include "../build/generated/xdg-decoration-unstable-v1.hpp"
 #include "../build/generated/xdg-shell.hpp"
@@ -71,6 +74,7 @@ namespace {
 
 struct Toplevel;
 struct CloseTimer;
+struct Viewport;
 
 // A wl_surface: the client's pixel container. We track only what commit
 // needs - the buffer attached since the last commit, the frame callbacks the
@@ -85,9 +89,29 @@ struct Surface {
   Colony<CWlCallback> frame_cbs;
   Toplevel* toplevel = nullptr;
   wl_resource* held_dmabuf = nullptr;  // dmabuf buffer held for zero-copy display
+  Viewport* viewport = nullptr;        // wp_viewport crop/scale state, if any
 
   Surface(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
   Surface(const Surface&) = delete;
+};
+
+// A wp_viewport: the crop and scale state a client attaches to one wl_surface.
+// The state lives on this object, not on the Surface, so destroying the viewport
+// removes the crop and scale at the surface's next commit, which is exactly what
+// the protocol requires. `surface` becomes null once the wl_surface is gone; any
+// later request on the orphaned viewport then raises no_surface.
+struct Viewport {
+  CWpViewport res;
+  Surface* surface = nullptr;
+  // Pending source rectangle (buffer pixels; Automat applies no buffer transform
+  // or scale) and destination size, read at the surface's next commit. A
+  // negative width marks the rectangle or the destination as unset, which falls
+  // back to the buffer's own geometry.
+  double src_x = -1, src_y = -1, src_w = -1, src_h = -1;
+  int dst_w = -1, dst_h = -1;
+
+  Viewport(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
+  Viewport(const Viewport&) = delete;
 };
 
 // An xdg_surface: the middle of the role chain wl_surface -> xdg_surface ->
@@ -234,6 +258,8 @@ struct Server::Impl {
   Colony<CXdgPositioner> positioners;
   Colony<CZxdgDecorationManagerV1> decoration_managers;
   Colony<CZxdgToplevelDecorationV1> decorations;
+  Colony<CWpViewporter> viewporters;
+  Colony<Viewport> viewports;
   Colony<Surface> surfaces;
   Colony<XdgSurf> xdg_surfaces;
   Colony<Toplevel> toplevels;
@@ -406,6 +432,51 @@ void PublishFrame(Impl& s, Toplevel& t, Ptr<Object> win_obj, bool adopted) {
   }
 }
 
+// The surface size and the buffer source rectangle a commit applies, derived
+// from the surface's wp_viewport (if any) and the just-attached buffer's pixel
+// size. A surface with no viewport keeps the buffer's own size and samples it
+// whole.
+struct SurfaceGeometry {
+  SkISize destination_px;
+  SkRect source_px;
+};
+
+// Fills `out` from the surface's viewport and the buffer size. Returns false,
+// having posted the protocol error, on the two violations the protocol defers to
+// commit time: a non-integer crop with no destination size, and a source
+// rectangle reaching outside the buffer. Source values are exact dyadic
+// rationals (wl_fixed/256) and buffer sizes are integers, so the comparisons
+// below carry no floating-point slack.
+bool ResolveGeometry(Surface& surf, int buf_w, int buf_h, SurfaceGeometry& out) {
+  Viewport* vp = surf.viewport;
+  bool src_set = vp && vp->src_w >= 0;
+  bool dst_set = vp && vp->dst_w >= 0;
+  double sx = src_set ? vp->src_x : 0;
+  double sy = src_set ? vp->src_y : 0;
+  double sw = src_set ? vp->src_w : buf_w;
+  double sh = src_set ? vp->src_h : buf_h;
+  if (src_set) {
+    if (!dst_set && (sw != std::floor(sw) || sh != std::floor(sh))) {
+      vp->res.error(WP_VIEWPORT_ERROR_BAD_SIZE, "non-integer crop without a destination size");
+      return false;
+    }
+    if (sx + sw > buf_w || sy + sh > buf_h || sx < 0 || sy < 0) {
+      vp->res.error(WP_VIEWPORT_ERROR_OUT_OF_BUFFER, "source rectangle reaches outside the buffer");
+      return false;
+    }
+  }
+  out.source_px.setXYWH(sx, sy, sw, sh);
+  out.destination_px.set(dst_set ? vp->dst_w : (int)sw, dst_set ? vp->dst_h : (int)sh);
+  static bool first = true;
+  if (first && (src_set || dst_set)) {
+    first = false;
+    LOG << f("Wayland: first viewport applied, buffer {}x{} -> surface {}x{} source {}x{}+{}+{}",
+             buf_w, buf_h, out.destination_px.width(), out.destination_px.height(), (int)sw,
+             (int)sh, (int)sx, (int)sy);
+  }
+  return true;
+}
+
 void Commit(Impl& s, Surface& surf) {
   Toplevel* t = surf.toplevel;
 
@@ -430,7 +501,8 @@ void Commit(Impl& s, Surface& surf) {
       int h = wl_shm_buffer_get_height(shm);
       int stride = wl_shm_buffer_get_stride(shm);
       uint32_t format = wl_shm_buffer_get_format(shm);
-      if (t && w > 0 && h > 0) {
+      SurfaceGeometry geom;
+      if (t && w > 0 && h > 0 && ResolveGeometry(surf, w, h, geom)) {
         bool adopted = false;
         if (Ptr<Object> win_obj = AcquireWindow(s, *t, adopted)) {
           auto& win = static_cast<WaylandWindow&>(*win_obj);
@@ -463,8 +535,8 @@ void Commit(Impl& s, Surface& surf) {
           {
             auto lock = std::lock_guard(win.mutex);
             win.content = std::move(img);
-            win.width = w;
-            win.height = h;
+            win.viewport_destination_px = geom.destination_px;
+            win.viewport_source_px = geom.source_px;
             win.content_serial++;
           }
           PublishFrame(s, *t, std::move(win_obj), adopted);
@@ -481,7 +553,9 @@ void Commit(Impl& s, Surface& surf) {
         LOG << f("Wayland: first dmabuf frame {}x{} drm_format=0x{:08x} modifier=0x{:016x}",
                  db->width, db->height, db->drm_format, db->modifier);
       }
-      if (t && db->width > 0 && db->height > 0) {
+      SurfaceGeometry geom;
+      if (t && db->width > 0 && db->height > 0 &&
+          ResolveGeometry(surf, db->width, db->height, geom)) {
         bool adopted = false;
         if (Ptr<Object> win_obj = AcquireWindow(s, *t, adopted)) {
           auto& win = static_cast<WaylandWindow&>(*win_obj);
@@ -511,8 +585,8 @@ void Commit(Impl& s, Surface& surf) {
           if (img) {
             auto lock = std::lock_guard(win.mutex);
             win.content = std::move(img);
-            win.width = db->width;
-            win.height = db->height;
+            win.viewport_destination_px = geom.destination_px;
+            win.viewport_source_px = geom.source_px;
             win.content_serial++;
           }
           PublishFrame(s, *t, std::move(win_obj), adopted);
@@ -555,6 +629,7 @@ void NewSurface(Impl& s, wl_client* client, int version, uint32_t id) {
   res->setCommit([&s, sp](CWlSurface*) { Commit(s, *sp); });
   res->setOnDestroy([&s, sp](CWlSurface* r) {
     ReleaseHeldDmabuf(s, *sp);
+    if (sp->viewport) sp->viewport->surface = nullptr;
     if (sp->toplevel && sp->toplevel->xdg) sp->toplevel->xdg->surface = nullptr;
     s.surface_by_res.erase(r->resource());
     EraseOwned(s.surfaces, sp);
@@ -778,6 +853,71 @@ void BindXdgWmBase(wl_client* client, void* data, uint32_t version, uint32_t id)
   });
   rp->setPong([](CXdgWmBase*, uint32_t) {});
   rp->setOnDestroy([&s, rp](CXdgWmBase*) { EraseOwned(s.wm_bases, rp); });
+}
+
+// -------------------------------------------------------------- viewporter --
+
+// wp_viewporter lets a client crop and scale a surface independently of its
+// buffer size: a source rectangle selects part of the buffer and a destination
+// size sets the surface size it is scaled to. Both pieces are double-buffered;
+// they are read at commit (ResolveGeometry) and the surface's content rectangle
+// and board size follow. Used by clients that render at a fractional scale or
+// hand over an oversized buffer and crop it.
+void BindViewporter(wl_client* client, void* data, uint32_t version, uint32_t id) {
+  auto& s = *(Impl*)data;
+  CWpViewporter* rp = &*s.viewporters.emplace(client, version, id);
+  rp->setGetViewport([&s](CWpViewporter* r, uint32_t id, wl_resource* surface_res) {
+    auto it = s.surface_by_res.find(surface_res);
+    Surface* surf = it == s.surface_by_res.end() ? nullptr : it->second;
+    if (surf && surf->viewport) {
+      r->error(WP_VIEWPORTER_ERROR_VIEWPORT_EXISTS, "surface already has a viewport");
+      return;
+    }
+    Viewport* vp = &*s.viewports.emplace(r->client(), r->version(), id);
+    vp->surface = surf;
+    if (surf) surf->viewport = vp;
+    auto* vr = &vp->res;
+    vr->setSetSource([vp](CWpViewport* r, wl_fixed_t x, wl_fixed_t y, wl_fixed_t w, wl_fixed_t h) {
+      if (!vp->surface) {
+        r->error(WP_VIEWPORT_ERROR_NO_SURFACE, "the wl_surface was destroyed");
+        return;
+      }
+      wl_fixed_t unset = wl_fixed_from_int(-1);
+      if (x == unset && y == unset && w == unset && h == unset) {
+        vp->src_x = vp->src_y = vp->src_w = vp->src_h = -1;
+        return;
+      }
+      if (x < 0 || y < 0 || w <= 0 || h <= 0) {
+        r->error(WP_VIEWPORT_ERROR_BAD_VALUE, "negative origin or non-positive source size");
+        return;
+      }
+      vp->src_x = wl_fixed_to_double(x);
+      vp->src_y = wl_fixed_to_double(y);
+      vp->src_w = wl_fixed_to_double(w);
+      vp->src_h = wl_fixed_to_double(h);
+    });
+    vr->setSetDestination([vp](CWpViewport* r, int32_t w, int32_t h) {
+      if (!vp->surface) {
+        r->error(WP_VIEWPORT_ERROR_NO_SURFACE, "the wl_surface was destroyed");
+        return;
+      }
+      if (w == -1 && h == -1) {
+        vp->dst_w = vp->dst_h = -1;
+        return;
+      }
+      if (w <= 0 || h <= 0) {
+        r->error(WP_VIEWPORT_ERROR_BAD_VALUE, "non-positive destination size");
+        return;
+      }
+      vp->dst_w = w;
+      vp->dst_h = h;
+    });
+    vr->setOnDestroy([&s, vp](CWpViewport*) {
+      if (vp->surface) vp->surface->viewport = nullptr;
+      EraseOwned(s.viewports, vp);
+    });
+  });
+  rp->setOnDestroy([&s, rp](CWpViewporter*) { EraseOwned(s.viewporters, rp); });
 }
 
 // ------------------------------------------------------------------ dmabuf --
@@ -1005,6 +1145,7 @@ void WaylandThread(Impl* s, std::stop_token stop) {
   wl_global_create(s->display, &xdg_wm_base_interface, 6, s, BindXdgWmBase);
   wl_global_create(s->display, &zxdg_decoration_manager_v1_interface, 1, s, BindDecorationManager);
   wl_global_create(s->display, &zwp_linux_dmabuf_v1_interface, 4, s, BindLinuxDmabuf);
+  wl_global_create(s->display, &wp_viewporter_interface, 1, s, BindViewporter);
   InitKeymap(*s);
   InitDmabuf(*s);
 
@@ -1088,8 +1229,8 @@ void Server::UIFrame() {
       {
         auto lock = std::lock_guard(win.mutex);
         cpid = win.client_pid;
-        win_w = win.width;
-        win_h = win.height;
+        win_w = win.viewport_destination_px.width();
+        win_h = win.viewport_destination_px.height();
       }
       if (cpid) {
         for (auto& loc : vm.root_board->locations) {

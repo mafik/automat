@@ -6,6 +6,7 @@
 #include "library_wayland_window.hpp"
 
 #include <include/core/SkCanvas.h>
+#include <include/core/SkColorFilter.h>
 #include <include/core/SkImage.h>
 #include <include/core/SkPixmap.h>
 #include <include/core/SkSamplingOptions.h>
@@ -94,6 +95,7 @@ Vec2 WindowBoardSize(int width, int height) {
 
 struct WaylandWindowToy : ui::beta::ObjectToy {
   sk_sp<SkImage> image;
+  SkRect viewport_source = SkRect::MakeEmpty();  // sub-rect of `image` to display (buffer px)
   uint64_t image_serial = 0;
   Str title_;
   bool client_gone_ = false;
@@ -115,13 +117,14 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
     auto lock = std::lock_guard(win->mutex);
     title_ = win->title.empty() ? win->app_id : win->title;
     client_gone_ = win->client_gone;
-    if (win->width > 0 && win->height > 0) {
-      content_w = win->width * kClientPx;
-      content_h = win->height * kClientPx;
+    if (!win->viewport_destination_px.isEmpty()) {
+      content_w = win->viewport_destination_px.width() * kClientPx;
+      content_h = win->viewport_destination_px.height() * kClientPx;
     }
     if (win->content_serial != image_serial) {
       image_serial = win->content_serial;
       image = win->content;
+      viewport_source = win->viewport_source_px;
     }
   }
 
@@ -255,7 +258,16 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
       canvas.scale(1, -1);
       SkRect dst = SkRect::MakeLTRB(content_left, -content_top, content_left + content_w,
                                     -(content_top - content_h));
-      canvas.drawImageRect(image, dst, SkSamplingOptions(SkFilterMode::kLinear));
+      // Opaque client content (XRGB/XR24) may carry a zero X/alpha channel. The
+      // renderer composites widget textures by alpha, so force such content
+      // opaque (RGB kept, alpha set to 1) to stop the board showing through;
+      // translucent (ARGB) windows are left untouched.
+      SkPaint paint;
+      if (image->isOpaque()) {
+        paint.setColorFilter(SkColorFilters::Blend(SK_ColorBLACK, SkBlendMode::kDstOver));
+      }
+      canvas.drawImageRect(image, viewport_source, dst, SkSamplingOptions(SkFilterMode::kLinear),
+                           &paint, SkCanvas::kStrict_SrcRectConstraint);
       canvas.restore();
     }
   }

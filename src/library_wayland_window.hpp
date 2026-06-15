@@ -29,7 +29,12 @@ struct WaylandWindow : Object {
   // raster image and a dmabuf is imported to a GPU texture, both on the
   // compositor thread at commit time.
   sk_sp<SkImage> content;
-  int width = 0, height = 0;  // client-surface size, px
+  // Surface size in client pixels. Drives the window's board size and the
+  // surface-local mapping of pointer input. Empty until the first frame.
+  SkISize viewport_destination_px = {};
+  // Rectangle of `content` to display, in buffer pixels - the whole buffer
+  // unless a wp_viewport crops it.
+  SkRect viewport_source_px = {};
   uint64_t content_serial = 0;
   Str title;
   Str app_id;

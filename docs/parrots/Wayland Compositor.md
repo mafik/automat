@@ -64,9 +64,10 @@ but their content is not composited), `wl_shm` (libwayland's built-in),
 `wl_output`, `wl_seat` (pointer + keyboard), `wl_data_device_manager`
 (objects only; clipboard transfer not wired), `xdg_wm_base` with toplevels,
 `zxdg_decoration_manager_v1` forcing server-side decorations so clients do not
-draw their own title bars, and `zwp_linux_dmabuf_v1` for GPU buffer passing
-(see below). foot requires the subcompositor and data device manager to even
-start; kitty requires the decoration ordering rule below.
+draw their own title bars, `zwp_linux_dmabuf_v1` for GPU buffer passing (see
+below), and `wp_viewporter` for surface cropping and scaling (see below). foot
+requires the subcompositor and data device manager to even start; kitty requires
+the decoration ordering rule below.
 
 Two protocol rules earned through debugging:
 
@@ -116,6 +117,41 @@ with a real GPU imports every client's dmabuf zero-copy.
 The protocol and feedback are in `src/wayland_compositor.cpp`, the import in
 `src/vk.cpp` (`ImportDmabuf`), and the plane description it consumes in
 `src/dmabuf.hpp`.
+
+## Surface cropping and scaling
+
+`wp_viewporter` separates a surface's displayed size from its buffer's pixel
+size: a source rectangle selects part of the buffer and a destination size sets
+the surface size that rectangle is scaled to. Clients use it to render at a
+fractional scale, or to hand over one oversized buffer and present a sub-region
+of it. Automat needs it because the displayed size, not the buffer size, is what
+a window object occupies on the board and what pointer input is measured
+against.
+
+The crop and scale state lives on the `wp_viewport` object rather than the
+surface. Destroying the viewport then removes the crop and scale at the
+surface's next commit, which is what the protocol requires, and the surface's
+teardown only has to orphan the viewport. The state is resolved at commit, once
+the just-attached buffer's size is known: resolution yields the surface size -
+the destination, or else the source size, or else the buffer size - and the
+buffer rectangle to sample. A surface with no viewport resolves to its buffer's
+size sampled whole, so it carries no special handling. The two violations the
+protocol defers to commit, a non-integer crop with no destination and a source
+rectangle reaching outside the buffer, raise the protocol error there; the
+cheaper checks on negative or zero values raise it when the request arrives.
+
+The resolved surface size becomes the window object's size and the source
+rectangle travels with the frame to the toy, which samples it into the content
+area. Because both the window's board size and its surface-local input mapping
+derive from the surface size, a cropped or scaled window drags, seats and routes
+pointer events correctly with no further change. Resolution and the protocol are
+in `src/wayland_compositor.cpp` (`ResolveGeometry`, `BindViewporter`); the
+sampling is in `src/library_wayland_window.cpp`.
+
+A commit that changes only the viewport while attaching no new buffer does not
+resize the window until the next buffer arrives, because resolution runs on the
+buffer path. Clients that change their crop or scale attach a buffer in the same
+commit, so this is not observed in practice.
 
 ## Input pass-through
 

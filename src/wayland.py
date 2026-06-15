@@ -27,6 +27,7 @@ if sys.platform == 'linux':
     ('/usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml', []),
     ('/usr/share/wayland-protocols/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml', []),
     ('/usr/share/wayland-protocols/stable/linux-dmabuf/linux-dmabuf-v1.xml', []),
+    ('/usr/share/wayland-protocols/stable/viewporter/viewporter.xml', []),
   ]
 
   scanner_bin = build.PREFIX / 'bin' / 'hyprwayland-scanner'

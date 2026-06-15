@@ -185,10 +185,12 @@ struct Toplevel {
   bool mapped = false;
   pid_t pid = 0;                      // client process, for close escalation
   mux::Timer* close_timer = nullptr;  // armed when a close was requested
-  WeakPtr<Object> window_weak;
+  WeakPtr<WaylandWindow> window_weak;
 
   Toplevel(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
   Toplevel(const Toplevel&) = delete;
+
+  Ptr<WaylandWindow> LockWindow() const { return window_weak.Lock(); }
 };
 
 // One plane of a dmabuf-backed buffer. The fd stays open for the buffer's whole
@@ -237,8 +239,6 @@ struct DmabufBuffer {
   }
 };
 
-Ptr<Object> LockWindow(Toplevel& t) { return t.window_weak.Lock(); }
-
 // Drives libwayland from our epoll loop: when the wl_display's event loop fd
 // signals, dispatch its ready events once (non-blocking) and flush replies.
 struct WaylandListener : mux::Epoll::Listener {
@@ -285,7 +285,6 @@ struct Server::Impl {
   Colony<XdgSurf> xdg_surfaces;
   Colony<Toplevel> toplevels;
   std::unordered_map<wl_resource*, Surface*> surface_by_res;
-  std::unordered_map<wl_resource*, Toplevel*> toplevel_by_res;
 
   // GPU buffer passing (zwp_linux_dmabuf_v1). Buffers outlive their params and
   // are looked up by resource at commit time.
@@ -318,7 +317,7 @@ struct Server::Impl {
 
   // Respawned clients waiting to be adopted into their board objects.
   std::mutex adoption_mutex;
-  std::vector<std::pair<pid_t, WeakPtr<Object>>> adoptions;
+  std::vector<std::pair<pid_t, WeakPtr<WaylandWindow>>> adoptions;
 };
 
 namespace {
@@ -344,17 +343,16 @@ uint32_t NowMs() {
 void UnmapToplevel(Impl& s, Toplevel& t) {
   if (!t.mapped) return;
   t.mapped = false;
-  if (auto win_obj = LockWindow(t)) {
-    auto& win = static_cast<WaylandWindow&>(*win_obj);
-    win.toplevel_handle.store(nullptr);
+  if (auto win = t.LockWindow()) {
+    win->toplevel_handle.store(nullptr);
     {
-      auto lock = std::lock_guard(win.mutex);
-      win.client_gone = true;
+      auto lock = std::lock_guard(win->mutex);
+      win->client_gone = true;
     }
-    win.WakeToys();
+    win->WakeToys();
     {
       auto lock = std::lock_guard(s.ui_mutex);
-      s.ui_disappeared.push_back(std::move(win_obj));
+      s.ui_disappeared.push_back(std::move(win));
     }
     vm.WakeToys();  // wakes RootWidget::Tick (via PackFrame) so UIFrame drains
   }
@@ -374,30 +372,29 @@ void ReleaseHeldDmabuf(Impl& s, Surface& surf) {
 // an existing board object was reattached.
 Ptr<Object> AcquireWindow(Impl& s, Toplevel& t, bool& adopted) {
   adopted = false;
-  Ptr<Object> win_obj = LockWindow(t);
-  if (win_obj || t.mapped) return win_obj;
+  auto win = t.LockWindow();
+  if (win || t.mapped) return win;
   {  // A respawned recipe adopts its existing board object.
     auto lock = std::lock_guard(s.adoption_mutex);
     for (auto it = s.adoptions.begin(); it != s.adoptions.end(); ++it) {
       if (it->first == t.pid) {
-        win_obj = it->second.Lock();
+        win = it->second.Lock();
         s.adoptions.erase(it);
         break;
       }
     }
   }
-  if (win_obj) {
+  if (win) {
     adopted = true;
-    auto& win = static_cast<WaylandWindow&>(*win_obj);
-    win.toplevel_handle.store(&t);
+    win->toplevel_handle.store(&t);
     {
-      auto lock = std::lock_guard(win.mutex);
-      win.client_gone = false;
-      win.client_pid = t.pid;
-      if (!t.title.empty()) win.title = t.title;
-      win.app_id = t.app_id;
+      auto lock = std::lock_guard(win->mutex);
+      win->client_gone = false;
+      win->client_pid = t.pid;
+      if (!t.title.empty()) win->title = t.title;
+      win->app_id = t.app_id;
     }
-    t.window_weak = win.AcquireWeakPtr();
+    t.window_weak = win->AcquireWeakPtr();
   } else {
     auto created = MAKE_PTR(WaylandWindow);
     created->toplevel_handle.store(&t);
@@ -408,21 +405,21 @@ Ptr<Object> AcquireWindow(Impl& s, Toplevel& t, bool& adopted) {
       created->client_pid = t.pid;
     }
     t.window_weak = created->AcquireWeakPtr();
-    win_obj = std::move(created);
+    win = std::move(created);
   }
-  return win_obj;
+  return win;
 }
 
 // Wakes the toy/UI for a new frame and, on the first frame, seats the window on
 // the board (adopted windows are already there).
-void PublishFrame(Impl& s, Toplevel& t, Ptr<Object> win_obj, bool adopted) {
-  static_cast<WaylandWindow&>(*win_obj).WakeToys();
+void PublishFrame(Impl& s, Toplevel& t, Ptr<Object> win, bool adopted) {
+  win->WakeToys();
   vm.WakeToys();
   if (!t.mapped) {
     t.mapped = true;
     if (!adopted) {
       auto lock = std::lock_guard(s.ui_mutex);
-      s.ui_appeared.push_back(std::move(win_obj));
+      s.ui_appeared.push_back(std::move(win));
     }
   }
 }
@@ -645,7 +642,7 @@ void ApplyAndPublish(Impl& s, Surface& surf) {
   if (!owner) return;
   bool adopted = false;
   Ptr<Object> win_obj =
-      (owner == surf.toplevel) ? AcquireWindow(s, *owner, adopted) : LockWindow(*owner);
+      (owner == surf.toplevel) ? AcquireWindow(s, *owner, adopted) : owner->LockWindow();
   if (!win_obj) return;
   RecomposeWindow(static_cast<WaylandWindow&>(*win_obj), *owner);
   PublishFrame(s, *owner, std::move(win_obj), adopted);
@@ -802,13 +799,12 @@ void NewToplevel(Impl& s, XdgSurf& xs, uint32_t id) {
   uid_t uid;
   gid_t gid;
   wl_client_get_credentials(xs.res.client(), &tp->pid, &uid, &gid);
-  s.toplevel_by_res[tp->res.resource()] = tp;
 
   auto* res = &tp->res;
   res->setSetTitle([&s, tp](CXdgToplevel*, const char* title) {
     tp->title = title;
-    if (auto win_obj = LockWindow(*tp)) {
-      auto& win = static_cast<WaylandWindow&>(*win_obj);
+    if (auto win_obj = tp->LockWindow()) {
+      auto& win = *win_obj;
       {
         auto lock = std::lock_guard(win.mutex);
         win.title = title;
@@ -818,19 +814,18 @@ void NewToplevel(Impl& s, XdgSurf& xs, uint32_t id) {
   });
   res->setSetAppId([&s, tp](CXdgToplevel*, const char* app_id) {
     tp->app_id = app_id;
-    if (auto win_obj = LockWindow(*tp)) {
-      auto& win = static_cast<WaylandWindow&>(*win_obj);
+    if (auto win_obj = tp->LockWindow()) {
+      auto& win = *win_obj;
       auto lock = std::lock_guard(win.mutex);
       win.app_id = app_id;
     }
   });
-  res->setOnDestroy([&s, tp](CXdgToplevel* r) {
+  res->setOnDestroy([&s, tp](CXdgToplevel*) {
     UnmapToplevel(s, *tp);
     if (tp->close_timer) {
       EraseOwned(s.close_timers, tp->close_timer);
       tp->close_timer = nullptr;
     }
-    s.toplevel_by_res.erase(r->resource());
     if (tp->xdg) tp->xdg->toplevel = nullptr;
     if (tp->xdg && tp->xdg->surface) tp->xdg->surface->toplevel = nullptr;
     EraseOwned(s.toplevels, tp);

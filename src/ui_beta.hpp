@@ -262,6 +262,9 @@ struct RunButton : Widget {
   uint32_t wiggle = 0;  // hover shimmer phase
   bool running = false;
   bool enabled = true;
+  // Mirror of running/enabled as last painted; Tick repaints when they diverge.
+  bool drawn_running = false;
+  bool drawn_enabled = true;
 
   constexpr static float kRadius = 4_mm;
   constexpr static float kOverhang = 2_mm;  // how far the disc dips below the border

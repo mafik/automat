@@ -1118,6 +1118,11 @@ ui::Tock RunButton::Tick(time::Timer& t) {
     local_to_parent = SkM44::Translate(bounds.CenterX(), bounds.bottom + kRadius - kOverhang);
   }
   Tock tock = clickable.Tick(t);
+  if (running != drawn_running || enabled != drawn_enabled) {
+    drawn_running = running;
+    drawn_enabled = enabled;
+    tock.draw = true;
+  }
   if (enabled && clickable.pointers_over > 0 && clickable.pointers_pressing == 0) {
     wiggle = static_cast<uint32_t>(t.NowSeconds() * 5.0);
     tock.draw = true;

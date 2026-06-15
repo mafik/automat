@@ -43,6 +43,8 @@ struct TextFieldBase : Widget {
   void KeyDown(Caret&, Key) override;
   void KeyUp(Caret&, Key) override;
 
+  Tock Tick(time::Timer&) override { return Tock::Draw; }
+
   virtual void TextVisit(const TextVisitor&) = 0;
   virtual int IndexFromPosition(float x) const = 0;
   virtual Vec2 PositionFromIndex(int index) const = 0;

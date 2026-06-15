@@ -75,6 +75,17 @@ struct Toplevel;
 struct Viewport;
 struct Subsurface;
 
+// Describes a section of an image (not included) possibly stretched to some `dst_size`.
+struct CutoutGeometry {
+  SkRect src_crop = SkRect::MakeEmpty();  // in local `image` pixels
+  SkISize dst_size = {};                  // in local `image` pixels
+};
+
+// Describes a section of an image (image included) possibly stretched to some `dst_size`.
+struct SurfaceCutout : CutoutGeometry {
+  sk_sp<SkImage> image;
+};
+
 // A wl_surface: the client's pixel container. We track only what commit
 // needs - the buffer attached since the last commit, the frame callbacks the
 // client registered ("tell me when it's worth drawing the next frame"), and
@@ -89,13 +100,7 @@ struct Surface {
   Toplevel* toplevel = nullptr;
   wl_resource* held_dmabuf = nullptr;  // dmabuf buffer held for zero-copy display
   Viewport* viewport = nullptr;        // wp_viewport crop/scale state, if any
-
-  // Applied (visible) contents: the latest committed buffer as an image, its
-  // wp_viewport source crop, and the displayed surface size. Every surface in a
-  // window tree carries these; the window composites them into layers.
-  sk_sp<SkImage> image;
-  SkRect src = SkRect::MakeEmpty();
-  SkISize size = {};
+  SurfaceCutout content;
   // Recycled frame allocations for this surface's shm copies; an entry is
   // reclaimed once nothing else (the window's SkImage, the renderer) references it.
   std::vector<sk_sp<SkData>> frame_pool;
@@ -120,16 +125,12 @@ struct Subsurface {
   CWlSubsurface res;
   Surface* surface = nullptr;  // the child surface (holds the subsurface role)
   Surface* parent = nullptr;
-  int x = 0, y = 0;                  // applied position, surface px
+  int x = 0, y = 0;                  // applied position, in the parent's surface px
   int pending_x = 0, pending_y = 0;  // set_position, applied at the parent's commit
   bool position_dirty = false;
   bool sync = true;  // set_desync clears this
-  // Sync-mode cache: the child's committed image/crop/size, held until the
-  // parent commits.
-  sk_sp<SkImage> cache_image;
-  SkRect cache_src = SkRect::MakeEmpty();
-  SkISize cache_size = {};
-  bool has_cache = false;
+  // Sync-mode cache: the child's committed frame, held until the parent commits.
+  Optional<SurfaceCutout> cache;
 
   Subsurface(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
   Subsurface(const Subsurface&) = delete;
@@ -431,22 +432,13 @@ void PublishFrame(Impl& s, Toplevel& t, Ptr<Object> win, bool adopted) {
   }
 }
 
-// The surface size and the buffer source rectangle a commit applies, derived
-// from the surface's wp_viewport (if any) and the just-attached buffer's pixel
-// size. A surface with no viewport keeps the buffer's own size and samples it
-// whole.
-struct SurfaceGeometry {
-  SkISize destination_px;
-  SkRect source_px;
-};
-
 // Fills `out` from the surface's viewport and the buffer size. Returns false,
 // having posted the protocol error, on the two violations the protocol defers to
 // commit time: a non-integer crop with no destination size, and a source
 // rectangle reaching outside the buffer. Source values are exact dyadic
 // rationals (wl_fixed/256) and buffer sizes are integers, so the comparisons
 // below carry no floating-point slack.
-bool ResolveGeometry(Surface& surf, int buf_w, int buf_h, SurfaceGeometry& out) {
+bool ResolveGeometry(Surface& surf, int buf_w, int buf_h, CutoutGeometry& out) {
   Viewport* vp = surf.viewport;
   bool src_set = vp && vp->src_w >= 0;
   bool dst_set = vp && vp->dst_w >= 0;
@@ -464,14 +456,14 @@ bool ResolveGeometry(Surface& surf, int buf_w, int buf_h, SurfaceGeometry& out) 
       return false;
     }
   }
-  out.source_px.setXYWH(sx, sy, sw, sh);
-  out.destination_px.set(dst_set ? vp->dst_w : (int)sw, dst_set ? vp->dst_h : (int)sh);
+  out.src_crop.setXYWH(sx, sy, sw, sh);
+  out.dst_size.set(dst_set ? vp->dst_w : (int)sw, dst_set ? vp->dst_h : (int)sh);
   static bool first = true;
   if (first && (src_set || dst_set)) {
     first = false;
     LOG << f("Wayland: first viewport applied, buffer {}x{} -> surface {}x{} source {}x{}+{}+{}",
-             buf_w, buf_h, out.destination_px.width(), out.destination_px.height(), (int)sw,
-             (int)sh, (int)sx, (int)sy);
+             buf_w, buf_h, out.dst_size.width(), out.dst_size.height(), (int)sw, (int)sh, (int)sx,
+             (int)sy);
   }
   return true;
 }
@@ -482,14 +474,13 @@ bool ResolveGeometry(Surface& surf, int buf_w, int buf_h, SurfaceGeometry& out) 
 // or holds the dmabuf until the next frame replaces it. Returns false (with the
 // buffer already released or held) when the buffer is unusable or a protocol
 // error was posted.
-bool ImportBuffer(Impl& s, Surface& surf, wl_resource* buf, sk_sp<SkImage>& out_image,
-                  SkRect& out_src, SkISize& out_size) {
+bool ImportBuffer(Impl& s, Surface& surf, wl_resource* buf, SurfaceCutout& out) {
   if (wl_shm_buffer* shm = wl_shm_buffer_get(buf)) {
     int w = wl_shm_buffer_get_width(shm);
     int h = wl_shm_buffer_get_height(shm);
     int stride = wl_shm_buffer_get_stride(shm);
     uint32_t format = wl_shm_buffer_get_format(shm);
-    SurfaceGeometry geom;
+    CutoutGeometry geom;
     bool ok = w > 0 && h > 0 && ResolveGeometry(surf, w, h, geom);
     if (ok) {
       // The one unavoidable copy (we release the client's buffer right after
@@ -515,9 +506,9 @@ bool ImportBuffer(Impl& s, Surface& surf, wl_resource* buf, sk_sp<SkImage>& out_
       auto info = SkImageInfo::Make(
           w, h, kBGRA_8888_SkColorType,
           format == WL_SHM_FORMAT_XRGB8888 ? kOpaque_SkAlphaType : kPremul_SkAlphaType);
-      out_image = SkImages::RasterFromData(info, data, (size_t)w * 4);
-      out_src = geom.source_px;
-      out_size = geom.destination_px;
+      out.image = SkImages::RasterFromData(info, data, (size_t)w * 4);
+      out.src_crop = geom.src_crop;
+      out.dst_size = geom.dst_size;
       surf.frame_pool.push_back(std::move(data));
       if (surf.frame_pool.size() > 4) surf.frame_pool.erase(surf.frame_pool.begin());
     }
@@ -534,7 +525,7 @@ bool ImportBuffer(Impl& s, Surface& surf, wl_resource* buf, sk_sp<SkImage>& out_
       LOG << f("Wayland: first dmabuf frame {}x{} drm_format=0x{:08x} modifier=0x{:016x}",
                db->width, db->height, db->drm_format, db->modifier);
     }
-    SurfaceGeometry geom;
+    CutoutGeometry geom;
     bool ok = db->width > 0 && db->height > 0 && ResolveGeometry(surf, db->width, db->height, geom);
     if (ok) {
       // Import the planes to an SkImage here, on the compositor thread, so a
@@ -558,10 +549,10 @@ bool ImportBuffer(Impl& s, Surface& surf, wl_resource* buf, sk_sp<SkImage>& out_
       }
       // ImportDmabuf takes desc by value and closes its fds; on a dup failure we
       // skip it and desc closes them itself at scope exit.
-      out_image = dup_ok ? vk::ImportDmabuf(std::move(desc)) : nullptr;
-      out_src = geom.source_px;
-      out_size = geom.destination_px;
-      ok = (bool)out_image;
+      out.image = dup_ok ? vk::ImportDmabuf(std::move(desc)) : nullptr;
+      out.src_crop = geom.src_crop;
+      out.dst_size = geom.dst_size;
+      ok = (bool)out.image;
     }
     // Zero-copy: hold this buffer until the next frame replaces it, then let the
     // client reuse the previous one.
@@ -591,7 +582,10 @@ Toplevel* OwningToplevel(Surface& surf) {
 void CollectLayers(Surface& surf, int ox, int oy, Vec<WindowLayer>& out) {
   for (Surface* entry : surf.stack) {
     if (entry == &surf) {
-      if (surf.image) out.push_back({surf.image, surf.src, SkIPoint::Make(ox, oy), surf.size});
+      if (surf.content.image) {
+        auto& c = surf.content;
+        out.push_back({c.image, c.src_crop, SkIPoint::Make(ox, oy), c.dst_size});
+      }
     } else {
       Subsurface* sub = entry->as_subsurface;
       CollectLayers(*entry, ox + sub->x, oy + sub->y, out);
@@ -605,7 +599,7 @@ void RecomposeWindow(WaylandWindow& win, Toplevel& t) {
   Vec<WindowLayer> layers;
   SkISize extent = {};
   if (t.xdg && t.xdg->surface) {
-    extent = t.xdg->surface->size;
+    extent = t.xdg->surface->content.dst_size;
     CollectLayers(*t.xdg->surface, 0, 0, layers);
   }
   auto lock = std::lock_guard(win.mutex);
@@ -628,11 +622,9 @@ bool ApplyChildren(Surface& parent) {
       sub->position_dirty = false;
       changed = true;
     }
-    if (sub->sync && sub->has_cache) {
-      entry->image = std::move(sub->cache_image);
-      entry->src = sub->cache_src;
-      entry->size = sub->cache_size;
-      sub->has_cache = false;
+    if (sub->sync && sub->cache) {
+      entry->content = std::move(*sub->cache);
+      sub->cache.reset();
       changed = true;
       ApplyChildren(*entry);
     }
@@ -674,7 +666,7 @@ void Commit(Impl& s, Surface& surf) {
     if (!buf) {
       // Null buffer = unmap: a toplevel removes its window, a subsurface drops
       // out of its window's layers.
-      surf.image = nullptr;
+      surf.content.image = nullptr;
       if (t) {
         UnmapToplevel(s, *t);
       } else {
@@ -682,20 +674,13 @@ void Commit(Impl& s, Surface& surf) {
       }
       ReleaseHeldDmabuf(s, surf);
     } else {
-      sk_sp<SkImage> img;
-      SkRect src;
-      SkISize size;
-      if (ImportBuffer(s, surf, buf, img, src, size)) {
+      SurfaceCutout content;
+      if (ImportBuffer(s, surf, buf, content)) {
         if (surf.as_subsurface && surf.as_subsurface->sync) {
-          // Sync subsurface: cache the committed state until the parent commits.
-          surf.as_subsurface->cache_image = std::move(img);
-          surf.as_subsurface->cache_src = src;
-          surf.as_subsurface->cache_size = size;
-          surf.as_subsurface->has_cache = true;
+          // Sync subsurface: cache the committed frame until the parent commits.
+          surf.as_subsurface->cache = std::move(content);
         } else {
-          surf.image = std::move(img);
-          surf.src = src;
-          surf.size = size;
+          surf.content = std::move(content);
           dirty = true;
         }
       }
@@ -1369,9 +1354,10 @@ Surface* SurfaceAt(Surface& root, double px, double py, double ox, double oy, do
   for (auto it = root.stack.rbegin(); it != root.stack.rend(); ++it) {
     Surface* entry = *it;
     if (entry == &root) {
-      if (root.image) {
+      if (root.content.image) {
         double rx = px - ox, ry = py - oy;
-        if (rx >= 0 && ry >= 0 && rx < root.size.width() && ry < root.size.height()) {
+        if (rx >= 0 && ry >= 0 && rx < root.content.dst_size.width() &&
+            ry < root.content.dst_size.height()) {
           lx = rx;
           ly = ry;
           return &root;

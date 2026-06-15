@@ -23,6 +23,7 @@
 #include <xkbcommon/xkbcommon-x11.h>
 #include <xkbcommon/xkbcommon.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <cmath>
@@ -59,6 +60,7 @@
 namespace automat::wayland {
 
 using library::WaylandWindow;
+using library::WindowLayer;
 using Impl = Server::Impl;
 
 namespace {
@@ -75,6 +77,7 @@ namespace {
 struct Toplevel;
 struct CloseTimer;
 struct Viewport;
+struct Subsurface;
 
 // A wl_surface: the client's pixel container. We track only what commit
 // needs - the buffer attached since the last commit, the frame callbacks the
@@ -91,8 +94,49 @@ struct Surface {
   wl_resource* held_dmabuf = nullptr;  // dmabuf buffer held for zero-copy display
   Viewport* viewport = nullptr;        // wp_viewport crop/scale state, if any
 
+  // Applied (visible) contents: the latest committed buffer as an image, its
+  // wp_viewport source crop, and the displayed surface size. Every surface in a
+  // window tree carries these; the window composites them into layers.
+  sk_sp<SkImage> image;
+  SkRect src = SkRect::MakeEmpty();
+  SkISize size = {};
+  // Recycled frame allocations for this surface's shm copies; an entry is
+  // reclaimed once nothing else (the window's SkImage, the renderer) references it.
+  std::vector<sk_sp<SkData>> frame_pool;
+
+  // Subsurface tree: `as_subsurface` is set when this surface has the subsurface
+  // role. Children are the subsurfaces parented here, split into those stacked
+  // below this surface and those above it, each back-to-front; the surface's own
+  // content sits between the two groups.
+  Subsurface* as_subsurface = nullptr;
+  std::vector<Subsurface*> children_below, children_above;
+
   Surface(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
   Surface(const Surface&) = delete;
+};
+
+// A wl_subsurface: positions one child surface relative to a parent and stacks
+// it in the parent's surface tree. The position is applied at the PARENT
+// surface's commit; in sync mode (the default) the child's own commits are
+// cached and applied at the parent's commit too, while in desync mode they apply
+// immediately. `surface`/`parent` go null when either wl_surface is destroyed.
+struct Subsurface {
+  CWlSubsurface res;
+  Surface* surface = nullptr;  // the child surface (holds the subsurface role)
+  Surface* parent = nullptr;
+  int x = 0, y = 0;                  // applied position, surface px
+  int pending_x = 0, pending_y = 0;  // set_position, applied at the parent's commit
+  bool position_dirty = false;
+  bool sync = true;  // set_desync clears this
+  // Sync-mode cache: the child's committed image/crop/size, held until the
+  // parent commits.
+  sk_sp<SkImage> cache_image;
+  SkRect cache_src = SkRect::MakeEmpty();
+  SkISize cache_size = {};
+  bool has_cache = false;
+
+  Subsurface(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
+  Subsurface(const Subsurface&) = delete;
 };
 
 // A wp_viewport: the crop and scale state a client attaches to one wl_surface.
@@ -146,9 +190,6 @@ struct Toplevel {
   pid_t pid = 0;                      // client process, for close escalation
   CloseTimer* close_timer = nullptr;  // armed when a close was requested
   WeakPtr<Object> window_weak;
-  // Recycled frame allocations: an entry is reclaimed once nothing else
-  // (the window's SkImage, the renderer) still references it.
-  std::vector<sk_sp<SkData>> frame_pool;
 
   Toplevel(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
   Toplevel(const Toplevel&) = delete;
@@ -245,7 +286,7 @@ struct Server::Impl {
   // Protocol objects; wayland thread only.
   Colony<CWlCompositor> compositor_resources;
   Colony<CWlSubcompositor> subcompositors;
-  Colony<CWlSubsurface> subsurfaces;
+  Colony<Subsurface> subsurfaces;
   Colony<CWlRegion> regions;
   Colony<CWlDataDeviceManager> data_device_managers;
   Colony<CWlDataDevice> data_devices;
@@ -254,6 +295,10 @@ struct Server::Impl {
   Colony<CWlSeat> seats;
   Colony<CWlPointer> pointers;
   Colony<CWlKeyboard> keyboards;
+  // The surfaces in a window tree that currently hold pointer / keyboard focus,
+  // so events route to the subsurface under the cursor (cleared on destroy).
+  Surface* pointer_surface = nullptr;
+  Surface* keyboard_surface = nullptr;
   Colony<CXdgWmBase> wm_bases;
   Colony<CXdgPositioner> positioners;
   Colony<CZxdgDecorationManagerV1> decoration_managers;
@@ -477,6 +522,185 @@ bool ResolveGeometry(Surface& surf, int buf_w, int buf_h, SurfaceGeometry& out) 
   return true;
 }
 
+// Imports a just-committed buffer into `out_*` (the image plus its wp_viewport
+// source crop and displayed surface size). Handles shm (row-copied into
+// surf.frame_pool) and dmabuf (GPU import); releases the shm buffer immediately
+// or holds the dmabuf until the next frame replaces it. Returns false (with the
+// buffer already released or held) when the buffer is unusable or a protocol
+// error was posted.
+bool ImportBuffer(Impl& s, Surface& surf, wl_resource* buf, sk_sp<SkImage>& out_image,
+                  SkRect& out_src, SkISize& out_size) {
+  if (wl_shm_buffer* shm = wl_shm_buffer_get(buf)) {
+    int w = wl_shm_buffer_get_width(shm);
+    int h = wl_shm_buffer_get_height(shm);
+    int stride = wl_shm_buffer_get_stride(shm);
+    uint32_t format = wl_shm_buffer_get_format(shm);
+    SurfaceGeometry geom;
+    bool ok = w > 0 && h > 0 && ResolveGeometry(surf, w, h, geom);
+    if (ok) {
+      // The one unavoidable copy (we release the client's buffer right after
+      // commit): shm rows land in a pooled allocation, and the SkImage wraps
+      // that allocation without copying again.
+      size_t need = (size_t)w * 4 * h;
+      sk_sp<SkData> data;
+      for (auto it = surf.frame_pool.begin(); it != surf.frame_pool.end(); ++it) {
+        if ((*it)->unique() && (*it)->size() == need) {
+          data = std::move(*it);
+          surf.frame_pool.erase(it);
+          break;
+        }
+      }
+      if (!data) data = SkData::MakeUninitialized(need);
+      wl_shm_buffer_begin_access(shm);
+      auto* src = (const uint8_t*)wl_shm_buffer_get_data(shm);
+      auto* dst = (uint8_t*)data->writable_data();
+      for (int row = 0; row < h; ++row) {
+        memcpy(dst + (size_t)row * w * 4, src + (size_t)row * stride, (size_t)w * 4);
+      }
+      wl_shm_buffer_end_access(shm);
+      auto info = SkImageInfo::Make(
+          w, h, kBGRA_8888_SkColorType,
+          format == WL_SHM_FORMAT_XRGB8888 ? kOpaque_SkAlphaType : kPremul_SkAlphaType);
+      out_image = SkImages::RasterFromData(info, data, (size_t)w * 4);
+      out_src = geom.source_px;
+      out_size = geom.destination_px;
+      surf.frame_pool.push_back(std::move(data));
+      if (surf.frame_pool.size() > 4) surf.frame_pool.erase(surf.frame_pool.begin());
+    }
+    // Copy-release: the client may reuse the buffer immediately.
+    wl_buffer_send_release(buf);
+    ReleaseHeldDmabuf(s, surf);
+    return ok;
+  }
+  if (auto it = s.dmabuf_by_res.find(buf); it != s.dmabuf_by_res.end()) {
+    DmabufBuffer* db = it->second;
+    static bool first_dmabuf = true;
+    if (first_dmabuf) {
+      first_dmabuf = false;
+      LOG << f("Wayland: first dmabuf frame {}x{} drm_format=0x{:08x} modifier=0x{:016x}",
+               db->width, db->height, db->drm_format, db->modifier);
+    }
+    SurfaceGeometry geom;
+    bool ok = db->width > 0 && db->height > 0 && ResolveGeometry(surf, db->width, db->height, geom);
+    if (ok) {
+      // Import the planes to an SkImage here, on the compositor thread, so a
+      // dmabuf becomes a layer exactly like an shm frame (vk::ImportDmabuf owns
+      // the Graphite recorder its zero-copy path needs). The fds are dup'd
+      // because the buffer outlives this commit and may be re-imported next frame.
+      DmabufImage desc;
+      desc.width = db->width;
+      desc.height = db->height;
+      desc.drm_format = db->drm_format;
+      desc.modifier = db->modifier;
+      desc.opaque = db->drm_format == DRM_FORMAT_XRGB8888;
+      desc.y_invert = db->y_invert;
+      desc.plane_count = db->plane_count;
+      bool dup_ok = true;
+      for (int i = 0; i < db->plane_count; ++i) {
+        desc.fds[i] = fcntl(db->planes[i].fd, F_DUPFD_CLOEXEC, 0);
+        desc.offsets[i] = db->planes[i].offset;
+        desc.strides[i] = db->planes[i].stride;
+        if (desc.fds[i] < 0) dup_ok = false;
+      }
+      // ImportDmabuf takes desc by value and closes its fds; on a dup failure we
+      // skip it and desc closes them itself at scope exit.
+      out_image = dup_ok ? vk::ImportDmabuf(std::move(desc)) : nullptr;
+      out_src = geom.source_px;
+      out_size = geom.destination_px;
+      ok = (bool)out_image;
+    }
+    // Zero-copy: hold this buffer until the next frame replaces it, then let the
+    // client reuse the previous one.
+    if (surf.held_dmabuf && surf.held_dmabuf != buf) {
+      wl_buffer_send_release(surf.held_dmabuf);
+    }
+    surf.held_dmabuf = buf;
+    return ok;
+  }
+  // Unknown buffer type; release it so clients don't stall.
+  wl_buffer_send_release(buf);
+  return false;
+}
+
+// Walks up the subsurface parent chain to the Toplevel that owns `surf`'s
+// window, or null if the surface isn't part of a toplevel tree.
+Toplevel* OwningToplevel(Surface& surf) {
+  for (Surface* p = &surf; p;) {
+    if (p->toplevel) return p->toplevel;
+    p = p->as_subsurface ? p->as_subsurface->parent : nullptr;
+  }
+  return nullptr;
+}
+
+// Appends `surf` and its subsurface subtree to `out` as back-to-front layers,
+// each at its absolute offset (ox, oy) within the window in surface px.
+void CollectLayers(Surface& surf, int ox, int oy, Vec<WindowLayer>& out) {
+  for (Subsurface* sub : surf.children_below) {
+    if (sub->surface) CollectLayers(*sub->surface, ox + sub->x, oy + sub->y, out);
+  }
+  if (surf.image) {
+    out.push_back({surf.image, surf.src, SkIPoint::Make(ox, oy), surf.size});
+  }
+  for (Subsurface* sub : surf.children_above) {
+    if (sub->surface) CollectLayers(*sub->surface, ox + sub->x, oy + sub->y, out);
+  }
+}
+
+// Rebuilds the window's layer list and window extent from the toplevel surface
+// tree, bumping the content serial. Locks win.mutex.
+void RecomposeWindow(WaylandWindow& win, Toplevel& t) {
+  Vec<WindowLayer> layers;
+  SkISize extent = {};
+  if (t.xdg && t.xdg->surface) {
+    extent = t.xdg->surface->size;
+    CollectLayers(*t.xdg->surface, 0, 0, layers);
+  }
+  auto lock = std::lock_guard(win.mutex);
+  win.layers = std::move(layers);
+  win.viewport_destination_px = extent;
+  win.content_serial++;
+}
+
+// At a parent surface's commit, applies its subsurfaces' pending positions and,
+// in sync mode, their cached committed state - recursing into sync children.
+// Returns whether anything visible changed.
+bool ApplyChildren(Surface& parent) {
+  bool changed = false;
+  for (auto* list : {&parent.children_below, &parent.children_above})
+    for (Subsurface* sub : *list) {
+      if (!sub->surface) continue;
+      if (sub->position_dirty) {
+        sub->x = sub->pending_x;
+        sub->y = sub->pending_y;
+        sub->position_dirty = false;
+        changed = true;
+      }
+      if (sub->sync && sub->has_cache) {
+        sub->surface->image = std::move(sub->cache_image);
+        sub->surface->src = sub->cache_src;
+        sub->surface->size = sub->cache_size;
+        sub->has_cache = false;
+        changed = true;
+        ApplyChildren(*sub->surface);
+      }
+    }
+  return changed;
+}
+
+// Recomposes and publishes the window that owns `surf` after its applied state
+// changed. The toplevel surface's first frame creates/adopts and maps the window
+// object; subsurface updates refresh an already-mapped window.
+void ApplyAndPublish(Impl& s, Surface& surf) {
+  Toplevel* owner = OwningToplevel(surf);
+  if (!owner) return;
+  bool adopted = false;
+  Ptr<Object> win_obj =
+      (owner == surf.toplevel) ? AcquireWindow(s, *owner, adopted) : LockWindow(*owner);
+  if (!win_obj) return;
+  RecomposeWindow(static_cast<WaylandWindow&>(*win_obj), *owner);
+  PublishFrame(s, *owner, std::move(win_obj), adopted);
+}
+
 void Commit(Impl& s, Surface& surf) {
   Toplevel* t = surf.toplevel;
 
@@ -489,120 +713,45 @@ void Commit(Impl& s, Surface& surf) {
     t->xdg->initial_configure_sent = true;
   }
 
+  bool dirty = false;
   if (surf.buffer_attached) {
     surf.buffer_attached = false;
     wl_resource* buf = surf.pending_buffer;
     surf.pending_buffer = nullptr;
     if (!buf) {
-      if (t) UnmapToplevel(s, *t);
+      // Null buffer = unmap: a toplevel removes its window, a subsurface drops
+      // out of its window's layers.
+      surf.image = nullptr;
+      if (t) {
+        UnmapToplevel(s, *t);
+      } else {
+        dirty = true;
+      }
       ReleaseHeldDmabuf(s, surf);
-    } else if (wl_shm_buffer* shm = wl_shm_buffer_get(buf)) {
-      int w = wl_shm_buffer_get_width(shm);
-      int h = wl_shm_buffer_get_height(shm);
-      int stride = wl_shm_buffer_get_stride(shm);
-      uint32_t format = wl_shm_buffer_get_format(shm);
-      SurfaceGeometry geom;
-      if (t && w > 0 && h > 0 && ResolveGeometry(surf, w, h, geom)) {
-        bool adopted = false;
-        if (Ptr<Object> win_obj = AcquireWindow(s, *t, adopted)) {
-          auto& win = static_cast<WaylandWindow&>(*win_obj);
-          // The one unavoidable copy (we release the client's buffer right after
-          // commit): shm rows land in a pooled allocation, and the SkImage wraps
-          // that allocation without copying again.
-          size_t need = (size_t)w * 4 * h;
-          sk_sp<SkData> data;
-          for (auto it = t->frame_pool.begin(); it != t->frame_pool.end(); ++it) {
-            if ((*it)->unique() && (*it)->size() == need) {
-              data = std::move(*it);
-              t->frame_pool.erase(it);
-              break;
-            }
-          }
-          if (!data) data = SkData::MakeUninitialized(need);
-          wl_shm_buffer_begin_access(shm);
-          auto* src = (const uint8_t*)wl_shm_buffer_get_data(shm);
-          auto* dst = (uint8_t*)data->writable_data();
-          for (int row = 0; row < h; ++row) {
-            memcpy(dst + (size_t)row * w * 4, src + (size_t)row * stride, (size_t)w * 4);
-          }
-          wl_shm_buffer_end_access(shm);
-          auto info = SkImageInfo::Make(
-              w, h, kBGRA_8888_SkColorType,
-              format == WL_SHM_FORMAT_XRGB8888 ? kOpaque_SkAlphaType : kPremul_SkAlphaType);
-          sk_sp<SkImage> img = SkImages::RasterFromData(info, data, (size_t)w * 4);
-          t->frame_pool.push_back(std::move(data));
-          if (t->frame_pool.size() > 4) t->frame_pool.erase(t->frame_pool.begin());
-          {
-            auto lock = std::lock_guard(win.mutex);
-            win.content = std::move(img);
-            win.viewport_destination_px = geom.destination_px;
-            win.viewport_source_px = geom.source_px;
-            win.content_serial++;
-          }
-          PublishFrame(s, *t, std::move(win_obj), adopted);
-        }
-      }
-      // Copy-release: the client may reuse the buffer immediately.
-      wl_buffer_send_release(buf);
-      ReleaseHeldDmabuf(s, surf);
-    } else if (auto it = s.dmabuf_by_res.find(buf); it != s.dmabuf_by_res.end()) {
-      DmabufBuffer* db = it->second;
-      static bool first_dmabuf = true;
-      if (first_dmabuf) {
-        first_dmabuf = false;
-        LOG << f("Wayland: first dmabuf frame {}x{} drm_format=0x{:08x} modifier=0x{:016x}",
-                 db->width, db->height, db->drm_format, db->modifier);
-      }
-      SurfaceGeometry geom;
-      if (t && db->width > 0 && db->height > 0 &&
-          ResolveGeometry(surf, db->width, db->height, geom)) {
-        bool adopted = false;
-        if (Ptr<Object> win_obj = AcquireWindow(s, *t, adopted)) {
-          auto& win = static_cast<WaylandWindow&>(*win_obj);
-          // Import the planes to an SkImage here, on the compositor thread, so a
-          // dmabuf rides win.content exactly like an shm frame (vk::ImportDmabuf
-          // owns the Graphite recorder its zero-copy path needs). The fds are
-          // dup'd because the buffer outlives this commit and may be re-imported
-          // next frame.
-          DmabufImage desc;
-          desc.width = db->width;
-          desc.height = db->height;
-          desc.drm_format = db->drm_format;
-          desc.modifier = db->modifier;
-          desc.opaque = db->drm_format == DRM_FORMAT_XRGB8888;
-          desc.y_invert = db->y_invert;
-          desc.plane_count = db->plane_count;
-          bool dup_ok = true;
-          for (int i = 0; i < db->plane_count; ++i) {
-            desc.fds[i] = fcntl(db->planes[i].fd, F_DUPFD_CLOEXEC, 0);
-            desc.offsets[i] = db->planes[i].offset;
-            desc.strides[i] = db->planes[i].stride;
-            if (desc.fds[i] < 0) dup_ok = false;
-          }
-          // ImportDmabuf takes desc by value and closes its fds; on a dup
-          // failure we skip it and desc closes them itself at scope exit.
-          sk_sp<SkImage> img = dup_ok ? vk::ImportDmabuf(std::move(desc)) : nullptr;
-          if (img) {
-            auto lock = std::lock_guard(win.mutex);
-            win.content = std::move(img);
-            win.viewport_destination_px = geom.destination_px;
-            win.viewport_source_px = geom.source_px;
-            win.content_serial++;
-          }
-          PublishFrame(s, *t, std::move(win_obj), adopted);
-        }
-      }
-      // Zero-copy: hold this buffer until the next frame replaces it, then let
-      // the client reuse the previous one.
-      if (surf.held_dmabuf && surf.held_dmabuf != buf) {
-        wl_buffer_send_release(surf.held_dmabuf);
-      }
-      surf.held_dmabuf = buf;
     } else {
-      // Unknown buffer type; release it so clients don't stall.
-      wl_buffer_send_release(buf);
+      sk_sp<SkImage> img;
+      SkRect src;
+      SkISize size;
+      if (ImportBuffer(s, surf, buf, img, src, size)) {
+        if (surf.as_subsurface && surf.as_subsurface->sync) {
+          // Sync subsurface: cache the committed state until the parent commits.
+          surf.as_subsurface->cache_image = std::move(img);
+          surf.as_subsurface->cache_src = src;
+          surf.as_subsurface->cache_size = size;
+          surf.as_subsurface->has_cache = true;
+        } else {
+          surf.image = std::move(img);
+          surf.src = src;
+          surf.size = size;
+          dirty = true;
+        }
+      }
     }
   }
+
+  // This surface's commit applies its subsurfaces' positions and sync caches.
+  if (ApplyChildren(surf)) dirty = true;
+  if (dirty) ApplyAndPublish(s, surf);
 
   // Frame callbacks are the client asking "when is it worth drawing the next
   // frame?". Completing them right at commit answers "immediately": honest
@@ -613,6 +762,56 @@ void Commit(Impl& s, Surface& surf) {
     cb.sendDone(now);
   }
   surf.frame_cbs.clear();
+}
+
+// place_above/place_below reorder a subsurface relative to a sibling, which may
+// be another subsurface of the same parent or the parent surface itself. The
+// reference can be in either stacking group, and the subsurface may cross between
+// them (e.g. place_below(parent) moves it under the parent's own content).
+void RestackSubsurface(Impl& s, Subsurface& sub, wl_resource* sibling_res, bool above) {
+  Surface* parent = sub.parent;
+  if (!parent) return;
+  for (auto* list : {&parent->children_below, &parent->children_above})
+    list->erase(std::remove(list->begin(), list->end(), &sub), list->end());
+  auto sit = s.surface_by_res.find(sibling_res);
+  Surface* sibling = sit == s.surface_by_res.end() ? nullptr : sit->second;
+  if (sibling == parent) {
+    // Relative to the parent's own content: just above it is the bottom of the
+    // above-group; just below it is the top of the below-group.
+    if (above)
+      parent->children_above.insert(parent->children_above.begin(), &sub);
+    else
+      parent->children_below.push_back(&sub);
+  } else if (sibling && sibling->as_subsurface) {
+    Subsurface* ref = sibling->as_subsurface;
+    bool placed = false;
+    for (auto* list : {&parent->children_below, &parent->children_above}) {
+      auto it = std::find(list->begin(), list->end(), ref);
+      if (it != list->end()) {
+        list->insert(it + (above ? 1 : 0), &sub);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) parent->children_above.push_back(&sub);  // not a sibling; leave on top
+  } else {
+    parent->children_above.push_back(&sub);  // unknown reference; leave on top
+  }
+  ApplyAndPublish(s, *parent);
+}
+
+// Removes a subsurface from its parent's tree and orphans it. Idempotent: safe to
+// call again from the wl_surface's own destroy.
+void DetachSubsurface(Impl& s, Subsurface& sub) {
+  Surface* parent = sub.parent;
+  if (parent) {
+    for (auto* list : {&parent->children_below, &parent->children_above})
+      list->erase(std::remove(list->begin(), list->end(), &sub), list->end());
+  }
+  if (sub.surface) sub.surface->as_subsurface = nullptr;
+  sub.surface = nullptr;
+  sub.parent = nullptr;
+  if (parent) ApplyAndPublish(s, *parent);
 }
 
 void NewSurface(Impl& s, wl_client* client, int version, uint32_t id) {
@@ -630,6 +829,13 @@ void NewSurface(Impl& s, wl_client* client, int version, uint32_t id) {
   res->setOnDestroy([&s, sp](CWlSurface* r) {
     ReleaseHeldDmabuf(s, *sp);
     if (sp->viewport) sp->viewport->surface = nullptr;
+    if (s.pointer_surface == sp) s.pointer_surface = nullptr;
+    if (s.keyboard_surface == sp) s.keyboard_surface = nullptr;
+    // Subsurface role: detach from the parent tree (recomposes the window).
+    if (sp->as_subsurface) DetachSubsurface(s, *sp->as_subsurface);
+    // Parent of subsurfaces: orphan them so they stop compositing.
+    for (auto* list : {&sp->children_below, &sp->children_above})
+      for (Subsurface* child : *list) child->parent = nullptr;
     if (sp->toplevel && sp->toplevel->xdg) sp->toplevel->xdg->surface = nullptr;
     s.surface_by_res.erase(r->resource());
     EraseOwned(s.surfaces, sp);
@@ -715,10 +921,43 @@ void BindSubcompositor(wl_client* client, void* data, uint32_t version, uint32_t
   auto& s = *(Impl*)data;
   CWlSubcompositor* rp = &*s.subcompositors.emplace(client, version, id);
   rp->setGetSubsurface(
-      [&s](CWlSubcompositor* r, uint32_t id, wl_resource* surface, wl_resource* parent) {
-        // Accepted so clients can use them; their content is not composited yet.
-        CWlSubsurface* sp = &*s.subsurfaces.emplace(r->client(), r->version(), id);
-        sp->setOnDestroy([&s, sp](CWlSubsurface*) { EraseOwned(s.subsurfaces, sp); });
+      [&s](CWlSubcompositor* r, uint32_t id, wl_resource* surface_res, wl_resource* parent_res) {
+        auto cit = s.surface_by_res.find(surface_res);
+        auto pit = s.surface_by_res.find(parent_res);
+        Surface* child = cit == s.surface_by_res.end() ? nullptr : cit->second;
+        Surface* parent = pit == s.surface_by_res.end() ? nullptr : pit->second;
+        // A surface cannot be its own ancestor; reject cycles (and self-parenting) so
+        // the tree walks stay finite. This is the protocol's bad_surface error.
+        for (Surface* a = parent; a; a = a->as_subsurface ? a->as_subsurface->parent : nullptr) {
+          if (a == child) {
+            r->error(WL_SUBCOMPOSITOR_ERROR_BAD_SURFACE, "a surface cannot be its own ancestor");
+            return;
+          }
+        }
+        Subsurface* sub = &*s.subsurfaces.emplace(r->client(), r->version(), id);
+        sub->surface = child;
+        sub->parent = parent;
+        if (child) child->as_subsurface = sub;
+        if (parent)
+          parent->children_above.push_back(sub);  // newest above its siblings and the parent
+        auto* sr = &sub->res;
+        sr->setSetPosition([sub](CWlSubsurface*, int32_t x, int32_t y) {
+          sub->pending_x = x;
+          sub->pending_y = y;
+          sub->position_dirty = true;
+        });
+        sr->setSetSync([sub](CWlSubsurface*) { sub->sync = true; });
+        sr->setSetDesync([sub](CWlSubsurface*) { sub->sync = false; });
+        sr->setPlaceAbove([&s, sub](CWlSubsurface*, wl_resource* sibling) {
+          RestackSubsurface(s, *sub, sibling, true);
+        });
+        sr->setPlaceBelow([&s, sub](CWlSubsurface*, wl_resource* sibling) {
+          RestackSubsurface(s, *sub, sibling, false);
+        });
+        sr->setOnDestroy([&s, sub](CWlSubsurface*) {
+          DetachSubsurface(s, *sub);
+          EraseOwned(s.subsurfaces, sub);
+        });
       });
   rp->setOnDestroy([&s, rp](CWlSubcompositor*) { EraseOwned(s.subcompositors, rp); });
 }
@@ -1195,6 +1434,83 @@ void PostInput(Impl& impl, WaylandWindow& w, Fn&& fn) {
   });
 }
 
+// Hit-tests the surface tree at a toplevel-local point, front-to-back (mirroring
+// the back-to-front draw order), returning the topmost surface that covers it
+// and the point in that surface's local coordinates.
+Surface* SurfaceAt(Surface& root, double px, double py, double ox, double oy, double& lx,
+                   double& ly) {
+  for (auto it = root.children_above.rbegin(); it != root.children_above.rend(); ++it) {
+    if ((*it)->surface)
+      if (Surface* hit = SurfaceAt(*(*it)->surface, px, py, ox + (*it)->x, oy + (*it)->y, lx, ly))
+        return hit;
+  }
+  if (root.image) {
+    double rx = px - ox, ry = py - oy;
+    if (rx >= 0 && ry >= 0 && rx < root.size.width() && ry < root.size.height()) {
+      lx = rx;
+      ly = ry;
+      return &root;
+    }
+  }
+  for (auto it = root.children_below.rbegin(); it != root.children_below.rend(); ++it) {
+    if ((*it)->surface)
+      if (Surface* hit = SurfaceAt(*(*it)->surface, px, py, ox + (*it)->x, oy + (*it)->y, lx, ly))
+        return hit;
+  }
+  return nullptr;
+}
+
+void PointerEnterTo(Impl& s, Surface& surf, double lx, double ly) {
+  wl_client* c = surf.res.client();
+  for (auto& p : s.pointers) {
+    if (p.client() != c) continue;
+    p.sendEnterRaw(s.serial++, surf.res.resource(), wl_fixed_from_double(lx),
+                   wl_fixed_from_double(ly));
+    if (p.version() >= 5) p.sendFrame();
+  }
+}
+void PointerLeaveTo(Impl& s, Surface& surf) {
+  wl_client* c = surf.res.client();
+  for (auto& p : s.pointers) {
+    if (p.client() != c) continue;
+    p.sendLeaveRaw(s.serial++, surf.res.resource());
+    if (p.version() >= 5) p.sendFrame();
+  }
+}
+void PointerMotionTo(Impl& s, Surface& surf, double lx, double ly) {
+  wl_client* c = surf.res.client();
+  uint32_t time = NowMs();
+  for (auto& p : s.pointers) {
+    if (p.client() != c) continue;
+    p.sendMotion(time, wl_fixed_from_double(lx), wl_fixed_from_double(ly));
+    if (p.version() >= 5) p.sendFrame();
+  }
+}
+void PointerButtonTo(Impl& s, Surface& surf, uint32_t button, bool pressed) {
+  wl_client* c = surf.res.client();
+  uint32_t time = NowMs();
+  for (auto& p : s.pointers) {
+    if (p.client() != c) continue;
+    p.sendButton(s.serial++, time, button,
+                 pressed ? WL_POINTER_BUTTON_STATE_PRESSED : WL_POINTER_BUTTON_STATE_RELEASED);
+    if (p.version() >= 5) p.sendFrame();
+  }
+}
+
+// Routes a pointer at toplevel-local (sx, sy) to the topmost surface there,
+// sending leave/enter across surface boundaries and a motion to the target.
+void RoutePointer(Impl& s, Toplevel& t, double sx, double sy) {
+  if (!t.xdg || !t.xdg->surface) return;
+  double lx = 0, ly = 0;
+  Surface* target = SurfaceAt(*t.xdg->surface, sx, sy, 0, 0, lx, ly);
+  if (target != s.pointer_surface) {
+    if (s.pointer_surface) PointerLeaveTo(s, *s.pointer_surface);
+    s.pointer_surface = target;
+    if (target) PointerEnterTo(s, *target, lx, ly);
+  }
+  if (target) PointerMotionTo(s, *target, lx, ly);
+}
+
 }  // namespace
 
 Server::Server(std::stop_token stop) : impl(std::make_unique<Impl>()) {
@@ -1383,92 +1699,75 @@ void Server::WatchProcess(pid_t pid, std::function<void(int)> on_exit, Status& s
 // ----------------------------------------------------------- input senders --
 
 void Server::SendPointerEnter(WaylandWindow& w, float sx, float sy) {
-  PostInput(*impl, w, [sx, sy](Impl& s, Toplevel&, wl_resource* surf) {
-    wl_client* c = wl_resource_get_client(surf);
-    for (auto& p : s.pointers) {
-      if (p.client() != c) continue;
-      p.sendEnterRaw(s.serial++, surf, wl_fixed_from_double(sx), wl_fixed_from_double(sy));
-      if (p.version() >= 5) p.sendFrame();
-    }
-  });
+  PostInput(*impl, w, [sx, sy](Impl& s, Toplevel& t, wl_resource*) { RoutePointer(s, t, sx, sy); });
 }
 
 void Server::SendPointerMotion(WaylandWindow& w, float sx, float sy) {
-  PostInput(*impl, w, [sx, sy](Impl& s, Toplevel&, wl_resource* surf) {
-    wl_client* c = wl_resource_get_client(surf);
-    uint32_t time = NowMs();
-    for (auto& p : s.pointers) {
-      if (p.client() != c) continue;
-      p.sendMotion(time, wl_fixed_from_double(sx), wl_fixed_from_double(sy));
-      if (p.version() >= 5) p.sendFrame();
-    }
-  });
+  PostInput(*impl, w, [sx, sy](Impl& s, Toplevel& t, wl_resource*) { RoutePointer(s, t, sx, sy); });
 }
 
 void Server::SendPointerButton(WaylandWindow& w, uint32_t button, bool pressed) {
-  PostInput(*impl, w, [button, pressed](Impl& s, Toplevel&, wl_resource* surf) {
-    wl_client* c = wl_resource_get_client(surf);
-    uint32_t time = NowMs();
-    for (auto& p : s.pointers) {
-      if (p.client() != c) continue;
-      p.sendButton(s.serial++, time, button,
-                   pressed ? WL_POINTER_BUTTON_STATE_PRESSED : WL_POINTER_BUTTON_STATE_RELEASED);
-      if (p.version() >= 5) p.sendFrame();
-    }
+  PostInput(*impl, w, [button, pressed](Impl& s, Toplevel&, wl_resource*) {
+    if (s.pointer_surface) PointerButtonTo(s, *s.pointer_surface, button, pressed);
   });
 }
 
 void Server::SendPointerLeave(WaylandWindow& w) {
-  PostInput(*impl, w, [](Impl& s, Toplevel&, wl_resource* surf) {
-    wl_client* c = wl_resource_get_client(surf);
-    for (auto& p : s.pointers) {
-      if (p.client() != c) continue;
-      p.sendLeaveRaw(s.serial++, surf);
-      if (p.version() >= 5) p.sendFrame();
+  PostInput(*impl, w, [](Impl& s, Toplevel&, wl_resource*) {
+    if (s.pointer_surface) {
+      PointerLeaveTo(s, *s.pointer_surface);
+      s.pointer_surface = nullptr;
     }
   });
 }
 
 void Server::SendKeyboardEnter(WaylandWindow& w) {
-  PostInput(*impl, w, [](Impl& s, Toplevel&, wl_resource* surf) {
-    wl_client* c = wl_resource_get_client(surf);
+  PostInput(*impl, w, [](Impl& s, Toplevel& t, wl_resource*) {
+    // Keyboard follows the surface the pointer is over (the one just clicked to
+    // focus), falling back to the toplevel surface.
+    Surface* target = s.pointer_surface ? s.pointer_surface : (t.xdg ? t.xdg->surface : nullptr);
+    if (!target) return;
+    s.keyboard_surface = target;
+    wl_client* c = target->res.client();
     wl_array keys;
     wl_array_init(&keys);
     for (auto& k : s.keyboards) {
       if (k.client() != c) continue;
       k.sendModifiers(s.serial++, 0, 0, 0, 0);
-      k.sendEnterRaw(s.serial++, surf, &keys);
+      k.sendEnterRaw(s.serial++, target->res.resource(), &keys);
     }
     wl_array_release(&keys);
   });
 }
 
 void Server::SendKeyboardLeave(WaylandWindow& w) {
-  PostInput(*impl, w, [](Impl& s, Toplevel&, wl_resource* surf) {
-    wl_client* c = wl_resource_get_client(surf);
+  PostInput(*impl, w, [](Impl& s, Toplevel&, wl_resource*) {
+    if (!s.keyboard_surface) return;
+    wl_client* c = s.keyboard_surface->res.client();
     for (auto& k : s.keyboards) {
       if (k.client() != c) continue;
-      k.sendLeaveRaw(s.serial++, surf);
+      k.sendLeaveRaw(s.serial++, s.keyboard_surface->res.resource());
     }
+    s.keyboard_surface = nullptr;
   });
 }
 
 void Server::SendKey(WaylandWindow& w, uint32_t evdev_keycode, bool pressed, bool ctrl, bool alt,
                      bool shift, bool super) {
-  PostInput(
-      *impl, w,
-      [evdev_keycode, pressed, ctrl, alt, shift, super](Impl& s, Toplevel&, wl_resource* surf) {
-        wl_client* c = wl_resource_get_client(surf);
-        uint32_t mods = (ctrl ? s.mod_ctrl : 0) | (alt ? s.mod_alt : 0) |
-                        (shift ? s.mod_shift : 0) | (super ? s.mod_super : 0);
-        uint32_t time = NowMs();
-        for (auto& k : s.keyboards) {
-          if (k.client() != c) continue;
-          k.sendModifiers(s.serial++, mods, 0, 0, 0);
-          k.sendKey(s.serial++, time, evdev_keycode,
-                    pressed ? WL_KEYBOARD_KEY_STATE_PRESSED : WL_KEYBOARD_KEY_STATE_RELEASED);
-        }
-      });
+  PostInput(*impl, w,
+            [evdev_keycode, pressed, ctrl, alt, shift, super](Impl& s, Toplevel&, wl_resource*) {
+              if (!s.keyboard_surface) return;
+              wl_client* c = s.keyboard_surface->res.client();
+              uint32_t mods = (ctrl ? s.mod_ctrl : 0) | (alt ? s.mod_alt : 0) |
+                              (shift ? s.mod_shift : 0) | (super ? s.mod_super : 0);
+              uint32_t time = NowMs();
+              for (auto& k : s.keyboards) {
+                if (k.client() != c) continue;
+                k.sendModifiers(s.serial++, mods, 0, 0, 0);
+                k.sendKey(s.serial++, time, evdev_keycode,
+                          pressed ? WL_KEYBOARD_KEY_STATE_PRESSED : WL_KEYBOARD_KEY_STATE_RELEASED);
+              }
+            });
 }
 
 Optional<Server> server;

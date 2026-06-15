@@ -38,15 +38,16 @@ runs one epoll loop that multiplexes every descriptor the subsystem cares about,
 - one pidfd per child process started by a Command
 - one timerfd per pending window-close escalation
 
-Pixels flow out through the window object as a ready `sk_sp<SkImage>`: each
+Pixels flow out through the window object as ready `sk_sp<SkImage>` layers: each
 committed `wl_shm` buffer is row-copied once into a pooled allocation (the
 pool entry is reclaimed when the previous frame's image lets go) and the
-raster image wraps that allocation without further copies; `wake_counter`
-notifies the toy, which just draws the image. The field is backend-agnostic: a
-`wl_shm` buffer becomes a raster image and a dmabuf becomes a GPU-backed image,
-both imported on the compositor thread (see GPU buffer passing below); the toy
-draws whichever it finds. Board structure is only
-mutated on the UI thread, in
+raster image wraps that allocation without further copies. Every surface in a
+window's tree carries its imported image this way, and the window holds them as a
+back-to-front list of layers (the toplevel surface plus any subsurfaces, see
+below) that `wake_counter` notifies the toy to draw in order. The import is
+backend-agnostic: a `wl_shm` buffer becomes a raster image and a dmabuf a
+GPU-backed image, both on the compositor thread (see GPU buffer passing below).
+Board structure is only mutated on the UI thread, in
 `UIFrame()` — called once per frame from `RootWidget::Tick` — which inserts
 newly mapped windows (seated next to the Command that spawned them) and
 removes windows whose client went away.
@@ -59,8 +60,8 @@ watches.
 
 ## Protocol surface
 
-Implemented: `wl_compositor`, `wl_subcompositor` (subsurfaces are accepted
-but their content is not composited), `wl_shm` (libwayland's built-in),
+Implemented: `wl_compositor`, `wl_subcompositor` (subsurfaces are composited
+into the window's surface tree, see below), `wl_shm` (libwayland's built-in),
 `wl_output`, `wl_seat` (pointer + keyboard), `wl_data_device_manager`
 (objects only; clipboard transfer not wired), `xdg_wm_base` with toplevels,
 `zxdg_decoration_manager_v1` forcing server-side decorations so clients do not
@@ -152,6 +153,48 @@ A commit that changes only the viewport while attaching no new buffer does not
 resize the window until the next buffer arrives, because resolution runs on the
 buffer path. Clients that change their crop or scale attach a buffer in the same
 commit, so this is not observed in practice.
+
+## Subsurface compositing
+
+A client may split a window across several surfaces: `wl_subcompositor` turns a
+wl_surface into a subsurface of a parent, positioned relative to it and stacked
+in the parent's tree. Toolkits that render through a GPU compositor use this for
+their main content - Firefox and Chromium put their whole page in a child surface
+- so a compositor that ignores the subtree shows only the parent, which for those
+clients is an empty decoration frame. This is why the feature exists: it is what
+separates "maps the window" from "shows the page".
+
+Each surface keeps its own committed image, and at every commit that changes the
+visible tree the compositor flattens the toplevel's subtree into the window
+object as a back-to-front list of layers, each at its absolute offset. The window
+is no longer one image but this list, and the toy draws the layers in order, so a
+parent with a transparent centre (a client that draws its own decorations) shows
+its child's content through it. The window extent and board size come from the
+toplevel surface; subsurfaces are placed within it, and each can be stacked above
+the parent's own content or below it - the compositor keeps a list of children on
+each side and draws the parent between them, so a subsurface placed below an
+opaque parent is hidden, as the protocol requires.
+
+Subsurface state is double-buffered against the parent. `set_position` and, in
+sync mode (the default), the child's committed buffer apply at the parent
+surface's commit; a desync child - what browsers use, so content updates are not
+gated on a parent repaint - applies its commits immediately. The compositor holds
+a sync child's committed state in a cache until the parent commits, then applies
+it recursively. A surface is rejected as its own ancestor at `get_subsurface`, so
+the tree walks stay finite.
+
+Pointer and keyboard input reach the surface under the cursor, not just the
+toplevel. The same tree is hit-tested front-to-back (`SurfaceAt`) to find the
+topmost surface at a point; enter, leave, motion and button are sent there in
+that surface's local coordinates, with focus following the pointer across surface
+boundaries (`RoutePointer`), and keyboard focus following the clicked surface. So
+a browser's clicks and typing land in its content subsurface rather than the
+inert decoration frame.
+
+The tree, the sync/desync rules, stacking and input routing are in
+`src/wayland_compositor.cpp` (`Commit`, `ApplyChildren`, `CollectLayers`,
+`RecomposeWindow`, `BindSubcompositor`, `SurfaceAt`, `RoutePointer`); the layer
+drawing is in `src/library_wayland_window.cpp`.
 
 ## Input pass-through
 

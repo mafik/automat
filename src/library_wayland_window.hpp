@@ -5,6 +5,7 @@
 // Warning: coded with a stochastic parrot
 
 #include <include/core/SkImage.h>
+#include <include/core/SkPoint.h>
 
 #include <atomic>
 
@@ -18,23 +19,33 @@ namespace automat::library {
 // surface (content + chrome). Used to seat new windows next to their Command.
 Vec2 WindowBoardSize(int width, int height);
 
+// One surface in a window's composited tree: the toplevel (layer 0) plus any
+// subsurfaces. Layers are drawn back-to-front; `image` is sampled through
+// `source` (the wp_viewport crop, or the whole buffer) into a `size`-pixel
+// rectangle placed at `position` within the window, all in client pixels.
+struct WindowLayer {
+  sk_sp<SkImage> image;
+  SkRect source;
+  SkIPoint position;
+  SkISize size;
+};
+
 // One mapped Wayland toplevel, shown as an object on the board. The window's
 // life is bound to the client: the client unmapping/exiting removes the
 // object, and deleting the object asks the client to close.
 struct WaylandWindow : Object {
   mutable std::mutex mutex;  // guards everything below
 
-  // The latest committed frame as an SkImage; the client does the rendering, so
-  // the read side is just an image. An shm buffer is row-copied into a pooled
-  // raster image and a dmabuf is imported to a GPU texture, both on the
-  // compositor thread at commit time.
-  sk_sp<SkImage> content;
-  // Surface size in client pixels. Drives the window's board size and the
-  // surface-local mapping of pointer input. Empty until the first frame.
+  // The committed frame as a back-to-front list of layers (toplevel surface plus
+  // any subsurfaces); the client does the rendering, so the read side is just
+  // images. Each surface's shm buffer is row-copied into a pooled raster image
+  // and each dmabuf imported to a GPU texture, on the compositor thread at commit
+  // time. Empty until the first frame.
+  Vec<WindowLayer> layers;
+  // Window extent in client pixels (the toplevel surface size). Drives the
+  // window's board size and the surface-local mapping of pointer input. Empty
+  // until the first frame.
   SkISize viewport_destination_px = {};
-  // Rectangle of `content` to display, in buffer pixels - the whole buffer
-  // unless a wp_viewport crops it.
-  SkRect viewport_source_px = {};
   uint64_t content_serial = 0;
   Str title;
   Str app_id;

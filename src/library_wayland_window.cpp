@@ -94,8 +94,7 @@ Vec2 WindowBoardSize(int width, int height) {
 }
 
 struct WaylandWindowToy : ui::beta::ObjectToy {
-  sk_sp<SkImage> image;
-  SkRect viewport_source = SkRect::MakeEmpty();  // sub-rect of `image` to display (buffer px)
+  Vec<WindowLayer> layers_;  // composited surface tree (toplevel + subsurfaces), back-to-front
   uint64_t image_serial = 0;
   Str title_;
   bool client_gone_ = false;
@@ -123,8 +122,7 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
     }
     if (win->content_serial != image_serial) {
       image_serial = win->content_serial;
-      image = win->content;
-      viewport_source = win->viewport_source_px;
+      layers_ = win->layers;
     }
   }
 
@@ -242,32 +240,39 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
                            ui::beta::kBodySize, ui::beta::TextOn(ui::beta::kBlue),
                            ui::beta::TextAlign::Left, true, seed);
       ui::beta::SketchyStroke(canvas, base, ui::beta::kInk, ui::beta::kStroke, seed, 2);
-      if (client_gone_ || !image) {
+      if (client_gone_ || layers_.empty()) {
         // The content area below the band, hatched while there is no buffer.
         Rect inner{-w / 2 + 0.9_mm, -h / 2 + 0.9_mm, w / 2 - 0.9_mm, h / 2 - kTitleH - 0.6_mm};
         ui::beta::HatchRect(canvas, inner, ui::beta::kGray, 1.6_mm, seed);
       }
     }
-    if (image) {
-      // The client surface is top-row-first; in this +Y-up space drawImageRect
+    if (!layers_.empty()) {
+      // The client surfaces are top-row-first; in this +Y-up space drawImageRect
       // would otherwise place row 0 at the visual bottom, so flip Y to keep the
-      // top row at the visual top.
+      // top row at the visual top. Layers (the toplevel plus any subsurfaces) are
+      // drawn back-to-front, each at its offset within the content area.
       float content_top = top - kTitleH - kFrame;
       float content_left = left + kFrame;
       canvas.save();
       canvas.scale(1, -1);
-      SkRect dst = SkRect::MakeLTRB(content_left, -content_top, content_left + content_w,
-                                    -(content_top - content_h));
-      // Opaque client content (XRGB/XR24) may carry a zero X/alpha channel. The
-      // renderer composites widget textures by alpha, so force such content
-      // opaque (RGB kept, alpha set to 1) to stop the board showing through;
-      // translucent (ARGB) windows are left untouched.
-      SkPaint paint;
-      if (image->isOpaque()) {
-        paint.setColorFilter(SkColorFilters::Blend(SK_ColorBLACK, SkBlendMode::kDstOver));
+      for (auto& layer : layers_) {
+        if (!layer.image) continue;
+        float lx = content_left + layer.position.x() * kClientPx;
+        float lt = content_top - layer.position.y() * kClientPx;  // board Y of the layer's top edge
+        float lw = layer.size.width() * kClientPx;
+        float lh = layer.size.height() * kClientPx;
+        SkRect dst = SkRect::MakeLTRB(lx, -lt, lx + lw, -(lt - lh));
+        // Opaque content (XRGB/XR24) may carry a zero X/alpha channel. The
+        // renderer composites by alpha, so force such a layer opaque (RGB kept,
+        // alpha set to 1); translucent (ARGB) layers are left untouched.
+        SkPaint paint;
+        if (layer.image->isOpaque()) {
+          paint.setColorFilter(SkColorFilters::Blend(SK_ColorBLACK, SkBlendMode::kDstOver));
+        }
+        canvas.drawImageRect(layer.image, layer.source, dst,
+                             SkSamplingOptions(SkFilterMode::kLinear), &paint,
+                             SkCanvas::kStrict_SrcRectConstraint);
       }
-      canvas.drawImageRect(image, viewport_source, dst, SkSamplingOptions(SkFilterMode::kLinear),
-                           &paint, SkCanvas::kStrict_SrcRectConstraint);
       canvas.restore();
     }
   }

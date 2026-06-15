@@ -24,11 +24,10 @@ Vec2 WindowBoardSize(int width, int height);
 struct WaylandWindow : Object {
   mutable std::mutex mutex;  // guards everything below
 
-  // The latest committed frame. Raster-backed today (the compositor thread
-  // copies each wl_shm buffer once, into a pooled allocation the image wraps
-  // without further copies); a GPU-backed image from a dmabuf import can
-  // land in the same field later. SkImage is the read-side type on purpose -
-  // an SkSurface is a render target, and the client does the rendering.
+  // The latest committed frame as an SkImage; the client does the rendering, so
+  // the read side is just an image. An shm buffer is row-copied into a pooled
+  // raster image and a dmabuf is imported to a GPU texture, both on the
+  // compositor thread at commit time.
   sk_sp<SkImage> content;
   int width = 0, height = 0;  // client-surface size, px
   uint64_t content_serial = 0;

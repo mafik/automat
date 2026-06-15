@@ -42,9 +42,11 @@ Pixels flow out through the window object as a ready `sk_sp<SkImage>`: each
 committed `wl_shm` buffer is row-copied once into a pooled allocation (the
 pool entry is reclaimed when the previous frame's image lets go) and the
 raster image wraps that allocation without further copies; `wake_counter`
-notifies the toy, which just draws the image. The field is deliberately
-backend-agnostic — a GPU-backed image from a future dmabuf import lands in
-the same place. Board structure is only mutated on the UI thread, in
+notifies the toy, which just draws the image. The field is backend-agnostic: a
+`wl_shm` buffer becomes a raster image and a dmabuf becomes a GPU-backed image,
+both imported on the compositor thread (see GPU buffer passing below); the toy
+draws whichever it finds. Board structure is only
+mutated on the UI thread, in
 `UIFrame()` — called once per frame from `RootWidget::Tick` — which inserts
 newly mapped windows (seated next to the Command that spawned them) and
 removes windows whose client went away.
@@ -61,10 +63,10 @@ Implemented: `wl_compositor`, `wl_subcompositor` (subsurfaces are accepted
 but their content is not composited), `wl_shm` (libwayland's built-in),
 `wl_output`, `wl_seat` (pointer + keyboard), `wl_data_device_manager`
 (objects only; clipboard transfer not wired), `xdg_wm_base` with toplevels,
-and `zxdg_decoration_manager_v1` forcing server-side decorations so clients
-do not draw their own title bars. foot requires the subcompositor and data
-device manager to even start; kitty requires the decoration ordering rule
-below.
+`zxdg_decoration_manager_v1` forcing server-side decorations so clients do not
+draw their own title bars, and `zwp_linux_dmabuf_v1` for GPU buffer passing
+(see below). foot requires the subcompositor and data device manager to even
+start; kitty requires the decoration ordering rule below.
 
 Two protocol rules earned through debugging:
 
@@ -77,16 +79,43 @@ Two protocol rules earned through debugging:
   for terminals; pacing tied to actual board presentation is the natural
   refinement if animating clients ever matter.
 
-GPU buffer import (`zwp_linux_dmabuf_v1` + Vulkan external memory) is
-deliberately absent: the development host is all-software (llvmpipe/lavapipe
-on virtio-gpu), where Mesa never exercises a dmabuf path, so the
-implementation would be unverifiable. The design when hardware exists:
-advertise version 3 (modifier events; Mesa does not need the v4 feedback
-table), formats `AR24`/`XR24` mapped to `VK_FORMAT_B8G8R8A8_UNORM` with
-modifiers from `VkDrmFormatModifierPropertiesListEXT`, import through
-`VK_EXT_external_memory_dma_buf` + `VK_EXT_image_drm_format_modifier` into a
-Graphite backend texture, and hold each `wl_buffer` unreleased until the
-next one arrives (zero-copy lifetime, unlike the shm copy-release).
+## GPU buffer passing
+
+Clients hand the compositor GPU buffers through `zwp_linux_dmabuf_v1` rather
+than copying pixels through `wl_shm`. The global is advertised at version 4
+because the version 4 feedback events are the only way a Mesa client learns
+which DRM device to allocate its buffers on; without that information (and
+without the obsolete `wl_drm` global) Mesa falls back to `wl_shm`. The feedback
+names the render node as the main device and offers one tranche of `AR24`/`XR24`
+with the linear and implicit modifiers; version 1-3 clients receive the legacy
+format and modifier events instead. Both formats import as
+`VK_FORMAT_B8G8R8A8_UNORM`.
+
+A committed dmabuf becomes the same `sk_sp<SkImage>` the shm path produces,
+imported on the compositor thread at commit so a dmabuf frame travels the same
+field as an shm frame. Import takes one of two paths: a zero-copy Vulkan
+external-memory import when the driver can import the buffer, and a mapped-upload
+fallback when it cannot. The zero-copy path builds a GPU texture, which needs a
+Graphite recorder; the compositor uses its own recorder, separate from the
+renderer's - not a second Graphite context, because Graphite images are
+context-local, so an image built on a second context could not be drawn by the
+renderer, whereas a second recorder on the shared context yields one that can.
+The two recorders are each confined to their own thread and never used at once,
+so no lock is needed. A dmabuf buffer is held until the next frame replaces it
+before being released, because the producer must not reuse it while the GPU is
+still sampling it; this is the zero-copy lifetime the shm copy-release avoids.
+
+The two import paths exist because of what a host without a real GPU can do.
+With llvmpipe and lavapipe on a virtio-gpu that has no 3D acceleration, Mesa's
+WSI gives ordinary clients (terminals, Chromium) only `wl_shm`; they cannot
+emit dmabuf at all. A client that allocates its own buffers through GBM on the
+primary node, such as the weston dmabuf demo, does emit dmabuf, but lavapipe
+cannot import that buffer zero-copy and so takes the mapped-upload path. A host
+with a real GPU imports every client's dmabuf zero-copy.
+
+The protocol and feedback are in `src/wayland_compositor.cpp`, the import in
+`src/vk.cpp` (`ImportDmabuf`), and the plane description it consumes in
+`src/dmabuf.hpp`.
 
 ## Input pass-through
 

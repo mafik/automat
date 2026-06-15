@@ -3,9 +3,12 @@
 #include "vk.hpp"
 
 #include <VkBootstrap.h>
+#include <drm/drm_fourcc.h>
+#include <fcntl.h>
 #include <include/core/SkAlphaType.h>
 #include <include/core/SkColorSpace.h>
 #include <include/core/SkColorType.h>
+#include <include/core/SkData.h>
 #include <include/core/SkImageInfo.h>
 #include <include/core/SkSurface.h>
 #include <include/gpu/GpuTypes.h>
@@ -16,6 +19,7 @@
 #include <include/gpu/graphite/Context.h>
 #include <include/gpu/graphite/ContextOptions.h>
 #include <include/gpu/graphite/GraphiteTypes.h>
+#include <include/gpu/graphite/Image.h>
 #include <include/gpu/graphite/Recorder.h>
 #include <include/gpu/graphite/Surface.h>
 #include <include/gpu/graphite/vk/VulkanGraphiteTypes.h>
@@ -25,12 +29,17 @@
 #include <include/gpu/vk/VulkanMemoryAllocator.h>
 #include <include/gpu/vk/VulkanMutableTextureState.h>
 #include <include/gpu/vk/VulkanPreferredFeatures.h>
+#include <linux/dma-buf.h>
 #include <src/gpu/GpuTypesPriv.h>
 #include <src/gpu/graphite/vk/VulkanGraphiteUtils.h>
 #include <src/gpu/vk/vulkanmemoryallocator/VulkanMemoryAllocatorPriv.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
+#include <cerrno>
+#include <cstring>
 #include <tracy/Tracy.hpp>
 
 #include "log.hpp"
@@ -65,29 +74,33 @@ PFN_vkGetDeviceProcAddr GetDeviceProcAddr;
   X(GetPhysicalDeviceFeatures2)              \
   X(GetPhysicalDeviceMemoryProperties2)
 
-#define EACH_DEVICE_PROC(X) \
-  X(GetDeviceQueue)         \
-  X(CreateSwapchainKHR)     \
-  X(DestroySwapchainKHR)    \
-  X(GetSwapchainImagesKHR)  \
-  X(AcquireNextImageKHR)    \
-  X(QueuePresentKHR)        \
-  X(DeviceWaitIdle)         \
-  X(QueueWaitIdle)          \
-  X(DestroyDevice)          \
-  X(CreateSemaphore)        \
-  X(DestroySemaphore)       \
-  X(CreateImage)            \
-  X(DestroyImage)           \
-  X(CreateCommandPool)      \
-  X(DestroyCommandPool)     \
-  X(AllocateCommandBuffers) \
-  X(BeginCommandBuffer)     \
-  X(EndCommandBuffer)       \
-  X(CmdCopyImage)           \
-  X(QueueSubmit2)           \
-  X(BindImageMemory)        \
-  X(CmdPipelineBarrier2)
+#define EACH_DEVICE_PROC(X)      \
+  X(GetDeviceQueue)              \
+  X(CreateSwapchainKHR)          \
+  X(DestroySwapchainKHR)         \
+  X(GetSwapchainImagesKHR)       \
+  X(AcquireNextImageKHR)         \
+  X(QueuePresentKHR)             \
+  X(DeviceWaitIdle)              \
+  X(QueueWaitIdle)               \
+  X(DestroyDevice)               \
+  X(CreateSemaphore)             \
+  X(DestroySemaphore)            \
+  X(CreateImage)                 \
+  X(DestroyImage)                \
+  X(CreateCommandPool)           \
+  X(DestroyCommandPool)          \
+  X(AllocateCommandBuffers)      \
+  X(BeginCommandBuffer)          \
+  X(EndCommandBuffer)            \
+  X(CmdCopyImage)                \
+  X(QueueSubmit2)                \
+  X(BindImageMemory)             \
+  X(CmdPipelineBarrier2)         \
+  X(AllocateMemory)              \
+  X(FreeMemory)                  \
+  X(GetImageMemoryRequirements2) \
+  X(GetMemoryFdPropertiesKHR)
 
 #define VULKAN_DECLARE(F) PFN_vk##F vk##F;
 EACH_INSTANCE_PROC(VULKAN_DECLARE)
@@ -180,6 +193,9 @@ sk_sp<skgpu::VulkanMemoryAllocator> memory_allocator;
 bool memory_budget_available = false;  // VK_EXT_memory_budget
 
 std::unique_ptr<graphite::Recorder> graphite_recorder;
+
+// Dedicated recorder for wrapping imported dmabuf images (compositor thread only).
+std::unique_ptr<graphite::Recorder> import_recorder;
 
 struct CommandPool {
   VkCommandPool vk_command_pool = VK_NULL_HANDLE;
@@ -392,6 +408,12 @@ void Device::Init(Status& status) {
   std::vector<const char*> app_extensions;
   skia_features.addFeaturesToEnable(app_extensions, features);
   app_extensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+  // dmabuf import (Wayland GPU buffer passing): external-memory-fd, dma-buf
+  // external memory, DRM format modifiers and foreign-queue ownership.
+  app_extensions.push_back(VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME);
+  app_extensions.push_back(VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME);
+  app_extensions.push_back(VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME);
+  app_extensions.push_back(VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME);
   vk::physical_device.enable_extensions_if_present(app_extensions);
   memory_budget_available =
       vk::physical_device.is_extension_present(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
@@ -499,6 +521,7 @@ void InitGrContext() {
   graphite_context = graphite::ContextFactory::MakeVulkan(foreground_backend, options);
   background_context = graphite::ContextFactory::MakeVulkan(background_backend, options);
   graphite_recorder = graphite_context->makeRecorder();
+  import_recorder = graphite_context->makeRecorder();
 }
 static void InitInstanceFunctions() {
 #define GET_INSTANCE_PROC(P) vk##P = (PFN_vk##P)instance.GetProc("vk" #P);
@@ -1289,6 +1312,7 @@ void Destroy() {
 
   memory_allocator.reset();
   graphite_recorder.reset();
+  import_recorder.reset();
   graphite_context.reset();
   background_context.reset();
 
@@ -1314,5 +1338,207 @@ void Resize(int width_hint, int height_hint, Status& status) {
 SkCanvas* AcquireCanvas() { return swapchain.AcquireCanvas(); }
 
 void Present() { swapchain.Present(); }
+
+namespace {
+// Keeps an imported VkImage + VkDeviceMemory alive for the wrapped SkImage's
+// lifetime; Skia's release proc frees them once the GPU is done sampling.
+struct ImportedTexture {
+  VkImage image;
+  VkDeviceMemory memory;
+};
+void ReleaseImportedTexture(void* context) {
+  auto* t = static_cast<ImportedTexture*>(context);
+  vkDestroyImage(device, t->image, nullptr);
+  vkFreeMemory(device, t->memory, nullptr);
+  delete t;
+}
+}  // namespace
+
+// Zero-copy path: import the dmabuf straight into a VkImage via external memory.
+// Returns null (leaving desc's original fd open) when the driver can't import
+// this buffer - notably lavapipe rejects foreign GBM/virtio-gpu dmabufs with
+// VK_ERROR_INVALID_EXTERNAL_HANDLE. AR24/XR24 are little-endian, i.e. B,G,R,A in
+// memory => VK_FORMAT_B8G8R8A8.
+static sk_sp<SkImage> ImportDmabufZeroCopy(DmabufImage& desc) {
+  // Vulkan takes ownership of the fd it imports (even on failure, on some
+  // drivers), so hand it a dup and keep desc's original fd for the caller, which
+  // owns desc's fds and may still need the mapped-copy fallback.
+  int import_fd = fcntl(desc.fds[0], F_DUPFD_CLOEXEC, 0);
+  if (import_fd < 0) return nullptr;
+  const VkFormat vk_format = VK_FORMAT_B8G8R8A8_UNORM;
+  const uint64_t modifier =
+      desc.modifier == DRM_FORMAT_MOD_INVALID ? DRM_FORMAT_MOD_LINEAR : desc.modifier;
+
+  VkSubresourceLayout plane_layout = {.offset = desc.offsets[0], .rowPitch = desc.strides[0]};
+  VkImageDrmFormatModifierExplicitCreateInfoEXT modifier_info = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT,
+      .drmFormatModifier = modifier,
+      .drmFormatModifierPlaneCount = 1,
+      .pPlaneLayouts = &plane_layout,
+  };
+  VkExternalMemoryImageCreateInfo external_info = {
+      .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+      .pNext = &modifier_info,
+      .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+  };
+  VkImageCreateInfo image_info = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .pNext = &external_info,
+      .imageType = VK_IMAGE_TYPE_2D,
+      .format = vk_format,
+      .extent = {(uint32_t)desc.width, (uint32_t)desc.height, 1},
+      .mipLevels = 1,
+      .arrayLayers = 1,
+      .samples = VK_SAMPLE_COUNT_1_BIT,
+      .tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT,
+      .usage = VK_IMAGE_USAGE_SAMPLED_BIT,
+      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+  };
+  VkImage image = VK_NULL_HANDLE;
+  if (vkCreateImage(device, &image_info, nullptr, &image) != VK_SUCCESS) {
+    close(import_fd);
+    ERROR_ONCE << "dmabuf import: vkCreateImage failed.";
+    return nullptr;
+  }
+
+  VkImageMemoryRequirementsInfo2 req_info = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2, .image = image};
+  VkMemoryRequirements2 req = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
+  vkGetImageMemoryRequirements2(device, &req_info, &req);
+
+  VkMemoryFdPropertiesKHR fd_props = {.sType = VK_STRUCTURE_TYPE_MEMORY_FD_PROPERTIES_KHR};
+  if (vkGetMemoryFdPropertiesKHR(device, VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT, import_fd,
+                                 &fd_props) != VK_SUCCESS) {
+    vkDestroyImage(device, image, nullptr);
+    close(import_fd);
+    ERROR_ONCE << "dmabuf import: vkGetMemoryFdPropertiesKHR failed.";
+    return nullptr;
+  }
+  uint32_t type_bits = req.memoryRequirements.memoryTypeBits & fd_props.memoryTypeBits;
+  if (type_bits == 0) {
+    vkDestroyImage(device, image, nullptr);
+    close(import_fd);
+    ERROR_ONCE << "dmabuf import: no compatible memory type.";
+    return nullptr;
+  }
+
+  VkImportMemoryFdInfoKHR import_info = {
+      .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
+      .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+      .fd = import_fd,
+  };
+  VkMemoryDedicatedAllocateInfo dedicated_info = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
+      .pNext = &import_info,
+      .image = image,
+  };
+  VkMemoryAllocateInfo alloc_info = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+      .pNext = &dedicated_info,
+      .allocationSize = req.memoryRequirements.size,
+      .memoryTypeIndex = (uint32_t)__builtin_ctz(type_bits),
+  };
+  VkDeviceMemory memory = VK_NULL_HANDLE;
+  if (VkResult res = vkAllocateMemory(device, &alloc_info, nullptr, &memory); res != VK_SUCCESS) {
+    vkDestroyImage(device, image, nullptr);
+    // import_fd ownership is ambiguous after a failed import, so leaking it is
+    // the safe choice; it is bounded because ImportDmabuf probes zero-copy once.
+    ERROR_ONCE << "dmabuf import: vkAllocateMemory failed: " << ToStr(res)
+               << " imageTypeBits=" << req.memoryRequirements.memoryTypeBits
+               << " fdTypeBits=" << fd_props.memoryTypeBits
+               << " size=" << req.memoryRequirements.size << " dmabufStride=" << desc.strides[0];
+    return nullptr;
+  }
+  // Vulkan now owns import_fd; it is released when `memory` is freed.
+  if (vkBindImageMemory(device, image, memory, 0) != VK_SUCCESS) {
+    vkFreeMemory(device, memory, nullptr);
+    vkDestroyImage(device, image, nullptr);
+    ERROR_ONCE << "dmabuf import: vkBindImageMemory failed.";
+    return nullptr;
+  }
+
+  graphite::VulkanTextureInfo texture_info(
+      VK_SAMPLE_COUNT_1_BIT, skgpu::Mipmapped::kNo, 0, vk_format,
+      VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT, VK_IMAGE_USAGE_SAMPLED_BIT,
+      VK_SHARING_MODE_EXCLUSIVE, VK_IMAGE_ASPECT_COLOR_BIT, skgpu::VulkanYcbcrConversionInfo());
+  auto backend_texture = graphite::BackendTextures::MakeVulkan(
+      {desc.width, desc.height}, texture_info, VK_IMAGE_LAYOUT_GENERAL, device.graphics_queue_index,
+      image, skgpu::VulkanAlloc());
+  if (!backend_texture.isValid()) {
+    vkFreeMemory(device, memory, nullptr);
+    vkDestroyImage(device, image, nullptr);
+    ERROR_ONCE << "dmabuf import: BackendTextures::MakeVulkan returned invalid.";
+    return nullptr;
+  }
+
+  auto* context = new ImportedTexture{image, memory};
+  SkAlphaType alpha = desc.opaque ? kOpaque_SkAlphaType : kPremul_SkAlphaType;
+  sk_sp<SkImage> sk_image =
+      SkImages::WrapTexture(import_recorder.get(), backend_texture, alpha, SkColorSpace::MakeSRGB(),
+                            desc.y_invert ? skgpu::Origin::kBottomLeft : skgpu::Origin::kTopLeft,
+                            ReleaseImportedTexture, context);
+  if (!sk_image) {
+    ReleaseImportedTexture(context);  // frees image + memory
+    ERROR_ONCE << "dmabuf import: SkImages::WrapTexture failed.";
+    return nullptr;
+  }
+  static bool first_ok = true;
+  if (first_ok) {
+    first_ok = false;
+    LOG << "dmabuf import: first frame imported zero-copy as a GPU texture.";
+  }
+  return sk_image;
+}
+
+// Fallback for drivers that can't import a foreign dmabuf zero-copy (lavapipe +
+// a GBM/virtio-gpu buffer here): map the buffer and copy its rows into a raster
+// image the renderer then uploads to a texture, like the shm path. The buffer is
+// single-plane LINEAR in this case, so the mapping is the raw pixel rows.
+static sk_sp<SkImage> ImportDmabufByCopy(const DmabufImage& desc) {
+  size_t map_size = (size_t)desc.offsets[0] + (size_t)desc.strides[0] * desc.height;
+  void* map = mmap(nullptr, map_size, PROT_READ, MAP_SHARED, desc.fds[0], 0);
+  if (map == MAP_FAILED) {
+    ERROR_ONCE << "dmabuf import: mmap fallback failed: " << strerror(errno);
+    return nullptr;
+  }
+  dma_buf_sync sync = {.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ};
+  ioctl(desc.fds[0], DMA_BUF_IOCTL_SYNC, &sync);
+  const size_t tight = (size_t)desc.width * 4;
+  sk_sp<SkData> data = SkData::MakeUninitialized(tight * desc.height);
+  auto* src = (const uint8_t*)map + desc.offsets[0];
+  auto* dst = (uint8_t*)data->writable_data();
+  for (int row = 0; row < desc.height; ++row) {
+    memcpy(dst + (size_t)row * tight, src + (size_t)row * desc.strides[0], tight);
+  }
+  sync.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ;
+  ioctl(desc.fds[0], DMA_BUF_IOCTL_SYNC, &sync);
+  munmap(map, map_size);
+  static bool first_copy = true;
+  if (first_copy) {
+    first_copy = false;
+    LOG << "dmabuf import: first frame imported by mapped copy (driver rejects zero-copy import).";
+  }
+  auto info = SkImageInfo::Make(desc.width, desc.height, kBGRA_8888_SkColorType,
+                                desc.opaque ? kOpaque_SkAlphaType : kPremul_SkAlphaType);
+  return SkImages::RasterFromData(info, data, tight);
+}
+
+sk_sp<SkImage> ImportDmabuf(DmabufImage desc) {
+  // Only single-plane BGRA/BGRX is advertised, so only that is imported. desc
+  // owns its plane fds and closes them when it goes out of scope.
+  if (desc.plane_count != 1 || desc.fds[0] < 0) {
+    ERROR_ONCE << "dmabuf import: unsupported plane layout (planes=" << desc.plane_count << ").";
+    return nullptr;
+  }
+  // Probe the zero-copy path once: if the driver can't import a foreign dmabuf
+  // (lavapipe here), stop probing and always take the mapped-copy fallback.
+  static bool try_zero_copy = true;
+  if (try_zero_copy) {
+    if (sk_sp<SkImage> zero_copy = ImportDmabufZeroCopy(desc)) return zero_copy;
+    try_zero_copy = false;
+  }
+  return ImportDmabufByCopy(desc);
+}
 
 }  // namespace automat::vk

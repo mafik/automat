@@ -7,10 +7,13 @@
 
 #if defined(__linux__)
 
+#include <drm/drm_fourcc.h>
+#include <fcntl.h>
 #include <include/core/SkData.h>
 #include <include/core/SkImage.h>
 #include <linux/input-event-codes.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/timerfd.h>
 #include <sys/wait.h>
@@ -32,6 +35,7 @@
 
 #include "automat.hpp"
 #include "colony.hpp"
+#include "dmabuf.hpp"
 #include "format.hpp"
 #include "library_command.hpp"
 #include "library_wayland_window.hpp"
@@ -39,10 +43,12 @@
 #include "mux_epoll.hpp"
 #include "thread_name.hpp"
 #include "time.hpp"
+#include "vk.hpp"
 #include "xcb.hpp"
 
 // The generated headers #define F std::function; they must come after all
 // Automat headers.
+#include "../build/generated/linux-dmabuf-v1.hpp"
 #include "../build/generated/wayland.hpp"
 #include "../build/generated/xdg-decoration-unstable-v1.hpp"
 #include "../build/generated/xdg-shell.hpp"
@@ -78,6 +84,7 @@ struct Surface {
   bool buffer_attached = false;  // attach happened since the last commit (may be null = unmap)
   Colony<CWlCallback> frame_cbs;
   Toplevel* toplevel = nullptr;
+  wl_resource* held_dmabuf = nullptr;  // dmabuf buffer held for zero-copy display
 
   Surface(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
   Surface(const Surface&) = delete;
@@ -121,6 +128,52 @@ struct Toplevel {
 
   Toplevel(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
   Toplevel(const Toplevel&) = delete;
+};
+
+// One plane of a dmabuf-backed buffer. The fd stays open for the buffer's whole
+// lifetime so the compositor can re-import on every commit.
+struct DmabufPlane {
+  int fd = -1;
+  uint32_t offset = 0;
+  uint32_t stride = 0;
+};
+
+// A zwp_linux_buffer_params_v1: planes accumulate via `add`, then `create` or
+// `create_immed` turns them into a wl_buffer. Single-use; the client destroys it
+// once the buffer (or `failed`) comes back.
+struct DmabufParams {
+  CZwpLinuxBufferParamsV1 res;
+  DmabufPlane planes[4];
+  int plane_count = 0;
+  uint64_t modifier = DRM_FORMAT_MOD_INVALID;
+  bool used = false;
+
+  DmabufParams(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
+  DmabufParams(const DmabufParams&) = delete;
+  ~DmabufParams() {
+    for (auto& p : planes)
+      if (p.fd >= 0) close(p.fd);
+  }
+};
+
+// A dmabuf-backed wl_buffer. The compositor owns the plane fds until the client
+// destroys the buffer; every commit re-imports them into a GPU texture (see the
+// dmabuf branch in Commit).
+struct DmabufBuffer {
+  CWlBuffer res;
+  int width = 0, height = 0;
+  uint32_t drm_format = 0;
+  uint64_t modifier = DRM_FORMAT_MOD_INVALID;
+  bool y_invert = false;
+  DmabufPlane planes[4];
+  int plane_count = 0;
+
+  DmabufBuffer(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
+  DmabufBuffer(const DmabufBuffer&) = delete;
+  ~DmabufBuffer() {
+    for (auto& p : planes)
+      if (p.fd >= 0) close(p.fd);
+  }
 };
 
 Ptr<Object> LockWindow(Toplevel& t) { return t.window_weak.Lock(); }
@@ -186,6 +239,22 @@ struct Server::Impl {
   Colony<Toplevel> toplevels;
   std::unordered_map<wl_resource*, Surface*> surface_by_res;
   std::unordered_map<wl_resource*, Toplevel*> toplevel_by_res;
+
+  // GPU buffer passing (zwp_linux_dmabuf_v1). Buffers outlive their params and
+  // are looked up by resource at commit time.
+  Colony<CZwpLinuxDmabufV1> dmabuf_globals;
+  Colony<DmabufParams> dmabuf_params;
+  Colony<DmabufBuffer> dmabuf_buffers;
+  std::unordered_map<wl_resource*, DmabufBuffer*> dmabuf_by_res;
+
+  // Version 4 feedback inputs, built once in InitDmabuf: the render node clients
+  // must allocate on (without it Mesa can't pick a device and falls back to shm)
+  // and a sealed table the feedback events index into.
+  Colony<CZwpLinuxDmabufFeedbackV1> dmabuf_feedbacks;
+  int dmabuf_format_table_fd = -1;
+  uint32_t dmabuf_format_table_size = 0;
+  dev_t dmabuf_main_device = 0;
+  bool dmabuf_has_device = false;
 
   // Child processes watched for exit via pidfd, and pending close-escalation
   // timers; both are epoll Listeners owned and touched only on the wayland thread.
@@ -271,6 +340,72 @@ void UnmapToplevel(Impl& s, Toplevel& t) {
   t.window_weak = {};
 }
 
+// Releases the dmabuf buffer a surface holds for zero-copy display, if any.
+void ReleaseHeldDmabuf(Impl& s, Surface& surf) {
+  if (surf.held_dmabuf) {
+    wl_buffer_send_release(surf.held_dmabuf);
+    surf.held_dmabuf = nullptr;
+  }
+}
+
+// Returns the window object for this toplevel's frame, creating it (or adopting
+// a respawned recipe's existing object) on the first buffer. Sets `adopted` when
+// an existing board object was reattached.
+Ptr<Object> AcquireWindow(Impl& s, Toplevel& t, bool& adopted) {
+  adopted = false;
+  Ptr<Object> win_obj = LockWindow(t);
+  if (win_obj || t.mapped) return win_obj;
+  {  // A respawned recipe adopts its existing board object.
+    auto lock = std::lock_guard(s.adoption_mutex);
+    for (auto it = s.adoptions.begin(); it != s.adoptions.end(); ++it) {
+      if (it->first == t.pid) {
+        win_obj = it->second.Lock();
+        s.adoptions.erase(it);
+        break;
+      }
+    }
+  }
+  if (win_obj) {
+    adopted = true;
+    auto& win = static_cast<WaylandWindow&>(*win_obj);
+    win.toplevel_handle.store(&t);
+    {
+      auto lock = std::lock_guard(win.mutex);
+      win.client_gone = false;
+      win.client_pid = t.pid;
+      if (!t.title.empty()) win.title = t.title;
+      win.app_id = t.app_id;
+    }
+    t.window_weak = win.AcquireWeakPtr();
+  } else {
+    auto created = MAKE_PTR(WaylandWindow);
+    created->toplevel_handle.store(&t);
+    {
+      auto lock = std::lock_guard(created->mutex);
+      created->title = t.title;
+      created->app_id = t.app_id;
+      created->client_pid = t.pid;
+    }
+    t.window_weak = created->AcquireWeakPtr();
+    win_obj = std::move(created);
+  }
+  return win_obj;
+}
+
+// Wakes the toy/UI for a new frame and, on the first frame, seats the window on
+// the board (adopted windows are already there).
+void PublishFrame(Impl& s, Toplevel& t, Ptr<Object> win_obj, bool adopted) {
+  static_cast<WaylandWindow&>(*win_obj).WakeToys();
+  vm.WakeToys();
+  if (!t.mapped) {
+    t.mapped = true;
+    if (!adopted) {
+      auto lock = std::lock_guard(s.ui_mutex);
+      s.ui_appeared.push_back(std::move(win_obj));
+    }
+  }
+}
+
 void Commit(Impl& s, Surface& surf) {
   Toplevel* t = surf.toplevel;
 
@@ -289,55 +424,19 @@ void Commit(Impl& s, Surface& surf) {
     surf.pending_buffer = nullptr;
     if (!buf) {
       if (t) UnmapToplevel(s, *t);
+      ReleaseHeldDmabuf(s, surf);
     } else if (wl_shm_buffer* shm = wl_shm_buffer_get(buf)) {
       int w = wl_shm_buffer_get_width(shm);
       int h = wl_shm_buffer_get_height(shm);
       int stride = wl_shm_buffer_get_stride(shm);
       uint32_t format = wl_shm_buffer_get_format(shm);
       if (t && w > 0 && h > 0) {
-        Ptr<Object> win_obj = LockWindow(*t);
         bool adopted = false;
-        if (!win_obj && !t->mapped) {
-          {  // A respawned recipe adopts its existing board object.
-            auto lock = std::lock_guard(s.adoption_mutex);
-            for (auto it = s.adoptions.begin(); it != s.adoptions.end(); ++it) {
-              if (it->first == t->pid) {
-                win_obj = it->second.Lock();
-                s.adoptions.erase(it);
-                break;
-              }
-            }
-          }
-          if (win_obj) {
-            adopted = true;
-            auto& win = static_cast<WaylandWindow&>(*win_obj);
-            win.toplevel_handle.store(t);
-            {
-              auto lock = std::lock_guard(win.mutex);
-              win.client_gone = false;
-              win.client_pid = t->pid;
-              if (!t->title.empty()) win.title = t->title;
-              win.app_id = t->app_id;
-            }
-            t->window_weak = win.AcquireWeakPtr();
-          } else {
-            auto created = MAKE_PTR(WaylandWindow);
-            created->toplevel_handle.store(t);
-            {
-              auto lock = std::lock_guard(created->mutex);
-              created->title = t->title;
-              created->app_id = t->app_id;
-              created->client_pid = t->pid;
-            }
-            t->window_weak = created->AcquireWeakPtr();
-            win_obj = std::move(created);
-          }
-        }
-        if (win_obj) {
+        if (Ptr<Object> win_obj = AcquireWindow(s, *t, adopted)) {
           auto& win = static_cast<WaylandWindow&>(*win_obj);
-          // The one unavoidable copy (we release the client's buffer right
-          // after commit): shm rows land in a pooled allocation, and the
-          // SkImage wraps that allocation without copying again.
+          // The one unavoidable copy (we release the client's buffer right after
+          // commit): shm rows land in a pooled allocation, and the SkImage wraps
+          // that allocation without copying again.
           size_t need = (size_t)w * 4 * h;
           sk_sp<SkData> data;
           for (auto it = t->frame_pool.begin(); it != t->frame_pool.end(); ++it) {
@@ -368,21 +467,65 @@ void Commit(Impl& s, Surface& surf) {
             win.height = h;
             win.content_serial++;
           }
-          win.WakeToys();
-          vm.WakeToys();
-          if (!t->mapped) {
-            t->mapped = true;
-            if (!adopted) {  // adopted windows are already on the board
-              auto lock = std::lock_guard(s.ui_mutex);
-              s.ui_appeared.push_back(std::move(win_obj));
-            }
-          }
+          PublishFrame(s, *t, std::move(win_obj), adopted);
         }
       }
       // Copy-release: the client may reuse the buffer immediately.
       wl_buffer_send_release(buf);
+      ReleaseHeldDmabuf(s, surf);
+    } else if (auto it = s.dmabuf_by_res.find(buf); it != s.dmabuf_by_res.end()) {
+      DmabufBuffer* db = it->second;
+      static bool first_dmabuf = true;
+      if (first_dmabuf) {
+        first_dmabuf = false;
+        LOG << f("Wayland: first dmabuf frame {}x{} drm_format=0x{:08x} modifier=0x{:016x}",
+                 db->width, db->height, db->drm_format, db->modifier);
+      }
+      if (t && db->width > 0 && db->height > 0) {
+        bool adopted = false;
+        if (Ptr<Object> win_obj = AcquireWindow(s, *t, adopted)) {
+          auto& win = static_cast<WaylandWindow&>(*win_obj);
+          // Import the planes to an SkImage here, on the compositor thread, so a
+          // dmabuf rides win.content exactly like an shm frame (vk::ImportDmabuf
+          // owns the Graphite recorder its zero-copy path needs). The fds are
+          // dup'd because the buffer outlives this commit and may be re-imported
+          // next frame.
+          DmabufImage desc;
+          desc.width = db->width;
+          desc.height = db->height;
+          desc.drm_format = db->drm_format;
+          desc.modifier = db->modifier;
+          desc.opaque = db->drm_format == DRM_FORMAT_XRGB8888;
+          desc.y_invert = db->y_invert;
+          desc.plane_count = db->plane_count;
+          bool dup_ok = true;
+          for (int i = 0; i < db->plane_count; ++i) {
+            desc.fds[i] = fcntl(db->planes[i].fd, F_DUPFD_CLOEXEC, 0);
+            desc.offsets[i] = db->planes[i].offset;
+            desc.strides[i] = db->planes[i].stride;
+            if (desc.fds[i] < 0) dup_ok = false;
+          }
+          // ImportDmabuf takes desc by value and closes its fds; on a dup
+          // failure we skip it and desc closes them itself at scope exit.
+          sk_sp<SkImage> img = dup_ok ? vk::ImportDmabuf(std::move(desc)) : nullptr;
+          if (img) {
+            auto lock = std::lock_guard(win.mutex);
+            win.content = std::move(img);
+            win.width = db->width;
+            win.height = db->height;
+            win.content_serial++;
+          }
+          PublishFrame(s, *t, std::move(win_obj), adopted);
+        }
+      }
+      // Zero-copy: hold this buffer until the next frame replaces it, then let
+      // the client reuse the previous one.
+      if (surf.held_dmabuf && surf.held_dmabuf != buf) {
+        wl_buffer_send_release(surf.held_dmabuf);
+      }
+      surf.held_dmabuf = buf;
     } else {
-      // Not a shm buffer (dmabuf comes later); release it so clients don't stall.
+      // Unknown buffer type; release it so clients don't stall.
       wl_buffer_send_release(buf);
     }
   }
@@ -411,6 +554,7 @@ void NewSurface(Impl& s, wl_client* client, int version, uint32_t id) {
       [&s, sp](CWlSurface* r, uint32_t cb_id) { sp->frame_cbs.emplace(r->client(), 1, cb_id); });
   res->setCommit([&s, sp](CWlSurface*) { Commit(s, *sp); });
   res->setOnDestroy([&s, sp](CWlSurface* r) {
+    ReleaseHeldDmabuf(s, *sp);
     if (sp->toplevel && sp->toplevel->xdg) sp->toplevel->xdg->surface = nullptr;
     s.surface_by_res.erase(r->resource());
     EraseOwned(s.surfaces, sp);
@@ -591,7 +735,10 @@ void BindSeat(wl_client* client, void* data, uint32_t version, uint32_t id) {
     if (s.keymap_fd >= 0) {
       kp->sendKeymap(WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1, s.keymap_fd, s.keymap_size);
     }
-    if (kp->version() >= 4) kp->sendRepeatInfo(30, 500);
+    // Automat forwards the host's key auto-repeat (one wl_keyboard.key per X
+    // repeat event), so clients must not also repeat on their own — otherwise a
+    // held key repeats twice. Advertise no client-side repeat.
+    if (kp->version() >= 4) kp->sendRepeatInfo(0, 0);
   });
   rp->setOnDestroy([&s, rp](CWlSeat*) { EraseOwned(s.seats, rp); });
   rp->sendCapabilities(
@@ -633,6 +780,203 @@ void BindXdgWmBase(wl_client* client, void* data, uint32_t version, uint32_t id)
   rp->setOnDestroy([&s, rp](CXdgWmBase*) { EraseOwned(s.wm_bases, rp); });
 }
 
+// ------------------------------------------------------------------ dmabuf --
+
+// The format/modifier pairs the compositor accepts. AR24/XR24 are the 32-bit
+// BGRA formats every toolkit produces; both import as VK_FORMAT_B8G8R8A8_UNORM.
+// LINEAR is what the all-software Mesa stack allocates here; INVALID lets a
+// client send an implicitly-allocated buffer.
+struct DmabufFormatModifier {
+  uint32_t format;
+  uint64_t modifier;
+};
+constexpr DmabufFormatModifier kDmabufFormats[] = {
+    {DRM_FORMAT_ARGB8888, DRM_FORMAT_MOD_LINEAR},
+    {DRM_FORMAT_XRGB8888, DRM_FORMAT_MOD_LINEAR},
+    {DRM_FORMAT_ARGB8888, DRM_FORMAT_MOD_INVALID},
+    {DRM_FORMAT_XRGB8888, DRM_FORMAT_MOD_INVALID},
+};
+constexpr int kDmabufFormatCount = (int)(sizeof(kDmabufFormats) / sizeof(kDmabufFormats[0]));
+
+// Builds the version 4 feedback inputs once: the render node clients allocate on
+// (its dev_t becomes main_device) and a sealed format table the feedback events
+// reference by index.
+void InitDmabuf(Impl& s) {
+  struct stat st;
+  if (stat("/dev/dri/renderD128", &st) == 0) {
+    s.dmabuf_main_device = st.st_rdev;
+    s.dmabuf_has_device = true;
+  } else {
+    ERROR << "Wayland dmabuf: can't stat /dev/dri/renderD128; clients fall back to shm.";
+  }
+  struct TableEntry {
+    uint32_t format;
+    uint32_t pad;
+    uint64_t modifier;
+  };
+  static_assert(sizeof(TableEntry) == 16, "dmabuf format table entry must be 16 bytes");
+  TableEntry table[kDmabufFormatCount];
+  for (int i = 0; i < kDmabufFormatCount; ++i) {
+    table[i] = {kDmabufFormats[i].format, 0, kDmabufFormats[i].modifier};
+  }
+  int fd = memfd_create("automat-dmabuf-formats", MFD_CLOEXEC | MFD_ALLOW_SEALING);
+  if (fd < 0) {
+    ERROR << "Wayland dmabuf: memfd_create failed; feedback disabled.";
+    return;
+  }
+  if (write(fd, table, sizeof(table)) != (ssize_t)sizeof(table)) {
+    close(fd);
+    return;
+  }
+  fcntl(fd, F_ADD_SEALS, F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_WRITE);
+  s.dmabuf_format_table_fd = fd;
+  s.dmabuf_format_table_size = (uint32_t)sizeof(table);
+}
+
+// Sends a full feedback bundle: the format table, the main device, then one
+// tranche (same device, every advertised format) closed by done. This is the
+// only way Mesa learns which DRM device to allocate on; without it Mesa clients
+// silently fall back to wl_shm.
+void SendDmabufFeedback(Impl& s, CZwpLinuxDmabufFeedbackV1* fb) {
+  if (s.dmabuf_format_table_fd >= 0) {
+    fb->sendFormatTable(s.dmabuf_format_table_fd, s.dmabuf_format_table_size);
+  }
+  wl_array device;
+  wl_array_init(&device);
+  if (s.dmabuf_has_device) {
+    memcpy(wl_array_add(&device, sizeof(dev_t)), &s.dmabuf_main_device, sizeof(dev_t));
+  }
+  fb->sendMainDevice(&device);
+  fb->sendTrancheTargetDevice(&device);
+  fb->sendTrancheFlags((zwpLinuxDmabufFeedbackV1TrancheFlags)0);
+  wl_array indices;
+  wl_array_init(&indices);
+  for (uint16_t i = 0; i < kDmabufFormatCount; ++i) {
+    *(uint16_t*)wl_array_add(&indices, sizeof(uint16_t)) = i;
+  }
+  fb->sendTrancheFormats(&indices);
+  fb->sendTrancheDone();
+  fb->sendDone();
+  wl_array_release(&indices);
+  wl_array_release(&device);
+}
+
+// Legacy version 1-3 advertisement; version 4 clients use SendDmabufFeedback and
+// must not receive these events.
+void SendDmabufFormats(CZwpLinuxDmabufV1* r) {
+  for (auto& fm : kDmabufFormats) {
+    r->sendFormat(fm.format);
+    if (r->version() >= 3) {
+      r->sendModifier(fm.format, (uint32_t)(fm.modifier >> 32),
+                      (uint32_t)(fm.modifier & 0xffffffffu));
+    }
+  }
+}
+
+// Turns finished params into a wl_buffer. `buffer_id` is the client-supplied id
+// for create_immed, or 0 to let the server allocate one for create. Plane fd
+// ownership moves from the params into the buffer.
+DmabufBuffer* MakeDmabufBuffer(Impl& s, DmabufParams& p, uint32_t buffer_id, int width, int height,
+                               uint32_t format, bool y_invert) {
+  DmabufBuffer* b = &*s.dmabuf_buffers.emplace(p.res.client(), 1, buffer_id);
+  b->width = width;
+  b->height = height;
+  b->drm_format = format;
+  b->modifier = p.modifier;
+  b->y_invert = y_invert;
+  b->plane_count = p.plane_count;
+  for (int i = 0; i < p.plane_count; ++i) {
+    b->planes[i] = p.planes[i];
+    p.planes[i].fd = -1;  // ownership moves to the buffer
+  }
+  s.dmabuf_by_res[b->res.resource()] = b;
+  b->res.setOnDestroy([&s](CWlBuffer* r) {
+    wl_resource* res = r->resource();
+    // Drop any dangling references before the buffer's storage goes away.
+    for (auto& surf : s.surfaces) {
+      if (surf.held_dmabuf == res) surf.held_dmabuf = nullptr;
+      if (surf.pending_buffer == res) {
+        surf.pending_buffer = nullptr;
+        surf.buffer_attached = false;
+      }
+    }
+    auto it = s.dmabuf_by_res.find(res);
+    if (it == s.dmabuf_by_res.end()) return;
+    DmabufBuffer* db = it->second;
+    s.dmabuf_by_res.erase(it);
+    EraseOwned(s.dmabuf_buffers, db);
+  });
+  return b;
+}
+
+void BindLinuxDmabuf(wl_client* client, void* data, uint32_t version, uint32_t id) {
+  auto& s = *(Impl*)data;
+  CZwpLinuxDmabufV1* rp = &*s.dmabuf_globals.emplace(client, version, id);
+  rp->setCreateParams([&s](CZwpLinuxDmabufV1* r, uint32_t id) {
+    DmabufParams* pp = &*s.dmabuf_params.emplace(r->client(), r->version(), id);
+    auto* pr = &pp->res;
+    pr->setAdd([pp](CZwpLinuxBufferParamsV1* r, int32_t fd, uint32_t plane_idx, uint32_t offset,
+                    uint32_t stride, uint32_t mod_hi, uint32_t mod_lo) {
+      if (plane_idx >= 4) {
+        r->error(ZWP_LINUX_BUFFER_PARAMS_V1_ERROR_PLANE_IDX, "plane index out of bounds");
+        close(fd);
+        return;
+      }
+      if (pp->planes[plane_idx].fd >= 0) {
+        r->error(ZWP_LINUX_BUFFER_PARAMS_V1_ERROR_PLANE_SET, "plane already set");
+        close(fd);
+        return;
+      }
+      pp->planes[plane_idx] = {fd, offset, stride};
+      if ((int)plane_idx + 1 > pp->plane_count) pp->plane_count = plane_idx + 1;
+      pp->modifier = ((uint64_t)mod_hi << 32) | mod_lo;
+    });
+    pr->setCreate([&s, pp](CZwpLinuxBufferParamsV1* r, int32_t width, int32_t height,
+                           uint32_t format, zwpLinuxBufferParamsV1Flags flags) {
+      if (pp->used) {
+        r->error(ZWP_LINUX_BUFFER_PARAMS_V1_ERROR_ALREADY_USED, "params already used");
+        return;
+      }
+      pp->used = true;
+      if (width <= 0 || height <= 0 || pp->plane_count == 0) {
+        r->sendFailed();
+        return;
+      }
+      DmabufBuffer* b = MakeDmabufBuffer(s, *pp, 0, width, height, format,
+                                         flags & ZWP_LINUX_BUFFER_PARAMS_V1_FLAGS_Y_INVERT);
+      r->sendCreated(b->res.resource());
+    });
+    pr->setCreateImmed([&s, pp](CZwpLinuxBufferParamsV1* r, uint32_t buffer_id, int32_t width,
+                                int32_t height, uint32_t format,
+                                zwpLinuxBufferParamsV1Flags flags) {
+      if (pp->used) {
+        r->error(ZWP_LINUX_BUFFER_PARAMS_V1_ERROR_ALREADY_USED, "params already used");
+        return;
+      }
+      pp->used = true;
+      if (width <= 0 || height <= 0 || pp->plane_count == 0) {
+        r->error(ZWP_LINUX_BUFFER_PARAMS_V1_ERROR_INCOMPLETE, "missing planes or bad dimensions");
+        return;
+      }
+      MakeDmabufBuffer(s, *pp, buffer_id, width, height, format,
+                       flags & ZWP_LINUX_BUFFER_PARAMS_V1_FLAGS_Y_INVERT);
+    });
+    pr->setOnDestroy([&s, pp](CZwpLinuxBufferParamsV1*) { EraseOwned(s.dmabuf_params, pp); });
+  });
+  auto make_feedback = [&s](CZwpLinuxDmabufV1* r, uint32_t id) {
+    CZwpLinuxDmabufFeedbackV1* fb = &*s.dmabuf_feedbacks.emplace(r->client(), r->version(), id);
+    fb->setOnDestroy([&s, fb](CZwpLinuxDmabufFeedbackV1*) { EraseOwned(s.dmabuf_feedbacks, fb); });
+    SendDmabufFeedback(s, fb);
+  };
+  rp->setGetDefaultFeedback(make_feedback);
+  rp->setGetSurfaceFeedback(
+      [make_feedback](CZwpLinuxDmabufV1* r, uint32_t id, wl_resource*) { make_feedback(r, id); });
+  rp->setOnDestroy([&s, rp](CZwpLinuxDmabufV1*) { EraseOwned(s.dmabuf_globals, rp); });
+  // Version 4 clients use the feedback above; only version 1-3 get the legacy
+  // per-format/modifier events (the protocol forbids mixing the two).
+  if (version < 4) SendDmabufFormats(rp);
+}
+
 void WaylandThread(Impl* s, std::stop_token stop) {
   SetThreadName("Wayland");
   s->display = wl_display_create();
@@ -660,7 +1004,9 @@ void WaylandThread(Impl* s, std::stop_token stop) {
   wl_global_create(s->display, &wl_data_device_manager_interface, 3, s, BindDataDeviceManager);
   wl_global_create(s->display, &xdg_wm_base_interface, 6, s, BindXdgWmBase);
   wl_global_create(s->display, &zxdg_decoration_manager_v1_interface, 1, s, BindDecorationManager);
+  wl_global_create(s->display, &zwp_linux_dmabuf_v1_interface, 4, s, BindLinuxDmabuf);
   InitKeymap(*s);
+  InitDmabuf(*s);
 
   Status status;
   s->epoll.Init(status);
@@ -700,6 +1046,11 @@ void PostInput(Impl& impl, WaylandWindow& w, Fn&& fn) {
     auto* t = FindToplevel(impl, handle);
     if (!t || !t->xdg || !t->xdg->surface) return;
     fn(impl, *t, t->xdg->surface->res.resource());
+    // libwayland buffers these events; the epoll Post path (unlike the client-fd
+    // path in WaylandListener) never flushes. Without this an idle client only
+    // receives the input when it next sends a request of its own — e.g. a
+    // cursor-blink commit, ~0.5-1s later — so input appears to lag. Flush now.
+    wl_display_flush_clients(impl.display);
   });
 }
 
@@ -834,6 +1185,8 @@ void Server::NotifyWindowDestroyed(void* handle) {
     auto* t = FindToplevel(*impl, handle);
     if (!t) return;
     t->res.sendClose();
+    // Same as in PostInput: flush, or the client only sees this on its next request.
+    wl_display_flush_clients(impl->display);
     // A client that ignores the request gets SIGTERM after a grace period.
     if (!t->close_timer) {
       int tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);

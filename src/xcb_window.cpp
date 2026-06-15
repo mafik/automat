@@ -773,6 +773,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
               case XCB_INPUT_RAW_KEY_PRESS: {
                 auto ev = (xcb_input_raw_key_press_event_t*)event;
                 xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
+                auto lock = Lock();
                 root.keyboard.KeyDown(*ev);
                 break;
               }
@@ -780,16 +781,19 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                 auto ev = (xcb_input_key_press_event_t*)event;
                 xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
                 ReplaceProperty32(xcb_window, atom::_NET_WM_USER_TIME, XCB_ATOM_CARDINAL, ev->time);
+                auto lock = Lock();
                 root.keyboard.KeyDown(*ev);
                 break;
               }
               case XCB_INPUT_RAW_KEY_RELEASE: {
+                auto lock = Lock();
                 root.keyboard.KeyUp(*(xcb_input_raw_key_release_event_t*)event);
                 break;
               }
               case XCB_INPUT_KEY_RELEASE: {
                 auto ev = (xcb_input_key_release_event_t*)event;
                 xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
+                auto lock = Lock();
                 root.keyboard.KeyUp(*ev);
                 break;
               }

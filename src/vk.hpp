@@ -11,7 +11,10 @@
 #include <include/gpu/vk/VulkanMemoryAllocator.h>
 #include <vulkan/vulkan_core.h>
 
+#include "dmabuf.hpp"
 #include "status.hpp"
+
+class SkImage;
 
 namespace automat::vk {
 
@@ -29,6 +32,13 @@ void Resize(int width_hint, int height_hint, Status&);
 
 SkCanvas* AcquireCanvas();
 void Present();
+
+// Imports a client dmabuf as a GPU-backed image. Tries a zero-copy Vulkan
+// external-memory import and falls back to a mapped upload for drivers that
+// cannot import the buffer directly. Takes desc by value and closes its plane
+// fds when done. Runs on the compositor thread, which exclusively owns the
+// import recorder. Returns null on failure.
+sk_sp<SkImage> ImportDmabuf(DmabufImage desc);
 
 // Reports basic memory stats through Tracy plots.
 // Enable kDebugVulkanMemory for even more plots.

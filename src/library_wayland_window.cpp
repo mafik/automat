@@ -110,18 +110,18 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
   Ptr<WaylandWindow> LockWindow() const { return LockObject<WaylandWindow>(); }
 
   void PullState() {
-    if (auto win = LockWindow()) {
-      auto lock = std::lock_guard(win->mutex);
-      title_ = win->title.empty() ? win->app_id : win->title;
-      client_gone_ = win->client_gone;
-      if (win->width > 0 && win->height > 0) {
-        content_w = win->width * kClientPx;
-        content_h = win->height * kClientPx;
-      }
-      if (win->content_serial != image_serial) {
-        image_serial = win->content_serial;
-        image = win->content;
-      }
+    auto win = LockWindow();
+    if (!win) return;
+    auto lock = std::lock_guard(win->mutex);
+    title_ = win->title.empty() ? win->app_id : win->title;
+    client_gone_ = win->client_gone;
+    if (win->width > 0 && win->height > 0) {
+      content_w = win->width * kClientPx;
+      content_h = win->height * kClientPx;
+    }
+    if (win->content_serial != image_serial) {
+      image_serial = win->content_serial;
+      image = win->content;
     }
   }
 

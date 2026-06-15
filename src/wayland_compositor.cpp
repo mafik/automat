@@ -100,14 +100,14 @@ struct Surface {
   // reclaimed once nothing else (the window's SkImage, the renderer) references it.
   std::vector<sk_sp<SkData>> frame_pool;
 
-  // Subsurface tree: `as_subsurface` is set when this surface has the subsurface
-  // role. Children are the subsurfaces parented here, split into those stacked
-  // below this surface and those above it, each back-to-front; the surface's own
-  // content sits between the two groups.
+  // Subsurface tree: `as_subsurface` is set when this surface holds the subsurface
+  // role under some parent.
   Subsurface* as_subsurface = nullptr;
-  std::vector<Subsurface*> children_below, children_above;
+  std::vector<Surface*> stack;
 
-  Surface(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
+  Surface(wl_client* client, int version, uint32_t id) : res(client, version, id) {
+    stack.push_back(this);  // own content; subsurfaces are inserted around it
+  }
   Surface(const Surface&) = delete;
 };
 
@@ -325,6 +325,13 @@ namespace {
 template <typename T>
 void EraseOwned(Colony<T>& v, T* p) {
   v.erase(v.get_iterator(p));
+}
+
+// The Surface backing a wl_surface resource, or null if it is not one of ours
+// (or was already destroyed).
+Surface* SurfaceOrNull(Impl& s, wl_resource* res) {
+  auto it = s.surface_by_res.find(res);
+  return it == s.surface_by_res.end() ? nullptr : it->second;
 }
 
 void WaylandListener::NotifyRead(Status&) {
@@ -582,14 +589,13 @@ Toplevel* OwningToplevel(Surface& surf) {
 // Appends `surf` and its subsurface subtree to `out` as back-to-front layers,
 // each at its absolute offset (ox, oy) within the window in surface px.
 void CollectLayers(Surface& surf, int ox, int oy, Vec<WindowLayer>& out) {
-  for (Subsurface* sub : surf.children_below) {
-    if (sub->surface) CollectLayers(*sub->surface, ox + sub->x, oy + sub->y, out);
-  }
-  if (surf.image) {
-    out.push_back({surf.image, surf.src, SkIPoint::Make(ox, oy), surf.size});
-  }
-  for (Subsurface* sub : surf.children_above) {
-    if (sub->surface) CollectLayers(*sub->surface, ox + sub->x, oy + sub->y, out);
+  for (Surface* entry : surf.stack) {
+    if (entry == &surf) {
+      if (surf.image) out.push_back({surf.image, surf.src, SkIPoint::Make(ox, oy), surf.size});
+    } else {
+      Subsurface* sub = entry->as_subsurface;
+      CollectLayers(*entry, ox + sub->x, oy + sub->y, out);
+    }
   }
 }
 
@@ -613,24 +619,24 @@ void RecomposeWindow(WaylandWindow& win, Toplevel& t) {
 // Returns whether anything visible changed.
 bool ApplyChildren(Surface& parent) {
   bool changed = false;
-  for (auto* list : {&parent.children_below, &parent.children_above})
-    for (Subsurface* sub : *list) {
-      if (!sub->surface) continue;
-      if (sub->position_dirty) {
-        sub->x = sub->pending_x;
-        sub->y = sub->pending_y;
-        sub->position_dirty = false;
-        changed = true;
-      }
-      if (sub->sync && sub->has_cache) {
-        sub->surface->image = std::move(sub->cache_image);
-        sub->surface->src = sub->cache_src;
-        sub->surface->size = sub->cache_size;
-        sub->has_cache = false;
-        changed = true;
-        ApplyChildren(*sub->surface);
-      }
+  for (Surface* entry : parent.stack) {
+    if (entry == &parent) continue;
+    Subsurface* sub = entry->as_subsurface;
+    if (sub->position_dirty) {
+      sub->x = sub->pending_x;
+      sub->y = sub->pending_y;
+      sub->position_dirty = false;
+      changed = true;
     }
+    if (sub->sync && sub->has_cache) {
+      entry->image = std::move(sub->cache_image);
+      entry->src = sub->cache_src;
+      entry->size = sub->cache_size;
+      sub->has_cache = false;
+      changed = true;
+      ApplyChildren(*entry);
+    }
+  }
   return changed;
 }
 
@@ -712,38 +718,21 @@ void Commit(Impl& s, Surface& surf) {
 }
 
 // place_above/place_below reorder a subsurface relative to a sibling, which may
-// be another subsurface of the same parent or the parent surface itself. The
-// reference can be in either stacking group, and the subsurface may cross between
-// them (e.g. place_below(parent) moves it under the parent's own content).
+// be another subsurface of the same parent or the parent surface itself. Both the
+// reference and the parent's own content live in the parent's single `stack`, so
+// the move is one erase plus one insert next to the reference entry.
 void RestackSubsurface(Impl& s, Subsurface& sub, wl_resource* sibling_res, bool above) {
   Surface* parent = sub.parent;
-  if (!parent) return;
-  for (auto* list : {&parent->children_below, &parent->children_above})
-    list->erase(std::remove(list->begin(), list->end(), &sub), list->end());
-  auto sit = s.surface_by_res.find(sibling_res);
-  Surface* sibling = sit == s.surface_by_res.end() ? nullptr : sit->second;
-  if (sibling == parent) {
-    // Relative to the parent's own content: just above it is the bottom of the
-    // above-group; just below it is the top of the below-group.
-    if (above)
-      parent->children_above.insert(parent->children_above.begin(), &sub);
-    else
-      parent->children_below.push_back(&sub);
-  } else if (sibling && sibling->as_subsurface) {
-    Subsurface* ref = sibling->as_subsurface;
-    bool placed = false;
-    for (auto* list : {&parent->children_below, &parent->children_above}) {
-      auto it = std::find(list->begin(), list->end(), ref);
-      if (it != list->end()) {
-        list->insert(it + (above ? 1 : 0), &sub);
-        placed = true;
-        break;
-      }
-    }
-    if (!placed) parent->children_above.push_back(&sub);  // not a sibling; leave on top
-  } else {
-    parent->children_above.push_back(&sub);  // unknown reference; leave on top
-  }
+  Surface* child = sub.surface;
+  if (!parent || !child) return;
+  auto& stack = parent->stack;
+  std::erase(stack, child);
+  Surface* ref = SurfaceOrNull(s, sibling_res);  // a sibling's surface, or the parent itself
+  auto it = std::find(stack.begin(), stack.end(), ref);
+  if (it == stack.end())
+    stack.push_back(child);  // unknown reference: leave on top
+  else
+    stack.insert(it + (above ? 1 : 0), child);
   ApplyAndPublish(s, *parent);
 }
 
@@ -751,10 +740,7 @@ void RestackSubsurface(Impl& s, Subsurface& sub, wl_resource* sibling_res, bool 
 // call again from the wl_surface's own destroy.
 void DetachSubsurface(Impl& s, Subsurface& sub) {
   Surface* parent = sub.parent;
-  if (parent) {
-    for (auto* list : {&parent->children_below, &parent->children_above})
-      list->erase(std::remove(list->begin(), list->end(), &sub), list->end());
-  }
+  if (parent && sub.surface) std::erase(parent->stack, sub.surface);
   if (sub.surface) sub.surface->as_subsurface = nullptr;
   sub.surface = nullptr;
   sub.parent = nullptr;
@@ -781,8 +767,8 @@ void NewSurface(Impl& s, wl_client* client, int version, uint32_t id) {
     // Subsurface role: detach from the parent tree (recomposes the window).
     if (sp->as_subsurface) DetachSubsurface(s, *sp->as_subsurface);
     // Parent of subsurfaces: orphan them so they stop compositing.
-    for (auto* list : {&sp->children_below, &sp->children_above})
-      for (Subsurface* child : *list) child->parent = nullptr;
+    for (Surface* entry : sp->stack)
+      if (entry != sp) entry->as_subsurface->parent = nullptr;
     if (sp->toplevel && sp->toplevel->xdg) sp->toplevel->xdg->surface = nullptr;
     s.surface_by_res.erase(r->resource());
     EraseOwned(s.surfaces, sp);
@@ -865,10 +851,8 @@ void BindSubcompositor(wl_client* client, void* data, uint32_t version, uint32_t
   CWlSubcompositor* rp = &*s.subcompositors.emplace(client, version, id);
   rp->setGetSubsurface(
       [&s](CWlSubcompositor* r, uint32_t id, wl_resource* surface_res, wl_resource* parent_res) {
-        auto cit = s.surface_by_res.find(surface_res);
-        auto pit = s.surface_by_res.find(parent_res);
-        Surface* child = cit == s.surface_by_res.end() ? nullptr : cit->second;
-        Surface* parent = pit == s.surface_by_res.end() ? nullptr : pit->second;
+        Surface* child = SurfaceOrNull(s, surface_res);
+        Surface* parent = SurfaceOrNull(s, parent_res);
         // A surface cannot be its own ancestor; reject cycles (and self-parenting) so
         // the tree walks stay finite. This is the protocol's bad_surface error.
         for (Surface* a = parent; a; a = a->as_subsurface ? a->as_subsurface->parent : nullptr) {
@@ -881,8 +865,8 @@ void BindSubcompositor(wl_client* client, void* data, uint32_t version, uint32_t
         sub->surface = child;
         sub->parent = parent;
         if (child) child->as_subsurface = sub;
-        if (parent)
-          parent->children_above.push_back(sub);  // newest above its siblings and the parent
+        if (parent && child)
+          parent->stack.push_back(child);  // newest above its siblings and the parent
         auto* sr = &sub->res;
         sr->setSetPosition([sub](CWlSubsurface*, int32_t x, int32_t y) {
           sub->pending_x = x;
@@ -1382,23 +1366,21 @@ void PostInput(Impl& impl, WaylandWindow& w, Fn&& fn) {
 // and the point in that surface's local coordinates.
 Surface* SurfaceAt(Surface& root, double px, double py, double ox, double oy, double& lx,
                    double& ly) {
-  for (auto it = root.children_above.rbegin(); it != root.children_above.rend(); ++it) {
-    if ((*it)->surface)
-      if (Surface* hit = SurfaceAt(*(*it)->surface, px, py, ox + (*it)->x, oy + (*it)->y, lx, ly))
-        return hit;
-  }
-  if (root.image) {
-    double rx = px - ox, ry = py - oy;
-    if (rx >= 0 && ry >= 0 && rx < root.size.width() && ry < root.size.height()) {
-      lx = rx;
-      ly = ry;
-      return &root;
+  for (auto it = root.stack.rbegin(); it != root.stack.rend(); ++it) {
+    Surface* entry = *it;
+    if (entry == &root) {
+      if (root.image) {
+        double rx = px - ox, ry = py - oy;
+        if (rx >= 0 && ry >= 0 && rx < root.size.width() && ry < root.size.height()) {
+          lx = rx;
+          ly = ry;
+          return &root;
+        }
+      }
+    } else {
+      Subsurface* sub = entry->as_subsurface;
+      if (Surface* hit = SurfaceAt(*entry, px, py, ox + sub->x, oy + sub->y, lx, ly)) return hit;
     }
-  }
-  for (auto it = root.children_below.rbegin(); it != root.children_below.rend(); ++it) {
-    if ((*it)->surface)
-      if (Surface* hit = SurfaceAt(*(*it)->surface, px, py, ox + (*it)->x, oy + (*it)->y, lx, ly))
-        return hit;
   }
   return nullptr;
 }

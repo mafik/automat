@@ -106,11 +106,11 @@ struct RegionOp {
 struct InputRegion {
   bool infinite = true;
   Vec<RegionOp> ops;
-  bool Contains(int x, int y) const {
+  bool Contains(SkIPoint p) const {
     if (infinite) return true;
     bool inside = false;
     for (auto& op : ops)
-      if (op.rect.contains(x, y)) inside = op.add;
+      if (op.rect.contains(p.x(), p.y())) inside = op.add;
     return inside;
   }
 };
@@ -169,8 +169,8 @@ struct Subsurface {
   CWlSubsurface res;
   Surface* surface = nullptr;  // the child surface (holds the subsurface role)
   Surface* parent = nullptr;
-  int x = 0, y = 0;                  // applied position, in the parent's surface px
-  int pending_x = 0, pending_y = 0;  // set_position, applied at the parent's commit
+  SkIPoint pos = {};          // applied position, in the parent's surface px
+  SkIPoint pending_pos = {};  // set_position, applied at the parent's commit
   bool position_dirty = false;
   bool sync = true;  // set_desync clears this
   // Sync-mode cache: the child's committed frame, held until the parent commits.
@@ -193,7 +193,7 @@ struct Viewport {
   // negative width marks the rectangle or the destination as unset, which falls
   // back to the buffer's own geometry.
   double src_x = -1, src_y = -1, src_w = -1, src_h = -1;
-  int dst_w = -1, dst_h = -1;
+  SkISize dst_size = {-1, -1};
 
   Viewport(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
   Viewport(const Viewport&) = delete;
@@ -245,12 +245,12 @@ struct Toplevel {
 
 struct Positioner {
   CXdgPositioner res;
-  int w = 0, h = 0;                    // popup size (set_size)
-  int ax = 0, ay = 0, aw = 0, ah = 0;  // anchor rectangle (set_anchor_rect)
-  uint32_t anchor = 0;                 // xdgPositionerAnchor (set_anchor)
-  uint32_t gravity = 0;                // xdgPositionerGravity (set_gravity)
-  int off_x = 0, off_y = 0;            // set_offset
-  uint32_t constraint_adjustment = 0;  // flip/slide to keep the popup on-screen
+  SkISize size = {};                           // popup size (set_size)
+  SkIRect anchor_rect = SkIRect::MakeEmpty();  // set_anchor_rect
+  uint32_t anchor = 0;                         // xdgPositionerAnchor (set_anchor)
+  uint32_t gravity = 0;                        // xdgPositionerGravity (set_gravity)
+  SkIPoint offset = {};                        // set_offset
+  uint32_t constraint_adjustment = 0;          // flip/slide to keep the popup on-screen
 
   Positioner(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
   Positioner(const Positioner&) = delete;
@@ -260,7 +260,7 @@ struct Popup {
   CXdgPopup res;
   XdgSurf* xdg = nullptr;
   XdgSurf* parent = nullptr;
-  int x = 0, y = 0, w = 0, h = 0;  // resolved geometry in the parent's window-geometry space
+  SkIRect geo = SkIRect::MakeEmpty();  // resolved geometry in the parent's window-geometry space
 
   Popup(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
   Popup(const Popup&) = delete;
@@ -311,7 +311,7 @@ struct DmabufParams {
 // dmabuf branch in Commit).
 struct DmabufBuffer {
   CWlBuffer res;
-  int width = 0, height = 0;
+  SkISize size = {};
   uint32_t drm_format = 0;
   uint64_t modifier = DRM_FORMAT_MOD_INVALID;
   bool y_invert = false;
@@ -462,8 +462,8 @@ Positioner* PositionerOrNull(Impl& s, wl_resource* res) {
 }
 
 // Places the popup by the positioner's anchor/gravity/offset, then flips or
-// slides it (per constraint_adjustment) to stay within avail_w x avail_h.
-void ResolvePopup(const Positioner& p, Popup& popup, int avail_w, int avail_h) {
+// slides it (per constraint_adjustment) to stay within `avail`.
+void ResolvePopup(const Positioner& p, Popup& popup, SkISize avail) {
   auto is_left = [](uint32_t e) {
     return e == XDG_POSITIONER_ANCHOR_LEFT || e == XDG_POSITIONER_ANCHOR_TOP_LEFT ||
            e == XDG_POSITIONER_ANCHOR_BOTTOM_LEFT;
@@ -519,39 +519,40 @@ void ResolvePopup(const Positioner& p, Popup& popup, int avail_w, int avail_h) {
   };
   // Gravity is the direction the popup extends from the anchor point.
   auto place_x = [&](uint32_t anchor, uint32_t gravity) {
-    int a = is_left(anchor) ? p.ax : is_right(anchor) ? p.ax + p.aw : p.ax + p.aw / 2;
-    int x = is_left(gravity) ? a - p.w : is_right(gravity) ? a : a - p.w / 2;
-    return x + p.off_x;
+    const SkIRect& ar = p.anchor_rect;
+    int w = p.size.width();
+    int a = is_left(anchor) ? ar.x() : is_right(anchor) ? ar.right() : ar.x() + ar.width() / 2;
+    int x = is_left(gravity) ? a - w : is_right(gravity) ? a : a - w / 2;
+    return x + p.offset.x();
   };
   auto place_y = [&](uint32_t anchor, uint32_t gravity) {
-    int a = is_top(anchor) ? p.ay : is_bottom(anchor) ? p.ay + p.ah : p.ay + p.ah / 2;
-    int y = is_top(gravity) ? a - p.h : is_bottom(gravity) ? a : a - p.h / 2;
-    return y + p.off_y;
+    const SkIRect& ar = p.anchor_rect;
+    int h = p.size.height();
+    int a = is_top(anchor) ? ar.y() : is_bottom(anchor) ? ar.bottom() : ar.y() + ar.height() / 2;
+    int y = is_top(gravity) ? a - h : is_bottom(gravity) ? a : a - h / 2;
+    return y + p.offset.y();
   };
 
   int x = place_x(p.anchor, p.gravity);
   int y = place_y(p.anchor, p.gravity);
   uint32_t ca = p.constraint_adjustment;
-  auto fits_x = [&](int v) { return v >= 0 && v + p.w <= avail_w; };
-  auto fits_y = [&](int v) { return v >= 0 && v + p.h <= avail_h; };
-  if (avail_w > 0 && !fits_x(x)) {
+  auto fits_x = [&](int v) { return v >= 0 && v + p.size.width() <= avail.width(); };
+  auto fits_y = [&](int v) { return v >= 0 && v + p.size.height() <= avail.height(); };
+  if (avail.width() > 0 && !fits_x(x)) {
     if (ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_X) {
       if (int fx = place_x(mirror_x(p.anchor), mirror_x(p.gravity)); fits_x(fx)) x = fx;
     }
     if (!fits_x(x) && (ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_X))
-      x = std::clamp(x, 0, std::max(0, avail_w - p.w));
+      x = std::clamp(x, 0, std::max(0, avail.width() - p.size.width()));
   }
-  if (avail_h > 0 && !fits_y(y)) {
+  if (avail.height() > 0 && !fits_y(y)) {
     if (ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_Y) {
       if (int fy = place_y(mirror_y(p.anchor), mirror_y(p.gravity)); fits_y(fy)) y = fy;
     }
     if (!fits_y(y) && (ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_Y))
-      y = std::clamp(y, 0, std::max(0, avail_h - p.h));
+      y = std::clamp(y, 0, std::max(0, avail.height() - p.size.height()));
   }
-  popup.x = x;
-  popup.y = y;
-  popup.w = p.w;
-  popup.h = p.h;
+  popup.geo = SkIRect::MakeXYWH(x, y, p.size.width(), p.size.height());
 }
 
 void WaylandListener::NotifyRead(Status&) {
@@ -670,27 +671,27 @@ void PublishFrame(Impl& s, Toplevel& t, Ptr<Object> win, bool adopted) {
 // rectangle reaching outside the buffer. Source values are exact dyadic
 // rationals (wl_fixed/256) and buffer sizes are integers, so the comparisons
 // below carry no floating-point slack.
-bool ResolveGeometry(Surface& surf, int buf_w, int buf_h, CutoutGeometry& out) {
+bool ResolveGeometry(Surface& surf, SkISize buf, CutoutGeometry& out) {
   Viewport* vp = surf.viewport;
   bool src_set = vp && vp->src_w >= 0;
-  bool dst_set = vp && vp->dst_w >= 0;
+  bool dst_set = vp && vp->dst_size.width() >= 0;
   double sx = src_set ? vp->src_x : 0;
   double sy = src_set ? vp->src_y : 0;
-  double sw = src_set ? vp->src_w : buf_w;
-  double sh = src_set ? vp->src_h : buf_h;
+  double sw = src_set ? vp->src_w : buf.width();
+  double sh = src_set ? vp->src_h : buf.height();
   if (src_set) {
     if (!dst_set && (sw != std::floor(sw) || sh != std::floor(sh))) {
       vp->res.error(WP_VIEWPORT_ERROR_BAD_SIZE, "non-integer crop without a destination size");
       return false;
     }
-    if (sx + sw > buf_w || sy + sh > buf_h || sx < 0 || sy < 0) {
+    if (sx + sw > buf.width() || sy + sh > buf.height() || sx < 0 || sy < 0) {
       vp->res.error(WP_VIEWPORT_ERROR_OUT_OF_BUFFER, "source rectangle reaches outside the buffer");
       return false;
     }
   }
   out.src_crop.setXYWH(sx, sy, sw, sh);
   if (dst_set) {
-    out.dst_size.set(vp->dst_w, vp->dst_h);
+    out.dst_size = vp->dst_size;
   } else {
     // No viewport destination: the surface size is the (cropped) buffer divided
     // by the buffer scale, with width and height swapped for a 90/270 transform.
@@ -699,14 +700,14 @@ bool ResolveGeometry(Surface& surf, int buf_w, int buf_h, CutoutGeometry& out) {
                 surf.buffer_transform == WL_OUTPUT_TRANSFORM_270 ||
                 surf.buffer_transform == WL_OUTPUT_TRANSFORM_FLIPPED_90 ||
                 surf.buffer_transform == WL_OUTPUT_TRANSFORM_FLIPPED_270;
-    out.dst_size.set(swap ? dh : dw, swap ? dw : dh);
+    out.dst_size = {swap ? dh : dw, swap ? dw : dh};
   }
   static bool first = true;
   if (first && (src_set || dst_set)) {
     first = false;
     LOG << f("Wayland: first viewport applied, buffer {}x{} -> surface {}x{} source {}x{}+{}+{}",
-             buf_w, buf_h, out.dst_size.width(), out.dst_size.height(), (int)sw, (int)sh, (int)sx,
-             (int)sy);
+             buf.width(), buf.height(), out.dst_size.width(), out.dst_size.height(), (int)sw,
+             (int)sh, (int)sx, (int)sy);
   }
   return true;
 }
@@ -724,7 +725,7 @@ bool ImportBuffer(Impl& s, Surface& surf, wl_resource* buf, SurfaceCutout& out) 
     int stride = wl_shm_buffer_get_stride(shm);
     uint32_t format = wl_shm_buffer_get_format(shm);
     CutoutGeometry geom;
-    bool ok = w > 0 && h > 0 && ResolveGeometry(surf, w, h, geom);
+    bool ok = w > 0 && h > 0 && ResolveGeometry(surf, {w, h}, geom);
     if (ok) {
       // The one unavoidable copy (we release the client's buffer right after
       // commit): shm rows land in a pooled allocation, and the SkImage wraps
@@ -766,18 +767,18 @@ bool ImportBuffer(Impl& s, Surface& surf, wl_resource* buf, SurfaceCutout& out) 
     if (first_dmabuf) {
       first_dmabuf = false;
       LOG << f("Wayland: first dmabuf frame {}x{} drm_format=0x{:08x} modifier=0x{:016x}",
-               db->width, db->height, db->drm_format, db->modifier);
+               db->size.width(), db->size.height(), db->drm_format, db->modifier);
     }
     CutoutGeometry geom;
-    bool ok = db->width > 0 && db->height > 0 && ResolveGeometry(surf, db->width, db->height, geom);
+    bool ok = !db->size.isEmpty() && ResolveGeometry(surf, db->size, geom);
     if (ok) {
       // Import the planes to an SkImage here, on the compositor thread, so a
       // dmabuf becomes a layer exactly like an shm frame (vk::ImportDmabuf owns
       // the Graphite recorder its zero-copy path needs). The fds are dup'd
       // because the buffer outlives this commit and may be re-imported next frame.
       DmabufImage desc;
-      desc.width = db->width;
-      desc.height = db->height;
+      desc.width = db->size.width();
+      desc.height = db->size.height();
       desc.drm_format = db->drm_format;
       desc.modifier = db->modifier;
       desc.opaque = db->drm_format == DRM_FORMAT_XRGB8888;
@@ -827,28 +828,27 @@ Toplevel* OwningToplevel(Surface& surf) {
 }
 
 // Appends `surf` and its subsurface subtree to `out` as back-to-front layers,
-// each at its absolute offset (ox, oy) within the window in surface px.
-void CollectLayers(Surface& surf, int ox, int oy, Vec<WindowLayer>& out) {
+// each at its absolute `origin` within the window in surface px.
+void CollectLayers(Surface& surf, SkIPoint origin, Vec<WindowLayer>& out) {
   for (Surface* entry : surf.stack) {
     if (entry == &surf) {
       if (surf.content.image) {
         auto& c = surf.content;
-        out.push_back({c.image, c.src_crop, SkIPoint::Make(ox, oy), c.dst_size});
+        out.push_back({c.image, c.src_crop, origin, c.dst_size});
       }
     } else {
       Subsurface* sub = entry->as_subsurface;
-      CollectLayers(*entry, ox + sub->x, oy + sub->y, out);
+      CollectLayers(*entry, origin + sub->pos, out);
     }
   }
 }
 
-void CollectPopups(XdgSurf& parent_xdg, int parent_ox, int parent_oy, Vec<WindowLayer>& out) {
+void CollectPopups(XdgSurf& parent_xdg, SkIPoint parent_origin, Vec<WindowLayer>& out) {
   for (Popup* pp : parent_xdg.child_popups) {
     if (!pp->xdg || !pp->xdg->surface) continue;
-    int ox = parent_ox + parent_xdg.geo.x() + pp->x;
-    int oy = parent_oy + parent_xdg.geo.y() + pp->y;
-    CollectLayers(*pp->xdg->surface, ox, oy, out);
-    CollectPopups(*pp->xdg, ox, oy, out);
+    SkIPoint origin = parent_origin + parent_xdg.geo.topLeft() + pp->geo.topLeft();
+    CollectLayers(*pp->xdg->surface, origin, out);
+    CollectPopups(*pp->xdg, origin, out);
   }
 }
 
@@ -859,8 +859,8 @@ void RecomposeWindow(WaylandWindow& win, Toplevel& t) {
   SkISize extent = {};
   if (t.xdg && t.xdg->surface) {
     extent = t.xdg->surface->content.dst_size;
-    CollectLayers(*t.xdg->surface, 0, 0, layers);
-    CollectPopups(*t.xdg, 0, 0, layers);
+    CollectLayers(*t.xdg->surface, {0, 0}, layers);
+    CollectPopups(*t.xdg, {0, 0}, layers);
   }
   auto lock = std::lock_guard(win.mutex);
   win.layers = std::move(layers);
@@ -881,8 +881,7 @@ bool ApplyChildren(Surface& parent) {
     if (entry == &parent) continue;
     Subsurface* sub = entry->as_subsurface;
     if (sub->position_dirty) {
-      sub->x = sub->pending_x;
-      sub->y = sub->pending_y;
+      sub->pos = sub->pending_pos;
       sub->position_dirty = false;
       changed = true;
     }
@@ -940,7 +939,7 @@ void Commit(Impl& s, Surface& surf) {
       xp->initial_configure_sent = true;
     } else if (xp->popup) {
       Popup& pp = *xp->popup;
-      pp.res.sendConfigure(pp.x, pp.y, pp.w, pp.h);
+      pp.res.sendConfigure(pp.geo.x(), pp.geo.y(), pp.geo.width(), pp.geo.height());
       SendXdgConfigure(s, *xp);
       xp->initial_configure_sent = true;
     }
@@ -1164,8 +1163,7 @@ void NewPopup(Impl& s, XdgSurf& xs, uint32_t id, XdgSurf* parent, Positioner* po
   pp->xdg = &xs;
   pp->parent = parent;
   xs.popup = pp;
-  if (pos)
-    ResolvePopup(*pos, *pp, parent ? parent->geo.width() : 0, parent ? parent->geo.height() : 0);
+  if (pos) ResolvePopup(*pos, *pp, parent ? parent->geo.size() : SkISize{});
   if (parent) parent->child_popups.push_back(pp);
 
   auto* res = &pp->res;
@@ -1177,10 +1175,9 @@ void NewPopup(Impl& s, XdgSurf& xs, uint32_t id, XdgSurf* parent, Positioner* po
   });
   res->setReposition([&s, pp](CXdgPopup*, wl_resource* positioner_res, uint32_t token) {
     if (Positioner* np = PositionerOrNull(s, positioner_res))
-      ResolvePopup(*np, *pp, pp->parent ? pp->parent->geo.width() : 0,
-                   pp->parent ? pp->parent->geo.height() : 0);
+      ResolvePopup(*np, *pp, pp->parent ? pp->parent->geo.size() : SkISize{});
     pp->res.sendRepositioned(token);
-    pp->res.sendConfigure(pp->x, pp->y, pp->w, pp->h);
+    pp->res.sendConfigure(pp->geo.x(), pp->geo.y(), pp->geo.width(), pp->geo.height());
     if (pp->xdg) SendXdgConfigure(s, *pp->xdg);
     if (pp->parent && pp->parent->surface) ApplyAndPublish(s, *pp->parent->surface);
   });
@@ -1291,8 +1288,7 @@ void BindSubcompositor(wl_client* client, void* data, uint32_t version, uint32_t
     if (parent && child) parent->pending_stack.push_back(child);  // newest on top
     auto* sr = &sub->res;
     sr->setSetPosition([sub](CWlSubsurface*, int32_t x, int32_t y) {
-      sub->pending_x = x;
-      sub->pending_y = y;
+      sub->pending_pos = {x, y};
       sub->position_dirty = true;
     });
     sr->setSetSync([sub](CWlSubsurface*) { sub->sync = true; });
@@ -1498,22 +1494,13 @@ void BindXdgWmBase(wl_client* client, void* data, uint32_t version, uint32_t id)
   rp->setCreatePositioner([&s](CXdgWmBase* r, uint32_t id) {
     Positioner* pp = &*s.positioners.emplace(r->client(), r->version(), id);
     auto* pr = &pp->res;
-    pr->setSetSize([pp](CXdgPositioner*, int32_t w, int32_t h) {
-      pp->w = w;
-      pp->h = h;
-    });
+    pr->setSetSize([pp](CXdgPositioner*, int32_t w, int32_t h) { pp->size = {w, h}; });
     pr->setSetAnchorRect([pp](CXdgPositioner*, int32_t x, int32_t y, int32_t w, int32_t h) {
-      pp->ax = x;
-      pp->ay = y;
-      pp->aw = w;
-      pp->ah = h;
+      pp->anchor_rect = SkIRect::MakeXYWH(x, y, w, h);
     });
     pr->setSetAnchor([pp](CXdgPositioner*, xdgPositionerAnchor a) { pp->anchor = a; });
     pr->setSetGravity([pp](CXdgPositioner*, xdgPositionerGravity g) { pp->gravity = g; });
-    pr->setSetOffset([pp](CXdgPositioner*, int32_t x, int32_t y) {
-      pp->off_x = x;
-      pp->off_y = y;
-    });
+    pr->setSetOffset([pp](CXdgPositioner*, int32_t x, int32_t y) { pp->offset = {x, y}; });
     pr->setSetConstraintAdjustment([pp](CXdgPositioner*, xdgPositionerConstraintAdjustment ca) {
       pp->constraint_adjustment = ca;
     });
@@ -1571,15 +1558,14 @@ void BindViewporter(wl_client* client, void* data, uint32_t version, uint32_t id
         return;
       }
       if (w == -1 && h == -1) {
-        vp->dst_w = vp->dst_h = -1;
+        vp->dst_size = {-1, -1};
         return;
       }
       if (w <= 0 || h <= 0) {
         r->error(WP_VIEWPORT_ERROR_BAD_VALUE, "non-positive destination size");
         return;
       }
-      vp->dst_w = w;
-      vp->dst_h = h;
+      vp->dst_size = {w, h};
     });
     vr->setOnDestroy([&s, vp](CWpViewport*) {
       if (vp->surface) vp->surface->viewport = nullptr;
@@ -1717,11 +1703,10 @@ void SendDmabufFormats(CZwpLinuxDmabufV1* r) {
 // Turns finished params into a wl_buffer. `buffer_id` is the client-supplied id
 // for create_immed, or 0 to let the server allocate one for create. Plane fd
 // ownership moves from the params into the buffer.
-DmabufBuffer* MakeDmabufBuffer(Impl& s, DmabufParams& p, uint32_t buffer_id, int width, int height,
+DmabufBuffer* MakeDmabufBuffer(Impl& s, DmabufParams& p, uint32_t buffer_id, SkISize size,
                                uint32_t format, bool y_invert) {
   DmabufBuffer* b = &*s.dmabuf_buffers.emplace(p.res.client(), 1, buffer_id);
-  b->width = width;
-  b->height = height;
+  b->size = size;
   b->drm_format = format;
   b->modifier = p.modifier;
   b->y_invert = y_invert;
@@ -1784,7 +1769,7 @@ void BindLinuxDmabuf(wl_client* client, void* data, uint32_t version, uint32_t i
         r->sendFailed();
         return;
       }
-      DmabufBuffer* b = MakeDmabufBuffer(s, *pp, 0, width, height, format,
+      DmabufBuffer* b = MakeDmabufBuffer(s, *pp, 0, {width, height}, format,
                                          flags & ZWP_LINUX_BUFFER_PARAMS_V1_FLAGS_Y_INVERT);
       r->sendCreated(b->res.resource());
     });
@@ -1800,7 +1785,7 @@ void BindLinuxDmabuf(wl_client* client, void* data, uint32_t version, uint32_t i
         r->error(ZWP_LINUX_BUFFER_PARAMS_V1_ERROR_INCOMPLETE, "missing planes or bad dimensions");
         return;
       }
-      MakeDmabufBuffer(s, *pp, buffer_id, width, height, format,
+      MakeDmabufBuffer(s, *pp, buffer_id, {width, height}, format,
                        flags & ZWP_LINUX_BUFFER_PARAMS_V1_FLAGS_Y_INVERT);
     });
     pr->setOnDestroy([&s, pp](CZwpLinuxBufferParamsV1*) { EraseOwned(s.dmabuf_params, pp); });
@@ -1908,19 +1893,18 @@ void PostInput(Impl& impl, WaylandWindow& w, Fn&& fn) {
 // Hit-tests the surface tree at a toplevel-local point, front-to-back (mirroring
 // the back-to-front draw order), returning the topmost surface that covers it
 // and the point in that surface's local coordinates.
-Surface* SurfaceAt(Surface& root, double px, double py, double ox, double oy, double& lx,
-                   double& ly) {
+Surface* SurfaceAt(Surface& root, double px, double py, SkIPoint origin, double& lx, double& ly) {
   for (auto it = root.stack.rbegin(); it != root.stack.rend(); ++it) {
     Surface* entry = *it;
     if (entry == &root) {
       if (root.content.image) {
-        double rx = px - ox, ry = py - oy;
+        double rx = px - origin.x(), ry = py - origin.y();
         // Honor set_input_region: a surface with an empty (or point-excluding)
         // input region is transparent to the pointer, so the hit falls through to
         // whatever is behind it - this is what makes input reach the toplevel
         // instead of a client's render-only content subsurface.
         if (rx >= 0 && ry >= 0 && rx < root.content.dst_size.width() &&
-            ry < root.content.dst_size.height() && root.input_region.Contains((int)rx, (int)ry)) {
+            ry < root.content.dst_size.height() && root.input_region.Contains({(int)rx, (int)ry})) {
           lx = rx;
           ly = ry;
           return &root;
@@ -1928,7 +1912,7 @@ Surface* SurfaceAt(Surface& root, double px, double py, double ox, double oy, do
       }
     } else {
       Subsurface* sub = entry->as_subsurface;
-      if (Surface* hit = SurfaceAt(*entry, px, py, ox + sub->x, oy + sub->y, lx, ly)) return hit;
+      if (Surface* hit = SurfaceAt(*entry, px, py, origin + sub->pos, lx, ly)) return hit;
     }
   }
   return nullptr;
@@ -1996,16 +1980,15 @@ void PointerAxisTo(Impl& s, Surface& surf, float notches_up) {
 // Hit-tests the popups parented to `parent_xdg` (and their nested popups),
 // topmost first, in toplevel-surface coordinates - mirroring how CollectPopups
 // places them.
-Surface* PopupSurfaceAt(XdgSurf& parent_xdg, int parent_ox, int parent_oy, double px, double py,
+Surface* PopupSurfaceAt(XdgSurf& parent_xdg, SkIPoint parent_origin, double px, double py,
                         double& lx, double& ly) {
   for (auto it = parent_xdg.child_popups.rbegin(); it != parent_xdg.child_popups.rend(); ++it) {
     Popup* pp = *it;
     if (!pp->xdg || !pp->xdg->surface) continue;
-    int ox = parent_ox + parent_xdg.geo.x() + pp->x;
-    int oy = parent_oy + parent_xdg.geo.y() + pp->y;
-    if (Surface* hit = PopupSurfaceAt(*pp->xdg, ox, oy, px, py, lx, ly))
+    SkIPoint origin = parent_origin + parent_xdg.geo.topLeft() + pp->geo.topLeft();
+    if (Surface* hit = PopupSurfaceAt(*pp->xdg, origin, px, py, lx, ly))
       return hit;  // nested above
-    if (Surface* hit = SurfaceAt(*pp->xdg->surface, px, py, ox, oy, lx, ly)) return hit;
+    if (Surface* hit = SurfaceAt(*pp->xdg->surface, px, py, origin, lx, ly)) return hit;
   }
   return nullptr;
 }
@@ -2030,9 +2013,9 @@ void RoutePointer(Impl& s, Toplevel& t, double sx, double sy) {
   double lx = 0, ly = 0;
   // Popups draw above the toplevel, so hit-test them first; a hit there marks the
   // pointer as inside the popup chain, which a grab uses for dismissal.
-  Surface* target = PopupSurfaceAt(*t.xdg, 0, 0, sx, sy, lx, ly);
+  Surface* target = PopupSurfaceAt(*t.xdg, {0, 0}, sx, sy, lx, ly);
   s.pointer_over_popup = target != nullptr;
-  if (!target) target = SurfaceAt(*t.xdg->surface, sx, sy, 0, 0, lx, ly);
+  if (!target) target = SurfaceAt(*t.xdg->surface, sx, sy, {0, 0}, lx, ly);
   if (target != s.pointer_surface) {
     if (s.pointer_surface) PointerLeaveTo(s, *s.pointer_surface);
     s.pointer_surface = target;
@@ -2069,14 +2052,13 @@ void Server::UIFrame() {
     // window keeps a Launcher link to it (visible cable, serialized).
     Location* command_location = nullptr;
     library::Command* command = nullptr;
-    int win_w, win_h;
+    SkISize win_size = {};
     {
       I64 cpid;
       {
         auto lock = std::lock_guard(win.mutex);
         cpid = win.client_pid;
-        win_w = win.viewport_destination_px.width();
-        win_h = win.viewport_destination_px.height();
+        win_size = win.viewport_destination_px;
       }
       if (cpid) {
         for (auto& loc : vm.root_board->locations) {
@@ -2102,7 +2084,7 @@ void Server::UIFrame() {
       // Next to its Command: left edge against the plate's right edge, tops
       // aligned; siblings cascade slightly so they stay distinguishable.
       Vec2 plate = library::CommandPlateSize();
-      Vec2 size = library::WindowBoardSize(win_w, win_h);
+      Vec2 size = library::WindowBoardSize(win_size.width(), win_size.height());
       loc.position =
           command_location->position + Vec2(plate.x / 2 + 0.008f + size.x / 2 + 0.006f * (n % 3),
                                             plate.y / 2 - size.y / 2 - 0.012f * (n % 3));

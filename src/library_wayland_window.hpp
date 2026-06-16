@@ -61,6 +61,11 @@ struct WaylandWindow : Object {
   // Compositor-side identity; only the wayland thread dereferences it.
   std::atomic<void*> toplevel_handle{nullptr};
 
+  // The cursor shape the client last requested over this window.
+  // See: wp_cursor_shape_device_v1.
+  // The wayland thread writes it.
+  std::atomic<uint32_t> cursor_shape{1};
+
   // The Command whose child mapped this window. Connected at adoption, drawn
   // as a cable, serialized as a link; restore-time respawn goes through it so
   // the Command keeps STOP control over the new child.

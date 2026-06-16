@@ -28,6 +28,7 @@ if sys.platform == 'linux':
     ('/usr/share/wayland-protocols/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml', []),
     ('/usr/share/wayland-protocols/stable/linux-dmabuf/linux-dmabuf-v1.xml', []),
     ('/usr/share/wayland-protocols/stable/viewporter/viewporter.xml', []),
+    ('/usr/share/wayland-protocols/staging/cursor-shape/cursor-shape-v1.xml', []),
   ]
 
   scanner_bin = build.PREFIX / 'bin' / 'hyprwayland-scanner'

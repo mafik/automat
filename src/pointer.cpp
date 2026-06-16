@@ -163,6 +163,13 @@ void Pointer::Wheel(float delta) {
     return;
   }
 
+  // Offer the wheel to the hovered widget chain before falling back to canvas
+  // zoom: a Wayland window scrolls its client instead. Walk up from the deepest
+  // hovered widget, like ButtonDown does.
+  for (Widget* w = hover; w; w = w->parent) {
+    if (w->PointerWheel(*this, delta)) return;
+  }
+
   float factor = exp(delta / 4);
   root_widget.zoom_target *= factor;
   // For small changes we skip the animation to increase responsiveness.

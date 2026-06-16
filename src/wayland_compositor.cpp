@@ -48,11 +48,20 @@
 
 // The generated headers #define F std::function; they must come after all
 // Automat headers.
+#include "../build/generated/cursor-shape-v1.hpp"
 #include "../build/generated/linux-dmabuf-v1.hpp"
 #include "../build/generated/viewporter.hpp"
 #include "../build/generated/wayland.hpp"
 #include "../build/generated/xdg-decoration-unstable-v1.hpp"
 #include "../build/generated/xdg-shell.hpp"
+
+// The generated cursor-shape-v1 bindings reference this interface in the argument
+// table of get_tablet_tool_v2. Automat advertises no tablet, so a client can
+// never create a zwp_tablet_tool_v2 and that request is unreachable; a minimal
+// stub satisfies the linker without generating the whole tablet protocol. (If
+// tablet support is ever added, its generated definition replaces this.)
+extern const wl_interface zwp_tablet_tool_v2_interface = {
+    "zwp_tablet_tool_v2", 1, 0, nullptr, 0, nullptr};
 
 namespace automat::wayland {
 
@@ -74,6 +83,8 @@ namespace {
 struct Toplevel;
 struct Viewport;
 struct Subsurface;
+struct Popup;
+struct XdgSurf;
 
 // Describes a section of an image (not included) possibly stretched to some `dst_size`.
 struct CutoutGeometry {
@@ -84,6 +95,33 @@ struct CutoutGeometry {
 // Describes a section of an image (image included) possibly stretched to some `dst_size`.
 struct SurfaceCutout : CutoutGeometry {
   sk_sp<SkImage> image;
+};
+
+// A region rectangle, added or subtracted. Ops stay in request order: the last
+// one covering a point decides membership.
+struct RegionOp {
+  SkIRect rect;
+  bool add;
+};
+struct InputRegion {
+  bool infinite = true;
+  Vec<RegionOp> ops;
+  bool Contains(int x, int y) const {
+    if (infinite) return true;
+    bool inside = false;
+    for (auto& op : ops)
+      if (op.rect.contains(x, y)) inside = op.add;
+    return inside;
+  }
+};
+
+// A wl_region: snapshotted into a surface's InputRegion at adopt time, so the
+// client may free it immediately.
+struct Region {
+  CWlRegion res;
+  Vec<RegionOp> ops;
+  Region(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
+  Region(const Region&) = delete;
 };
 
 // A wl_surface: the client's pixel container. We track only what commit
@@ -98,20 +136,26 @@ struct Surface {
   bool buffer_attached = false;  // attach happened since the last commit (may be null = unmap)
   Colony<CWlCallback> frame_cbs;
   Toplevel* toplevel = nullptr;
+  XdgSurf* xdg = nullptr;
   wl_resource* held_dmabuf = nullptr;  // dmabuf buffer held for zero-copy display
   Viewport* viewport = nullptr;        // wp_viewport crop/scale state, if any
   SurfaceCutout content;
+  InputRegion input_region;                    // current; pointer hit-testing honors it
+  Optional<InputRegion> pending_input_region;  // set_input_region, applied at commit
+  // The image is not rotated, so only the normal transform renders correctly.
+  int buffer_scale = 1;
+  int32_t buffer_transform = 0;
   // Recycled frame allocations for this surface's shm copies; an entry is
   // reclaimed once nothing else (the window's SkImage, the renderer) references it.
   std::vector<sk_sp<SkData>> frame_pool;
 
-  // Subsurface tree: `as_subsurface` is set when this surface holds the subsurface
-  // role under some parent.
   Subsurface* as_subsurface = nullptr;
-  std::vector<Surface*> stack;
+  std::vector<Surface*> stack;          // back-to-front order (this + subsurfaces)
+  std::vector<Surface*> pending_stack;  // accumulates updates until 'commit'
 
   Surface(wl_client* client, int version, uint32_t id) : res(client, version, id) {
     stack.push_back(this);  // own content; subsurfaces are inserted around it
+    pending_stack.push_back(this);
   }
   Surface(const Surface&) = delete;
 };
@@ -163,8 +207,13 @@ struct Viewport {
 // disconnect if it happens. The client acks and only then attaches pixels.
 struct XdgSurf {
   CXdgSurface res;
+  CXdgWmBase* wm_base = nullptr;  // for posting protocol errors
   Surface* surface = nullptr;
   Toplevel* toplevel = nullptr;
+  Popup* popup = nullptr;
+  Vec<Popup*> child_popups;            // oldest first
+  SkIRect geo = SkIRect::MakeEmpty();  // set_window_geometry, surface px
+  uint32_t last_configure_serial = 0;  // ack_configure must not exceed it
   bool initial_configure_sent = false;
 
   XdgSurf(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
@@ -192,6 +241,43 @@ struct Toplevel {
   Toplevel(const Toplevel&) = delete;
 
   Ptr<WaylandWindow> LockWindow() const { return window_weak.Lock(); }
+};
+
+struct Positioner {
+  CXdgPositioner res;
+  int w = 0, h = 0;                    // popup size (set_size)
+  int ax = 0, ay = 0, aw = 0, ah = 0;  // anchor rectangle (set_anchor_rect)
+  uint32_t anchor = 0;                 // xdgPositionerAnchor (set_anchor)
+  uint32_t gravity = 0;                // xdgPositionerGravity (set_gravity)
+  int off_x = 0, off_y = 0;            // set_offset
+  uint32_t constraint_adjustment = 0;  // flip/slide to keep the popup on-screen
+
+  Positioner(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
+  Positioner(const Positioner&) = delete;
+};
+
+struct Popup {
+  CXdgPopup res;
+  XdgSurf* xdg = nullptr;
+  XdgSurf* parent = nullptr;
+  int x = 0, y = 0, w = 0, h = 0;  // resolved geometry in the parent's window-geometry space
+
+  Popup(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
+  Popup(const Popup&) = delete;
+};
+
+struct DataSource {
+  CWlDataSource res;
+  Vec<Str> mimes;
+  DataSource(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
+  DataSource(const DataSource&) = delete;
+};
+
+struct DataOffer {
+  CWlDataOffer res;
+  DataSource* source = nullptr;
+  DataOffer(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
+  DataOffer(const DataOffer&) = delete;
 };
 
 // One plane of a dmabuf-backed buffer. The fd stays open for the buffer's whole
@@ -264,10 +350,12 @@ struct Server::Impl {
   Colony<CWlCompositor> compositor_resources;
   Colony<CWlSubcompositor> subcompositors;
   Colony<Subsurface> subsurfaces;
-  Colony<CWlRegion> regions;
+  Colony<Region> regions;
   Colony<CWlDataDeviceManager> data_device_managers;
   Colony<CWlDataDevice> data_devices;
-  Colony<CWlDataSource> data_sources;
+  Colony<DataSource> data_sources;
+  Colony<DataOffer> data_offers;
+  DataSource* selection = nullptr;  // the current clipboard selection source, or null
   Colony<CWlOutput> outputs;
   Colony<CWlSeat> seats;
   Colony<CWlPointer> pointers;
@@ -276,12 +364,17 @@ struct Server::Impl {
   // so events route to the subsurface under the cursor (cleared on destroy).
   Surface* pointer_surface = nullptr;
   Surface* keyboard_surface = nullptr;
+  bool pointer_over_popup = false;  // last pointer routing landed inside a popup
+  Popup* grabbing_popup = nullptr;  // topmost popup holding a grab, or null
   Colony<CXdgWmBase> wm_bases;
-  Colony<CXdgPositioner> positioners;
+  Colony<Positioner> positioners;
+  Colony<Popup> popups;
   Colony<CZxdgDecorationManagerV1> decoration_managers;
   Colony<CZxdgToplevelDecorationV1> decorations;
   Colony<CWpViewporter> viewporters;
   Colony<Viewport> viewports;
+  Colony<CWpCursorShapeManagerV1> cursor_shape_managers;
+  Colony<CWpCursorShapeDeviceV1> cursor_shape_devices;
   Colony<Surface> surfaces;
   Colony<XdgSurf> xdg_surfaces;
   Colony<Toplevel> toplevels;
@@ -303,7 +396,9 @@ struct Server::Impl {
   dev_t dmabuf_main_device = 0;
   bool dmabuf_has_device = false;
 
-  Colony<mux::Timer> close_timers;  // SIGTERMs for naughty children
+  Colony<mux::Timer> close_timers;    // SIGTERMs for naughty children, plus the frame timer
+  mux::Timer* frame_timer = nullptr;  // paces wl_surface.frame callbacks to ~60 Hz
+  bool frame_pending = false;         // a frame-callback completion is already scheduled
 
   // The xkb keymap advertised to clients (matches the compositor host's
   // default layout); built once at startup.
@@ -328,11 +423,135 @@ void EraseOwned(Colony<T>& v, T* p) {
   v.erase(v.get_iterator(p));
 }
 
+template <typename T>
+void DestroyOnRequest(T& w) {
+  w.setDestroy([](T* r) { wl_resource_destroy(r->resource()); });
+}
+template <typename T>
+void ReleaseOnRequest(T& w) {
+  w.setRelease([](T* r) { wl_resource_destroy(r->resource()); });
+}
+
 // The Surface backing a wl_surface resource, or null if it is not one of ours
 // (or was already destroyed).
 Surface* SurfaceOrNull(Impl& s, wl_resource* res) {
   auto it = s.surface_by_res.find(res);
   return it == s.surface_by_res.end() ? nullptr : it->second;
+}
+
+// The Region backing a wl_region resource, or null. Regions are few, so a linear
+// scan beats carrying another lookup table.
+Region* RegionOrNull(Impl& s, wl_resource* res) {
+  for (auto& r : s.regions)
+    if (r.res.resource() == res) return &r;
+  return nullptr;
+}
+
+XdgSurf* XdgSurfOrNull(Impl& s, wl_resource* res) {
+  if (!res) return nullptr;
+  for (auto& x : s.xdg_surfaces)
+    if (x.res.resource() == res) return &x;
+  return nullptr;
+}
+
+Positioner* PositionerOrNull(Impl& s, wl_resource* res) {
+  if (!res) return nullptr;
+  for (auto& p : s.positioners)
+    if (p.res.resource() == res) return &p;
+  return nullptr;
+}
+
+// Places the popup by the positioner's anchor/gravity/offset, then flips or
+// slides it (per constraint_adjustment) to stay within avail_w x avail_h.
+void ResolvePopup(const Positioner& p, Popup& popup, int avail_w, int avail_h) {
+  auto is_left = [](uint32_t e) {
+    return e == XDG_POSITIONER_ANCHOR_LEFT || e == XDG_POSITIONER_ANCHOR_TOP_LEFT ||
+           e == XDG_POSITIONER_ANCHOR_BOTTOM_LEFT;
+  };
+  auto is_right = [](uint32_t e) {
+    return e == XDG_POSITIONER_ANCHOR_RIGHT || e == XDG_POSITIONER_ANCHOR_TOP_RIGHT ||
+           e == XDG_POSITIONER_ANCHOR_BOTTOM_RIGHT;
+  };
+  auto is_top = [](uint32_t e) {
+    return e == XDG_POSITIONER_ANCHOR_TOP || e == XDG_POSITIONER_ANCHOR_TOP_LEFT ||
+           e == XDG_POSITIONER_ANCHOR_TOP_RIGHT;
+  };
+  auto is_bottom = [](uint32_t e) {
+    return e == XDG_POSITIONER_ANCHOR_BOTTOM || e == XDG_POSITIONER_ANCHOR_BOTTOM_LEFT ||
+           e == XDG_POSITIONER_ANCHOR_BOTTOM_RIGHT;
+  };
+  // The anchor and gravity enums share values, so one mirror serves both axes.
+  auto mirror_x = [](uint32_t e) -> uint32_t {
+    switch (e) {
+      case XDG_POSITIONER_ANCHOR_LEFT:
+        return XDG_POSITIONER_ANCHOR_RIGHT;
+      case XDG_POSITIONER_ANCHOR_RIGHT:
+        return XDG_POSITIONER_ANCHOR_LEFT;
+      case XDG_POSITIONER_ANCHOR_TOP_LEFT:
+        return XDG_POSITIONER_ANCHOR_TOP_RIGHT;
+      case XDG_POSITIONER_ANCHOR_TOP_RIGHT:
+        return XDG_POSITIONER_ANCHOR_TOP_LEFT;
+      case XDG_POSITIONER_ANCHOR_BOTTOM_LEFT:
+        return XDG_POSITIONER_ANCHOR_BOTTOM_RIGHT;
+      case XDG_POSITIONER_ANCHOR_BOTTOM_RIGHT:
+        return XDG_POSITIONER_ANCHOR_BOTTOM_LEFT;
+      default:
+        return e;
+    }
+  };
+  auto mirror_y = [](uint32_t e) -> uint32_t {
+    switch (e) {
+      case XDG_POSITIONER_ANCHOR_TOP:
+        return XDG_POSITIONER_ANCHOR_BOTTOM;
+      case XDG_POSITIONER_ANCHOR_BOTTOM:
+        return XDG_POSITIONER_ANCHOR_TOP;
+      case XDG_POSITIONER_ANCHOR_TOP_LEFT:
+        return XDG_POSITIONER_ANCHOR_BOTTOM_LEFT;
+      case XDG_POSITIONER_ANCHOR_BOTTOM_LEFT:
+        return XDG_POSITIONER_ANCHOR_TOP_LEFT;
+      case XDG_POSITIONER_ANCHOR_TOP_RIGHT:
+        return XDG_POSITIONER_ANCHOR_BOTTOM_RIGHT;
+      case XDG_POSITIONER_ANCHOR_BOTTOM_RIGHT:
+        return XDG_POSITIONER_ANCHOR_TOP_RIGHT;
+      default:
+        return e;
+    }
+  };
+  // Gravity is the direction the popup extends from the anchor point.
+  auto place_x = [&](uint32_t anchor, uint32_t gravity) {
+    int a = is_left(anchor) ? p.ax : is_right(anchor) ? p.ax + p.aw : p.ax + p.aw / 2;
+    int x = is_left(gravity) ? a - p.w : is_right(gravity) ? a : a - p.w / 2;
+    return x + p.off_x;
+  };
+  auto place_y = [&](uint32_t anchor, uint32_t gravity) {
+    int a = is_top(anchor) ? p.ay : is_bottom(anchor) ? p.ay + p.ah : p.ay + p.ah / 2;
+    int y = is_top(gravity) ? a - p.h : is_bottom(gravity) ? a : a - p.h / 2;
+    return y + p.off_y;
+  };
+
+  int x = place_x(p.anchor, p.gravity);
+  int y = place_y(p.anchor, p.gravity);
+  uint32_t ca = p.constraint_adjustment;
+  auto fits_x = [&](int v) { return v >= 0 && v + p.w <= avail_w; };
+  auto fits_y = [&](int v) { return v >= 0 && v + p.h <= avail_h; };
+  if (avail_w > 0 && !fits_x(x)) {
+    if (ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_X) {
+      if (int fx = place_x(mirror_x(p.anchor), mirror_x(p.gravity)); fits_x(fx)) x = fx;
+    }
+    if (!fits_x(x) && (ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_X))
+      x = std::clamp(x, 0, std::max(0, avail_w - p.w));
+  }
+  if (avail_h > 0 && !fits_y(y)) {
+    if (ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_Y) {
+      if (int fy = place_y(mirror_y(p.anchor), mirror_y(p.gravity)); fits_y(fy)) y = fy;
+    }
+    if (!fits_y(y) && (ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_Y))
+      y = std::clamp(y, 0, std::max(0, avail_h - p.h));
+  }
+  popup.x = x;
+  popup.y = y;
+  popup.w = p.w;
+  popup.h = p.h;
 }
 
 void WaylandListener::NotifyRead(Status&) {
@@ -344,6 +563,19 @@ uint32_t NowMs() {
   return (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(
              time::SteadyNow().time_since_epoch())
       .count();
+}
+
+// Completes every pending wl_surface.frame callback; the frame timer fires this
+// at ~60 Hz to pace animating clients. Flushing matters because this runs off
+// the timer fd, not the client-fd dispatch path that flushes on its own.
+void CompletePendingFrames(Impl& s) {
+  uint32_t now = NowMs();
+  for (auto& surf : s.surfaces) {
+    for (auto& cb : surf.frame_cbs) cb.sendDone(now);
+    surf.frame_cbs.clear();
+  }
+  s.frame_pending = false;
+  wl_display_flush_clients(s.display);
 }
 
 // ----------------------------------------------------------------- surfaces --
@@ -457,7 +689,18 @@ bool ResolveGeometry(Surface& surf, int buf_w, int buf_h, CutoutGeometry& out) {
     }
   }
   out.src_crop.setXYWH(sx, sy, sw, sh);
-  out.dst_size.set(dst_set ? vp->dst_w : (int)sw, dst_set ? vp->dst_h : (int)sh);
+  if (dst_set) {
+    out.dst_size.set(vp->dst_w, vp->dst_h);
+  } else {
+    // No viewport destination: the surface size is the (cropped) buffer divided
+    // by the buffer scale, with width and height swapped for a 90/270 transform.
+    int dw = (int)sw / surf.buffer_scale, dh = (int)sh / surf.buffer_scale;
+    bool swap = surf.buffer_transform == WL_OUTPUT_TRANSFORM_90 ||
+                surf.buffer_transform == WL_OUTPUT_TRANSFORM_270 ||
+                surf.buffer_transform == WL_OUTPUT_TRANSFORM_FLIPPED_90 ||
+                surf.buffer_transform == WL_OUTPUT_TRANSFORM_FLIPPED_270;
+    out.dst_size.set(swap ? dh : dw, swap ? dw : dh);
+  }
   static bool first = true;
   if (first && (src_set || dst_set)) {
     first = false;
@@ -567,11 +810,17 @@ bool ImportBuffer(Impl& s, Surface& surf, wl_resource* buf, SurfaceCutout& out) 
   return false;
 }
 
-// Walks up the subsurface parent chain to the Toplevel that owns `surf`'s
-// window, or null if the surface isn't part of a toplevel tree.
+// Walks up to the Toplevel that owns `surf`'s window, following subsurface parent
+// links and popup parent links, or null if the surface isn't part of a toplevel
+// tree. Popups hang off the toplevel through their parent xdg_surface, so a popup
+// commit recomposes the same window.
 Toplevel* OwningToplevel(Surface& surf) {
   for (Surface* p = &surf; p;) {
     if (p->toplevel) return p->toplevel;
+    if (p->xdg && p->xdg->popup && p->xdg->popup->parent) {
+      p = p->xdg->popup->parent->surface;
+      continue;
+    }
     p = p->as_subsurface ? p->as_subsurface->parent : nullptr;
   }
   return nullptr;
@@ -593,14 +842,25 @@ void CollectLayers(Surface& surf, int ox, int oy, Vec<WindowLayer>& out) {
   }
 }
 
+void CollectPopups(XdgSurf& parent_xdg, int parent_ox, int parent_oy, Vec<WindowLayer>& out) {
+  for (Popup* pp : parent_xdg.child_popups) {
+    if (!pp->xdg || !pp->xdg->surface) continue;
+    int ox = parent_ox + parent_xdg.geo.x() + pp->x;
+    int oy = parent_oy + parent_xdg.geo.y() + pp->y;
+    CollectLayers(*pp->xdg->surface, ox, oy, out);
+    CollectPopups(*pp->xdg, ox, oy, out);
+  }
+}
+
 // Rebuilds the window's layer list and window extent from the toplevel surface
-// tree, bumping the content serial. Locks win.mutex.
+// tree plus any popups, bumping the content serial. Locks win.mutex.
 void RecomposeWindow(WaylandWindow& win, Toplevel& t) {
   Vec<WindowLayer> layers;
   SkISize extent = {};
   if (t.xdg && t.xdg->surface) {
     extent = t.xdg->surface->content.dst_size;
     CollectLayers(*t.xdg->surface, 0, 0, layers);
+    CollectPopups(*t.xdg, 0, 0, layers);
   }
   auto lock = std::lock_guard(win.mutex);
   win.layers = std::move(layers);
@@ -613,6 +873,10 @@ void RecomposeWindow(WaylandWindow& win, Toplevel& t) {
 // Returns whether anything visible changed.
 bool ApplyChildren(Surface& parent) {
   bool changed = false;
+  if (parent.stack != parent.pending_stack) {
+    parent.stack = parent.pending_stack;
+    changed = true;
+  }
   for (Surface* entry : parent.stack) {
     if (entry == &parent) continue;
     Subsurface* sub = entry->as_subsurface;
@@ -646,16 +910,45 @@ void ApplyAndPublish(Impl& s, Surface& surf) {
   PublishFrame(s, *owner, std::move(win_obj), adopted);
 }
 
+void SendXdgConfigure(Impl& s, XdgSurf& xp) {
+  xp.last_configure_serial = s.serial++;
+  xp.res.sendConfigure(xp.last_configure_serial);
+}
+
 void Commit(Impl& s, Surface& surf) {
   Toplevel* t = surf.toplevel;
 
-  if (t && t->xdg && !t->xdg->initial_configure_sent) {
-    wl_array states;
-    wl_array_init(&states);
-    t->res.sendConfigure(0, 0, &states);
-    wl_array_release(&states);
-    t->xdg->res.sendConfigure(s.serial++);
-    t->xdg->initial_configure_sent = true;
+  // Initial configure handshake, sent on the first commit before the client
+  // attaches pixels. A toplevel gets its configure bundle (toplevel first, then
+  // xdg_surface); a popup gets its resolved geometry, then xdg_surface. Nothing
+  // else may send an xdg_surface.configure before this.
+  if (XdgSurf* xp = surf.xdg; xp && !xp->initial_configure_sent) {
+    if (xp->toplevel) {
+      // wm_capabilities (v5+) must precede the first xdg_surface.configure; an
+      // empty set means none of maximize/minimize/fullscreen/window-menu.
+      if (xp->toplevel->res.version() >= 5) {
+        wl_array caps;
+        wl_array_init(&caps);
+        xp->toplevel->res.sendWmCapabilities(&caps);
+        wl_array_release(&caps);
+      }
+      wl_array states;
+      wl_array_init(&states);
+      xp->toplevel->res.sendConfigure(0, 0, &states);
+      wl_array_release(&states);
+      SendXdgConfigure(s, *xp);
+      xp->initial_configure_sent = true;
+    } else if (xp->popup) {
+      Popup& pp = *xp->popup;
+      pp.res.sendConfigure(pp.x, pp.y, pp.w, pp.h);
+      SendXdgConfigure(s, *xp);
+      xp->initial_configure_sent = true;
+    }
+  }
+
+  if (surf.pending_input_region) {
+    surf.input_region = std::move(*surf.pending_input_region);
+    surf.pending_input_region.reset();
   }
 
   bool dirty = false;
@@ -691,26 +984,23 @@ void Commit(Impl& s, Surface& surf) {
   if (ApplyChildren(surf)) dirty = true;
   if (dirty) ApplyAndPublish(s, surf);
 
-  // Frame callbacks are the client asking "when is it worth drawing the next
-  // frame?". Completing them right at commit answers "immediately": honest
-  // for input-driven clients like terminals, and the place to add real
-  // pacing (tied to board presentation) if animating clients ever matter.
-  uint32_t now = NowMs();
-  for (auto& cb : surf.frame_cbs) {
-    cb.sendDone(now);
+  // Pace frame callbacks at ~60 Hz rather than completing them at commit, or an
+  // animating client (a video) re-renders in a tight loop. Armed on demand.
+  if (!surf.frame_cbs.empty() && !s.frame_pending && s.frame_timer) {
+    s.frame_pending = true;
+    s.frame_timer->Arm(1.0 / 60);
   }
-  surf.frame_cbs.clear();
 }
 
 // place_above/place_below reorder a subsurface relative to a sibling, which may
-// be another subsurface of the same parent or the parent surface itself. Both the
-// reference and the parent's own content live in the parent's single `stack`, so
-// the move is one erase plus one insert next to the reference entry.
+// be another subsurface of the same parent or the parent surface itself. The
+// reorder is double-buffered: it edits the parent's pending stack and only
+// becomes visible at the parent's next commit, so nothing is published here.
 void RestackSubsurface(Impl& s, Subsurface& sub, wl_resource* sibling_res, bool above) {
   Surface* parent = sub.parent;
   Surface* child = sub.surface;
   if (!parent || !child) return;
-  auto& stack = parent->stack;
+  auto& stack = parent->pending_stack;
   std::erase(stack, child);
   Surface* ref = SurfaceOrNull(s, sibling_res);  // a sibling's surface, or the parent itself
   auto it = std::find(stack.begin(), stack.end(), ref);
@@ -718,14 +1008,16 @@ void RestackSubsurface(Impl& s, Subsurface& sub, wl_resource* sibling_res, bool 
     stack.push_back(child);  // unknown reference: leave on top
   else
     stack.insert(it + (above ? 1 : 0), child);
-  ApplyAndPublish(s, *parent);
 }
 
 // Removes a subsurface from its parent's tree and orphans it. Idempotent: safe to
 // call again from the wl_surface's own destroy.
 void DetachSubsurface(Impl& s, Subsurface& sub) {
   Surface* parent = sub.parent;
-  if (parent && sub.surface) std::erase(parent->stack, sub.surface);
+  if (parent && sub.surface) {  // immediate: drop from both applied and pending stacks
+    std::erase(parent->stack, sub.surface);
+    std::erase(parent->pending_stack, sub.surface);
+  }
   if (sub.surface) sub.surface->as_subsurface = nullptr;
   sub.surface = nullptr;
   sub.parent = nullptr;
@@ -743,6 +1035,28 @@ void NewSurface(Impl& s, wl_client* client, int version, uint32_t id) {
   });
   res->setFrame(
       [&s, sp](CWlSurface* r, uint32_t cb_id) { sp->frame_cbs.emplace(r->client(), 1, cb_id); });
+  res->setSetInputRegion([&s, sp](CWlSurface*, wl_resource* region_res) {
+    InputRegion ir;
+    if (region_res) {
+      ir.infinite = false;
+      if (Region* rg = RegionOrNull(s, region_res)) ir.ops = rg->ops;
+    }
+    sp->pending_input_region = std::move(ir);
+  });
+  res->setSetBufferScale([sp](CWlSurface* r, int32_t scale) {
+    if (scale <= 0) {
+      r->error(WL_SURFACE_ERROR_INVALID_SCALE, "buffer scale must be positive");
+      return;
+    }
+    sp->buffer_scale = scale;
+  });
+  res->setSetBufferTransform([sp](CWlSurface* r, int32_t transform) {
+    if (transform < WL_OUTPUT_TRANSFORM_NORMAL || transform > WL_OUTPUT_TRANSFORM_FLIPPED_270) {
+      r->error(WL_SURFACE_ERROR_INVALID_TRANSFORM, "unknown buffer transform");
+      return;
+    }
+    sp->buffer_transform = transform;
+  });
   res->setCommit([&s, sp](CWlSurface*) { Commit(s, *sp); });
   res->setOnDestroy([&s, sp](CWlSurface* r) {
     ReleaseHeldDmabuf(s, *sp);
@@ -751,16 +1065,57 @@ void NewSurface(Impl& s, wl_client* client, int version, uint32_t id) {
     if (s.keyboard_surface == sp) s.keyboard_surface = nullptr;
     // Subsurface role: detach from the parent tree (recomposes the window).
     if (sp->as_subsurface) DetachSubsurface(s, *sp->as_subsurface);
-    // Parent of subsurfaces: orphan them so they stop compositing.
-    for (Surface* entry : sp->stack)
+    // Parent of subsurfaces: orphan them so they stop compositing. The pending
+    // stack is the authoritative child set (it includes any not yet committed).
+    for (Surface* entry : sp->pending_stack)
       if (entry != sp) entry->as_subsurface->parent = nullptr;
-    if (sp->toplevel && sp->toplevel->xdg) sp->toplevel->xdg->surface = nullptr;
+    if (sp->xdg) sp->xdg->surface = nullptr;
     s.surface_by_res.erase(r->resource());
     EraseOwned(s.surfaces, sp);
   });
+  DestroyOnRequest(*res);
 }
 
 // ---------------------------------------------------------------- xdg-shell --
+
+// Moves wl_keyboard focus to `target` (or clears it when null): a leave to the
+// old surface, an enter to the new one. Used both for the toplevel (click to
+// focus) and for popup grabs (a menu takes the keyboard so arrow keys work).
+void KeyboardFocusTo(Impl& s, Surface* target) {
+  if (s.keyboard_surface == target) return;
+  if (s.keyboard_surface) {
+    wl_client* c = s.keyboard_surface->res.client();
+    for (auto& k : s.keyboards)
+      if (k.client() == c) k.sendLeaveRaw(s.serial++, s.keyboard_surface->res.resource());
+  }
+  s.keyboard_surface = target;
+  if (target) {
+    wl_client* c = target->res.client();
+    wl_array keys;
+    wl_array_init(&keys);
+    for (auto& k : s.keyboards) {
+      if (k.client() != c) continue;
+      // The spec requires the enter event first, then the modifiers snapshot.
+      k.sendEnterRaw(s.serial++, target->res.resource(), &keys);
+      k.sendModifiers(s.serial++, 0, 0, 0, 0);
+    }
+    wl_array_release(&keys);
+  }
+}
+
+void FocusKeyboardOnPopup(Impl& s, Popup& pp) {
+  if (pp.xdg && pp.xdg->surface) KeyboardFocusTo(s, pp.xdg->surface);
+}
+
+// On popup dismissal, hand the keyboard back to the owning toplevel so typing in
+// the page keeps working.
+void RestoreKeyboardAfterPopup(Impl& s, XdgSurf* parent) {
+  Surface* target = nullptr;
+  if (parent && parent->surface)
+    if (Toplevel* t = OwningToplevel(*parent->surface))
+      if (t->xdg) target = t->xdg->surface;
+  KeyboardFocusTo(s, target);
+}
 
 void NewToplevel(Impl& s, XdgSurf& xs, uint32_t id) {
   Toplevel* tp = &*s.toplevels.emplace(xs.res.client(), xs.res.version(), id);
@@ -801,19 +1156,89 @@ void NewToplevel(Impl& s, XdgSurf& xs, uint32_t id) {
     if (tp->xdg && tp->xdg->surface) tp->xdg->surface->toplevel = nullptr;
     EraseOwned(s.toplevels, tp);
   });
+  DestroyOnRequest(*res);
 }
 
-void NewXdgSurface(Impl& s, wl_client* client, int version, uint32_t id, wl_resource* surface_res) {
-  XdgSurf* xp = &*s.xdg_surfaces.emplace(client, version, id);
-  auto it = s.surface_by_res.find(surface_res);
-  xp->surface = it == s.surface_by_res.end() ? nullptr : it->second;
+void NewPopup(Impl& s, XdgSurf& xs, uint32_t id, XdgSurf* parent, Positioner* pos) {
+  Popup* pp = &*s.popups.emplace(xs.res.client(), xs.res.version(), id);
+  pp->xdg = &xs;
+  pp->parent = parent;
+  xs.popup = pp;
+  if (pos)
+    ResolvePopup(*pos, *pp, parent ? parent->geo.width() : 0, parent ? parent->geo.height() : 0);
+  if (parent) parent->child_popups.push_back(pp);
+
+  auto* res = &pp->res;
+  // The grab makes this popup the input focus: keyboard goes to it and a press
+  // outside the popup chain dismisses it (see RoutePointer / SendPointerButton).
+  res->setGrab([&s, pp](CXdgPopup*, wl_resource*, uint32_t) {
+    s.grabbing_popup = pp;
+    FocusKeyboardOnPopup(s, *pp);
+  });
+  res->setReposition([&s, pp](CXdgPopup*, wl_resource* positioner_res, uint32_t token) {
+    if (Positioner* np = PositionerOrNull(s, positioner_res))
+      ResolvePopup(*np, *pp, pp->parent ? pp->parent->geo.width() : 0,
+                   pp->parent ? pp->parent->geo.height() : 0);
+    pp->res.sendRepositioned(token);
+    pp->res.sendConfigure(pp->x, pp->y, pp->w, pp->h);
+    if (pp->xdg) SendXdgConfigure(s, *pp->xdg);
+    if (pp->parent && pp->parent->surface) ApplyAndPublish(s, *pp->parent->surface);
+  });
+  res->setOnDestroy([&s, pp](CXdgPopup*) {
+    XdgSurf* parent = pp->parent;
+    if (parent) std::erase(parent->child_popups, pp);
+    if (pp->xdg) pp->xdg->popup = nullptr;
+    if (s.grabbing_popup == pp) {
+      s.grabbing_popup = nullptr;
+      RestoreKeyboardAfterPopup(s, parent);
+    }
+    if (parent && parent->surface) ApplyAndPublish(s, *parent->surface);
+    EraseOwned(s.popups, pp);
+  });
+  // Destroying a popup that still has child popups is the not_the_topmost_popup
+  // error (a popup chain must be torn down from the innermost outwards).
+  res->setDestroy([pp](CXdgPopup* r) {
+    if (pp->xdg && !pp->xdg->child_popups.empty() && pp->xdg->wm_base)
+      pp->xdg->wm_base->error(XDG_WM_BASE_ERROR_NOT_THE_TOPMOST_POPUP,
+                              "destroyed a popup that is not the topmost");
+    else
+      wl_resource_destroy(r->resource());
+  });
+}
+
+void NewXdgSurface(Impl& s, CXdgWmBase* wm_base, uint32_t id, wl_resource* surface_res) {
+  XdgSurf* xp = &*s.xdg_surfaces.emplace(wm_base->client(), wm_base->version(), id);
+  xp->wm_base = wm_base;
+  xp->surface = SurfaceOrNull(s, surface_res);
+  if (xp->surface) xp->surface->xdg = xp;
 
   auto* res = &xp->res;
   res->setGetToplevel([&s, xp](CXdgSurface*, uint32_t id) { NewToplevel(s, *xp, id); });
-  res->setAckConfigure([](CXdgSurface*, uint32_t) {});
+  res->setGetPopup(
+      [&s, xp](CXdgSurface*, uint32_t id, wl_resource* parent_res, wl_resource* positioner_res) {
+        NewPopup(s, *xp, id, XdgSurfOrNull(s, parent_res), PositionerOrNull(s, positioner_res));
+      });
+  res->setSetWindowGeometry([xp](CXdgSurface*, int32_t x, int32_t y, int32_t w, int32_t h) {
+    xp->geo = SkIRect::MakeXYWH(x, y, w, h);
+  });
+  res->setAckConfigure([xp](CXdgSurface* r, uint32_t serial) {
+    if (serial > xp->last_configure_serial)
+      r->error(XDG_SURFACE_ERROR_INVALID_SERIAL, "ack of a configure that was never sent");
+  });
   res->setOnDestroy([&s, xp](CXdgSurface*) {
     if (xp->toplevel) xp->toplevel->xdg = nullptr;
+    if (xp->popup) xp->popup->xdg = nullptr;
+    if (xp->surface) xp->surface->xdg = nullptr;
     EraseOwned(s.xdg_surfaces, xp);
+  });
+  // Destroying an xdg_surface while its toplevel/popup role object still lives is
+  // the defunct_role_object error; otherwise tear the surface down normally.
+  res->setDestroy([xp](CXdgSurface* r) {
+    if (xp->toplevel || xp->popup)
+      r->error(XDG_SURFACE_ERROR_DEFUNCT_ROLE_OBJECT,
+               "xdg_surface destroyed before its role object");
+    else
+      wl_resource_destroy(r->resource());
   });
 }
 
@@ -825,8 +1250,15 @@ void BindCompositor(wl_client* client, void* data, uint32_t version, uint32_t id
   rp->setCreateSurface(
       [&s](CWlCompositor* r, uint32_t id) { NewSurface(s, r->client(), r->version(), id); });
   rp->setCreateRegion([&s](CWlCompositor* r, uint32_t id) {
-    CWlRegion* gp = &*s.regions.emplace(r->client(), r->version(), id);
-    gp->setOnDestroy([&s, gp](CWlRegion*) { EraseOwned(s.regions, gp); });
+    Region* gp = &*s.regions.emplace(r->client(), r->version(), id);
+    gp->res.setAdd([gp](CWlRegion*, int32_t x, int32_t y, int32_t w, int32_t h) {
+      gp->ops.push_back({SkIRect::MakeXYWH(x, y, w, h), true});
+    });
+    gp->res.setSubtract([gp](CWlRegion*, int32_t x, int32_t y, int32_t w, int32_t h) {
+      gp->ops.push_back({SkIRect::MakeXYWH(x, y, w, h), false});
+    });
+    gp->res.setOnDestroy([&s, gp](CWlRegion*) { EraseOwned(s.regions, gp); });
+    DestroyOnRequest(gp->res);
   });
   rp->setOnDestroy([&s, rp](CWlCompositor*) { EraseOwned(s.compositor_resources, rp); });
 }
@@ -834,57 +1266,117 @@ void BindCompositor(wl_client* client, void* data, uint32_t version, uint32_t id
 void BindSubcompositor(wl_client* client, void* data, uint32_t version, uint32_t id) {
   auto& s = *(Impl*)data;
   CWlSubcompositor* rp = &*s.subcompositors.emplace(client, version, id);
-  rp->setGetSubsurface(
-      [&s](CWlSubcompositor* r, uint32_t id, wl_resource* surface_res, wl_resource* parent_res) {
-        Surface* child = SurfaceOrNull(s, surface_res);
-        Surface* parent = SurfaceOrNull(s, parent_res);
-        // A surface cannot be its own ancestor; reject cycles (and self-parenting) so
-        // the tree walks stay finite. This is the protocol's bad_surface error.
-        for (Surface* a = parent; a; a = a->as_subsurface ? a->as_subsurface->parent : nullptr) {
-          if (a == child) {
-            r->error(WL_SUBCOMPOSITOR_ERROR_BAD_SURFACE, "a surface cannot be its own ancestor");
-            return;
-          }
-        }
-        Subsurface* sub = &*s.subsurfaces.emplace(r->client(), r->version(), id);
-        sub->surface = child;
-        sub->parent = parent;
-        if (child) child->as_subsurface = sub;
-        if (parent && child)
-          parent->stack.push_back(child);  // newest above its siblings and the parent
-        auto* sr = &sub->res;
-        sr->setSetPosition([sub](CWlSubsurface*, int32_t x, int32_t y) {
-          sub->pending_x = x;
-          sub->pending_y = y;
-          sub->position_dirty = true;
-        });
-        sr->setSetSync([sub](CWlSubsurface*) { sub->sync = true; });
-        sr->setSetDesync([sub](CWlSubsurface*) { sub->sync = false; });
-        sr->setPlaceAbove([&s, sub](CWlSubsurface*, wl_resource* sibling) {
-          RestackSubsurface(s, *sub, sibling, true);
-        });
-        sr->setPlaceBelow([&s, sub](CWlSubsurface*, wl_resource* sibling) {
-          RestackSubsurface(s, *sub, sibling, false);
-        });
-        sr->setOnDestroy([&s, sub](CWlSubsurface*) {
-          DetachSubsurface(s, *sub);
-          EraseOwned(s.subsurfaces, sub);
-        });
-      });
+  rp->setGetSubsurface([&s](CWlSubcompositor* r, uint32_t id, wl_resource* surface_res,
+                            wl_resource* parent_res) {
+    Surface* child = SurfaceOrNull(s, surface_res);
+    Surface* parent = SurfaceOrNull(s, parent_res);
+    // The child must be role-less; an existing subsurface or xdg role is the
+    // protocol's bad_surface error.
+    if (child && (child->as_subsurface || child->xdg)) {
+      r->error(WL_SUBCOMPOSITOR_ERROR_BAD_SURFACE, "the surface already has a role");
+      return;
+    }
+    // The parent must not be the child or one of its descendants; such a loop
+    // is the bad_parent error (and keeps the tree walks finite).
+    for (Surface* a = parent; a; a = a->as_subsurface ? a->as_subsurface->parent : nullptr) {
+      if (a == child) {
+        r->error(WL_SUBCOMPOSITOR_ERROR_BAD_PARENT, "the parent is the surface or a descendant");
+        return;
+      }
+    }
+    Subsurface* sub = &*s.subsurfaces.emplace(r->client(), r->version(), id);
+    sub->surface = child;
+    sub->parent = parent;
+    if (child) child->as_subsurface = sub;
+    if (parent && child) parent->pending_stack.push_back(child);  // newest on top
+    auto* sr = &sub->res;
+    sr->setSetPosition([sub](CWlSubsurface*, int32_t x, int32_t y) {
+      sub->pending_x = x;
+      sub->pending_y = y;
+      sub->position_dirty = true;
+    });
+    sr->setSetSync([sub](CWlSubsurface*) { sub->sync = true; });
+    sr->setSetDesync([sub](CWlSubsurface*) { sub->sync = false; });
+    sr->setPlaceAbove([&s, sub](CWlSubsurface*, wl_resource* sibling) {
+      RestackSubsurface(s, *sub, sibling, true);
+    });
+    sr->setPlaceBelow([&s, sub](CWlSubsurface*, wl_resource* sibling) {
+      RestackSubsurface(s, *sub, sibling, false);
+    });
+    sr->setOnDestroy([&s, sub](CWlSubsurface*) {
+      DetachSubsurface(s, *sub);
+      EraseOwned(s.subsurfaces, sub);
+    });
+    DestroyOnRequest(*sr);
+  });
   rp->setOnDestroy([&s, rp](CWlSubcompositor*) { EraseOwned(s.subcompositors, rp); });
+  DestroyOnRequest(*rp);
+}
+
+DataSource* DataSourceOrNull(Impl& s, wl_resource* res) {
+  if (!res) return nullptr;
+  for (auto& src : s.data_sources)
+    if (src.res.resource() == res) return &src;
+  return nullptr;
+}
+
+void OfferSelectionTo(Impl& s, CWlDataDevice& dev) {
+  if (!s.selection) {
+    dev.sendSelection(nullptr);
+    return;
+  }
+  DataOffer* offer = &*s.data_offers.emplace(dev.client(), dev.version(), 0);
+  offer->source = s.selection;
+  offer->res.setReceive([offer](CWlDataOffer*, const char* mime, int32_t fd) {
+    // Broker the paste: hand the destination's fd to the source to fill, flush so
+    // the fd is on the wire before we drop our copy. A gone source just closes the
+    // fd, unblocking the reader.
+    if (offer->source) {
+      offer->source->res.sendSend(mime, fd);
+      wl_client_flush(offer->source->res.client());
+    }
+    close(fd);
+  });
+  offer->res.setAccept([](CWlDataOffer*, uint32_t, const char*) {});
+  offer->res.setSetActions([](CWlDataOffer*, uint32_t, uint32_t) {});
+  offer->res.setFinish([](CWlDataOffer*) {});
+  offer->res.setOnDestroy([&s, offer](CWlDataOffer*) { EraseOwned(s.data_offers, offer); });
+  DestroyOnRequest(offer->res);
+  dev.sendDataOffer(&offer->res);
+  for (auto& mime : s.selection->mimes) offer->res.sendOffer(mime.c_str());
+  dev.sendSelection(&offer->res);
+}
+
+void SetSelection(Impl& s, wl_resource* source_res) {
+  DataSource* src = DataSourceOrNull(s, source_res);
+  if (s.selection && s.selection != src) s.selection->res.sendCancelled();
+  s.selection = src;
+  for (auto& dev : s.data_devices) OfferSelectionTo(s, dev);
 }
 
 void BindDataDeviceManager(wl_client* client, void* data, uint32_t version, uint32_t id) {
   auto& s = *(Impl*)data;
   CWlDataDeviceManager* rp = &*s.data_device_managers.emplace(client, version, id);
-  // Clipboard plumbing comes later; the objects exist so clients are happy.
   rp->setCreateDataSource([&s](CWlDataDeviceManager* r, uint32_t id) {
-    CWlDataSource* dp = &*s.data_sources.emplace(r->client(), r->version(), id);
-    dp->setOnDestroy([&s, dp](CWlDataSource*) { EraseOwned(s.data_sources, dp); });
+    DataSource* src = &*s.data_sources.emplace(r->client(), r->version(), id);
+    src->res.setOffer([src](CWlDataSource*, const char* mime) { src->mimes.push_back(mime); });
+    src->res.setSetActions([](CWlDataSource*, uint32_t) {});
+    src->res.setOnDestroy([&s, src](CWlDataSource*) {
+      if (s.selection == src) s.selection = nullptr;
+      for (auto& o : s.data_offers)
+        if (o.source == src) o.source = nullptr;
+      EraseOwned(s.data_sources, src);
+    });
+    DestroyOnRequest(src->res);
   });
   rp->setGetDataDevice([&s](CWlDataDeviceManager* r, uint32_t id, wl_resource*) {
-    CWlDataDevice* dp = &*s.data_devices.emplace(r->client(), r->version(), id);
-    dp->setOnDestroy([&s, dp](CWlDataDevice*) { EraseOwned(s.data_devices, dp); });
+    CWlDataDevice* dev = &*s.data_devices.emplace(r->client(), r->version(), id);
+    dev->setSetSelection(
+        [&s](CWlDataDevice*, wl_resource* source_res, uint32_t) { SetSelection(s, source_res); });
+    dev->setStartDrag([](CWlDataDevice*, wl_resource*, wl_resource*, wl_resource*, uint32_t) {});
+    dev->setOnDestroy([&s, dev](CWlDataDevice*) { EraseOwned(s.data_devices, dev); });
+    ReleaseOnRequest(*dev);
+    OfferSelectionTo(s, *dev);
   });
   rp->setOnDestroy([&s, rp](CWlDataDeviceManager*) { EraseOwned(s.data_device_managers, rp); });
 }
@@ -893,6 +1385,7 @@ void BindOutput(wl_client* client, void* data, uint32_t version, uint32_t id) {
   auto& s = *(Impl*)data;
   CWlOutput* rp = &*s.outputs.emplace(client, version, id);
   rp->setOnDestroy([&s, rp](CWlOutput*) { EraseOwned(s.outputs, rp); });
+  ReleaseOnRequest(*rp);
   rp->sendGeometry(0, 0, 600, 340, WL_OUTPUT_SUBPIXEL_UNKNOWN, "Automat", "Board",
                    WL_OUTPUT_TRANSFORM_NORMAL);
   rp->sendMode((wl_output_mode)(WL_OUTPUT_MODE_CURRENT | WL_OUTPUT_MODE_PREFERRED), 1920, 1080,
@@ -954,10 +1447,12 @@ void BindSeat(wl_client* client, void* data, uint32_t version, uint32_t id) {
   rp->setGetPointer([&s](CWlSeat* r, uint32_t id) {
     CWlPointer* pp = &*s.pointers.emplace(r->client(), r->version(), id);
     pp->setOnDestroy([&s, pp](CWlPointer*) { EraseOwned(s.pointers, pp); });
+    ReleaseOnRequest(*pp);
   });
   rp->setGetKeyboard([&s](CWlSeat* r, uint32_t id) {
     CWlKeyboard* kp = &*s.keyboards.emplace(r->client(), r->version(), id);
     kp->setOnDestroy([&s, kp](CWlKeyboard*) { EraseOwned(s.keyboards, kp); });
+    ReleaseOnRequest(*kp);
     if (s.keymap_fd >= 0) {
       kp->sendKeymap(WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1, s.keymap_fd, s.keymap_size);
     }
@@ -967,6 +1462,7 @@ void BindSeat(wl_client* client, void* data, uint32_t version, uint32_t id) {
     if (kp->version() >= 4) kp->sendRepeatInfo(0, 0);
   });
   rp->setOnDestroy([&s, rp](CWlSeat*) { EraseOwned(s.seats, rp); });
+  ReleaseOnRequest(*rp);
   rp->sendCapabilities(
       (wl_seat_capability)(WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_KEYBOARD));
   if (version >= 2) rp->sendName("automat");
@@ -988,22 +1484,45 @@ void BindDecorationManager(wl_client* client, void* data, uint32_t version, uint
         dp->setUnsetMode(confirm);
         dp->sendConfigure(ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
         dp->setOnDestroy([&s, dp](CZxdgToplevelDecorationV1*) { EraseOwned(s.decorations, dp); });
+        DestroyOnRequest(*dp);
       });
   rp->setOnDestroy([&s, rp](CZxdgDecorationManagerV1*) { EraseOwned(s.decoration_managers, rp); });
+  DestroyOnRequest(*rp);
 }
 
 void BindXdgWmBase(wl_client* client, void* data, uint32_t version, uint32_t id) {
   auto& s = *(Impl*)data;
   CXdgWmBase* rp = &*s.wm_bases.emplace(client, version, id);
-  rp->setGetXdgSurface([&s](CXdgWmBase* r, uint32_t id, wl_resource* surface) {
-    NewXdgSurface(s, r->client(), r->version(), id, surface);
-  });
+  rp->setGetXdgSurface(
+      [&s](CXdgWmBase* r, uint32_t id, wl_resource* surface) { NewXdgSurface(s, r, id, surface); });
   rp->setCreatePositioner([&s](CXdgWmBase* r, uint32_t id) {
-    CXdgPositioner* pp = &*s.positioners.emplace(r->client(), r->version(), id);
-    pp->setOnDestroy([&s, pp](CXdgPositioner*) { EraseOwned(s.positioners, pp); });
+    Positioner* pp = &*s.positioners.emplace(r->client(), r->version(), id);
+    auto* pr = &pp->res;
+    pr->setSetSize([pp](CXdgPositioner*, int32_t w, int32_t h) {
+      pp->w = w;
+      pp->h = h;
+    });
+    pr->setSetAnchorRect([pp](CXdgPositioner*, int32_t x, int32_t y, int32_t w, int32_t h) {
+      pp->ax = x;
+      pp->ay = y;
+      pp->aw = w;
+      pp->ah = h;
+    });
+    pr->setSetAnchor([pp](CXdgPositioner*, xdgPositionerAnchor a) { pp->anchor = a; });
+    pr->setSetGravity([pp](CXdgPositioner*, xdgPositionerGravity g) { pp->gravity = g; });
+    pr->setSetOffset([pp](CXdgPositioner*, int32_t x, int32_t y) {
+      pp->off_x = x;
+      pp->off_y = y;
+    });
+    pr->setSetConstraintAdjustment([pp](CXdgPositioner*, xdgPositionerConstraintAdjustment ca) {
+      pp->constraint_adjustment = ca;
+    });
+    pr->setOnDestroy([&s, pp](CXdgPositioner*) { EraseOwned(s.positioners, pp); });
+    DestroyOnRequest(pp->res);
   });
   rp->setPong([](CXdgWmBase*, uint32_t) {});
   rp->setOnDestroy([&s, rp](CXdgWmBase*) { EraseOwned(s.wm_bases, rp); });
+  DestroyOnRequest(*rp);
 }
 
 // -------------------------------------------------------------- viewporter --
@@ -1018,8 +1537,7 @@ void BindViewporter(wl_client* client, void* data, uint32_t version, uint32_t id
   auto& s = *(Impl*)data;
   CWpViewporter* rp = &*s.viewporters.emplace(client, version, id);
   rp->setGetViewport([&s](CWpViewporter* r, uint32_t id, wl_resource* surface_res) {
-    auto it = s.surface_by_res.find(surface_res);
-    Surface* surf = it == s.surface_by_res.end() ? nullptr : it->second;
+    Surface* surf = SurfaceOrNull(s, surface_res);
     if (surf && surf->viewport) {
       r->error(WP_VIEWPORTER_ERROR_VIEWPORT_EXISTS, "surface already has a viewport");
       return;
@@ -1067,8 +1585,40 @@ void BindViewporter(wl_client* client, void* data, uint32_t version, uint32_t id
       if (vp->surface) vp->surface->viewport = nullptr;
       EraseOwned(s.viewports, vp);
     });
+    DestroyOnRequest(vp->res);
   });
   rp->setOnDestroy([&s, rp](CWpViewporter*) { EraseOwned(s.viewporters, rp); });
+  DestroyOnRequest(*rp);
+}
+
+// ---------------------------------------------------------------- cursor shape --
+
+// Advertise named cursors so GTK clients use them instead of wl_pointer.set_cursor,
+// whose cursor buffer we don't render.
+void BindCursorShapeManager(wl_client* client, void* data, uint32_t version, uint32_t id) {
+  auto& s = *(Impl*)data;
+  CWpCursorShapeManagerV1* rp = &*s.cursor_shape_managers.emplace(client, version, id);
+  auto make_device = [&s](wl_client* c, uint32_t ver, uint32_t id) {
+    CWpCursorShapeDeviceV1* dp = &*s.cursor_shape_devices.emplace(c, ver, id);
+    dp->setSetShape([&s](CWpCursorShapeDeviceV1*, uint32_t, wpCursorShapeDeviceV1Shape shape) {
+      if (!s.pointer_surface) return;
+      if (Toplevel* t = OwningToplevel(*s.pointer_surface))
+        if (auto win = t->LockWindow()) {
+          win->cursor_shape.store(shape, std::memory_order_relaxed);
+          win->WakeToys();
+        }
+    });
+    dp->setOnDestroy([&s, dp](CWpCursorShapeDeviceV1*) { EraseOwned(s.cursor_shape_devices, dp); });
+    DestroyOnRequest(*dp);
+  };
+  rp->setGetPointer([make_device](CWpCursorShapeManagerV1* r, uint32_t id, wl_resource*) {
+    make_device(r->client(), r->version(), id);
+  });
+  rp->setGetTabletToolV2([make_device](CWpCursorShapeManagerV1* r, uint32_t id, wl_resource*) {
+    make_device(r->client(), r->version(), id);
+  });
+  rp->setOnDestroy([&s, rp](CWpCursorShapeManagerV1*) { EraseOwned(s.cursor_shape_managers, rp); });
+  DestroyOnRequest(*rp);
 }
 
 // ------------------------------------------------------------------ dmabuf --
@@ -1197,6 +1747,7 @@ DmabufBuffer* MakeDmabufBuffer(Impl& s, DmabufParams& p, uint32_t buffer_id, int
     s.dmabuf_by_res.erase(it);
     EraseOwned(s.dmabuf_buffers, db);
   });
+  DestroyOnRequest(b->res);
   return b;
 }
 
@@ -1253,16 +1804,19 @@ void BindLinuxDmabuf(wl_client* client, void* data, uint32_t version, uint32_t i
                        flags & ZWP_LINUX_BUFFER_PARAMS_V1_FLAGS_Y_INVERT);
     });
     pr->setOnDestroy([&s, pp](CZwpLinuxBufferParamsV1*) { EraseOwned(s.dmabuf_params, pp); });
+    DestroyOnRequest(*pr);
   });
   auto make_feedback = [&s](CZwpLinuxDmabufV1* r, uint32_t id) {
     CZwpLinuxDmabufFeedbackV1* fb = &*s.dmabuf_feedbacks.emplace(r->client(), r->version(), id);
     fb->setOnDestroy([&s, fb](CZwpLinuxDmabufFeedbackV1*) { EraseOwned(s.dmabuf_feedbacks, fb); });
+    DestroyOnRequest(*fb);
     SendDmabufFeedback(s, fb);
   };
   rp->setGetDefaultFeedback(make_feedback);
   rp->setGetSurfaceFeedback(
       [make_feedback](CZwpLinuxDmabufV1* r, uint32_t id, wl_resource*) { make_feedback(r, id); });
   rp->setOnDestroy([&s, rp](CZwpLinuxDmabufV1*) { EraseOwned(s.dmabuf_globals, rp); });
+  DestroyOnRequest(*rp);
   // Version 4 clients use the feedback above; only version 1-3 get the legacy
   // per-format/modifier events (the protocol forbids mixing the two).
   if (version < 4) SendDmabufFormats(rp);
@@ -1297,6 +1851,7 @@ void WaylandThread(Impl* s, std::stop_token stop) {
   wl_global_create(s->display, &zxdg_decoration_manager_v1_interface, 1, s, BindDecorationManager);
   wl_global_create(s->display, &zwp_linux_dmabuf_v1_interface, 4, s, BindLinuxDmabuf);
   wl_global_create(s->display, &wp_viewporter_interface, 1, s, BindViewporter);
+  wl_global_create(s->display, &wp_cursor_shape_manager_v1_interface, 2, s, BindCursorShapeManager);
   InitKeymap(*s);
   InitDmabuf(*s);
 
@@ -1305,6 +1860,10 @@ void WaylandThread(Impl* s, std::stop_token stop) {
   s->wayland_listener.impl = s;
   s->wayland_listener.fd = wl_event_loop_get_fd(s->loop);
   s->epoll.Add(&s->wayland_listener, status);
+
+  // The frame timer paces wl_surface.frame callbacks (armed on demand in Commit).
+  s->frame_timer = &*s->close_timers.emplace(s->epoll);
+  s->frame_timer->handler = [s] { CompletePendingFrames(*s); };
 
   s->ready = true;
   vm.WakeToys();
@@ -1356,8 +1915,12 @@ Surface* SurfaceAt(Surface& root, double px, double py, double ox, double oy, do
     if (entry == &root) {
       if (root.content.image) {
         double rx = px - ox, ry = py - oy;
+        // Honor set_input_region: a surface with an empty (or point-excluding)
+        // input region is transparent to the pointer, so the hit falls through to
+        // whatever is behind it - this is what makes input reach the toplevel
+        // instead of a client's render-only content subsurface.
         if (rx >= 0 && ry >= 0 && rx < root.content.dst_size.width() &&
-            ry < root.content.dst_size.height()) {
+            ry < root.content.dst_size.height() && root.input_region.Contains((int)rx, (int)ry)) {
           lx = rx;
           ly = ry;
           return &root;
@@ -1407,13 +1970,69 @@ void PointerButtonTo(Impl& s, Surface& surf, uint32_t button, bool pressed) {
     if (p.version() >= 5) p.sendFrame();
   }
 }
+void PointerAxisTo(Impl& s, Surface& surf, float notches_up) {
+  wl_client* c = surf.res.client();
+  uint32_t time = NowMs();
+  // Wayland's vertical axis is positive downward; our notch count is positive
+  // upward, so negate. One detent is ~10 axis units, and version 5 clients also
+  // read the integer notch count (axis_discrete) for line-based scrolling.
+  //
+  // TODO: properly accumulate fractional notches so that discrete eventually increments
+  double value = -notches_up * 10.0;
+  int discrete = -(int)std::lround(notches_up);
+  for (auto& p : s.pointers) {
+    if (p.client() != c) continue;
+    if (p.version() >= 5) {
+      p.sendAxisSource(WL_POINTER_AXIS_SOURCE_WHEEL);
+      if (discrete != 0) p.sendAxisDiscrete(WL_POINTER_AXIS_VERTICAL_SCROLL, discrete);
+    }
+    p.sendAxis(time, WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_double(value));
+    if (p.version() >= 5) p.sendFrame();
+  }
+}
 
 // Routes a pointer at toplevel-local (sx, sy) to the topmost surface there,
 // sending leave/enter across surface boundaries and a motion to the target.
+// Hit-tests the popups parented to `parent_xdg` (and their nested popups),
+// topmost first, in toplevel-surface coordinates - mirroring how CollectPopups
+// places them.
+Surface* PopupSurfaceAt(XdgSurf& parent_xdg, int parent_ox, int parent_oy, double px, double py,
+                        double& lx, double& ly) {
+  for (auto it = parent_xdg.child_popups.rbegin(); it != parent_xdg.child_popups.rend(); ++it) {
+    Popup* pp = *it;
+    if (!pp->xdg || !pp->xdg->surface) continue;
+    int ox = parent_ox + parent_xdg.geo.x() + pp->x;
+    int oy = parent_oy + parent_xdg.geo.y() + pp->y;
+    if (Surface* hit = PopupSurfaceAt(*pp->xdg, ox, oy, px, py, lx, ly))
+      return hit;  // nested above
+    if (Surface* hit = SurfaceAt(*pp->xdg->surface, px, py, ox, oy, lx, ly)) return hit;
+  }
+  return nullptr;
+}
+
+// The deepest (topmost) open popup under `xdg`, or null. A press outside it
+// dismisses it. Note: Firefox shows context menus on button release, by which
+// time the implicit grab serial is gone, so it never calls xdg_popup.grab; the
+// compositor must still dismiss the popup on an outside click, which every real
+// compositor does.
+Popup* TopmostPopup(XdgSurf& xdg) {
+  for (auto it = xdg.child_popups.rbegin(); it != xdg.child_popups.rend(); ++it) {
+    Popup* pp = *it;
+    if (!pp->xdg) continue;
+    if (Popup* deeper = TopmostPopup(*pp->xdg)) return deeper;
+    return pp;
+  }
+  return nullptr;
+}
+
 void RoutePointer(Impl& s, Toplevel& t, double sx, double sy) {
   if (!t.xdg || !t.xdg->surface) return;
   double lx = 0, ly = 0;
-  Surface* target = SurfaceAt(*t.xdg->surface, sx, sy, 0, 0, lx, ly);
+  // Popups draw above the toplevel, so hit-test them first; a hit there marks the
+  // pointer as inside the popup chain, which a grab uses for dismissal.
+  Surface* target = PopupSurfaceAt(*t.xdg, 0, 0, sx, sy, lx, ly);
+  s.pointer_over_popup = target != nullptr;
+  if (!target) target = SurfaceAt(*t.xdg->surface, sx, sy, 0, 0, lx, ly);
   if (target != s.pointer_surface) {
     if (s.pointer_surface) PointerLeaveTo(s, *s.pointer_surface);
     s.pointer_surface = target;
@@ -1578,8 +2197,24 @@ void Server::SendPointerMotion(WaylandWindow& w, float sx, float sy) {
 }
 
 void Server::SendPointerButton(WaylandWindow& w, uint32_t button, bool pressed) {
-  PostInput(*impl, w, [button, pressed](Impl& s, Toplevel&, wl_resource*) {
+  PostInput(*impl, w, [button, pressed](Impl& s, Toplevel& t, wl_resource*) {
+    // A press outside any open popup dismisses the topmost one (a menu) instead of
+    // reaching the client. The press is consumed; the client destroys the popup,
+    // which recomposes the window. This covers grabbing popups and the
+    // non-grabbing ones Firefox uses for context menus.
+    if (pressed && !s.pointer_over_popup && t.xdg) {
+      if (Popup* top = TopmostPopup(*t.xdg)) {
+        top->res.sendPopupDone();
+        return;
+      }
+    }
     if (s.pointer_surface) PointerButtonTo(s, *s.pointer_surface, button, pressed);
+  });
+}
+
+void Server::SendPointerAxis(WaylandWindow& w, float notches_up) {
+  PostInput(*impl, w, [notches_up](Impl& s, Toplevel&, wl_resource*) {
+    if (s.pointer_surface) PointerAxisTo(s, *s.pointer_surface, notches_up);
   });
 }
 
@@ -1589,25 +2224,13 @@ void Server::SendPointerLeave(WaylandWindow& w) {
       PointerLeaveTo(s, *s.pointer_surface);
       s.pointer_surface = nullptr;
     }
+    s.pointer_over_popup = false;
   });
 }
 
 void Server::SendKeyboardEnter(WaylandWindow& w) {
   PostInput(*impl, w, [](Impl& s, Toplevel& t, wl_resource*) {
-    // Keyboard follows the surface the pointer is over (the one just clicked to
-    // focus), falling back to the toplevel surface.
-    Surface* target = s.pointer_surface ? s.pointer_surface : (t.xdg ? t.xdg->surface : nullptr);
-    if (!target) return;
-    s.keyboard_surface = target;
-    wl_client* c = target->res.client();
-    wl_array keys;
-    wl_array_init(&keys);
-    for (auto& k : s.keyboards) {
-      if (k.client() != c) continue;
-      k.sendModifiers(s.serial++, 0, 0, 0, 0);
-      k.sendEnterRaw(s.serial++, target->res.resource(), &keys);
-    }
-    wl_array_release(&keys);
+    KeyboardFocusTo(s, t.xdg ? t.xdg->surface : nullptr);
   });
 }
 

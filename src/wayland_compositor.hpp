@@ -40,6 +40,7 @@ struct Server {
   void SendPointerEnter(library::WaylandWindow&, float sx, float sy);
   void SendPointerMotion(library::WaylandWindow&, float sx, float sy);
   void SendPointerButton(library::WaylandWindow&, uint32_t button, bool pressed);
+  void SendPointerAxis(library::WaylandWindow&, float notches_up);
   void SendPointerLeave(library::WaylandWindow&);
   void SendKeyboardEnter(library::WaylandWindow&);
   void SendKeyboardLeave(library::WaylandWindow&);

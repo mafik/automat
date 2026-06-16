@@ -85,6 +85,37 @@ constexpr uint32_t kBtnLeft = 0x110;
 constexpr uint32_t kBtnRight = 0x111;
 constexpr uint32_t kBtnMiddle = 0x112;
 
+// wp_cursor_shape_device_v1 shape (stable protocol values) to the nearest icon.
+ui::Pointer::IconType ShapeToIcon(uint32_t shape) {
+  switch (shape) {
+    case 4:  // pointer
+      return ui::Pointer::kIconHand;
+    case 9:   // text
+    case 10:  // vertical_text
+      return ui::Pointer::kIconIBeam;
+    case 8:  // crosshair
+      return ui::Pointer::kIconCrosshair;
+    case 13:  // move
+    case 16:  // grab
+    case 17:  // grabbing
+    case 32:  // all_scroll
+    case 36:  // all_resize
+      return ui::Pointer::kIconAllScroll;
+    case 18:  // e_resize
+    case 25:  // w_resize
+    case 26:  // ew_resize
+    case 30:  // col_resize
+      return ui::Pointer::kIconResizeHorizontal;
+    case 19:  // n_resize
+    case 22:  // s_resize
+    case 27:  // ns_resize
+    case 31:  // row_resize
+      return ui::Pointer::kIconResizeVertical;
+    default:  // default and the long tail (help, wait, copy, ...)
+      return ui::Pointer::kIconArrow;
+  }
+}
+
 }  // namespace
 
 Vec2 WindowBoardSize(int width, int height) {
@@ -93,13 +124,16 @@ Vec2 WindowBoardSize(int width, int height) {
   return Vec2(content_w + 2 * kFrame, content_h + 2 * kFrame + kTitleH);
 }
 
-struct WaylandWindowToy : ui::beta::ObjectToy {
+struct WaylandWindowToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
   Vec<WindowLayer> layers_;  // composited surface tree (toplevel + subsurfaces), back-to-front
   uint64_t image_serial = 0;
   Str title_;
   bool client_gone_ = false;
   float content_w = kMinContentW, content_h = kMinContentH;
   ui::Caret* caret_ = nullptr;  // present while the keyboard flows into the client
+  ui::Pointer* hover_pointer_ = nullptr;
+  Optional<ui::Pointer::IconOverride> cursor_override_;
+  ui::Pointer::IconType cursor_icon_ = ui::Pointer::kIconArrow;
 
   WaylandWindowToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     PullState();
@@ -128,7 +162,24 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
 
   Tock Tick(time::Timer&) override {
     PullState();
+    ApplyCursor();  // the client may have changed its cursor while the pointer sat still
     return Tock::Draw;
+  }
+
+  void ApplyCursor() {
+    if (!hover_pointer_) return;
+    float sx, sy;
+    if (!ClientPos(hover_pointer_->PositionWithin(*this), sx, sy)) {
+      cursor_override_.reset();
+      return;
+    }
+    auto win = LockWindow();
+    ui::Pointer::IconType want =
+        win ? ShapeToIcon(win->cursor_shape.load(std::memory_order_relaxed))
+            : ui::Pointer::kIconArrow;
+    if (cursor_override_ && cursor_icon_ == want) return;
+    cursor_icon_ = want;
+    cursor_override_.emplace(*hover_pointer_, want);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -196,9 +247,29 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
     float sx, sy;
     ClientPos(p.PositionWithin(*this), sx, sy);
     if (auto w = LockWindow()) wayland::server->SendPointerEnter(*w, sx, sy);
+    StartWatching(p);
+    hover_pointer_ = &p;
+    ApplyCursor();
   }
-  void PointerLeave(ui::Pointer&) override {
+  void PointerLeave(ui::Pointer& p) override {
+    StopWatching(p);
+    cursor_override_.reset();
+    hover_pointer_ = nullptr;
     if (auto w = LockWindow()) wayland::server->SendPointerLeave(*w);
+  }
+  void PointerMove(ui::Pointer& p, Vec2) override {
+    float sx, sy;
+    ClientPos(p.PositionWithin(*this), sx, sy);
+    if (auto w = LockWindow()) wayland::server->SendPointerMotion(*w, sx, sy);
+    ApplyCursor();
+  }
+
+  // Over the chrome, fall through (return false) so the board still zooms.
+  bool PointerWheel(ui::Pointer& p, float delta) override {
+    float sx, sy;
+    if (!ClientPos(p.PositionWithin(*this), sx, sy)) return false;
+    if (auto w = LockWindow()) wayland::server->SendPointerAxis(*w, delta);
+    return true;
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;

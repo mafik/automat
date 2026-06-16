@@ -62,13 +62,15 @@ watches.
 
 Implemented: `wl_compositor`, `wl_subcompositor` (subsurfaces are composited
 into the window's surface tree, see below), `wl_shm` (libwayland's built-in),
-`wl_output`, `wl_seat` (pointer + keyboard), `wl_data_device_manager`
-(objects only; clipboard transfer not wired), `xdg_wm_base` with toplevels,
-`zxdg_decoration_manager_v1` forcing server-side decorations so clients do not
-draw their own title bars, `zwp_linux_dmabuf_v1` for GPU buffer passing (see
-below), and `wp_viewporter` for surface cropping and scaling (see below). foot
-requires the subcompositor and data device manager to even start; kitty requires
-the decoration ordering rule below.
+`wl_output`, `wl_seat` (pointer + keyboard), `wl_data_device_manager` (clipboard
+selection, see below), `xdg_wm_base` with toplevels and popups (menus, see
+below), `zxdg_decoration_manager_v1` forcing server-side decorations so clients
+do not draw their own title bars, `zwp_linux_dmabuf_v1` for GPU buffer passing
+(see below), `wp_viewporter` for surface cropping and scaling (see below), and
+`wp_cursor_shape_v1` for named cursors.
+foot requires the subcompositor and data device manager to even start; kitty
+requires the decoration ordering rule below; Firefox additionally needs popups,
+input regions, scroll and clipboard (see below).
 
 Two protocol rules earned through debugging:
 
@@ -76,10 +78,9 @@ Two protocol rules earned through debugging:
   `xdg_surface.configure` second, and *nothing else* may send an
   `xdg_surface.configure` before that bundle. The decoration object
   confirming a mode pre-map must send only its own configure event; GLFW
-  clients (kitty) tear down silently otherwise.
-- Frame callbacks are completed immediately on commit. This is sufficient
-  for terminals; pacing tied to actual board presentation is the natural
-  refinement if animating clients ever matter.
+  clients (kitty) tear down silently otherwise. A popup's first commit sends the
+  same kind of bundle for its own xdg_surface: `xdg_popup.configure` (the
+  resolved geometry) then `xdg_surface.configure`.
 
 ## GPU buffer passing
 
@@ -183,35 +184,94 @@ a sync child's committed state in a cache until the parent commits, then applies
 it recursively. A surface is rejected as its own ancestor at `get_subsurface`, so
 the tree walks stay finite.
 
-Pointer and keyboard input reach the surface under the cursor, not just the
-toplevel. The same tree is hit-tested front-to-back (`SurfaceAt`) to find the
-topmost surface at a point; enter, leave, motion and button are sent there in
+Pointer input reaches the topmost surface at the cursor that accepts input, which
+need not be the toplevel and need not be the surface visually on top: the tree is
+hit-tested front-to-back (`SurfaceAt`), honoring each surface's input region (see
+Input pass-through), and enter, leave, motion, button and axis are sent there in
 that surface's local coordinates, with focus following the pointer across surface
-boundaries (`RoutePointer`), and keyboard focus following the clicked surface. So
-a browser's clicks and typing land in its content subsurface rather than the
-inert decoration frame.
+boundaries (`RoutePointer`). Keyboard input goes to the toplevel surface instead;
+see Input pass-through for why a subsurface must not hold keyboard focus.
 
 The tree, the sync/desync rules, stacking and input routing are in
 `src/wayland_compositor.cpp` (`Commit`, `ApplyChildren`, `CollectLayers`,
 `RecomposeWindow`, `BindSubcompositor`, `SurfaceAt`, `RoutePointer`); the layer
 drawing is in `src/library_wayland_window.cpp`.
 
+## Popups (menus)
+
+A client opens a menu, dropdown, autocomplete list or context menu as an
+`xdg_popup`: a transient child surface placed by an `xdg_positioner` relative to a
+parent `xdg_surface` (a toplevel or another popup). Automat composites popups into
+the same window object as extra layers on top of the toplevel's surface tree, each
+at the offset its positioner resolves to - the anchor point on the anchor
+rectangle, placed by gravity, plus the offset - so a window is the toplevel tree
+plus its live popups. Hit-testing checks popups before the toplevel tree because
+they draw on top.
+
+At the moment popups are forced into the WaylandWindow surface but it should be
+changed so that they render as separate textures instead.
+
+Dismissal does not rely on the popup grab. Firefox shows context menus on button
+release, by which point the implicit grab serial is gone, so it never calls
+`xdg_popup.grab` (Weston behaves identically). The compositor therefore dismisses
+the topmost popup on any press outside the popup chain (`popup_done`), which is
+what compositors do regardless of grab; a popup that *does* grab additionally
+takes keyboard focus so the menu can be driven from the keyboard.
+
+The positioner, placement, rendering and input are in
+`src/wayland_compositor.cpp` (`ResolvePopup`, `CollectPopups`, `PopupSurfaceAt`,
+`NewPopup`, `TopmostPopup`). `ResolvePopup` honors the positioner's constraint
+adjustment, flipping then sliding a popup that would fall outside the parent's
+window geometry so a menu opened near an edge stays usable. A popup is still
+clipped to the window's texture bounds, so one extending far past the window edge
+is cut off.
+
+## Clipboard
+
+Copy and paste use the `wl_data_device` selection. A client copies by offering a
+`wl_data_source` (with its mime types) and setting it as the selection; the
+compositor stores it and hands every data device a data offer advertising those
+types, so any client can paste. A paste's `wl_data_offer.receive` is brokered to
+the owning source's `wl_data_source.send`, relaying the destination's fd for the
+source to fill. Copy and paste within one client - a URL copied from a page and
+pasted into the address bar - round-trips through this. The host X11 clipboard is
+not bridged, so copy between Firefox and an X11 application does not cross. The
+broker is in `src/wayland_compositor.cpp` (`SetSelection`, `OfferSelectionTo`,
+`BindDataDeviceManager`).
+
 ## Input pass-through
 
-The window toy routes input by area: presses inside the client content
-become `wl_pointer` button/motion events (an `Action` lives for the duration
-of the press, so drags select text in a terminal instead of moving the
-object); the title bar and frame fall through to the standard object
-behaviors (drag, menu).
+The window toy routes input by area: presses inside the client content become
+`wl_pointer` button events (an `Action` lives for the duration of the press, so
+drags select text in a terminal instead of moving the object); hover motion with
+no button held is forwarded too (the toy watches the pointer via
+`PointerMoveCallback`), so links and menu items highlight and the client sets its
+own cursor; the scroll wheel becomes `wl_pointer.axis` when the cursor is over
+the content, and falls through to canvas zoom over the chrome (`Widget::PointerWheel`,
+offered to the hovered widget before zoom in `Pointer::Wheel`). The title bar and
+frame fall through to the standard object behaviors (drag, menu).
 
-Keyboard focus uses Automat's caret system. Clicking the content requests a
-caret owned by the window toy; the familiar blinking I-beam then morphs into
-an underline inside the title band — carets draw black, so the focus shape
-lives on guaranteed-light chrome, never on client pixels, which are
-arbitrary and often dark. While the caret exists, `KeyDown`/`KeyUp` pairs
-are forwarded to the client; focus moves the way carets always move —
-clicking any text field steals it (a keyboard leave is sent), and Escape
-releases it. Escape therefore never reaches the client today. Candidate
+Which surface a pointer event reaches is decided by `set_input_region`, not by
+which surface is visually on top. A surface with an empty input region is
+transparent to the pointer, so the hit-test (`SurfaceAt`) falls through to
+whatever is behind it. This is load-bearing for GTK clients: Firefox renders its
+page into a content subsurface but marks that subsurface input-transparent and
+takes all pointer input on the toplevel surface, so a compositor that routed by
+visual stacking would deliver clicks, scroll and motion to a surface the client
+silently discards them on.
+
+Keyboard focus is the toplevel surface, never a subsurface under the cursor.
+Toolkits route keyboard input through the window's main (xdg_toplevel) surface
+and ignore a `wl_keyboard.enter` delivered to a content subsurface, so a browser
+whose page lives in a subsurface would drop every keystroke if focus followed the
+pointer. Focus is still gated by Automat's caret system: clicking the content
+requests a caret owned by the window toy; the familiar blinking I-beam then morphs
+into an underline inside the title band — carets draw black, so the focus shape
+lives on guaranteed-light chrome, never on client pixels, which are arbitrary and
+often dark. While the caret exists, `KeyDown`/`KeyUp` pairs are forwarded to the
+toplevel surface (or to a popup that holds a grab); focus moves the way carets
+always move — clicking any text field steals it (a keyboard leave is sent), and
+Escape releases it. Escape therefore never reaches the client today. Candidate
 future treatments, in rough order of appeal: a compositor-reserved chord
 (the compositor reserves Super for itself, following Hyprland, so
 Super+Esc could mean "send a literal Escape"), holding focus through the *first*
@@ -226,8 +286,8 @@ server's actual keymap, fetched with `xkbcommon-x11` — building a default
 Programmer Dvorak, which is how this rule was learned). Modifier masks are
 taken from the same keymap and sent before every key event.
 
-Not yet routed: scroll wheel, hover motion while no button is held, clipboard
-contents, and cursor shapes (clients fall back to client-side cursors).
+Not yet routed: the relative-pointer / pointer-constraints used for pointer lock
+(Firefox binds them but works without).
 
 ## Window objects and lifetime
 

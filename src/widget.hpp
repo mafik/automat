@@ -185,6 +185,10 @@ struct Widget : Trackable, OptionsProvider {
   virtual void PointerOver(Pointer&) {}
   virtual void PointerLeave(Pointer&) {}
 
+  // Scroll wheel over this widget. `delta` is in notches, positive when the finger
+  // moves up. Return true to consume it.
+  virtual bool PointerWheel(Pointer&, float delta) { return false; }
+
   // Caret events. A widget that requests a Caret (via Keyboard::RequestCaret) overrides these
   // to receive keyboard input and a release notification.
   virtual void ReleaseCaret(Caret&) {}

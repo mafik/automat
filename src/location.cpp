@@ -151,7 +151,7 @@ void Location::FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_
 ///////////////////////////////////////////////////////////////////////////////
 
 LocationWidget::LocationWidget(ui::Widget* parent, Location& loc)
-    : ObjectToy(parent, loc), elevation(0), location_weak(loc.AcquireWeakPtr()) {
+    : ObjectToy(parent, loc), elevation(0), location_weak(loc.AcquireWeakPtr()), shadow(*this) {
   loc.widget = this;
   local_to_parent = SkM44(root_widget->CanvasToWindow());
   if (auto* obj_toy = ToyStore().FindOrNull(*loc.object)) {
@@ -209,7 +209,8 @@ std::pair<int, int> LocationWidget::FillChildren(Vec<Widget*>& children) {
   if (toy) {
     children.push_back(toy.Get());
   }
-  return {0, (int)children.size()};
+  children.push_back(&shadow);  // composites behind the toy
+  return {0, (int)children.size() - 1};
 }
 
 Optional<Rect> LocationWidget::TextureBounds() const { return nullopt; }
@@ -392,16 +393,18 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
   }
 }
 
-void LocationWidget::PreDraw(SkCanvas& canvas) const {
+ShadowWidget::ShadowWidget(LocationWidget& loc) : ui::Widget(&loc), loc(loc) {}
+
+void ShadowWidget::Draw(SkCanvas& canvas) const {
   constexpr float kMinElevation = 1_mm;
   constexpr float kElevationRange = 8_mm;
 
-  if (!toy || !toy->pack_frame_texture_bounds) {
+  if (!loc.toy || !loc.toy->pack_frame_texture_bounds) {
     return;  // no shadow for non-cached widgets
   }
   auto& rw = FindRootWidget();
   auto window_size_px = rw.size * rw.display_pixels_per_meter;
-  float elevation_mm = kMinElevation + elevation * kElevationRange;
+  float elevation_mm = kMinElevation + loc.elevation * kElevationRange;
   float shadow_sigma_mm = elevation_mm / 2;
 
   SkMatrix local_to_device = canvas.getLocalToDeviceAs3x3();
@@ -435,10 +438,10 @@ void LocationWidget::PreDraw(SkCanvas& canvas) const {
           elevation_mm / 10, elevation_mm / 10,
           SkImageFilters::ColorFilter(SkColorFilters::Lighting("#c9ced6"_color, "#000000"_color),
                                       nullptr))));
-  shadow_paint.setAlphaf(1.f - transparency);
+  shadow_paint.setAlphaf(1.f - loc.transparency);
   canvas.saveLayer(nullptr, &shadow_paint);
-  canvas.concat(toy->local_to_parent);
-  canvas.drawDrawable(toy->sk_drawable.get());
+  canvas.concat(loc.toy->local_to_parent);
+  canvas.drawDrawable(loc.toy->sk_drawable.get());
   canvas.restore();
 }
 

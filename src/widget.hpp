@@ -344,8 +344,6 @@ struct Widget : Trackable, OptionsProvider {
 
   virtual void PreDrawChildren(SkCanvas&) const;
 
-  void DrawChildrenSpan(SkCanvas&, Span<Widget*> widgets) const;
-
   void DrawChildren(SkCanvas&) const;
 
   // Used to obtain references to the child widgets in a generic fashion.

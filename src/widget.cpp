@@ -75,7 +75,7 @@ void Widget::Reparent(Widget& new_parent) {
 }
 
 void Widget::PreDrawChildren(SkCanvas& canvas) const {
-  for (auto* widget : ranges::reverse_view(Children())) {
+  for (auto* widget : ranges::reverse_view(Baked())) {
     canvas.save();
     canvas.concat(widget->local_to_parent);
     widget->PreDraw(canvas);
@@ -108,20 +108,23 @@ void Widget::WakeAnimationAt(time::SteadyPoint when) const {
 void Widget::DrawChildCached(SkCanvas& canvas, const Widget& child) const {
   canvas.save();
   canvas.concat(child.local_to_parent);
+  // The child's Over()/Under() bands are not baked into the child's texture; they composite here, in
+  // the child's baker (this surface), wrapped around the child. Recursing lands a whole detached
+  // subtree in its nearest baking ancestor. With the default all-baked range both bands are empty.
+  auto children = child.Children();  // refreshes child.baked_begin / child.baked_end
+  for (auto* under : ranges::reverse_view(children.subspan(child.baked_end))) {
+    DrawChildCached(canvas, *under);
+  }
   child.DrawCached(canvas);
+  for (auto* over : ranges::reverse_view(children.first(child.baked_begin))) {
+    DrawChildCached(canvas, *over);
+  }
   canvas.restore();
-}
-
-void Widget::DrawChildrenSpan(SkCanvas& canvas, Span<Widget*> widgets) const {
-  std::ranges::reverse_view rv{widgets};
-  for (auto& widget : rv) {
-    DrawChildCached(canvas, *widget);
-  }  // for each Widget
 }
 
 void Widget::DrawChildren(SkCanvas& canvas) const {
   PreDrawChildren(canvas);
-  for (auto* child : ranges::reverse_view(Children())) {
+  for (auto* child : ranges::reverse_view(Baked())) {
     DrawChildCached(canvas, *child);
   }
 }

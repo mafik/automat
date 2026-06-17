@@ -14,7 +14,7 @@ struct RootWidget;
 struct BlackHole : Widget, DropTarget {
   constexpr static float kMaxRadius = 3_cm;
 
-  float radius;
+  float radius = 0;
 
   BlackHole(RootWidget* parent);
   RootWidget& ParentRootWidget() const;

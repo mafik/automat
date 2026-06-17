@@ -1368,9 +1368,6 @@ struct TimelineWidget : ObjectToy {
     DrawScrew(-kPlasticWidth / 2 + kScrewMargin + kScrewRadius,
               kPlasticTop - kScrewMargin - kScrewRadius);
 
-    Widget* arr[] = {run_button.get(), prev_button.get(), next_button.get()};
-    DrawChildrenSpan(canvas, arr);
-
     canvas.save();
     canvas.clipPath(window_path, true);
 
@@ -1550,7 +1547,7 @@ struct TimelineWidget : ObjectToy {
     for (auto& track_widget : track_widgets) {
       children.push_back(track_widget.get());
     }
-    return {0, (int)children.size()};
+    return {3, (int)children.size()};
   }
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   using ObjectToy::ArgStart;

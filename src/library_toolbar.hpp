@@ -26,11 +26,11 @@ struct PrototypeButton : Widget {
 
   RRect CoarseBounds() const override { return proto_widget->CoarseBounds(); }
 
-  Optional<Rect> TextureBounds() const override { return proto_widget->TextureBounds(); }
+  Optional<Rect> TextureBounds() const override { return std::nullopt; }
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     children.push_back(proto_widget);
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 
   void PointerOver(Pointer& pointer) override { hand_icon.emplace(pointer, Pointer::kIconHand); }

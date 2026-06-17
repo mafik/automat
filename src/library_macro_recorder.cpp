@@ -569,7 +569,7 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     children.push_back(record_button.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 
   void PointerOver(ui::Pointer& p) override {

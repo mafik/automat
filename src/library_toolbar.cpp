@@ -150,7 +150,7 @@ std::pair<int, int> Toolbar::FillChildren(Vec<Widget*>& children) {
   for (size_t i = 0; i < buttons.size(); ++i) {
     children.push_back(buttons[i].get());
   }
-  return {0, (int)children.size()};
+  return {(int)children.size(), (int)children.size()};
 }
 
 void Toolbar::AddObjectPrototype(const Ptr<Object>& new_proto) {

@@ -1541,7 +1541,7 @@ struct TimelineWidget : ObjectToy {
     return SkPath::RRect(r);
   }
   bool CenteredAtZero() const override { return true; }
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     children.reserve(3 + track_widgets.size());
     children.push_back(run_button.get());
     children.push_back(prev_button.get());
@@ -1550,6 +1550,7 @@ struct TimelineWidget : ObjectToy {
     for (auto& track_widget : track_widgets) {
       children.push_back(track_widget.get());
     }
+    return {0, (int)children.size()};
   }
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   using ObjectToy::ArgStart;

@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <memory>
 #include <source_location>
+#include <utility>
 
 #include "action.hpp"
 #include "animation.hpp"
@@ -349,14 +350,45 @@ struct Widget : Trackable, OptionsProvider {
 
   // Used to obtain references to the child widgets in a generic fashion.
   // Widgets are stored in front-to-back order.
-  virtual void FillChildren(Vec<Widget*>& children) {}
+  // Returns a range of indices within the array which are drawn by this Widget's Draw method and
+  // cannot be hoisted out.
+  virtual std::pair<int, int> FillChildren(Vec<Widget*>& children) {
+    return {0, (int)children.size()};
+  }
 
-  mutable Vec<Widget*> children_cache;
+  // Cached stack - list of children of this Widget.
+  mutable Vec<Widget*> stack;
 
+  // First child that is baked into this widget's texture by Draw().
+  // Children in front of this index will be drawn in front of this Widget.
+  mutable int baked_begin = 0;
+
+  // Last child that is baked into this widget's texture by Draw().
+  // Children after this index will be drawn under this Widget.
+  mutable int baked_end = 0;
+
+  // Vector of all children drawn in front-to-back order.
   Span<Widget*> Children() const {
-    children_cache.clear();  // keeping Vec around prevents allocations
-    const_cast<Widget*>(this)->FillChildren(children_cache);
-    return children_cache;
+    stack.clear();  // keeping Vec around prevents allocations
+    auto baked = const_cast<Widget*>(this)->FillChildren(stack);
+    baked_begin = std::clamp<int>(baked.first, 0, stack.size());
+    baked_end = std::clamp<int>(baked.second, baked_begin, stack.size());
+    return stack;
+  }
+
+  Span<Widget*> Over() const {
+    Children();
+    return std::span<Widget*>(stack.begin(), stack.begin() + baked_begin);
+  }
+
+  Span<Widget*> Baked() const {
+    Children();
+    return std::span<Widget*>(stack.begin() + baked_begin, stack.begin() + baked_end);
+  }
+
+  Span<Widget*> Under() const {
+    Children();
+    return std::span<Widget*>(stack.begin() + baked_end, stack.end());
   }
 
   bool IsAbove(Widget& other) const;

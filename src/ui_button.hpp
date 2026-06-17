@@ -58,7 +58,10 @@ struct Button : Widget {
   // Values outside of 0..1 are actually ok - for various animated effects.
   virtual float PressRatio() const { return clickable.pointers_pressing ? 1 : 0; }
 
-  void FillChildren(Vec<Widget*>& children) override { children.push_back(child.get()); }
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
+    children.push_back(child.get());
+    return {0, (int)children.size()};
+  }
   SkRect ChildBounds() const;
   SkPath Shape() const override;
   virtual void Activate(ui::Pointer&) { WakeAnimation(); }
@@ -118,9 +121,10 @@ struct ToggleButton : Widget {
 
   ToggleButton(ui::Widget* parent) : Widget(parent) {}
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     children.push_back(OnWidget());
     children.push_back(off.get());
+    return {0, (int)children.size()};
   }
   bool AllowChildPointerEvents(Widget& child) const override {
     if (Filled()) {

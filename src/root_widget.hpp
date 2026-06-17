@@ -137,7 +137,7 @@ struct RootWidget final : Widget, DropTarget {
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
 
   void Zoom(float delta);
-  void FillChildren(Vec<Widget*>& out_children) override;
+  std::pair<int, int> FillChildren(Vec<Widget*>& out_children) override;
   std::unique_ptr<Pointer> MakePointer(Vec2 position);
 
   // Called when closing Automat to persist state across restarts.

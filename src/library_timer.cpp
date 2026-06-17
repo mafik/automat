@@ -641,7 +641,10 @@ struct TimerWidget : ObjectToy {
     canvas.restore();
   }
 
-  void FillChildren(Vec<Widget*>& children) override { children.push_back(text_field.get()); }
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
+    children.push_back(text_field.get());
+    return {0, (int)children.size()};
+  }
 
   SkPath Shape() const override {
     static SkPath shape = [] {

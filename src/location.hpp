@@ -226,7 +226,7 @@ struct LocationWidget : ObjectToy {
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   SkPath ShapeRigid() const override;
-  void FillChildren(Vec<ui::Widget*>& children) override;
+  std::pair<int, int> FillChildren(Vec<ui::Widget*>& children) override;
   Optional<Rect> TextureBounds() const override;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
 

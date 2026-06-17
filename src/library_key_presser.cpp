@@ -224,7 +224,10 @@ struct KeyPresserWidget : ObjectToy {
     shortcut_button->WakeAnimation();
   }
 
-  void FillChildren(Vec<Widget*>& children) override { children.push_back(shortcut_button.get()); }
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
+    children.push_back(shortcut_button.get());
+    return {0, (int)children.size()};
+  }
 
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
 };

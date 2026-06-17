@@ -202,13 +202,14 @@ SkPath LocationWidget::ShapeRigid() const {
   return toy->ShapeRigid().makeTransform(toy->local_to_parent.asM33());
 }
 
-void LocationWidget::FillChildren(Vec<Widget*>& children) {
+std::pair<int, int> LocationWidget::FillChildren(Vec<Widget*>& children) {
   for (auto* overlay : overlays) {
     children.push_back(overlay);
   }
   if (toy) {
     children.push_back(toy.Get());
   }
+  return {0, (int)children.size()};
 }
 
 Optional<Rect> LocationWidget::TextureBounds() const { return nullopt; }

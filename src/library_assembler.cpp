@@ -410,11 +410,12 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
   */
 }
 
-void AssemblerWidget::FillChildren(Vec<ui::Widget*>& children) {
+std::pair<int, int> AssemblerWidget::FillChildren(Vec<ui::Widget*>& children) {
   // TODO: Draw registers
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     children.push_back(reg_widgets[i].get());
   }
+  return {0, (int)children.size()};
 }
 
 struct RegisterIndexKnobWidget : public ui::EnumKnobWidget {
@@ -592,9 +593,10 @@ SkPath RegisterWidget::Shape() const {
 }
 std::string_view RegisterWidget::Name() const { return "Register"; }
 
-void RegisterWidget::FillChildren(Vec<Widget*>& children) {
+std::pair<int, int> RegisterWidget::FillChildren(Vec<Widget*>& children) {
   children.push_back(&small_buffer_widget);
   children.push_back(register_index_knob.get());
+  return {0, (int)children.size()};
 }
 
 void RegisterWidget::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {

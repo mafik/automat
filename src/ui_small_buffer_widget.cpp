@@ -235,8 +235,9 @@ void SmallBufferWidget::Draw(SkCanvas& canvas) const {
   DrawChildren(canvas);
 }
 
-void SmallBufferWidget::FillChildren(Vec<Widget*>& children) {
+std::pair<int, int> SmallBufferWidget::FillChildren(Vec<Widget*>& children) {
   children.push_back(type_button.get());
+  return {0, (int)children.size()};
 }
 
 RRect SmallBufferWidget::CoarseBounds() const {

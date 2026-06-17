@@ -147,7 +147,7 @@ struct Instruction : Object, Buffer {
     Tock Tick(time::Timer&) override;
     void Draw(SkCanvas&) const override;
     Vec2AndDir ArgStart(const Interface::Table&) override;
-    void FillChildren(Vec<ui::Widget*>& children) override;
+    std::pair<int, int> FillChildren(Vec<ui::Widget*>& children) override;
   };
 
   Str ToAsmStr() const;

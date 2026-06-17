@@ -263,7 +263,7 @@ struct NumberWidget : ObjectToy {
   SkPath Shape() const override { return kNumberShape; }
   bool CenteredAtZero() const override { return true; }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     children.reserve(13);
     children.push_back(dot.get());
     children.push_back(backspace.get());
@@ -271,6 +271,7 @@ struct NumberWidget : ObjectToy {
       children.push_back(digits[i].get());
     }
     children.push_back(text_field.get());
+    return {0, (int)children.size()};
   }
 };
 

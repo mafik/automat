@@ -86,7 +86,7 @@ struct SmallBufferWidget : TextFieldBase {
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
 
-  void FillChildren(Vec<Widget*>& children) override;
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override;
 
   void TextVisit(const TextVisitor&) override;
   int IndexFromPosition(float x) const override;

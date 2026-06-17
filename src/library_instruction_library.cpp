@@ -271,7 +271,7 @@ static float CardAngleDeg(float i, int visible_instructions, float helix_tween) 
   return lerp(ret, ret2, helix_tween * 0.7f);           // blend between the two curves
 }
 
-void InstructionLibrary::Widget::FillChildren(Vec<ui::Widget*>& children) {
+std::pair<int, int> InstructionLibrary::Widget::FillChildren(Vec<ui::Widget*>& children) {
   for (auto& card : instruction_helix) {
     if (card.throw_t < 0.5) {
       children.push_back(card.widget.get());
@@ -282,6 +282,7 @@ void InstructionLibrary::Widget::FillChildren(Vec<ui::Widget*>& children) {
       children.push_back(card.widget.get());
     }
   }
+  return {0, (int)children.size()};
 }
 
 ui::Tock InstructionLibrary::Widget::Tick(time::Timer& timer) {

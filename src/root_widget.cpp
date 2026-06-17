@@ -837,8 +837,9 @@ void RootWidget::DropLocation(Ptr<Location>&& location) {
   audio::Play(embedded::assets_SFX_trash_wav);
 }
 
-void RootWidget::FillChildren(Vec<Widget*>& out_children) {
+std::pair<int, int> RootWidget::FillChildren(Vec<Widget*>& out_children) {
   out_children.insert(out_children.end(), children.begin(), children.end());
+  return {0, (int)out_children.size()};
 }
 
 static void UpdateLocalToParent(RootWidget& root_widget) {

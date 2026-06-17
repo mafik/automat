@@ -310,7 +310,10 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
     DrawChildren(canvas);
   }
 
-  void FillChildren(Vec<Widget*>& children) override { children.push_back(pick_button.get()); }
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
+    children.push_back(pick_button.get());
+    return {0, (int)children.size()};
+  }
 
   void ReleaseGrabs() {
     if (pointer_grab) pointer_grab->Release();

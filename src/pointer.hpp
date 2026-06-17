@@ -186,7 +186,7 @@ struct PointerWidget : Widget {
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas& canvas) const override;
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     for (auto& action : pointer.actions) {
       if (action == nullptr) {
         continue;
@@ -195,6 +195,7 @@ struct PointerWidget : Widget {
         children.push_back(widget);
       }
     }
+    return {0, (int)children.size()};
   }
   Optional<Rect> TextureBounds() const override { return std::nullopt; }
 };

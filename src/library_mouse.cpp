@@ -163,7 +163,7 @@ struct MouseWidgetCommon {
   }
 
   static ui::Tock Tick(time::Timer& timer, ui::Widget& widget, ui::PointerButton button,
-                               Optional<bool> down_opt, PresserWidget* presser_widget) {
+                       Optional<bool> down_opt, PresserWidget* presser_widget) {
     SkPath mask = ButtonShape(button);
     float lod = FindLoD(TransformUp(widget), krita::mouse::base.height(), 40, 80);
 
@@ -303,8 +303,9 @@ struct MouseIcon : ui::Widget {
     DrawChildren(canvas);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (presser_widget) children.push_back(presser_widget.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -891,7 +892,10 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
     DrawChildren(canvas);
   }
 
-  void FillChildren(Vec<Widget*>& children) override { children.push_back(&presser_widget); }
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
+    children.push_back(&presser_widget);
+    return {0, (int)children.size()};
+  }
 };
 
 MouseButtonPresser::MouseButtonPresser(ui::PointerButton button) : button(button) {}

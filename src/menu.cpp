@@ -277,11 +277,12 @@ struct Menu : ui::Widget {
     return Rect::MakeAtZero(kMenuSize * 3, kMenuSize * 3);
   }
   Tock Tick(time::Timer& timer) override;
-  void FillChildren(Vec<ui::Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<ui::Widget*>& children) override {
     for (auto& opt : options) {
       if (opt == nullptr) continue;
       children.push_back(opt->icon.get());
     }
+    return {0, (int)children.size()};
   }
   void Draw(SkCanvas& canvas) const override {
     auto shape = Shape();

@@ -145,11 +145,12 @@ void Toolbar::Draw(SkCanvas& canvas) const {
   DrawChildren(canvas);
 }
 
-void Toolbar::FillChildren(Vec<Widget*>& children) {
+std::pair<int, int> Toolbar::FillChildren(Vec<Widget*>& children) {
   children.reserve(buttons.size());
   for (size_t i = 0; i < buttons.size(); ++i) {
     children.push_back(buttons[i].get());
   }
+  return {0, (int)children.size()};
 }
 
 void Toolbar::AddObjectPrototype(const Ptr<Object>& new_proto) {

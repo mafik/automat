@@ -853,9 +853,10 @@ struct PhotoToolWidget : beta::ObjectToy {
     flush_line();
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
     for (auto& k : knobs) children.push_back(k.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -1038,7 +1039,10 @@ struct ShelfButton : ui::Widget {
   SkPath Shape() const override { return proto_widget->Shape(); }
   RRect CoarseBounds() const override { return proto_widget->CoarseBounds(); }
   Optional<Rect> TextureBounds() const override { return std::nullopt; }
-  void FillChildren(Vec<Widget*>& children) override { children.push_back(proto_widget); }
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
+    children.push_back(proto_widget);
+    return {0, (int)children.size()};
+  }
   bool AllowChildPointerEvents(Widget&) const override { return false; }
 
   void PointerOver(ui::Pointer& p) override { hand_icon.emplace(p, ui::Pointer::kIconHand); }
@@ -1223,8 +1227,9 @@ struct LeptonicaShelfWidget : beta::ObjectToy {
     }
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     for (auto& b : buttons) children.push_back(b.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -1747,8 +1752,9 @@ struct ThresholdToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -2399,8 +2405,9 @@ struct MorphologyToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -2800,8 +2807,9 @@ struct ToneToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -3436,8 +3444,9 @@ struct GeometryToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -3908,8 +3917,9 @@ struct ChannelToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -4370,8 +4380,9 @@ struct ConvolveToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -4838,8 +4849,9 @@ struct BlendToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -5403,8 +5415,9 @@ struct QuantizeToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -5880,8 +5893,9 @@ struct FlattenToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -6174,8 +6188,9 @@ struct PosterizeToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -6497,8 +6512,9 @@ struct DitherToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -6947,8 +6963,9 @@ struct DeskewToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -7308,8 +7325,9 @@ struct FindLevelToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -7631,8 +7649,9 @@ struct CountToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -8112,8 +8131,9 @@ struct SelectToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -8500,8 +8520,9 @@ struct FadeToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -8890,8 +8911,9 @@ struct ReduceToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -9351,8 +9373,9 @@ struct MeasureToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -9707,8 +9730,9 @@ struct WarpToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -10087,8 +10111,9 @@ struct ColorToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -10663,8 +10688,9 @@ struct SeedfillToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -11004,8 +11030,9 @@ struct GenerateToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 
@@ -11350,8 +11377,9 @@ struct CropToy : beta::ObjectToy {
     return ObjectToy::FindAction(p, btn);
   }
 
-  void FillChildren(Vec<Widget*>& children) override {
+  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
+    return {0, (int)children.size()};
   }
 };
 

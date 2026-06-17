@@ -184,7 +184,10 @@ struct FlipFlopWidget : ObjectToy {
   SkPath Shape() const override { return SkPath::Rect(FlipFlopRect()); }
   bool CenteredAtZero() const override { return true; }
 
-  void FillChildren(Vec<ui::Widget*>& children) override { children.push_back(button.get()); }
+  std::pair<int, int> FillChildren(Vec<ui::Widget*>& children) override {
+    children.push_back(button.get());
+    return {0, (int)children.size()};
+  }
 };
 
 std::unique_ptr<ObjectToy> FlipFlop::MakeToy(ui::Widget* parent) {

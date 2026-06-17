@@ -3394,13 +3394,14 @@ Vec2AndDir Instruction::Widget::ArgStart(const Interface::Table& arg) {
   return ObjectToy::ArgStart(arg);
 }
 
-void Instruction::Widget::FillChildren(Vec<ui::Widget*>& children) {
+std::pair<int, int> Instruction::Widget::FillChildren(Vec<ui::Widget*>& children) {
   if (imm_widget) {
     children.emplace_back(imm_widget.get());
   }
   if (condition_code_widget) {
     children.emplace_back(condition_code_widget.get());
   }
+  return {0, (int)children.size()};
 }
 
 void Instruction::SerializeState(ObjectSerializer& writer) const {

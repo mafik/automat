@@ -567,6 +567,9 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
     }
   }
 
+  layers.Clear();
+  for (auto* c : children) layers.OrderInside(c);
+
   return tock;
 }
 
@@ -837,11 +840,6 @@ SkMatrix RootWidget::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixe
 void RootWidget::DropLocation(Ptr<Location>&& location) {
   // do nothing - location will be deleted by unique_ptr
   audio::Play(embedded::assets_SFX_trash_wav);
-}
-
-std::pair<int, int> RootWidget::FillChildren(Vec<Widget*>& out_children) {
-  out_children.insert(out_children.end(), children.begin(), children.end());
-  return {0, (int)out_children.size()};
 }
 
 static void UpdateLocalToParent(RootWidget& root_widget) {

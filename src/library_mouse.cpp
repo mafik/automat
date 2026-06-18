@@ -283,6 +283,7 @@ struct MouseIcon : ui::Widget {
       : ui::Widget(parent), button(button), down(down), presser_widget(nullptr), scroll(scroll) {
     if (presser) {
       presser_widget.reset(new PresserWidget(this));
+      layers.OrderInside(presser_widget.get());
     }
   }
 
@@ -301,11 +302,6 @@ struct MouseIcon : ui::Widget {
   void Draw(SkCanvas& canvas) const override {
     MouseWidgetCommon::Draw(canvas, ui::PointerButton::Unknown, down, presser_widget.get(), scroll);
     BakeChildren(canvas);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (presser_widget) children.push_back(presser_widget.get());
-    return {0, (int)children.size()};
   }
 };
 
@@ -854,6 +850,7 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
 
   MouseButtonPresserWidget(ui::Widget* parent, MouseButtonPresser& object)
       : MouseWidgetBase(parent, object), presser_widget(this) {
+    layers.OrderInside(&presser_widget);
     SkPath mouse_shape = krita::mouse::Shape();
 
     button = object.button;
@@ -890,11 +887,6 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
     krita::mouse::base.draw(canvas);
     MouseWidgetCommon::Draw(canvas, button, std::nullopt, &presser_widget, false);
     BakeChildren(canvas);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    children.push_back(&presser_widget);
-    return {0, (int)children.size()};
   }
 };
 

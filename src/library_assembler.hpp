@@ -69,8 +69,6 @@ struct RegisterWidget : public ObjectToy {
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override;
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override;
 };
 
 struct AssemblerWidget : ObjectToy {
@@ -78,7 +76,6 @@ struct AssemblerWidget : ObjectToy {
 
   AssemblerWidget(Widget* parent, Assembler&);
   std::string_view Name() const override;
-  std::pair<int, int> FillChildren(Vec<ui::Widget*>& children) override;
   SkPath Shape() const override;
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;

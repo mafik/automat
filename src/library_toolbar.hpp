@@ -28,11 +28,6 @@ struct PrototypeButton : Widget {
 
   Optional<Rect> TextureBounds() const override { return std::nullopt; }
 
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    children.push_back(proto_widget);
-    return {(int)children.size(), (int)children.size()};
-  }
-
   void PointerOver(Pointer& pointer) override { hand_icon.emplace(pointer, Pointer::kIconHand); }
 
   void PointerLeave(Pointer& pointer) override { hand_icon.reset(); }
@@ -59,7 +54,6 @@ struct Toolbar : ui::Widget, ui::PointerMoveCallback {
   SkPath Shape() const override;
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas& canvas) const override;
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override;
   void UpdateChildTransform();
   float CalculateWidth() const;
 

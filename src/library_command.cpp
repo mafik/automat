@@ -457,11 +457,6 @@ struct CommandToy : ui::beta::ObjectToy {
   Optional<Rect> TextureBounds() const override {
     return Shape().getBounds().makeOutset(4_mm, 4_mm);
   }
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    children.push_back(field.get());
-    children.push_back(button.get());
-    return {(int)children.size(), (int)children.size()};
-  }
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     return ui::beta::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }

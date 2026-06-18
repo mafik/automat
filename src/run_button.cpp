@@ -22,6 +22,8 @@ PowerButton::PowerButton(Widget* parent, NestedWeakPtr<OnOff::Table> target, SkC
   off = make_unique<ColoredButton>(
       this, PathFromSVG(kPowerSVG),
       ColoredButtonArgs{.fg = fg, .bg = bg, .on_click = [this](ui::Pointer& p) { Activate(p); }});
+  layers.OrderInside(on.get());
+  layers.OrderInside(off.get());
 }
 
 void PowerButton::Activate(ui::Pointer& p) {

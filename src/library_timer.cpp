@@ -480,6 +480,7 @@ struct TimerWidget : ObjectToy {
   TimerWidget(ui::Widget* parent, Object& timer_obj)
       : ObjectToy(parent, timer_obj), text_field(new ui::NumberTextField(this, kTextWidth)) {
     text_field->local_to_parent = SkM44::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
+    layers.OrderInside(text_field.get());
     range_dial.velocity = 0;
     range_dial.value = 1;
     hand_degrees.value = 90;
@@ -639,11 +640,6 @@ struct TimerWidget : ObjectToy {
     canvas.drawPaint(duration_handle_paint);
     canvas.drawPath(duration_path_rotated, highlight_paint);
     canvas.restore();
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    children.push_back(text_field.get());
-    return {0, (int)children.size()};  // Timer draws over its text field
   }
 
   SkPath Shape() const override {

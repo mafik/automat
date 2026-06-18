@@ -135,10 +135,12 @@ struct NumberButton : ui::Button {
   std::function<void(Location&)> activate;
   NumberButton(ui::Widget* parent, SkPath shape) : Button(parent) {
     child = std::make_unique<ShapeWidget>(this, shape);
+    layers.OrderInside(child.get());
     UpdateChildTransform();
   }
   NumberButton(ui::Widget* parent, std::string text) : Button(parent) {
     child = std::make_unique<Text>(this, text);
+    layers.OrderInside(child.get());
     UpdateChildTransform();
   }
   void Activate(ui::Pointer& pointer) override {
@@ -262,17 +264,6 @@ struct NumberWidget : ObjectToy {
 
   SkPath Shape() const override { return kNumberShape; }
   bool CenteredAtZero() const override { return true; }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    children.reserve(13);
-    children.push_back(dot.get());
-    children.push_back(backspace.get());
-    for (int i = 0; i < std::size(digits); ++i) {
-      children.push_back(digits[i].get());
-    }
-    children.push_back(text_field.get());
-    return {(int)children.size(), (int)children.size()};
-  }
 };
 
 std::unique_ptr<ObjectToy> Number::MakeToy(ui::Widget* parent) {

@@ -69,8 +69,12 @@ void Widget::Reparent(Widget& new_parent) {
   OnReparent(new_parent, fix44);
   Widget* old_parent = parent;
   parent = new_parent.AcquireTrackedPtr();
-  if (old_parent && old_parent != &new_parent) {
-    old_parent->OnChildReparentedAway(*this);
+  if (old_parent != &new_parent) {
+    if (old_parent) {
+      old_parent->layers.Remove(this);
+      old_parent->OnChildReparentedAway(*this);
+    }
+    new_parent.layers.InsertFront(this);  // front by default; new parent reorders if it cares
   }
 }
 
@@ -101,20 +105,19 @@ void Widget::BakeChildStack(SkCanvas& canvas, const Widget& child) const {
   canvas.concat(child.local_to_parent);
   // The child's Over()/Under() bands are not baked into the child's texture; they composite here,
   // in the child's baker (this surface), wrapped around the child. Recursing lands a whole detached
-  // subtree in its nearest baking ancestor. With the default all-baked range both bands are empty.
-  auto children = child.Children();  // refreshes child.baked_begin / child.baked_end
-  for (auto* under : ranges::reverse_view(children.subspan(child.baked_end))) {
+  // subtree in its nearest baking ancestor.
+  for (auto* under : ranges::reverse_view(child.layers.Under())) {
     BakeChildStack(canvas, *under);
   }
   child.DrawCached(canvas);
-  for (auto* over : ranges::reverse_view(children.first(child.baked_begin))) {
+  for (auto* over : ranges::reverse_view(child.layers.Over())) {
     BakeChildStack(canvas, *over);
   }
   canvas.restore();
 }
 
 void Widget::BakeChildren(SkCanvas& canvas) const {
-  for (auto* child : ranges::reverse_view(Baked())) {
+  for (auto* child : ranges::reverse_view(layers.Baked())) {
     BakeChildStack(canvas, *child);
   }
 }
@@ -239,9 +242,17 @@ std::map<uint32_t, Widget*>& GetWidgetIndex() {
 Widget::Widget(Widget* parent) : parent(parent) {
   GetWidgetIndex()[ID()] = this;
   sk_drawable = MakeWidgetDrawable(*this);
+  if (parent) {
+    parent->layers.InsertFront(this);
+  }
 }
 
-Widget::~Widget() { GetWidgetIndex().erase(ID()); }
+Widget::~Widget() {
+  if (parent) {
+    parent->layers.Remove(this);
+  }
+  GetWidgetIndex().erase(ID());
+}
 
 void Widget::CheckAllWidgetsReleased() {
   auto& widget_index = GetWidgetIndex();

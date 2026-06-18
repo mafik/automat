@@ -393,16 +393,6 @@ struct HotKeyWidget : ObjectToy {
   SkPath Shape() const override { return SkPath::RRect(kShapeRRect); }
   bool CenteredAtZero() const override { return true; }
 
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    children.push_back(power_button.get());
-    children.push_back(ctrl_button.get());
-    children.push_back(alt_button.get());
-    children.push_back(shift_button.get());
-    children.push_back(windows_button.get());
-    children.push_back(shortcut_button.get());
-    return {(int)children.size(), (int)children.size()};
-  }
-
   // CaretOwner - called when the new HotKey is selected by the user
   void KeyDown(ui::Caret&, ui::Key key) override {
     if (auto hk = LockHotKey()) {

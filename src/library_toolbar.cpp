@@ -145,14 +145,6 @@ void Toolbar::Draw(SkCanvas& canvas) const {
   BakeChildren(canvas);
 }
 
-std::pair<int, int> Toolbar::FillChildren(Vec<Widget*>& children) {
-  children.reserve(buttons.size());
-  for (size_t i = 0; i < buttons.size(); ++i) {
-    children.push_back(buttons[i].get());
-  }
-  return {(int)children.size(), (int)children.size()};
-}
-
 void Toolbar::AddObjectPrototype(const Ptr<Object>& new_proto) {
   prototypes.push_back(new_proto->Clone());
   buttons.emplace_back(std::make_unique<ui::PrototypeButton>(this, prototypes.back()));

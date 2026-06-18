@@ -112,7 +112,6 @@ struct InstructionLibrary : Object {
     void Draw(SkCanvas&) const override;
     std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
 
-    std::pair<int, int> FillChildren(Vec<ui::Widget*>& children) override;
     bool AllowChildPointerEvents(ui::Widget& child) const override { return false; }
 
     void PointerMove(ui::Pointer&, Vec2 position) override;

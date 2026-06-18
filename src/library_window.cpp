@@ -130,6 +130,7 @@ struct PickButton : theme::xp::TitleButton {
   std::function<void(ui::Pointer&)> on_activate;
   PickButton(ui::Widget* parent) : theme::xp::TitleButton(parent) {
     child = ui::MakeShapeWidget(this, PathFromSVG(kPickSVG), "#000000"_color);
+    layers.OrderInside(child.get());
     UpdateChildTransform();
     child->local_to_parent.preTranslate(-0.6_mm, 0.6_mm);
   }
@@ -196,6 +197,7 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
 
   WindowWidget(ui::Widget* parent, Object& window) : ObjectToy(parent, window) {
     pick_button = std::make_unique<PickButton>(this);
+    layers.OrderInside(pick_button.get());
     pick_button->on_activate = [this](ui::Pointer& p) {
       p.EndAllActions();
       pointer_grab = &p.RequestGlobalGrab(*this);
@@ -308,11 +310,6 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
     }
 
     BakeChildren(canvas);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    children.push_back(pick_button.get());
-    return {0, (int)children.size()};
   }
 
   void ReleaseGrabs() {

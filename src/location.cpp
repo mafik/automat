@@ -158,7 +158,9 @@ LocationWidget::LocationWidget(ui::Widget* parent, Location& loc)
     // If the object already has a toy, reparent it to keep transform
     toy = obj_toy;
     toy->Reparent(*this);
+    layers.OrderInside(toy.Get());
   }
+  layers.OrderBelow(&shadow, nullptr);
 }
 
 LocationWidget::~LocationWidget() {
@@ -176,6 +178,7 @@ ObjectToy& LocationWidget::ToyForObject() {
         toy->local_to_parent =
             SkM44(Location::ToMatrix(loc->position, loc->scale * 1.2, LocalAnchor()));
         transparency = 1;
+        layers.OrderInside(toy.Get());
       }
     }
   }
@@ -200,17 +203,6 @@ SkPath LocationWidget::Shape() const {
 SkPath LocationWidget::ShapeRigid() const {
   if (!toy) return SkPath();
   return toy->ShapeRigid().makeTransform(toy->local_to_parent.asM33());
-}
-
-std::pair<int, int> LocationWidget::FillChildren(Vec<Widget*>& children) {
-  for (auto* overlay : overlays) {
-    children.push_back(overlay);
-  }
-  if (toy) {
-    children.push_back(toy.Get());
-  }
-  children.push_back(&shadow);  // composites behind the toy
-  return {0, (int)children.size() - 1};
 }
 
 Optional<Rect> LocationWidget::TextureBounds() const { return nullopt; }
@@ -710,6 +702,7 @@ void LocationWidget::OnReparent(ui::Widget& new_parent, SkM44& fix) {
 }
 
 void LocationWidget::OnChildReparentedAway(ui::Widget& child) {
+  // Reparent already dropped `child` from our stack; just forget the cached pointer.
   if (toy.Get() == &child) {
     toy = nullptr;
   }

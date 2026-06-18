@@ -667,6 +667,7 @@ struct PrevButton : SideButton {
   PrevButton(TimelineWidget& parent) : SideButton(parent) {
     child = MakeShapeWidget(this, PathFromSVG(kNextShape).makeTransform(kHorizontalFlip),
                             SK_ColorWHITE);
+    layers.OrderInside(child.get());
     UpdateChildTransform();
   }
   void Activate(ui::Pointer&) override;
@@ -676,6 +677,7 @@ struct PrevButton : SideButton {
 struct NextButton : SideButton {
   NextButton(TimelineWidget& parent) : SideButton(parent) {
     child = MakeShapeWidget(this, PathFromSVG(kNextShape), SK_ColorWHITE);
+    layers.OrderInside(child.get());
     UpdateChildTransform();
   }
   void Activate(ui::Pointer&) override;
@@ -708,10 +710,24 @@ struct TimelineRunButton : ui::ToggleButton {
                           .bg = color::kParrotRed,
                           .radius = kPlayButtonRadius,
                           .on_click = [this](ui::Pointer& p) { Activate(p); }});
+    layers.OrderInside(on.get());
+    layers.OrderInside(off.get());
   }
   TimelineWidget* GetTimelineWidget() const;
   ui::Button* OnWidget() override;
   bool Filled() const override;
+  Tock Tick(time::Timer& timer) override {
+    Tock tock = ToggleButton::Tick(timer);
+    auto* want = OnWidget();
+    if (layers.vec.empty() || layers.vec[0] != want) {
+      layers.Clear();
+      layers.OrderInside(want);
+      layers.OrderInside(off.get());
+      tock.drawing |= true;
+    }
+    if (Filled()) tock.ing |= true;  // poll tw->state while playing/recording
+    return tock;
+  }
   void Activate(ui::Pointer&) {
     auto timeline = timeline_weak.Lock();
     if (!timeline) return;
@@ -727,6 +743,7 @@ struct TimelineRunButton : ui::ToggleButton {
         timeline->StopRecording();
         break;
     }
+    WakeAnimation();
   }
   StrView Name() const override { return "Timeline Run Button"; }
 };
@@ -920,6 +937,7 @@ struct TimelineWidget : ObjectToy {
       LOG << "Adding track widget for track " << i;
       auto& track_widget = toy_store.FindOrMake(*tracks[i], this);
       track_widgets.emplace_back(&track_widget);
+      layers.OrderInside(&track_widget);
     }
   }
 
@@ -1538,17 +1556,6 @@ struct TimelineWidget : ObjectToy {
     return SkPath::RRect(r);
   }
   bool CenteredAtZero() const override { return true; }
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    children.reserve(3 + track_widgets.size());
-    children.push_back(run_button.get());
-    children.push_back(prev_button.get());
-    children.push_back(next_button.get());
-    children.reserve(children.size() + track_widgets.size());
-    for (auto& track_widget : track_widgets) {
-      children.push_back(track_widget.get());
-    }
-    return {3, (int)children.size()};
-  }
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   using ObjectToy::ArgStart;
   Vec2AndDir ArgStart(const Interface::Table& arg) override {

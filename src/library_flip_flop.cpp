@@ -90,6 +90,7 @@ struct YingYangButton : ui::ColoredButton {
       : ColoredButton(parent,
                       ui::ColoredButtonArgs{.fg = fg, .bg = bg, .radius = kYingYangButtonRadius}) {
     child = make_unique<YingYangIcon>(this);
+    layers.OrderInside(child.get());
     UpdateChildTransform();
   }
 };
@@ -101,6 +102,8 @@ struct FlipFlopButton : ui::ToggleButton {
       : ui::ToggleButton(parent), flip_flop(flip_flop) {
     on = make_unique<YingYangButton>(this, "#eae9e8"_color4f, "#1d1d1d"_color4f);
     off = make_unique<YingYangButton>(this, "#1d1d1d"_color4f, "#eae9e8"_color4f);
+    layers.OrderInside(on.get());
+    layers.OrderInside(off.get());
     static_cast<YingYangButton*>(this->off.get())->on_click =
         static_cast<YingYangButton*>(this->on.get())->on_click = [this](ui::Pointer&) {
           if (auto flip_flop_ptr = this->flip_flop.Lock()) {
@@ -183,11 +186,6 @@ struct FlipFlopWidget : ObjectToy {
   }
   SkPath Shape() const override { return SkPath::Rect(FlipFlopRect()); }
   bool CenteredAtZero() const override { return true; }
-
-  std::pair<int, int> FillChildren(Vec<ui::Widget*>& children) override {
-    children.push_back(button.get());
-    return {(int)children.size(), (int)children.size()};
-  }
 };
 
 std::unique_ptr<ObjectToy> FlipFlop::MakeToy(ui::Widget* parent) {

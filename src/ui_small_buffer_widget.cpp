@@ -35,6 +35,7 @@ struct TypeButton : ShapeWidget {
 
 SmallBufferWidget::SmallBufferWidget(ui::Widget* parent, NestedWeakPtr<Buffer> buffer)
     : TextFieldBase(parent), buffer_weak(buffer), type_button(new TypeButton(this, kTypeTextPath)) {
+  layers.OrderInside(type_button.get());
   auto tb = static_cast<TypeButton*>(type_button.get());
   tb->clickable.activate = [this](Pointer&) {
     auto buffer = buffer_weak.Lock();
@@ -233,11 +234,6 @@ void SmallBufferWidget::Draw(SkCanvas& canvas) const {
   font.DrawText(canvas, text, text_paint);
   canvas.setMatrix(default_matrix);
   BakeChildren(canvas);
-}
-
-std::pair<int, int> SmallBufferWidget::FillChildren(Vec<Widget*>& children) {
-  children.push_back(type_button.get());
-  return {0, (int)children.size()};
 }
 
 RRect SmallBufferWidget::CoarseBounds() const {

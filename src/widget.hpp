@@ -344,48 +344,96 @@ struct Widget : Trackable, OptionsProvider {
   // Baba Yaga approves.
   void BakeChildren(SkCanvas&) const;
 
-  // Used to obtain references to the child widgets in a generic fashion.
-  // Widgets are stored in front-to-back order.
-  // Returns a range of indices within the array which are drawn by this Widget's Draw method and
-  // cannot be hoisted out.
-  virtual std::pair<int, int> FillChildren(Vec<Widget*>& children) {
-    return {0, (int)children.size()};
-  }
+  struct LayerStack {
+    SmallVec<Widget*> vec{};
+    int bake_begin = 0;
+    int bake_end = 0;
 
-  // Cached stack - list of children of this Widget.
-  mutable Vec<Widget*> stack;
+    void Clear() {
+      vec.clear();
+      bake_begin = 0;
+      bake_end = 0;
+    }
+    void Remove(Widget* w) {
+      auto it = std::find(vec.begin(), vec.end(), w);
+      if (it == vec.end()) return;
+      int i = (int)(it - vec.begin());
+      if (i < bake_begin) --bake_begin;
+      if (i < bake_end) --bake_end;
+      vec.erase(it);
+    }
 
-  // First child that is baked into this widget's texture by Draw().
-  // Children in front of this index will be drawn in front of this Widget.
-  mutable int baked_begin = 0;
+    // Move `child` (already a member) into the Baked() range.
+    void OrderInside(Widget* child) {
+      // TODO: use bubble-sort instead
+      Remove(child);
+      vec.insert(vec.begin() + bake_end, child);
+      ++bake_end;
+    }
 
-  // Last child that is baked into this widget's texture by Draw().
-  // Children after this index will be drawn under this Widget.
-  mutable int baked_end = 0;
+    // Place `child` (already a member) just in front of `reference`, joining its range.
+    // `reference == nullptr` means the parent: `child` lands at the bottom of the Over range.
+    void OrderAbove(Widget* child, Widget* reference = nullptr) {
+      Reorder(child, reference, false);
+    }
 
-  // Vector of all children drawn in front-to-back order.
-  Span<Widget*> Children() const {
-    stack.clear();  // keeping Vec around prevents allocations
-    auto baked = const_cast<Widget*>(this)->FillChildren(stack);
-    baked_begin = std::clamp<int>(baked.first, 0, stack.size());
-    baked_end = std::clamp<int>(baked.second, baked_begin, stack.size());
-    return stack;
-  }
+    // Place `child` (already a member) just behind `reference`, joining its range.
+    // `reference == nullptr` means the parent: `child` lands at the top of the Under range.
+    void OrderBelow(Widget* child, Widget* reference = nullptr) { Reorder(child, reference, true); }
 
-  Span<Widget*> Over() const {
-    Children();
-    return std::span<Widget*>(stack.begin(), stack.begin() + baked_begin);
-  }
+    // Range of child widgets which are drawn over their parent
+    Span<Widget*> Over() { return Span<Widget*>(vec).Resize(bake_begin); }
 
-  Span<Widget*> Baked() const {
-    Children();
-    return std::span<Widget*>(stack.begin() + baked_begin, stack.begin() + baked_end);
-  }
+    // Range of child widgets which are drawn from within the Draw() function of their parent
+    Span<Widget*> Baked() {
+      return Span<Widget*>(vec.begin() + bake_begin, vec.begin() + bake_end);
+    }
 
-  Span<Widget*> Under() const {
-    Children();
-    return std::span<Widget*>(stack.begin() + baked_end, stack.end());
-  }
+    // Range of child widgets which are drawn under their parent
+    Span<Widget*> Under() { return Span<Widget*>(vec).RemovePrefix(bake_end); }
+
+   private:
+    // Detach `child`, then re-insert it relative to `reference` (a sibling, or nullptr = the
+    // parent's own drawing); `below` selects behind vs in-front-of. The baked range stays
+    // consistent: `child` joins the reference's range.
+    void Reorder(Widget* child, Widget* reference, bool below) {
+      if (child == reference) return;
+      Remove(child);
+      if (reference == nullptr) {
+        if (below) {
+          vec.insert(vec.begin() + bake_end, child);  // top of Under
+        } else {
+          vec.insert(vec.begin() + bake_begin, child);  // bottom of Over
+          ++bake_begin;
+          ++bake_end;
+        }
+        return;
+      }
+      auto it = std::find(vec.begin(), vec.end(), reference);
+      if (it == vec.end()) return;
+      int r = (int)(it - vec.begin());
+      vec.insert(vec.begin() + (below ? r + 1 : r), child);
+      if (r < bake_begin) {
+        ++bake_begin;
+        ++bake_end;
+      } else if (r < bake_end) {
+        ++bake_end;
+      }
+    }
+
+    // Add at the top of the Over() range.
+    void InsertFront(Widget* w) {
+      vec.insert(vec.begin(), w);
+      ++bake_begin;
+      ++bake_end;
+    }
+
+    friend struct Widget;
+
+  } mutable layers;  // protected by RootWidget::mutex;
+
+  // Front-to-back child views, backed by the continuously-maintained `stack`.
+  Span<Widget*> Children() const { return Span<Widget*>(layers.vec); }
 
   bool IsAbove(Widget& other) const;
 

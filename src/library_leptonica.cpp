@@ -568,6 +568,7 @@ struct PhotoToolWidget : beta::ObjectToy {
           if (auto tool = LockObject<PhotoTool>()) tool->develop->ScheduleRun();
         },
         Seed(0x12B));
+    if (glass) layers.OrderInside(glass.get());
 
     if (auto tool = LockTool()) {
       label = std::string(tool->Label());
@@ -610,6 +611,7 @@ struct PhotoToolWidget : beta::ObjectToy {
         auto knob = std::make_unique<ParamKnob>(this, *this, i, infos[i]);
         knob->local_to_parent = SkM44::Translate(x, y);
         knobs.push_back(std::move(knob));
+        layers.OrderInside(knobs.back().get());
         param_names.push_back(std::string(infos[i].name));
         knob_pos.push_back({x, y});
       }
@@ -852,12 +854,6 @@ struct PhotoToolWidget : beta::ObjectToy {
     }
     flush_line();
   }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    for (auto& k : knobs) children.push_back(k.get());
-    return {0, (int)children.size()};
-  }
 };
 
 ParamKnob::ParamKnob(ui::Widget* parent, PhotoToolWidget& tw, int index, PhotoTool::ParamInfo info)
@@ -1033,16 +1029,15 @@ struct ShelfButton : ui::Widget {
   ShelfButton(ui::Widget* parent, Ptr<Object> proto)
       : ui::Widget(parent), proto(std::move(proto)) {}
 
-  void Init() { proto_widget = &ToyStore().FindOrMake(*proto, this); }
+  void Init() {
+    proto_widget = &ToyStore().FindOrMake(*proto, this);
+    layers.OrderInside(proto_widget);
+  }
 
   StrView Name() const override { return "ShelfButton"; }
   SkPath Shape() const override { return proto_widget->Shape(); }
   RRect CoarseBounds() const override { return proto_widget->CoarseBounds(); }
   Optional<Rect> TextureBounds() const override { return std::nullopt; }
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    children.push_back(proto_widget);
-    return {0, (int)children.size()};
-  }
   bool AllowChildPointerEvents(Widget&) const override { return false; }
 
   void PointerOver(ui::Pointer& p) override { hand_icon.emplace(p, ui::Pointer::kIconHand); }
@@ -1225,11 +1220,6 @@ struct LeptonicaShelfWidget : beta::ObjectToy {
       beta::DrawBetaStamp(canvas, {sheet.right - 0.6_cm, sheet.top - 0.6_cm}, 2.2_cm, -15.f,
                           Seed(0xA1), "BETA");
     }
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    for (auto& b : buttons) children.push_back(b.get());
-    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -1750,11 +1740,6 @@ struct ThresholdToy : beta::ObjectToy {
       }
     }
     return ObjectToy::FindAction(p, btn);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -2404,11 +2389,6 @@ struct MorphologyToy : beta::ObjectToy {
     }
     return ObjectToy::FindAction(p, btn);
   }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
-  }
 };
 
 MorphLevelDrag::MorphLevelDrag(ui::Pointer& p, MorphologyToy& w) : Action(p), widget(&w) {}
@@ -2805,11 +2785,6 @@ struct ToneToy : beta::ObjectToy {
       }
     }
     return ObjectToy::FindAction(p, btn);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -3443,11 +3418,6 @@ struct GeometryToy : beta::ObjectToy {
     }
     return ObjectToy::FindAction(p, btn);
   }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
-  }
 };
 
 GeoDialDrag::GeoDialDrag(ui::Pointer& p, GeometryToy& w) : Action(p), widget(&w) {
@@ -3916,11 +3886,6 @@ struct ChannelToy : beta::ObjectToy {
     }
     return ObjectToy::FindAction(p, btn);
   }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
-  }
 };
 
 ChannelWeightDrag::ChannelWeightDrag(ui::Pointer& p, ChannelToy& w, int which)
@@ -4378,11 +4343,6 @@ struct ConvolveToy : beta::ObjectToy {
         return std::make_unique<ConvRankDrag>(p, *this);
     }
     return ObjectToy::FindAction(p, btn);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -4847,11 +4807,6 @@ struct BlendToy : beta::ObjectToy {
         return std::make_unique<BlendAmountDrag>(p, *this);
     }
     return ObjectToy::FindAction(p, btn);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -5414,11 +5369,6 @@ struct QuantizeToy : beta::ObjectToy {
     }
     return ObjectToy::FindAction(p, btn);
   }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
-  }
 };
 
 QuantCountDrag::QuantCountDrag(ui::Pointer& p, QuantizeToy& w) : Action(p), widget(&w) {
@@ -5892,11 +5842,6 @@ struct FlattenToy : beta::ObjectToy {
     }
     return ObjectToy::FindAction(p, btn);
   }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
-  }
 };
 
 FlattenSliderDrag::FlattenSliderDrag(ui::Pointer& p, FlattenToy& w, int which)
@@ -6186,11 +6131,6 @@ struct PosterizeToy : beta::ObjectToy {
       if (in(plus)) return std::make_unique<PosterStepPoke>(p, *this, +1);
     }
     return ObjectToy::FindAction(p, btn);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -6510,11 +6450,6 @@ struct DitherToy : beta::ObjectToy {
       }
     }
     return ObjectToy::FindAction(p, btn);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -6962,11 +6897,6 @@ struct DeskewToy : beta::ObjectToy {
     }
     return ObjectToy::FindAction(p, btn);
   }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
-  }
 };
 
 std::unique_ptr<ObjectToy> Deskew::MakeToy(ui::Widget* parent) {
@@ -7324,11 +7254,6 @@ struct FindLevelToy : beta::ObjectToy {
     }
     return ObjectToy::FindAction(p, btn);
   }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
-  }
 };
 
 FindLevelFractDrag::FindLevelFractDrag(ui::Pointer& p, FindLevelToy& w) : Action(p), widget(&w) {
@@ -7647,11 +7572,6 @@ struct CountToy : beta::ObjectToy {
       }
     }
     return ObjectToy::FindAction(p, btn);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -8130,11 +8050,6 @@ struct SelectToy : beta::ObjectToy {
     }
     return ObjectToy::FindAction(p, btn);
   }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
-  }
 };
 
 SelectBandDrag::SelectBandDrag(ui::Pointer& p, SelectToy& w, int which)
@@ -8518,11 +8433,6 @@ struct FadeToy : beta::ObjectToy {
       if (inRect(StrengthSliderM())) return std::make_unique<FadeSliderDrag>(p, *this, 1);
     }
     return ObjectToy::FindAction(p, btn);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -8909,11 +8819,6 @@ struct ReduceToy : beta::ObjectToy {
       }
     }
     return ObjectToy::FindAction(p, btn);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -9372,11 +9277,6 @@ struct MeasureToy : beta::ObjectToy {
     }
     return ObjectToy::FindAction(p, btn);
   }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
-  }
 };
 
 MeasureRegionDrag::MeasureRegionDrag(ui::Pointer& p, MeasureToy& w, int which)
@@ -9728,11 +9628,6 @@ struct WarpToy : beta::ObjectToy {
         return std::make_unique<WarpAmountDrag>(p, *this);
     }
     return ObjectToy::FindAction(p, btn);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -10109,11 +10004,6 @@ struct ColorToy : beta::ObjectToy {
       }
     }
     return ObjectToy::FindAction(p, btn);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -10687,11 +10577,6 @@ struct SeedfillToy : beta::ObjectToy {
     }
     return ObjectToy::FindAction(p, btn);
   }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
-  }
 };
 
 static void SeedfillSetFromPointer(SeedfillToy& w, ui::Pointer& pointer) {
@@ -11028,11 +10913,6 @@ struct GenerateToy : beta::ObjectToy {
         return std::make_unique<GenSliderDrag>(p, *this);
     }
     return ObjectToy::FindAction(p, btn);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -11375,11 +11255,6 @@ struct CropToy : beta::ObjectToy {
       if (hit != 0) return std::make_unique<CropDrag>(p, *this, hit);
     }
     return ObjectToy::FindAction(p, btn);
-  }
-
-  std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
-    if (glass) children.push_back(glass.get());
-    return {(int)children.size(), (int)children.size()};
   }
 };
 

@@ -915,12 +915,12 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
         }
         node.SetVerdict(Verdict::Skip_Clipped);
       } else {
-        auto children = widget->Children();  // refreshes baked_begin / baked_end
-        int baked_begin = widget->baked_begin, baked_end = widget->baked_end;
+        auto children = widget->Children();
+        int baked_begin = widget->layers.bake_begin, baked_end = widget->layers.bake_end;
         for (int k = (int)children.size() - 1; k >= 0; --k) {
           Widget* child = children[k];
           if (child->parent != widget) {
-            ERROR << "Widget " << widget->Name() << "::FillChildren returned " << child->Name()
+            ERROR << "Widget " << widget->Name() << " has child " << child->Name()
                   << " whose parent pointer is "
                   << (child->parent ? child->parent->Name() : StrView("nullptr"))
                   << "; skipping to preserve render tree invariants.";

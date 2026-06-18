@@ -271,20 +271,6 @@ static float CardAngleDeg(float i, int visible_instructions, float helix_tween) 
   return lerp(ret, ret2, helix_tween * 0.7f);           // blend between the two curves
 }
 
-std::pair<int, int> InstructionLibrary::Widget::FillChildren(Vec<ui::Widget*>& children) {
-  for (auto& card : instruction_helix) {
-    if (card.throw_t < 0.5) {
-      children.push_back(card.widget.get());
-    }
-  }
-  for (auto& card : std::ranges::reverse_view(instruction_helix)) {
-    if (card.throw_t >= 0.5) {
-      children.push_back(card.widget.get());
-    }
-  }
-  return {(int)children.size(), (int)children.size()};
-}
-
 ui::Tock InstructionLibrary::Widget::Tick(time::Timer& timer) {
   Tock tock;
 
@@ -494,6 +480,13 @@ ui::Tock InstructionLibrary::Widget::Tick(time::Timer& timer) {
     transform.preRotate(rotation_deg);
     transform.preTranslate(-Instruction::Widget::kWidth / 2, -Instruction::Widget::kHeight / 2);
     card.widget->local_to_parent = SkM44(transform);
+  }
+
+  for (auto& card : instruction_helix) {
+    if (card.throw_t < 0.5) layers.OrderAbove(card.widget.get());
+  }
+  for (auto& card : std::ranges::reverse_view(instruction_helix)) {
+    if (card.throw_t >= 0.5) layers.OrderAbove(card.widget.get());
   }
 
   return tock;

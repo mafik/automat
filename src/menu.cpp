@@ -191,6 +191,7 @@ struct Menu : ui::Widget {
     for (int i = 0; i < Option::DIR_COUNT; ++i) {
       if (options[i] == nullptr) continue;
       options[i]->icon = options[i]->MakeIcon(this);
+      layers.OrderInside(options[i]->icon.get());
     }
   }
   Option::Dir SinCosToDir(SinCos sc) {
@@ -277,13 +278,6 @@ struct Menu : ui::Widget {
     return Rect::MakeAtZero(kMenuSize * 3, kMenuSize * 3);
   }
   Tock Tick(time::Timer& timer) override;
-  std::pair<int, int> FillChildren(Vec<ui::Widget*>& children) override {
-    for (auto& opt : options) {
-      if (opt == nullptr) continue;
-      children.push_back(opt->icon.get());
-    }
-    return {0, (int)children.size()};
-  }
   void Draw(SkCanvas& canvas) const override {
     auto shape = Shape();
 

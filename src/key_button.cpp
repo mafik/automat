@@ -44,6 +44,7 @@ struct KeyLabelWidget : Widget, LabelMixin {
 KeyButton::KeyButton(Widget* parent, StrView label, SkColor4f color, float width)
     : Button(parent), width(width), fg(color) {
   child = make_unique<KeyLabelWidget>(this, label);
+  layers.OrderInside(child.get());
   SetLabel(label);
 }
 

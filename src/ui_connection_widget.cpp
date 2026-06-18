@@ -64,7 +64,7 @@ SkPath ConnectionWidget::Shape() const {
   }
 }
 
-void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
+void ConnectionWidget::DrawDecoration(SkCanvas& canvas) const {
   auto arg = LockBind<Argument>();
   if (!arg) return;
   Location* from_ptr = arg.object_ptr->MyLocation();

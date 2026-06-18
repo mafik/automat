@@ -592,9 +592,11 @@ void RootWidget::Draw(SkCanvas& canvas) const {
     }
   }
   for (auto* child : ranges::reverse_view{children}) {
+    auto* conn = dynamic_cast<ConnectionWidget*>(child);
+    if (!conn) continue;
     canvas.save();
     canvas.concat(child->local_to_parent);
-    child->PreDraw(canvas);
+    conn->DrawDecoration(canvas);
     canvas.restore();
   }
   for (auto* child : ranges::reverse_view{children}) {

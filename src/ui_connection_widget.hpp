@@ -73,7 +73,7 @@ struct ConnectionWidget : ArgumentToy {
 
   StrView Name() const override { return "ConnectionWidget"; }
   SkPath Shape() const override;
-  void PreDraw(SkCanvas&) const override;
+  void DrawDecoration(SkCanvas&) const;
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   Compositor GetCompositor() const override { return Compositor::ANCHOR_WARP; }

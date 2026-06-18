@@ -349,23 +349,9 @@ struct Widget : Trackable, OptionsProvider {
     int bake_begin = 0;
     int bake_end = 0;
 
-    void Clear() {
-      vec.clear();
-      bake_begin = 0;
-      bake_end = 0;
-    }
-    void Remove(Widget* w) {
-      auto it = std::find(vec.begin(), vec.end(), w);
-      if (it == vec.end()) return;
-      int i = (int)(it - vec.begin());
-      if (i < bake_begin) --bake_begin;
-      if (i < bake_end) --bake_end;
-      vec.erase(it);
-    }
-
     // Move `child` (already a member) into the Baked() range.
     void OrderInside(Widget* child) {
-      // TODO: use bubble-sort instead
+      // TODO: use range rotation
       Remove(child);
       vec.insert(vec.begin() + bake_end, child);
       ++bake_end;
@@ -374,12 +360,16 @@ struct Widget : Trackable, OptionsProvider {
     // Place `child` (already a member) just in front of `reference`, joining its range.
     // `reference == nullptr` means the parent: `child` lands at the bottom of the Over range.
     void OrderAbove(Widget* child, Widget* reference = nullptr) {
+      // TODO: use range rotation
       Reorder(child, reference, false);
     }
 
     // Place `child` (already a member) just behind `reference`, joining its range.
     // `reference == nullptr` means the parent: `child` lands at the top of the Under range.
-    void OrderBelow(Widget* child, Widget* reference = nullptr) { Reorder(child, reference, true); }
+    void OrderBelow(Widget* child, Widget* reference = nullptr) {
+      // TODO: use range rotation
+      Reorder(child, reference, true);
+    }
 
     // Range of child widgets which are drawn over their parent
     Span<Widget*> Over() { return Span<Widget*>(vec).Resize(bake_begin); }
@@ -426,6 +416,15 @@ struct Widget : Trackable, OptionsProvider {
       vec.insert(vec.begin(), w);
       ++bake_begin;
       ++bake_end;
+    }
+
+    void Remove(Widget* w) {
+      auto it = std::find(vec.begin(), vec.end(), w);
+      if (it == vec.end()) return;
+      int i = (int)(it - vec.begin());
+      if (i < bake_begin) --bake_begin;
+      if (i < bake_end) --bake_end;
+      vec.erase(it);
     }
 
     friend struct Widget;

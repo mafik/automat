@@ -567,7 +567,6 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
     }
   }
 
-  layers.Clear();
   for (auto* c : children) layers.OrderInside(c);
 
   return tock;

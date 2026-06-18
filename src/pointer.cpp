@@ -319,7 +319,6 @@ void Pointer::Logging::Release() {
 }
 
 ui::Tock PointerWidget::Tick(time::Timer& timer) {
-  layers.Clear();
   for (auto& action : pointer.actions) {
     if (action == nullptr) continue;
     if (auto widget = action->Widget()) {

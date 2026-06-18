@@ -712,22 +712,11 @@ struct TimelineRunButton : ui::ToggleButton {
                           .on_click = [this](ui::Pointer& p) { Activate(p); }});
     layers.OrderInside(on.get());
     layers.OrderInside(off.get());
+    layers.OrderInside(rec_button.get());
   }
   TimelineWidget* GetTimelineWidget() const;
   ui::Button* OnWidget() override;
   bool Filled() const override;
-  Tock Tick(time::Timer& timer) override {
-    Tock tock = ToggleButton::Tick(timer);
-    auto* want = OnWidget();
-    if (layers.vec.empty() || layers.vec[0] != want) {
-      layers.Clear();
-      layers.OrderInside(want);
-      layers.OrderInside(off.get());
-      tock.drawing |= true;
-    }
-    if (Filled()) tock.ing |= true;  // poll tw->state while playing/recording
-    return tock;
-  }
   void Activate(ui::Pointer&) {
     auto timeline = timeline_weak.Lock();
     if (!timeline) return;

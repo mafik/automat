@@ -187,20 +187,12 @@ Widget::Tock ToggleButton::Tick(time::Timer& timer) {
   return tock;
 }
 
-void ToggleButton::BakeChildStack(SkCanvas& canvas, const Widget& child) const {
+void ToggleButton::Draw(SkCanvas& canvas) const {
   auto on_widget = const_cast<ToggleButton*>(this)->OnWidget();
   if (filling >= 0.999) {
-    if (&child == on_widget) {
-      return on_widget->DrawCached(canvas);
-    } else {
-      return;
-    }
+    return BakeChildStack(canvas, *on_widget);
   } else if (filling <= 0.001) {
-    if (&child == off.get()) {
-      return off->DrawCached(canvas);
-    } else {
-      return;
-    }
+    return BakeChildStack(canvas, *off);
   }
 
   constexpr float kClipMargin = 0.5_mm;
@@ -236,11 +228,14 @@ void ToggleButton::BakeChildStack(SkCanvas& canvas, const Widget& child) const {
   SkPath waves_clip = waves_builder.detach();
 
   canvas.save();
-  if (&child == off.get()) {
-    canvas.clipPath(waves_clip, SkClipOp::kDifference, true);
-  } else {
-    canvas.clipPath(waves_clip, SkClipOp::kIntersect, false);
-  }
+  canvas.clipPath(waves_clip, SkClipOp::kDifference, true);
+  off->DrawCached(canvas);
+  canvas.restore();
+
+  canvas.save();
+  canvas.clipPath(waves_clip, SkClipOp::kIntersect, false);
+  on_widget->DrawCached(canvas);
+  canvas.restore();
 
   if constexpr (false) {
     SkPaint debug_paint;
@@ -248,10 +243,6 @@ void ToggleButton::BakeChildStack(SkCanvas& canvas, const Widget& child) const {
     debug_paint.setStyle(SkPaint::kStroke_Style);
     canvas.drawPath(waves_clip, debug_paint);
   }
-
-  child.DrawCached(canvas);
-
-  canvas.restore();
 }
 
 Button::Button(ui::Widget* parent) : Widget(parent), clickable(*this) {

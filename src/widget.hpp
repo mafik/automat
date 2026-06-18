@@ -351,64 +351,67 @@ struct Widget : Trackable, OptionsProvider {
 
     // Move `child` (already a member) into the Baked() range.
     void OrderInside(Widget* child) {
-      // TODO: use range rotation
-      Remove(child);
-      vec.insert(vec.begin() + bake_end, child);
-      ++bake_end;
+      int from = IndexOf(child);
+      Place(from, bake_end - (from < bake_end), Layer::Baked);
     }
 
     // Place `child` (already a member) just in front of `reference`, joining its range.
     // `reference == nullptr` means the parent: `child` lands at the bottom of the Over range.
     void OrderAbove(Widget* child, Widget* reference = nullptr) {
-      // TODO: use range rotation
-      Reorder(child, reference, false);
+      int from = IndexOf(child);
+      if (reference == nullptr) {
+        Place(from, bake_begin - (from < bake_begin), Layer::Over);
+      } else {
+        int ref = IndexOf(reference);
+        Place(from, ref - (ref > from), LayerAt(ref));
+      }
     }
 
     // Place `child` (already a member) just behind `reference`, joining its range.
     // `reference == nullptr` means the parent: `child` lands at the top of the Under range.
     void OrderBelow(Widget* child, Widget* reference = nullptr) {
-      // TODO: use range rotation
-      Reorder(child, reference, true);
+      int from = IndexOf(child);
+      if (reference == nullptr) {
+        Place(from, bake_end - (from < bake_end), Layer::Under);
+      } else {
+        int ref = IndexOf(reference);
+        Place(from, ref + (ref < from), LayerAt(ref));
+      }
     }
 
-    // Range of child widgets which are drawn over their parent
+    // Range of child widgets which are composited over their parent.
     Span<Widget*> Over() { return Span<Widget*>(vec).Resize(bake_begin); }
 
-    // Range of child widgets which are drawn from within the Draw() function of their parent
+    // Range of child widgets which are composited within their parent's Draw().
+    //
+    // This allows clipping, under/over-draw & fancy special effects through shaders.
     Span<Widget*> Baked() {
       return Span<Widget*>(vec.begin() + bake_begin, vec.begin() + bake_end);
     }
 
-    // Range of child widgets which are drawn under their parent
+    // Range of child widgets which are composited under their parent.
     Span<Widget*> Under() { return Span<Widget*>(vec).RemovePrefix(bake_end); }
 
    private:
-    // Detach `child`, then re-insert it relative to `reference` (a sibling, or nullptr = the
-    // parent's own drawing); `below` selects behind vs in-front-of. The baked range stays
-    // consistent: `child` joins the reference's range.
-    void Reorder(Widget* child, Widget* reference, bool below) {
-      if (child == reference) return;
-      Remove(child);
-      if (reference == nullptr) {
-        if (below) {
-          vec.insert(vec.begin() + bake_end, child);  // top of Under
-        } else {
-          vec.insert(vec.begin() + bake_begin, child);  // bottom of Over
-          ++bake_begin;
-          ++bake_end;
-        }
-        return;
+    enum class Layer { Over, Baked, Under };
+
+    int IndexOf(Widget* w) const { return (int)(std::ranges::find(vec, w) - vec.begin()); }
+
+    Layer LayerAt(int i) const {
+      return i < bake_begin ? Layer::Over : i < bake_end ? Layer::Baked : Layer::Under;
+    }
+
+    // Move an element from 'from' to 'to'/'layer' while keeping 'bake_*' range correct.
+    void Place(int from, int to, Layer layer) {
+      Layer was = LayerAt(from);
+      auto b = vec.begin();
+      if (from < to) {
+        std::ranges::rotate(b + from, b + from + 1, b + to + 1);
+      } else if (to < from) {
+        std::ranges::rotate(b + to, b + from, b + from + 1);
       }
-      auto it = std::find(vec.begin(), vec.end(), reference);
-      if (it == vec.end()) return;
-      int r = (int)(it - vec.begin());
-      vec.insert(vec.begin() + (below ? r + 1 : r), child);
-      if (r < bake_begin) {
-        ++bake_begin;
-        ++bake_end;
-      } else if (r < bake_end) {
-        ++bake_end;
-      }
+      bake_begin += (layer == Layer::Over) - (was == Layer::Over);
+      bake_end += (layer != Layer::Under) - (was != Layer::Under);
     }
 
     // Add at the top of the Over() range.
@@ -419,12 +422,11 @@ struct Widget : Trackable, OptionsProvider {
     }
 
     void Remove(Widget* w) {
-      auto it = std::find(vec.begin(), vec.end(), w);
-      if (it == vec.end()) return;
-      int i = (int)(it - vec.begin());
+      int i = IndexOf(w);
+      if (i == (int)vec.size()) return;
       if (i < bake_begin) --bake_begin;
       if (i < bake_end) --bake_end;
-      vec.erase(it);
+      vec.erase(vec.begin() + i);
     }
 
     friend struct Widget;

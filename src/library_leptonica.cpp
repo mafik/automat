@@ -1229,7 +1229,7 @@ struct LeptonicaShelfWidget : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     for (auto& b : buttons) children.push_back(b.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -1754,7 +1754,7 @@ struct ThresholdToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -2407,7 +2407,7 @@ struct MorphologyToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -2809,7 +2809,7 @@ struct ToneToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -3446,7 +3446,7 @@ struct GeometryToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -3919,7 +3919,7 @@ struct ChannelToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -4382,7 +4382,7 @@ struct ConvolveToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -4851,7 +4851,7 @@ struct BlendToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -5417,7 +5417,7 @@ struct QuantizeToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -5895,7 +5895,7 @@ struct FlattenToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -6190,7 +6190,7 @@ struct PosterizeToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -6514,7 +6514,7 @@ struct DitherToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -6965,7 +6965,7 @@ struct DeskewToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -7327,7 +7327,7 @@ struct FindLevelToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -7651,7 +7651,7 @@ struct CountToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -8133,7 +8133,7 @@ struct SelectToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -8522,7 +8522,7 @@ struct FadeToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -8913,7 +8913,7 @@ struct ReduceToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -9375,7 +9375,7 @@ struct MeasureToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -9732,7 +9732,7 @@ struct WarpToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -10113,7 +10113,7 @@ struct ColorToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -10690,7 +10690,7 @@ struct SeedfillToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -11032,7 +11032,7 @@ struct GenerateToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 
@@ -11379,7 +11379,7 @@ struct CropToy : beta::ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     if (glass) children.push_back(glass.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 

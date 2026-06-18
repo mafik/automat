@@ -170,15 +170,14 @@ Widget::Tock Button::Tick(time::Timer& timer) {
   return tock;
 }
 
-void Button::PreDraw(SkCanvas& canvas) const {
-  auto bg = BackgroundColor();
-  DrawButtonShadow(canvas, bg);
-}
-
 void Button::Draw(SkCanvas& canvas) const {
   auto bg = BackgroundColor();
   auto fg = ForegroundColor();
 
+  // The shadow is part of the button's own texture (TextureBounds already covers it), drawn behind
+  // the face rather than in a PreDraw pass - so it survives when the button is a detached child
+  // (the higher-level composite replays the button's recording, not the parent's PreDraw).
+  DrawButtonShadow(canvas, bg);
   DrawButtonFace(canvas, bg, fg);
   DrawChildren(canvas);
 }

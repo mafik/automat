@@ -42,7 +42,6 @@ struct Button : Widget {
 
   Button(ui::Widget* parent);
   Tock Tick(time::Timer&) override;
-  void PreDraw(SkCanvas&) const override;
   void Draw(SkCanvas&) const override;
   virtual SkRRect RRect() const;
   void PointerOver(Pointer& p) override { clickable.PointerOver(p); }

@@ -3401,7 +3401,7 @@ std::pair<int, int> Instruction::Widget::FillChildren(Vec<ui::Widget*>& children
   if (condition_code_widget) {
     children.emplace_back(condition_code_widget.get());
   }
-  return {0, (int)children.size()};
+  return {(int)children.size(), (int)children.size()};
 }
 
 void Instruction::SerializeState(ObjectSerializer& writer) const {

@@ -415,7 +415,7 @@ std::pair<int, int> AssemblerWidget::FillChildren(Vec<ui::Widget*>& children) {
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     children.push_back(reg_widgets[i].get());
   }
-  return {0, (int)children.size()};
+  return {(int)children.size(), (int)children.size()};
 }
 
 struct RegisterIndexKnobWidget : public ui::EnumKnobWidget {

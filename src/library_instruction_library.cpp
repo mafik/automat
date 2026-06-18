@@ -282,7 +282,7 @@ std::pair<int, int> InstructionLibrary::Widget::FillChildren(Vec<ui::Widget*>& c
       children.push_back(card.widget.get());
     }
   }
-  return {0, (int)children.size()};
+  return {(int)children.size(), (int)children.size()};
 }
 
 ui::Tock InstructionLibrary::Widget::Tick(time::Timer& timer) {

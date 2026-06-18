@@ -400,7 +400,7 @@ struct HotKeyWidget : ObjectToy {
     children.push_back(shift_button.get());
     children.push_back(windows_button.get());
     children.push_back(shortcut_button.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 
   // CaretOwner - called when the new HotKey is selected by the user

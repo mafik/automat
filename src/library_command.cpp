@@ -460,7 +460,7 @@ struct CommandToy : ui::beta::ObjectToy {
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     children.push_back(field.get());
     children.push_back(button.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     return ui::beta::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));

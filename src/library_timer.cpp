@@ -643,7 +643,7 @@ struct TimerWidget : ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     children.push_back(text_field.get());
-    return {0, (int)children.size()};
+    return {0, (int)children.size()};  // Timer draws over its text field
   }
 
   SkPath Shape() const override {

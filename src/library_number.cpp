@@ -271,7 +271,7 @@ struct NumberWidget : ObjectToy {
       children.push_back(digits[i].get());
     }
     children.push_back(text_field.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 

@@ -226,7 +226,7 @@ struct KeyPresserWidget : ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
     children.push_back(shortcut_button.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 
   bool AllowChildPointerEvents(Widget& child) const override { return false; }

@@ -186,7 +186,7 @@ struct FlipFlopWidget : ObjectToy {
 
   std::pair<int, int> FillChildren(Vec<ui::Widget*>& children) override {
     children.push_back(button.get());
-    return {0, (int)children.size()};
+    return {(int)children.size(), (int)children.size()};
   }
 };
 

@@ -74,15 +74,6 @@ void Widget::Reparent(Widget& new_parent) {
   }
 }
 
-void Widget::PreDrawChildren(SkCanvas& canvas) const {
-  for (auto* widget : ranges::reverse_view(Baked())) {
-    canvas.save();
-    canvas.concat(widget->local_to_parent);
-    widget->PreDraw(canvas);
-    canvas.restore();
-  }
-}
-
 void Widget::DrawCached(SkCanvas& canvas) const {
   if (pack_frame_texture_bounds == nullopt) {
     Draw(canvas);
@@ -123,7 +114,6 @@ void Widget::DrawChildCached(SkCanvas& canvas, const Widget& child) const {
 }
 
 void Widget::DrawChildren(SkCanvas& canvas) const {
-  PreDrawChildren(canvas);
   for (auto* child : ranges::reverse_view(Baked())) {
     DrawChildCached(canvas, *child);
   }

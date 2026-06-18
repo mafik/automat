@@ -202,7 +202,6 @@ struct Widget : Trackable, OptionsProvider {
   // This may be used by some widgets to trigger re-rendering.
   virtual void TransformUpdated() {}
 
-  virtual void PreDraw(SkCanvas&) const {}
   void DrawCached(SkCanvas&) const;
   void WakeAnimation() const;
   void WakeAnimationAt(time::SteadyPoint) const;
@@ -341,8 +340,6 @@ struct Widget : Trackable, OptionsProvider {
   // Can be overridden to change how child's textures are composited (or prevent children from being
   // drawn entirely).
   virtual void DrawChildCached(SkCanvas&, const Widget& child) const;
-
-  virtual void PreDrawChildren(SkCanvas&) const;
 
   void DrawChildren(SkCanvas&) const;
 

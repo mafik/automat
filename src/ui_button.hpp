@@ -135,7 +135,6 @@ struct ToggleButton : Widget {
 
   virtual Button* OnWidget() { return on.get(); }
   Tock Tick(time::Timer&) override;
-  void PreDrawChildren(SkCanvas&) const override;
   void DrawChildCached(SkCanvas&, const Widget& child) const override;
   SkRRect RRect() const { return off->RRect(); }
   SkPath Shape() const override { return off->Shape(); }

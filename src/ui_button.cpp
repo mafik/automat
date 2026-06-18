@@ -174,9 +174,7 @@ void Button::Draw(SkCanvas& canvas) const {
   auto bg = BackgroundColor();
   auto fg = ForegroundColor();
 
-  // The shadow is part of the button's own texture (TextureBounds already covers it), drawn behind
-  // the face rather than in a PreDraw pass - so it survives when the button is a detached child
-  // (the higher-level composite replays the button's recording, not the parent's PreDraw).
+  // TODO: current clipping produces janky cut in the shadow - fix it
   DrawButtonShadow(canvas, bg);
   DrawButtonFace(canvas, bg, fg);
   DrawChildren(canvas);
@@ -253,18 +251,6 @@ void ToggleButton::DrawChildCached(SkCanvas& canvas, const Widget& child) const 
 
   child.DrawCached(canvas);
 
-  canvas.restore();
-}
-
-void ToggleButton::PreDrawChildren(SkCanvas& canvas) const {
-  auto on_widget = const_cast<ToggleButton*>(this)->OnWidget();
-
-  canvas.saveLayerAlphaf(nullptr, filling);
-  on_widget->PreDraw(canvas);
-  canvas.restore();
-
-  canvas.saveLayerAlphaf(nullptr, 1 - filling);
-  off->PreDraw(canvas);
   canvas.restore();
 }
 

@@ -169,6 +169,23 @@ All references to previous versions (e.g. v1, "old design", "before the rewrite"
   - For "depend on the *list* of items, not on each item's contents", materialize the list to a file and depend on that single file. This decouples list-membership changes from item-content changes
   - Split a coarse build step into multiple narrower steps with disjoint outputs when finer invalidation is wanted; don't keep one big step and try to gate parts of its work internally
 
+#### Avoid code compression
+
+Repetition is often the simpler solution. When simplifying code seek to:
+
+- identify new primitives
+- extract new genuinely reusable functions
+- improveme the API of existing primitives
+- apply existing primitives more widely
+
+Only introduce new abstractions that are genuinely simpler than status quo and make reading the code faster (from the name of the function you can already tell what it does - without reading any docs or function contents).
+
+#### Avoid comments
+
+Prefer very sparsely commented code. Adding long (paragraph-length) comments is absolutely forbidden (one exception is when the comment will be certainly needed for some TODO).
+
+Lengthy comments reduce readability as they go stale and dilute the substance of the program. Code must read like a comment itself.
+
 ### Testing
 
 - Use Google Test framework for unit tests

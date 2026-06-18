@@ -460,7 +460,7 @@ void PointerWidget::Draw(SkCanvas& canvas) const {
     canvas.drawPath(outset_shape, dash_paint);
     canvas.restore();
   }
-  DrawChildren(canvas);
+  BakeChildren(canvas);
   return;
 }
 

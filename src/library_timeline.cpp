@@ -1219,7 +1219,7 @@ struct TimelineWidget : ObjectToy {
     }
 
     for (auto& w : std::ranges::reverse_view{track_widgets}) {
-      DrawChildCached(canvas, *w);
+      BakeChildStack(canvas, *w);
     }
 
     bool draw_bridge_hairline = true;

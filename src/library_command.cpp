@@ -598,7 +598,7 @@ struct CommandToy : ui::beta::ObjectToy {
       ui::beta::DrawTextIn(canvas, label, chip, ui::beta::kMicroSize + 0.3_mm,
                            ui::beta::TextOn(color), ui::beta::TextAlign::Center, false, cs);
     }
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 };
 

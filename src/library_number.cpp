@@ -257,7 +257,7 @@ struct NumberWidget : ObjectToy {
   void Draw(SkCanvas& canvas) const override {
     canvas.drawRRect(kNumberRRectInner, kNumberBackgroundPaint);
     canvas.drawRRect(kNumberRRectInner, kNumberBorderPaint);
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   SkPath Shape() const override { return kNumberShape; }

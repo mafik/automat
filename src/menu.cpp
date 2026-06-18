@@ -320,7 +320,7 @@ struct Menu : ui::Widget {
       canvas.drawDrawable(opt->icon->sk_drawable.get());
     }
     canvas.restore();
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
   SkPath Shape() const override { return SkPath::Circle(0, 0, size.value); }
 };

@@ -387,7 +387,7 @@ struct HotKeyWidget : ObjectToy {
     canvas.drawPath(inner_contour, shadow_paint);
     canvas.restore();
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   SkPath Shape() const override { return SkPath::RRect(kShapeRRect); }

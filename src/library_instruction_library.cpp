@@ -862,7 +862,7 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
     }
   }
 
-  DrawChildren(canvas);
+  BakeChildren(canvas);
 }
 
 struct RegisterFilterButton {

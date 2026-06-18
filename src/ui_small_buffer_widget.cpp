@@ -232,7 +232,7 @@ void SmallBufferWidget::Draw(SkCanvas& canvas) const {
   canvas.translate(kMargin, 0);
   font.DrawText(canvas, text, text_paint);
   canvas.setMatrix(default_matrix);
-  DrawChildren(canvas);
+  BakeChildren(canvas);
 }
 
 std::pair<int, int> SmallBufferWidget::FillChildren(Vec<Widget*>& children) {

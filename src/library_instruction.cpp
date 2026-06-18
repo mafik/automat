@@ -3383,7 +3383,7 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
     canvas.setMatrix(default_mat);
   }
 
-  DrawChildren(canvas);
+  BakeChildren(canvas);
 }
 
 Vec2AndDir Instruction::Widget::ArgStart(const Interface::Table& arg) {

@@ -179,7 +179,7 @@ struct FlipFlopWidget : ObjectToy {
       canvas.drawCircle(center, radius, red_glow);
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
   SkPath Shape() const override { return SkPath::Rect(FlipFlopRect()); }
   bool CenteredAtZero() const override { return true; }

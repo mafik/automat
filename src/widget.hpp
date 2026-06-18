@@ -237,7 +237,7 @@ struct Widget : Trackable, OptionsProvider {
   // calling WakeAnimation.
   virtual Tock Tick(time::Timer&) { return {}; }
 
-  virtual void Draw(SkCanvas& canvas) const { return DrawChildren(canvas); }
+  virtual void Draw(SkCanvas& canvas) const { return BakeChildren(canvas); }
 
   // Compositor decides how the widget's texture is going to be copied onto the parent texture.
   // If GPU is overloaded, the texture may not be ready in time. Compositor's job is then to take
@@ -339,9 +339,10 @@ struct Widget : Trackable, OptionsProvider {
   //
   // Can be overridden to change how child's textures are composited (or prevent children from being
   // drawn entirely).
-  virtual void DrawChildCached(SkCanvas&, const Widget& child) const;
+  virtual void BakeChildStack(SkCanvas&, const Widget& child) const;
 
-  void DrawChildren(SkCanvas&) const;
+  // Baba Yaga approves.
+  void BakeChildren(SkCanvas&) const;
 
   // Used to obtain references to the child widgets in a generic fashion.
   // Widgets are stored in front-to-back order.

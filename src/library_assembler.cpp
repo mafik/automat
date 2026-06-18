@@ -332,7 +332,7 @@ ui::Tock AssemblerWidget::Tick(time::Timer& timer) {
 
 void AssemblerWidget::Draw(SkCanvas& canvas) const {
   krita::assembler::slab.draw(canvas);
-  DrawChildren(canvas);
+  BakeChildren(canvas);
   /*
   float one_pixel = 1.0f / canvas.getTotalMatrix().getScaleX();
   SkPaint flat_border_paint;
@@ -877,7 +877,7 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
     canvas.restore();
   }
 
-  DrawChildren(canvas);
+  BakeChildren(canvas);
 }
 
 Register::Register(WeakPtr<Assembler> assembler_weak, int register_index)

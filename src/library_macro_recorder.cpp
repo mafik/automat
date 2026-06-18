@@ -562,7 +562,7 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
 
     macro_recorder_front_color.draw(canvas);
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   SkPath Shape() const override { return MacroRecorderShape(); }

@@ -177,7 +177,7 @@ void Button::Draw(SkCanvas& canvas) const {
   // TODO: current clipping produces janky cut in the shadow - fix it
   DrawButtonShadow(canvas, bg);
   DrawButtonFace(canvas, bg, fg);
-  DrawChildren(canvas);
+  BakeChildren(canvas);
 }
 
 Widget::Tock ToggleButton::Tick(time::Timer& timer) {
@@ -187,7 +187,7 @@ Widget::Tock ToggleButton::Tick(time::Timer& timer) {
   return tock;
 }
 
-void ToggleButton::DrawChildCached(SkCanvas& canvas, const Widget& child) const {
+void ToggleButton::BakeChildStack(SkCanvas& canvas, const Widget& child) const {
   auto on_widget = const_cast<ToggleButton*>(this)->OnWidget();
   if (filling >= 0.999) {
     if (&child == on_widget) {

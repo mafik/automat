@@ -163,7 +163,7 @@ struct KeyPresserWidget : ObjectToy {
   void Draw(SkCanvas& canvas) const override {
     bool is_pressed = shortcut_button->is_pressed;
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
     auto& img = is_pressed ? textures::PressingHandColor() : textures::PointingHandColor();
     canvas.save();
     canvas.translate(4.5_mm, -6.8_mm);

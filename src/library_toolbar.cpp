@@ -142,7 +142,7 @@ void Toolbar::Draw(SkCanvas& canvas) const {
                        SkCanvas::kFast_SrcRectConstraint);
   canvas.restore();
 
-  DrawChildren(canvas);
+  BakeChildren(canvas);
 }
 
 std::pair<int, int> Toolbar::FillChildren(Vec<Widget*>& children) {

@@ -307,7 +307,7 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
       canvas.restore();
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {

@@ -312,7 +312,7 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
   float line_height = ui::kLetterSize * 1.5;
   auto& font = ui::GetFont();
 
-  DrawChildren(canvas);
+  BakeChildren(canvas);
 
   auto loc = LockLocation();
   if (!loc) {

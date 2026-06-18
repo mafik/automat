@@ -794,7 +794,7 @@ struct PhotoToolWidget : beta::ObjectToy {
       canvas.restore();
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
 
     auto& small = ui::GetFont();
     SkPaint plabel;
@@ -1022,7 +1022,7 @@ struct LeptonicaImageWidget : beta::ObjectToy {
     font.DrawText(canvas, buf, cap);
     canvas.restore();
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 };
 
@@ -1219,7 +1219,7 @@ struct LeptonicaShelfWidget : beta::ObjectToy {
                         Seed(0x42));
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
 
     {
       beta::DrawBetaStamp(canvas, {sheet.right - 0.6_cm, sheet.top - 0.6_cm}, 2.2_cm, -15.f,
@@ -1712,7 +1712,7 @@ struct ThresholdToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -2320,7 +2320,7 @@ struct MorphologyToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -2781,7 +2781,7 @@ struct ToneToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -3378,7 +3378,7 @@ struct GeometryToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -3888,7 +3888,7 @@ struct ChannelToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -4347,7 +4347,7 @@ struct ConvolveToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -4824,7 +4824,7 @@ struct BlendToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -5355,7 +5355,7 @@ struct QuantizeToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -5855,7 +5855,7 @@ struct FlattenToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -6169,7 +6169,7 @@ struct PosterizeToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -6486,7 +6486,7 @@ struct DitherToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -6940,7 +6940,7 @@ struct DeskewToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -7311,7 +7311,7 @@ struct FindLevelToy : beta::ObjectToy {
                      Seed(0xFD41));
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -7628,7 +7628,7 @@ struct CountToy : beta::ObjectToy {
                      Seed(0xC031));
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -8063,7 +8063,7 @@ struct SelectToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -8480,7 +8480,7 @@ struct FadeToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -8869,7 +8869,7 @@ struct ReduceToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -9343,7 +9343,7 @@ struct MeasureToy : beta::ObjectToy {
                      Seed(0xE351));
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -9705,7 +9705,7 @@ struct WarpToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -10091,7 +10091,7 @@ struct ColorToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -10635,7 +10635,7 @@ struct SeedfillToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -11005,7 +11005,7 @@ struct GenerateToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
@@ -11362,7 +11362,7 @@ struct CropToy : beta::ObjectToy {
       }
     }
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {

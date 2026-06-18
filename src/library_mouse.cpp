@@ -300,7 +300,7 @@ struct MouseIcon : ui::Widget {
 
   void Draw(SkCanvas& canvas) const override {
     MouseWidgetCommon::Draw(canvas, ui::PointerButton::Unknown, down, presser_widget.get(), scroll);
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {
@@ -889,7 +889,7 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
   void Draw(SkCanvas& canvas) const override {
     krita::mouse::base.draw(canvas);
     MouseWidgetCommon::Draw(canvas, button, std::nullopt, &presser_widget, false);
-    DrawChildren(canvas);
+    BakeChildren(canvas);
   }
 
   std::pair<int, int> FillChildren(Vec<Widget*>& children) override {

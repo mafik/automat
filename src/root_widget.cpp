@@ -586,7 +586,7 @@ void RootWidget::Draw(SkCanvas& canvas) const {
   auto children = Children();
   for (auto* child : ranges::reverse_view{children}) {
     if (auto* m = dynamic_cast<BoardWidget*>(child)) {
-      DrawChildCached(canvas, *m);
+      BakeChildStack(canvas, *m);
     } else {
       continue;
     }
@@ -603,7 +603,7 @@ void RootWidget::Draw(SkCanvas& canvas) const {
     if (auto* m = dynamic_cast<BoardWidget*>(child)) {
       continue;
     } else {
-      DrawChildCached(canvas, *child);
+      BakeChildStack(canvas, *child);
     }
   }
 

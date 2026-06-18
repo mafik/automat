@@ -566,7 +566,7 @@ struct TimerWidget : ObjectToy {
              duration_value);
     canvas.restore();
 
-    DrawChildren(canvas);
+    BakeChildren(canvas);
 
     DrawRing(canvas, r4, r4_b, "#00000046"_color4f, "#ffffffe1"_color4f, kRingInset);
 

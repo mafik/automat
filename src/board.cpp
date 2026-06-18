@@ -166,7 +166,7 @@ void BoardWidget::Draw(SkCanvas& canvas) const {
   border_paint.setColor("#404040"_color);
   border_paint.setStyle(SkPaint::kStroke_Style);
   canvas.drawPath(shape, border_paint);
-  DrawChildren(canvas);
+  BakeChildren(canvas);
 }
 
 SkMatrix BoardWidget::DropSnap(const Rect& rect_ref, Vec2 bounds_origin, Vec2* fixed_point) {

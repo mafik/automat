@@ -12,8 +12,8 @@
 namespace automat::ui {
 
 SkPaint ShadowPaint(SkCanvas& canvas, float elevation_mm) {
-  auto size_px = canvas.getBaseLayerSize();
-  size_px.set(size_px.width() - kCanvasMargin * 2, size_px.height() - kCanvasMargin * 2);
+  auto isize_px = canvas.getBaseLayerSize();
+  auto size_px = Vec2(isize_px.width() - kCanvasMargin * 2, isize_px.height() - kCanvasMargin * 2);
 
   float shadow_sigma_mm = elevation_mm / 2;
 
@@ -23,8 +23,8 @@ SkPaint ShadowPaint(SkCanvas& canvas, float elevation_mm) {
 
   // Place some control points on the screen
   Vec2 control_points[2] = {
-      Vec2{size_px.width() / 2.f, 0},                       // top
-      Vec2{size_px.width() / 2.f, (float)size_px.height()}  // bottom
+      Vec2{size_px.x / 2, 0},         // top
+      Vec2{size_px.x / 2, size_px.y}  // bottom
   };
 
   // Move them into local coordinates
@@ -48,7 +48,6 @@ SkPaint ShadowPaint(SkCanvas& canvas, float elevation_mm) {
           elevation_mm / 10, elevation_mm / 10,
           SkImageFilters::ColorFilter(SkColorFilters::Lighting("#c9ced6"_color, "#000000"_color),
                                       nullptr)),
-
       nullptr,  // Actual Child
   };
   shadow_paint.setImageFilter(SkImageFilters::Merge(merge, 3));

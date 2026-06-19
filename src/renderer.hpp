@@ -42,6 +42,8 @@ void RendererShutdown();
 // 16ms frame time.
 void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw);
 
+// SkCanvas provided by PackFrame includes a margin to render some off-screen textures & improve
+// smoothness of scrolling. This margin is provided on all four sides of the canvas.
 constexpr float kCanvasMargin = 64.f;
 
 }  // namespace automat

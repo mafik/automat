@@ -704,17 +704,15 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
   struct WidgetTree {
     Widget* widget;
     Verdict verdict = Verdict::Unknown;
-    int parent_with_texture;
-    // Ancestor this node folds its render cost into: `parent` when baked, the baker
-    // (parent_with_texture) when detached, so packing a detached child re-packs its baker.
-    int cost_parent;
+    int baker;
+    int repack_parent;      // Ancestor this node folds its render cost into.
     bool detached = false;  // an Over()/Under() child, composited into its baker rather than parent
     int prev_job = -1;
     int next_job = -1;
     bool same_scale;
     bool wants_to_draw = false;
     bool surface_reusable = false;  // set to true if existing surface covers the visible area
-    float render_px = 0;            // texture resolution (pixels rasterized if re-rendered)
+    float render_area_px2 = 0;      // texture resolution (pixels rasterized if re-rendered)
     float model_render_ms = 0;
     int type_id = -1;
     SkMatrix window_to_local;
@@ -801,34 +799,32 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
   }
 
   {  // Step 2 - flatten the widget tree for analysis.
-    // Queue of children to flatten. `detached` marks an Over()/Under() child: it composites into
-    // its baker (the parent's parent_with_texture) rather than baking into the parent's texture.
-    struct QEntry {
+    struct DFSVisit {
       int parent;
       Widget* widget;
-      bool detached;
+      bool detached;  // true for children that composite outside their immediate parent
     };
-    vector<QEntry> q;
-    q.push_back({0, &rw, false});
-    while (!q.empty()) {
-      auto [parent, widget, detached] = std::move(q.back());
-      q.pop_back();
+    vector<DFSVisit> dfs;
+    dfs.push_back({0, &rw, false});
+    while (!dfs.empty()) {
+      auto [parent, widget, detached] = std::move(dfs.back());
+      dfs.pop_back();
 
       tree.push_back(WidgetTree{
           .widget = widget,
-          .parent_with_texture = detached ? tree[parent].parent_with_texture : parent,
+          .baker = detached ? tree[parent].baker : parent,
           .detached = detached,
       });
       int tree_index = tree.size() - 1;
 
       auto& node = tree.back();
 
-      while (tree[node.parent_with_texture].verdict == Verdict::Skip_NoTexture) {
-        node.parent_with_texture = tree[node.parent_with_texture].parent_with_texture;
+      while (tree[node.baker].verdict == Verdict::Skip_NoTexture) {
+        node.baker = tree[node.baker].baker;
       }
-      node.cost_parent = detached ? node.parent_with_texture : parent;
+      node.repack_parent = detached ? node.baker : parent;
 
-      if (widget->rendering || tree[node.parent_with_texture].verdict == Verdict::Skip_Rendering) {
+      if (widget->rendering || tree[node.baker].verdict == Verdict::Skip_Rendering) {
         node.SetVerdict(Verdict::Skip_Rendering);
       }
 
@@ -891,7 +887,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
 
         root_bounds.roundOut(&node.surface_bounds_root);
 
-        node.render_px =
+        node.render_area_px2 =
             (float)node.surface_bounds_root.width() * node.surface_bounds_root.height();
 
         // TODO: this is overestimating the visible area when window_to_local contains a rotation!
@@ -928,7 +924,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
           }
           // Children outside [baked_begin, baked_end) are the Over/Under bands: detached,
           // composited into this node's baker instead of baked into this node's texture.
-          q.push_back({tree_index, child, k < baked_begin || k >= baked_end});
+          dfs.push_back({tree_index, child, k < baked_begin || k >= baked_end});
         }
       }
     }
@@ -947,7 +943,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       vector<bool> last_child = vector<bool>(tree.size(), false);
       vector<bool> last_child_found = vector<bool>(tree.size(), false);
       for (int i = tree.size() - 1; i > 0; --i) {
-        int parent = tree[i].parent_with_texture;
+        int parent = tree[i].baker;
         if (!last_child_found[parent]) {
           last_child_found[parent] = true;
           last_child[i] = true;
@@ -955,7 +951,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       }
       for (int i = 0; i < tree.size(); ++i) {
         Str line;
-        for (int j = tree[i].parent_with_texture; j != 0; j = tree[j].parent_with_texture) {
+        for (int j = tree[i].baker; j != 0; j = tree[j].baker) {
           if (last_child[j]) {
             line = "   " + line;
           } else {
@@ -992,7 +988,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     for (int i = tree.size() - 1; i >= 0; --i) {
       auto& node = tree[i];
       if (node.verdict == Verdict::Skip_NoTexture && node.wants_to_draw) {
-        tree[node.parent_with_texture].wants_to_draw = true;
+        tree[node.baker].wants_to_draw = true;
       }
     }
 
@@ -1028,7 +1024,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       if (node.verdict == Verdict::Skip_NoTexture || node.verdict == Verdict::Skip_Clipped)
         continue;
       node.type_id = cost_model.TypeId(std::string(node.widget->Name()));
-      node.model_render_ms = cost_model.RenderCostMs(node.type_id, node.render_px);
+      node.model_render_ms = cost_model.RenderCostMs(node.type_id, node.render_area_px2);
     }
 
     Optional<LOG_IndentGuard> indent;
@@ -1046,7 +1042,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
 
     auto Pack = [&](int pack_i) {
       float millis = 0;
-      for (int i = pack_i; true; i = tree[i].cost_parent) {
+      for (int i = pack_i; true; i = tree[i].repack_parent) {
         if (tree[i].verdict == Verdict::Pack) {
           break;
         }
@@ -1091,7 +1087,8 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
         float total_lag = GetLag(tree[i]);
         float millis = GetRenderMillis(tree[i]);
 
-        for (int i_parent = tree[i].cost_parent; i_parent; i_parent = tree[i_parent].cost_parent) {
+        for (int i_parent = tree[i].repack_parent; i_parent;
+             i_parent = tree[i_parent].repack_parent) {
           if (tree[i_parent].verdict == Verdict::Pack) {
             break;
           }
@@ -1140,20 +1137,21 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       continue;
     }
     auto& node = tree[i];
-    cost_model_obs.push_back({node.type_id, node.render_px, node.widget->smooth_render_millis});
+    cost_model_obs.push_back(
+        {node.type_id, node.render_area_px2, node.widget->smooth_render_millis});
 
     auto& widget = *node.widget;
 
     if (widget.rendering) {
-      ERROR << "Widget " << widget.Name() << " has been repacked!";
+      ERROR << "Widget " << widget.Name() << " has been multi-packed!";
       continue;
     }
 
     WidgetDrawable::Update update = {};
 
     update.id = widget.ID();
-    if (node.parent_with_texture != i) {
-      update.parent_id = tree[node.parent_with_texture].widget->ID();
+    if (node.baker != i) {
+      update.parent_id = tree[node.baker].widget->ID();
     }
 
     update.average_draw_millis = widget.smooth_render_millis;
@@ -1192,13 +1190,13 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     for (int i = 0; i < tree.size(); ++i) {
       auto& node = tree[i];
       bool include = node.verdict == Verdict::Pack;
-      if (node.parent_with_texture != i) {
-        include |= tree[node.parent_with_texture].verdict == Verdict::Pack;
+      if (node.baker != i) {
+        include |= tree[node.baker].verdict == Verdict::Pack;
       }
       if (node.detached) {
         // A detached child is composited during its baker's rasterization, so it needs a fresh
         // matrix whenever the baker repacks - even if its logical parent did not.
-        include |= tree[node.parent_with_texture].verdict == Verdict::Pack;
+        include |= tree[node.baker].verdict == Verdict::Pack;
       }
       if (include) {
         pack.fresh_matrices[node.widget->ID()] = node.widget->local_to_window;
@@ -1227,7 +1225,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     // (which walks each packed widget's own children) does not reach them. Publish their anchors
     // whenever their baker repacks.
     for (auto& node : tree) {
-      if (!node.detached || tree[node.parent_with_texture].verdict != Verdict::Pack) {
+      if (!node.detached || tree[node.baker].verdict != Verdict::Pack) {
         continue;
       }
       auto id = node.widget->ID();

@@ -32,7 +32,7 @@ struct CostModel {
 
   int TypeId(const std::string& n);
 
-  float RenderCostMs(int t, float px) const { return rbias[t] + rweight[t] * (px * 1e-6f); }
+  float RenderCostMs(int t, float px2) const { return rbias[t] + rweight[t] * (px2 * 1e-6f); }
 
   struct Obs {
     int type;

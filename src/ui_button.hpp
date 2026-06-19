@@ -7,7 +7,6 @@
 #include <memory>
 #include <optional>
 
-#include "animation.hpp"
 #include "pointer.hpp"
 #include "ui_constants.hpp"
 #include "ui_shape_widget.hpp"
@@ -61,7 +60,6 @@ struct Button : Widget {
   SkPath Shape() const override;
   virtual void Activate(ui::Pointer&) { WakeAnimation(); }
 
-  virtual void DrawButtonShadow(SkCanvas& canvas, SkColor4f bg) const;
   virtual void DrawButtonFace(SkCanvas&, SkColor4f bg, SkColor4f fg) const;
 
   Optional<Rect> TextureBounds() const override;
@@ -130,7 +128,7 @@ struct ToggleButton : Widget {
   void Draw(SkCanvas&) const override;
   SkRRect RRect() const { return off->RRect(); }
   SkPath Shape() const override { return off->Shape(); }
-  Optional<Rect> TextureBounds() const override { return off->TextureBounds(); }
+  Optional<Rect> TextureBounds() const override { return off->TextureBounds()->Outset(2 * 1_mm); }
 
   virtual bool Filled() const { return false; }
 };

@@ -18,6 +18,7 @@
 #include <include/effects/SkImageFilters.h>
 #include <include/utils/SkShadowUtils.h>
 
+#include <algorithm>
 #include <cmath>
 
 #include "animation.hpp"
@@ -35,11 +36,11 @@
 #include "object_iconified.hpp"
 #include "raycast.hpp"
 #include "root_widget.hpp"
-#include "textures.hpp"
 #include "time.hpp"
 #include "timer_thread.hpp"
 #include "ui_connection_widget.hpp"
 #include "ui_constants.hpp"
+#include "ui_shadow.hpp"
 #include "widget.hpp"
 
 using namespace automat::ui;
@@ -151,7 +152,7 @@ void Location::FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_
 ///////////////////////////////////////////////////////////////////////////////
 
 LocationWidget::LocationWidget(ui::Widget* parent, Location& loc)
-    : ObjectToy(parent, loc), elevation(0), location_weak(loc.AcquireWeakPtr()), shadow(this) {
+    : ObjectToy(parent, loc), elevation(0), location_weak(loc.AcquireWeakPtr()) {
   loc.widget = this;
   local_to_parent = SkM44(root_widget->CanvasToWindow());
   if (auto* obj_toy = ToyStore().FindOrNull(*loc.object)) {
@@ -160,7 +161,6 @@ LocationWidget::LocationWidget(ui::Widget* parent, Location& loc)
     toy->Reparent(*this);
     layers.OrderInside(toy.Get());
   }
-  layers.OrderBelow(&shadow, nullptr);
 }
 
 LocationWidget::~LocationWidget() {
@@ -218,9 +218,6 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
   if (!loc) {
     // Location is dead — fade out and eventually expire
     auto transparency_progress = animation::ExponentialApproach(1, timer.d, 0.1, transparency);
-    if (transparency_progress.value_changed) {
-      shadow.SetAlpha(transparency);
-    }
     tock.drawing |= transparency_progress;
     if (!tock.ing) {
       // Bring our cached ObjectToy with us so it doesn't outlive the path back to RootWidget.
@@ -258,9 +255,6 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
   {
     float target_elevation = IsDragged(*this) ? 1 : 0;
     auto elevation_progress = elevation.SineTowards(target_elevation, timer.d, 0.2);
-    if (elevation_progress.value_changed) {
-      shadow.SetElevation(elevation);
-    }
     tock.drawing |= elevation_progress;
   }
   if (HasError(*loc->object)) {
@@ -276,12 +270,6 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
   SkPath my_shape = toy->Shape();
   Rect bounds = Rect(my_shape.getBounds());
   toy->local_to_parent.asM33().mapRect(&bounds.sk);
-
-  bool using_layer = false;
-  if (transparency > 0.01) {
-    using_layer = true;
-    canvas.saveLayerAlphaf(&bounds.sk, 1.f - transparency);
-  }
 
   if constexpr (false) {  // Gray frame
     SkPaint frame_bg;
@@ -312,13 +300,24 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
   float line_height = ui::kLetterSize * 1.5;
   auto& font = ui::GetFont();
 
-  BakeChildren(canvas);
+  int saveCount = canvas.save();
+  canvas.concat(toy->local_to_parent);
+  auto paint = ui::ShadowPaint(canvas, 1_mm + elevation * 8_mm);
+  paint.setAlphaf(1.f - transparency);
+  canvas.saveLayer(nullptr, &paint);
+
+  for (auto* under : ranges::reverse_view(toy->layers.Under())) {
+    BakeChildStack(canvas, *under);
+  }
+  toy->DrawCached(canvas);
+  for (auto* over : ranges::reverse_view(toy->layers.Over())) {
+    BakeChildStack(canvas, *over);
+  }
+
+  canvas.restoreToCount(saveCount);
 
   auto loc = LockLocation();
   if (!loc) {
-    if (using_layer) {
-      canvas.restore();
-    }
     return;
   }
 
@@ -387,10 +386,6 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
     canvas.restore();
     canvas.restore();
   });
-
-  if (using_layer) {
-    canvas.restore();
-  }
 }
 
 std::unique_ptr<Action> LocationWidget::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {

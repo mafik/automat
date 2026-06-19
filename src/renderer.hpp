@@ -42,4 +42,6 @@ void RendererShutdown();
 // 16ms frame time.
 void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw);
 
+constexpr float kCanvasMargin = 64.f;
+
 }  // namespace automat

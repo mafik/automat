@@ -100,7 +100,7 @@ void Widget::WakeAnimationAt(time::SteadyPoint when) const {
   next_tick = min(next_tick, when);
 }
 
-void Widget::BakeChildStack(SkCanvas& canvas, const Widget& child) const {
+void Widget::BakeChildStack(SkCanvas& canvas, const Widget& child) {
   canvas.save();
   canvas.concat(child.local_to_parent);
   // The child's Over()/Under() bands are not baked into the child's texture; they composite here,

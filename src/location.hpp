@@ -13,7 +13,6 @@
 #include "tasks.hpp"
 #include "time.hpp"
 #include "toy.hpp"
-#include "ui_shadow.hpp"
 #include "widget.hpp"
 
 namespace automat::ui {
@@ -212,7 +211,6 @@ struct LocationWidget : ObjectToy {
   float scale_vel = 0;
   TrackedPtr<ObjectToy> toy;  // cached Object Toy (auto-nulled on destruction)
   std::vector<ui::Widget*> overlays;
-  ui::ShadowWidget shadow;
 
   LocationWidget(ui::Widget* parent, Location& loc);
   ~LocationWidget();

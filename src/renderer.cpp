@@ -617,8 +617,8 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       builder.uniform("iScaleLog10") = scale_log;
       builder.uniform("iLocalToPx") = fresh_matrix;
       builder.uniform("iLocalToSurface") = surface_transform;
-      builder.uniform("iResolution") = Vec2(frame.surface_bounds_root.width() - 64 * 2,
-                                            frame.surface_bounds_root.height() - 64 * 2);
+      builder.uniform("iResolution") = Vec2(frame.surface_bounds_root.width() - kCanvasMargin * 2,
+                                            frame.surface_bounds_root.height() - kCanvasMargin * 2);
       float time = time::SteadySaw<M_PI * 2>();
       builder.uniform("iTime") = time;
       SkSamplingOptions sampling;
@@ -677,7 +677,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
   auto now = rw.timer.now;
   auto root_widget_bounds_px =
       Rect::MakeAtZero<LeftX, BottomY>(Round(rw.size * rw.display_pixels_per_meter))
-          .Outset(64);  // 64px margin around screen
+          .Outset(kCanvasMargin);
   rw.ValidateHierarchy();
   {
     uint32_t current = vm.wake_counter.load(std::memory_order_relaxed);

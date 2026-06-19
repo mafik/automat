@@ -139,10 +139,10 @@ struct Widget : Trackable, OptionsProvider {
   // This is then used later to check if the old surface can be reused.
   Optional<Rect> rendered_bounds;
   SkMatrix rendered_matrix;
-  bool rendering = false;  // Whether the widget is currently being rendered by the client.
   // Moment when the on-screen texture stopped matching this widget's content.
   time::SteadyPoint invalidated = time::SteadyPoint::min();
 
+  bool rendering = false;  // Whether the widget is currently being rendered by the client.
   // Set to true by `MarkDead`.
   bool dead = false;
 
@@ -338,7 +338,7 @@ struct Widget : Trackable, OptionsProvider {
   //
   // Can be overridden to change how child's textures are composited (or prevent children from being
   // drawn entirely).
-  virtual void BakeChildStack(SkCanvas&, const Widget& child) const;
+  static void BakeChildStack(SkCanvas&, const Widget& child);
 
   // Baba Yaga approves.
   void BakeChildren(SkCanvas&) const;

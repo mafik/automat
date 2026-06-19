@@ -3,6 +3,7 @@
 #include "ui_button.hpp"
 
 #include <include/core/SkBlurTypes.h>
+#include <include/core/SkCanvas.h>
 #include <include/core/SkClipOp.h>
 #include <include/core/SkColor.h>
 #include <include/core/SkMaskFilter.h>
@@ -19,6 +20,7 @@
 #include "embedded.hpp"
 #include "pointer.hpp"
 #include "ui_constants.hpp"
+#include "ui_shadow.hpp"
 #include "widget.hpp"
 
 using namespace std;
@@ -101,26 +103,10 @@ SkRRect Button::RRect() const {
   return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, w, h), kRadius, kRadius);
 }
 
-static float ShadowSigma(SkRRect& bounds) { return bounds.width() / 20; }
-
-void Button::DrawButtonShadow(SkCanvas& canvas, SkColor4f bg) const {
-  auto oval = RRect();
-  float offset = ShadowOffset(oval), sigma = ShadowSigma(oval);
-  oval.inset(kBorderWidth / 2, kBorderWidth / 2);
-  oval.offset(0, offset);
-  SkPaint shadow_paint;
-  shadow_paint.setColor(color::AdjustLightness(bg, -40));
-  shadow_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, sigma, true));
-  canvas.drawRRect(oval, shadow_paint);
-}
-
 Optional<Rect> Button::TextureBounds() const {
   auto rrect = RRect();
-  float offset = ShadowOffset(rrect), sigma = ShadowSigma(rrect);
-  Rect base_rect = rrect.rect();
-  Rect shadow_rect = base_rect.sk.makeOffset(0, offset).makeOutset(sigma * 2, sigma * 2);
-  base_rect.sk.join(shadow_rect.sk);
-  return base_rect;
+  // Tiny margin to avoid clipping into antialiased lines
+  return rrect.rect().makeOutset(0.5_mm, 0.5_mm);
 }
 
 void Button::DrawButtonFace(SkCanvas& canvas, SkColor4f bg, SkColor4f fg) const {
@@ -174,8 +160,6 @@ void Button::Draw(SkCanvas& canvas) const {
   auto bg = BackgroundColor();
   auto fg = ForegroundColor();
 
-  // TODO: current clipping produces janky cut in the shadow - fix it
-  DrawButtonShadow(canvas, bg);
   DrawButtonFace(canvas, bg, fg);
   BakeChildren(canvas);
 }
@@ -189,6 +173,12 @@ Widget::Tock ToggleButton::Tick(time::Timer& timer) {
 
 void ToggleButton::Draw(SkCanvas& canvas) const {
   auto on_widget = const_cast<ToggleButton*>(this)->OnWidget();
+
+  SkAutoCanvasRestore restore(&canvas, false);
+
+  auto shadow_paint = ShadowPaint(canvas, 1_mm);
+  canvas.saveLayer(nullptr, &shadow_paint);
+
   if (filling >= 0.999) {
     return BakeChildStack(canvas, *on_widget);
   } else if (filling <= 0.001) {

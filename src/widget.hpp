@@ -14,7 +14,6 @@
 #include <cstddef>
 #include <memory>
 #include <source_location>
-#include <utility>
 
 #include "action.hpp"
 #include "animation.hpp"

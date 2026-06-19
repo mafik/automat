@@ -151,7 +151,7 @@ void Location::FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_
 ///////////////////////////////////////////////////////////////////////////////
 
 LocationWidget::LocationWidget(ui::Widget* parent, Location& loc)
-    : ObjectToy(parent, loc), elevation(0), location_weak(loc.AcquireWeakPtr()), shadow(*this) {
+    : ObjectToy(parent, loc), elevation(0), location_weak(loc.AcquireWeakPtr()), shadow(this) {
   loc.widget = this;
   local_to_parent = SkM44(root_widget->CanvasToWindow());
   if (auto* obj_toy = ToyStore().FindOrNull(*loc.object)) {
@@ -217,7 +217,11 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
 
   if (!loc) {
     // Location is dead — fade out and eventually expire
-    tock.drawing |= animation::ExponentialApproach(1, timer.d, 0.1, transparency);
+    auto transparency_progress = animation::ExponentialApproach(1, timer.d, 0.1, transparency);
+    if (transparency_progress.value_changed) {
+      shadow.SetAlpha(transparency);
+    }
+    tock.drawing |= transparency_progress;
     if (!tock.ing) {
       // Bring our cached ObjectToy with us so it doesn't outlive the path back to RootWidget.
       if (toy && toy->parent == this) {
@@ -253,7 +257,11 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
 
   {
     float target_elevation = IsDragged(*this) ? 1 : 0;
-    tock.drawing |= elevation.SineTowards(target_elevation, timer.d, 0.2);
+    auto elevation_progress = elevation.SineTowards(target_elevation, timer.d, 0.2);
+    if (elevation_progress.value_changed) {
+      shadow.SetElevation(elevation);
+    }
+    tock.drawing |= elevation_progress;
   }
   if (HasError(*loc->object)) {
     tock |= Tock::Drawing;
@@ -383,58 +391,6 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
   if (using_layer) {
     canvas.restore();
   }
-}
-
-ShadowWidget::ShadowWidget(LocationWidget& loc) : ui::Widget(&loc), loc(loc) {}
-
-void ShadowWidget::Draw(SkCanvas& canvas) const {
-  constexpr float kMinElevation = 1_mm;
-  constexpr float kElevationRange = 8_mm;
-
-  if (!loc.toy || !loc.toy->pack_frame_texture_bounds) {
-    return;  // no shadow for non-cached widgets
-  }
-  auto& rw = FindRootWidget();
-  auto window_size_px = rw.size * rw.display_pixels_per_meter;
-  float elevation_mm = kMinElevation + loc.elevation * kElevationRange;
-  float shadow_sigma_mm = elevation_mm / 2;
-
-  SkMatrix local_to_device = canvas.getLocalToDeviceAs3x3();
-  SkMatrix device_to_local;
-  (void)local_to_device.invert(&device_to_local);
-
-  // Place some control points on the screen
-  Vec2 control_points[2] = {
-      Vec2{window_size_px.width / 2, 0},                     // top
-      Vec2{window_size_px.width / 2, window_size_px.height}  // bottom
-  };
-  // Move them into local coordinates
-  device_to_local.mapPoints(SkSpan<SkPoint>(&control_points[0].sk, 2));
-  // Keep the top point in place, move the bottom point down to follow the shadow
-  Vec2 dst[2] = {control_points[0], control_points[1] - Vec2{0, elevation_mm}};
-
-  SkMatrix matrix;
-  if (!matrix.setPolyToPoly(SkSpan<const SkPoint>{&control_points[0].sk, 2},
-                            SkSpan<const SkPoint>{&dst[0].sk, 2})) {
-    matrix = SkMatrix::I();
-  }
-
-  SkPaint shadow_paint;
-  // Simulate shadow & ambient occlusion.
-  shadow_paint.setImageFilter(SkImageFilters::Merge(
-      SkImageFilters::MatrixTransform(
-          matrix, kFastSamplingOptions,
-          SkImageFilters::DropShadowOnly(0, 0, shadow_sigma_mm, shadow_sigma_mm, "#09000c5b"_color,
-                                         nullptr)),
-      SkImageFilters::Blur(
-          elevation_mm / 10, elevation_mm / 10,
-          SkImageFilters::ColorFilter(SkColorFilters::Lighting("#c9ced6"_color, "#000000"_color),
-                                      nullptr))));
-  shadow_paint.setAlphaf(1.f - loc.transparency);
-  canvas.saveLayer(nullptr, &shadow_paint);
-  canvas.concat(loc.toy->local_to_parent);
-  canvas.drawDrawable(loc.toy->sk_drawable.get());
-  canvas.restore();
 }
 
 std::unique_ptr<Action> LocationWidget::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {

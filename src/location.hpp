@@ -13,6 +13,7 @@
 #include "tasks.hpp"
 #include "time.hpp"
 #include "toy.hpp"
+#include "ui_shadow.hpp"
 #include "widget.hpp"
 
 namespace automat::ui {
@@ -196,19 +197,6 @@ struct Location : Object {
   }
 };
 
-// The drop-shadow cast by a LocationWidget's object toy. It is an Under() child of the
-// LocationWidget rather than part of its texture, so it composites behind the toy into the
-// LocationWidget's baker. It must be detached because the shadow's blur extends beyond the toy's
-// texture bounds, which a baked child could not.
-struct ShadowWidget : ui::Widget {
-  LocationWidget& loc;
-  ShadowWidget(LocationWidget& loc);
-  StrView Name() const override { return "Shadow"; }
-  SkPath Shape() const override { return SkPath(); }
-  Optional<Rect> TextureBounds() const override { return std::nullopt; }
-  void Draw(SkCanvas&) const override;
-};
-
 struct LocationWidget : ObjectToy {
   constexpr static float kPositionSpringPeriod = 0.2;
   constexpr static float kScaleSpringPeriod = 0.3;
@@ -224,7 +212,7 @@ struct LocationWidget : ObjectToy {
   float scale_vel = 0;
   TrackedPtr<ObjectToy> toy;  // cached Object Toy (auto-nulled on destruction)
   std::vector<ui::Widget*> overlays;
-  ShadowWidget shadow;
+  ui::ShadowWidget shadow;
 
   LocationWidget(ui::Widget* parent, Location& loc);
   ~LocationWidget();

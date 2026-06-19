@@ -915,10 +915,10 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
         }
         node.SetVerdict(Verdict::Skip_Clipped);
       } else {
-        auto children = widget->Children();
-        int baked_begin = widget->layers.bake_begin, baked_end = widget->layers.bake_end;
-        for (int k = (int)children.size() - 1; k >= 0; --k) {
-          Widget* child = children[k];
+        auto& layers = widget->layers;
+        int baked_begin = layers.bake_begin, baked_end = layers.bake_end;
+        for (int k = (int)layers.size() - 1; k >= 0; --k) {
+          Widget* child = layers[k];
           if (child->parent != widget) {
             ERROR << "Widget " << widget->Name() << " has child " << child->Name()
                   << " whose parent pointer is "
@@ -1215,7 +1215,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       }
       if (auto* widget = Widget::Find(update.id)) {
         pack.fresh_texture_anchors[update.id] = widget->TextureAnchors();
-        for (auto* child : widget->Children()) {
+        for (auto* child : widget->layers) {
           if (pack.fresh_texture_anchors.find(child->ID()) != pack.fresh_texture_anchors.end()) {
             continue;
           }

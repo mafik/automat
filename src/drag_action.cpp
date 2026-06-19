@@ -25,7 +25,7 @@ static Vec2 RoundToMilimeters(Vec2 v) {
 }
 
 static ui::DropTarget* FindDropTarget(DragLocationAction& a, Widget& widget) {
-  for (auto* child : widget.Children()) {
+  for (auto* child : widget.layers) {
     if (auto drop_target = FindDropTarget(a, *child)) {
       return drop_target;
     }

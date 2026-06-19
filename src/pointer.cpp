@@ -63,7 +63,7 @@ static bool FillPath(Pointer& p, Widget& w) {
   bool w_is_unbounded = shape.isEmpty();
 
   if (p_inside_w || w_is_unbounded) {
-    for (auto* child : w.Children()) {
+    for (auto* child : w.layers) {
       if (w.AllowChildPointerEvents(*child)) {
         if (FillPath(p, *child)) {
           return true;

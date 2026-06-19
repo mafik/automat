@@ -156,7 +156,7 @@ Widget::Tock Button::Tick(time::Timer& timer) {
 
   auto fg = ForegroundColor();
 
-  for (auto* child : Children()) {
+  for (auto* child : layers) {
     if (auto paint = PaintMixin::Get(child)) {
       if (paint->getColor4f() == fg) {
         continue;

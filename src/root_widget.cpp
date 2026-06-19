@@ -585,7 +585,7 @@ void RootWidget::Draw(SkCanvas& canvas) const {
 
   DrawStarfieldBackground(canvas);
 
-  auto children = Children();
+  auto& children = layers;
   for (auto* child : ranges::reverse_view{children}) {
     if (auto* m = dynamic_cast<BoardWidget*>(child)) {
       BakeChildStack(canvas, *m);

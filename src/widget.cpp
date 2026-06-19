@@ -153,7 +153,7 @@ bool Widget::IsAbove(Widget& other) const {
     auto* shared_ancestor = path_this[path_this.size() - n_common];
     auto* this_ancestor = path_this[path_this.size() - n_common - 1];
     auto* other_ancestor = path_other[path_other.size() - n_common - 1];
-    for (auto* child : shared_ancestor->Children()) {
+    for (auto* child : shared_ancestor->layers) {
       if (child == this_ancestor) {
         return true;
       } else if (child == other_ancestor) {
@@ -271,7 +271,7 @@ void Widget::RedrawThisFrame() {
   if (pack_frame_texture_bounds) {
     invalidated = time::SteadyPoint::min();
   } else {
-    for (auto* child : Children()) {
+    for (auto* child : layers) {
       child->RedrawThisFrame();
     }
   }
@@ -295,7 +295,7 @@ Widget* Widget::Find(uint32_t id) {
 
 void Widget::ValidateHierarchy(std::source_location location) {
   if constexpr (build_variant::NotRelease) {
-    for (auto* child : Children()) {
+    for (auto* child : layers) {
       if (child->parent != this) {
         LogEntry(LogLevel::Error, location)
             << "Widget " << child->Name() << " has parent "
@@ -313,7 +313,7 @@ SkPath Widget::ShapeRecursive() const {
   if (shape.isEmpty()) {  // only descend into children if the parent widget has no shape
     SkPathBuilder builder;
     builder.addPath(shape);
-    for (auto* child : Children()) {
+    for (auto* child : layers) {
       SkPath child_shape = child->ShapeRigid().makeTransform(child->local_to_parent.asM33());
       builder.addPath(child_shape);
     }
@@ -374,7 +374,7 @@ void DebugCheckParents(Widget& widget) {
       }
     }
   }
-  for (auto* child : widget.Children()) {
+  for (auto* child : widget.layers) {
     DebugCheckParents(*child);
   }
 }

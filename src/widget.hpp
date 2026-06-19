@@ -345,9 +345,16 @@ struct Widget : Trackable, OptionsProvider {
   void BakeChildren(SkCanvas&) const;
 
   struct LayerStack {
-    SmallVec<Widget*> vec{};
     int bake_begin = 0;
     int bake_end = 0;
+
+    // Iterate all children front-to-back (Over, then Baked, then Under).
+    auto begin() { return vec.begin(); }
+    auto end() { return vec.end(); }
+    auto begin() const { return vec.begin(); }
+    auto end() const { return vec.end(); }
+    size_t size() const { return vec.size(); }
+    Widget* operator[](size_t i) const { return vec[i]; }
 
     // Move `child` (already a member) into the Baked() range.
     void OrderInside(Widget* child) {
@@ -393,6 +400,8 @@ struct Widget : Trackable, OptionsProvider {
     Span<Widget*> Under() { return Span<Widget*>(vec).RemovePrefix(bake_end); }
 
    private:
+    SmallVec<Widget*> vec{};
+
     enum class Layer { Over, Baked, Under };
 
     int IndexOf(Widget* w) const { return (int)(std::ranges::find(vec, w) - vec.begin()); }
@@ -432,9 +441,6 @@ struct Widget : Trackable, OptionsProvider {
     friend struct Widget;
 
   } mutable layers;  // protected by RootWidget::mutex;
-
-  // Front-to-back child views, backed by the continuously-maintained `stack`.
-  Span<Widget*> Children() const { return Span<Widget*>(layers.vec); }
 
   bool IsAbove(Widget& other) const;
 

@@ -600,6 +600,7 @@ Keyboard::Keyboard(RootWidget& root_widget) : Widget(&root_widget), root_widget(
 #if defined(__linux__)
   linux_state.reset(new LinuxKeyboardState());
 #endif
+  root_widget.layers.OrderInside(this);
 }
 
 Keyboard::~Keyboard() {

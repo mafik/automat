@@ -10,6 +10,7 @@
 #include <include/effects/SkRuntimeEffect.h>
 #include <include/pathops/SkPathOps.h>
 
+#include <ranges>
 #include <unordered_map>
 
 #include "argument.hpp"
@@ -20,8 +21,10 @@
 #include "location.hpp"
 #include "math.hpp"
 #include "root_widget.hpp"
+#include "sync.hpp"
 #include "textures.hpp"
 #include "ui_connection_widget.hpp"
+#include "vm.hpp"
 
 using namespace std;
 
@@ -101,6 +104,7 @@ Ptr<Location> Board::Extract(Location& location) {
 Location& Board::CreateEmpty() {
   auto& it = locations.emplace_front(new Location(here));
   Location* h = it.get();
+  WakeToys();
   return *h;
 }
 
@@ -111,16 +115,18 @@ void Board::Relocate(Location* new_here) {
   }
 }
 
-BoardWidget::BoardWidget(ui::Widget* parent, Board& board) : ObjectToy(parent, board) {}
-
-SkPath BoardWidget::Shape() const {
-  SkPath rect = SkPath::Rect(Rect::MakeCenterZero(100_cm, 100_cm));
-  auto& root = FindRootWidget();
-  auto trash = root.TrashShape();
-  SkPath rect_minus_trash;
-  Op(rect, trash, kDifference_SkPathOp, &rect_minus_trash);
-  return rect_minus_trash;
+BoardWidget::BoardWidget(ui::Widget* parent, Board& board) : ObjectToy(parent, board) {
+  parent->layers.OrderInside(this);
 }
+
+BoardWidget* BoardOrNull(const ui::Widget& widget) {
+  for (ui::Widget* w = const_cast<ui::Widget*>(&widget); w; w = w->parent) {
+    if (auto* bw = dynamic_cast<BoardWidget*>(w)) return bw;
+  }
+  return nullptr;
+}
+
+SkPath BoardWidget::Shape() const { return SkPath::Rect(Rect::MakeCenterZero(100_cm, 100_cm)); }
 
 // Turns the background green - to make it easier to isolate elements of Automat in screenshots.
 constexpr bool kGreenScreen = false;
@@ -157,6 +163,53 @@ SkPaint& GetBackgroundPaint(float px_per_m) {
   return paint;
 }
 
+ui::Tock BoardWidget::Tick(time::Timer&) {
+  auto board = LockBoard();
+  if (!board) return {};
+  auto& toys = ToyStore();
+
+  // Ensure Locations exist
+  for (auto& loc : board->locations) {
+    auto& lw = toys.FindOrMake(*loc, this);
+    lw.local_to_parent = SkM44();
+    lw.ToyForObject();
+    loc->object->Each<Argument>([&](Argument arg) {
+      if (auto syncable = dyn_cast<Syncable>(arg)) {
+        if (arg.IsConnected()) toys.FindOrMake(syncable, this).local_to_parent = SkM44();
+      } else {
+        toys.FindOrMake(arg, this).local_to_parent = SkM44();
+      }
+      return LoopControl::Continue;
+    });
+    layers.OrderAbove(&lw);
+  }
+
+  // Once every endpoint location exists:
+  // - raise each argument in front of its endpoint location and
+  // - tuck each sync belt behind its source.
+  for (auto& loc : board->locations) {
+    auto& lw = toys.FindOrMake(*loc, this);
+    loc->object->Each<Argument>([&](Argument arg) {
+      if (auto syncable = dyn_cast<Syncable>(arg)) {
+        if (arg.IsConnected())
+          if (auto* belt = toys.FindOrNull(syncable)) {
+            layers.OrderAbove(belt);
+            layers.OrderBelow(belt, &lw);
+          }
+        return LoopControl::Continue;
+      }
+      auto& arg_toy = toys.FindOrMake(arg, this);
+      layers.OrderAbove(&arg_toy);
+      if (auto end = arg.Find())
+        if (auto* end_obj = end.Owner<Object>())
+          if (end_obj->here)
+            if (auto* end_lw = toys.FindOrNull(*end_obj->here)) layers.OrderAbove(&arg_toy, end_lw);
+      return LoopControl::Continue;
+    });
+  }
+  return {};
+}
+
 void BoardWidget::Draw(SkCanvas& canvas) const {
   auto shape = Shape();
   float px_per_m = canvas.getLocalToDeviceAs3x3().mapRadius(1);
@@ -166,7 +219,7 @@ void BoardWidget::Draw(SkCanvas& canvas) const {
   border_paint.setColor("#404040"_color);
   border_paint.setStyle(SkPaint::kStroke_Style);
   canvas.drawPath(shape, border_paint);
-  BakeChildren(canvas);
+  BakeChildren(canvas);  // nothing gets baked actually
 }
 
 SkMatrix BoardWidget::DropSnap(const Rect& rect_ref, Vec2 bounds_origin, Vec2* fixed_point) {
@@ -195,8 +248,14 @@ void BoardWidget::DropLocation(Ptr<Location>&& l) {
   if (!board) return;
   l->parent_location = board->here;
   board->locations.insert(board->locations.begin(), std::move(l));
+  WakeAnimation();
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
   Location& dropped = *board->locations.front();
+  if (dropped.widget) {  // TODO: FindOrNull
+    dropped.widget->Reparent(*this);
+  } else {
+    ToyStore().FindOrMake(dropped, this);
+  }
   dropped.object->ForEachToy([](ui::RootWidget&, automat::Toy& w) { w.RedrawThisFrame(); });
   // Walk over connections that start/end in the dropped location.
   // If the other end of the connection is obscured by another location, raise that obscurer

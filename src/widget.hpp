@@ -358,6 +358,7 @@ struct Widget : Trackable, OptionsProvider {
     // Move `child` (already a member) into the Baked() range.
     void OrderInside(Widget* child) {
       int from = IndexOf(child);
+      if (from >= bake_begin && from < bake_end) return;
       Place(from, bake_end - (from < bake_end), Layer::Baked);
     }
 
@@ -369,6 +370,7 @@ struct Widget : Trackable, OptionsProvider {
         Place(from, bake_begin - (from < bake_begin), Layer::Over);
       } else {
         int ref = IndexOf(reference);
+        if (ref == (int)vec.size()) return;
         Place(from, ref - (ref > from), LayerAt(ref));
       }
     }
@@ -381,6 +383,7 @@ struct Widget : Trackable, OptionsProvider {
         Place(from, bake_end - (from < bake_end), Layer::Under);
       } else {
         int ref = IndexOf(reference);
+        if (ref == (int)vec.size()) return;
         Place(from, ref + (ref < from), LayerAt(ref));
       }
     }

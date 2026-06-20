@@ -154,7 +154,6 @@ void Location::FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_
 LocationWidget::LocationWidget(ui::Widget* parent, Location& loc)
     : ObjectToy(parent, loc), elevation(0), location_weak(loc.AcquireWeakPtr()) {
   loc.widget = this;
-  local_to_parent = SkM44(root_widget->CanvasToWindow());
   if (auto* obj_toy = ToyStore().FindOrNull(*loc.object)) {
     // If the object already has a toy, reparent it to keep transform
     toy = obj_toy;
@@ -584,6 +583,7 @@ void PositionBelow(Location& origin, Location& below) {
   }
   if (origin_index > below_index) {
     std::swap(m->locations[origin_index], m->locations[below_index]);
+    m->WakeToys();
   }
 }
 

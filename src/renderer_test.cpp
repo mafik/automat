@@ -108,7 +108,7 @@ struct SlowWidget : Widget {
   sk_sp<SkDrawable> drawable;
   sk_sp<SkRuntimeEffect> runtime_effect;
   SkPaint paint;
-  SlowWidget() : drawable(SkDrawableRTTI::Make<SlowDrawable>()) {
+  SlowWidget(Widget* parent) : Widget(parent), drawable(SkDrawableRTTI::Make<SlowDrawable>()) {
     Status status;
     runtime_effect = resources::CompileShader(
         fs::VFile{
@@ -177,7 +177,7 @@ TEST(Renderer, Construction) {
   }
   RendererInit();
   std::stop_source stop_source;
-  root_widget->children.push_back(MAKE_PTR(SlowWidget));
+  new SlowWidget(root_widget.get());  // parents itself into root_widget's layers
   test_start = time::SteadyNow();
   render_thread = std::jthread(RenderThread, stop_source.get_token());
   LOG << "Render thread started";

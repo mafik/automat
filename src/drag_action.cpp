@@ -133,10 +133,15 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
   if (root.drag_action_count == 1) {
     root.black_hole.WakeAnimation();
   }
-  for (auto& location : locations) {
-    auto& lw = root.toys.FindOrMake(*location, &root);
+  for (auto& location : std::ranges::reverse_view(locations)) {
+    auto* lw = location->widget;  // TODO: FindOrNull
+    if (lw) {
+      lw->Reparent(*pointer.GetWidget());
+    } else {
+      lw = &root.toys.FindOrMake(*location, pointer.GetWidget());
+    }
     auto& toy = location->ToyForObject();
-    lw.local_anchor = pointer.PositionWithin(toy);
+    lw->local_anchor = pointer.PositionWithin(toy);
     location->WakeToys();
   }
   widget->ValidateHierarchy();
@@ -160,6 +165,9 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
           connection_widget->animation_state.radar_alpha_target = 1;
         }
       }
+    }
+    if (connection_widget->animation_state.radar_alpha_target >= 1) {
+      connection_widget->WakeAnimation();
     }
   }
   ui::root_widget->WakeAnimation();

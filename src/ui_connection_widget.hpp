@@ -63,8 +63,10 @@ struct ConnectionWidget : ArgumentToy {
   float transparency = 1;
   float alpha = 0;
   float length = 0;
-  mutable std::unique_ptr<ObjectToy> prototype_widget;
   std::unique_ptr<ui::Widget> icon;
+  std::unique_ptr<ui::Widget> spotlight;
+  std::unique_ptr<ui::Widget> radar;
+  std::unique_ptr<ui::Widget> prototype_ghost;
 
   ConnectionWidget(Widget* parent, Object&, Argument::Table&);
 
@@ -73,7 +75,6 @@ struct ConnectionWidget : ArgumentToy {
 
   StrView Name() const override { return "ConnectionWidget"; }
   SkPath Shape() const override;
-  void DrawDecoration(SkCanvas&) const;
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   Compositor GetCompositor() const override { return Compositor::ANCHOR_WARP; }

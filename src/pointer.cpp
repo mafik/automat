@@ -46,6 +46,7 @@ Pointer::Pointer(RootWidget& root_widget, Vec2 position)
   keyboard = &root_widget.keyboard;
   keyboard->pointer = this;
   pointer_widget->local_to_parent = SkM44(root_widget.CanvasToWindow());
+  root_widget.layers.OrderAbove(pointer_widget.get(), &root_widget.black_hole);
 }
 Pointer::~Pointer() {
   Leave();

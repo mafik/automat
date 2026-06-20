@@ -14,7 +14,7 @@
 
 namespace automat::ui {
 
-BlackHole::BlackHole(RootWidget* parent) : Widget(parent) {}
+BlackHole::BlackHole(RootWidget* parent) : Widget(parent) { parent->layers.OrderInside(this); }
 
 SkPath BlackHole::Shape() const {
   auto& root_widget = ParentRootWidget();

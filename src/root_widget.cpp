@@ -97,7 +97,6 @@ void RenderThread(RootWidget& rw, std::stop_token stop_token) {
     if (rw.minimized.Get()) {
       {
         ZoneScopedN("ReleaseGpuResources");
-        rw.children.clear();
         rw.toys.container.clear();
         rw.toolbar.reset();
         rw.sk_drawable.reset();
@@ -406,175 +405,16 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
 
   auto canvas_to_window44 = SkM44(CanvasToWindow());
 
-  {  // Update `children`
-    // Make sure that all Arguments are raised above their endpoints
-    // TODO: std maps & sets are slow - use something better here
-    //  (ideally something that would avoid allocations)
-    std::multimap<Widget*, Widget*> widgets_over;
-
-    auto GetLocWidget = [&](Object& o) {
-      auto& w = toys.FindOrMake(*o.here, this);
-      w.local_to_parent = canvas_to_window44;
-      w.ToyForObject();
-      return &w;
-    };
-
-    // Temporary storage for children in front-to-back order
-    // Doesn't include Arguments raised through 'widgets_over'
-    Vec<Widget*> children_tmp;
-    children_tmp.reserve(children.size());
-
-    auto VisitObject = [&](Object& o) {
-      auto* start_loc_widget = GetLocWidget(o);
-
-      SmallVec<SyncBelt*, 4> sync_belts;
-
-      // Make sure that each argument has a toy
-      o.Each<Argument>([&](Argument arg) {
-        Toy* arg_toy = nullptr;
-        if (auto syncable = dyn_cast<Syncable>(arg)) {
-          bool connected = arg.IsConnected();
-          auto* toy = connected ? &toys.FindOrMake(syncable, this) : toys.FindOrNull(syncable);
-          if (toy) {
-            sync_belts.push_back(toy);
-          }
-          return LoopControl::Continue;
-        } else {
-          // For now we always create toys for non-Syncable Arguments, but it might be changed to
-          // reduce the visual clutter.
-          arg_toy = &toys.FindOrMake(arg, this);
-        }
-        arg_toy->local_to_parent = canvas_to_window44;
-        children_tmp.push_back(arg_toy);
-        if (auto end = arg.Find()) {
-          auto* end_obj = end.Owner<Object>();
-          auto* end_loc_widget = GetLocWidget(*end_obj);
-          widgets_over.insert(std::make_pair(end_loc_widget, arg_toy));
-        }
-        return LoopControl::Continue;
-      });
-
-      children_tmp.push_back(start_loc_widget);
-
-      for (auto* sync_belt : sync_belts) {
-        sync_belt->local_to_parent = canvas_to_window44;
-        children_tmp.push_back(sync_belt);
-      }
-    };
-
-    keyboard.local_to_parent = canvas_to_window44;
-    children_tmp.push_back(&keyboard);
-
-    // First flatten Object Toys dragged by pointers
-    for (auto p : pointers) {
-      for (auto& a : p->actions) {
-        if (a == nullptr) continue;
-        a->VisitObjects(VisitObject);
-      }
-      if (auto widget = p->GetWidget()) {
-        widget->local_to_parent = canvas_to_window44;
-        children_tmp.push_back(widget);
-      }
-    }
-
-    children_tmp.push_back(&black_hole);
-    children_tmp.push_back(toolbar.get());
-    children_tmp.push_back(&zoom_warning);
-
-    // Then flatten the Object Toys stored by the Boards
-    for (auto& loc : vm.root_board->locations) {
-      VisitObject(*loc->object);
-    }
-
-    // At the very end - add the board widget
-    auto& board_widget = toys.FindOrMake(*vm.root_board, this);
-    board_widget.local_to_parent = canvas_to_window44;
-    children_tmp.push_back(&board_widget);
-
-    // We'll "rename" some collections:
-    // old_children - children after the last Tick (- expired ones)
-    // new_children - children obtained from the VM during this Tick
-    // children - result of this Tick (new_children + zombies from old_children)
-    Vec<Widget*> old_children;
-    std::swap(children, old_children);
-
-    // Assign the children sequential indexes and find the total number of unique children
-    for (auto* old_child : old_children) {
-      old_child->index = -1;
-    }
-    int n = 0;
-    for (; n < children_tmp.size(); ++n) {
-      children_tmp[n]->index = n;
-    }
-    for (auto* old_child : old_children) {
-      if (old_child->index == -1) {
-        old_child->index = n++;
-      }
-    }
-    bool in_new[n], in_old[n], passed[n];
-    memset(in_new, 0, n);
-    memset(in_old, 0, n);
-    memset(passed, 0, n);
-
-    // Finally, serialize the children_tmp into children, ensuring that `widgets_over` are placed
-    // over their bases.
-    Vec<Widget*> new_children;
-    new_children.reserve(children_tmp.size());
-    for (auto* child : children_tmp) {
-      if (in_new[child->index]) continue;
-      in_new[child->index] = true;
-      auto r = widgets_over.equal_range(child);
-      for (auto it = r.first; it != r.second; ++it) {
-        auto* arg_toy = it->second;
-        if (in_new[arg_toy->index]) continue;
-        in_new[arg_toy->index] = true;
-        new_children.push_back(arg_toy);
-      }
-      new_children.push_back(child);
-    }
-
-    for (auto* w : old_children) {
-      in_old[w->index] = true;
-    }
-
-    // Final step - merge new_children & old_children
-    // Result is mostly new_children + unique elements from old_children inserted as late as
-    // possible.
-    children.reserve(n);
-    int i_old = 0;
-    // "for new"
-    for (auto* new_child : new_children) {
-      int idx_new = new_child->index;
-      if (in_old[idx_new] && in_new[idx_new]) {
-        // "for old"
-        for (; i_old < old_children.size(); ++i_old) {
-          int idx_old = old_children[i_old]->index;
-          if (in_new[idx_old]) {
-            if (idx_old == idx_new) {
-              ++i_old;
-              break;
-            } else {
-              // prevent "for old" from running for this idx
-              in_new[idx_old] = false;
-            }
-          } else {
-            // widget unique to old_children - we can add it right away
-            children.push_back(old_children[i_old]);
-          }
-        }
-      }
-      children.push_back(new_child);
+  keyboard.local_to_parent = canvas_to_window44;
+  for (auto p : pointers) {
+    if (auto widget = p->GetWidget()) {
+      widget->local_to_parent = canvas_to_window44;
     }
   }
-
-  for (auto* c : children) layers.OrderInside(c);
+  auto& board_widget = toys.FindOrMake(*vm.root_board, this);
+  board_widget.local_to_parent = canvas_to_window44;
 
   return tock;
-}
-
-void RootWidget::OnChildDead(Widget& child, time::SteadyPoint now) {
-  std::erase(children, &child);
-  WakeAnimationAt(now);
 }
 
 void RootWidget::Draw(SkCanvas& canvas) const {
@@ -585,29 +425,7 @@ void RootWidget::Draw(SkCanvas& canvas) const {
 
   DrawStarfieldBackground(canvas);
 
-  auto& children = layers;
-  for (auto* child : ranges::reverse_view{children}) {
-    if (auto* m = dynamic_cast<BoardWidget*>(child)) {
-      BakeChildStack(canvas, *m);
-    } else {
-      continue;
-    }
-  }
-  for (auto* child : ranges::reverse_view{children}) {
-    auto* conn = dynamic_cast<ConnectionWidget*>(child);
-    if (!conn) continue;
-    canvas.save();
-    canvas.concat(child->local_to_parent);
-    conn->DrawDecoration(canvas);
-    canvas.restore();
-  }
-  for (auto* child : ranges::reverse_view{children}) {
-    if (auto* m = dynamic_cast<BoardWidget*>(child)) {
-      continue;
-    } else {
-      BakeChildStack(canvas, *child);
-    }
-  }
+  BakeChildren(canvas);
 
   canvas.concat(CanvasToWindow());
 

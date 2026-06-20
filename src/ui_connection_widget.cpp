@@ -64,19 +64,37 @@ SkPath ConnectionWidget::Shape() const {
   }
 }
 
-void ConnectionWidget::DrawDecoration(SkCanvas& canvas) const {
-  auto arg = LockBind<Argument>();
-  if (!arg) return;
-  Location* from_ptr = arg.object_ptr->MyLocation();
-  if (!from_ptr) return;
-  Location& from = *from_ptr;
+struct ConnectionSpotlight : Widget {
+  ConnectionWidget& connection;
+  ConnectionSpotlight(ConnectionWidget* parent) : Widget(parent), connection(*parent) {}
+  StrView Name() const override { return "ConnectionSpotlight"; }
+  SkPath Shape() const override { return SkPath(); }
 
-  if (style == Argument::Style::Spotlight) {
+  Optional<Rect> TextureBounds() const override {
+    auto arg = connection.LockBind<Argument>();
+    if (!arg) return std::nullopt;
+    auto* from = arg.object_ptr->MyLocation();
+    if (!from) return std::nullopt;
+    float radius = from->ToyForObject().CoarseBounds().rect.Hypotenuse() / 2;
+    Rect bounds = Rect::MakeCenter(from->position, radius * 2, radius * 2);
+    if (auto* source = arg.ObjectOrNull()) {
+      bounds.ExpandToInclude(source->MyLocation()->position);
+    }
+    return bounds;
+  }
+
+  void Draw(SkCanvas& canvas) const override {
+    auto arg = connection.LockBind<Argument>();
+    if (!arg) return;
+    auto* from_ptr = arg.object_ptr->MyLocation();
+    if (!from_ptr) return;
+    Location& from = *from_ptr;
+
     auto target_bounds = from.ToyForObject().CoarseBounds();
-    Vec2 target = from.position;  //  + target_bounds.Center();
+    Vec2 target = from.position;
     float radius = target_bounds.rect.Hypotenuse() / 2;
 
-    {  // Circle around the target
+    {  // Disc around the target
       SkPaint circle_paint;
       SkColor4f colors[] = {
           "#ffffff"_color4f,
@@ -88,33 +106,51 @@ void ConnectionWidget::DrawDecoration(SkCanvas& canvas) const {
       canvas.drawCircle(target, radius, circle_paint);
     }
 
-    {  // Ray from the source to the target
-      auto source_object = arg.ObjectOrNull();
-      if (source_object) {
-        Vec2 source = source_object->MyLocation()->position;
-        Vec2 diff = target - source;
-        float dist = Length(diff);
-        auto angle = SinCos::FromVec2(diff, dist);
-        SkPath path = SkPathBuilder()
-                          .moveTo(source)
-                          .lineTo(target + Vec2::Polar((angle + 90_deg), radius))
-                          .lineTo(target + Vec2::Polar((angle - 90_deg), radius))
-                          .detach();
-        SkColor4f ray_colors[] = {"#ffffbe"_color4f, "#ffffbe00"_color4f};
-        Vec2 ray_positions[] = {source, target};
-        SkPaint ray_paint;
-        ray_paint.setShader(SkShaders::LinearGradient(
-            &ray_positions[0].sk,
-            SkGradient{SkGradient::Colors{ray_colors, SkTileMode::kClamp}, {}}));
-        ray_paint.setMaskFilter(SkMaskFilter::MakeBlur(SkBlurStyle::kNormal_SkBlurStyle, 1_mm));
-        canvas.drawPath(path, ray_paint);
-      }
+    if (auto* source_object = arg.ObjectOrNull()) {  // Ray from the source to the target
+      Vec2 source = source_object->MyLocation()->position;
+      Vec2 diff = target - source;
+      float dist = Length(diff);
+      auto angle = SinCos::FromVec2(diff, dist);
+      SkPath path = SkPathBuilder()
+                        .moveTo(source)
+                        .lineTo(target + Vec2::Polar((angle + 90_deg), radius))
+                        .lineTo(target + Vec2::Polar((angle - 90_deg), radius))
+                        .detach();
+      SkColor4f ray_colors[] = {"#ffffbe"_color4f, "#ffffbe00"_color4f};
+      Vec2 ray_positions[] = {source, target};
+      SkPaint ray_paint;
+      ray_paint.setShader(SkShaders::LinearGradient(
+          &ray_positions[0].sk,
+          SkGradient{SkGradient::Colors{ray_colors, SkTileMode::kClamp}, {}}));
+      ray_paint.setMaskFilter(SkMaskFilter::MakeBlur(SkBlurStyle::kNormal_SkBlurStyle, 1_mm));
+      canvas.drawPath(path, ray_paint);
     }
-
-    return;
   }
-  auto anim = &animation_state;
-  if (anim->radar_alpha >= 0.01f) {
+};
+
+struct AutoconnectRadar : Widget {
+  ConnectionWidget& connection;
+  AutoconnectRadar(ConnectionWidget* parent) : Widget(parent), connection(*parent) {}
+  StrView Name() const override { return "AutoconnectRadar"; }
+  SkPath Shape() const override { return SkPath(); }
+
+  Optional<Rect> TextureBounds() const override {
+    auto arg = connection.LockBind<Argument>();
+    if (!arg) return std::nullopt;
+    float reach = arg.table->autoconnect_radius * 2 + 10_cm;
+    return Rect::MakeCenter(connection.pos_dir.pos, reach * 2, reach * 2);
+  }
+
+  void Draw(SkCanvas& canvas) const override {
+    auto arg = connection.LockBind<Argument>();
+    if (!arg) return;
+    auto* from_ptr = arg.object_ptr->MyLocation();
+    if (!from_ptr) return;
+    Location& from = *from_ptr;
+    auto* anim = &connection.animation_state;
+    if (anim->radar_alpha < 0.01f) return;
+    auto& pos_dir = connection.pos_dir;
+
     SkPaint radius_paint;
     SkColor4f tint = arg.table->tint;
     SkColor4f colors[] = {{tint.fR, tint.fG, tint.fB, 0},
@@ -130,7 +166,6 @@ void ConnectionWidget::DrawDecoration(SkCanvas& canvas) const {
         SkGradient{SkGradient::Colors{colors, pos, SkTileMode::kClamp}, {}}, &local_matrix));
     // TODO: switch to drawArc instead
     float autoconnect_radius = arg.table->autoconnect_radius;
-    SkRect oval = Rect::MakeCenter(pos_dir.pos, autoconnect_radius * 2, autoconnect_radius * 2);
 
     float crt_width =
         animation::SinInterp(anim->radar_alpha, 0.2f, 0.1f, 0.5f, 1.f) * autoconnect_radius * 2;
@@ -161,7 +196,6 @@ void ConnectionWidget::DrawDecoration(SkCanvas& canvas) const {
     SkRSXform transforms[name.size()];
     for (size_t i = 0; i < name.size(); ++i) {
       float i_fract = (i + 1.f) / (name.size() + 1.f);
-      // float i_fract = i / (float)arg.name.size();
       float letter_a = (i_fract - 0.5f) * kQuadrantSweep / 180 / 2 * radar_alpha_sin * kPi +
                        quadrant_offset / 180 * kPi;
 
@@ -190,8 +224,7 @@ void ConnectionWidget::DrawDecoration(SkCanvas& canvas) const {
     canvas.drawTextBlob(text_blob, 0, 0, text_paint);
     canvas.restore();
 
-    auto* mw = ToyStore().FindOrNull(*vm.root_board);
-    if (mw) {
+    if (auto* mw = BoardOrNull(connection)) {
       mw->NearbyCandidates(
           from, *arg.table, autoconnect_radius * 2 + 10_cm,
           [&](ObjectToy& candidate_toy, Interface::Table*, Vec<Vec2AndDir>& to_points) {
@@ -210,18 +243,27 @@ void ConnectionWidget::DrawDecoration(SkCanvas& canvas) const {
           });
     }
   }
-  if (anim->prototype_alpha >= 0.01f && prototype_widget) {
-    auto proto_shape = prototype_widget->Shape();
-    Rect proto_bounds = proto_shape.getBounds();
-    canvas.save();
-    Vec2 prototype_position = PositionAhead(from, *arg.table, *prototype_widget);
-    canvas.translate(prototype_position.x, prototype_position.y);
-    canvas.saveLayerAlphaf(&proto_bounds.sk, anim->prototype_alpha * 0.4f);
-    prototype_widget->Draw(canvas);
-    canvas.restore();
+};
+
+struct PrototypeGhost : Widget {
+  ConnectionWidget& connection;
+  std::unique_ptr<ObjectToy> prototype_widget;
+
+  PrototypeGhost(ConnectionWidget* parent, Argument::Table& table)
+      : Widget(parent), connection(*parent), prototype_widget(table.prototype()->MakeToy(this)) {
+    layers.OrderInside(prototype_widget.get());
+  }
+  StrView Name() const override { return "PrototypeGhost"; }
+  SkPath Shape() const override { return SkPath(); }
+  Optional<Rect> TextureBounds() const override { return prototype_widget->Shape().getBounds(); }
+
+  void Draw(SkCanvas& canvas) const override {
+    Rect bounds = prototype_widget->Shape().getBounds();
+    canvas.saveLayerAlphaf(&bounds.sk, connection.animation_state.prototype_alpha * 0.4f);
+    BakeChildren(canvas);
     canvas.restore();
   }
-}
+};
 
 // Helper for methods of ConnectionWidget that need to access the start/end of the connection.
 // It performs the locking of weak pointers and locates the widgets of connected objects.
@@ -240,7 +282,7 @@ struct ConnectionWidgetLocker {
   // Computing everything in initializer avoids zero-initialization
   ConnectionWidgetLocker(ConnectionWidget& w)
       : toy_store(w.ToyStore()),
-        board_widget(toy_store.FindOrNull(*vm.root_board)),
+        board_widget(BoardOrNull(w)),
         start_obj(w.LockOwner<Object>()),
         start_arg(start_obj ? w.Bind<Argument>(*start_obj) : nullptr),
         start_widget(start_obj ? toy_store.FindOrNull(*start_obj) : nullptr),
@@ -305,7 +347,15 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
 
   style = arg.table->style;
   tint = arg.table->tint.toSkColor();
-  if (style == Argument::Style::Invisible || style == Argument::Style::Spotlight) {
+  if (style == Argument::Style::Spotlight) {
+    if (!spotlight) {
+      spotlight = std::make_unique<ConnectionSpotlight>(this);
+      layers.OrderBelow(spotlight.get());
+    }
+    spotlight->RedrawThisFrame();
+    return Tock::Draw;
+  }
+  if (style == Argument::Style::Invisible) {
     return Tock::Draw;
   }
 
@@ -397,7 +447,7 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
   if (state) {
     if (state->stabilized && !state->stabilized_end.has_value()) {
       auto& toy = *a.start_widget;
-      auto* mw = ToyStore().FindOrNull(*vm.root_board);
+      auto* mw = BoardOrNull(*this);
 
       auto pos_dir = this->pos_dir;
       state->stabilized_start = pos_dir.pos;
@@ -429,25 +479,42 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
 
   if (arg.table->autoconnect_radius > 0) {
     auto& anim = animation_state;
-    tock.drawing |=
+    auto radar_progress =
         animation::LinearApproach(anim.radar_alpha_target, timer.d, 2.f, anim.radar_alpha);
     if (anim.radar_alpha >= 0.01f) {
-      tock |= Tock::Drawing;
+      if (!radar) {
+        radar = std::make_unique<AutoconnectRadar>(this);
+        layers.OrderBelow(radar.get());
+      }
       anim.time_seconds = timer.NowSeconds();
+      radar->RedrawThisFrame();
+      tock |= Tock::Ing;
+    } else {
+      radar.reset();
+      if (!radar_progress.settled) tock |= Tock::Ing;
     }
 
-    float prototype_alpha_target = anim.prototype_alpha_target;
-    if (a.end_iface) {
-      prototype_alpha_target = 0;
-    }
-    tock.drawing |=
+    float prototype_alpha_target = a.end_iface ? 0 : anim.prototype_alpha_target;
+    auto prototype_progress =
         animation::LinearApproach(prototype_alpha_target, timer.d, 2.f, anim.prototype_alpha);
     if (anim.prototype_alpha > 0) {
-      if (!prototype_widget) {
-        auto proto = arg.table->prototype();
-        prototype_widget = proto->MakeToy(this);
+      auto* ghost = static_cast<PrototypeGhost*>(prototype_ghost.get());
+      if (!ghost) {
+        prototype_ghost = std::make_unique<PrototypeGhost>(this, *arg.table);
+        ghost = static_cast<PrototypeGhost*>(prototype_ghost.get());
+        layers.OrderBelow(prototype_ghost.get());
       }
-      tock |= prototype_widget->Tick(timer);
+      if (auto* from = arg.object_ptr->MyLocation()) {
+        Vec2 pos = PositionAhead(*from, *arg.table, *ghost->prototype_widget);
+        ghost->local_to_parent = SkM44(SkMatrix::Translate(pos.x, pos.y));
+      }
+      if (!prototype_progress.settled) {
+        prototype_ghost->RedrawThisFrame();
+        tock |= Tock::Ing;
+      }
+    } else {
+      prototype_ghost.reset();
+      if (!prototype_progress.settled) tock |= Tock::Ing;
     }
   }
   return tock;
@@ -541,7 +608,7 @@ DragConnectionAction::~DragConnectionAction() {
   } else {
     return;
   }
-  auto* mw = pointer.root_widget.toys.FindOrNull(*vm.root_board);
+  auto* mw = BoardOrNull(widget);
   if (mw) {
     mw->ConnectAtPoint(arg, pos);
   }

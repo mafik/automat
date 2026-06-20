@@ -595,7 +595,7 @@ void SyncAction::Update() {
   if (auto syncable_ptr = weak.Lock()) {
     Syncable syncable(syncable_ptr.Owner<Object>(), syncable_ptr.Get());
     auto* origin_widget = pointer.root_widget.toys.FindOrNull(*syncable.object_ptr);
-    auto* bw = pointer.root_widget.toys.FindOrNull(*vm.root_board);
+    auto* bw = origin_widget ? BoardOrNull(*origin_widget) : nullptr;
     auto start_local = origin_widget->Shape().getBounds().center();
     auto start = bw ? TransformBetween(*origin_widget, *bw).mapPoint(start_local) : start_local;
     if (auto* sync_widget = pointer.root_widget.toys.FindOrNull(syncable)) {

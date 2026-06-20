@@ -50,7 +50,9 @@ struct RootWidget final : Widget, DropTarget {
     float zoom_limit_scroll = 0;
     RootWidget* root_widget;
 
-    ZoomWarning(RootWidget* root_widget) : Widget(root_widget), root_widget(root_widget) {}
+    ZoomWarning(RootWidget* root_widget) : Widget(root_widget), root_widget(root_widget) {
+      root_widget->layers.OrderInside(this);
+    }
     SkPath Shape() const override { return SkPath(); }
     Optional<Rect> TextureBounds() const override { return std::nullopt; }
     Tock Tick(time::Timer&) override;
@@ -130,7 +132,6 @@ struct RootWidget final : Widget, DropTarget {
 
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
-  void OnChildDead(Widget& child, time::SteadyPoint now) override;
   Compositor GetCompositor() const override { return Compositor::COPY_RAW; }
 
   Vec2 move_velocity = Vec2(0, 0);
@@ -179,8 +180,6 @@ struct RootWidget final : Widget, DropTarget {
 
   Vec<Pointer*> pointers;
   Keyboard keyboard;
-
-  Vec<Widget*> children;
 
   uint32_t observed_vm_wake_counter = 0;
 

@@ -93,6 +93,7 @@ struct BoardWidget : ObjectToy, ui::DropTarget {
   std::string_view Name() const override { return "BoardWidget"; }
 
   // Widget overrides
+  Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   Compositor GetCompositor() const override { return Compositor::QUANTUM_REALM; }
@@ -116,6 +117,8 @@ struct BoardWidget : ObjectToy, ui::DropTarget {
   Vec<Ptr<Location>> CloneStack(Location& base);
   void RaiseStack(Location& base);
 };
+
+BoardWidget* BoardOrNull(const ui::Widget& widget);
 
 static_assert(ToyMaker<Board>);
 

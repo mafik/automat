@@ -137,6 +137,7 @@ struct KeyPresserWidget : ObjectToy {
   KeyPresserWidget(Widget* parent, Object& key_presser)
       : ObjectToy(parent, key_presser),
         shortcut_button(new KeyPresserButton(this, "?", KeyColor(false), kBaseKeyWidth)) {
+    layers.OrderInside(shortcut_button.get());
     shortcut_button->activate = [this](ui::Pointer& pointer) {
       if (key_selector) {
         key_selector->Release();

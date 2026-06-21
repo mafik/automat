@@ -63,6 +63,8 @@ struct ConnectionWidget : ArgumentToy {
   float transparency = 1;
   float alpha = 0;
   float length = 0;
+  Optional<ArcLine> arcline;        // routed cable for non-physical connections
+  Optional<Vec2> end_anchor_local;  // cable end in the end widget's local frame
   std::unique_ptr<ui::Widget> icon;
   std::unique_ptr<ui::Widget> spotlight;
   std::unique_ptr<ui::Widget> radar;

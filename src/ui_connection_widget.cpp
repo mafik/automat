@@ -440,9 +440,14 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
                                : 0.f;
   alpha = (1.f - loc_transparency) * (1.f - transparency);
 
+  if (state) {
+    arcline.reset();
+  } else {
+    arcline = RouteCable(pos_dir, to_points, nullptr);
+  }
+
   if (!state.has_value() && style != Argument::Style::Arrow && alpha > 0.01f) {
-    auto arcline = RouteCable(pos_dir, to_points, nullptr);
-    auto new_length = ArcLine::Iterator(arcline).AdvanceToEnd();
+    auto new_length = ArcLine::Iterator(*arcline).AdvanceToEnd();
     if (new_length > length + 2_cm) {
       alpha = 0;
       transparency = 1;
@@ -478,6 +483,19 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
     cable_width.target = a.end_iface ? 2_mm : 0;
     cable_width.speed = 5;
     tock.drawing |= cable_width.Tick(timer);
+  }
+
+  end_anchor_local.reset();
+  if (a.end_widget) {
+    const Optional<ArcLine>& route = state ? state->arcline : arcline;
+    if (route) {
+      ArcLine::Iterator it = *route;
+      it.AdvanceToEnd();
+      SkMatrix inv;
+      if (a.end_transform.invert(&inv)) {
+        end_anchor_local = inv.mapPoint(it.Position());
+      }
+    }
   }
 
   if (arg.table->autoconnect_radius > 0) {
@@ -839,16 +857,11 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
       if (!to_shape.isEmpty()) {
         DrawArrow(canvas, from_shape, to_shape);
       }
-    } else {
-      if (cable_width > 0.01_mm) {
-        if (alpha > 0.01f) {
-          auto arcline = RouteCable(pos_dir, to_points, &canvas);
-          auto color = SkColorSetA(tint, 255 * cable_width.value / 2_mm);
-          auto color_filter = color::MakeTintFilter(color, 30);
-          auto path = arcline.ToPath(false);
-          DrawCable(canvas, path, color_filter, CableTexture::Smooth, cable_width, cable_width);
-        }
-      }
+    } else if (cable_width > 0.01_mm && alpha > 0.01f && arcline) {
+      auto color = SkColorSetA(tint, 255 * cable_width.value / 2_mm);
+      auto color_filter = color::MakeTintFilter(color, 30);
+      auto path = arcline->ToPath(false);
+      DrawCable(canvas, path, color_filter, CableTexture::Smooth, cable_width, cable_width);
     }
   }
   if (using_layer) {
@@ -934,11 +947,10 @@ Optional<Rect> ConnectionWidget::TextureBounds() const {
       bounds.ExpandToInclude(section.pos - Vec2{w, w});
     }
     return bounds;
-  } else {
-    ArcLine arcline = RouteCable(pos_dir, to_points);
-    Rect rect = arcline.Bounds();
-    return rect.Outset(cable_width / 2);
+  } else if (arcline) {
+    return arcline->Bounds().Outset(cable_width / 2);
   }
+  return std::nullopt;
 }
 
 Vec<Vec2> ConnectionWidget::TextureAnchors() {
@@ -949,11 +961,8 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() {
   Optional<Vec2> end_pos;
   if (manual_position.has_value()) {
     end_pos = *manual_position;
-  } else if (!to_points.empty()) {
-    ArcLine arcline = RouteCable(pos_dir, to_points);
-    auto it = ArcLine::Iterator(arcline);
-    it.AdvanceToEnd();
-    end_pos = it.Position();  // to_points.front().pos;
+  } else if (a.end_widget && end_anchor_local.has_value()) {
+    end_pos = a.end_transform.mapPoint(*end_anchor_local);
   }
   if (end_pos) {
     anchors.push_back(*end_pos);

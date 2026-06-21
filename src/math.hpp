@@ -178,6 +178,24 @@ constexpr Vec2 EvalBezierAtFixedT(Vec2 p0, Vec2 p1, Vec2 p2, Vec2 p3) {
          p2 * 3 * t * t * (1 - t) + p3 * t * t * t;
 }
 
+inline Vec2 Conic(Vec2 p0, Vec2 p1, Vec2 p2, float w, float t) {
+  float s = 1 - t;
+  float w0 = s * s;
+  float w1 = 2 * s * t * w;
+  float w2 = t * t;
+  float denom = w0 + w1 + w2;
+  return (p0 * w0 + p1 * w1 + p2 * w2) / denom;
+}
+
+inline Vec2 ConicTangent(Vec2 p0, Vec2 p1, Vec2 p2, float w, float t) {
+  float s = 1 - t;
+  float denom = powf(-2 * (w - 1) * t * t + 2 * (w - 1) * t + 1, 2);
+  float w0 = -2 * s * (t * (w - 1) - w) / denom;
+  float w1 = 2 * w * (2 * t - 1) / denom;
+  float w2 = 2 * t * (-w * t + t - 1) / denom;
+  return p0 * w0 + p1 * w1 + p2 * w2;
+}
+
 // Project vector p onto vector dir.
 template <typename T>
 float VectorProjection(T dir, T p) {

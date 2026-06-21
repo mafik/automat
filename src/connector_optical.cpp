@@ -669,23 +669,6 @@ SkPath CablePhysicsSimulation::Shape() const {
       .detach(&m);
 }
 
-static SkPoint conic(SkPoint p0, SkPoint p1, SkPoint p2, float w, float t) {
-  float s = 1 - t;
-  return {((s * s * p0.x()) + (2 * s * t * w * p1.x()) + (t * t * p2.x())) /
-              ((s * s) + (w * 2 * s * t) + (t * t)),
-          ((s * s * p0.y()) + (2 * s * t * w * p1.y()) + (t * t * p2.y())) /
-              ((s * s) + (w * 2 * s * t) + (t * t))};
-}
-
-static SkPoint conic_tangent(SkPoint p0, SkPoint p1, SkPoint p2, float w, float t) {
-  float s = 1 - t;
-  float denominator = powf(-2 * (w - 1) * t * t + 2 * (w - 1) * t + 1, 2);
-  float w0 = -2 * s * (t * (w - 1) - w) / denominator;
-  float w1 = 2 * w * (2 * t - 1) / denominator;
-  float w2 = 2 * t * (-w * t + t - 1) / denominator;
-  return {p0.x() * w0 + p1.x() * w1 + p2.x() * w2, p0.y() * w0 + p1.y() * w1 + p2.y() * w2};
-}
-
 void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filter,
                CableTexture texture, float start_width, float end_width, float* length_cache) {
   float cached_length = 100_mm;
@@ -761,10 +744,10 @@ void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filte
 
       for (int step = 0; step <= n_steps; step++) {
         float t = (float)step / n_steps;
-        Vec2 point = conic(points[0], points[1], points[2], weight, t);
+        Vec2 point = Conic(points[0], points[1], points[2], weight, t);
         float delta_length = Length(point - last_point);
         length += step ? delta_length : 0;
-        Vec2 tangent = -conic_tangent(points[0], points[1], points[2], weight, t);
+        Vec2 tangent = -ConicTangent(points[0], points[1], points[2], weight, t);
         Vec2 normal = Rotate90DegreesClockwise(tangent) * GetWidth(length) / 2 / Length(tangent);
         last_point = point;
         Vec2 left = point - normal;
@@ -1017,17 +1000,17 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
         last_point = points[0];
         for (int step = 0; step <= n_steps; step++) {
           float t = (float)step / n_steps;
-          Vec2 point = conic(points[0], points[1], points[2], weight, t);
+          Vec2 point = Conic(points[0], points[1], points[2], weight, t);
           float delta_length = Length(point - last_point);
           if (length + delta_length >= length_limit) {
             t = (float)(step - 1 + (length_limit - length) / delta_length) / n_steps;
-            point = conic(points[0], points[1], points[2], weight, t);
+            point = Conic(points[0], points[1], points[2], weight, t);
             length = length_limit;
             limit_reached = true;
           } else {
             length += delta_length;
           }
-          Vec2 tangent = -conic_tangent(points[0], points[1], points[2], weight, t);
+          Vec2 tangent = -ConicTangent(points[0], points[1], points[2], weight, t);
           normal = Rotate90DegreesClockwise(tangent) / Length(tangent);
           last_point = point;
           if (limit_reached) {

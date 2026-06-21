@@ -18,6 +18,10 @@
 
 namespace automat::ui {
 
+inline constexpr float kCasingWidth = 8_mm;
+inline constexpr float kCasingHeight = 8_mm;
+inline constexpr Rect kSteelRect = Rect(-3_mm, -1_mm, 3_mm, 1_mm);
+
 struct CablePhysicsSimulation {
   float dispenser_v;
 
@@ -75,8 +79,6 @@ ArcLine RouteCable(Vec2AndDir start, Span<const Vec2AndDir> ends, SkCanvas* debu
 
 animation::Progress SimulateCablePhysics(time::Timer&, CablePhysicsSimulation&, Vec2AndDir start,
                                          Span<Vec2AndDir> end_candidates);
-
-void DrawOpticalConnector(SkCanvas&, const CablePhysicsSimulation&, Widget* icon);
 
 // Draws the given path as a cable and possibly update its length.
 void DrawCable(SkCanvas&, SkPath&, sk_sp<SkColorFilter>&, CableTexture, float start_width,

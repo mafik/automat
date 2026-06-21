@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: MIT
 #include "ui_connection_widget.hpp"
 
+#include <include/core/SkBlendMode.h>
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkColor.h>
+#include <include/core/SkColorFilter.h>
+#include <include/core/SkMaskFilter.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPathBuilder.h>
 #include <include/core/SkRRect.h>
@@ -13,6 +16,8 @@
 #include <include/core/SkTileMode.h>
 #include <include/core/SkVertices.h>
 #include <include/effects/SkGradient.h>
+#include <include/effects/SkRuntimeEffect.h>
+#include <src/core/SkPathPriv.h>
 
 #include <atomic>
 #include <optional>
@@ -26,6 +31,7 @@
 #include "casting.hpp"
 #include "connector_optical.hpp"
 #include "font.hpp"
+#include "global_resources.hpp"
 #include "location.hpp"
 #include "math.hpp"
 #include "object.hpp"
@@ -534,7 +540,300 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
 
   if (state) {
     if (alpha > 0.01f) {
-      DrawOpticalConnector(canvas, *state, icon.get());
+      float dispenser_scale = state->start_widget->local_to_parent.rc(0, 0);
+      SkMatrix connector_matrix = state->ConnectorMatrix();
+
+      SkPathBuilder p_builder;
+      if (state->stabilized) {
+        if (state->arcline) {
+          SkPath p2 = state->arcline->ToPath(false);
+          SkPathPriv::ReverseAddPath(&p_builder, p2);
+        }
+      } else {
+        p_builder.moveTo(state->sections[0].pos);
+        for (int i = 1; i < state->sections.size(); i++) {
+          Vec2 p1 = state->sections[i - 1].pos +
+                    Vec2::Polar(state->sections[i - 1].dir + state->sections[i - 1].true_dir_offset,
+                                state->sections[i - 1].distance / 3);
+          Vec2 p2 = state->sections[i].pos -
+                    Vec2::Polar(state->sections[i].dir + state->sections[i].true_dir_offset,
+                                state->sections[i].distance / 3);
+          p_builder.cubicTo(p1, p2, state->sections[i].pos);
+        }
+      }
+      SkPath p = p_builder.detach();
+      p.setIsVolatile(true);
+
+      // Draw the cable
+      auto color_filter = color::MakeTintFilter(state->argument.table->tint.toSkColor(), NAN);
+      DrawCable(canvas, p, color_filter, CableTexture::Braided,
+                state->cable_width * state->connector_scale, state->cable_width * dispenser_scale,
+                &state->approx_length);
+
+      Vec2 cable_end = state->PlugTopCenter();
+      SinCos connector_dir = state->sections.front().dir + state->sections.front().true_dir_offset;
+
+      canvas.save();
+      canvas.concat(connector_matrix);
+
+      constexpr float casing_left = -kCasingWidth / 2;
+      constexpr float casing_right = kCasingWidth / 2;
+      constexpr float casing_top = kCasingHeight;
+
+      {  // Steel insert
+        canvas.save();
+        canvas.translate(0, 2_mm * state->steel_insert_hidden);
+
+        auto builder = SkVertices::Builder(SkVertices::kTriangleStrip_VertexMode, 4, 0,
+                                           SkVertices::kHasTexCoords_BuilderFlag);
+        SkPoint* positions = builder.positions();
+        positions[0] = kSteelRect.BottomLeftCorner();
+        positions[1] = kSteelRect.BottomRightCorner();
+        positions[2] = kSteelRect.TopLeftCorner();
+        positions[3] = kSteelRect.TopRightCorner();
+
+        SkPoint* tex_coords = builder.texCoords();
+        tex_coords[0] = SkPoint::Make(0, 0);
+        tex_coords[1] = SkPoint::Make(1, 0);
+        tex_coords[2] = SkPoint::Make(0, 1);
+        tex_coords[3] = SkPoint::Make(1, 1);
+
+        SkPaint paint;
+
+        Status status;
+        static auto effect =
+            resources::CompileShader(embedded::assets_connector_insert_rt_sksl, status);
+        if (!OK(status)) {
+          FATAL << status;
+        }
+        paint.setShader(effect->makeShader(nullptr, nullptr, 0));
+        canvas.drawVertices(builder.detach(), SkBlendMode::kScreen, paint);
+
+        canvas.restore();
+      }
+
+      {  // Black metal casing
+         // TODO: optimize by caching vertices & shader
+        auto builder = SkVertices::Builder(SkVertices::kTriangleStrip_VertexMode, 4, 0,
+                                           SkVertices::kHasTexCoords_BuilderFlag);
+        constexpr Rect black_case_bounds =
+            Rect::MakeCornerZero(kCasingWidth, kCasingHeight).MoveBy({-kCasingWidth / 2, 0});
+        SkPoint* positions = builder.positions();
+        positions[0] = black_case_bounds.BottomLeftCorner();
+        positions[1] = black_case_bounds.BottomRightCorner();
+        positions[2] = black_case_bounds.TopLeftCorner();
+        positions[3] = black_case_bounds.TopRightCorner();
+
+        SkPoint* tex_coords = builder.texCoords();
+        tex_coords[0] = SkPoint::Make(0, 0);
+        tex_coords[1] = SkPoint::Make(1, 0);
+        tex_coords[2] = SkPoint::Make(0, 1);
+        tex_coords[3] = SkPoint::Make(1, 1);
+
+        SkPaint paint;
+
+        Status status;
+        static auto effect =
+            resources::CompileShader(embedded::assets_connector_case_rt_sksl, status);
+        if (!OK(status)) {
+          FATAL << status;
+        }
+        paint.setShader(effect->makeShader(nullptr, nullptr, 0));
+        paint.setColorFilter(color_filter);
+        canvas.drawVertices(builder.detach(), SkBlendMode::kScreen, paint);
+      }
+
+      canvas.restore();
+
+      if (icon) {  // Icon on the metal casing
+
+        Vec2 icon_offset = connector_matrix.mapPoint(Vec2(0, kCasingHeight / 2));
+
+        SkColor4f base_color = color::AdjustLightness(state->argument.table->tint, 30);
+        SkColor4f bright_light = color::AdjustLightness(state->argument.table->light, 50);
+        SkColor4f adjusted_color = color::AdjustLightness(base_color, state->lightness_pct);
+        adjusted_color = color::MixColors(adjusted_color, bright_light, state->lightness_pct / 100);
+
+        auto* icon_paint = PaintMixin::Get(icon.get());
+        if (icon_paint) {
+          SkPaint paint;
+          paint.setColor(adjusted_color);
+          paint.setAntiAlias(true);
+          *icon_paint = paint;
+        }
+
+        canvas.save();
+        canvas.translate(icon_offset.x, icon_offset.y);
+        canvas.scale(state->connector_scale, state->connector_scale);
+
+        canvas.concat(icon->local_to_parent);
+        icon->Draw(canvas);
+
+        // Draw blur
+        if (state->lightness_pct > 1) {
+          SkPaint glow_paint;
+          glow_paint.setColor(state->argument.table->light);
+          glow_paint.setAlphaf(state->lightness_pct / 100);
+          float sigma = canvas.getLocalToDeviceAs3x3().mapRadius(0.5_mm);
+          glow_paint.setMaskFilter(
+              SkMaskFilter::MakeBlur(SkBlurStyle::kOuter_SkBlurStyle, sigma, false));
+          glow_paint.setBlendMode(SkBlendMode::kScreen);
+          if (icon_paint) {
+            *icon_paint = glow_paint;
+          }
+
+          icon->Draw(canvas);
+        }
+        canvas.restore();
+      }
+
+      {  // Rubber cable holder
+
+        float length_limit = 15_mm * state->connector_scale;
+        float length = 0;
+
+        SkPath::Iter iter(p, false);
+        SkPath::Verb verb;
+        Vec2 last_point = cable_end;
+        Vec2 normal = Vec2::Polar(connector_dir - 90_deg, 1);
+        do {
+          SkPoint points[4];
+          verb = iter.next(points);
+          bool limit_reached = false;
+          if (SkPath::kConic_Verb == verb) {
+            float weight = iter.conicWeight();
+            float angle = acosf(weight) * 2 * 180 / M_PI;
+            int n_steps = ceil(angle * 2 / 5);
+            last_point = points[0];
+            for (int step = 0; step <= n_steps; step++) {
+              float t = (float)step / n_steps;
+              Vec2 point = Conic(points[0], points[1], points[2], weight, t);
+              float delta_length = Length(point - last_point);
+              if (length + delta_length >= length_limit) {
+                t = (float)(step - 1 + (length_limit - length) / delta_length) / n_steps;
+                point = Conic(points[0], points[1], points[2], weight, t);
+                length = length_limit;
+                limit_reached = true;
+              } else {
+                length += delta_length;
+              }
+              Vec2 tangent = -ConicTangent(points[0], points[1], points[2], weight, t);
+              normal = Rotate90DegreesClockwise(tangent) / Length(tangent);
+              last_point = point;
+              if (limit_reached) {
+                break;
+              }
+            }
+          } else if (SkPath::kMove_Verb == verb) {
+            // pass
+          } else if (SkPath::kLine_Verb == verb) {
+            Vec2 diff = points[1] - points[0];
+            float segment_length = Length(diff);
+            diff = diff / std::max(segment_length, 0.00001f);
+
+            int n_steps = 1;
+            for (int step = 0; step <= n_steps; ++step) {
+              float t = (float)step / n_steps;
+
+              float delta_length = step ? segment_length / n_steps : 0;
+              if (length + delta_length >= length_limit) {
+                t = (float)(step - 1 + (length_limit - length) / delta_length) / n_steps;
+                length = length_limit;
+                limit_reached = true;
+              } else {
+                length += delta_length;
+              }
+
+              last_point = points[0] * (1 - t) + points[1] * t;
+              normal = Rotate90DegreesClockwise(diff);
+              if (limit_reached) {
+                break;
+              }
+            }
+          } else if (SkPath::kCubic_Verb == verb) {
+            Vec2 p0 = points[0];
+            Vec2 p1 = points[1];
+            Vec2 p2 = points[2];
+            Vec2 p3 = points[3];
+            constexpr int n_steps = 1;
+            last_point = p0;
+            for (int step = 1; step <= n_steps; step++) {
+              float t = (float)step / n_steps;
+              Vec2 point = p0 * powf(1 - t, 3) + p1 * 3 * powf(1 - t, 2) * t +
+                           p2 * 3 * (1 - t) * t * t + p3 * powf(t, 3);
+
+              float delta_length = Length(point - last_point);
+              if (length + delta_length >= length_limit) {
+                t = (float)(step - 1 + (length_limit - length) / delta_length) / n_steps;
+                point = p0 * powf(1 - t, 3) + p1 * 3 * powf(1 - t, 2) * t +
+                        p2 * 3 * (1 - t) * t * t + p3 * powf(t, 3);
+                length = length_limit;
+                limit_reached = true;
+              } else {
+                length += delta_length;
+              }
+
+              Vec2 tangent = p0 * -3 * powf(1 - t, 2) +
+                             p1 * (3 * powf(1 - t, 2) - 6 * t * (1 - t)) +
+                             p2 * (6 * t * (1 - t) - 3 * t * t) + p3 * 3 * powf(t, 2);
+              normal = Rotate90DegreesClockwise(tangent) / Length(tangent);
+              last_point = point;
+              if (limit_reached) {
+                break;
+              }
+            }
+          }
+        } while (SkPath::kDone_Verb != verb && length < length_limit);
+
+        Vec2 top_offset = normal *
+                          CosineInterpolate(kCasingWidth / 2, 1.5_mm, length / length_limit) *
+                          state->connector_scale;
+        Vec2 top_tangent = Rotate90DegreesCounterClockwise(normal);
+        Vec2 base_offset =
+            Vec2::Polar(connector_dir - 90_deg, kCasingWidth / 2 * state->connector_scale);
+        auto top = last_point;
+        auto base = cable_end;
+        auto base_tangent = Vec2::Polar(connector_dir, 1);
+        auto top_left = top - top_offset;
+        auto top_right = top + top_offset;
+        auto base_left = base - base_offset;
+        auto base_right = base + base_offset;
+        float vertical_control_point_distance_left = std::min(length, Length(base_left - top_left));
+        float vertical_control_point_distance_right =
+            std::min(length, Length(base_right - top_right));
+        Vec2 positions[12] = {
+            top_left,
+            top_left + top_tangent * 0.5_mm,
+            top_right + top_tangent * 0.5_mm,
+            top_right,
+            top_right - top_tangent * vertical_control_point_distance_right * 0.2,
+            base_right + base_tangent * vertical_control_point_distance_right * 0.6,
+            base_right,
+            base + base_offset / 3,
+            base - base_offset / 3,
+            base_left,
+            base_left + base_tangent * vertical_control_point_distance_left * 0.6,
+            top_left - top_tangent * vertical_control_point_distance_left * 0.2,
+        };
+
+        SkPaint paint;
+        Status status;
+        static auto effect =
+            resources::CompileShader(embedded::assets_connector_rubber_rt_sksl, status);
+        if (!OK(status)) {
+          FATAL << status;
+        }
+        paint.setShader(effect->makeShader(nullptr, nullptr, 0));
+        paint.setColorFilter(color_filter);
+        Vec2 tex_coords[4] = {
+            {-1, length},
+            {1, length},
+            {1, 0},
+            {-1, 0},
+        };
+        canvas.drawPatch(&positions[0].sk, nullptr, &tex_coords[0].sk, SkBlendMode::kSrcOver,
+                         paint);
+      }
     }
   } else {
     if (style == Argument::Style::Arrow) {

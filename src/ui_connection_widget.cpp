@@ -381,6 +381,7 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
 
   if (icon == nullptr && a.start_arg && style == Argument::Style::Cable) {
     icon = arg.MakeIcon(this);
+    layers.OrderInside(icon.get());
     auto m = SkMatrix::RectToRect(icon->Shape().getBounds(), Rect(-4_mm, -4_mm, 4_mm, 4_mm),
                                   SkMatrix::kCenter_ScaleToFit);
     // scale is guaranteed to be the same for X & Y

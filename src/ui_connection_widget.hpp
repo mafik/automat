@@ -58,7 +58,7 @@ struct ConnectionWidget : ArgumentToy {
   Vec2AndDir pos_dir;  // position of connection start
   SkPath from_shape;   // board coords
   SkPath to_shape;     // board coords
-  mutable animation::Approach<> cable_width;
+  animation::Approach<> cable_width;
   Vec<Vec2AndDir> to_points;
   float transparency = 1;
   float alpha = 0;

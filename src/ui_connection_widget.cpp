@@ -453,10 +453,6 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
 
   if (state) {
     if (state->stabilized && !state->stabilized_end.has_value()) {
-      auto& toy = *a.start_widget;
-      auto* mw = BoardOrNull(*this);
-
-      auto pos_dir = this->pos_dir;
       state->stabilized_start = pos_dir.pos;
       state->sections.front().pos = pos_dir.pos;
       state->sections.back().pos = pos_dir.pos;
@@ -576,10 +572,6 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
 
       canvas.save();
       canvas.concat(connector_matrix);
-
-      constexpr float casing_left = -kCasingWidth / 2;
-      constexpr float casing_right = kCasingWidth / 2;
-      constexpr float casing_top = kCasingHeight;
 
       {  // Steel insert
         canvas.save();

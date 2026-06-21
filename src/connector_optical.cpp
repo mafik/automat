@@ -26,6 +26,7 @@
 #include "../build/generated/embedded.hpp"
 #include "arcline.hpp"
 #include "argument.hpp"
+#include "audio.hpp"
 #include "casting.hpp"
 #include "color.hpp"
 #include "font.hpp"
@@ -43,7 +44,6 @@ namespace automat::ui {
 
 constexpr bool kDebugCable = false;
 constexpr float kStep = 5_mm;
-constexpr float kCrossSize = 0.001;
 constexpr SkColor kRoutingDebugColor = "#28387f"_color;
 
 // The job of RouteCable is to find a visually pleasing path from the given start (point &
@@ -147,7 +147,7 @@ static ArcLine RouteCableDown(Vec2AndDir start, Vec2 cable_end) {
   return cable;
 }
 
-static ArcLine RoutCableStraight(Vec2AndDir start, Vec2AndDir end,
+static ArcLine RouteCableStraight(Vec2AndDir start, Vec2AndDir end,
                                  SkCanvas* debug_canvas = nullptr) {
   float radius = 1_cm;
   ArcLine cable = ArcLine(start.pos, start.dir);
@@ -226,7 +226,7 @@ static ArcLine RouteCableOneEnd(Vec2AndDir start, Vec2AndDir end,
   if (start.dir == -90_deg && end.dir == -90_deg) {
     return RouteCableDown(start, end.pos);
   } else {
-    return RoutCableStraight(start, end, debug_canvas);
+    return RouteCableStraight(start, end, debug_canvas);
   }
 }
 
@@ -307,7 +307,7 @@ static bool SimulateDispenser(CablePhysicsSimulation& state, float dt, Size anch
       float extend_threshold = kStep + state.cable_width / 2;
       if (current_dist > extend_threshold) {
         state.sections[state.sections.size() - 2].distance = kStep;
-        auto new_it = state.sections.insert(
+        state.sections.insert(
             state.sections.begin() + state.sections.size() - 1,
             CablePhysicsSimulation::CableSection{
                 .pos = state.sections[state.sections.size() - 2].pos -
@@ -318,7 +318,7 @@ static bool SimulateDispenser(CablePhysicsSimulation& state, float dt, Size anch
                 .distance = current_dist - kStep,
             });
       } else if (state.sections.size() < anchor_count) {
-        auto new_it = state.sections.insert(
+        state.sections.insert(
             state.sections.begin() + state.sections.size() - 1,
             CablePhysicsSimulation::CableSection{
                 .pos = state.sections.back().pos -

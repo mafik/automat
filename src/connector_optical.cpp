@@ -20,6 +20,7 @@
 #include <include/effects/SkRuntimeEffect.h>
 #include <src/core/SkPathPriv.h>
 
+#include <cassert>
 #include <cmath>
 
 #include "../build/generated/embedded.hpp"
@@ -28,6 +29,7 @@
 #include "casting.hpp"
 #include "color.hpp"
 #include "font.hpp"
+#include "global_resources.hpp"
 #include "log.hpp"
 #include "math.hpp"
 #include "on_off.hpp"
@@ -684,21 +686,6 @@ static SkPoint conic_tangent(SkPoint p0, SkPoint p1, SkPoint p2, float w, float 
   return {p0.x() * w0 + p1.x() * w1 + p2.x() * w2, p0.y() * w0 + p1.y() * w1 + p2.y() * w2};
 }
 
-struct OptionsHack {
-  bool forceUnoptimized = false;
-  std::string_view fName;
-  bool allowPrivateAccess = false;
-  uint32_t fStableKey = 0;
-  SkSL::Version maxVersionAllowed = SkSL::Version::k300;
-  operator const SkRuntimeEffect::Options&() const {
-    return *reinterpret_cast<const SkRuntimeEffect::Options*>(this);
-  }
-};
-
-const OptionsHack kOptionsHack;
-
-static_assert(sizeof(OptionsHack) == sizeof(SkRuntimeEffect::Options));
-
 void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filter,
                CableTexture texture, float start_width, float end_width, float* length_cache) {
   float cached_length = 100_mm;
@@ -718,11 +705,9 @@ void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filte
 
   SkPaint paint;
 
-  auto [effect, err] = SkRuntimeEffect::MakeForShader(
-      SkString(embedded::assets_cable_rt_sksl.content), kOptionsHack);
-  if (!err.isEmpty()) {
-    FATAL << err.c_str();
-  }
+  Status status;
+  static auto effect = resources::CompileShader(embedded::assets_cable_rt_sksl, status);
+  assert(effect);
   sk_sp<SkShader> cable_color, cable_normal;
   switch (texture) {
     case CableTexture::Braided:
@@ -926,10 +911,11 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
 
     SkPaint paint;
 
-    auto [effect, err] = SkRuntimeEffect::MakeForShader(
-        SkString(embedded::assets_connector_insert_rt_sksl.content), kOptionsHack);
-    if (!err.isEmpty()) {
-      FATAL << err.c_str();
+    Status status;
+    static auto effect =
+        resources::CompileShader(embedded::assets_connector_insert_rt_sksl, status);
+    if (!OK(status)) {
+      FATAL << status;
     }
     paint.setShader(effect->makeShader(nullptr, nullptr, 0));
     canvas.drawVertices(builder.detach(), SkBlendMode::kScreen, paint);
@@ -957,10 +943,10 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
 
     SkPaint paint;
 
-    auto [effect, err] = SkRuntimeEffect::MakeForShader(
-        SkString(embedded::assets_connector_case_rt_sksl.content), kOptionsHack);
-    if (!err.isEmpty()) {
-      FATAL << err.c_str();
+    Status status;
+    static auto effect = resources::CompileShader(embedded::assets_connector_case_rt_sksl, status);
+    if (!OK(status)) {
+      FATAL << status;
     }
     paint.setShader(effect->makeShader(nullptr, nullptr, 0));
     paint.setColorFilter(color_filter);
@@ -1138,10 +1124,11 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
     };
 
     SkPaint paint;
-    auto [effect, err] = SkRuntimeEffect::MakeForShader(
-        SkString(embedded::assets_connector_rubber_rt_sksl.content), kOptionsHack);
-    if (!err.isEmpty()) {
-      FATAL << err.c_str();
+    Status status;
+    static auto effect =
+        resources::CompileShader(embedded::assets_connector_rubber_rt_sksl, status);
+    if (!OK(status)) {
+      FATAL << status;
     }
     paint.setShader(effect->makeShader(nullptr, nullptr, 0));
     paint.setColorFilter(color_filter);

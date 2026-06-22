@@ -180,10 +180,13 @@ class Binary:
 
 
 OBJ_DIR = BASE / 'obj'
-OBJ_DIR.mkdir(parents=True, exist_ok=True)
+GENERATED_OBJ_DIR = OBJ_DIR / 'generated'
+GENERATED_OBJ_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def obj_path(src_path: Path) -> Path:
+    if src_path.is_relative_to(fs_utils.generated_dir):
+        return GENERATED_OBJ_DIR / (src_path.stem + '.o')
     return OBJ_DIR / (src_path.stem + '.o')
 
 def libname(name):

@@ -48,9 +48,9 @@ buffer is row-copied once into a pooled allocation (the pool entry is reclaimed
 when the previous frame's image lets go) and the raster image wraps it without
 further copies; a dmabuf becomes a GPU-backed image instead. Both imports happen
 on the compositor thread (see GPU buffer passing below), which writes each
-object's texture and child list under that object's mutex and bumps its
-`content_serial`; `wake_counter` notifies the per-surface toy to pull the new
-state and redraw. Board structure is only mutated on the UI thread, in
+object's texture and child list under that object's mutex.
+
+Board structure is only mutated on the UI thread, in
 `UIFrame()` — called once per frame from `RootWidget::Tick` — which inserts
 newly mapped windows (seated next to the Command that spawned them) and
 removes windows whose client went away; the child surface objects below a window

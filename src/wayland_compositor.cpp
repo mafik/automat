@@ -859,9 +859,8 @@ void UpdateSurfaceNode(WaylandSurface& object, Surface& surf) {
     object.dst_size = surf.content.dst_size;
     object.below = std::move(below);
     object.above = std::move(above);
-    object.content_serial++;
+    object.WakeToys();
   }
-  object.WakeToys();
 }
 
 // Rebuilds the window's surface-object tree from the toplevel surface tree plus
@@ -876,7 +875,7 @@ void SyncWindowTree(WaylandWindow& win, Toplevel& t) {
     win.dst_size = {};
     win.below.clear();
     win.above.clear();
-    win.content_serial++;
+    win.WakeToys();
   }
 }
 

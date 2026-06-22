@@ -149,7 +149,6 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy {
   SkRect src_crop_ = SkRect::MakeEmpty();
   SkISize dst_size_ = {};
   Vec<WaylandSurface::Child> below_, above_;
-  uint64_t content_serial_ = 0;
 
   WaylandSurfaceToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {}
 
@@ -162,8 +161,6 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy {
     auto s = LockSurface();
     if (!s) return;
     auto lock = std::lock_guard(s->mutex);
-    if (s->content_serial == content_serial_) return;
-    content_serial_ = s->content_serial;
     image_ = s->image;
     src_crop_ = s->src_crop;
     dst_size_ = s->dst_size;

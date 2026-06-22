@@ -51,8 +51,6 @@ struct WaylandSurface : Object {
   // this surface's popups, which always draw on top.
   Vec<Child> below;
   Vec<Child> above;
-  // Bumped (with WakeToys) whenever any field above changes, so the toy re-pulls.
-  uint64_t content_serial = 0;
 
   WaylandSurface() = default;
   WaylandSurface(const WaylandSurface&) = delete;

@@ -19,7 +19,7 @@
 #include "toy.hpp"
 #include "ui_beta.hpp"
 #include "units.hpp"
-#include "wayland_compositor.hpp"
+#include "wayland.hpp"
 
 #if defined(__linux__)
 #include "x11.hpp"

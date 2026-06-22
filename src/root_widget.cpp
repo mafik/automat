@@ -42,7 +42,7 @@
 #include "win32.hpp"
 #include "win32_window.hpp"
 #elif defined(__linux__)
-#include "wayland_compositor.hpp"
+#include "wayland.hpp"
 #include "xcb_window.hpp"
 #endif
 

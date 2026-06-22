@@ -69,16 +69,14 @@ Every state change is shown on two channels (the Beta rule):
 - While the child runs, the button becomes a red STOP, the lower-left corner
   shows the spinner and the live `pid` readout.
 - After exit, a chip reports the result: green `exit 0`, red `exit N`, or
-  the signal name if the child died by signal. STOP sends SIGTERM; a child
-  that handles it and exits cleanly therefore shows its own exit code, not
-  the signal.
+  the signal name if the child died by signal. STOP means SIGTERM.
 
 Pressing Enter inside the tiles is equivalent to pressing RUN.
 
 ## Interfaces and composition
 
 The object exposes the standard `Runnable` (spawn) and `LongRunning`
-(STOP/cancel = SIGTERM, `Done` on reap) interfaces plus `Next` chaining, so
+(STOP/cancel, `Done` on reap) interfaces plus `Next` chaining, so
 Timers, Gears, chains and the bubble menu drive it without special cases. A
 detached reaper thread waits on the child and reports the exit status.
 

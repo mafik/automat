@@ -50,6 +50,7 @@ struct Path {
   Str Stem() const;
 
   Path WithStem(StrView stem) const;
+  Path WithExt(StrView ext) const;
 
   Path operator/(StrView rhs) const;
 
@@ -57,6 +58,7 @@ struct Path {
   operator StrView() const { return str; }
   operator const char*() const { return str.c_str(); }
   const char* c_str() const { return str.c_str(); }
+  operator bool() const { return !str.empty(); }
 };
 
 }  // namespace automat

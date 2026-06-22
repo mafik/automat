@@ -201,12 +201,30 @@ Path Path::WithStem(StrView stem) const {
   }
   auto dot_pos = str.rfind(".");
   Size stem_end;
+  // TODO: handle stem_end is <= stem_begin
   if (dot_pos == StrView::npos) {
     stem_end = str.size();
   } else {
     stem_end = dot_pos;
   }
   return Path(str.substr(0, stem_begin) + Str(stem) + str.substr(stem_end));
+}
+
+Path Path::WithExt(StrView ext) const {
+  auto slash_pos = str.rfind("/");
+  Size stem_begin;
+  if (slash_pos == StrView::npos) {
+    stem_begin = 0;
+  } else {
+    stem_begin = slash_pos + 1;
+  }
+  auto dot_pos = str.rfind(".");
+  // TODO: handle stem_end is <= stem_begin
+  if (dot_pos == StrView::npos) {
+    return Path(str + '.' + Str(ext));
+  } else {
+    return Path(str.substr(0, dot_pos + 1) + Str(ext));
+  }
 }
 
 }  // namespace automat

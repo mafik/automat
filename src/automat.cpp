@@ -31,7 +31,7 @@
 #include "timer_thread.hpp"
 #include "tracy_client.hpp"  // IWYU pragma: keep
 #include "vk.hpp"
-#include "wayland_compositor.hpp"
+#include "wayland.hpp"
 
 #if defined(__linux__)
 #include "mux_epoll.hpp"
@@ -158,7 +158,11 @@ int Main() {
     ERROR << "Couldn't start the epoll thread: " << status;
     status.Reset();
   }
-  wayland::server.emplace(stop_source.get_token());
+  wayland::server = wayland::MakeServer(mux::epoll, status);
+  if (!OK(status)) {
+    ERROR << "Couldn't start the Wayland compositor: " << status;
+    status.Reset();
+  }
 #endif
 
   if (root_widget->loading_animation) {

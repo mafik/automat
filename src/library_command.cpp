@@ -15,7 +15,7 @@
 #include "ui_beta.hpp"
 #include "ui_button.hpp"
 #include "units.hpp"
-#include "wayland_compositor.hpp"
+#include "wayland.hpp"
 
 #if !defined(_WIN32)
 #include <spawn.h>
@@ -142,7 +142,7 @@ I64 SpawnArgv(const Vec<Str>& argv_in, Status& status) {
   // Children talk to Automat's own Wayland compositor: WAYLAND_DISPLAY points
   // at our socket and DISPLAY is dropped so toolkits don't fall back to the
   // host X server.
-  Str wayland_socket = wayland::server ? wayland::server->SocketName() : Str{};
+  Str wayland_socket = wayland::server ? wayland::server->socket_path.Name() : Str{};
   Str wayland_entry = "WAYLAND_DISPLAY=" + wayland_socket;
   std::vector<char*> envp;
   for (char** e = environ; *e; ++e) {

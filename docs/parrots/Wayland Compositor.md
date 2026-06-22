@@ -193,18 +193,16 @@ it recursively. A surface is rejected as its own ancestor at `get_subsurface`, s
 the tree walks stay finite.
 
 Pointer input reaches the topmost surface at the cursor that accepts input, which
-need not be the toplevel and need not be the surface visually on top: the tree is
-hit-tested front-to-back (`SurfaceAt`), honoring each surface's input region (see
-Input pass-through), and enter, leave, motion, button and axis are sent there in
-that surface's local coordinates, with focus following the pointer across surface
-boundaries (`RoutePointer`). Keyboard input goes to the toplevel surface instead;
-see Input pass-through for why a subsurface must not hold keyboard focus.
+need not be the toplevel and need not be the surface visually on top. Toys
+forward enter, leave, motion, button and axis to their surface's clients in
+surface-local coordinates (see Input pass-through). Keyboard input goes to the
+toplevel surface instead; see Input pass-through for why a subsurface must not hold
+keyboard focus.
 
-The tree, the sync/desync rules, stacking and input routing are in
-`src/wayland_compositor.cpp` (`Commit`, `ApplyChildren`, `UpdateSurfaceNode`,
-`SyncWindowTree`, `BindSubcompositor`, `SurfaceAt`, `RoutePointer`); the
-per-surface objects, their toys and the texture drawing are in
-`src/library_wayland_window.cpp`.
+The tree, the sync/desync rules and stacking are in `src/wayland_compositor.cpp`
+(`Commit`, `ApplyChildren`, `UpdateSurfaceNode`, `SyncWindowTree`,
+`BindSubcompositor`); the per-surface objects, their toys, the texture drawing and
+the per-surface input routing are in `src/library_wayland_window.cpp`.
 
 ## Popups (menus)
 
@@ -224,16 +222,15 @@ top.
 Dismissal does not rely on the popup grab. Firefox shows context menus on button
 release, by which point the implicit grab serial is gone, so it never calls
 `xdg_popup.grab` (Weston behaves identically). The compositor therefore dismisses
-the topmost popup on any press outside the popup chain (`popup_done`), which is
-what compositors do regardless of grab; a popup that *does* grab additionally
-takes keyboard focus so the menu can be driven from the keyboard.
+the topmost popup whenever a press lands on a surface that is not itself a popup
+(`popup_done`); a popup that *does* grab additionally takes
+keyboard focus so the menu can be driven from the keyboard.
 
 The positioner is computed and encoded in `src/wayland_compositor.cpp`
 (`ResolvePopup`, `UpdateSurfaceNode`, `NewPopup`) and resolved against the viewport
 in `src/library_wayland_window.cpp` (`PlacePopup`), which flips then slides a popup
 that would fall off screen, honoring the client's permitted adjustments so a menu
-opened near a screen edge stays usable. Input is in `PopupSurfaceAt` and
-`TopmostPopup`.
+opened near a screen edge stays usable.
 
 ## Clipboard
 
@@ -250,23 +247,21 @@ broker is in `src/wayland_compositor.cpp` (`SetSelection`, `OfferSelectionTo`,
 
 ## Input pass-through
 
-The window toy routes input by area: presses inside the client content become
-`wl_pointer` button events (an `Action` lives for the duration of the press, so
-drags select text in a terminal instead of moving the object); hover motion with
-no button held is forwarded too (the toy watches the pointer via
-`PointerMoveCallback`), so links and menu items highlight and the client sets its
-own cursor; the scroll wheel becomes `wl_pointer.axis` when the cursor is over
-the content, and falls through to canvas zoom over the chrome (`Widget::PointerWheel`,
-offered to the hovered widget before zoom in `Pointer::Wheel`). The title bar and
-frame fall through to the standard object behaviors (drag, menu).
+A press becomes a `wl_pointer` button (an `Action` lives for the duration of the
+press, so drags select text in a terminal instead of moving the object); hover
+motion with no button held is forwarded too (the toy watches the pointer via
+`PointerMoveCallback`), so links and menu items highlight; the scroll wheel
+becomes `wl_pointer.axis` over the content and falls through to canvas zoom over
+the chrome. The toy hands the compositor the surface plus surface-local
+coordinates; the compositor resolves the surface handle and relays the event.
+The title bar and frame fall through to the standard object behaviors (drag, menu).
 
-Which surface a pointer event reaches is decided by `set_input_region`, not by
-which surface is visually on top. A surface with an empty input region is
-transparent to the pointer, so the hit-test (`SurfaceAt`) falls through to
-whatever is behind it. This is load-bearing for GTK clients: Firefox renders its
-page into a content subsurface but marks that subsurface input-transparent and
-takes all pointer input on the toplevel surface, so a compositor that routed by
-visual stacking would deliver clicks, scroll and motion to a surface the client
+A surface's reactive shape is its `set_input_region`, not its texture, so a
+surface with an empty input region is transparent to the pointer and the hit falls
+through to whatever is behind it. This is load-bearing for GTK clients: Firefox
+renders its page into a content subsurface but marks that subsurface
+input-transparent and takes all pointer input on the toplevel surface, so routing
+by visual stacking would deliver clicks, scroll and motion to a surface the client
 silently discards them on.
 
 Keyboard focus is the toplevel surface, never a subsurface under the cursor.

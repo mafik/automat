@@ -20,8 +20,9 @@
 #include "str.hpp"
 
 namespace automat::library {
+struct WaylandSurface;
 struct WaylandWindow;
-}
+}  // namespace automat::library
 
 namespace automat::wayland {
 
@@ -37,11 +38,11 @@ struct Server {
   Str SocketName();
   void UIFrame();
   void NotifyWindowDestroyed(void* toplevel_handle);
-  void SendPointerEnter(library::WaylandWindow&, float sx, float sy);
-  void SendPointerMotion(library::WaylandWindow&, float sx, float sy);
-  void SendPointerButton(library::WaylandWindow&, uint32_t button, bool pressed);
-  void SendPointerAxis(library::WaylandWindow&, float notches_up);
-  void SendPointerLeave(library::WaylandWindow&);
+  void SendPointerEnter(library::WaylandSurface&, float lx, float ly);
+  void SendPointerMotion(library::WaylandSurface&, float lx, float ly);
+  void SendPointerButton(library::WaylandSurface&, uint32_t button, bool pressed);
+  void SendPointerAxis(library::WaylandSurface&, float notches_up);
+  void SendPointerLeave(library::WaylandSurface&);
   void SendKeyboardEnter(library::WaylandWindow&);
   void SendKeyboardLeave(library::WaylandWindow&);
   void SendKey(library::WaylandWindow&, uint32_t evdev_keycode, bool pressed, bool ctrl, bool alt,

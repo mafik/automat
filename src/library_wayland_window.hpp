@@ -5,6 +5,7 @@
 // Warning: coded with a stochastic parrot
 
 #include <include/core/SkImage.h>
+#include <include/core/SkPath.h>
 #include <include/core/SkPoint.h>
 #include <include/core/SkRect.h>
 #include <include/core/SkSize.h>
@@ -28,6 +29,14 @@ struct WaylandSurface : Object {
   sk_sp<SkImage> image;
   SkRect src_crop = SkRect::MakeEmpty();  // wp_viewport crop
   SkISize dst_size = {};                  // pixels
+  // The surface's input region, in client pixels (a closed path; empty means the
+  // surface takes no pointer input, e.g. a render-only content subsurface). The
+  // toy maps it to its Shape, so Automat's own hit-testing routes input to the
+  // right surface and the compositor does no hit-testing of its own.
+  SkPath input_region;
+  // The protocol wl_surface this object mirrors (a wl_resource*); the wayland
+  // thread resolves it to route input to this surface's client. Null until mapped.
+  std::atomic<void*> surface_handle{nullptr};
 
   // A child surface and its placement within this surface (client pixels). The
   // placement lives on the edge, not the child, so the toy reads it and the

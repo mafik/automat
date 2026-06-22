@@ -11,7 +11,9 @@
 #include <fcntl.h>
 #include <include/core/SkData.h>
 #include <include/core/SkImage.h>
+#include <include/core/SkPath.h>
 #include <include/core/SkSize.h>
+#include <include/pathops/SkPathOps.h>
 #include <linux/input-event-codes.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -106,13 +108,6 @@ struct RegionOp {
 struct InputRegion {
   bool infinite = true;
   Vec<RegionOp> ops;
-  bool Contains(SkIPoint p) const {
-    if (infinite) return true;
-    bool inside = false;
-    for (auto& op : ops)
-      if (op.rect.contains(p.x(), p.y())) inside = op.add;
-    return inside;
-  }
 };
 
 // A wl_region: snapshotted into a surface's InputRegion at adopt time, so the
@@ -369,7 +364,6 @@ struct Server::Impl {
   // so events route to the subsurface under the cursor (cleared on destroy).
   Surface* pointer_surface = nullptr;
   Surface* keyboard_surface = nullptr;
-  bool pointer_over_popup = false;  // last pointer routing landed inside a popup
   Popup* grabbing_popup = nullptr;  // topmost popup holding a grab, or null
   Colony<CXdgWmBase> wm_bases;
   Colony<Positioner> positioners;
@@ -828,6 +822,18 @@ Ptr<WaylandSurface> GetOrCreateObject(Surface& surf) {
   return p;
 }
 
+SkPath InputRegionPath(const InputRegion& ir, SkISize size) {
+  if (ir.infinite) return SkPath::Rect(SkRect::MakeIWH(size.width(), size.height()));
+  SkPath path;
+  for (const RegionOp& op : ir.ops) {
+    SkPath rect = SkPath::Rect(SkRect::Make(op.rect));
+    SkPath out;
+    if (Op(path, rect, op.add ? kUnion_SkPathOp : kDifference_SkPathOp, &out))
+      path = std::move(out);
+  }
+  return path;
+}
+
 // Copies `surf`'s committed texture and child surfaces into its `object`,
 // recursing into subsurfaces and popups to mirror the Wayland surface tree.
 void UpdateSurfaceNode(WaylandSurface& object, Surface& surf) {
@@ -857,10 +863,13 @@ void UpdateSurfaceNode(WaylandSurface& object, Surface& surf) {
     object.image = surf.content.image;
     object.src_crop = surf.content.src_crop;
     object.dst_size = surf.content.dst_size;
+    object.input_region = InputRegionPath(surf.input_region, surf.content.dst_size);
     object.below = std::move(below);
     object.above = std::move(above);
     object.WakeToys();
   }
+  // The toy hands this back to route input; resolved via surface_by_res.
+  object.surface_handle.store(surf.res.resource());
 }
 
 // Rebuilds the window's surface-object tree from the toplevel surface tree plus
@@ -1896,32 +1905,18 @@ void PostInput(Impl& impl, WaylandWindow& w, Fn&& fn) {
   });
 }
 
-// Hit-tests the surface tree at a toplevel-local point, front-to-back (mirroring
-// the back-to-front draw order), returning the topmost surface that covers it
-// and the point in that surface's local coordinates.
-Surface* SurfaceAt(Surface& root, double px, double py, SkIPoint origin, double& lx, double& ly) {
-  for (auto it = root.stack.rbegin(); it != root.stack.rend(); ++it) {
-    Surface* entry = *it;
-    if (entry == &root) {
-      if (root.content.image) {
-        double rx = px - origin.x(), ry = py - origin.y();
-        // Honor set_input_region: a surface with an empty (or point-excluding)
-        // input region is transparent to the pointer, so the hit falls through to
-        // whatever is behind it - this is what makes input reach the toplevel
-        // instead of a client's render-only content subsurface.
-        if (rx >= 0 && ry >= 0 && rx < root.content.dst_size.width() &&
-            ry < root.content.dst_size.height() && root.input_region.Contains({(int)rx, (int)ry})) {
-          lx = rx;
-          ly = ry;
-          return &root;
-        }
-      }
-    } else {
-      Subsurface* sub = entry->as_subsurface;
-      if (Surface* hit = SurfaceAt(*entry, px, py, origin + sub->pos, lx, ly)) return hit;
+// Like PostInput, but for any surface in the tree.
+template <typename Fn>
+void PostSurfaceInput(Impl& impl, WaylandSurface& ws, Fn&& fn) {
+  if (!impl.ready) return;
+  void* handle = ws.surface_handle.load();
+  if (!handle) return;
+  impl.epoll.Post([&impl, handle, fn = std::forward<Fn>(fn)] {
+    if (Surface* surf = SurfaceOrNull(impl, (wl_resource*)handle)) {
+      fn(impl, *surf);
+      wl_display_flush_clients(impl.display);
     }
-  }
-  return nullptr;
+  });
 }
 
 void PointerEnterTo(Impl& s, Surface& surf, double lx, double ly) {
@@ -1981,24 +1976,6 @@ void PointerAxisTo(Impl& s, Surface& surf, float notches_up) {
   }
 }
 
-// Routes a pointer at toplevel-local (sx, sy) to the topmost surface there,
-// sending leave/enter across surface boundaries and a motion to the target.
-// Hit-tests the popups parented to `parent_xdg` (and their nested popups),
-// topmost first, in toplevel-surface coordinates - mirroring how UpdateSurfaceNode
-// places them.
-Surface* PopupSurfaceAt(XdgSurf& parent_xdg, SkIPoint parent_origin, double px, double py,
-                        double& lx, double& ly) {
-  for (auto it = parent_xdg.child_popups.rbegin(); it != parent_xdg.child_popups.rend(); ++it) {
-    Popup* pp = *it;
-    if (!pp->xdg || !pp->xdg->surface) continue;
-    SkIPoint origin = parent_origin + parent_xdg.geo.topLeft() + pp->geo.topLeft();
-    if (Surface* hit = PopupSurfaceAt(*pp->xdg, origin, px, py, lx, ly))
-      return hit;  // nested above
-    if (Surface* hit = SurfaceAt(*pp->xdg->surface, px, py, origin, lx, ly)) return hit;
-  }
-  return nullptr;
-}
-
 // The deepest (topmost) open popup under `xdg`, or null. A press outside it
 // dismisses it. Note: Firefox shows context menus on button release, by which
 // time the implicit grab serial is gone, so it never calls xdg_popup.grab; the
@@ -2012,22 +1989,6 @@ Popup* TopmostPopup(XdgSurf& xdg) {
     return pp;
   }
   return nullptr;
-}
-
-void RoutePointer(Impl& s, Toplevel& t, double sx, double sy) {
-  if (!t.xdg || !t.xdg->surface) return;
-  double lx = 0, ly = 0;
-  // Popups draw above the toplevel, so hit-test them first; a hit there marks the
-  // pointer as inside the popup chain, which a grab uses for dismissal.
-  Surface* target = PopupSurfaceAt(*t.xdg, {0, 0}, sx, sy, lx, ly);
-  s.pointer_over_popup = target != nullptr;
-  if (!target) target = SurfaceAt(*t.xdg->surface, sx, sy, {0, 0}, lx, ly);
-  if (target != s.pointer_surface) {
-    if (s.pointer_surface) PointerLeaveTo(s, *s.pointer_surface);
-    s.pointer_surface = target;
-    if (target) PointerEnterTo(s, *target, lx, ly);
-  }
-  if (target) PointerMotionTo(s, *target, lx, ly);
 }
 
 }  // namespace
@@ -2176,43 +2137,45 @@ void Server::NotifyWindowDestroyed(void* handle) {
 
 // ----------------------------------------------------------- input senders --
 
-void Server::SendPointerEnter(WaylandWindow& w, float sx, float sy) {
-  PostInput(*impl, w, [sx, sy](Impl& s, Toplevel& t, wl_resource*) { RoutePointer(s, t, sx, sy); });
-}
-
-void Server::SendPointerMotion(WaylandWindow& w, float sx, float sy) {
-  PostInput(*impl, w, [sx, sy](Impl& s, Toplevel& t, wl_resource*) { RoutePointer(s, t, sx, sy); });
-}
-
-void Server::SendPointerButton(WaylandWindow& w, uint32_t button, bool pressed) {
-  PostInput(*impl, w, [button, pressed](Impl& s, Toplevel& t, wl_resource*) {
-    // A press outside any open popup dismisses the topmost one (a menu) instead of
-    // reaching the client. The press is consumed; the client destroys the popup,
-    // which recomposes the window. This covers grabbing popups and the
-    // non-grabbing ones Firefox uses for context menus.
-    if (pressed && !s.pointer_over_popup && t.xdg) {
-      if (Popup* top = TopmostPopup(*t.xdg)) {
-        top->res.sendPopupDone();
-        return;
-      }
-    }
-    if (s.pointer_surface) PointerButtonTo(s, *s.pointer_surface, button, pressed);
+void Server::SendPointerEnter(WaylandSurface& surf, float lx, float ly) {
+  PostSurfaceInput(*impl, surf, [lx, ly](Impl& s, Surface& target) {
+    s.pointer_surface = &target;
+    PointerEnterTo(s, target, lx, ly);
   });
 }
 
-void Server::SendPointerAxis(WaylandWindow& w, float notches_up) {
-  PostInput(*impl, w, [notches_up](Impl& s, Toplevel&, wl_resource*) {
-    if (s.pointer_surface) PointerAxisTo(s, *s.pointer_surface, notches_up);
+void Server::SendPointerMotion(WaylandSurface& surf, float lx, float ly) {
+  PostSurfaceInput(*impl, surf,
+                   [lx, ly](Impl& s, Surface& target) { PointerMotionTo(s, target, lx, ly); });
+}
+
+void Server::SendPointerButton(WaylandSurface& surf, uint32_t button, bool pressed) {
+  PostSurfaceInput(*impl, surf, [button, pressed](Impl& s, Surface& target) {
+    // A press that lands on something other than a popup dismisses the topmost
+    // open popup (a menu) instead of reaching the client - covering grabbing
+    // popups and the non-grabbing ones Firefox uses for context menus.
+    if (pressed && !(target.xdg && target.xdg->popup)) {
+      if (Toplevel* t = OwningToplevel(target))
+        if (t->xdg)
+          if (Popup* top = TopmostPopup(*t->xdg)) {
+            top->res.sendPopupDone();
+            return;
+          }
+    }
+    PointerButtonTo(s, target, button, pressed);
   });
 }
 
-void Server::SendPointerLeave(WaylandWindow& w) {
-  PostInput(*impl, w, [](Impl& s, Toplevel&, wl_resource*) {
-    if (s.pointer_surface) {
-      PointerLeaveTo(s, *s.pointer_surface);
-      s.pointer_surface = nullptr;
-    }
-    s.pointer_over_popup = false;
+void Server::SendPointerAxis(WaylandSurface& surf, float notches_up) {
+  PostSurfaceInput(*impl, surf, [notches_up](Impl& s, Surface& target) {
+    PointerAxisTo(s, target, notches_up);
+  });
+}
+
+void Server::SendPointerLeave(WaylandSurface& surf) {
+  PostSurfaceInput(*impl, surf, [](Impl& s, Surface& target) {
+    if (s.pointer_surface == &target) s.pointer_surface = nullptr;
+    PointerLeaveTo(s, target);
   });
 }
 

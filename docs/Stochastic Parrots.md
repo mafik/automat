@@ -25,26 +25,23 @@ If along the way you execute some command, it doesn't work and then you figure o
 
 ### Development Tools
 
-- `python run.py "link automat"` - Build automat binary without running it (for testing compilation) (build/fast/automat)
-- `python run.py "link automat" --variant=debug` - Build debug variant - for running under GDB (build/debug/automat)
-- `python run.py "link automat" --variant=release` - Build release variant - fastest variant to build for testing (build/release/automat)
-- `python run.py compile_commands.json` - Generate `compile_commands.json` for LSP support. The output is cached: after include-graph changes, `rm compile_commands.json` first or entries keep stale flags.
-- `python run.py screenshot` - Take a screenshot of running automat (saved to `build/{variant}/screenshot.png`). If the invoking shell has no `DISPLAY` (headless/SSH), prefix with `DISPLAY=:0` — both automat and gnome-screenshot need the X session.
+- `python run.py "link automat"` - Build "fast" variant (build/fast/automat) - good tradeoff between build speed / performance / debuggability - best for day-to-day development
+- `python run.py "link automat" --variant=debug` - Build debug variant (build/debug/automat) - slowest & most expensive - best for investigating tricky bugs under GDB (warning: uses a lot of disk space!)
+- `python run.py "link automat" --variant=release` - Build release variant (build/release/automat) - fastest variant with assertions turned off for increased stability - best for performance measurements
+- **To test builds**: Use `python run.py "link automat"` to verify compilation without running
+- `python run.py compile_commands.json` - Generate `compile_commands.json` for LSP support. The output is cached so after each include-graph changes, you must run `rm compile_commands.json` or entries will keep stale flags.
+- `python run.py screenshot` - Start & take a screenshot of Automat (saved to `build/{variant}/screenshot.png`). If the invoking shell has no `DISPLAY` (headless/SSH), prefix with `DISPLAY=:0` — both automat and gnome-screenshot need the X session.
 - Build dashboard available at http://localhost:8000/ when running build commands
 - Custom build system written in Python, located in `run_py/` directory
 - Build variants: `fast` (default), `debug`, `release`, `asan`, `tsan`, `ubsan`
-
-### Important Notes
-
-- **To test builds**: Use `python run.py "link automat" --variant=release` to verify compilation without running
-- **Stale third-party build dirs**: After system package updates, dependency build dirs under `build/{variant}/` can hold stale paths to removed system files and fail in odd ways (PipeWire: "missing libcap.so"; fmt: "/usr/lib/llvm/20/bin/llvm-ar: No such file or directory" after an LLVM upgrade; libsystemd: "loading 'build.ninja': No such file or directory"). Fix: delete that dependency's build directory (e.g. `rm -rf build/release/fmt`) and rebuild. Several deps may be affected in sequence.
-- **Avoid running automat directly**: The `python run.py automat` command runs automat indefinitely and must be manually stopped
 
 ### Debugging
 
 When prompted with "gdb debug" run `build/debug/automat` under GDB (`gdb -q -ex "run" -ex "bt full" -ex "quit" build/debug/automat 2>&1`). The user will trigger a crash. Then you should figure out where the crash is coming from and how to fix it. Don't fix it yourself though - just investigate the root cause and recommend some options.
 
 When prompted with just "gdb", run `build/fast/automat` - in the same way as `gdb debug`.
+
+When prompted with any of the "gdb" requests, do not rebuild Automat with `./run.py 'link automat'` as it may destroy the binary prepared by the user. Instead invoke `gdb` directly on the `build/*/automat` binary.
 
 ## Architecture Overview
 
@@ -186,6 +183,14 @@ Prefer very sparsely commented code. Adding long (paragraph-length) comments is 
 
 Lengthy comments reduce readability as they go stale and dilute the substance of the program. Code must read like a comment itself.
 
+### Full sentences
+
+Do not abbreviate sentences by removing glue words:
+
+BAD example: "The output is cached: after include-graph changes, `rm compile_commands.json` first or entries keep stale flags."
+
+GOOD example: "The output is cached so after each include-graph changes, you must run `rm compile_commands.json` or entries will keep stale flags."
+
 ### Testing
 
 - Use Google Test framework for unit tests
@@ -200,6 +205,12 @@ Lengthy comments reduce readability as they go stale and dilute the substance of
 - Build variants controlled by `run_py/build_variant.py`
 - Custom pragma directives in source files control compilation and linking
 - Extension system allows easy integration of external libraries
+
+## Gotchas
+
+### Build System Gotchas
+
+- **Stale third-party build dirs**: After system package updates, dependency build dirs under `build/{variant}/` can hold stale paths to removed system files and fail in odd ways (PipeWire: "missing libcap.so"; fmt: "/usr/lib/llvm/20/bin/llvm-ar: No such file or directory" after an LLVM upgrade; libsystemd: "loading 'build.ninja': No such file or directory"). Fix: delete that dependency's build directory (e.g. `rm -rf build/fast/fmt`) and rebuild. Several deps may be affected in sequence.
 
 ### Renderer & Widget Lifecycle Gotchas
 

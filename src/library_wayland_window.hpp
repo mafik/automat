@@ -6,8 +6,11 @@
 
 #include <include/core/SkImage.h>
 #include <include/core/SkPoint.h>
+#include <include/core/SkRect.h>
+#include <include/core/SkSize.h>
 
 #include <atomic>
+#include <mutex>
 
 #include "base.hpp"
 #include "str.hpp"
@@ -19,34 +22,52 @@ namespace automat::library {
 // surface (content + chrome). Used to seat new windows next to their Command.
 Vec2 WindowBoardSize(int width, int height);
 
-// One surface in a window's composited tree: the toplevel (layer 0) plus any
-// subsurfaces. Layers are drawn back-to-front; `image` is sampled through
-// `source` (the wp_viewport crop, or the whole buffer) into a `size`-pixel
-// rectangle placed at `position` within the window, all in client pixels.
-struct WindowLayer {
-  sk_sp<SkImage> image;
-  SkRect source;
-  SkIPoint position;
-  SkISize size;
-};
-
-// One mapped Wayland toplevel, shown as an object on the board. The window's
-// life is bound to the client: the client unmapping/exiting removes the
-// object, and deleting the object asks the client to close.
-struct WaylandWindow : Object {
+struct WaylandSurface : Object {
   mutable std::mutex mutex;  // guards everything below
 
-  // The committed frame as a back-to-front list of layers (toplevel surface plus
-  // any subsurfaces); the client does the rendering, so the read side is just
-  // images. Each surface's shm buffer is row-copied into a pooled raster image
-  // and each dmabuf imported to a GPU texture, on the compositor thread at commit
-  // time. Empty until the first frame.
-  Vec<WindowLayer> layers;
-  // Window extent in client pixels (the toplevel surface size). Drives the
-  // window's board size and the surface-local mapping of pointer input. Empty
-  // until the first frame.
-  SkISize viewport_destination_px = {};
+  sk_sp<SkImage> image;
+  SkRect src_crop = SkRect::MakeEmpty();  // wp_viewport crop
+  SkISize dst_size = {};                  // pixels
+
+  // A child surface and its placement within this surface (client pixels). The
+  // placement lives on the edge, not the child, so the toy reads it and the
+  // child list as one consistent snapshot under this surface's mutex.
+  //
+  // Subsurfaces sit at `offset`. Popups carry their positioner instead: `offset`
+  // is the unconstrained anchor position and `flipped` its mirror about the
+  // anchor; the flags say which adjustments the client permits. The compositor
+  // does not fit a popup to the window - the toy keeps it within the on-screen
+  // viewport, which only the UI layer knows since the window is movable and
+  // zoomable - so a popup may extend past the window edge.
+  struct Child {
+    Ptr<WaylandSurface> surface;
+    SkIPoint offset = {};
+    bool is_popup = false;
+    SkIPoint flipped = {};
+    bool flip_x = false, flip_y = false, slide_x = false, slide_y = false;
+  };
+  // Child surfaces owned by this one, back-to-front, split by whether they
+  // composite below or above this surface's own content. `above` also carries
+  // this surface's popups, which always draw on top.
+  Vec<Child> below;
+  Vec<Child> above;
+  // Bumped (with WakeToys) whenever any field above changes, so the toy re-pulls.
   uint64_t content_serial = 0;
+
+  WaylandSurface() = default;
+  WaylandSurface(const WaylandSurface&) = delete;
+
+  StrView Name() const override { return "Wayland Surface"; }
+  Ptr<Object> Clone() const override { return MAKE_PTR(WaylandSurface); }
+  std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
+};
+
+// Adds window's identity, chrome and persistence on top of WaylandSurface.
+//
+// Lifetime controlled by the client:
+// - unmapping/exiting removes the object,
+// - deleting the object asks the client to close.
+struct WaylandWindow : WaylandSurface {
   Str title;
   Str app_id;
   bool client_gone = false;
@@ -77,7 +98,7 @@ struct WaylandWindow : Object {
   INTERFACES(launcher);
 
   WaylandWindow() = default;
-  WaylandWindow(const WaylandWindow& o) : Object(), launcher(o.launcher) {
+  WaylandWindow(const WaylandWindow& o) : WaylandSurface(), launcher(o.launcher) {
     auto lock = std::lock_guard(o.mutex);
     recipe = o.recipe;
     title = o.title;

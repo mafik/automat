@@ -65,8 +65,8 @@ extern const wl_interface zwp_tablet_tool_v2_interface = {
 
 namespace automat::wayland {
 
+using library::WaylandSurface;
 using library::WaylandWindow;
-using library::WindowLayer;
 using Impl = Server::Impl;
 
 namespace {
@@ -140,6 +140,9 @@ struct Surface {
   wl_resource* held_dmabuf = nullptr;  // dmabuf buffer held for zero-copy display
   Viewport* viewport = nullptr;        // wp_viewport crop/scale state, if any
   SurfaceCutout content;
+  // The scene-graph node (an Automat object) mirroring this surface; the parent
+  // node's child list owns it, so it dies when the surface leaves the tree.
+  WeakPtr<WaylandSurface> object;
   InputRegion input_region;                    // current; pointer hit-testing honors it
   Optional<InputRegion> pending_input_region;  // set_input_region, applied at commit
   // The image is not rotated, so only the normal transform renders correctly.
@@ -260,7 +263,9 @@ struct Popup {
   CXdgPopup res;
   XdgSurf* xdg = nullptr;
   XdgSurf* parent = nullptr;
-  SkIRect geo = SkIRect::MakeEmpty();  // resolved geometry in the parent's window-geometry space
+  SkIRect geo = SkIRect::MakeEmpty();  // anchor geometry in the parent's window-geometry space
+  SkIPoint flipped = {};               // `geo` mirrored about the anchor
+  bool flip_x = false, flip_y = false, slide_x = false, slide_y = false;
 
   Popup(wl_client* client, int version, uint32_t id) : res(client, version, id) {}
   Popup(const Popup&) = delete;
@@ -461,9 +466,9 @@ Positioner* PositionerOrNull(Impl& s, wl_resource* res) {
   return nullptr;
 }
 
-// Places the popup by the positioner's anchor/gravity/offset, then flips or
-// slides it (per constraint_adjustment) to stay within `avail`.
-void ResolvePopup(const Positioner& p, Popup& popup, SkISize avail) {
+// Places the popup by the positioner's anchor, gravity and offset, and records
+// the flipped alternative and the client's flip/slide permissions.
+void ResolvePopup(const Positioner& p, Popup& popup) {
   auto is_left = [](uint32_t e) {
     return e == XDG_POSITIONER_ANCHOR_LEFT || e == XDG_POSITIONER_ANCHOR_TOP_LEFT ||
            e == XDG_POSITIONER_ANCHOR_BOTTOM_LEFT;
@@ -533,26 +538,15 @@ void ResolvePopup(const Positioner& p, Popup& popup, SkISize avail) {
     return y + p.offset.y();
   };
 
-  int x = place_x(p.anchor, p.gravity);
-  int y = place_y(p.anchor, p.gravity);
   uint32_t ca = p.constraint_adjustment;
-  auto fits_x = [&](int v) { return v >= 0 && v + p.size.width() <= avail.width(); };
-  auto fits_y = [&](int v) { return v >= 0 && v + p.size.height() <= avail.height(); };
-  if (avail.width() > 0 && !fits_x(x)) {
-    if (ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_X) {
-      if (int fx = place_x(mirror_x(p.anchor), mirror_x(p.gravity)); fits_x(fx)) x = fx;
-    }
-    if (!fits_x(x) && (ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_X))
-      x = std::clamp(x, 0, std::max(0, avail.width() - p.size.width()));
-  }
-  if (avail.height() > 0 && !fits_y(y)) {
-    if (ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_Y) {
-      if (int fy = place_y(mirror_y(p.anchor), mirror_y(p.gravity)); fits_y(fy)) y = fy;
-    }
-    if (!fits_y(y) && (ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_Y))
-      y = std::clamp(y, 0, std::max(0, avail.height() - p.size.height()));
-  }
-  popup.geo = SkIRect::MakeXYWH(x, y, p.size.width(), p.size.height());
+  popup.geo = SkIRect::MakeXYWH(place_x(p.anchor, p.gravity), place_y(p.anchor, p.gravity),
+                                p.size.width(), p.size.height());
+  popup.flipped = {place_x(mirror_x(p.anchor), mirror_x(p.gravity)),
+                   place_y(mirror_y(p.anchor), mirror_y(p.gravity))};
+  popup.flip_x = ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_X;
+  popup.flip_y = ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_Y;
+  popup.slide_x = ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_X;
+  popup.slide_y = ca & XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_Y;
 }
 
 void WaylandListener::NotifyRead(Status&) {
@@ -827,45 +821,63 @@ Toplevel* OwningToplevel(Surface& surf) {
   return nullptr;
 }
 
-// Appends `surf` and its subsurface subtree to `out` as back-to-front layers,
-// each at its absolute `origin` within the window in surface px.
-void CollectLayers(Surface& surf, SkIPoint origin, Vec<WindowLayer>& out) {
+Ptr<WaylandSurface> GetOrCreateObject(Surface& surf) {
+  if (auto p = surf.object.Lock()) return p;
+  auto p = MAKE_PTR(WaylandSurface);
+  surf.object = p->AcquireWeakPtr();
+  return p;
+}
+
+// Copies `surf`'s committed texture and child surfaces into its `object`,
+// recursing into subsurfaces and popups to mirror the Wayland surface tree.
+void UpdateSurfaceNode(WaylandSurface& object, Surface& surf) {
+  Vec<WaylandSurface::Child> below, above;
+  bool seen_self = false;
   for (Surface* entry : surf.stack) {
     if (entry == &surf) {
-      if (surf.content.image) {
-        auto& c = surf.content;
-        out.push_back({c.image, c.src_crop, origin, c.dst_size});
-      }
-    } else {
-      Subsurface* sub = entry->as_subsurface;
-      CollectLayers(*entry, origin + sub->pos, out);
+      seen_self = true;
+      continue;
+    }
+    Ptr<WaylandSurface> child = GetOrCreateObject(*entry);
+    UpdateSurfaceNode(*child, *entry);
+    (seen_self ? above : below).push_back({std::move(child), entry->as_subsurface->pos});
+  }
+  if (surf.xdg) {
+    for (Popup* pp : surf.xdg->child_popups) {
+      if (!pp->xdg || !pp->xdg->surface) continue;
+      Ptr<WaylandSurface> child = GetOrCreateObject(*pp->xdg->surface);
+      UpdateSurfaceNode(*child, *pp->xdg->surface);
+      SkIPoint base = surf.xdg->geo.topLeft();
+      above.push_back({std::move(child), base + pp->geo.topLeft(), true, base + pp->flipped,
+                       pp->flip_x, pp->flip_y, pp->slide_x, pp->slide_y});
     }
   }
-}
-
-void CollectPopups(XdgSurf& parent_xdg, SkIPoint parent_origin, Vec<WindowLayer>& out) {
-  for (Popup* pp : parent_xdg.child_popups) {
-    if (!pp->xdg || !pp->xdg->surface) continue;
-    SkIPoint origin = parent_origin + parent_xdg.geo.topLeft() + pp->geo.topLeft();
-    CollectLayers(*pp->xdg->surface, origin, out);
-    CollectPopups(*pp->xdg, origin, out);
+  {
+    auto lock = std::lock_guard(object.mutex);
+    object.image = surf.content.image;
+    object.src_crop = surf.content.src_crop;
+    object.dst_size = surf.content.dst_size;
+    object.below = std::move(below);
+    object.above = std::move(above);
+    object.content_serial++;
   }
+  object.WakeToys();
 }
 
-// Rebuilds the window's layer list and window extent from the toplevel surface
-// tree plus any popups, bumping the content serial. Locks win.mutex.
-void RecomposeWindow(WaylandWindow& win, Toplevel& t) {
-  Vec<WindowLayer> layers;
-  SkISize extent = {};
+// Rebuilds the window's surface-object tree from the toplevel surface tree plus
+// any popups (the toplevel surface IS the window object), so Automat's widget
+// compositing lays the tree out, each surface drawing its own texture.
+void SyncWindowTree(WaylandWindow& win, Toplevel& t) {
   if (t.xdg && t.xdg->surface) {
-    extent = t.xdg->surface->content.dst_size;
-    CollectLayers(*t.xdg->surface, {0, 0}, layers);
-    CollectPopups(*t.xdg, {0, 0}, layers);
+    UpdateSurfaceNode(win, *t.xdg->surface);
+  } else {
+    auto lock = std::lock_guard(win.mutex);
+    win.image = nullptr;
+    win.dst_size = {};
+    win.below.clear();
+    win.above.clear();
+    win.content_serial++;
   }
-  auto lock = std::lock_guard(win.mutex);
-  win.layers = std::move(layers);
-  win.viewport_destination_px = extent;
-  win.content_serial++;
 }
 
 // At a parent surface's commit, applies its subsurfaces' pending positions and,
@@ -905,7 +917,7 @@ void ApplyAndPublish(Impl& s, Surface& surf) {
   Ptr<Object> win_obj =
       (owner == surf.toplevel) ? AcquireWindow(s, *owner, adopted) : owner->LockWindow();
   if (!win_obj) return;
-  RecomposeWindow(static_cast<WaylandWindow&>(*win_obj), *owner);
+  SyncWindowTree(static_cast<WaylandWindow&>(*win_obj), *owner);
   PublishFrame(s, *owner, std::move(win_obj), adopted);
 }
 
@@ -1163,7 +1175,7 @@ void NewPopup(Impl& s, XdgSurf& xs, uint32_t id, XdgSurf* parent, Positioner* po
   pp->xdg = &xs;
   pp->parent = parent;
   xs.popup = pp;
-  if (pos) ResolvePopup(*pos, *pp, parent ? parent->geo.size() : SkISize{});
+  if (pos) ResolvePopup(*pos, *pp);
   if (parent) parent->child_popups.push_back(pp);
 
   auto* res = &pp->res;
@@ -1174,8 +1186,7 @@ void NewPopup(Impl& s, XdgSurf& xs, uint32_t id, XdgSurf* parent, Positioner* po
     FocusKeyboardOnPopup(s, *pp);
   });
   res->setReposition([&s, pp](CXdgPopup*, wl_resource* positioner_res, uint32_t token) {
-    if (Positioner* np = PositionerOrNull(s, positioner_res))
-      ResolvePopup(*np, *pp, pp->parent ? pp->parent->geo.size() : SkISize{});
+    if (Positioner* np = PositionerOrNull(s, positioner_res)) ResolvePopup(*np, *pp);
     pp->res.sendRepositioned(token);
     pp->res.sendConfigure(pp->geo.x(), pp->geo.y(), pp->geo.width(), pp->geo.height());
     if (pp->xdg) SendXdgConfigure(s, *pp->xdg);
@@ -1716,8 +1727,7 @@ DmabufBuffer* MakeDmabufBuffer(Impl& s, DmabufParams& p, uint32_t buffer_id, SkI
     p.planes[i].fd = -1;  // ownership moves to the buffer
   }
   s.dmabuf_by_res[b->res.resource()] = b;
-  b->res.setOnDestroy([&s](CWlBuffer* r) {
-    wl_resource* res = r->resource();
+  b->res.setOnDestroy([&s, b, res = b->res.resource()](CWlBuffer* r) {
     // Drop any dangling references before the buffer's storage goes away.
     for (auto& surf : s.surfaces) {
       if (surf.held_dmabuf == res) surf.held_dmabuf = nullptr;
@@ -1726,11 +1736,8 @@ DmabufBuffer* MakeDmabufBuffer(Impl& s, DmabufParams& p, uint32_t buffer_id, SkI
         surf.buffer_attached = false;
       }
     }
-    auto it = s.dmabuf_by_res.find(res);
-    if (it == s.dmabuf_by_res.end()) return;
-    DmabufBuffer* db = it->second;
-    s.dmabuf_by_res.erase(it);
-    EraseOwned(s.dmabuf_buffers, db);
+    s.dmabuf_by_res.erase(res);
+    EraseOwned(s.dmabuf_buffers, b);
   });
   DestroyOnRequest(b->res);
   return b;
@@ -1978,7 +1985,7 @@ void PointerAxisTo(Impl& s, Surface& surf, float notches_up) {
 // Routes a pointer at toplevel-local (sx, sy) to the topmost surface there,
 // sending leave/enter across surface boundaries and a motion to the target.
 // Hit-tests the popups parented to `parent_xdg` (and their nested popups),
-// topmost first, in toplevel-surface coordinates - mirroring how CollectPopups
+// topmost first, in toplevel-surface coordinates - mirroring how UpdateSurfaceNode
 // places them.
 Surface* PopupSurfaceAt(XdgSurf& parent_xdg, SkIPoint parent_origin, double px, double py,
                         double& lx, double& ly) {
@@ -2058,7 +2065,7 @@ void Server::UIFrame() {
       {
         auto lock = std::lock_guard(win.mutex);
         cpid = win.client_pid;
-        win_size = win.viewport_destination_px;
+        win_size = win.dst_size;
       }
       if (cpid) {
         for (auto& loc : vm.root_board->locations) {

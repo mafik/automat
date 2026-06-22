@@ -38,19 +38,23 @@ runs one epoll loop that multiplexes every descriptor the subsystem cares about,
 - one pidfd per child process started by a Command
 - one timerfd per pending window-close escalation
 
-Pixels flow out through the window object as ready `sk_sp<SkImage>` layers: each
-committed `wl_shm` buffer is row-copied once into a pooled allocation (the
-pool entry is reclaimed when the previous frame's image lets go) and the
-raster image wraps that allocation without further copies. Every surface in a
-window's tree carries its imported image this way, and the window holds them as a
-back-to-front list of layers (the toplevel surface plus any subsurfaces, see
-below) that `wake_counter` notifies the toy to draw in order. The import is
-backend-agnostic: a `wl_shm` buffer becomes a raster image and a dmabuf a
-GPU-backed image, both on the compositor thread (see GPU buffer passing below).
-Board structure is only mutated on the UI thread, in
+Pixels flow out as a tree of surface objects that mirrors the Wayland surface
+tree, so Automat's own widget compositing lays a window out. Every `wl_surface`
+becomes a `WaylandSurface` object
+holding its own imported `sk_sp<SkImage>`; a surface owns its subsurfaces and
+popups as `Ptr<WaylandSurface>` children, and the toplevel surface is the board's
+`WaylandWindow`, which derives from `WaylandSurface`. Each committed `wl_shm`
+buffer is row-copied once into a pooled allocation (the pool entry is reclaimed
+when the previous frame's image lets go) and the raster image wraps it without
+further copies; a dmabuf becomes a GPU-backed image instead. Both imports happen
+on the compositor thread (see GPU buffer passing below), which writes each
+object's texture and child list under that object's mutex and bumps its
+`content_serial`; `wake_counter` notifies the per-surface toy to pull the new
+state and redraw. Board structure is only mutated on the UI thread, in
 `UIFrame()` — called once per frame from `RootWidget::Tick` — which inserts
 newly mapped windows (seated next to the Command that spawned them) and
-removes windows whose client went away.
+removes windows whose client went away; the child surface objects below a window
+are created and dropped by the compositor, off the board.
 
 One renderer fact matters to anyone extending this: an idle Automat does not
 tick the root widget. Every path that needs `UIFrame` to run (window
@@ -165,16 +169,20 @@ their main content - Firefox and Chromium put their whole page in a child surfac
 clients is an empty decoration frame. This is why the feature exists: it is what
 separates "maps the window" from "shows the page".
 
-Each surface keeps its own committed image, and at every commit that changes the
-visible tree the compositor flattens the toplevel's subtree into the window
-object as a back-to-front list of layers, each at its absolute offset. The window
-is no longer one image but this list, and the toy draws the layers in order, so a
-parent with a transparent centre (a client that draws its own decorations) shows
-its child's content through it. The window extent and board size come from the
-toplevel surface; subsurfaces are placed within it, and each can be stacked above
-the parent's own content or below it - the compositor keeps a list of children on
-each side and draws the parent between them, so a subsurface placed below an
-opaque parent is hidden, as the protocol requires.
+Each surface keeps its own committed image on a `WaylandSurface` object, and a
+parent surface owns its subsurfaces as `Ptr<WaylandSurface>` children; at every
+commit that changes the visible tree the compositor updates this object tree to
+match the Wayland tree (`UpdateSurfaceNode`). Each surface's toy draws only its own
+texture and hosts a child toy per child surface, so Automat's renderer composites
+the subtree the way it composites any widget tree, each surface a node with its
+own cached texture. A parent with a transparent centre (a client that draws its
+own decorations) shows its child's content through it. The window extent and board
+size come from the toplevel surface; subsurfaces are placed within it, and each can
+be stacked above the parent's own content or below it - a surface object keeps a
+child list on each side, drawn around its own texture, so a subsurface placed below
+an opaque parent is hidden, as the protocol requires. The offset of a child within
+its parent lives on the parent's child list, not on the child, so the toy reads a
+surface's geometry and its children as one consistent snapshot under one mutex.
 
 Subsurface state is double-buffered against the parent. `set_position` and, in
 sync mode (the default), the child's committed buffer apply at the parent
@@ -193,23 +201,25 @@ boundaries (`RoutePointer`). Keyboard input goes to the toplevel surface instead
 see Input pass-through for why a subsurface must not hold keyboard focus.
 
 The tree, the sync/desync rules, stacking and input routing are in
-`src/wayland_compositor.cpp` (`Commit`, `ApplyChildren`, `CollectLayers`,
-`RecomposeWindow`, `BindSubcompositor`, `SurfaceAt`, `RoutePointer`); the layer
-drawing is in `src/library_wayland_window.cpp`.
+`src/wayland_compositor.cpp` (`Commit`, `ApplyChildren`, `UpdateSurfaceNode`,
+`SyncWindowTree`, `BindSubcompositor`, `SurfaceAt`, `RoutePointer`); the
+per-surface objects, their toys and the texture drawing are in
+`src/library_wayland_window.cpp`.
 
 ## Popups (menus)
 
 A client opens a menu, dropdown, autocomplete list or context menu as an
 `xdg_popup`: a transient child surface placed by an `xdg_positioner` relative to a
-parent `xdg_surface` (a toplevel or another popup). Automat composites popups into
-the same window object as extra layers on top of the toplevel's surface tree, each
-at the offset its positioner resolves to - the anchor point on the anchor
-rectangle, placed by gravity, plus the offset - so a window is the toplevel tree
-plus its live popups. Hit-testing checks popups before the toplevel tree because
-they draw on top.
-
-At the moment popups are forced into the WaylandWindow surface but it should be
-changed so that they render as separate textures instead.
+parent `xdg_surface` (a toplevel or another popup). A popup becomes a
+`WaylandSurface` child of its parent surface object, in the above-content list. The
+compositor does not pin a final position: it encodes the positioner onto the edge -
+the anchor/gravity/offset position, the alternative mirrored about the anchor, and
+the client's flip and slide permissions - and the popup's toy resolves the
+placement against the on-screen viewport, keeping the popup visible while letting it
+extend past the window edge. That decision belongs to the UI layer because the
+window is a movable, zoomable board object whose on-screen position only the UI
+layer knows. Hit-testing checks popups before the toplevel tree because they draw on
+top.
 
 Dismissal does not rely on the popup grab. Firefox shows context menus on button
 release, by which point the implicit grab serial is gone, so it never calls
@@ -218,13 +228,12 @@ the topmost popup on any press outside the popup chain (`popup_done`), which is
 what compositors do regardless of grab; a popup that *does* grab additionally
 takes keyboard focus so the menu can be driven from the keyboard.
 
-The positioner, placement, rendering and input are in
-`src/wayland_compositor.cpp` (`ResolvePopup`, `CollectPopups`, `PopupSurfaceAt`,
-`NewPopup`, `TopmostPopup`). `ResolvePopup` honors the positioner's constraint
-adjustment, flipping then sliding a popup that would fall outside the parent's
-window geometry so a menu opened near an edge stays usable. A popup is still
-clipped to the window's texture bounds, so one extending far past the window edge
-is cut off.
+The positioner is computed and encoded in `src/wayland_compositor.cpp`
+(`ResolvePopup`, `UpdateSurfaceNode`, `NewPopup`) and resolved against the viewport
+in `src/library_wayland_window.cpp` (`PlacePopup`), which flips then slides a popup
+that would fall off screen, honoring the client's permitted adjustments so a menu
+opened near a screen edge stays usable. Input is in `PopupSurfaceAt` and
+`TopmostPopup`.
 
 ## Clipboard
 

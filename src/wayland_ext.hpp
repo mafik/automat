@@ -132,6 +132,7 @@ struct Server : mux::Epoll::Listener {
   void SendKeyboardLeave(library::WaylandWindow&);
   void SendKey(library::WaylandWindow&, uint32_t evdev_keycode, bool pressed, bool ctrl, bool alt,
                bool shift, bool super);
+  void SendDecorationPreference(library::WaylandWindow&);
 };
 
 struct Client : mux::Epoll::Listener {
@@ -260,8 +261,16 @@ struct Base<XdgToplevel> : Common {
   U32 version = 1;  // inherited from the xdg_wm_base; gates wm_capabilities
   I64 pid = 0;
   WeakPtr<ReferenceCounted> window;  // a library::WaylandWindow
+  MortalPtr<ZxdgToplevelDecorationV1> decoration;
   std::unique_ptr<mux::Timer> sigterm_timer;
   ~Base();
+};
+
+template <>
+struct Base<ZxdgToplevelDecorationV1> : Common {
+  using Common::Common;
+  MortalPtr<XdgToplevel> toplevel;
+  U32 client_mode = 0;
 };
 
 template <>

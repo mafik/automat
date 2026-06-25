@@ -14,6 +14,7 @@
 
 #include "animation.hpp"
 #include "keyboard.hpp"
+#include "menu.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
 #include "toy.hpp"
@@ -130,6 +131,48 @@ void DrawSurfaceImage(SkCanvas& canvas, const sk_sp<SkImage>& image, const SkRec
                        &paint, SkCanvas::kStrict_SrcRectConstraint);
   canvas.restore();
 }
+
+struct DecorationOption : TextOption {
+  WeakPtr<WaylandWindow> window;
+  WaylandWindow::DecorationPreference pref;
+  Option::Dir dir;
+  DecorationOption(Str label, WeakPtr<WaylandWindow> window,
+                   WaylandWindow::DecorationPreference pref, Option::Dir dir)
+      : TextOption(std::move(label)), window(window), pref(pref), dir(dir) {}
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<DecorationOption>(text, window, pref, dir);
+  }
+  std::unique_ptr<Action> Activate(ui::Pointer&) const override {
+    if (auto w = window.Lock()) {
+      w->decoration_preference.store(pref, std::memory_order_relaxed);
+      if (wayland::server) wayland::server->SendDecorationPreference(*w);
+    }
+    return nullptr;
+  }
+  Option::Dir PreferredDir() const override { return dir; }
+};
+
+struct DecorationMenuOption : TextOption, OptionsProvider {
+  WeakPtr<WaylandWindow> window;
+  DecorationMenuOption(WeakPtr<WaylandWindow> window)
+      : TextOption("Decoration..."), window(window) {}
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<DecorationMenuOption>(window);
+  }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    return OpenMenu(pointer);
+  }
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    using P = WaylandWindow::DecorationPreference;
+    DecorationOption automat_auto("Auto", window, P::Auto, Option::S);
+    visitor(automat_auto);
+    DecorationOption server_side("Automat", window, P::ServerSide, Option::W);
+    visitor(server_side);
+    DecorationOption client_side("App", window, P::ClientSide, Option::E);
+    visitor(client_side);
+  }
+  Option::Dir PreferredDir() const override { return Option::S; }
+};
 
 }  // namespace
 
@@ -431,6 +474,12 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
+
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    ObjectToy::VisitOptions(visitor);
+    DecorationMenuOption deco{owner.Copy<WaylandWindow>()};
+    visitor(deco);
+  }
 
   SkPath Shape() const override {
     return SkPath::RRect(RRect::MakeSimple(Rect::MakeCenterZero(TotalW(), TotalH()), 1.5_mm).sk);

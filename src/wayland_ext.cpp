@@ -890,11 +890,37 @@ void Viewport::OnSetDestination(I32 width, I32 height) {
   dst_size = {width, height};
 }
 
-void ZxdgDecorationManagerV1::OnGetToplevelDecoration(ZxdgToplevelDecorationV1& id, XdgToplevel&) {
-  id.Configure(ZxdgToplevelDecorationV1::ModeServerSide);
+static ZxdgToplevelDecorationV1::Mode DecorationModeFor(ZxdgToplevelDecorationV1& dec) {
+  using P = WaylandWindow::DecorationPreference;
+  using M = ZxdgToplevelDecorationV1::Mode;
+  P pref = P::Auto;
+  if (dec.toplevel)
+    if (Ptr<ReferenceCounted> w = dec.toplevel->window.Lock())
+      pref = w.Cast<WaylandWindow>()->decoration_preference.load(std::memory_order_relaxed);
+  switch (pref) {
+    case P::ServerSide:
+      return M::ModeServerSide;
+    case P::ClientSide:
+      return M::ModeClientSide;
+    default:  // Auto
+      return dec.client_mode == M::ModeServerSide ? M::ModeServerSide : M::ModeClientSide;
+  }
 }
-void ZxdgToplevelDecorationV1::OnSetMode(enum Mode) { Configure(ModeServerSide); }
-void ZxdgToplevelDecorationV1::OnUnsetMode() { Configure(ModeServerSide); }
+
+void ZxdgDecorationManagerV1::OnGetToplevelDecoration(ZxdgToplevelDecorationV1& id,
+                                                      XdgToplevel& toplevel) {
+  id.toplevel = &toplevel;
+  toplevel.decoration = &id;
+  id.Configure(DecorationModeFor(id));
+}
+void ZxdgToplevelDecorationV1::OnSetMode(enum Mode mode) {
+  client_mode = mode;
+  Configure(DecorationModeFor(*this));
+}
+void ZxdgToplevelDecorationV1::OnUnsetMode() {
+  client_mode = 0;
+  Configure(DecorationModeFor(*this));
+}
 
 void XdgPositioner::OnSetSize(I32 width, I32 height) { size = {width, height}; }
 void XdgPositioner::OnSetAnchorRect(I32 x, I32 y, I32 width, I32 height) {
@@ -1196,6 +1222,18 @@ void Server::SendKey(library::WaylandWindow& w, uint32_t evdev_keycode, bool pre
       k.Key(serial++, time, evdev_keycode,
             pressed ? Keyboard::KeyStatePressed : Keyboard::KeyStateReleased);
     }
+    FlushAll();
+  });
+}
+void Server::SendDecorationPreference(library::WaylandWindow& w) {
+  auto* h = (XdgToplevel*)w.toplevel_handle.load();
+  if (!h) return;
+  epoll.Post([this, h] {
+    XdgToplevel* t = LiveToplevel(h);
+    if (!t || !t->decoration) return;
+    t->decoration->Configure(DecorationModeFor(*t->decoration));
+    // Drive an xdg_surface.configure/ack cycle so the new mode takes effect.
+    if (t->xdg) t->xdg->Configure(t->xdg->last_configure_serial = serial++);
     FlushAll();
   });
 }

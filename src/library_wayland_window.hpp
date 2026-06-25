@@ -94,6 +94,9 @@ struct WaylandWindow : WaylandSurface {
   // The wayland thread writes it.
   std::atomic<uint32_t> cursor_shape{1};
 
+  enum class DecorationPreference { Auto = 0, ServerSide = 1, ClientSide = 2 };
+  std::atomic<DecorationPreference> decoration_preference{DecorationPreference::Auto};
+
   // The Command whose child mapped this window. Connected at adoption, drawn
   // as a cable, serialized as a link; restore-time respawn goes through it so
   // the Command keeps STOP control over the new child.

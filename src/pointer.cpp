@@ -92,7 +92,7 @@ void Pointer::UpdatePath() {
   FillPath(*this, root_widget);
 
   if (path.empty()) {
-    hover.Reset();
+    hover = nullptr;
   } else {
     hover = path.back();
   }
@@ -146,7 +146,7 @@ void Pointer::Enter() { root_widget.pointers.push_back(this); }
 void Pointer::Leave() {
   auto old_path = std::move(path);
   path.clear();
-  hover.Reset();
+  hover = nullptr;
   for (auto& w : old_path) {
     if (w) {
       w->PointerLeave(*this);

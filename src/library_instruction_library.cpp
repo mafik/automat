@@ -969,7 +969,7 @@ void InstructionLibrary::Widget::PointerLeave(ui::Pointer& p) {
 
 struct ScrollDeckAction : Action {
   SinCos angle;
-  TrackedPtr<InstructionLibrary::Widget> widget;
+  MortalPtr<InstructionLibrary::Widget> widget;
   Ptr<Object> object;
 
   InstructionLibrary& library;

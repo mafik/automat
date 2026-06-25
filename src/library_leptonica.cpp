@@ -1275,7 +1275,7 @@ static void DrawFittedDepthChip(SkCanvas& canvas, const Rect& box, const sk_sp<S
 struct ThresholdToy;
 
 struct ThresholdBladeDrag : Action {
-  TrackedPtr<ThresholdToy> widget;
+  MortalPtr<ThresholdToy> widget;
   ThresholdBladeDrag(ui::Pointer& p, ThresholdToy& w);
   ~ThresholdBladeDrag();
   void Update() override;
@@ -1937,7 +1937,7 @@ struct MorphPoke : Action {
 
 // Dragging the per-mode parameter row: BRICK size (TOPHAT) or HEIGHT (DOME).
 struct MorphLevelDrag : Action {
-  TrackedPtr<MorphologyToy> widget;
+  MortalPtr<MorphologyToy> widget;
   MorphLevelDrag(ui::Pointer& p, MorphologyToy& w);
   void Update() override;
 };
@@ -2505,7 +2505,7 @@ bool Tone::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 struct ToneToy;
 struct ToneHandleDrag : Action {
-  TrackedPtr<ToneToy> widget;
+  MortalPtr<ToneToy> widget;
   int which;  // 0 black, 1 white, 2 gamma
   ToneHandleDrag(ui::Pointer& p, ToneToy& w, int which);
   ~ToneHandleDrag();
@@ -2976,33 +2976,33 @@ bool Geometry::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 struct GeometryToy;
 struct GeoRingDrag : Action {
-  TrackedPtr<GeometryToy> widget;
+  MortalPtr<GeometryToy> widget;
   GeoRingDrag(ui::Pointer& p, GeometryToy& w);
   ~GeoRingDrag();
   void Update() override;
 };
 struct GeoCornerDrag : Action {
-  TrackedPtr<GeometryToy> widget;
+  MortalPtr<GeometryToy> widget;
   float start_dist = 1.f, start_scale = 1.f;
   GeoCornerDrag(ui::Pointer& p, GeometryToy& w);
   ~GeoCornerDrag();
   void Update() override;
 };
 struct GeoDialDrag : Action {
-  TrackedPtr<GeometryToy> widget;
+  MortalPtr<GeometryToy> widget;
   GeoDialDrag(ui::Pointer& p, GeometryToy& w);
   ~GeoDialDrag();
   void Update() override;
 };
 struct GeoScaleDrag : Action {
-  TrackedPtr<GeometryToy> widget;
+  MortalPtr<GeometryToy> widget;
   GeoScaleDrag(ui::Pointer& p, GeometryToy& w);
   ~GeoScaleDrag();
   void Update() override;
 };
 
 struct GeoScaleYDrag : Action {
-  TrackedPtr<GeometryToy> widget;
+  MortalPtr<GeometryToy> widget;
   GeoScaleYDrag(ui::Pointer& p, GeometryToy& w);
   ~GeoScaleYDrag();
   void Update() override;
@@ -3631,7 +3631,7 @@ struct ChannelPoke : Action {
 
 struct ChannelToy;
 struct ChannelWeightDrag : Action {
-  TrackedPtr<ChannelToy> widget;
+  MortalPtr<ChannelToy> widget;
   int which;
   ChannelWeightDrag(ui::Pointer& p, ChannelToy& w, int which);
   ~ChannelWeightDrag();
@@ -4019,7 +4019,7 @@ bool Convolve::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 struct ConvolveToy;
 struct ConvRadiusDrag : Action {
-  TrackedPtr<ConvolveToy> widget;
+  MortalPtr<ConvolveToy> widget;
   ConvRadiusDrag(ui::Pointer& p, ConvolveToy& w);
   ~ConvRadiusDrag();
   void Update() override;
@@ -4030,14 +4030,14 @@ struct ConvPoke : Action {
 };
 
 struct ConvAmountDrag : Action {
-  TrackedPtr<ConvolveToy> widget;
+  MortalPtr<ConvolveToy> widget;
   ConvAmountDrag(ui::Pointer& p, ConvolveToy& w);
   ~ConvAmountDrag();
   void Update() override;
 };
 
 struct ConvRankDrag : Action {
-  TrackedPtr<ConvolveToy> widget;
+  MortalPtr<ConvolveToy> widget;
   ConvRankDrag(ui::Pointer& p, ConvolveToy& w);
   ~ConvRankDrag();
   void Update() override;
@@ -4523,7 +4523,7 @@ bool Blend::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 struct BlendToy;
 struct BlendAmountDrag : Action {
-  TrackedPtr<BlendToy> widget;
+  MortalPtr<BlendToy> widget;
   BlendAmountDrag(ui::Pointer& p, BlendToy& w);
   ~BlendAmountDrag();
   void Update() override;
@@ -4995,12 +4995,12 @@ static int QuantNearestStepIdx(int n) {
 
 struct QuantizeToy;
 struct QuantGraysDrag : Action {
-  TrackedPtr<QuantizeToy> widget;
+  MortalPtr<QuantizeToy> widget;
   QuantGraysDrag(ui::Pointer& p, QuantizeToy& w);
   void Update() override;
 };
 struct QuantCountDrag : Action {
-  TrackedPtr<QuantizeToy> widget;
+  MortalPtr<QuantizeToy> widget;
   QuantCountDrag(ui::Pointer& p, QuantizeToy& w);
   ~QuantCountDrag();
   void Update() override;
@@ -5526,7 +5526,7 @@ struct FlattenPoke : Action {
   void Update() override {}
 };
 struct FlattenSliderDrag : Action {
-  TrackedPtr<FlattenToy> widget;
+  MortalPtr<FlattenToy> widget;
   int which;  // 0 = bg value, 1 = tile size
   FlattenSliderDrag(ui::Pointer& p, FlattenToy& w, int which);
   ~FlattenSliderDrag();
@@ -6193,7 +6193,7 @@ bool Dither::DeserializeKey(ObjectDeserializer& d, StrView key) {
 struct DitherToy;
 // Dragging one of the two clip markers along the Window band.
 struct DitherClipDrag : Action {
-  TrackedPtr<DitherToy> widget;
+  MortalPtr<DitherToy> widget;
   int which;  // 0 = black clip (lo marker), 1 = white clip (hi marker)
   DitherClipDrag(ui::Pointer& p, DitherToy& w, int which);
   ~DitherClipDrag();
@@ -6975,7 +6975,7 @@ bool FindLevel::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 struct FindLevelToy;
 struct FindLevelFractDrag : Action {
-  TrackedPtr<FindLevelToy> widget;
+  MortalPtr<FindLevelToy> widget;
   FindLevelFractDrag(ui::Pointer& p, FindLevelToy& w);
   ~FindLevelFractDrag();
   void Update() override;
@@ -7673,7 +7673,7 @@ bool Select::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 struct SelectToy;
 struct SelectBandDrag : Action {
-  TrackedPtr<SelectToy> widget;
+  MortalPtr<SelectToy> widget;
   int which;  // 0 = lo, 1 = hi
   SelectBandDrag(ui::Pointer& p, SelectToy& w, int which);
   ~SelectBandDrag();
@@ -8161,7 +8161,7 @@ struct FadePoke : Action {
   void Update() override {}
 };
 struct FadeSliderDrag : Action {
-  TrackedPtr<FadeToy> widget;
+  MortalPtr<FadeToy> widget;
   int which;  // 0 reach, 1 strength
   FadeSliderDrag(ui::Pointer& p, FadeToy& w, int which);
   void Update() override;
@@ -8547,7 +8547,7 @@ struct ReducePoke : Action {
   void Update() override {}
 };
 struct ReduceRankDrag : Action {
-  TrackedPtr<ReduceToy> widget;
+  MortalPtr<ReduceToy> widget;
   ReduceRankDrag(ui::Pointer& p, ReduceToy& w);
   void Update() override;
 };
@@ -8963,7 +8963,7 @@ bool Measure::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 struct MeasureToy;
 struct MeasureRegionDrag : Action {
-  TrackedPtr<MeasureToy> widget;
+  MortalPtr<MeasureToy> widget;
   int which;
   float grab_du = 0.f, grab_dv = 0.f;
   MeasureRegionDrag(ui::Pointer& p, MeasureToy& w, int which);
@@ -9401,7 +9401,7 @@ bool Warp::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 struct WarpToy;
 struct WarpAmountDrag : Action {
-  TrackedPtr<WarpToy> widget;
+  MortalPtr<WarpToy> widget;
   WarpAmountDrag(ui::Pointer& p, WarpToy& w);
   ~WarpAmountDrag();
   void Update() override;
@@ -9733,13 +9733,13 @@ bool Color::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 struct ColorToy;
 struct ColorHueDrag : Action {
-  TrackedPtr<ColorToy> widget;
+  MortalPtr<ColorToy> widget;
   ColorHueDrag(ui::Pointer& p, ColorToy& w);
   ~ColorHueDrag();
   void Update() override;
 };
 struct ColorSliderDrag : Action {
-  TrackedPtr<ColorToy> widget;
+  MortalPtr<ColorToy> widget;
   int which;  // 0 sat, 1 r, 2 g, 3 b
   ColorSliderDrag(ui::Pointer& p, ColorToy& w, int which);
   ~ColorSliderDrag();
@@ -10168,7 +10168,7 @@ bool Seedfill::DeserializeKey(ObjectDeserializer& d, StrView key) {
 struct SeedfillToy;
 // Dragging (or click-placing) the seed pin on the preview.
 struct SeedDrag : Action {
-  TrackedPtr<SeedfillToy> widget;
+  MortalPtr<SeedfillToy> widget;
   SeedDrag(ui::Pointer& p, SeedfillToy& w);
   ~SeedDrag();
   void Update() override;
@@ -10666,7 +10666,7 @@ struct GenPoke : Action {
   void Update() override {}
 };
 struct GenSliderDrag : Action {
-  TrackedPtr<GenerateToy> widget;
+  MortalPtr<GenerateToy> widget;
   GenSliderDrag(ui::Pointer& p, GenerateToy& w);
   void Update() override;
 };
@@ -11013,7 +11013,7 @@ bool CropRegion::DeserializeKey(ObjectDeserializer& d, StrView key) {
 struct CropToy;
 // Dragging a marquee corner (which 1..4 from RegionHit: LL/LR/UL/UR) or the whole box (which 5).
 struct CropDrag : Action {
-  TrackedPtr<CropToy> widget;
+  MortalPtr<CropToy> widget;
   int which;
   float grab_du = 0.f, grab_dv = 0.f;  // pointer offset from the box's top-left (move mode)
   CropDrag(ui::Pointer& p, CropToy& w, int which);

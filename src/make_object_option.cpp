@@ -24,7 +24,7 @@ std::unique_ptr<Action> MakeObjectOption::Activate(ui::Pointer& pointer) const {
   // This could be even handled by the "Create" method - it could take existing widget to "adopt".
   auto loc = MAKE_PTR(Location, vm.root_location);
   auto obj = proto->Clone();
-  pointer.root_widget.toys.FindOrMake(*obj, icon.get());
+  pointer.root_widget.toys.FindOrMake(*obj, icon.Get());
   loc->InsertHere(std::move(obj));
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
   auto action = std::make_unique<DragLocationAction>(pointer, std::move(loc));

@@ -209,7 +209,7 @@ struct LocationWidget : ObjectToy {
   Optional<Vec2> local_anchor;
   Vec2 position_vel = {};
   float scale_vel = 0;
-  TrackedPtr<ObjectToy> toy;  // cached Object Toy (auto-nulled on destruction)
+  MortalPtr<ObjectToy> toy;  // cached Object Toy (auto-nulled on destruction)
   std::vector<ui::Widget*> overlays;
 
   LocationWidget(ui::Widget* parent, Location& loc);

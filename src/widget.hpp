@@ -14,11 +14,13 @@
 #include <cstddef>
 #include <memory>
 #include <source_location>
+#include <typeinfo>
 
 #include "action.hpp"
 #include "animation.hpp"
 #include "key.hpp"
 #include "menu.hpp"
+#include "mortal.hpp"
 #include "optional.hpp"
 #include "ptr.hpp"
 #include "span.hpp"
@@ -90,17 +92,23 @@ Str ToStr(ActionTrigger);
 
 // Widgets are things that can be drawn to the SkCanvas. They're sometimes produced by Objects
 // which can't draw themselves otherwise.
-struct Widget : Trackable, OptionsProvider {
+struct Widget : OptionsProvider {
   Widget(Widget* parent);
   Widget(const Widget&) = delete;
   virtual ~Widget();
+
+  virtual StrView Name() const {
+    const std::type_info& info = typeid(*this);
+    return CleanTypeName(info.name());
+  }
 
   static void CheckAllWidgetsReleased();
 
   uint32_t ID() const;
   static Widget* Find(uint32_t id);
 
-  TrackedPtr<Widget> parent;
+  MortalCoil mortal_coil;
+  MortalPtr<Widget> parent;
   SkM44 local_to_parent = SkM44();
 
   // This is updated by renderer, right before the call to Tick.
@@ -535,7 +543,7 @@ struct PaintMixin {
 };
 
 // Use this function if the Widget hierarchy enters an invalid state (for example a widget's parent
-// pointer points to invalid memory or widget destruction fails somewhere in TrackedPtr).
+// pointer points to invalid memory or widget destruction fails somewhere in its MortalCoil).
 void DebugCheckParents(Widget& widget);
 
 }  // namespace automat::ui

@@ -37,7 +37,7 @@ void SendKeyEvent(AnsiKey physical, bool down);
 
 struct Caret final {
   Keyboard& keyboard;
-  TrackedPtr<Widget> owner;  // also the coordinate space `shape` is expressed in
+  MortalPtr<Widget> owner;  // also the coordinate space `shape` is expressed in
   SkPath shape;
   Caret(Keyboard& keyboard);
   ~Caret() = default;

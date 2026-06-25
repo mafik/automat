@@ -54,7 +54,7 @@ struct CablePhysicsSimulation {
   animation::SpringV2<float> connector_scale = 1;
 
   Argument argument;
-  TrackedPtr<Widget> start_widget;
+  MortalPtr<Widget> start_widget;
 
   animation::Spring<float> steel_insert_hidden;
   bool hidden = false;

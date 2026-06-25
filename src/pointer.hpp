@@ -132,9 +132,9 @@ struct Pointer {
   Vec<PointerMoveCallback*> move_callbacks;
 
   std::unique_ptr<Action> actions[static_cast<int>(PointerButton::Count)];
-  TrackedPtr<Widget> hover;
+  MortalPtr<Widget> hover;
 
-  Vec<TrackedPtr<Widget>> path;
+  Vec<MortalPtr<Widget>> path;
 
   unique_ptr<PointerWidget> pointer_widget;
 

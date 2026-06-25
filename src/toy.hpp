@@ -123,7 +123,7 @@ struct ToyStore {
       it = container.emplace(std::move(key), std::move(widget)).first;
     } else if (auto& toy = *it->second; toy.parent != parent) {
       if (toy.parent == nullptr) {
-        toy.parent = parent->AcquireTrackedPtr();
+        toy.parent = parent;
       } else {
         LOG << "Reparenting " << toy.Name() << " from " << toy.parent->Name() << " to "
             << parent->Name();

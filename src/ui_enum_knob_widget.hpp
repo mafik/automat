@@ -82,7 +82,7 @@ struct EnumKnobWidget : ui::Widget {
   Optional<Rect> TextureBounds() const override;
 
   struct ChangeEnumKnobAction : public Action {
-    TrackedPtr<EnumKnobWidget> widget;
+    MortalPtr<EnumKnobWidget> widget;
     time::SteadyPoint start_time;
     ui::Pointer::IconOverride scroll_icon;
 

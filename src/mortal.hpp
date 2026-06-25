@@ -44,7 +44,7 @@ concept Mortal = requires(T t) {
 };
 
 // A 24B pointer, set to null when its Mortal dies.
-template <Mortal T>
+template <typename T>
 struct MortalPtr : mortal_priv::PtrNode {
   MortalPtr() = default;
   MortalPtr(std::nullptr_t) {}
@@ -102,7 +102,7 @@ struct MortalPtr : mortal_priv::PtrNode {
 };
 
 // A smaller (16B) twin of MortalPtr. The price is that it unlinks in O(n).
-template <Mortal T>
+template <typename T>
 struct MortalPtr16 : mortal_priv::Ptr16Node {
   MortalPtr16() = default;
   MortalPtr16(std::nullptr_t) {}

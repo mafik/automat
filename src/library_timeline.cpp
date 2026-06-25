@@ -657,7 +657,7 @@ struct TimelineWidget;
 
 struct SideButton : ui::Button {
   SideButton(TimelineWidget& parent) : Button((Widget*)&parent) {}
-  TimelineWidget* GetTimelineWidget() { return (TimelineWidget*)(parent.get()); }
+  TimelineWidget* GetTimelineWidget() { return (TimelineWidget*)(parent.Get()); }
   SkColor4f ForegroundColor() const override { return "#404040"_color4f; }
   SkColor4f BackgroundColor() const override { return kTimelineButtonBackground; }
   SkRRect RRect() const override;
@@ -740,7 +740,7 @@ struct TimelineRunButton : ui::ToggleButton {
 struct DragZoomAction;
 
 struct SpliceAction : Action {
-  TrackedPtr<TimelineWidget> timeline_widget;
+  MortalPtr<TimelineWidget> timeline_widget;
   time::Duration splice_to;
   bool snapped = false;
   bool cancel = true;
@@ -773,7 +773,7 @@ struct TimelineWidget : ObjectToy {
   SpliceAction* splice_action = nullptr;
   DragZoomAction* drag_zoom_action = nullptr;
 
-  Vec<TrackedPtr<ui::Widget>> track_widgets;
+  Vec<MortalPtr<ui::Widget>> track_widgets;
 
   float zoom = 10;
   float splice_x = 0;
@@ -1567,7 +1567,7 @@ struct TimelineWidget : ObjectToy {
 };
 
 TimelineWidget* TimelineRunButton::GetTimelineWidget() const {
-  return dynamic_cast<TimelineWidget*>(parent.get());
+  return dynamic_cast<TimelineWidget*>(parent.Get());
 }
 
 bool TimelineRunButton::Filled() const {
@@ -1612,7 +1612,7 @@ void NextButton::Activate(ui::Pointer& ptr) {
 }
 
 struct DragBridgeAction : Action {
-  TrackedPtr<TimelineWidget> timeline_widget;
+  MortalPtr<TimelineWidget> timeline_widget;
   float press_offset_x;
   DragBridgeAction(ui::Pointer& pointer, TimelineWidget& timeline_widget_ref)
       : Action(pointer), timeline_widget(&timeline_widget_ref) {
@@ -1657,7 +1657,7 @@ struct DragBridgeAction : Action {
 };
 
 struct DragTimelineAction : Action {
-  TrackedPtr<TimelineWidget> timeline_widget;
+  MortalPtr<TimelineWidget> timeline_widget;
   time::Duration initial_bridge_offset;
   float initial_x;
   DragTimelineAction(ui::Pointer& pointer, TimelineWidget& timeline_widget_ref)
@@ -1711,7 +1711,7 @@ struct DragTimelineAction : Action {
 };
 
 struct DragZoomAction : Action {
-  TrackedPtr<TimelineWidget> timeline_widget;
+  MortalPtr<TimelineWidget> timeline_widget;
   float last_y;
   DragZoomAction(ui::Pointer& pointer, TimelineWidget& timeline_widget_ref)
       : Action(pointer), timeline_widget(&timeline_widget_ref) {
@@ -1880,7 +1880,7 @@ struct TrackBaseWidget : ObjectToy {
         timeline = track_ptr->timeline;
       }
       if (widget.parent) {
-        timeline_widget = static_cast<TimelineWidget*>(widget.parent.get());
+        timeline_widget = static_cast<TimelineWidget*>(widget.parent.Get());
         distance_to_seconds = timeline_widget->distance_to_seconds;
       }
     }

@@ -68,7 +68,7 @@ void Widget::Reparent(Widget& new_parent) {
   SkM44 fix44(fix);
   OnReparent(new_parent, fix44);
   Widget* old_parent = parent;
-  parent = new_parent.AcquireTrackedPtr();
+  parent = &new_parent;
   if (old_parent != &new_parent) {
     if (old_parent) {
       old_parent->layers.Remove(this);
@@ -353,24 +353,23 @@ std::unique_ptr<Action> Widget::FindAction(Pointer& pointer, ActionTrigger btn) 
 }
 
 void DebugCheckParents(Widget& widget) {
+  using namespace mortal_priv;
   if (Widget* parent = widget.parent) {
-    TrackedPtrBase* ref = parent->ref_list;
+    Ref* ref = Untag(parent->mortal_coil.head);
     bool found = false;
     while (ref) {
-      if (ref == &widget.parent) {
+      if (ref == static_cast<Ref*>(&widget.parent)) {
         found = true;
         break;
       }
-      ref = ref->next;
+      ref = Untag(ref->next);
     }
     if (!found) {
       ERROR << widget.Name() << " is not known by its parent!";
       LOG << "  Widget 'parent' ptr is located at: " << f("{}", (void*)&widget.parent);
       LOG << "  Parent's ref list:";
-      TrackedPtrBase* ref = parent->ref_list;
-      while (ref) {
-        LOG << "    " << f("{}", (void*)ref);
-        ref = ref->next;
+      for (Ref* r = Untag(parent->mortal_coil.head); r; r = Untag(r->next)) {
+        LOG << "    " << f("{}", (void*)r);
       }
     }
   }

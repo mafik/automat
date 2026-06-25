@@ -95,7 +95,7 @@ const char* ButtonEnumToName(ui::PointerButton button) {
 struct MakeObjectOption : Option {
   Ptr<Object> proto;
   Dir dir;
-  TrackedPtr<ui::Widget> icon;
+  MortalPtr<ui::Widget> icon;
   MakeObjectOption(Ptr<Object> proto, Dir dir = DIR_NONE) : proto(proto), dir(dir), icon(nullptr) {}
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
     auto new_icon = proto->MakeToy(parent);
@@ -112,7 +112,7 @@ struct MakeObjectOption : Option {
     // This could be even handled by the "Create" method - it could take existing widget to "adopt".
     auto loc = MAKE_PTR(Location, vm.root_location);
     auto obj = proto->Clone();
-    pointer.root_widget.toys.FindOrMake(*obj, icon.get());
+    pointer.root_widget.toys.FindOrMake(*obj, icon.Get());
     loc->InsertHere(std::move(obj));
     audio::Play(embedded::assets_SFX_toolbar_pick_wav);
     auto action = std::make_unique<DragLocationAction>(pointer, std::move(loc));

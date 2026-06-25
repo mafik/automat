@@ -21,6 +21,7 @@
 #include "colony.hpp"
 #include "fd.hpp"
 #include "int.hpp"
+#include "mortal.hpp"
 #include "mux_epoll.hpp"
 #include "mux_timer.hpp"
 #include "optional.hpp"
@@ -45,6 +46,7 @@ struct Common {
   Kind kind;  // LLVM-style RTTI
   U32 id;
   Client& client;  // Saves one parameter from every method call
+  MortalCoil mortal_coil;
   Common(Kind kind, U32 id, Client& client);
   ~Common();
   void GenericColonyDestroy();                                       // generated
@@ -93,10 +95,10 @@ struct Server : mux::Epoll::Listener {
 
   // Input focus + keymap. Cleared in the surface destructor;
   // the keymap is the host X keymap, built once.
-  Surface* pointer_surface = nullptr;
-  Surface* keyboard_surface = nullptr;
-  XdgPopup* grabbing_popup = nullptr;
-  DataSource* selection = nullptr;  // current clipboard owner (cleared in its destructor)
+  MortalPtr<Surface> pointer_surface;
+  MortalPtr<Surface> keyboard_surface;
+  MortalPtr<XdgPopup> grabbing_popup;
+  MortalPtr<DataSource> selection;  // current clipboard owner (cleared in its destructor)
   int keymap_fd = -1;
   U32 keymap_size = 0;
   U32 mod_shift = 0, mod_ctrl = 0, mod_alt = 0, mod_super = 0;
@@ -207,9 +209,9 @@ struct Base<Surface> : Common {
   U32 pending_buffer = 0;        // wl_buffer id attached since the last commit (0 = none)
   bool buffer_attached = false;  // an attach happened (a null buffer means unmap)
   Vec<U32> frame_callbacks;      // wl_callback ids from wl_surface.frame
-  XdgSurface* xdg = nullptr;
+  MortalPtr<XdgSurface> xdg;
   Subsurface* as_subsurface = nullptr;
-  Viewport* viewport = nullptr;
+  MortalPtr<Viewport> viewport;
   U32 held_dmabuf = 0;  // dmabuf wl_buffer id held for zero-copy display
   SurfaceCutout content;
   WeakPtr<ReferenceCounted> object;  // a library::WaylandSurface mirroring this
@@ -238,21 +240,20 @@ struct Base<XdgWmBase> : Common {
 template <>
 struct Base<XdgSurface> : Common {
   using Common::Common;
-  Surface* surface = nullptr;
-  XdgToplevel* toplevel = nullptr;
-  XdgPopup* popup = nullptr;
+  MortalPtr<Surface> surface;
+  MortalPtr<XdgToplevel> toplevel;
+  MortalPtr<XdgPopup> popup;
   Vec<XdgPopup*> child_popups;  // oldest first
   SkIRect geo = SkIRect::MakeEmpty();
   U32 last_configure_serial = 0;
   U32 version = 1;  // inherited from the xdg_wm_base, propagated on to the toplevel
   bool initial_configure_sent = false;
-  ~Base();
 };
 
 template <>
 struct Base<XdgToplevel> : Common {
   using Common::Common;
-  XdgSurface* xdg = nullptr;
+  MortalPtr<XdgSurface> xdg;
   Str title;
   Str app_id;
   bool mapped = false;
@@ -267,7 +268,7 @@ template <>
 struct Base<Subsurface> : Common {
   using Common::Common;
   Surface* surface = nullptr;  // the child surface (holds the subsurface role)
-  Surface* parent = nullptr;
+  MortalPtr<Surface> parent;
   SkIPoint pos = {}, pending_pos = {};
   bool position_dirty = false;
   bool sync = true;
@@ -278,8 +279,8 @@ struct Base<Subsurface> : Common {
 template <>
 struct Base<XdgPopup> : Common {
   using Common::Common;
-  XdgSurface* xdg = nullptr;
-  XdgSurface* parent = nullptr;
+  MortalPtr<XdgSurface> xdg;
+  MortalPtr<XdgSurface> parent;
   SkIRect geo = SkIRect::MakeEmpty();
   SkIPoint flipped = {};
   bool flip_x = false, flip_y = false, slide_x = false, slide_y = false;
@@ -300,10 +301,9 @@ struct Base<XdgPositioner> : Common {
 template <>
 struct Base<Viewport> : Common {
   using Common::Common;
-  Surface* surface = nullptr;
+  MortalPtr<Surface> surface;
   float src_x = -1, src_y = -1, src_w = -1, src_h = -1;
   SkISize dst_size = {-1, -1};
-  ~Base();
 };
 
 template <>
@@ -363,13 +363,12 @@ template <>
 struct Base<DataSource> : Common {
   using Common::Common;
   Vec<Str> mimes;
-  ~Base();
 };
 
 template <>
 struct Base<DataOffer> : Common {
   using Common::Common;
-  DataSource* source = nullptr;
+  MortalPtr<DataSource> source;
 };
 
 void AdvertiseDmabufOnBind(LinuxDmabufV1&, U32 version);

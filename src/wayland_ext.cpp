@@ -520,31 +520,18 @@ void OfferSelectionTo(Server& s, DataDevice& dev) {
 }  // namespace
 
 Base<Surface>::~Base() {
-  Server& s = client.server;
   Surface* self = static_cast<Surface*>(this);
   ReleaseHeldDmabuf(*self);  // hand any zero-copy buffer back so the client may reuse it
-  if (s.pointer_surface == self) s.pointer_surface = nullptr;
-  if (s.keyboard_surface == self) s.keyboard_surface = nullptr;
-  if (viewport) viewport->surface = nullptr;
   if (as_subsurface) DetachSubsurface(*as_subsurface);
-  for (Surface* entry : pending_stack)
-    if (entry != self && entry->as_subsurface) entry->as_subsurface->parent = nullptr;
-  if (xdg) xdg->surface = nullptr;
 }
 
 Base<Subsurface>::~Base() { DetachSubsurface(static_cast<Subsurface&>(*this)); }
-
-Base<Viewport>::~Base() {
-  if (surface) surface->viewport = nullptr;
-}
 
 Base<XdgPopup>::~Base() {
   Server& s = client.server;
   XdgPopup* self = static_cast<XdgPopup*>(this);
   if (parent) std::erase(parent->child_popups, self);
-  if (xdg) xdg->popup = nullptr;
   if (s.grabbing_popup == self) {
-    s.grabbing_popup = nullptr;
     Surface* target = nullptr;
     if (parent && parent->surface)
       if (XdgToplevel* t = OwningToplevel(*parent->surface))
@@ -554,27 +541,10 @@ Base<XdgPopup>::~Base() {
   if (parent && parent->surface) ApplyAndPublish(*parent->surface);
 }
 
-Base<XdgSurface>::~Base() {
-  if (toplevel) toplevel->xdg = nullptr;
-  if (popup) popup->xdg = nullptr;
-  if (surface) surface->xdg = nullptr;
-}
-
-Base<XdgToplevel>::~Base() {
-  UnmapToplevel(static_cast<XdgToplevel&>(*this));
-  if (xdg) xdg->toplevel = nullptr;
-}
+Base<XdgToplevel>::~Base() { UnmapToplevel(static_cast<XdgToplevel&>(*this)); }
 
 Base<Buffer>::~Base() {
   if (data) munmap(data, map_size);
-}
-
-Base<DataSource>::~Base() {
-  Server& s = client.server;
-  DataSource* self = static_cast<DataSource*>(this);
-  if (s.selection == self) s.selection = nullptr;
-  for (DataOffer& o : DataOffer::colony)
-    if (o.source == self) o.source = nullptr;
 }
 
 // --- request handlers ---

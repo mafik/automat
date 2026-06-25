@@ -41,6 +41,9 @@ struct RootWidget final : Widget, DropTarget {
   RootWidget();
   ~RootWidget();
 
+  // true when Wayland windows should receive input before Automat
+  constexpr static bool kWaylandLock = false;
+
   std::jthread render_thread;
 
   std::unique_ptr<Window> window;

@@ -261,6 +261,7 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
     if (auto s = LockSurface()) wayland::server->SendPointerMotion(*s, lx, ly);
   }
   bool PointerWheel(ui::Pointer& p, float delta) override {
+    if (!ui::RootWidget::kWaylandLock) return false;
     float lx, ly;
     SurfacePos(p.PositionWithin(*this), lx, ly);
     if (auto s = LockSurface()) wayland::server->SendPointerAxis(*s, delta);
@@ -420,8 +421,9 @@ struct WaylandWindowToy : WaylandSurfaceToy {
     ApplyCursor();
   }
 
-  // Over the chrome, fall through (return false) so the board still zooms.
+  // Unlocked, or over the chrome: fall through (return false) so the board zooms.
   bool PointerWheel(ui::Pointer& p, float delta) override {
+    if (!ui::RootWidget::kWaylandLock) return false;
     float sx, sy;
     if (!ClientPos(p.PositionWithin(*this), sx, sy)) return false;
     if (auto w = LockWindow()) wayland::server->SendPointerAxis(*w, delta);
@@ -523,17 +525,24 @@ struct ClientInputAction : Action {
   }
 };
 
+static bool ForwardsToClient(ui::ActionTrigger btn) {
+  return ui::RootWidget::kWaylandLock || (ui::PointerButton)btn == ui::PointerButton::Left;
+}
+
 std::unique_ptr<Action> WaylandSurfaceToy::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
-  if (uint32_t code = EvdevButtonCode(btn))
-    return std::make_unique<ClientInputAction>(p, *this, code);
+  if (ForwardsToClient(btn))
+    if (uint32_t code = EvdevButtonCode(btn))
+      return std::make_unique<ClientInputAction>(p, *this, code);
   return ObjectToy::FindAction(p, btn);
 }
 
 std::unique_ptr<Action> WaylandWindowToy::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
-  if (uint32_t code = EvdevButtonCode(btn)) {
-    float lx, ly;
-    if (ClientPos(p.PositionWithin(*this), lx, ly))
-      return std::make_unique<ClientInputAction>(p, *this, code);
+  if (ForwardsToClient(btn)) {
+    if (uint32_t code = EvdevButtonCode(btn)) {
+      float lx, ly;
+      if (ClientPos(p.PositionWithin(*this), lx, ly))
+        return std::make_unique<ClientInputAction>(p, *this, code);
+    }
   }
   // Title bar and frame: the standard object behaviors (drag, menu).
   return ObjectToy::FindAction(p, btn);

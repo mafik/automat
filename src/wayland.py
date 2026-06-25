@@ -8,6 +8,8 @@ import fs_utils
 import make
 import src
 
+GENERATED_HPP_DEPS = ['colony.hpp', 'fd.hpp', 'int.hpp', 'span.hpp', 'wayland_ext.hpp']
+
 # Requests whose handler the server implements by hand; the rest get an empty
 # generated default so the generated dispatcher always has something to call.
 HANDLED = {
@@ -322,11 +324,9 @@ if sys.platform == 'linux':
         w('};')
 
       w('#pragma once\n')
-      w('#include "../../src/colony.hpp"')
-      w('#include "../../src/fd.hpp"')
-      w('#include "../../src/int.hpp"')
-      w('#include "../../src/span.hpp"')
-      w('#include "../../src/wayland_ext.hpp"\n')
+      for header in GENERATED_HPP_DEPS:
+        w(f'#include "../../src/{header}"')
+      w('')
       w('namespace automat::wayland {')
       for iface in ordered:
         emit_interface(iface)
@@ -487,4 +487,14 @@ if sys.platform == 'linux':
           shortcut='wayland-protocols')
       for path in (cpp, hpp, hpp_forward):
         recipe.generated.add(str(path))
-        srcs[str(path)] = src.File(path)
+
+      cpp_file = src.File(cpp)
+      cpp_file.direct_includes.append(str(hpp))
+      srcs[str(cpp)] = cpp_file
+
+      hpp_file = src.File(hpp)
+      for header in GENERATED_HPP_DEPS:
+        hpp_file.direct_includes.append(str(fs_utils.src_dir / header))
+      srcs[str(hpp)] = hpp_file
+
+      srcs[str(hpp_forward)] = src.File(hpp_forward)

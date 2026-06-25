@@ -21,19 +21,13 @@ using namespace std;
 
 namespace automat::ui {
 
-PointerMoveCallback::~PointerMoveCallback() {
-  for (Pointer* p : pointers) {
-    p->move_callbacks.Erase(this);
-  }
-  pointers.clear();
-}
 void PointerMoveCallback::StartWatching(Pointer& p) {
   pointers.push_back(&p);
-  p.move_callbacks.push_back(this);
+  p.move_callbacks.Add(*this);
 }
 void PointerMoveCallback::StopWatching(Pointer& p) {
   pointers.Erase(&p);
-  p.move_callbacks.Erase(this);
+  p.move_callbacks.Erase(*this);
 }
 
 Pointer::Pointer(RootWidget& root_widget, Vec2 position)
@@ -133,11 +127,11 @@ void Pointer::Move(Vec2 position) {
     }
   }
   UpdatePath();
-  for (auto* cb : move_callbacks) {
-    cb->PointerMove(*this, position);
+  for (PointerMoveCallback& cb : move_callbacks) {
+    cb.PointerMove(*this, position);
   }
 }
-void Pointer::Enter() { root_widget.pointers.push_back(this); }
+void Pointer::Enter() { root_widget.pointers.Add(*this); }
 void Pointer::Leave() {
   auto old_path = std::move(path);
   path.clear();
@@ -147,10 +141,7 @@ void Pointer::Leave() {
       w->PointerLeave(*this);
     }
   }
-  auto it = std::find(root_widget.pointers.begin(), root_widget.pointers.end(), this);
-  if (it != root_widget.pointers.end()) {
-    root_widget.pointers.erase(it);
-  }
+  root_widget.pointers.Erase(*this);
   pointer_widget->WakeAnimation();
 }
 void Pointer::Wheel(float delta) {

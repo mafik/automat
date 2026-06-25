@@ -11,7 +11,7 @@ namespace automat::library {
 struct KeyPresser : Object, ui::Keylogger {
   ui::AnsiKey key = ui::AnsiKey::F;
 
-  ui::Keylogging* keylogging = nullptr;
+  MortalPtr<ui::Keylogging> keylogging;
   time::SteadyPoint last_pressed_time = time::kZeroSteady;
   time::SteadyPoint last_released_time = time::kZeroSteady;
   bool key_pressed = false;

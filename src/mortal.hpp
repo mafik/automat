@@ -218,6 +218,20 @@ struct MortalList {
     mortal_priv::Link<mortal_priv::Kind::List>(&target.mortal_coil.head, entry);
   }
 
+  // Remove the entry for `target` while it is still alive (removal on death is automatic). O(n).
+  void Erase(T& target) {
+    for (auto it = colony.begin(); it != colony.end(); ++it) {
+      if (static_cast<T*>(it->mortal) == &target) {
+        if (it->pprev) {
+          mortal_priv::UnlinkFast(&*it);
+          it->pprev = nullptr;
+        }
+        colony.erase(it);
+        return;
+      }
+    }
+  }
+
   bool empty() const { return colony.empty(); }
   size_t size() const { return colony.size(); }
 

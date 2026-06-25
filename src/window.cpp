@@ -21,8 +21,9 @@ Pointer& Window::GetMouse() {
   return *mouse;
 }
 
-void Window::BeginLogging(Keylogger* keylogger, Keylogging** keylogging,
-                          Pointer::Logger* pointer_logger, Pointer::Logging** pointer_logging) {
+void Window::BeginLogging(Keylogger* keylogger, MortalPtr<ui::Keylogging>* keylogging,
+                          Pointer::Logger* pointer_logger,
+                          MortalPtr<ui::Pointer::Logging>* pointer_logging) {
   assert((keylogger != nullptr) == (keylogging != nullptr));
   assert((pointer_logger != nullptr) == (pointer_logging != nullptr));
   assert(keylogger != nullptr || pointer_logger != nullptr);

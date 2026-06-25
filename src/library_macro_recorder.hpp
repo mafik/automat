@@ -17,8 +17,8 @@ struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
   void OnCancel() { obj->StopRecording(); }
   DEF_END(long_running);
 
-  ui::Keylogging* keylogging = nullptr;
-  ui::Pointer::Logging* pointer_logging = nullptr;
+  MortalPtr<ui::Keylogging> keylogging;
+  MortalPtr<ui::Pointer::Logging> pointer_logging;
 
   DEF_INTERFACE(MacroRecorder, ObjectArgument<Timeline>, timeline, "Timeline")
   static constexpr float kAutoconnectRadius = 10_cm;

@@ -325,7 +325,7 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
 
   if (stabilize_mouse) {
     if (pointers.size() > 0) {
-      Pointer* first_pointer = *pointers.begin();
+      Pointer* first_pointer = &*pointers.begin();
       Vec2 mouse_position = TransformDown(*this).mapPoint(first_pointer->pointer_position);
       Vec2 focus_pre = WindowToCanvas().mapPoint(mouse_position);
       tock.drawing |= animation::ExponentialApproach(zoom_target, timer.d, 1.0 / 15, zoom);
@@ -399,15 +399,15 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
 
   if (tock.ing) {
     for (auto& each_pointer : pointers) {
-      each_pointer->UpdatePath();
+      each_pointer.UpdatePath();
     }
   }
 
   auto canvas_to_window44 = SkM44(CanvasToWindow());
 
   keyboard.local_to_parent = canvas_to_window44;
-  for (auto p : pointers) {
-    if (auto widget = p->GetWidget()) {
+  for (auto& p : pointers) {
+    if (auto widget = p.GetWidget()) {
       widget->local_to_parent = canvas_to_window44;
     }
   }
@@ -508,7 +508,7 @@ std::unique_ptr<Action> RootWidget::FindAction(Pointer& p, ActionTrigger trigger
 
 void RootWidget::Zoom(float delta) {
   if (pointers.size() > 0) {
-    Pointer* first_pointer = *pointers.begin();
+    Pointer* first_pointer = &*pointers.begin();
     Vec2 mouse_position = TransformDown(*this).mapPoint(first_pointer->pointer_position);
     Vec2 focus_pre = WindowToCanvas().mapPoint(mouse_position);
     zoom_target *= delta;

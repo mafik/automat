@@ -27,8 +27,9 @@ struct Widget;
 struct RootWidget;
 
 struct PointerMoveCallback {
+  MortalCoil mortal_coil;
   Vec<Pointer*> pointers;
-  virtual ~PointerMoveCallback();
+  virtual ~PointerMoveCallback() = default;
   virtual void PointerMove(Pointer&, Vec2 position) = 0;
   void StartWatching(Pointer& p);
   void StopWatching(Pointer& p);
@@ -131,7 +132,7 @@ struct Pointer {
   Vec2 button_down_position[static_cast<int>(PointerButton::Count)];
   time::SteadyPoint button_down_time[static_cast<int>(PointerButton::Count)];
 
-  Vec<PointerMoveCallback*> move_callbacks;
+  MortalList<PointerMoveCallback> move_callbacks;
 
   std::unique_ptr<Action> actions[static_cast<int>(PointerButton::Count)];
   MortalPtr<Widget> hover;
@@ -162,6 +163,7 @@ struct Pointer {
   };
 
   struct Logging {
+    MortalCoil mortal_coil;
     Pointer& pointer;
     Logger& logger;
     Logging(Pointer& pointer, Logger& logger) : pointer(pointer), logger(logger) {}

@@ -179,7 +179,7 @@ struct RootWidget final : Widget, DropTarget {
 
   std::deque<float> fps_history;
 
-  Vec<Pointer*> pointers;
+  MortalList<Pointer> pointers;
   Keyboard keyboard;
 
   uint32_t observed_vm_wake_counter = 0;

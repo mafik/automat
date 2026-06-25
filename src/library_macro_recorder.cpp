@@ -125,7 +125,6 @@ void MacroRecorder::StopRecording() {
   }
   if (pointer_logging) {
     pointer_logging->Release();
-    pointer_logging = nullptr;
   }
 }
 
@@ -140,7 +139,6 @@ MacroRecorder::~MacroRecorder() {
   }
   if (pointer_logging) {
     pointer_logging->Release();
-    pointer_logging = nullptr;
   }
 }
 
@@ -284,9 +282,7 @@ void MacroRecorder::KeyloggerKeyDown(ui::Key key) {
 void MacroRecorder::KeyloggerKeyUp(ui::Key key) {
   RecordOnOffEvent(*this, key.physical, PointerButton::Unknown, false);
 }
-void MacroRecorder::KeyloggerOnRelease(const ui::Keylogging& keylogging) {
-  this->keylogging = nullptr;
-}
+void MacroRecorder::KeyloggerOnRelease(const ui::Keylogging&) {}
 
 void MacroRecorder::PointerLoggerButtonDown(ui::Pointer::Logging&, ui::PointerButton btn) {
   RecordOnOffEvent(*this, AnsiKey::Unknown, btn, true);
@@ -575,7 +571,6 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
   void PointerLeave(ui::Pointer& p) override {
     animation_state.pointers_over--;
     StopWatching(p);
-    p.move_callbacks.Erase(this);
   }
 
   void PointerMove(ui::Pointer&, Vec2 position) override { WakeAnimation(); }

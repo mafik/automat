@@ -254,6 +254,22 @@ TEST(MortalList, AddAndIterate) {
   EXPECT_EQ(seen, (std::set<M*>{&a, &b, &c}));
 }
 
+TEST(MortalList, EraseLive) {
+  M a, b, c;
+  MortalList<M> list;
+  list.Add(a);
+  list.Add(b);
+  list.Add(c);
+  list.Erase(b);  // live removal while b is still alive
+  EXPECT_EQ(list.size(), 2u);
+  std::set<M*> seen;
+  for (M& x : list) seen.insert(&x);
+  EXPECT_EQ(seen, (std::set<M*>{&a, &c}));
+  list.Erase(b);  // already gone -> no-op
+  EXPECT_EQ(list.size(), 2u);
+  // b was unlinked cleanly, so its own death touches nothing.
+}
+
 TEST(MortalList, DropsDeadTargets) {
   auto a = std::make_unique<M>();
   M b;

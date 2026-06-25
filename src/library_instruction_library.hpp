@@ -49,6 +49,7 @@ struct InstructionLibrary : Object {
   Ptr<Object> Clone() const override;
 
   struct Widget : Toy, ui::PointerMoveCallback {
+    using Toy::mortal_coil;  // disambiguate from PointerMoveCallback's coil for MortalPtr<Widget>
     struct InstructionCard {
       std::unique_ptr<Instruction::Widget> widget;
       Ptr<Instruction> instruction;

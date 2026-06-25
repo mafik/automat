@@ -148,6 +148,7 @@ struct KeyGrab {
 };
 
 struct Keylogging {
+  MortalCoil mortal_coil;
   Keyboard& keyboard;
   Keylogger& keylogger;
   bool released = false;

@@ -308,6 +308,6 @@ void KeyPresser::KeyloggerKeyUp(ui::Key key_up) {
   WakeToys();
 }
 
-void KeyPresser::KeyloggerOnRelease(const ui::Keylogging&) { keylogging = nullptr; }
+void KeyPresser::KeyloggerOnRelease(const ui::Keylogging&) {}
 
 }  // namespace automat::library

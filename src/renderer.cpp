@@ -1472,7 +1472,7 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
   if constexpr (kDebugRendering) {  // bullseye for latency visualisation
     lock_guard lock(rw.mutex);
     if (rw.pointers.size() > 0) {
-      auto p = rw.pointers[0]->pointer_position;
+      auto p = rw.pointers.begin()->pointer_position;
       auto window_transform = ui::TransformUp(rw);
       canvas.resetMatrix();
       SkPaint red;

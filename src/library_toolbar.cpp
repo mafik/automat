@@ -66,7 +66,8 @@ ui::Tock Toolbar::Tick(time::Timer& timer) {
   float width = CalculateWidth();
   int new_hovered_button = -1;
 
-  for (auto* pointer : root_widget.pointers) {
+  for (auto& pointer_ref : root_widget.pointers) {
+    auto* pointer = &pointer_ref;
     if (pointer->actions[static_cast<int>(PointerButton::Left)]) {
       continue;
     }

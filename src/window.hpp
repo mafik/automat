@@ -9,6 +9,7 @@
 #include "colony.hpp"
 #include "keyboard.hpp"
 #include "math.hpp"
+#include "mortal.hpp"
 #include "pointer.hpp"
 #include "window_watch.hpp"
 
@@ -57,8 +58,9 @@ struct Window {
 
   void RegisterInput();
 
-  void BeginLogging(Keylogger* keylogger, Keylogging** keylogging, Pointer::Logger* pointer_logger,
-                    Pointer::Logging** pointer_logging);
+  void BeginLogging(Keylogger* keylogger, MortalPtr<ui::Keylogging>* keylogging,
+                    Pointer::Logger* pointer_logger,
+                    MortalPtr<ui::Pointer::Logging>* pointer_logging);
 
   // Window watching - for tracking foreground window changes.
   Colony<WindowWatching> window_watchings;

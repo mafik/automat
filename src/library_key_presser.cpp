@@ -132,7 +132,7 @@ struct KeyPresserWidget : ObjectToy {
   mutable std::unique_ptr<KeyPresserButton> shortcut_button;
 
   // This is used to select the pressed key
-  ui::Caret* key_selector = nullptr;
+  MortalPtr<ui::Caret> key_selector;
 
   KeyPresserWidget(Widget* parent, Object& key_presser)
       : ObjectToy(parent, key_presser),
@@ -220,7 +220,6 @@ struct KeyPresserWidget : ObjectToy {
   }
 
   void ReleaseCaret(ui::Caret&) override {
-    key_selector = nullptr;
     WakeAnimation();
     shortcut_button->WakeAnimation();
   }

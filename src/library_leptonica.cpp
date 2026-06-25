@@ -1024,7 +1024,7 @@ struct LeptonicaImageWidget : beta::ObjectToy {
 
 struct ShelfButton : ui::Widget {
   Ptr<Object> proto;
-  Widget* proto_widget = nullptr;
+  MortalPtr<Widget> proto_widget;
 
   ShelfButton(ui::Widget* parent, Ptr<Object> proto)
       : ui::Widget(parent), proto(std::move(proto)) {}

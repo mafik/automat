@@ -128,7 +128,7 @@ void TextFieldBase::UpdateCaret(Caret& caret) {
 
 struct TextSelectAction : Action {
   TextFieldBase& text_field;
-  Caret* caret = nullptr;
+  MortalPtr<ui::Caret> caret;
 
   // TextSelectionAction can be used to drag connections. In order to do this, make sure to set the
   // `argument` of the TextField.

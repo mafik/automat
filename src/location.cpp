@@ -162,12 +162,6 @@ LocationWidget::LocationWidget(ui::Widget* parent, Location& loc)
   }
 }
 
-LocationWidget::~LocationWidget() {
-  if (auto loc = LockLocation()) {
-    loc->widget = nullptr;
-  }
-}
-
 ObjectToy& LocationWidget::ToyForObject() {
   if (!toy) {
     if (auto loc = LockLocation()) {

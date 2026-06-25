@@ -47,8 +47,8 @@ struct Location : Object {
   std::unordered_set<Location*> update_observers;
   std::unordered_set<Location*> observing_updates;
 
-  // Cached LocationWidget (set by MakeToy, cleared by LocationWidget dtor).
-  LocationWidget* widget = nullptr;
+  // Cached LocationWidget (set by MakeToy).
+  MortalPtr<LocationWidget> widget;
 
   // ToyMaker concept
   Object& GetOwner() { return *this; }
@@ -213,7 +213,6 @@ struct LocationWidget : ObjectToy {
   std::vector<ui::Widget*> overlays;
 
   LocationWidget(ui::Widget* parent, Location& loc);
-  ~LocationWidget();
 
   Ptr<Location> LockLocation() const { return location_weak.Lock(); }
 

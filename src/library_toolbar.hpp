@@ -13,7 +13,7 @@ constexpr float kToolbarIconSize = ui::kMinimalTouchableSize * 2;
 
 struct PrototypeButton : Widget {
   Ptr<Object> proto;
-  Widget* proto_widget;
+  MortalPtr<Widget> proto_widget;
   float natural_width;
   mutable animation::SpringV2<float> width{kToolbarIconSize};
   Optional<Pointer::IconOverride> hand_icon;

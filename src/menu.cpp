@@ -15,6 +15,7 @@
 #include "global_resources.hpp"
 #include "log.hpp"
 #include "math.hpp"
+#include "mortal.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
 #include "sincos.hpp"
@@ -59,7 +60,7 @@ struct Menu : ui::Widget {
                                          DIR_NONE, DIR_NONE, DIR_NONE, DIR_NONE};
 
   animation::SpringV2<float> size = 0;
-  MenuAction* action;
+  MortalPtr<MenuAction> action;
   bool first_tick = true;
 
   // Menus with fewer than 8 options may use a compressed display format where only some slots are
@@ -329,7 +330,6 @@ struct MenuAction : Action {
     menu_widget->local_to_parent = SkM44::Translate(pos.x, pos.y);
     menu_widget->WakeAnimation();
   }
-  ~MenuAction() override { menu_widget->action = nullptr; }
   void Update() override {
     auto pos = pointer.PositionWithin(*menu_widget);
     float length = Length(pos);

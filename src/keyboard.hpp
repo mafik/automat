@@ -17,6 +17,7 @@
 #include "fn.hpp"
 #include "key.hpp"
 #include "math.hpp"
+#include "mortal.hpp"
 #include "status.hpp"
 #include "time.hpp"
 #include "widget.hpp"
@@ -36,6 +37,7 @@ struct Keylogging;
 void SendKeyEvent(AnsiKey physical, bool down);
 
 struct Caret final {
+  MortalCoil mortal_coil;
   Keyboard& keyboard;
   MortalPtr<Widget> owner;  // also the coordinate space `shape` is expressed in
   SkPath shape;
@@ -107,6 +109,7 @@ struct KeyGrabber {
 };
 
 struct KeyGrab {
+  MortalCoil mortal_coil;
   Keyboard& keyboard;
   KeyGrabber& grabber;
   AnsiKey key;  // physical
@@ -170,7 +173,7 @@ struct Keyboard final : Widget {
   // Each keyboard may be associated with a pointer. This is the global OS pointer that may actually
   // aggregate multiple physical devices. If necessary, this should be switched to a collection of
   // pointers.
-  Pointer* pointer = nullptr;
+  MortalPtr<Pointer> pointer;
 
   // A keyboard can write to multiple carets at the same time! (not finished!)
   std::set<std::unique_ptr<Caret>> carets;

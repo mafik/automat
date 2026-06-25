@@ -17,6 +17,7 @@
 #include "library_toolbar.hpp"
 #include "loading_animation.hpp"
 #include "math.hpp"
+#include "mortal.hpp"
 #include "time.hpp"
 #include "widget.hpp"
 #include "window.hpp"
@@ -64,7 +65,7 @@ struct RootWidget final : Widget, DropTarget {
   void Init();
 
   struct ToyStore toys;
-  std::vector<Action*> active_actions;
+  MortalList<Action> active_actions;
 
   std::string_view Name() const override { return "RootWidget"; }
 

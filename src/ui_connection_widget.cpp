@@ -876,59 +876,65 @@ std::unique_ptr<Action> ConnectionWidget::FindAction(Pointer& pointer, ActionTri
   return nullptr;
 }
 
-DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& widget)
+DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& connection_widget)
     : Action(pointer),
-      widget(widget),
+      widget(connection_widget),
       effect(audio::MakeBeginLoopEndEffect(embedded::assets_SFX_cable_start_wav,
                                            embedded::assets_SFX_cable_loop_wav,
                                            embedded::assets_SFX_cable_end_wav)) {
-  if (auto arg = widget.LockBind<Argument>()) {
+  if (auto arg = widget->LockBind<Argument>()) {
     arg.Disconnect();  // Disconnect existing connection
   }
 
   grab_offset = Vec2(0, 0);
-  if (widget.state) {
+  if (widget->state) {
     // Position within parent board
     auto pointer_pos = pointer.PositionWithinRootBoard();
-    auto mat = widget.state->ConnectorMatrix();
+    auto mat = widget->state->ConnectorMatrix();
     SkMatrix mat_inv;
     if (mat.invert(&mat_inv)) {
       grab_offset = mat_inv.mapPoint(pointer_pos);
     }
-    widget.manual_position = pointer_pos - grab_offset * widget.state->connector_scale;
+    widget->manual_position = pointer_pos - grab_offset * widget->state->connector_scale;
   }
 
-  widget.WakeAnimation();
+  widget->WakeAnimation();
 }
 
 DragConnectionAction::~DragConnectionAction() {
-  auto arg = widget.LockBind<Argument>();
+  if (!widget) return;
+  auto arg = widget->LockBind<Argument>();
   if (!arg) return;
 
   Vec2 pos;
-  if (widget.state) {
-    pos = widget.state->ConnectorMatrix().mapPoint({});
-  } else if (widget.manual_position) {
-    pos = *widget.manual_position;
+  if (widget->state) {
+    pos = widget->state->ConnectorMatrix().mapPoint({});
+  } else if (widget->manual_position) {
+    pos = *widget->manual_position;
   } else {
     return;
   }
-  auto* mw = BoardOrNull(widget);
+  auto* mw = BoardOrNull(*widget);
   if (mw) {
     mw->ConnectAtPoint(arg, pos);
   }
-  widget.manual_position.reset();
-  widget.WakeAnimation();
+  widget->manual_position.reset();
+  widget->WakeAnimation();
 }
 
 void DragConnectionAction::Update() {
+  if (!widget) {
+    pointer.ReplaceAction(*this, nullptr);
+    return;
+  }
   Vec2 new_position = pointer.PositionWithinRootBoard();
-  widget.manual_position = new_position - grab_offset * widget.state->connector_scale;
-  widget.WakeAnimation();
+  widget->manual_position = new_position - grab_offset * widget->state->connector_scale;
+  widget->WakeAnimation();
 }
 
 bool DragConnectionAction::Highlight(Interface end) const {
-  if (auto arg = widget.LockBind<Argument>()) {
+  if (!widget) return false;
+  if (auto arg = widget->LockBind<Argument>()) {
     return arg.CanConnect(end);
   }
   return false;

@@ -347,8 +347,8 @@ void BoardWidget::NearbyCandidates(
   Argument bound(*here.object, arg);
   // Check the currently dragged object
   auto& root_widget = *ui::root_widget;
-  for (auto* action : root_widget.active_actions) {
-    if (auto* drag_location_action = dynamic_cast<DragLocationAction*>(action)) {
+  for (Action& action : root_widget.active_actions) {
+    if (auto* drag_location_action = dynamic_cast<DragLocationAction*>(&action)) {
       for (auto& location : drag_location_action->locations) {
         if (location.get() == &here) {
           continue;
@@ -473,7 +473,7 @@ Vec<Ptr<Location>> BoardWidget::CloneStack(Location& base) {
   // (if it does - move this part out of CloneStack and into the caller)
   auto& root = FindRootWidget();
   for (size_t i = 0; i < originals.size(); ++i) {
-    auto* orig_lw = originals[i]->widget;
+    auto* orig_lw = originals[i]->widget.Get();
     if (!orig_lw || !orig_lw->toy || !result[i]->object) continue;
     root.toys.FindOrMake(*result[i]->object, orig_lw->toy.Get());
   }

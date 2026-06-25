@@ -48,12 +48,7 @@ Pointer::Pointer(RootWidget& root_widget, Vec2 position)
   pointer_widget->local_to_parent = SkM44(root_widget.CanvasToWindow());
   root_widget.layers.OrderAbove(pointer_widget.get(), &root_widget.black_hole);
 }
-Pointer::~Pointer() {
-  Leave();
-  if (keyboard) {
-    keyboard->pointer = nullptr;
-  }
-}
+Pointer::~Pointer() { Leave(); }
 
 static bool FillPath(Pointer& p, Widget& w) {
   p.path.emplace_back(&w);

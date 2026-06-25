@@ -5,14 +5,11 @@
 
 #include "pointer.hpp"
 #include "root_widget.hpp"
-#include "vec.hpp"
 
 namespace automat {
 
 Action::Action(ui::Pointer& pointer) : pointer(pointer) {
-  pointer.root_widget.active_actions.push_back(this);
+  pointer.root_widget.active_actions.Add(*this);
 }
-
-Action::~Action() { FastRemove(pointer.root_widget.active_actions, this); }
 
 }  // namespace automat

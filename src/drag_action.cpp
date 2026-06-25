@@ -134,7 +134,7 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
     root.black_hole.WakeAnimation();
   }
   for (auto& location : std::ranges::reverse_view(locations)) {
-    auto* lw = location->widget;  // TODO: FindOrNull
+    auto* lw = location->widget.Get();  // TODO: FindOrNull
     if (lw) {
       lw->Reparent(*pointer.GetWidget());
     } else {

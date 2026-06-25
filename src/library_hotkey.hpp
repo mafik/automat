@@ -15,7 +15,7 @@ struct HotKey : Object, ui::KeyGrabber {
   bool windows = false;
 
   // This is used to get hotkey events
-  ui::KeyGrab* hotkey = nullptr;
+  MortalPtr<ui::KeyGrab> hotkey;
 
   DEF_INTERFACE(HotKey, OnOff, enabled, "Enabled")
   bool IsOn() const { return obj->hotkey != nullptr; }

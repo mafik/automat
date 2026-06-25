@@ -20,7 +20,7 @@ namespace automat::ui {
 struct ConnectionWidget;
 
 struct DragConnectionAction : Action {
-  ConnectionWidget& widget;
+  MortalPtr<ConnectionWidget> widget;
   std::unique_ptr<audio::Effect> effect;
 
   Vec2 grab_offset;

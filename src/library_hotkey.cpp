@@ -104,7 +104,7 @@ Ptr<Object> HotKey::Clone() const { return MAKE_PTR(HotKey, *this); }
 
 void HotKey::KeyGrabberKeyDown(ui::KeyGrab&) { ScheduleNext(*this); }
 void HotKey::KeyGrabberKeyUp(ui::KeyGrab&) {}
-void HotKey::ReleaseKeyGrab(ui::KeyGrab&) { hotkey = nullptr; }
+void HotKey::ReleaseKeyGrab(ui::KeyGrab&) {}
 
 void HotKey::SerializeState(ObjectSerializer& writer) const {
   writer.Key("key");
@@ -177,7 +177,7 @@ struct HotKeyWidget : ObjectToy {
   unique_ptr<KeyButton> shortcut_button;
 
   // This is used to select the main hotkey
-  ui::Caret* hotkey_selector = nullptr;
+  MortalPtr<ui::Caret> hotkey_selector;
 
   Ptr<HotKey> LockHotKey() const { return LockObject<HotKey>(); }
 
@@ -410,7 +410,6 @@ struct HotKeyWidget : ObjectToy {
   }
 
   void ReleaseCaret(ui::Caret&) override {
-    hotkey_selector = nullptr;
     WakeAnimation();
     shortcut_button->WakeAnimation();
   }

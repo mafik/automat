@@ -5,6 +5,7 @@
 #include <functional>
 
 #include "interface.hpp"
+#include "mortal.hpp"
 
 namespace automat {
 
@@ -20,6 +21,7 @@ struct Widget;
 //
 // Actions are the main mechanism for user to interact with the UI.
 struct Action {
+  MortalCoil mortal_coil;
   ui::Pointer& pointer;
 
   // Each action must be bound to a pointer. A reference to the pointer is stored internally to keep
@@ -28,7 +30,7 @@ struct Action {
 
   // Action is destroyed when the pointer is released. This typically corresponds to the button
   // release or key up.
-  virtual ~Action();
+  virtual ~Action() = default;
 
   // Update is called when the pointer moves (although spurious calls are also possible). This
   // function may be called hundreds of times per second.

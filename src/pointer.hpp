@@ -7,6 +7,7 @@
 #include "action.hpp"
 #include "colony.hpp"
 #include "math.hpp"
+#include "mortal.hpp"
 #include "object.hpp"
 #include "ptr.hpp"
 #include "str.hpp"
@@ -63,6 +64,7 @@ struct PointerGrab {
 struct PointerWidget;
 
 struct Pointer {
+  MortalCoil mortal_coil;
   Pointer(RootWidget&, Vec2 position);
   ~Pointer();
   void Move(Vec2 position);
@@ -121,7 +123,7 @@ struct Pointer {
 
   RootWidget& root_widget;
   // The main keyboard associated with this pointer device. May be null!
-  Keyboard* keyboard;
+  MortalPtr<Keyboard> keyboard;
 
   Vec2 pointer_position;
   std::list<Pointer::IconType> icons;

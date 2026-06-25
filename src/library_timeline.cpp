@@ -770,8 +770,8 @@ struct TimelineWidget : ObjectToy {
   std::unique_ptr<PrevButton> prev_button;
   std::unique_ptr<NextButton> next_button;
 
-  SpliceAction* splice_action = nullptr;
-  DragZoomAction* drag_zoom_action = nullptr;
+  MortalPtr<SpliceAction> splice_action;
+  MortalPtr<DragZoomAction> drag_zoom_action;
 
   Vec<MortalPtr<ui::Widget>> track_widgets;
 
@@ -1720,7 +1720,6 @@ struct DragZoomAction : Action {
   }
   ~DragZoomAction() override {
     if (timeline_widget) {
-      timeline_widget->drag_zoom_action = nullptr;
       auto timeline = timeline_widget->LockObject<Timeline>();
       if (timeline) {
         auto lock = std::lock_guard(timeline->mutex);
@@ -1759,7 +1758,6 @@ SpliceAction::SpliceAction(ui::Pointer& pointer, TimelineWidget& timeline_widget
 
 SpliceAction::~SpliceAction() {
   if (!timeline_widget) return;
-  timeline_widget->splice_action = nullptr;
   if (!cancel) {
     // Delete stuff between splice_to and current_offset
     auto current_offset = timeline_widget->current_offset;

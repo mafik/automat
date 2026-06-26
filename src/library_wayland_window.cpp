@@ -51,6 +51,12 @@ void WaylandWindow::SerializeState(ObjectSerializer& writer) const {
     writer.Key("title");
     writer.String(title.data(), title.size());
   }
+  auto pref = decoration_preference.load(std::memory_order_relaxed);
+  if (pref != DecorationPreference::Auto) {
+    StrView v = pref == DecorationPreference::ServerSide ? "server" : "client";
+    writer.Key("decoration");
+    writer.String(v.data(), v.size());
+  }
 }
 
 bool WaylandWindow::DeserializeKey(ObjectDeserializer& d, StrView key) {
@@ -70,6 +76,17 @@ bool WaylandWindow::DeserializeKey(ObjectDeserializer& d, StrView key) {
   }
   if (key == "title") {
     d.Get(title, status);
+    return true;
+  }
+  if (key == "decoration") {
+    Str v;
+    d.Get(v, status);
+    DecorationPreference pref = DecorationPreference::Auto;
+    if (v == "server")
+      pref = DecorationPreference::ServerSide;
+    else if (v == "client")
+      pref = DecorationPreference::ClientSide;
+    decoration_preference.store(pref, std::memory_order_relaxed);
     return true;
   }
   return false;
@@ -324,6 +341,7 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
 struct WaylandWindowToy : WaylandSurfaceToy {
   Str title_;
   bool client_gone_ = false;
+  bool decorate_ = false;
   ui::Caret* caret_ = nullptr;  // present while the keyboard flows into the client
   ui::Pointer* hover_pointer_ = nullptr;
   Optional<ui::Pointer::IconOverride> cursor_override_;
@@ -345,7 +363,12 @@ struct WaylandWindowToy : WaylandSurfaceToy {
     auto lock = std::lock_guard(win->mutex);
     title_ = win->title.empty() ? win->app_id : win->title;
     client_gone_ = win->client_gone;
+    decorate_ = win->server_side_decorated.load(std::memory_order_relaxed);
   }
+
+  bool Decorated() const { return decorate_ || client_gone_ || !image_; }
+  float Frame() const { return Decorated() ? kFrame : 0; }
+  float TitleH() const { return Decorated() ? kTitleH : 0; }
 
   float ContentW() const {
     return dst_size_.width() > 0 ? dst_size_.width() * kClientPx : kMinContentW;
@@ -353,19 +376,20 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   float ContentH() const {
     return dst_size_.height() > 0 ? dst_size_.height() * kClientPx : kMinContentH;
   }
-  float TotalW() const { return ContentW() + 2 * kFrame; }
-  float TotalH() const { return ContentH() + 2 * kFrame + kTitleH; }
+  float TotalW() const { return ContentW() + 2 * Frame(); }
+  float TotalH() const { return ContentH() + 2 * Frame() + TitleH(); }
 
   // The content area's top-left, where the toplevel surface (and its children)
   // sit, below the title band and inside the frame.
   Vec2 TopLeft() const override {
-    return Vec2(-TotalW() / 2 + kFrame, TotalH() / 2 - kTitleH - kFrame);
+    return Vec2(-TotalW() / 2 + Frame(), TotalH() / 2 - TitleH() - Frame());
   }
 
   Tock Tick(time::Timer&) override {
     PullState();
     SyncChildren(TopLeft());
     ApplyCursor();  // the client may have changed its cursor while the pointer sat still
+    if (caret_) caret_->shape = FocusCaretShape();
     return Tock::Draw;
   }
 
@@ -391,8 +415,8 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   // whether the point actually lies inside the content area.
   bool ClientPos(Vec2 local, float& sx, float& sy) const {
     float w = TotalW(), h = TotalH();
-    float left = -w / 2 + kFrame, right = w / 2 - kFrame;
-    float top = h / 2 - kTitleH - kFrame, bottom = -h / 2 + kFrame;
+    float left = -w / 2 + Frame(), right = w / 2 - Frame();
+    float top = h / 2 - TitleH() - Frame(), bottom = -h / 2 + Frame();
     bool inside = local.x >= left && local.x <= right && local.y >= bottom && local.y <= top;
     float cx = std::clamp(local.x, left, right);
     float cy = std::clamp(local.y, bottom, top);
@@ -408,6 +432,7 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   // draw black, so the shape must sit on guaranteed-light chrome - never on
   // client pixels, which are arbitrary and often dark.
   SkPath FocusCaretShape() const {
+    if (!Decorated()) return SkPath();
     float w = TotalW(), h = TotalH();
     float band_bottom = h / 2 - kTitleH;
     return SkPath::Rect(
@@ -417,7 +442,7 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   void FocusClient(ui::Pointer& p) {
     if (caret_ || !p.keyboard) return;
     float w = TotalW(), h = TotalH();
-    caret_ = &p.keyboard->RequestCaret(*this, Vec2(-w / 2 + kFrame, -h / 2 + kFrame));
+    caret_ = &p.keyboard->RequestCaret(*this, Vec2(-w / 2 + Frame(), -h / 2 + Frame()));
     caret_->shape = FocusCaretShape();
     if (auto win = LockWindow()) wayland::server->SendKeyboardEnter(*win);
     WakeAnimation();
@@ -482,6 +507,7 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   }
 
   SkPath Shape() const override {
+    if (!Decorated()) return SkPath::Rect(Rect::MakeCenterZero(TotalW(), TotalH()));
     return SkPath::RRect(RRect::MakeSimple(Rect::MakeCenterZero(TotalW(), TotalH()), 1.5_mm).sk);
   }
   Optional<Rect> TextureBounds() const override {
@@ -489,36 +515,38 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   }
 
   void Draw(SkCanvas& canvas) const override {
-    float w = TotalW(), h = TotalH();
-    uint32_t seed = Seed(ui::beta::Hash2(0x3A11D, (uint32_t)(title_.size() + 1)));
-    Rect body = Rect::MakeCenterZero(w, h);
-    SkPath base = ui::beta::WonkyRoundRect(body, 1.0_mm, ui::beta::kWonk, seed);
-    ui::beta::HandShadow(canvas, base, {ui::beta::kShadowDX, -ui::beta::kShadowDY},
-                         ui::beta::kShadow, seed);
-    ui::beta::MisregFill(canvas, base, ui::beta::kPaperCream, seed);
-    // The title band sits at the visual top.
-    Rect band{-w / 2, h / 2 - kTitleH, w / 2, h / 2};
-    canvas.save();
-    canvas.clipPath(base, true);
-    canvas.drawPath(
-        ui::beta::WobbleRect(band, ui::beta::kWonk, ui::beta::kSeg, ui::beta::Hash2(seed, 3)),
-        ui::beta::InkPaint(ui::beta::kBlue, 0.15_mm, true));
-    SkPaint band_fill;
-    band_fill.setColor(ui::beta::kBlue);
-    band_fill.setAntiAlias(true);
-    canvas.drawPath(
-        ui::beta::WobbleRect(band, ui::beta::kWonk, ui::beta::kSeg, ui::beta::Hash2(seed, 3)),
-        band_fill);
-    canvas.restore();
-    ui::beta::DrawTextIn(canvas, title_.empty() ? "Wayland Window" : title_,
-                         Rect{-w / 2 + 1.2_mm, h / 2 - kTitleH, w / 2 - 1.2_mm, h / 2},
-                         ui::beta::kBodySize, ui::beta::TextOn(ui::beta::kBlue),
-                         ui::beta::TextAlign::Left, true, seed);
-    ui::beta::SketchyStroke(canvas, base, ui::beta::kInk, ui::beta::kStroke, seed, 2);
-    if (client_gone_ || !image_) {
-      // The content area below the band, hatched while there is no buffer.
-      Rect inner{-w / 2 + 0.9_mm, -h / 2 + 0.9_mm, w / 2 - 0.9_mm, h / 2 - kTitleH - 0.6_mm};
-      ui::beta::HatchRect(canvas, inner, ui::beta::kGray, 1.6_mm, seed);
+    if (Decorated()) {
+      float w = TotalW(), h = TotalH();
+      uint32_t seed = Seed(ui::beta::Hash2(0x3A11D, (uint32_t)(title_.size() + 1)));
+      Rect body = Rect::MakeCenterZero(w, h);
+      SkPath base = ui::beta::WonkyRoundRect(body, 1.0_mm, ui::beta::kWonk, seed);
+      ui::beta::HandShadow(canvas, base, {ui::beta::kShadowDX, -ui::beta::kShadowDY},
+                           ui::beta::kShadow, seed);
+      ui::beta::MisregFill(canvas, base, ui::beta::kPaperCream, seed);
+      // The title band sits at the visual top.
+      Rect band{-w / 2, h / 2 - kTitleH, w / 2, h / 2};
+      canvas.save();
+      canvas.clipPath(base, true);
+      canvas.drawPath(
+          ui::beta::WobbleRect(band, ui::beta::kWonk, ui::beta::kSeg, ui::beta::Hash2(seed, 3)),
+          ui::beta::InkPaint(ui::beta::kBlue, 0.15_mm, true));
+      SkPaint band_fill;
+      band_fill.setColor(ui::beta::kBlue);
+      band_fill.setAntiAlias(true);
+      canvas.drawPath(
+          ui::beta::WobbleRect(band, ui::beta::kWonk, ui::beta::kSeg, ui::beta::Hash2(seed, 3)),
+          band_fill);
+      canvas.restore();
+      ui::beta::DrawTextIn(canvas, title_.empty() ? "Wayland Window" : title_,
+                           Rect{-w / 2 + 1.2_mm, h / 2 - kTitleH, w / 2 - 1.2_mm, h / 2},
+                           ui::beta::kBodySize, ui::beta::TextOn(ui::beta::kBlue),
+                           ui::beta::TextAlign::Left, true, seed);
+      ui::beta::SketchyStroke(canvas, base, ui::beta::kInk, ui::beta::kStroke, seed, 2);
+      if (client_gone_ || !image_) {
+        // The content area below the band, hatched while there is no buffer.
+        Rect inner{-w / 2 + 0.9_mm, -h / 2 + 0.9_mm, w / 2 - 0.9_mm, h / 2 - kTitleH - 0.6_mm};
+        ui::beta::HatchRect(canvas, inner, ui::beta::kGray, 1.6_mm, seed);
+      }
     }
     // The toplevel surface's own content; its child surfaces (subsurfaces and
     // popups) are separate widgets composited around it by the renderer.

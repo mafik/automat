@@ -47,7 +47,7 @@ void Display::OnGetRegistry(Registry& registry) {
   registry.Global(6, "wl_data_device_manager", 3);
   registry.Global(7, "xdg_wm_base", 6);
   registry.Global(8, "wp_viewporter", 1);
-  registry.Global(9, "zxdg_decoration_manager_v1", 1);
+  registry.Global(9, "zxdg_decoration_manager_v1", 2);
   registry.Global(10, "wp_cursor_shape_manager_v1", 1);
   registry.Global(11, "zwp_linux_dmabuf_v1", 4);
 }

@@ -97,6 +97,8 @@ struct WaylandWindow : WaylandSurface {
   enum class DecorationPreference { Auto = 0, ServerSide = 1, ClientSide = 2 };
   std::atomic<DecorationPreference> decoration_preference{DecorationPreference::Auto};
 
+  std::atomic<bool> server_side_decorated{false};
+
   // The Command whose child mapped this window. Connected at adoption, drawn
   // as a cable, serialized as a link; restore-time respawn goes through it so
   // the Command keeps STOP control over the new child.

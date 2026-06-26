@@ -126,6 +126,8 @@ void UnmapToplevel(XdgToplevel& t) {
   t.window = {};
 }
 
+void UpdateDecoration(XdgToplevel&);  // defined below
+
 void ApplyAndPublish(Surface& surf) {
   XdgToplevel* owner = OwningToplevel(surf);
   if (!owner) return;
@@ -166,6 +168,10 @@ void ApplyAndPublish(Surface& surf) {
         win->client_pid = t.pid;
       }
       t.window = win->AcquireWeakPtr();
+      // Now that the window is linked, settle the decoration mode for its
+      // (possibly restored) preference: the get_toplevel_decoration / set_mode
+      // handshake ran earlier, when the preference still read as the default.
+      UpdateDecoration(t);
       win_obj = win;
     }
   } else {
@@ -890,36 +896,55 @@ void Viewport::OnSetDestination(I32 width, I32 height) {
   dst_size = {width, height};
 }
 
-static ZxdgToplevelDecorationV1::Mode DecorationModeFor(ZxdgToplevelDecorationV1& dec) {
-  using P = WaylandWindow::DecorationPreference;
+namespace {
+
+void UpdateDecoration(XdgToplevel& t) {
   using M = ZxdgToplevelDecorationV1::Mode;
-  P pref = P::Auto;
-  if (dec.toplevel)
-    if (Ptr<ReferenceCounted> w = dec.toplevel->window.Lock())
-      pref = w.Cast<WaylandWindow>()->decoration_preference.load(std::memory_order_relaxed);
-  switch (pref) {
-    case P::ServerSide:
-      return M::ModeServerSide;
-    case P::ClientSide:
-      return M::ModeClientSide;
-    default:  // Auto
-      return dec.client_mode == M::ModeServerSide ? M::ModeServerSide : M::ModeClientSide;
+  using P = WaylandWindow::DecorationPreference;
+  M mode = t.decoration ? (M)t.decoration->client_mode : M::ModeClientSide;
+  if (Ptr<ReferenceCounted> ptr = t.window.Lock()) {
+    WaylandWindow* w = ptr.Get<WaylandWindow>();
+    P pref = w->decoration_preference.load(std::memory_order_relaxed);
+    if (pref == P::ServerSide) {
+      mode = M::ModeServerSide;
+    } else if (pref == P::ClientSide) {
+      mode = M::ModeClientSide;
+    }
+    // TODO: this should be stored only on surface Commit
+    w->server_side_decorated.store(mode == M::ModeServerSide, std::memory_order_relaxed);
+    w->WakeToys();
+  }
+  if (t.decoration) {
+    t.decoration->Configure(mode);
+    if (XdgSurface* xdg = t.xdg.Get(); xdg && xdg->initial_configure_sent)
+      xdg->Configure(xdg->last_configure_serial = t.client.server.serial++);
   }
 }
 
+}  // namespace
+
 void ZxdgDecorationManagerV1::OnGetToplevelDecoration(ZxdgToplevelDecorationV1& id,
                                                       XdgToplevel& toplevel) {
+  if (toplevel.decoration) {
+    id.client.ProtocolError(id.id, ZxdgToplevelDecorationV1::ErrorAlreadyConstructed,
+                            "xdg_toplevel already has a decoration object");
+    return;
+  }
   id.toplevel = &toplevel;
   toplevel.decoration = &id;
-  id.Configure(DecorationModeFor(id));
+  UpdateDecoration(toplevel);
 }
 void ZxdgToplevelDecorationV1::OnSetMode(enum Mode mode) {
+  if (mode != ModeClientSide && mode != ModeServerSide) {
+    client.ProtocolError(id, ErrorInvalidMode, "invalid decoration mode");
+    return;
+  }
   client_mode = mode;
-  Configure(DecorationModeFor(*this));
+  if (toplevel) UpdateDecoration(*toplevel);
 }
 void ZxdgToplevelDecorationV1::OnUnsetMode() {
   client_mode = 0;
-  Configure(DecorationModeFor(*this));
+  if (toplevel) UpdateDecoration(*toplevel);
 }
 
 void XdgPositioner::OnSetSize(I32 width, I32 height) { size = {width, height}; }
@@ -1229,12 +1254,10 @@ void Server::SendDecorationPreference(library::WaylandWindow& w) {
   auto* h = (XdgToplevel*)w.toplevel_handle.load();
   if (!h) return;
   epoll.Post([this, h] {
-    XdgToplevel* t = LiveToplevel(h);
-    if (!t || !t->decoration) return;
-    t->decoration->Configure(DecorationModeFor(*t->decoration));
-    // Drive an xdg_surface.configure/ack cycle so the new mode takes effect.
-    if (t->xdg) t->xdg->Configure(t->xdg->last_configure_serial = serial++);
-    FlushAll();
+    if (XdgToplevel* t = LiveToplevel(h)) {
+      UpdateDecoration(*t);
+      FlushAll();
+    }
   });
 }
 

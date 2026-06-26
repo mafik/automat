@@ -85,8 +85,7 @@ Implemented: `wl_compositor`, `wl_subcompositor` (subsurfaces are composited
 into the window's surface tree, see below), `wl_shm`,
 `wl_output`, `wl_seat` (pointer + keyboard), `wl_data_device_manager` (clipboard
 selection, see below), `xdg_wm_base` with toplevels and popups (menus, see
-below), `zxdg_decoration_manager_v1` forcing server-side decorations so clients
-do not draw their own title bars, `zwp_linux_dmabuf_v1` for GPU buffer passing
+below), `zxdg_decoration_manager_v1` for per-window decoration negotiation, `zwp_linux_dmabuf_v1` for GPU buffer passing
 (see below), `wp_viewporter` for surface cropping and scaling (see below), and
 `wp_cursor_shape_v1` for named cursors.
 foot requires the subcompositor and data device manager to even start; kitty

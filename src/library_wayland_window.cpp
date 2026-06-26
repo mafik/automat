@@ -7,12 +7,15 @@
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkColorFilter.h>
+#include <include/core/SkFontTypes.h>
 #include <include/core/SkImage.h>
 #include <include/core/SkM44.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
+#include <include/core/SkPathUtils.h>
 #include <include/core/SkSamplingOptions.h>
 #include <include/effects/SkGradient.h>
+#include <include/pathops/SkPathOps.h>
 
 #include "animation.hpp"
 #include "drawing.hpp"
@@ -407,11 +410,52 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   // sit, below the title band and inside the frame.
   Vec2 TopLeft() const override { return ContentRect().TopLeftCorner(); }
 
+  SkPath shape;
+
+  static ui::Font& GetFont() {
+    static auto font = ui::Font::MakeV2(ui::Font::GetBelanosimaRegular(), kTitleH);
+    return *font;
+  }
+
   Tock Tick(time::Timer&) override {
     PullState();
     SyncChildren(TopLeft());
     ApplyCursor();  // the client may have changed its cursor while the pointer sat still
     if (caret_) caret_->shape = FocusCaretShape();
+
+    if (Decorated()) {
+      auto& font = GetFont();
+
+      float w = font.sk_font.measureText(title_.c_str(), title_.size(), SkTextEncoding::kUTF8);
+      SkPath title_fill;
+      SkTextUtils::GetPath(title_.c_str(), title_.size(), SkTextEncoding::kUTF8, -w / 2, 0,
+                           font.sk_font, &title_fill);
+
+      SkPaint paint;
+      paint.setStyle(SkPaint::kStroke_Style);
+      // 0.3 is larger than 0.2 used for the real outline - this is to help in filling the holes in
+      // the text
+      paint.setStrokeWidth(kTitleH * 0.3 / font.font_scale);
+      SkPath title_outline = skpathutils::FillPathWithPaint(title_fill, paint);
+      auto uni = Op(title_fill, title_outline, SkPathOp::kUnion_SkPathOp);
+      if (uni) {
+        shape = *uni;
+      }
+      auto shift =
+          Op(shape, shape.makeOffset(0, 2_mm / font.font_scale), SkPathOp::kUnion_SkPathOp);
+      if (shift) {
+        shape = *shift;
+      }
+      auto frame = FrameOutRRect();
+      auto matrix = SkMatrix::ScaleTranslate(font.font_scale, -font.font_scale, 0, frame.rect.top);
+      auto with_frame =
+          Op(shape.makeTransform(matrix), SkPath::RRect(frame), SkPathOp::kUnion_SkPathOp);
+      if (with_frame) {
+        shape = *with_frame;
+      }
+    } else {
+      shape = SkPath::Rect(ContentRect());
+    }
     return Tock::Draw;
   }
 
@@ -510,15 +554,8 @@ struct WaylandWindowToy : WaylandSurfaceToy {
     visitor(deco);
   }
 
-  SkPath Shape() const override {
-    if (!Decorated()) return SkPath::Rect(ContentRect());
-    return SkPath::RRect(FrameOutRRect());
-  }
-  Optional<Rect> TextureBounds() const override {
-    auto rect = ContentRect().Outset(kFrame);
-    rect.top += kTitleH * 1.25f;
-    return rect;
-  }
+  SkPath Shape() const override { return shape; }
+  Optional<Rect> TextureBounds() const override { return shape.getBounds(); }
 
   void Draw(SkCanvas& canvas) const override {
     if (Decorated()) {
@@ -527,18 +564,19 @@ struct WaylandWindowToy : WaylandSurfaceToy {
       auto frame_outer = FrameOutRRect();
       auto lights_rrect = FrameLightsRRect();
 
-      auto font = ui::Font::MakeV2(ui::Font::GetBelanosimaRegular(), kTitleH);
-      float w = font->MeasureText(title_);
+      auto& font = GetFont();
+
+      float w = font.MeasureText(title_);
 
       float one_pixel = 1.0f / canvas.getTotalMatrix().getScaleX();
 
       canvas.save();
       canvas.translate(-w / 2, frame_outer.rect.top - kTitleH * 0.1);
-      SkPaint text_side_paint;
-      text_side_paint.setColor("#3a2021"_color);
-      text_side_paint.setStyle(SkPaint::kStrokeAndFill_Style);
-      text_side_paint.setStrokeWidth(kTitleH * 0.2 / font->font_scale);
-      font->DrawText(canvas, title_, text_side_paint);
+      SkPaint title_side_paint;
+      title_side_paint.setColor("#3a2021"_color);
+      title_side_paint.setStyle(SkPaint::kStrokeAndFill_Style);
+      title_side_paint.setStrokeWidth(kTitleH * 0.2 / GetFont().font_scale);
+      font.DrawText(canvas, title_, title_side_paint);
       canvas.restore();
 
       SkPaint flat_border_paint;
@@ -550,8 +588,8 @@ struct WaylandWindowToy : WaylandSurfaceToy {
       SkPaint text_outline_paint;
       text_outline_paint.setColor(flat_border_paint.getColor());
       text_outline_paint.setStyle(SkPaint::kStrokeAndFill_Style);
-      text_outline_paint.setStrokeWidth(kTitleH * 0.2 / font->font_scale);
-      font->DrawText(canvas, title_, text_outline_paint);
+      text_outline_paint.setStrokeWidth(kTitleH * 0.2 / font.font_scale);
+      font.DrawText(canvas, title_, text_outline_paint);
       canvas.restore();
 
       SkPaint bevel_border_paint;
@@ -615,7 +653,7 @@ struct WaylandWindowToy : WaylandSurfaceToy {
       title_paint.setColor("#e7e5cd"_color);
       canvas.save();
       canvas.translate(-w / 2, frame_outer.rect.top);
-      font->DrawText(canvas, title_, title_paint);
+      font.DrawText(canvas, title_, title_paint);
       canvas.restore();
     } else {
       DrawSurfaceImage(canvas, image_, src_crop_, dst_size_, TopLeft());

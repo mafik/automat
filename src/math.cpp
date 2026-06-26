@@ -17,8 +17,8 @@ std::string ToStrMetric(float x) { return f("{:4.1f}cm", x * 100); }
 std::string Vec2::ToStrMetric() const { return f("({:4.1f}cm, {:4.1f}cm)", x * 100, y * 100); }
 
 std::string Rect::ToStrMetric() const {
-  return f("Rect(t={:4.1f}cm, r={:4.1f}cm, b={:4.1f}cm, l={:4.1f}cm, w={:4.1f}cm, h={:4.1f}cm)", top * 100,
-           right * 100, bottom * 100, left * 100, Width() * 100, Height() * 100);
+  return f("Rect(t={:4.1f}cm, r={:4.1f}cm, b={:4.1f}cm, l={:4.1f}cm, w={:4.1f}cm, h={:4.1f}cm)",
+           top * 100, right * 100, bottom * 100, left * 100, Width() * 100, Height() * 100);
 }
 
 std::string ToStrMetric(SkPoint p) { return Vec2(p).ToStrMetric(); }
@@ -27,9 +27,13 @@ std::string Vec2::ToStrPx() const { return f("{:.0f}x{:.0f}px", roundf(x), round
 
 std::string ToStrPx(SkPoint p) { return Vec2(p).ToStrPx(); }
 
-std::string ToStrPx(SkRect r) { return f("{}x{}{:+g}{:+g}px", r.width(), r.height(), r.x(), r.y()); }
+std::string ToStrPx(SkRect r) {
+  return f("{}x{}{:+g}{:+g}px", r.width(), r.height(), r.x(), r.y());
+}
 
-std::string ToStrPx(SkIRect r) { return f("{}x{}{:+d}{:+d}px", r.width(), r.height(), r.x(), r.y()); }
+std::string ToStrPx(SkIRect r) {
+  return f("{}x{}{:+d}{:+d}px", r.width(), r.height(), r.x(), r.y());
+}
 
 void RRect::EquidistantPoints(std::span<Vec2> points) const {
   float radius = radii[0].x;
@@ -40,7 +44,6 @@ void RRect::EquidistantPoints(std::span<Vec2> points) const {
   float step = circumference / (points.size());
 
   enum SegmentType {
-    kTopRightCorner,
     kTopLine,
     kTopLeftCorner,
     kLeftLine,
@@ -48,13 +51,15 @@ void RRect::EquidistantPoints(std::span<Vec2> points) const {
     kBottomLine,
     kBottomRightCorner,
     kRightLine,
-  } state = kTopRightCorner;
+    kTopRightCorner,
+  } state = kTopLine;
 
-  float segment_lengths[] = {corners_length / 4, horiz_line_length,  corners_length / 4,
-                             vert_line_length,   corners_length / 4, horiz_line_length,
-                             corners_length / 4, vert_line_length};
+  float segment_lengths[] = {
+      horiz_line_length, corners_length / 4, vert_line_length, corners_length / 4,
+      horiz_line_length, corners_length / 4, vert_line_length, corners_length / 4,
+  };
 
-  float distance = corners_length / 8;
+  float distance = horiz_line_length / 2;
   for (int i = 0; i < points.size(); ++i) {
     switch (state) {
       case kTopRightCorner: {

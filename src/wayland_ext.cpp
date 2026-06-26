@@ -304,9 +304,8 @@ void SendDmabufFeedback(Server& s, LinuxDmabufFeedbackV1& fb) {
 
 // Releases the dmabuf buffer a surface holds for zero-copy display, if any.
 void ReleaseHeldDmabuf(Surface& surf) {
-  if (!surf.held_dmabuf) return;
-  if (Buffer* b = dyn_cast_if_present<Buffer>(surf.client.GetId(surf.held_dmabuf))) b->Release();
-  surf.held_dmabuf = 0;
+  if (Buffer* b = surf.held_dmabuf) b->Release();
+  surf.held_dmabuf = nullptr;
 }
 
 // Moves a finished params' planes and format into a new dmabuf wl_buffer.
@@ -597,7 +596,7 @@ void ShmPool::OnResize(I32 new_size) {
 }
 
 void Surface::OnAttach(Buffer* buffer, I32, I32) {
-  pending_buffer = buffer ? buffer->id : 0;
+  pending_buffer = buffer;
   buffer_attached = true;
 }
 
@@ -650,9 +649,8 @@ void Surface::OnCommit() {
   bool dirty = false;
   if (surf.buffer_attached) {
     surf.buffer_attached = false;
-    U32 buf_id = surf.pending_buffer;
-    surf.pending_buffer = 0;
-    Buffer* buf = buf_id ? dyn_cast_if_present<Buffer>(surf.client.GetId(buf_id)) : nullptr;
+    Buffer* buf = surf.pending_buffer;
+    surf.pending_buffer = nullptr;
     if (!buf) {
       // Null (or freed) buffer = unmap: a toplevel removes its window.
       surf.content.image = nullptr;
@@ -734,8 +732,8 @@ void Surface::OnCommit() {
       }
       if (is_dmabuf) {
         // Zero-copy: hold this buffer until the next frame replaces it, then release the previous.
-        if (surf.held_dmabuf != buf->id) ReleaseHeldDmabuf(surf);
-        surf.held_dmabuf = buf->id;
+        if (surf.held_dmabuf != buf) ReleaseHeldDmabuf(surf);
+        surf.held_dmabuf = buf;
       } else {
         buf->Release();           // shm: copy-release, the client may reuse it immediately
         ReleaseHeldDmabuf(surf);  // any previously held dmabuf is no longer shown

@@ -207,13 +207,13 @@ struct Base : Common {
 template <>
 struct Base<Surface> : Common {
   using Common::Common;
-  U32 pending_buffer = 0;        // wl_buffer id attached since the last commit (0 = none)
-  bool buffer_attached = false;  // an attach happened (a null buffer means unmap)
-  Vec<U32> frame_callbacks;      // wl_callback ids from wl_surface.frame
+  MortalPtr<Buffer> pending_buffer;  // wl_buffer attached since the last commit
+  bool buffer_attached = false;      // an attach happened (a null buffer means unmap)
+  Vec<U32> frame_callbacks;          // wl_callback ids from wl_surface.frame
   MortalPtr<XdgSurface> xdg;
   Subsurface* as_subsurface = nullptr;
   MortalPtr<Viewport> viewport;
-  U32 held_dmabuf = 0;  // dmabuf wl_buffer id held for zero-copy display
+  MortalPtr<Buffer> held_dmabuf;  // dmabuf wl_buffer held for zero-copy display
   SurfaceCutout content;
   WeakPtr<ReferenceCounted> object;  // a library::WaylandSurface mirroring this
   InputRegion input_region;

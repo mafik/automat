@@ -300,19 +300,37 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
   }
 
   // Maps a toy-local point into this surface's client pixels, clamped to it.
-  void SurfacePos(Vec2 local, float& lx, float& ly) const {
-    Vec2 tl = TopLeft();
-    lx = std::clamp((local.x - tl.x) / kClientPx, 0.f, (float)dst_size_.width());
-    ly = std::clamp((tl.y - local.y) / kClientPx, 0.f, (float)dst_size_.height());
+  //
+  // Returns boolean indicating whether point `l` was inside (no clamping was applied).
+  bool ToSurfacePx(Vec2& l) const {
+    l -= TopLeft();
+    l.y = -l.y;
+    l /= kClientPx;
+    bool inside = true;
+    if (l.x < 0) {
+      inside = false;
+      l.x = 0;
+    } else if (l.x > dst_size_.width()) {
+      inside = false;
+      l.x = dst_size_.width();
+    }
+    if (l.y < 0) {
+      inside = false;
+      l.y = 0;
+    } else if (l.y > dst_size_.height()) {
+      inside = false;
+      l.y = dst_size_.height();
+    }
+    return inside;
   }
   // Gives the keyboard to the toplevel window (keyboard focus is never on a
   // subsurface); walks up to the owning WaylandWindowToy. Defined below.
   void FocusWindow(ui::Pointer& p);
 
   void PointerOver(ui::Pointer& p) override {
-    float lx, ly;
-    SurfacePos(p.PositionWithin(*this), lx, ly);
-    if (auto s = LockSurface()) wayland::server->SendPointerEnter(*s, lx, ly);
+    Vec2 px = p.PositionWithin(*this);
+    ToSurfacePx(px);
+    if (auto s = LockSurface()) wayland::server->SendPointerEnter(*s, px.x, px.y);
     StartWatching(p);
   }
   void PointerLeave(ui::Pointer& p) override {
@@ -320,14 +338,12 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
     if (auto s = LockSurface()) wayland::server->SendPointerLeave(*s);
   }
   void PointerMove(ui::Pointer& p, Vec2) override {
-    float lx, ly;
-    SurfacePos(p.PositionWithin(*this), lx, ly);
-    if (auto s = LockSurface()) wayland::server->SendPointerMotion(*s, lx, ly);
+    Vec2 px = p.PositionWithin(*this);
+    ToSurfacePx(px);
+    if (auto s = LockSurface()) wayland::server->SendPointerMotion(*s, px.x, px.y);
   }
   bool PointerWheel(ui::Pointer& p, float delta) override {
     if (!ui::RootWidget::kWaylandLock) return false;
-    float lx, ly;
-    SurfacePos(p.PositionWithin(*this), lx, ly);
     if (auto s = LockSurface()) wayland::server->SendPointerAxis(*s, delta);
     return true;
   }
@@ -399,8 +415,9 @@ struct WaylandWindowToy : WaylandSurfaceToy {
 
   void ApplyCursor() {
     if (!hover_pointer_) return;
-    float sx, sy;
-    if (!ClientPos(hover_pointer_->PositionWithin(*this), sx, sy)) {
+    Vec2 px = hover_pointer_->PositionWithin(*this);
+    bool inside = ToSurfacePx(px);
+    if (!inside) {
       cursor_override_.reset();
       return;
     }
@@ -414,20 +431,6 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   }
 
   bool CenteredAtZero() const override { return true; }
-
-  // Maps a toy-local point into client-surface pixels (clamped); returns
-  // whether the point actually lies inside the content area.
-  bool ClientPos(Vec2 local, float& sx, float& sy) const {
-    auto [w, h] = ContentSize().xy;
-    float left = -w / 2 + Frame(), right = w / 2 - Frame();
-    float top = h / 2 - TitleH() - Frame(), bottom = -h / 2 + Frame();
-    bool inside = local.x >= left && local.x <= right && local.y >= bottom && local.y <= top;
-    float cx = std::clamp(local.x, left, right);
-    float cy = std::clamp(local.y, bottom, top);
-    sx = (cx - left) / kClientPx;
-    sy = (top - cy) / kClientPx;
-    return inside;
-  }
 
   // ---- client input routing (the content area belongs to the client) ----
 
@@ -469,9 +472,9 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   void KeyUp(ui::Caret&, ui::Key key) override { ForwardKey(key, false); }
 
   void PointerOver(ui::Pointer& p) override {
-    float sx, sy;
-    ClientPos(p.PositionWithin(*this), sx, sy);
-    if (auto w = LockWindow()) wayland::server->SendPointerEnter(*w, sx, sy);
+    Vec2 px = p.PositionWithin(*this);
+    ToSurfacePx(px);
+    if (auto w = LockWindow()) wayland::server->SendPointerEnter(*w, px.x, px.y);
     StartWatching(p);
     hover_pointer_ = &p;
     ApplyCursor();
@@ -483,17 +486,16 @@ struct WaylandWindowToy : WaylandSurfaceToy {
     if (auto w = LockWindow()) wayland::server->SendPointerLeave(*w);
   }
   void PointerMove(ui::Pointer& p, Vec2) override {
-    float sx, sy;
-    ClientPos(p.PositionWithin(*this), sx, sy);
-    if (auto w = LockWindow()) wayland::server->SendPointerMotion(*w, sx, sy);
+    Vec2 px = p.PositionWithin(*this);
+    ToSurfacePx(px);
+    if (auto w = LockWindow()) wayland::server->SendPointerMotion(*w, px.x, px.y);
     ApplyCursor();
   }
 
-  // Unlocked, or over the chrome: fall through (return false) so the board zooms.
   bool PointerWheel(ui::Pointer& p, float delta) override {
     if (!ui::RootWidget::kWaylandLock) return false;
-    float sx, sy;
-    if (!ClientPos(p.PositionWithin(*this), sx, sy)) return false;
+    Vec2 px = p.PositionWithin(*this);
+    if (!ToSurfacePx(px)) return false;  // outside
     if (auto w = LockWindow()) wayland::server->SendPointerAxis(*w, delta);
     return true;
   }
@@ -618,17 +620,17 @@ struct ClientInputAction : Action {
   ClientInputAction(ui::Pointer& p, WaylandSurfaceToy& toy, uint32_t button)
       : Action(p), toy(toy), button(button) {
     toy.FocusWindow(p);
-    float lx, ly;
-    toy.SurfacePos(p.PositionWithin(toy), lx, ly);
+    Vec2 px = p.PositionWithin(toy);
+    toy.ToSurfacePx(px);
     if (auto s = toy.LockSurface()) {
-      wayland::server->SendPointerMotion(*s, lx, ly);
+      wayland::server->SendPointerMotion(*s, px.x, px.y);
       wayland::server->SendPointerButton(*s, button, true);
     }
   }
   void Update() override {
-    float lx, ly;
-    toy.SurfacePos(pointer.PositionWithin(toy), lx, ly);
-    if (auto s = toy.LockSurface()) wayland::server->SendPointerMotion(*s, lx, ly);
+    Vec2 px = pointer.PositionWithin(toy);
+    toy.ToSurfacePx(px);
+    if (auto s = toy.LockSurface()) wayland::server->SendPointerMotion(*s, px.x, px.y);
   }
   ~ClientInputAction() override {
     if (auto s = toy.LockSurface()) wayland::server->SendPointerButton(*s, button, false);
@@ -649,9 +651,9 @@ std::unique_ptr<Action> WaylandSurfaceToy::FindAction(ui::Pointer& p, ui::Action
 std::unique_ptr<Action> WaylandWindowToy::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
   if (ForwardsToClient(btn)) {
     if (uint32_t code = EvdevButtonCode(btn)) {
-      float lx, ly;
-      if (ClientPos(p.PositionWithin(*this), lx, ly))
-        return std::make_unique<ClientInputAction>(p, *this, code);
+      Vec2 px = p.PositionWithin(*this);
+      bool inside = ToSurfacePx(px);
+      if (inside) return std::make_unique<ClientInputAction>(p, *this, code);
     }
   }
   // Title bar and frame: the standard object behaviors (drag, menu).

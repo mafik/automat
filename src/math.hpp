@@ -38,7 +38,7 @@ union Vec2 {
   struct {
     float width, height;
   };
-  float elements[2];
+  float xy[2];
   SkPoint sk;
   SkSize sk_size;
 

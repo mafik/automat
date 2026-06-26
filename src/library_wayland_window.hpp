@@ -21,6 +21,8 @@ namespace automat::library {
 
 // Board-metric size of a window object showing a width x height client
 // surface (content + chrome). Used to seat new windows next to their Command.
+//
+// TODO: this smells - get rid of this
 Vec2 WindowBoardSize(int width, int height);
 
 struct WaylandSurface : Object {

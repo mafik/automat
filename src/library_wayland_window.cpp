@@ -11,9 +11,12 @@
 #include <include/core/SkM44.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkSamplingOptions.h>
+#include <include/effects/SkGradient.h>
 
 #include "animation.hpp"
+#include "drawing.hpp"
 #include "keyboard.hpp"
+#include "math.hpp"
 #include "menu.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
@@ -96,8 +99,9 @@ namespace {
 
 constexpr float kClientPx = 0.20_mm;  // one client pixel on the board
 constexpr float kTitleH = 7_mm;
-constexpr float kFrame = 0.8_mm;      // ink frame around the client pixels
-constexpr float kMinContentW = 4_cm;  // placeholder size before the first buffer
+constexpr float kFrame = 5_mm;
+constexpr float kContentRadius = 4_mm;
+constexpr float kMinContentW = 3_cm;
 constexpr float kMinContentH = 3_cm;
 
 // wp_cursor_shape_device_v1 shape (stable protocol values) to the nearest icon.
@@ -370,20 +374,20 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   float Frame() const { return Decorated() ? kFrame : 0; }
   float TitleH() const { return Decorated() ? kTitleH : 0; }
 
-  float ContentW() const {
-    return dst_size_.width() > 0 ? dst_size_.width() * kClientPx : kMinContentW;
+  // Size of the main (toplevel) surface
+  Vec2 ContentSize() const {
+    return {dst_size_.width() > 0 ? dst_size_.width() * kClientPx : kMinContentW,
+            dst_size_.height() > 0 ? dst_size_.height() * kClientPx : kMinContentH};
   }
-  float ContentH() const {
-    return dst_size_.height() > 0 ? dst_size_.height() * kClientPx : kMinContentH;
-  }
-  float TotalW() const { return ContentW() + 2 * Frame(); }
-  float TotalH() const { return ContentH() + 2 * Frame() + TitleH(); }
+  Rect ContentRect() const { return Rect::MakeAtZero(ContentSize()); }
+  RRect ContentRRect() const { return RRect::MakeSimple(ContentRect(), kContentRadius); }
+  RRect FrameMidRRect() const { return ContentRRect().Outset(kFrame * 3 / 8); }
+  RRect FrameLightsRRect() const { return ContentRRect().Outset(kFrame * 11 / 16); }
+  RRect FrameOutRRect() const { return ContentRRect().Outset(kFrame); }
 
   // The content area's top-left, where the toplevel surface (and its children)
   // sit, below the title band and inside the frame.
-  Vec2 TopLeft() const override {
-    return Vec2(-TotalW() / 2 + Frame(), TotalH() / 2 - TitleH() - Frame());
-  }
+  Vec2 TopLeft() const override { return ContentRect().TopLeftCorner(); }
 
   Tock Tick(time::Timer&) override {
     PullState();
@@ -414,7 +418,7 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   // Maps a toy-local point into client-surface pixels (clamped); returns
   // whether the point actually lies inside the content area.
   bool ClientPos(Vec2 local, float& sx, float& sy) const {
-    float w = TotalW(), h = TotalH();
+    auto [w, h] = ContentSize().xy;
     float left = -w / 2 + Frame(), right = w / 2 - Frame();
     float top = h / 2 - TitleH() - Frame(), bottom = -h / 2 + Frame();
     bool inside = local.x >= left && local.x <= right && local.y >= bottom && local.y <= top;
@@ -427,13 +431,9 @@ struct WaylandWindowToy : WaylandSurfaceToy {
 
   // ---- client input routing (the content area belongs to the client) ----
 
-  // The focus indicator is the system caret itself: on focus the familiar
-  // blinking I-beam morphs into an underline inside the title band. Carets
-  // draw black, so the shape must sit on guaranteed-light chrome - never on
-  // client pixels, which are arbitrary and often dark.
   SkPath FocusCaretShape() const {
     if (!Decorated()) return SkPath();
-    float w = TotalW(), h = TotalH();
+    auto [w, h] = ContentSize().xy;
     float band_bottom = h / 2 - kTitleH;
     return SkPath::Rect(
         Rect{-w / 2 + 1.5_mm, band_bottom + 1.1_mm, w / 2 - 6_mm, band_bottom + 1.9_mm});
@@ -441,7 +441,7 @@ struct WaylandWindowToy : WaylandSurfaceToy {
 
   void FocusClient(ui::Pointer& p) {
     if (caret_ || !p.keyboard) return;
-    float w = TotalW(), h = TotalH();
+    auto [w, h] = ContentSize().xy;
     caret_ = &p.keyboard->RequestCaret(*this, Vec2(-w / 2 + Frame(), -h / 2 + Frame()));
     caret_->shape = FocusCaretShape();
     if (auto win = LockWindow()) wayland::server->SendKeyboardEnter(*win);
@@ -507,8 +507,8 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   }
 
   SkPath Shape() const override {
-    if (!Decorated()) return SkPath::Rect(Rect::MakeCenterZero(TotalW(), TotalH()));
-    return SkPath::RRect(RRect::MakeSimple(Rect::MakeCenterZero(TotalW(), TotalH()), 1.5_mm).sk);
+    if (!Decorated()) return SkPath::Rect(ContentRect());
+    return SkPath::RRect(FrameOutRRect());
   }
   Optional<Rect> TextureBounds() const override {
     return Shape().getBounds().makeOutset(4_mm, 4_mm);
@@ -516,41 +516,74 @@ struct WaylandWindowToy : WaylandSurfaceToy {
 
   void Draw(SkCanvas& canvas) const override {
     if (Decorated()) {
-      float w = TotalW(), h = TotalH();
-      uint32_t seed = Seed(ui::beta::Hash2(0x3A11D, (uint32_t)(title_.size() + 1)));
-      Rect body = Rect::MakeCenterZero(w, h);
-      SkPath base = ui::beta::WonkyRoundRect(body, 1.0_mm, ui::beta::kWonk, seed);
-      ui::beta::HandShadow(canvas, base, {ui::beta::kShadowDX, -ui::beta::kShadowDY},
-                           ui::beta::kShadow, seed);
-      ui::beta::MisregFill(canvas, base, ui::beta::kPaperCream, seed);
-      // The title band sits at the visual top.
-      Rect band{-w / 2, h / 2 - kTitleH, w / 2, h / 2};
+      auto frame_inner = ContentRRect();
+      auto frame_mid = FrameMidRRect();
+      auto frame_outer = FrameOutRRect();
+      auto lights_rrect = FrameLightsRRect();
+
+      float one_pixel = 1.0f / canvas.getTotalMatrix().getScaleX();
+      SkPaint flat_border_paint;
+      flat_border_paint.setColor("#9b252a"_color);
+      canvas.drawDRRect(frame_outer, frame_mid, flat_border_paint);
+
+      SkPaint bevel_border_paint;
+      bevel_border_paint.setColor("#7d2627"_color);
+      SetRRectShader(bevel_border_paint, frame_outer, "#3a2021"_color4f, "#7e2627"_color4f,
+                     "#d86355"_color4f);
+
+      canvas.drawDRRect(frame_mid.Outset(one_pixel), frame_inner.Outset(-one_pixel),
+                        bevel_border_paint);
       canvas.save();
-      canvas.clipPath(base, true);
-      canvas.drawPath(
-          ui::beta::WobbleRect(band, ui::beta::kWonk, ui::beta::kSeg, ui::beta::Hash2(seed, 3)),
-          ui::beta::InkPaint(ui::beta::kBlue, 0.15_mm, true));
-      SkPaint band_fill;
-      band_fill.setColor(ui::beta::kBlue);
-      band_fill.setAntiAlias(true);
-      canvas.drawPath(
-          ui::beta::WobbleRect(band, ui::beta::kWonk, ui::beta::kSeg, ui::beta::Hash2(seed, 3)),
-          band_fill);
+      canvas.clipRRect(frame_inner);
+
+      DrawSurfaceImage(canvas, image_, src_crop_, dst_size_, TopLeft());
+
       canvas.restore();
-      ui::beta::DrawTextIn(canvas, title_.empty() ? "Wayland Window" : title_,
-                           Rect{-w / 2 + 1.2_mm, h / 2 - kTitleH, w / 2 - 1.2_mm, h / 2},
-                           ui::beta::kBodySize, ui::beta::TextOn(ui::beta::kBlue),
-                           ui::beta::TextAlign::Left, true, seed);
-      ui::beta::SketchyStroke(canvas, base, ui::beta::kInk, ui::beta::kStroke, seed, 2);
-      if (client_gone_ || !image_) {
-        // The content area below the band, hatched while there is no buffer.
-        Rect inner{-w / 2 + 0.9_mm, -h / 2 + 0.9_mm, w / 2 - 0.9_mm, h / 2 - kTitleH - 0.6_mm};
-        ui::beta::HatchRect(canvas, inner, ui::beta::kGray, 1.6_mm, seed);
+
+      constexpr int kNumLights = 4 * 6;
+      Vec2 light_positions[kNumLights];
+      lights_rrect.EquidistantPoints(light_positions);
+      Vec2 center{};
+      constexpr float kLightRange = 5_mm;
+      constexpr float kLightRadius = 1_mm;
+
+      SkColor4f bulb_colors[] = {
+          "#ffffa2"_color4f,  // light center
+          "#ffff70"_color4f,  // light mid
+          "#ffff93"_color4f,  // outer light edge (faint yellow)
+      };
+      SkPaint bulb_paint;
+      bulb_paint.setShader(SkShaders::RadialGradient(
+          center, kLightRadius,
+          SkGradient{SkGradient::Colors{bulb_colors, SkTileMode::kClamp}, {}}));
+
+      SkColor4f glow_colors[] = {
+          "#5b0e00"_color4f,    // shadow
+          "#5b0e00"_color4f,    // shadow
+          "#ec4329"_color4f,    // warm red
+          "#ec432980"_color4f,  // half-transparent warm red
+          "#ec432900"_color4f,  // transparent warm red
+      };
+      SkPaint glow_paint;
+      float glow_positions[] = {0, kLightRadius / kLightRange, kLightRadius * 1.1 / kLightRange,
+                                kLightRadius * 2 / kLightRange, 1};
+      glow_paint.setShader(SkShaders::RadialGradient(
+          center, kLightRange,
+          SkGradient{SkGradient::Colors{glow_colors, glow_positions, SkTileMode::kClamp}, {}}));
+      canvas.save();
+      canvas.clipRRect(frame_outer);
+      canvas.clipRRect(frame_mid, SkClipOp::kDifference);
+      for (int i = 0; i < kNumLights; ++i) {
+        canvas.save();
+        canvas.translate(light_positions[i].x, light_positions[i].y);
+        canvas.drawCircle(0, 0, kLightRange, glow_paint);
+        canvas.drawCircle(0, 0, kLightRadius, bulb_paint);
+        canvas.restore();
       }
+      canvas.restore();
+    } else {
+      DrawSurfaceImage(canvas, image_, src_crop_, dst_size_, TopLeft());
     }
-    // The toplevel surface's own content; its child surfaces (subsurfaces and
-    // popups) are separate widgets composited around it by the renderer.
-    DrawSurfaceImage(canvas, image_, src_crop_, dst_size_, TopLeft());
   }
 };
 

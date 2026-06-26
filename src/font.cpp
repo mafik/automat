@@ -58,6 +58,21 @@ sk_sp<SkTypeface> Font::GetNotoSans() {
   return noto_sans;
 }
 
+sk_sp<SkTypeface> Font::GetBelanosimaRegular() {
+  static sk_sp<SkTypeface> typeface = LoadTypeface(embedded::assets_Belanosima_Regular_ttf);
+  return typeface;
+}
+
+sk_sp<SkTypeface> Font::GetBelanosimaSemiBold() {
+  static sk_sp<SkTypeface> typeface = LoadTypeface(embedded::assets_Belanosima_SemiBold_ttf);
+  return typeface;
+}
+
+sk_sp<SkTypeface> Font::GetBelanosimaBold() {
+  static sk_sp<SkTypeface> typeface = LoadTypeface(embedded::assets_Belanosima_Bold_ttf);
+  return typeface;
+}
+
 sk_sp<SkTypeface> Font::GetGrenzeThin() {
   static sk_sp<SkTypeface> grenze_thin = LoadTypeface(embedded::assets_Grenze_Thin_ttf);
   return grenze_thin;

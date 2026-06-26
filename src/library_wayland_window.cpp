@@ -10,11 +10,13 @@
 #include <include/core/SkImage.h>
 #include <include/core/SkM44.h>
 #include <include/core/SkMatrix.h>
+#include <include/core/SkPaint.h>
 #include <include/core/SkSamplingOptions.h>
 #include <include/effects/SkGradient.h>
 
 #include "animation.hpp"
 #include "drawing.hpp"
+#include "font.hpp"
 #include "keyboard.hpp"
 #include "math.hpp"
 #include "menu.hpp"
@@ -513,7 +515,9 @@ struct WaylandWindowToy : WaylandSurfaceToy {
     return SkPath::RRect(FrameOutRRect());
   }
   Optional<Rect> TextureBounds() const override {
-    return Shape().getBounds().makeOutset(4_mm, 4_mm);
+    auto rect = ContentRect().Outset(kFrame);
+    rect.top += kTitleH * 1.25f;
+    return rect;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -523,10 +527,32 @@ struct WaylandWindowToy : WaylandSurfaceToy {
       auto frame_outer = FrameOutRRect();
       auto lights_rrect = FrameLightsRRect();
 
+      auto font = ui::Font::MakeV2(ui::Font::GetBelanosimaRegular(), kTitleH);
+      float w = font->MeasureText(title_);
+
       float one_pixel = 1.0f / canvas.getTotalMatrix().getScaleX();
+
+      canvas.save();
+      canvas.translate(-w / 2, frame_outer.rect.top - kTitleH * 0.1);
+      SkPaint text_side_paint;
+      text_side_paint.setColor("#3a2021"_color);
+      text_side_paint.setStyle(SkPaint::kStrokeAndFill_Style);
+      text_side_paint.setStrokeWidth(kTitleH * 0.2 / font->font_scale);
+      font->DrawText(canvas, title_, text_side_paint);
+      canvas.restore();
+
       SkPaint flat_border_paint;
       flat_border_paint.setColor("#9b252a"_color);
       canvas.drawDRRect(frame_outer, frame_mid, flat_border_paint);
+
+      canvas.save();
+      canvas.translate(-w / 2, frame_outer.rect.top);
+      SkPaint text_outline_paint;
+      text_outline_paint.setColor(flat_border_paint.getColor());
+      text_outline_paint.setStyle(SkPaint::kStrokeAndFill_Style);
+      text_outline_paint.setStrokeWidth(kTitleH * 0.2 / font->font_scale);
+      font->DrawText(canvas, title_, text_outline_paint);
+      canvas.restore();
 
       SkPaint bevel_border_paint;
       bevel_border_paint.setColor("#7d2627"_color);
@@ -537,51 +563,59 @@ struct WaylandWindowToy : WaylandSurfaceToy {
                         bevel_border_paint);
       canvas.save();
       canvas.clipRRect(frame_inner);
-
       DrawSurfaceImage(canvas, image_, src_crop_, dst_size_, TopLeft());
-
       canvas.restore();
 
-      constexpr int kNumLights = 4 * 6;
-      Vec2 light_positions[kNumLights];
-      lights_rrect.EquidistantPoints(light_positions);
-      Vec2 center{};
-      constexpr float kLightRange = 5_mm;
-      constexpr float kLightRadius = 1_mm;
+      {  // Lights
 
-      SkColor4f bulb_colors[] = {
-          "#ffffa2"_color4f,  // light center
-          "#ffff70"_color4f,  // light mid
-          "#ffff93"_color4f,  // outer light edge (faint yellow)
-      };
-      SkPaint bulb_paint;
-      bulb_paint.setShader(SkShaders::RadialGradient(
-          center, kLightRadius,
-          SkGradient{SkGradient::Colors{bulb_colors, SkTileMode::kClamp}, {}}));
+        constexpr int kNumLights = 4 * 6;
+        Vec2 light_positions[kNumLights];
+        lights_rrect.EquidistantPoints(light_positions);
+        Vec2 center{};
+        constexpr float kLightRange = 5_mm;
+        constexpr float kLightRadius = 1_mm;
 
-      SkColor4f glow_colors[] = {
-          "#5b0e00"_color4f,    // shadow
-          "#5b0e00"_color4f,    // shadow
-          "#ec4329"_color4f,    // warm red
-          "#ec432980"_color4f,  // half-transparent warm red
-          "#ec432900"_color4f,  // transparent warm red
-      };
-      SkPaint glow_paint;
-      float glow_positions[] = {0, kLightRadius / kLightRange, kLightRadius * 1.1 / kLightRange,
-                                kLightRadius * 2 / kLightRange, 1};
-      glow_paint.setShader(SkShaders::RadialGradient(
-          center, kLightRange,
-          SkGradient{SkGradient::Colors{glow_colors, glow_positions, SkTileMode::kClamp}, {}}));
-      canvas.save();
-      canvas.clipRRect(frame_outer);
-      canvas.clipRRect(frame_mid, SkClipOp::kDifference);
-      for (int i = 0; i < kNumLights; ++i) {
+        SkColor4f bulb_colors[] = {
+            "#ffffa2"_color4f,  // light center
+            "#ffff70"_color4f,  // light mid
+            "#ffff93"_color4f,  // outer light edge (faint yellow)
+        };
+        SkPaint bulb_paint;
+        bulb_paint.setShader(SkShaders::RadialGradient(
+            center, kLightRadius,
+            SkGradient{SkGradient::Colors{bulb_colors, SkTileMode::kClamp}, {}}));
+
+        SkColor4f glow_colors[] = {
+            "#5b0e00"_color4f,    // shadow
+            "#5b0e00"_color4f,    // shadow
+            "#ec4329"_color4f,    // warm red
+            "#ec432980"_color4f,  // half-transparent warm red
+            "#ec432900"_color4f,  // transparent warm red
+        };
+        SkPaint glow_paint;
+        float glow_positions[] = {0, kLightRadius / kLightRange, kLightRadius * 1.1 / kLightRange,
+                                  kLightRadius * 2 / kLightRange, 1};
+        glow_paint.setShader(SkShaders::RadialGradient(
+            center, kLightRange,
+            SkGradient{SkGradient::Colors{glow_colors, glow_positions, SkTileMode::kClamp}, {}}));
         canvas.save();
-        canvas.translate(light_positions[i].x, light_positions[i].y);
-        canvas.drawCircle(0, 0, kLightRange, glow_paint);
-        canvas.drawCircle(0, 0, kLightRadius, bulb_paint);
+        canvas.clipRRect(frame_outer);
+        canvas.clipRRect(frame_mid, SkClipOp::kDifference);
+        for (int i = 0; i < kNumLights; ++i) {
+          canvas.save();
+          canvas.translate(light_positions[i].x, light_positions[i].y);
+          canvas.drawCircle(0, 0, kLightRange, glow_paint);
+          canvas.drawCircle(0, 0, kLightRadius, bulb_paint);
+          canvas.restore();
+        }
         canvas.restore();
       }
+
+      SkPaint title_paint;
+      title_paint.setColor("#e7e5cd"_color);
+      canvas.save();
+      canvas.translate(-w / 2, frame_outer.rect.top);
+      font->DrawText(canvas, title_, title_paint);
       canvas.restore();
     } else {
       DrawSurfaceImage(canvas, image_, src_crop_, dst_size_, TopLeft());

@@ -144,16 +144,21 @@ I64 SpawnArgv(const Vec<Str>& argv_in, Status& status) {
   // host X server.
   Str wayland_socket = wayland::server ? wayland::server->socket_path.Name() : Str{};
   Str wayland_entry = "WAYLAND_DISPLAY=" + wayland_socket;
+  Str gdk_entry = "GDK_BACKEND=wayland";
   std::vector<char*> envp;
   for (char** e = environ; *e; ++e) {
     StrView entry(*e);
     if (!wayland_socket.empty() &&
-        (entry.starts_with("WAYLAND_DISPLAY=") || entry.starts_with("DISPLAY="))) {
+        (entry.starts_with("WAYLAND_DISPLAY=") || entry.starts_with("DISPLAY=") ||
+         entry.starts_with("GDK_BACKEND="))) {
       continue;
     }
     envp.push_back(*e);
   }
-  if (!wayland_socket.empty()) envp.push_back(wayland_entry.data());
+  if (!wayland_socket.empty()) {
+    envp.push_back(wayland_entry.data());
+    envp.push_back(gdk_entry.data());
+  }
   envp.push_back(nullptr);
 
   pid_t pid = 0;

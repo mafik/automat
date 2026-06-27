@@ -81,11 +81,11 @@ Timers, Gears, chains and the bubble menu drive it without special cases. A
 detached reaper thread waits on the child and reports the exit status.
 
 Children are launched with `WAYLAND_DISPLAY` pointing at Automat's own
-compositor and without `DISPLAY` (`library::SpawnArgv`, errors through
-`Status`). A window mapped by the child appears seated next to the Command's
-plate and keeps a `Launcher` connection back to it — the visible cable that
-also makes the relationship survive saves (see `Wayland Compositor.md` and
-`Wayland Client Persistence.md`).
+compositor, without `DISPLAY`, and with `GDK_BACKEND` pinned to `wayland`
+(`library::SpawnArgv`, errors through `Status`). A window mapped by the child
+appears seated next to the Command's plate and keeps a `Launcher` connection
+back to it — the visible cable that also makes the relationship survive saves
+(see `Wayland Compositor.md` and `Wayland Client Persistence.md`).
 
 Deliberately absent: environment editing, working-directory control and
 stdio plumbing. The plate's left edge is kept free for those as future

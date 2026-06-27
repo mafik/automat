@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright 2026 Automat Authors
 # SPDX-License-Identifier: MIT
 
+import re
 import sys
 import xml.etree.ElementTree as ET
 
@@ -8,73 +9,12 @@ import fs_utils
 import make
 import src
 
-GENERATED_HPP_DEPS = ['colony.hpp', 'fd.hpp', 'int.hpp', 'span.hpp', 'wayland_ext.hpp']
-
-# Requests whose handler the server implements by hand; the rest get an empty
-# generated default so the generated dispatcher always has something to call.
-HANDLED = {
-  ('wl_display', 'sync'),
-  ('wl_display', 'get_registry'),
-  ('wl_registry', 'bind'),
-  ('wl_compositor', 'create_surface'),
-  ('wl_shm', 'create_pool'),
-  ('wl_shm_pool', 'create_buffer'),
-  ('wl_shm_pool', 'resize'),
-  ('wl_surface', 'attach'),
-  ('wl_surface', 'frame'),
-  ('wl_surface', 'commit'),
-  ('wl_surface', 'set_buffer_scale'),
-  ('wl_surface', 'set_buffer_transform'),
-  ('wl_surface', 'set_input_region'),
-  ('wl_region', 'add'),
-  ('wl_region', 'subtract'),
-  ('wl_seat', 'get_pointer'),
-  ('wl_seat', 'get_keyboard'),
-  ('wl_subcompositor', 'get_subsurface'),
-  ('wl_subsurface', 'set_position'),
-  ('wl_subsurface', 'set_sync'),
-  ('wl_subsurface', 'set_desync'),
-  ('wl_subsurface', 'place_above'),
-  ('wl_subsurface', 'place_below'),
-  ('wp_viewporter', 'get_viewport'),
-  ('wp_viewport', 'set_source'),
-  ('wp_viewport', 'set_destination'),
-  ('zxdg_decoration_manager_v1', 'get_toplevel_decoration'),
-  ('zxdg_toplevel_decoration_v1', 'set_mode'),
-  ('zxdg_toplevel_decoration_v1', 'unset_mode'),
-  ('xdg_surface', 'get_popup'),
-  ('xdg_positioner', 'set_size'),
-  ('xdg_positioner', 'set_anchor_rect'),
-  ('xdg_positioner', 'set_anchor'),
-  ('xdg_positioner', 'set_gravity'),
-  ('xdg_positioner', 'set_offset'),
-  ('xdg_positioner', 'set_constraint_adjustment'),
-  ('xdg_popup', 'grab'),
-  ('xdg_popup', 'reposition'),
-  ('xdg_popup', 'destroy'),
-  ('wp_cursor_shape_device_v1', 'set_shape'),
-  ('wl_data_device_manager', 'get_data_device'),
-  ('wl_data_device', 'set_selection'),
-  ('wl_data_source', 'offer'),
-  ('wl_data_offer', 'receive'),
-  ('zwp_linux_dmabuf_v1', 'get_default_feedback'),
-  ('zwp_linux_dmabuf_v1', 'get_surface_feedback'),
-  ('zwp_linux_buffer_params_v1', 'add'),
-  ('zwp_linux_buffer_params_v1', 'create'),
-  ('zwp_linux_buffer_params_v1', 'create_immed'),
-  ('xdg_wm_base', 'get_xdg_surface'),
-  ('xdg_surface', 'get_toplevel'),
-  ('xdg_surface', 'set_window_geometry'),
-  ('xdg_surface', 'ack_configure'),
-  ('xdg_surface', 'destroy'),
-  ('xdg_toplevel', 'set_title'),
-  ('xdg_toplevel', 'set_app_id'),
-}
-
 if sys.platform == 'linux':
-  cpp = fs_utils.generated_dir / 'wayland_protocols.cpp'
-  hpp = fs_utils.generated_dir / 'wayland_protocols.hpp'
-  hpp_forward = fs_utils.generated_dir / 'wayland_protocols_forward.hpp'
+  generated_cpp = fs_utils.generated_dir / 'wayland_generated.cpp'
+  generated_hpp = fs_utils.generated_dir / 'wayland_generated.hpp'
+  wayland_hpp = fs_utils.src_dir / 'wayland.hpp'
+  wayland_hpp_fixed = fs_utils.src_dir / 'wayland.hpp.fixed'
+  xml_dir = fs_utils.src_dir / 'wayland'
 
   TYPE_MAP = {
     'int': 'I32',
@@ -189,7 +129,7 @@ if sys.platform == 'linux':
       return f'Write(p, {name}.id)'
     return f'Write(p, {name})'
 
-  def decode_arg(arg, index, methods, iface):
+  def decode_arg(arg, index, iface):
     name = f'arg{index}'
     t = arg.attrib.get('type')
     bad = lambda msg: f'client.ProtocolError(id, Display::ErrorInvalidMethod, "{msg}"sv); return;'
@@ -254,91 +194,155 @@ if sys.platform == 'linux':
         pending.append(iface)
     return ordered
 
-  def gen_wayland():
-    interfaces = []
-    for xml in (fs_utils.src_dir / 'wayland').glob('*.xml'):
-      interfaces += list(ET.parse(xml).getroot().iter('interface'))
-    ordered = topo_sort(interfaces)
-    our_names = {iface.attrib['name'] for iface in ordered}
-    generated_interfaces.clear()
-    generated_interfaces.update(our_names)
-    external = sorted({ref for iface in ordered for ref in referenced_interfaces(iface)} - our_names)
+  def doc_lines(desc, indent, blank_if_none):
+    if desc is None:
+      return [''] if blank_if_none else []
+    out = ['', f'{indent}// {desc.attrib["summary"].capitalize()}']
+    if desc.text:
+      out.append(f'{indent}//')
+      out += block_comment(desc.text, prefix=f'{indent}// ').split('\n')
+    return out
 
-    with hpp.open('w') as out:
+  def enum_lines(enum):
+    name = camel_case(enum.attrib['name'])
+    out = doc_lines(enum.find('description'), '  ', blank_if_none=True)
+    out.append(f'  enum {name} : U32 {{')
+    for entry in enum.iter('entry'):
+      label = name + camel_case(entry.attrib['name'])
+      if 'summary' in entry.attrib:
+        out.append(f'    {label} = {entry.attrib["value"]}, // {entry.attrib["summary"].capitalize()}')
+      else:
+        out.append(f'    {label} = {entry.attrib["value"]},')
+    out.append('  };')
+    out.append('')
+    out.append(f'  static StrView {name}ToStr(U32 value) {{')
+    out.append('    switch (value) {')
+    for entry in enum.iter('entry'):
+      out.append(f'    case {entry.attrib["value"]}: return "{camel_case(entry.attrib["name"])}"sv;')
+    out.append(f'    default: return "Unknown{name}"sv;')
+    out.append('    }')
+    out.append('  }')
+    return out
+
+  def render_interface_block(iface, xml):
+    name = cpp_name(iface.attrib['name'])
+    methods = interface_methods(iface)
+    out = [f'// clang-format off: generated {name} from {xml}']
+    out += doc_lines(iface.find('description'), '', blank_if_none=True)
+    out.append(f'struct {name} : Common {{')
+    out.append(f'  static constexpr int Version = {iface.attrib["version"]};')
+    out.append(f'  static constexpr Kind Kind = Kind{name};')
+    out.append('')
+    out.append(f'  static Colony<{name}> colony;')
+    out.append('')
+    out.append('  // Do not use directly. Instead use `ColonyMake`')
+    out.append(f'  {name}(U32 id, Client& client) : Common(Kind, id, client) {{}}')
+    out.append('')
+    out.append(f'  static {name}& ColonyMake(U32 id, Client& client) {{ return *colony.emplace(id, client); }}')
+    out.append('  void ColonyDestroy() { colony.erase(colony.get_iterator(this)); }')
+    for enum in iface.iter('enum'):
+      out += enum_lines(enum)
+    for request in iface.iter('request'):
+      out += doc_lines(request.find('description'), '  ', blank_if_none=False)
+      if request.get('type') == 'destructor':
+        out.append('  //')
+        out.append('  // [destructor] After this method returns, this object will be released')
+      out.append(f'  void On{camel_case(request.attrib["name"])}({signature(request, methods)});')
+    for event in iface.iter('event'):
+      out += doc_lines(event.find('description'), '  ', blank_if_none=False)
+      out.append(f'  void {camel_case(event.attrib["name"])}({signature(event, methods)});')
+    out.append(f'  // clang-format on: generated {name} from {xml}')
+    return '\n'.join(out)
+
+  OFF_RE = re.compile(r'^// clang-format off: generated (\w+) from (\S+)$')
+
+  def on_marker(name, xml):
+    return f'  // clang-format on: generated {name} from {xml}'
+
+  def parse_wayland_hpp(lines):
+    # Returns (prologue, epilogue, present, errors). `present` maps interface name to
+    # (xml, actual_block_text, custom_lines). prologue/epilogue are line lists captured verbatim.
+    present = {}
+    errors = []
+    off_idxs = [i for i, l in enumerate(lines) if OFF_RE.match(l)]
+    if not off_idxs:
+      errors.append('no generated interface blocks found in wayland.hpp')
+      return [], [], present, errors
+    last_close = off_idxs[0]
+    for off in off_idxs:
+      name, xml = OFF_RE.match(lines[off]).groups()
+      try:
+        on = next(i for i in range(off + 1, len(lines)) if lines[i] == on_marker(name, xml))
+      except StopIteration:
+        errors.append(f'{name}: missing matching `clang-format on` marker')
+        continue
+      try:
+        close = next(i for i in range(on + 1, len(lines)) if lines[i] == '};')
+      except StopIteration:
+        errors.append(f'{name}: missing closing `}};`')
+        continue
+      present[name] = (xml, '\n'.join(lines[off:on + 1]), lines[on + 1:close])
+      last_close = max(last_close, close)
+    prologue = lines[:off_idxs[0]]
+    epilogue = lines[last_close + 1:]
+    return prologue, epilogue, present, errors
+
+  def render_struct(iface, xml, custom):
+    block = render_interface_block(iface, xml)
+    if custom is None:
+      return block + '\n};'
+    return block + '\n' + '\n'.join(custom) + '\n};'
+
+  def validate_and_fix(ordered, xml_of):
+    lines = wayland_hpp.read_text().split('\n')
+    prologue, epilogue, present, errors = parse_wayland_hpp(lines)
+    for iface in ordered:
+      name = cpp_name(iface.attrib['name'])
+      xml = xml_of[name]
+      if name not in present:
+        errors.append(f'{name}: not defined in wayland.hpp')
+        continue
+      if present[name][1] != render_interface_block(iface, xml):
+        errors.append(f'{name}: generated block does not match {xml}')
+    if not errors:
+      return True
+    structs = [render_struct(iface, xml_of[cpp_name(iface.attrib['name'])],
+                             present.get(cpp_name(iface.attrib['name']), (None, None, None))[2])
+               for iface in ordered]
+    body = '\n'.join(prologue).rstrip('\n') + '\n\n' + '\n\n'.join(structs) + '\n\n' + \
+           '\n'.join(epilogue).lstrip('\n')
+    wayland_hpp_fixed.write_text(body)
+    return False
+
+  def gen_generated_hpp(ordered, external):
+    with generated_hpp.open('w') as out:
       def w(line=''):
         print(line, file=out)
-
-      def emit_doc(desc, indent, blank_if_none):
-        if desc is None:
-          if blank_if_none:
-            w()
-          return
-        w(f'\n{indent}// {desc.attrib["summary"].capitalize()}')
-        if desc.text:
-          w(f'{indent}//')
-          w(block_comment(desc.text, prefix=f'{indent}// '))
-
-      def emit_enum(enum):
-        name = camel_case(enum.attrib['name'])
-        emit_doc(enum.find('description'), '  ', blank_if_none=True)
-        w(f'  enum {name} : U32 {{')
-        for entry in enum.iter('entry'):
-          label = name + camel_case(entry.attrib['name'])
-          if 'summary' in entry.attrib:
-            w(f'    {label} = {entry.attrib["value"]}, // {entry.attrib["summary"].capitalize()}')
-          else:
-            w(f'    {label} = {entry.attrib["value"]},')
-        w('  };')
-        w('')
-        w(f'  static StrView {name}ToStr(U32 value) {{')
-        w('    switch (value) {')
-        for entry in enum.iter('entry'):
-          w(f'    case {entry.attrib["value"]}: return "{camel_case(entry.attrib["name"])}"sv;')
-        w(f'    default: return "Unknown{name}"sv;')
-        w('    }')
-        w('  }')
-
-      def emit_interface(iface):
-        name = cpp_name(iface.attrib['name'])
-        emit_doc(iface.find('description'), '', blank_if_none=True)
-        w(f'struct {name} : Base<{name}> {{')
-        w(f'  static constexpr int Version = {iface.attrib["version"]};')
-        w(f'  static constexpr Kind Kind = Kind{name};')
-        w('\n  static bool classof(const Common* c) { return c->kind == Kind; }  // LLVM-style RTTI')
-        w(f'\n  static Colony<{name}> colony;')
-        w('\n  // Do not use directly. Instead use `ColonyMake`')
-        w(f'  {name}(U32 id, Client& client) : Base<{name}>(Kind, id, client) {{}}')
-        w(f'\n  static {name}& ColonyMake(U32 id, Client& client) {{ return *colony.emplace(id, client); }}')
-        w('  void ColonyDestroy() { colony.erase(colony.get_iterator(this)); }')
-        methods = interface_methods(iface)
-        for enum in iface.iter('enum'):
-          emit_enum(enum)
-        for request in iface.iter('request'):
-          emit_doc(request.find('description'), '  ', blank_if_none=False)
-          if request.get('type') == 'destructor':
-            w('  //\n  // [destructor] After this method returns, this object will be released')
-          w(f'  void On{camel_case(request.attrib["name"])}({signature(request, methods)});')
-        for event in iface.iter('event'):
-          emit_doc(event.find('description'), '  ', blank_if_none=False)
-          w(f'  void {camel_case(event.attrib["name"])}({signature(event, methods)});')
-        w('};')
-
       w('#pragma once\n')
-      for header in GENERATED_HPP_DEPS:
-        w(f'#include "../../src/{header}"')
-      w('')
-      w('namespace automat::wayland {')
+      w('namespace automat::wayland {\n')
+      w('struct Client;\n')
       for iface in ordered:
-        emit_interface(iface)
+        w(f'struct {cpp_name(iface.attrib["name"])};')
+      for name in external:
+        w(f'struct {cpp_name(name)};')
+      w('\nenum Kind {')
+      w('  KindNone = 0,')
+      for iface in ordered:
+        w(f'  Kind{cpp_name(iface.attrib["name"])},')
+      w('  KindEnd,  // sentinel')
+      w('};')
+      w('')
+      for iface in ordered:
+        w(f'using {iface.attrib["name"]} = {cpp_name(iface.attrib["name"])};')
       w('\n}  // namespace automat::wayland')
 
-    with cpp.open('w') as out:
+  def gen_generated_cpp(ordered):
+    with generated_cpp.open('w') as out:
       def w(line=''):
         print(line, file=out)
-
       w('// SPDX-FileCopyrightText: Copyright 2026 Automat Authors')
       w('// SPDX-License-Identifier: MIT')
-      w('#include "wayland_protocols.hpp"\n')
+      w('#include "../../src/wayland.hpp"\n')
       w('#include <cstring>')
       w('#include <utility>\n')
       w('namespace automat::wayland {')
@@ -409,14 +413,6 @@ if sys.platform == 'linux':
             w(f'  {write_arg(arg)};')
           w('}')
       w('')
-      for iface in ordered:
-        name = cpp_name(iface.attrib['name'])
-        methods = interface_methods(iface)
-        for request in iface.iter('request'):
-          if (iface.attrib['name'], request.attrib['name']) in HANDLED:
-            continue
-          w(f'void {name}::On{camel_case(request.attrib["name"])}({signature(request, methods)}) {{}}')
-      w('')
       w('void Common::GenericDispatch(U32 opcode, const char* p, const char* end) {')
       w('  switch (kind) {')
       for iface in ordered:
@@ -431,7 +427,7 @@ if sys.platform == 'linux':
           w(f'        case {opcode}: {{')
           call = []
           for index, arg in enumerate(request.iter('arg')):
-            decls, exprs = decode_arg(arg, index, methods, name)
+            decls, exprs = decode_arg(arg, index, name)
             for decl in decls:
               w(f'          {decl}')
             call += exprs
@@ -457,44 +453,41 @@ if sys.platform == 'linux':
       w('}')
       w('\n}  // namespace automat::wayland')
 
-    with hpp_forward.open('w') as out:
-      def w(line=''):
-        print(line, file=out)
+  def collect_interfaces():
+    interfaces, xml_of = [], {}
+    for xml in sorted(xml_dir.glob('*.xml')):
+      for iface in ET.parse(xml).getroot().iter('interface'):
+        interfaces.append(iface)
+        xml_of[cpp_name(iface.attrib['name'])] = xml.name
+    return topo_sort(interfaces), xml_of
 
-      w('#pragma once\n')
-      w('namespace automat::wayland {\n')
-      for iface in ordered:
-        w(f'struct {cpp_name(iface.attrib["name"])};')
-      for name in external:
-        w(f'struct {cpp_name(name)};')
-      w('\nenum Kind {')
-      w('  KindNone = 0,')
-      for iface in ordered:
-        w(f'  Kind{cpp_name(iface.attrib["name"])},')
-      w('  KindEnd,  // sentinel')
-      w('};')
-      w('')
-      for iface in ordered:
-        w(f'using {iface.attrib["name"]} = {cpp_name(iface.attrib["name"])};')
-      w('\n}  // namespace automat::wayland')
+  def gen_wayland():
+    ordered, xml_of = collect_interfaces()
+    our_names = {iface.attrib['name'] for iface in ordered}
+    generated_interfaces.clear()
+    generated_interfaces.update(our_names)
+    external = sorted({ref for iface in ordered for ref in referenced_interfaces(iface)} - our_names)
+
+    if not validate_and_fix(ordered, xml_of):
+      raise SystemExit(f'wayland.hpp is out of sync with the protocol XML; '
+                       f'wrote {wayland_hpp_fixed.name} with the corrected definitions.')
+
+    gen_generated_hpp(ordered, external)
+    gen_generated_cpp(ordered)
+    wayland_hpp_fixed.unlink(missing_ok=True)
 
   def hook_srcs(srcs: dict[str, 'src.File'], recipe: 'make.Recipe'):
       recipe.add_step(
           gen_wayland,
-          [cpp, hpp, hpp_forward],
-          [__file__, 'src/wayland_ext.hpp'],
-          desc='Generating Wayland stubs',
-          shortcut='wayland-protocols')
-      for path in (cpp, hpp, hpp_forward):
+          [generated_cpp, generated_hpp],
+          [__file__, str(wayland_hpp), *sorted(str(p) for p in xml_dir.glob('*.xml'))],
+          desc='Generating Wayland bindings',
+          shortcut='wayland-generated')
+      for path in (generated_cpp, generated_hpp):
         recipe.generated.add(str(path))
 
-      cpp_file = src.File(cpp)
-      cpp_file.direct_includes.append(str(hpp))
-      srcs[str(cpp)] = cpp_file
+      cpp_file = src.File(generated_cpp)
+      cpp_file.direct_includes.append(str(wayland_hpp))
+      srcs[str(generated_cpp)] = cpp_file
 
-      hpp_file = src.File(hpp)
-      for header in GENERATED_HPP_DEPS:
-        hpp_file.direct_includes.append(str(fs_utils.src_dir / header))
-      srcs[str(hpp)] = hpp_file
-
-      srcs[str(hpp_forward)] = src.File(hpp_forward)
+      srcs[str(generated_hpp)] = src.File(generated_hpp)

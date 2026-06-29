@@ -28,7 +28,7 @@ struct PrototypeButton : Widget {
 
   Optional<Rect> TextureBounds() const override { return std::nullopt; }
 
-  void PointerOver(Pointer& pointer) override { hand_icon.emplace(pointer, Pointer::kIconHand); }
+  void PointerEnter(Pointer& pointer) override { hand_icon.emplace(pointer, Pointer::kIconHand); }
 
   void PointerLeave(Pointer& pointer) override { hand_icon.reset(); }
 
@@ -60,7 +60,7 @@ struct Toolbar : ui::Widget, ui::PointerMoveCallback {
   // If the object should be cached into a texture, return its bounds in local coordinates.
   Optional<Rect> TextureBounds() const override;
 
-  void PointerOver(ui::Pointer& pointer) override { StartWatching(pointer); }
+  void PointerEnter(ui::Pointer& pointer) override { StartWatching(pointer); }
 
   void PointerLeave(ui::Pointer& pointer) override {
     StopWatching(pointer);

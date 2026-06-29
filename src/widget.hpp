@@ -193,7 +193,7 @@ struct Widget : OptionsProvider {
   virtual void PointerHover(Pointer&) {}
   virtual void PointerUnhover(Pointer&) {}
 
-  virtual void PointerOver(Pointer&) {}  // TODO: rename to PointerEnter
+  virtual void PointerEnter(Pointer&) {}
   virtual void PointerLeave(Pointer&) {}
 
   // Scroll wheel over this widget. `delta` is in notches, positive when the finger

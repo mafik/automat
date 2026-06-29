@@ -31,7 +31,7 @@ struct TextFieldBase : Widget {
 
   TextFieldBase(ui::Widget* parent) : Widget(parent) {}
 
-  void PointerOver(Pointer&) override;
+  void PointerEnter(Pointer&) override;
   void PointerLeave(Pointer&) override;
 
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;

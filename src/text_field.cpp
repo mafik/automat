@@ -18,7 +18,7 @@
 
 namespace automat::ui {
 
-void TextFieldBase::PointerOver(Pointer& pointer) {
+void TextFieldBase::PointerEnter(Pointer& pointer) {
   ibeam_icon.emplace(pointer, Pointer::kIconIBeam);
   WakeAnimation();
 }

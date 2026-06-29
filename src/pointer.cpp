@@ -114,7 +114,7 @@ void Pointer::UpdatePath() {
   }
   for (auto* new_w : new_path_alive) {
     if (std::find(old_path_alive.begin(), old_path_alive.end(), new_w) == old_path_alive.end()) {
-      new_w->PointerOver(*this);
+      new_w->PointerEnter(*this);
     }
   }
 }

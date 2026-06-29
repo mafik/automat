@@ -116,7 +116,7 @@ struct InstructionLibrary : Object {
     bool AllowChildPointerEvents(ui::Widget& child) const override { return false; }
 
     void PointerMove(ui::Pointer&, Vec2 position) override;
-    void PointerOver(ui::Pointer&) override;
+    void PointerEnter(ui::Pointer&) override;
     void PointerLeave(ui::Pointer&) override;
   };
 

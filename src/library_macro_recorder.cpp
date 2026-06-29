@@ -373,8 +373,8 @@ bool MacroRecorder::DeserializeKey(ObjectDeserializer& d, StrView key) {
 struct GlassRunButton : ui::PowerButton {
   GlassRunButton(ui::Widget* parent, NestedWeakPtr<OnOff::Table> on_off)
       : ui::PowerButton(parent, std::move(on_off), color::kParrotRed, "#eeeeee"_color4f) {}
-  void PointerOver(ui::Pointer& p) override {
-    ToggleButton::PointerOver(p);
+  void PointerEnter(ui::Pointer& p) override {
+    ToggleButton::PointerEnter(p);
     if (auto locked = target.Lock()) {
       auto& mr = static_cast<MacroRecorder&>(*locked.Owner<Object>());
       auto& toys = parent->ToyStore();
@@ -563,7 +563,7 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
 
   SkPath Shape() const override { return MacroRecorderShape(); }
 
-  void PointerOver(ui::Pointer& p) override {
+  void PointerEnter(ui::Pointer& p) override {
     animation_state.pointers_over++;
     StartWatching(p);
     WakeAnimation();

@@ -1040,7 +1040,7 @@ struct ShelfButton : ui::Widget {
   Optional<Rect> TextureBounds() const override { return std::nullopt; }
   bool AllowChildPointerEvents(Widget&) const override { return false; }
 
-  void PointerOver(ui::Pointer& p) override { hand_icon.emplace(p, ui::Pointer::kIconHand); }
+  void PointerEnter(ui::Pointer& p) override { hand_icon.emplace(p, ui::Pointer::kIconHand); }
   void PointerLeave(ui::Pointer&) override { hand_icon.reset(); }
   Optional<ui::Pointer::IconOverride> hand_icon;
 

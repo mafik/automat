@@ -27,7 +27,7 @@ using namespace std;
 
 namespace automat::ui {
 
-void Clickable::PointerOver(Pointer& pointer) {
+void Clickable::PointerEnter(Pointer& pointer) {
   pointers_over++;
   hand_icon.emplace(pointer, Pointer::kIconHand);
   widget.WakeAnimation();

@@ -938,7 +938,7 @@ void InstructionLibrary::Widget::PointerMove(ui::Pointer& p, Vec2 position) {
   }
 }
 
-void InstructionLibrary::Widget::PointerOver(ui::Pointer& p) {
+void InstructionLibrary::Widget::PointerEnter(ui::Pointer& p) {
   if (IsIconified()) return;
   StartWatching(p);
 }

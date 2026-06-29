@@ -882,7 +882,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
     }
   }
 
-  void PointerOver(ui::Pointer& pointer) override {
+  void PointerEnter(ui::Pointer& pointer) override {
     if (IsIconified()) return;
     Vec2 pos = pointer.PositionWithin(*this);
     hover_mode = GetDragModeAt(pos);

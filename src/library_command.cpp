@@ -142,7 +142,7 @@ I64 SpawnArgv(const Vec<Str>& argv_in, Status& status) {
   // Children talk to Automat's own Wayland compositor: WAYLAND_DISPLAY points
   // at our socket and DISPLAY is dropped so toolkits don't fall back to the
   // host X server.
-  Str wayland_socket = wayland::server ? wayland::server->socket_path.Name() : Str{};
+  Str wayland_socket = wayland::SocketName();
   Str wayland_entry = "WAYLAND_DISPLAY=" + wayland_socket;
   Str gdk_entry = "GDK_BACKEND=wayland";
   std::vector<char*> envp;

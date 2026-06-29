@@ -16,10 +16,10 @@
 #include "library_tesseract_ocr.hpp"
 #include "library_timeline.hpp"
 #include "library_timer.hpp"
-#include "library_wayland_window.hpp"
 #include "library_window.hpp"
 #include "object.hpp"
 #include "sync.hpp"
+#include "wayland.hpp"
 
 using namespace automat::library;
 

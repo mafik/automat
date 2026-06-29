@@ -1,12 +1,19 @@
 // SPDX-FileCopyrightText: Copyright 2026 Automat Authors
 // SPDX-License-Identifier: MIT
 
-#include "wayland.hpp"
-
 #include <drm/drm_fourcc.h>
 #include <fcntl.h>
+#include <include/core/SkCanvas.h>
+#include <include/core/SkColorFilter.h>
+#include <include/core/SkFontTypes.h>
 #include <include/core/SkImage.h>
 #include <include/core/SkImageInfo.h>
+#include <include/core/SkM44.h>
+#include <include/core/SkMatrix.h>
+#include <include/core/SkPaint.h>
+#include <include/core/SkPathUtils.h>
+#include <include/core/SkSamplingOptions.h>
+#include <include/effects/SkGradient.h>
 #include <include/pathops/SkPathOps.h>
 #include <sys/file.h>
 #include <sys/mman.h>
@@ -26,19 +33,136 @@
 #include <ctime>
 #include <memory>
 
+#include "animation.hpp"
 #include "dmabuf.hpp"
+#include "drawing.hpp"
+#include "font.hpp"
 #include "format.hpp"
+#include "keyboard.hpp"
 #include "library_command.hpp"
-#include "library_wayland_window.hpp"
 #include "location.hpp"
 #include "log.hpp"
+#include "math.hpp"
+#include "menu.hpp"
+#include "pointer.hpp"
+#include "root_widget.hpp"
+#include "toy.hpp"
+#include "ui_beta.hpp"
+#include "units.hpp"
 #include "vk.hpp"
 #include "vm.hpp"
+#include "wayland_protocol.hpp"
 #include "xcb.hpp"
+
+#if defined(__linux__)
+#include "x11.hpp"
+#endif
+
+namespace automat::library {
+// Board-metric size of a window object showing a width x height client surface
+// (content + chrome), used to seat a new window next to its Command.
+static Vec2 WindowBoardSize(int width, int height);
+}  // namespace automat::library
 
 namespace automat::wayland {
 
 Colony<Client> Client::colony;
+
+struct Server : mux::Epoll::Listener {
+  mux::Epoll& epoll;
+  Path socket_path;  // full filesystem path; unlinked on clean shutdown
+  FD lock_fd;  // exclusive flock on socket_path + ".lock"; released when the Server is destroyed
+
+  // Compositor server-level state (touched on the mux::epoll thread unless noted).
+  uint32_t serial = 1;  // monotonic serial source for protocol events
+  std::unique_ptr<mux::Timer> frame_timer;
+  bool frame_pending = false;
+  std::mutex ui_mutex;                              // guards the two handoff vectors
+  Vec<Ptr<library::WaylandWindow>> ui_appeared;     // mapped windows awaiting board insert
+  Vec<Ptr<library::WaylandWindow>> ui_disappeared;  // unmapped windows awaiting board remove
+  std::mutex adoption_mutex;
+  Vec<std::pair<I64, WeakPtr<library::WaylandWindow>>> adoptions;  // respawned clients, by pid
+
+  // Input focus + keymap. Cleared in the surface destructor;
+  // the keymap is the host X keymap, built once.
+  MortalPtr<Surface> keyboard_surface;
+  MortalPtr<XdgPopup> grabbing_popup;
+  MortalPtr<DataSource> selection;  // current clipboard owner (cleared in its destructor)
+  int keymap_fd = -1;
+  U32 keymap_size = 0;
+  U32 mod_shift = 0, mod_ctrl = 0, mod_alt = 0, mod_super = 0;
+
+  // dmabuf version-4 feedback inputs, built lazily on the first feedback request.
+  FD dmabuf_format_table_fd;
+  U32 dmabuf_format_table_size = 0;
+  dev_t dmabuf_main_device = 0;
+  bool dmabuf_has_device = false;
+  bool dmabuf_inited = false;
+
+  Server(mux::Epoll& epoll) : epoll(epoll) {}
+
+  ~Server() {
+    if (socket_path) {
+      Status ignore;
+      socket_path.Unlink(ignore, true);
+      socket_path.WithExt("lock").Unlink(ignore, true);
+    }
+  }
+
+  StrView Name() const override { return "WaylandServer"sv; }
+
+  void NotifyRead(Status&) override {
+    for (;;) {
+      int client_fd = accept4(fd.fd, nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK);
+      if (client_fd < 0) {
+        if (errno == EINTR) continue;
+        break;
+      }
+      Client& client = *Client::colony.emplace(*this);
+      client.fd = FD(client_fd);
+      Display::ColonyMake(1, client);
+      Status status;
+      epoll.Add(&client, status);
+    }
+  }
+
+  void FlushAll() {
+    for (Client& client : Client::colony) {
+      if (client.out.empty()) {
+        client.out_fds.clear();
+        continue;
+      }
+      msghdr msg{};
+      iovec iov{client.out.data(), client.out.size()};
+      msg.msg_iov = &iov;
+      msg.msg_iovlen = 1;
+      alignas(cmsghdr) char control[CMSG_SPACE(sizeof(int) * 16)];
+      if (!client.out_fds.empty()) {
+        int count = std::min<int>(client.out_fds.size(), 16);
+        msg.msg_control = control;
+        msg.msg_controllen = CMSG_SPACE(sizeof(int) * count);
+        cmsghdr* cm = CMSG_FIRSTHDR(&msg);
+        cm->cmsg_level = SOL_SOCKET;
+        cm->cmsg_type = SCM_RIGHTS;
+        cm->cmsg_len = CMSG_LEN(sizeof(int) * count);
+        int fds[16];
+        for (int k = 0; k < count; ++k) fds[k] = client.out_fds[k].fd;
+        std::memcpy(CMSG_DATA(cm), fds, sizeof(int) * count);
+      }
+      ssize_t n = sendmsg(client.fd.fd, &msg, MSG_NOSIGNAL | MSG_DONTWAIT);
+      if (n > 0) client.out.erase(0, n);
+      client.out_fds.clear();
+    }
+  }
+
+  // Compositor operations invoked from the UI/render thread (via the wayland::server global).
+  void NotifyWindowDestroyed(void* toplevel_handle);
+  void SendKeyboardEnter(library::WaylandWindow&);
+  void SendKeyboardLeave(library::WaylandWindow&);
+  void SendKey(library::WaylandWindow&, uint32_t evdev_keycode, bool pressed, bool ctrl, bool alt,
+               bool shift, bool super);
+  void SendDecorationPreference(library::WaylandWindow&);
+};
 
 Common::Common(Kind kind, U32 id, Client& client) : kind(kind), id(id), client(client) {
   client.SetId(id, this);
@@ -68,6 +192,21 @@ void Display::OnGetRegistry(Registry& registry) {
   registry.Global(10, "wp_cursor_shape_manager_v1", 1);
   registry.Global(11, "zwp_linux_dmabuf_v1", 4);
 }
+
+// The format/modifier pairs the compositor accepts. AR24/XR24 are the 32-bit BGRA formats every
+// toolkit produces; both import as VK_FORMAT_B8G8R8A8_UNORM. LINEAR is what the all-software Mesa
+// stack allocates here; INVALID lets a client send an implicitly-allocated buffer.
+struct DmabufFormatModifier {
+  U32 format;
+  U64 modifier;
+};
+constexpr DmabufFormatModifier kDmabufFormats[] = {
+    {DRM_FORMAT_ARGB8888, DRM_FORMAT_MOD_LINEAR},
+    {DRM_FORMAT_XRGB8888, DRM_FORMAT_MOD_LINEAR},
+    {DRM_FORMAT_ARGB8888, DRM_FORMAT_MOD_INVALID},
+    {DRM_FORMAT_XRGB8888, DRM_FORMAT_MOD_INVALID},
+};
+constexpr int kDmabufFormatCount = (int)(sizeof(kDmabufFormats) / sizeof(kDmabufFormats[0]));
 
 void Registry::OnBind(U32, StrView id_interface, U32 id_version, U32 id) {
   if (id_interface == "wl_compositor") {
@@ -106,7 +245,13 @@ void Registry::OnBind(U32, StrView id_interface, U32 id_version, U32 id) {
   } else if (id_interface == "wp_cursor_shape_manager_v1") {
     CursorShapeManagerV1::ColonyMake(id, client);
   } else if (id_interface == "zwp_linux_dmabuf_v1") {
-    AdvertiseDmabufOnBind(LinuxDmabufV1::ColonyMake(id, client), id_version);
+    auto& obj = LinuxDmabufV1::ColonyMake(id, client);
+    if (id_version >= 4) return;  // version 4+ clients learn the formats through feedback
+    for (auto& fm : kDmabufFormats) {
+      obj.Format(fm.format);
+      if (id_version >= 3)
+        obj.Modifier(fm.format, (U32)(fm.modifier >> 32), (U32)(fm.modifier & 0xffffffffu));
+    }
   }
 }
 
@@ -168,61 +313,18 @@ void Client::NotifyRead(Status&) {
 }
 StrView Client::Name() const { return "WaylandClient"sv; }
 
-void Server::NotifyRead(Status&) {
-  for (;;) {
-    int client_fd = accept4(fd.fd, nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK);
-    if (client_fd < 0) {
-      if (errno == EINTR) continue;
-      break;
-    }
-    Client& client = *Client::colony.emplace(*this);
-    client.fd = FD(client_fd);
-    Display::ColonyMake(1, client);
-    Status status;
-    epoll.Add(&client, status);
-  }
-}
-StrView Server::Name() const { return "WaylandServer"sv; }
+std::unique_ptr<Server> server;
 
-void Server::FlushAll() {
-  for (Client& client : Client::colony) {
-    if (client.out.empty()) {
-      client.out_fds.clear();
-      continue;
-    }
-    msghdr msg{};
-    iovec iov{client.out.data(), client.out.size()};
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
-    alignas(cmsghdr) char control[CMSG_SPACE(sizeof(int) * 16)];
-    if (!client.out_fds.empty()) {
-      int count = std::min<int>(client.out_fds.size(), 16);
-      msg.msg_control = control;
-      msg.msg_controllen = CMSG_SPACE(sizeof(int) * count);
-      cmsghdr* cm = CMSG_FIRSTHDR(&msg);
-      cm->cmsg_level = SOL_SOCKET;
-      cm->cmsg_type = SCM_RIGHTS;
-      cm->cmsg_len = CMSG_LEN(sizeof(int) * count);
-      int fds[16];
-      for (int k = 0; k < count; ++k) fds[k] = client.out_fds[k].fd;
-      std::memcpy(CMSG_DATA(cm), fds, sizeof(int) * count);
-    }
-    ssize_t n = sendmsg(client.fd.fd, &msg, MSG_NOSIGNAL | MSG_DONTWAIT);
-    if (n > 0) client.out.erase(0, n);
-    client.out_fds.clear();
-  }
-}
-
-std::unique_ptr<Server> MakeServer(mux::Epoll& epoll, Status& status) {
+void Start(mux::Epoll& epoll, Status& status) {
   const char* runtime = getenv("XDG_RUNTIME_DIR");
   if (!runtime) {
     AppendErrorMessage(status) += "XDG_RUNTIME_DIR is not set";
-    return nullptr;
+    return;
   }
   int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
   if (fd < 0) {
     AppendErrorMessage(status) += f("socket(): {}", strerror(errno));
-    return nullptr;
+    return;
   }
   sockaddr_un addr{};
   addr.sun_family = AF_UNIX;
@@ -251,39 +353,28 @@ std::unique_ptr<Server> MakeServer(mux::Epoll& epoll, Status& status) {
   if (name.empty()) {
     close(fd);
     AppendErrorMessage(status) += "no free wayland-N socket in XDG_RUNTIME_DIR";
-    return nullptr;
+    return;
   }
   if (listen(fd, 16) < 0) {
     close(fd);
     AppendErrorMessage(status) += f("listen(): {}", strerror(errno));
-    return nullptr;
+    return;
   }
   setenv("WAYLAND_DISPLAY", name.c_str(), 1);
   LOG << f("Wayland server listening on {} (WAYLAND_DISPLAY={})", addr.sun_path, name);
 
-  auto srv = std::make_unique<Server>(epoll);
-  srv->fd = FD(fd);
-  srv->socket_path = sock_path;
-  srv->lock_fd = std::move(lock_fd);
-  epoll.Post([s = srv.get()] {
+  server = std::make_unique<Server>(epoll);
+  server->fd = FD(fd);
+  server->socket_path = sock_path;
+  server->lock_fd = std::move(lock_fd);
+  epoll.Post([s = server.get()] {
     Status status;
     s->epoll.Add(s, status);
     if (!OK(status)) ERROR << "wayland: failed to watch the listening socket: " << status.ToStr();
   });
-  return srv;
 }
-
-std::unique_ptr<Server> server;
-
-Server::~Server() {
-  if (socket_path) {
-    Status ignore;
-    socket_path.Unlink(ignore, true);
-    socket_path.WithExt("lock").Unlink(ignore, true);
-  }
-}
-
-bool Server::Running() { return true; }
+void Stop() { server.reset(); }
+Str SocketName() { return server ? server->socket_path.Name() : Str{}; }
 
 using library::WaylandSurface;
 using library::WaylandWindow;
@@ -308,7 +399,7 @@ WaylandSurface* GetOrCreateObject(Surface& surf) {
   if (surf.object == nullptr) {
     surf.object = MAKE_PTR(WaylandSurface);
   }
-  return surf.object.Get<WaylandSurface>();
+  return surf.object.Get();
 }
 
 // Copies a surface's committed texture and input region into its board object. Subsurface and
@@ -355,8 +446,7 @@ void UnmapToplevel(XdgToplevel& t) {
   if (!t.mapped) return;
   t.mapped = false;
   Server& s = t.client.server;
-  if (Ptr<ReferenceCounted> win_obj = t.window.Lock()) {
-    auto win = win_obj.Cast<WaylandWindow>();
+  if (Ptr<WaylandWindow> win = t.window.Lock()) {
     win->toplevel_handle.store(nullptr);
     {
       auto lock = std::lock_guard(win->mutex);
@@ -381,9 +471,9 @@ void ApplyAndPublish(Surface& surf) {
   Server& s = t.client.server;
 
   bool adopted = false;
-  Ptr<ReferenceCounted> win_obj;
+  Ptr<WaylandWindow> win_obj;
   if (surf.xdg && surf.xdg->toplevel == owner) {
-    if (Ptr<ReferenceCounted> win = t.window.Lock()) {
+    if (Ptr<WaylandWindow> win = t.window.Lock()) {
       win_obj = win;
     } else if (!t.mapped) {
       Ptr<WaylandWindow> win;
@@ -391,7 +481,7 @@ void ApplyAndPublish(Surface& surf) {
         auto lock = std::lock_guard(s.adoption_mutex);
         for (auto it = s.adoptions.begin(); it != s.adoptions.end(); ++it) {
           if (it->first == t.pid) {
-            if (Ptr<ReferenceCounted> o = it->second.Lock()) win = o.Cast<WaylandWindow>();
+            win = it->second.Lock();
             s.adoptions.erase(it);
             break;
           }
@@ -426,7 +516,7 @@ void ApplyAndPublish(Surface& surf) {
   if (!win_obj) return;
 
   // Mirror the toplevel's surface tree into the window object.
-  WaylandWindow& wwin = static_cast<WaylandWindow&>(*win_obj);
+  WaylandWindow& wwin = *win_obj;
   if (t.xdg && t.xdg->surface) {
     UpdateSurfaceNode(wwin, *t.xdg->surface);
   } else {
@@ -440,7 +530,7 @@ void ApplyAndPublish(Surface& surf) {
 
   // Wake the toy; on the first frame insert the window onto the board (unless it was adopted, in
   // which case its Location already exists).
-  static_cast<Object*>(win_obj.Get())->WakeToys();
+  win_obj->WakeToys();
   vm.WakeToys();
   if (!t.mapped) {
     t.mapped = true;
@@ -485,21 +575,6 @@ bool ResolveGeometry(Surface& surf, SkISize buf, CutoutGeometry& out) {
   }
   return true;
 }
-
-// The format/modifier pairs the compositor accepts. AR24/XR24 are the 32-bit BGRA formats every
-// toolkit produces; both import as VK_FORMAT_B8G8R8A8_UNORM. LINEAR is what the all-software Mesa
-// stack allocates here; INVALID lets a client send an implicitly-allocated buffer.
-struct DmabufFormatModifier {
-  U32 format;
-  U64 modifier;
-};
-constexpr DmabufFormatModifier kDmabufFormats[] = {
-    {DRM_FORMAT_ARGB8888, DRM_FORMAT_MOD_LINEAR},
-    {DRM_FORMAT_XRGB8888, DRM_FORMAT_MOD_LINEAR},
-    {DRM_FORMAT_ARGB8888, DRM_FORMAT_MOD_INVALID},
-    {DRM_FORMAT_XRGB8888, DRM_FORMAT_MOD_INVALID},
-};
-constexpr int kDmabufFormatCount = (int)(sizeof(kDmabufFormats) / sizeof(kDmabufFormats[0]));
 
 // Tells Mesa which DRM device to allocate on; without it clients fall back to wl_shm.
 void SendDmabufFeedback(Server& s, LinuxDmabufFeedbackV1& fb) {
@@ -615,8 +690,6 @@ void DetachSubsurface(Subsurface& sub) {
     std::erase(parent->stack, sub.surface);
     std::erase(parent->pending_stack, sub.surface);
   }
-  if (sub.surface) sub.surface->as_subsurface = nullptr;
-  sub.surface = nullptr;
   sub.parent = nullptr;
   if (parent) ApplyAndPublish(*parent);
 }
@@ -737,13 +810,13 @@ void OfferSelectionTo(Server& s, DataDevice& dev) {
   dev.Selection(&offer);
 }
 
-}  // namespace
-
 uint32_t NowMs() {
   timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
   return (uint32_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 }
+
+}  // namespace
 
 Surface::~Surface() {
   ReleaseHeldDmabuf(*this);  // hand any zero-copy buffer back so the client may reuse it
@@ -1022,8 +1095,7 @@ void XdgSurface::OnSetWindowGeometry(I32 x, I32 y, I32 width, I32 height) {
 
 void XdgToplevel::OnSetTitle(StrView title) {
   this->title = Str(title);
-  if (Ptr<ReferenceCounted> win_obj = window.Lock()) {
-    auto win = win_obj.Cast<WaylandWindow>();
+  if (Ptr<WaylandWindow> win = window.Lock()) {
     {
       auto lock = std::lock_guard(win->mutex);
       win->title = Str(title);
@@ -1034,8 +1106,7 @@ void XdgToplevel::OnSetTitle(StrView title) {
 
 void XdgToplevel::OnSetAppId(StrView app_id) {
   this->app_id = Str(app_id);
-  if (Ptr<ReferenceCounted> win_obj = window.Lock()) {
-    auto win = win_obj.Cast<WaylandWindow>();
+  if (Ptr<WaylandWindow> win = window.Lock()) {
     auto lock = std::lock_guard(win->mutex);
     win->app_id = Str(app_id);
   }
@@ -1120,8 +1191,7 @@ void UpdateDecoration(XdgToplevel& t) {
   using M = ZxdgToplevelDecorationV1::Mode;
   using P = WaylandWindow::DecorationPreference;
   M mode = t.decoration ? (M)t.decoration->client_mode : M::ModeClientSide;
-  if (Ptr<ReferenceCounted> ptr = t.window.Lock()) {
-    WaylandWindow* w = ptr.Get<WaylandWindow>();
+  if (Ptr<WaylandWindow> w = t.window.Lock()) {
     P pref = w->decoration_preference.load(std::memory_order_relaxed);
     if (pref == P::ServerSide) {
       mode = M::ModeServerSide;
@@ -1218,8 +1288,7 @@ void CursorShapeDeviceV1::OnSetShape(U32, enum Shape shape) {
   Server& s = client.server;
   for (auto* handle : client.client_ids) {
     if (auto* t = dyn_cast_if_present<XdgToplevel>(handle)) {
-      if (Ptr<ReferenceCounted> w = t->window.Lock()) {
-        auto win = w.Cast<WaylandWindow>();
+      if (Ptr<WaylandWindow> win = t->window.Lock()) {
         win->cursor_shape.store((uint32_t)shape, std::memory_order_relaxed);
         win->WakeToys();
       }
@@ -1343,15 +1412,6 @@ void LinuxBufferParamsV1::OnCreateImmed(Buffer& buffer_id, I32 width, I32 height
                    ((U32)flags & LinuxBufferParamsV1::FlagsYInvert) != 0);
 }
 
-void AdvertiseDmabufOnBind(LinuxDmabufV1& obj, U32 version) {
-  if (version >= 4) return;  // version 4+ clients learn the formats through feedback
-  for (auto& fm : kDmabufFormats) {
-    obj.Format(fm.format);
-    if (version >= 3)
-      obj.Modifier(fm.format, (U32)(fm.modifier >> 32), (U32)(fm.modifier & 0xffffffffu));
-  }
-}
-
 void Server::SendKeyboardEnter(library::WaylandWindow& w) {
   auto* h = (XdgToplevel*)w.toplevel_handle.load();
   if (!h) return;
@@ -1419,16 +1479,18 @@ void Server::NotifyWindowDestroyed(void* handle) {
   });
 }
 
-void Server::UIFrame() {
-  std::vector<Ptr<ReferenceCounted>> appeared, disappeared;
+void UIFrame() {
+  if (!server) return;
+  Server& s = *server;
+  Vec<Ptr<WaylandWindow>> appeared, disappeared;
   {
-    auto lock = std::lock_guard(ui_mutex);
-    appeared.swap(ui_appeared);
-    disappeared.swap(ui_disappeared);
+    auto lock = std::lock_guard(s.ui_mutex);
+    appeared.swap(s.ui_appeared);
+    disappeared.swap(s.ui_disappeared);
   }
   static int spawn_count = 0;
   for (auto& w : appeared) {
-    auto& win = static_cast<WaylandWindow&>(*w);
+    auto& win = *w;
     // Find the Command whose child this client is: its argv becomes the respawn recipe, its plate
     // anchors where the window is seated, and the window keeps a Launcher cable to it.
     Location* command_location = nullptr;
@@ -1466,7 +1528,7 @@ void Server::UIFrame() {
     } else {
       loc.position = Vec2(0.01f * (n % 3), -0.02f * (n % 5));
     }
-    loc.InsertHere(w.Cast<Object>());
+    loc.InsertHere(std::move(w));
     vm.root_board->WakeToys();
     vm.WakeToys();
   }
@@ -1500,12 +1562,12 @@ void Server::UIFrame() {
       win->client_pid = pid;
     }
     {
-      auto lock = std::lock_guard(adoption_mutex);
-      adoptions.emplace_back(pid, win->AcquireWeakPtr());
+      auto lock = std::lock_guard(s.adoption_mutex);
+      s.adoptions.emplace_back(pid, win->AcquireWeakPtr());
     }
   }
   for (auto& w : disappeared) {
-    Location* here = static_cast<Object*>(w.Get())->here;
+    Location* here = w->here;
     if (!here) continue;
     auto& locations = vm.root_board->locations;
     for (auto it = locations.begin(); it != locations.end(); ++it) {
@@ -1597,3 +1659,762 @@ void Surface::OnDamageBuffer(I32 x, I32 y, I32 width, I32 height) {}
 void Surface::OnOffset(I32 x, I32 y) {}
 
 }  // namespace automat::wayland
+
+namespace automat::library {
+
+WaylandWindow::~WaylandWindow() {
+#if defined(__linux__)
+  // The only strong reference lives in this window's Location; its
+  // destruction means the user deleted the window.
+  if (wayland::server) wayland::server->NotifyWindowDestroyed(toplevel_handle.load());
+#endif
+}
+
+void WaylandWindow::SerializeState(ObjectSerializer& writer) const {
+  auto lock = std::lock_guard(mutex);
+  if (!recipe.empty()) {
+    writer.Key("recipe");
+    writer.StartArray();
+    for (auto& w : recipe) {
+      if (w.empty()) continue;
+      writer.String(w.data(), w.size());
+    }
+    writer.EndArray();
+  }
+  if (!title.empty()) {
+    writer.Key("title");
+    writer.String(title.data(), title.size());
+  }
+  auto pref = decoration_preference.load(std::memory_order_relaxed);
+  if (pref != DecorationPreference::Auto) {
+    StrView v = pref == DecorationPreference::ServerSide ? "server" : "client";
+    writer.Key("decoration");
+    writer.String(v.data(), v.size());
+  }
+}
+
+bool WaylandWindow::DeserializeKey(ObjectDeserializer& d, StrView key) {
+  Status status;
+  auto lock = std::lock_guard(mutex);
+  if (key == "recipe") {
+    recipe.clear();
+    for (auto i : ArrayView(d, status)) {
+      (void)i;
+      Str word;
+      d.Get(word, status);
+      if (OK(status)) recipe.push_back(std::move(word));
+    }
+    client_gone = true;
+    pending_respawn = !recipe.empty();
+    return true;
+  }
+  if (key == "title") {
+    d.Get(title, status);
+    return true;
+  }
+  if (key == "decoration") {
+    Str v;
+    d.Get(v, status);
+    DecorationPreference pref = DecorationPreference::Auto;
+    if (v == "server")
+      pref = DecorationPreference::ServerSide;
+    else if (v == "client")
+      pref = DecorationPreference::ClientSide;
+    decoration_preference.store(pref, std::memory_order_relaxed);
+    return true;
+  }
+  return false;
+}
+
+namespace {
+
+constexpr float kClientPx = 0.20_mm;  // one client pixel on the board
+constexpr float kTitleH = 7_mm;
+constexpr float kFrame = 5_mm;
+constexpr float kContentRadius = 4_mm;
+constexpr float kMinContentW = 3_cm;
+constexpr float kMinContentH = 3_cm;
+
+// wp_cursor_shape_device_v1 shape (stable protocol values) to the nearest icon.
+ui::Pointer::IconType ShapeToIcon(uint32_t shape) {
+  switch (shape) {
+    case 4:  // pointer
+      return ui::Pointer::kIconHand;
+    case 9:   // text
+    case 10:  // vertical_text
+      return ui::Pointer::kIconIBeam;
+    case 8:  // crosshair
+      return ui::Pointer::kIconCrosshair;
+    case 13:  // move
+    case 16:  // grab
+    case 17:  // grabbing
+    case 32:  // all_scroll
+    case 36:  // all_resize
+      return ui::Pointer::kIconAllScroll;
+    case 18:  // e_resize
+    case 25:  // w_resize
+    case 26:  // ew_resize
+    case 30:  // col_resize
+      return ui::Pointer::kIconResizeHorizontal;
+    case 19:  // n_resize
+    case 22:  // s_resize
+    case 27:  // ns_resize
+    case 31:  // row_resize
+      return ui::Pointer::kIconResizeVertical;
+    default:  // default and the long tail (help, wait, copy, ...)
+      return ui::Pointer::kIconArrow;
+  }
+}
+
+// Draws a surface's committed buffer, sampling `src` (buffer pixels) into a
+// dst_size-pixel rectangle. The image is flipped to keep row 0 at the top.
+// For opaque content (XRGB/XR24) alpha is set to 1.
+void DrawSurfaceImage(SkCanvas& canvas, const sk_sp<SkImage>& image, const SkRect& src,
+                      SkISize dst_size, Vec2 top_left) {
+  if (!image) return;
+  SkPaint paint;
+  if (image->isOpaque())
+    paint.setColorFilter(SkColorFilters::Blend(SK_ColorBLACK, SkBlendMode::kDstOver));
+  float w = dst_size.width() * kClientPx, h = dst_size.height() * kClientPx;
+  canvas.save();
+  canvas.translate(top_left.x, top_left.y);
+  canvas.scale(1, -1);
+  canvas.drawImageRect(image, src, SkRect::MakeWH(w, h), SkSamplingOptions(SkFilterMode::kLinear),
+                       &paint, SkCanvas::kStrict_SrcRectConstraint);
+  canvas.restore();
+}
+
+struct DecorationOption : TextOption {
+  WeakPtr<WaylandWindow> window;
+  WaylandWindow::DecorationPreference pref;
+  Option::Dir dir;
+  DecorationOption(Str label, WeakPtr<WaylandWindow> window,
+                   WaylandWindow::DecorationPreference pref, Option::Dir dir)
+      : TextOption(std::move(label)), window(window), pref(pref), dir(dir) {}
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<DecorationOption>(text, window, pref, dir);
+  }
+  std::unique_ptr<Action> Activate(ui::Pointer&) const override {
+    if (auto w = window.Lock()) {
+      w->decoration_preference.store(pref, std::memory_order_relaxed);
+      if (wayland::server) wayland::server->SendDecorationPreference(*w);
+    }
+    return nullptr;
+  }
+  Option::Dir PreferredDir() const override { return dir; }
+};
+
+struct DecorationMenuOption : TextOption, OptionsProvider {
+  WeakPtr<WaylandWindow> window;
+  DecorationMenuOption(WeakPtr<WaylandWindow> window)
+      : TextOption("Decoration..."), window(window) {}
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<DecorationMenuOption>(window);
+  }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    return OpenMenu(pointer);
+  }
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    using P = WaylandWindow::DecorationPreference;
+    DecorationOption automat_auto("Auto", window, P::Auto, Option::S);
+    visitor(automat_auto);
+    DecorationOption server_side("Automat", window, P::ServerSide, Option::W);
+    visitor(server_side);
+    DecorationOption client_side("App", window, P::ClientSide, Option::E);
+    visitor(client_side);
+  }
+  Option::Dir PreferredDir() const override { return Option::S; }
+};
+
+}  // namespace
+
+static Vec2 WindowBoardSize(int width, int height) {
+  float content_w = width > 0 ? width * kClientPx : kMinContentW;
+  float content_h = height > 0 ? height * kClientPx : kMinContentH;
+  return Vec2(content_w + 2 * kFrame, content_h + 2 * kFrame + kTitleH);
+}
+
+struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
+  sk_sp<SkImage> image_;
+  SkRect src_crop_ = SkRect::MakeEmpty();
+  SkISize dst_size_ = {};
+  SkPath input_shape_;  // this surface's input region, in toy-local coordinates
+  Vec<WaylandSurface::Child> below_, above_;
+
+  WaylandSurfaceToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {}
+
+  Ptr<WaylandSurface> LockSurface() const { return LockObject<WaylandSurface>(); }
+
+  // Child surfaces are placed relative to `TopLeft`.
+  virtual Vec2 TopLeft() const { return Vec2(0, 0); }
+
+  void PullSurfaceState() {
+    auto s = LockSurface();
+    if (!s) return;
+    auto lock = std::lock_guard(s->mutex);
+    image_ = s->image;
+    src_crop_ = s->src_crop;
+    dst_size_ = s->dst_size;
+    below_ = s->below;
+    above_ = s->above;
+    // The input region arrives in client pixels (y-down from the top-left); map it
+    // to toy-local coordinates (board metres, y-up) for Shape().
+    input_shape_ = s->input_region.makeTransform(SkMatrix::Scale(kClientPx, -kClientPx));
+  }
+
+  void SyncChildren(Vec2 content_origin) {
+    auto& toys = ToyStore();
+    auto place = [&](WaylandSurface::Child& c, bool over) {
+      auto& ct = toys.FindOrMake(*c.surface, this);
+      Vec2 p = c.is_popup
+                   ? PlacePopup(c, content_origin)
+                   : content_origin + Vec2(c.offset.x() * kClientPx, -c.offset.y() * kClientPx);
+      ct.local_to_parent = SkM44(SkMatrix::Translate(p.x, p.y));
+      if (over)
+        layers.OrderAbove(&ct);
+      else
+        layers.OrderBelow(&ct);
+    };
+    for (auto& c : below_) place(c, false);
+    for (auto it = above_.rbegin(); it != above_.rend(); ++it) place(*it, true);
+  }
+
+  // Flips or slides (whichever the client permits) the popup to keep it inside
+  // the viewport.
+  Vec2 PlacePopup(const WaylandSurface::Child& c, Vec2 top_left) {
+    auto to_local = [&](SkIPoint o) {
+      return top_left + Vec2(o.x() * kClientPx, -o.y() * kClientPx);
+    };
+    Vec2 base = to_local(c.offset), flip = to_local(c.flipped);
+    SkISize sz;
+    {
+      auto lock = std::lock_guard(c.surface->mutex);
+      sz = c.surface->dst_size;
+    }
+    float w = sz.width() * kClientPx, h = sz.height() * kClientPx;
+    if (w <= 0 || h <= 0) return base;
+    ui::RootWidget& root = FindRootWidget();
+    SkRect vp = ui::TransformBetween(root, *this).mapRect(root.Shape().getBounds());
+    float vminx = std::min(vp.fLeft, vp.fRight), vmaxx = std::max(vp.fLeft, vp.fRight);
+    float vminy = std::min(vp.fTop, vp.fBottom), vmaxy = std::max(vp.fTop, vp.fBottom);
+    // The popup occupies [x, x + w] horizontally and [y - h, y] vertically (y = top).
+    auto fits_x = [&](float x) { return x >= vminx && x + w <= vmaxx; };
+    auto fits_y = [&](float y) { return y - h >= vminy && y <= vmaxy; };
+    float x = base.x, y = base.y;
+    if (!fits_x(x)) {
+      if (c.flip_x && fits_x(flip.x)) x = flip.x;
+      if (!fits_x(x) && c.slide_x) x = std::clamp(x, vminx, std::max(vminx, vmaxx - w));
+    }
+    if (!fits_y(y)) {
+      if (c.flip_y && fits_y(flip.y)) y = flip.y;
+      if (!fits_y(y) && c.slide_y) y = std::clamp(y, std::min(vminy + h, vmaxy), vmaxy);
+    }
+    return Vec2(x, y);
+  }
+
+  Tock Tick(time::Timer& timer) override {
+    if (!LockSurface()) {
+      MarkDead(timer.now);
+      return {};
+    }
+    PullSurfaceState();
+    SyncChildren(TopLeft());
+    return Tock::Draw;
+  }
+
+  bool CenteredAtZero() const override { return false; }
+
+  SkPath Shape() const override { return input_shape_; }
+  Optional<Rect> TextureBounds() const override {
+    float w = dst_size_.width() * kClientPx, h = dst_size_.height() * kClientPx;
+    return Rect{0, -h, w, 0};
+  }
+
+  // Maps a toy-local point into this surface's client pixels, clamped to it.
+  //
+  // Returns boolean indicating whether point `l` was inside (no clamping was applied).
+  bool ToSurfacePx(Vec2& l) const {
+    l -= TopLeft();
+    l.y = -l.y;
+    l /= kClientPx;
+    bool inside = true;
+    if (l.x < 0) {
+      inside = false;
+      l.x = 0;
+    } else if (l.x > dst_size_.width()) {
+      inside = false;
+      l.x = dst_size_.width();
+    }
+    if (l.y < 0) {
+      inside = false;
+      l.y = 0;
+    } else if (l.y > dst_size_.height()) {
+      inside = false;
+      l.y = dst_size_.height();
+    }
+    return inside;
+  }
+  // Gives the keyboard to the toplevel window (keyboard focus is never on a
+  // subsurface); walks up to the owning WaylandWindowToy. Defined below.
+  void FocusWindow(ui::Pointer& p);
+
+  void PointerHover(ui::Pointer& p) override {
+    Vec2 px = p.PositionWithin(*this);
+    ToSurfacePx(px);
+
+    if (auto w = LockSurface()) {
+      mux::epoll.Post([w = std::move(w), px] {
+        if (!w->surface_handle) return;
+        for (auto& wp : wayland::Pointer::colony) {
+          if (&wp.client != &w->surface_handle->client) continue;
+          wp.Enter(wayland::server->serial++, *w->surface_handle, px.x, px.y);
+          if (wp.version >= 5) wp.Frame();
+        }
+        wayland::server->FlushAll();
+      });
+    }
+    StartWatching(p);
+  }
+  void PointerUnhover(ui::Pointer& p) override {
+    StopWatching(p);
+    if (auto w = LockSurface()) {
+      mux::epoll.Post([w = std::move(w)] {
+        if (!w->surface_handle) return;
+        for (auto& p : wayland::Pointer::colony) {
+          if (&p.client != &w->surface_handle->client) continue;
+          p.Leave(wayland::server->serial++, *w->surface_handle);
+          if (p.version >= 5) p.Frame();
+        }
+        wayland::server->FlushAll();
+      });
+    }
+  }
+
+  void PointerMove(ui::Pointer& p, Vec2) override {
+    Vec2 px = p.PositionWithin(*this);
+    ToSurfacePx(px);
+    mux::epoll.Post([w = std::move(LockSurface()), px] {
+      if (!w->surface_handle) return;
+      U32 time = wayland::NowMs();
+      for (auto& p : wayland::Pointer::colony) {
+        if (&p.client != &w->surface_handle->client) continue;
+        p.Motion(time, px.x, px.y);
+        if (p.version >= 5) p.Frame();
+      }
+      wayland::server->FlushAll();
+    });
+  }
+  bool PointerWheel(ui::Pointer& p, float delta) override {
+    if (!ui::RootWidget::kWaylandLock) return false;
+    Vec2 px = p.PositionWithin(*this);
+    if (!ToSurfacePx(px)) return false;  // outside
+    if (auto obj = LockSurface()) {
+      mux::epoll.Post([obj = std::move(obj), delta] {
+        auto* h = obj->surface_handle.Get();
+        if (!h) return;
+        U32 time = wayland::NowMs();
+        float value = -delta * 10.0f;
+        int discrete = -(int)std::lround(delta);
+        for (auto& p : wayland::Pointer::colony) {
+          if (&p.client != &h->client) continue;
+          if (p.version >= 5) {
+            p.AxisSource(wayland::Pointer::AxisSourceWheel);
+            if (discrete != 0) p.AxisDiscrete(wayland::Pointer::AxisVerticalScroll, discrete);
+          }
+          p.Axis(time, wayland::Pointer::AxisVerticalScroll, value);
+          if (p.version >= 5) p.Frame();
+        }
+        wayland::server->FlushAll();
+      });
+    }
+    return true;
+  }
+  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
+
+  void Draw(SkCanvas& canvas) const override {
+    DrawSurfaceImage(canvas, image_, src_crop_, dst_size_, TopLeft());
+  }
+};
+
+// The toy of a mapped toplevel: hand-drawn chrome (title band + frame) around
+// the toplevel surface's content, which it draws and whose child surfaces it
+// hosts (inherited from WaylandSurfaceToy). It also owns all input routing for
+// the window tree: presses, motion, scroll and keys forwarded to the client.
+struct WaylandWindowToy : WaylandSurfaceToy {
+  Str title_;
+  bool client_gone_ = false;
+  bool decorate_ = false;
+  ui::Caret* caret_ = nullptr;  // present while the keyboard flows into the client
+  Optional<ui::Pointer::IconOverride> cursor_override_;
+
+  WaylandWindowToy(ui::Widget* parent, Object& obj) : WaylandSurfaceToy(parent, obj) {
+    PullState();
+  }
+  ~WaylandWindowToy() override {
+    if (caret_) caret_->Release();
+  }
+
+  Ptr<WaylandWindow> LockWindow() const { return LockObject<WaylandWindow>(); }
+
+  void PullState() {
+    PullSurfaceState();
+    auto win = LockWindow();
+    if (!win) return;
+    auto lock = std::lock_guard(win->mutex);
+    title_ = win->title.empty() ? win->app_id : win->title;
+    client_gone_ = win->client_gone;
+    decorate_ = win->server_side_decorated.load(std::memory_order_relaxed);
+  }
+
+  bool Decorated() const { return decorate_ || client_gone_ || !image_; }
+  float Frame() const { return Decorated() ? kFrame : 0; }
+  float TitleH() const { return Decorated() ? kTitleH : 0; }
+
+  // Size of the main (toplevel) surface
+  Vec2 ContentSize() const {
+    return {dst_size_.width() > 0 ? dst_size_.width() * kClientPx : kMinContentW,
+            dst_size_.height() > 0 ? dst_size_.height() * kClientPx : kMinContentH};
+  }
+  Rect ContentRect() const { return Rect::MakeAtZero(ContentSize()); }
+  RRect ContentRRect() const { return RRect::MakeSimple(ContentRect(), kContentRadius); }
+  RRect FrameMidRRect() const { return ContentRRect().Outset(kFrame * 3 / 8); }
+  RRect FrameLightsRRect() const { return ContentRRect().Outset(kFrame * 11 / 16); }
+  RRect FrameOutRRect() const { return ContentRRect().Outset(kFrame); }
+
+  // The content area's top-left, where the toplevel surface (and its children)
+  // sit, below the title band and inside the frame.
+  Vec2 TopLeft() const override { return ContentRect().TopLeftCorner(); }
+
+  SkPath shape;
+
+  static ui::Font& GetFont() {
+    static auto font = ui::Font::MakeV2(ui::Font::GetBelanosimaRegular(), kTitleH);
+    return *font;
+  }
+
+  Tock Tick(time::Timer&) override {
+    PullState();
+    SyncChildren(TopLeft());
+    if (caret_) caret_->shape = FocusCaretShape();
+
+    if (Decorated()) {
+      auto& font = GetFont();
+
+      float w = font.sk_font.measureText(title_.c_str(), title_.size(), SkTextEncoding::kUTF8);
+      SkPath title_fill;
+      SkTextUtils::GetPath(title_.c_str(), title_.size(), SkTextEncoding::kUTF8, -w / 2, 0,
+                           font.sk_font, &title_fill);
+
+      SkPaint paint;
+      paint.setStyle(SkPaint::kStroke_Style);
+      // 0.3 is larger than 0.2 used for the real outline - this is to help in filling the holes in
+      // the text
+      paint.setStrokeWidth(kTitleH * 0.3 / font.font_scale);
+      SkPath title_outline = skpathutils::FillPathWithPaint(title_fill, paint);
+      auto uni = Op(title_fill, title_outline, SkPathOp::kUnion_SkPathOp);
+      if (uni) {
+        shape = *uni;
+      }
+      auto shift =
+          Op(shape, shape.makeOffset(0, 2_mm / font.font_scale), SkPathOp::kUnion_SkPathOp);
+      if (shift) {
+        shape = *shift;
+      }
+      auto frame = FrameOutRRect();
+      auto matrix = SkMatrix::ScaleTranslate(font.font_scale, -font.font_scale, 0, frame.rect.top);
+      auto with_frame =
+          Op(shape.makeTransform(matrix), SkPath::RRect(frame), SkPathOp::kUnion_SkPathOp);
+      if (with_frame) {
+        shape = *with_frame;
+      }
+    } else {
+      shape = SkPath::Rect(ContentRect());
+    }
+    return Tock::Draw;
+  }
+
+  void ApplyCursor(ui::Pointer& p) {
+    if (p.hover.Get() != this) {
+      cursor_override_.reset();
+      return;
+    }
+    if (auto obj = LockWindow()) {
+      ui::Pointer::IconType want = ShapeToIcon(obj->cursor_shape.load(std::memory_order_relaxed));
+      if (cursor_override_ && cursor_override_->GetIconType() == want) return;
+      cursor_override_.emplace(p, want);
+    }
+  }
+
+  void PointerHover(ui::Pointer& p) override {
+    WaylandSurfaceToy::PointerHover(p);
+    ApplyCursor(p);
+  }
+  void PointerUnhover(ui::Pointer& p) override {
+    WaylandSurfaceToy::PointerUnhover(p);
+    cursor_override_.reset();
+  }
+  void PointerMove(ui::Pointer& p, Vec2 pos) override {
+    WaylandSurfaceToy::PointerMove(p, pos);
+    ApplyCursor(p);
+  }
+
+  bool CenteredAtZero() const override { return true; }
+
+  // ---- client input routing (the content area belongs to the client) ----
+
+  SkPath FocusCaretShape() const {
+    if (!Decorated()) return SkPath();
+    auto [w, h] = ContentSize().xy;
+    float band_bottom = h / 2 - kTitleH;
+    return SkPath::Rect(
+        Rect{-w / 2 + 1.5_mm, band_bottom + 1.1_mm, w / 2 - 6_mm, band_bottom + 1.9_mm});
+  }
+
+  void FocusClient(ui::Pointer& p) {
+    if (caret_ || !p.keyboard) return;
+    auto [w, h] = ContentSize().xy;
+    caret_ = &p.keyboard->RequestCaret(*this, Vec2(-w / 2 + Frame(), -h / 2 + Frame()));
+    caret_->shape = FocusCaretShape();
+    if (auto win = LockWindow()) wayland::server->SendKeyboardEnter(*win);
+    WakeAnimation();
+  }
+
+  void ReleaseCaret(ui::Caret&) override {
+    caret_ = nullptr;
+    if (auto win = LockWindow()) wayland::server->SendKeyboardLeave(*win);
+    WakeAnimation();
+  }
+
+  void ForwardKey(ui::Key key, bool pressed) {
+#if defined(__linux__)
+    uint32_t keycode = (uint32_t)x11::KeyToX11KeyCode(key.physical);
+    if (keycode <= 8) return;
+    if (auto win = LockWindow()) {
+      // Wayland keyboards speak evdev; X11 keycodes are evdev + 8.
+      wayland::server->SendKey(*win, keycode - 8, pressed, key.ctrl, key.alt, key.shift,
+                               key.windows);
+    }
+#endif
+  }
+  void KeyDown(ui::Caret&, ui::Key key) override { ForwardKey(key, true); }
+  void KeyUp(ui::Caret&, ui::Key key) override { ForwardKey(key, false); }
+
+  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
+
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    ObjectToy::VisitOptions(visitor);
+    DecorationMenuOption deco{owner.Copy<WaylandWindow>()};
+    visitor(deco);
+  }
+
+  SkPath Shape() const override { return shape; }
+  Optional<Rect> TextureBounds() const override { return shape.getBounds(); }
+
+  void Draw(SkCanvas& canvas) const override {
+    if (Decorated()) {
+      auto frame_inner = ContentRRect();
+      auto frame_mid = FrameMidRRect();
+      auto frame_outer = FrameOutRRect();
+      auto lights_rrect = FrameLightsRRect();
+
+      auto& font = GetFont();
+
+      float w = font.MeasureText(title_);
+
+      float one_pixel = 1.0f / canvas.getTotalMatrix().getScaleX();
+
+      canvas.save();
+      canvas.translate(-w / 2, frame_outer.rect.top - kTitleH * 0.1);
+      SkPaint title_side_paint;
+      title_side_paint.setColor("#3a2021"_color);
+      title_side_paint.setStyle(SkPaint::kStrokeAndFill_Style);
+      title_side_paint.setStrokeWidth(kTitleH * 0.2 / GetFont().font_scale);
+      font.DrawText(canvas, title_, title_side_paint);
+      canvas.restore();
+
+      SkPaint flat_border_paint;
+      flat_border_paint.setColor("#9b252a"_color);
+      canvas.drawDRRect(frame_outer, frame_mid, flat_border_paint);
+
+      canvas.save();
+      canvas.translate(-w / 2, frame_outer.rect.top);
+      SkPaint text_outline_paint;
+      text_outline_paint.setColor(flat_border_paint.getColor());
+      text_outline_paint.setStyle(SkPaint::kStrokeAndFill_Style);
+      text_outline_paint.setStrokeWidth(kTitleH * 0.2 / font.font_scale);
+      font.DrawText(canvas, title_, text_outline_paint);
+      canvas.restore();
+
+      SkPaint bevel_border_paint;
+      bevel_border_paint.setColor("#7d2627"_color);
+      SetRRectShader(bevel_border_paint, frame_outer, "#3a2021"_color4f, "#7e2627"_color4f,
+                     "#d86355"_color4f);
+
+      canvas.drawDRRect(frame_mid.Outset(one_pixel), frame_inner.Outset(-one_pixel),
+                        bevel_border_paint);
+      canvas.save();
+      canvas.clipRRect(frame_inner);
+      DrawSurfaceImage(canvas, image_, src_crop_, dst_size_, TopLeft());
+      canvas.restore();
+
+      {  // Lights
+
+        constexpr int kNumLights = 4 * 6;
+        Vec2 light_positions[kNumLights];
+        lights_rrect.EquidistantPoints(light_positions);
+        Vec2 center{};
+        constexpr float kLightRange = 5_mm;
+        constexpr float kLightRadius = 1_mm;
+
+        SkColor4f bulb_colors[] = {
+            "#ffffa2"_color4f,  // light center
+            "#ffff70"_color4f,  // light mid
+            "#ffff93"_color4f,  // outer light edge (faint yellow)
+        };
+        SkPaint bulb_paint;
+        bulb_paint.setShader(SkShaders::RadialGradient(
+            center, kLightRadius,
+            SkGradient{SkGradient::Colors{bulb_colors, SkTileMode::kClamp}, {}}));
+
+        SkColor4f glow_colors[] = {
+            "#5b0e00"_color4f,    // shadow
+            "#5b0e00"_color4f,    // shadow
+            "#ec4329"_color4f,    // warm red
+            "#ec432980"_color4f,  // half-transparent warm red
+            "#ec432900"_color4f,  // transparent warm red
+        };
+        SkPaint glow_paint;
+        float glow_positions[] = {0, kLightRadius / kLightRange, kLightRadius * 1.1 / kLightRange,
+                                  kLightRadius * 2 / kLightRange, 1};
+        glow_paint.setShader(SkShaders::RadialGradient(
+            center, kLightRange,
+            SkGradient{SkGradient::Colors{glow_colors, glow_positions, SkTileMode::kClamp}, {}}));
+        canvas.save();
+        canvas.clipRRect(frame_outer);
+        canvas.clipRRect(frame_mid, SkClipOp::kDifference);
+        for (int i = 0; i < kNumLights; ++i) {
+          canvas.save();
+          canvas.translate(light_positions[i].x, light_positions[i].y);
+          canvas.drawCircle(0, 0, kLightRange, glow_paint);
+          canvas.drawCircle(0, 0, kLightRadius, bulb_paint);
+          canvas.restore();
+        }
+        canvas.restore();
+      }
+
+      SkPaint title_paint;
+      title_paint.setColor("#e7e5cd"_color);
+      canvas.save();
+      canvas.translate(-w / 2, frame_outer.rect.top);
+      font.DrawText(canvas, title_, title_paint);
+      canvas.restore();
+    } else {
+      DrawSurfaceImage(canvas, image_, src_crop_, dst_size_, TopLeft());
+    }
+  }
+};
+
+uint32_t EvdevButtonCode(ui::ActionTrigger btn) {
+  using ui::PointerButton;
+  switch ((PointerButton)btn) {
+    case PointerButton::Left:
+      return 0x110;
+    case PointerButton::Right:
+      return 0x111;
+    case PointerButton::Middle:
+      return 0x112;
+    default:
+      return 0;
+  }
+}
+
+void WaylandSurfaceToy::FocusWindow(ui::Pointer& p) {
+  for (ui::Widget* w = this; w; w = w->parent)
+    if (auto* wt = dynamic_cast<WaylandWindowToy*>(w)) {
+      wt->FocusClient(p);
+      return;
+    }
+}
+
+// Held while a button initiated over a surface is down: routes press, motion and
+// release to that surface's client (with the keyboard going to the toplevel)
+// instead of dragging the window object.
+struct ClientInputAction : Action {
+  WaylandSurfaceToy& toy;
+  uint32_t button;
+  ClientInputAction(ui::Pointer& p, WaylandSurfaceToy& toy, uint32_t button)
+      : Action(p), toy(toy), button(button) {
+    toy.FocusWindow(p);
+
+    if (auto obj = toy.LockSurface()) {
+      mux::epoll.Post([obj = std::move(obj), button] {
+        auto* h = obj->surface_handle.Get();
+        if (h == nullptr) return;
+        if (!(h->xdg && h->xdg->popup))
+          if (wayland::XdgToplevel* t = h->OwningToplevel())
+            if (t->xdg)
+              if (wayland::XdgPopup* top = t->xdg->TopmostPopup()) {
+                top->PopupDone();
+                wayland::server->FlushAll();
+                return;
+              }
+        U32 time = wayland::NowMs();
+        for (auto& p : wayland::Pointer::colony) {
+          if (&p.client != &h->client) continue;
+          p.Button(wayland::server->serial++, time, button, wayland::Pointer::ButtonStatePressed);
+          if (p.version >= 5) p.Frame();
+        }
+        wayland::server->FlushAll();
+      });
+    }
+  }
+  void Update() override {}
+  ~ClientInputAction() override {
+    if (auto obj = toy.LockSurface()) {
+      mux::epoll.Post([obj = std::move(obj), button = button] {
+        auto* h = obj->surface_handle.Get();
+        if (h == nullptr) return;
+        U32 time = wayland::NowMs();
+        for (auto& p : wayland::Pointer::colony) {
+          if (&p.client != &h->client) continue;
+          p.Button(wayland::server->serial++, time, button, wayland::Pointer::ButtonStateReleased);
+          if (p.version >= 5) p.Frame();
+        }
+        wayland::server->FlushAll();
+      });
+    }
+  }
+};
+
+static bool ForwardsToClient(ui::ActionTrigger btn) {
+  return ui::RootWidget::kWaylandLock || (ui::PointerButton)btn == ui::PointerButton::Left;
+}
+
+std::unique_ptr<Action> WaylandSurfaceToy::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
+  if (ForwardsToClient(btn))
+    if (uint32_t code = EvdevButtonCode(btn))
+      return std::make_unique<ClientInputAction>(p, *this, code);
+  return ObjectToy::FindAction(p, btn);
+}
+
+std::unique_ptr<Action> WaylandWindowToy::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
+  if (ForwardsToClient(btn)) {
+    if (uint32_t code = EvdevButtonCode(btn)) {
+      Vec2 px = p.PositionWithin(*this);
+      bool inside = ToSurfacePx(px);
+      if (inside) return std::make_unique<ClientInputAction>(p, *this, code);
+    }
+  }
+  // Title bar and frame: the standard object behaviors (drag, menu).
+  return ObjectToy::FindAction(p, btn);
+}
+
+std::unique_ptr<ObjectToy> WaylandSurface::MakeToy(ui::Widget* parent) {
+  return std::make_unique<WaylandSurfaceToy>(parent, *this);
+}
+
+std::unique_ptr<ObjectToy> WaylandWindow::MakeToy(ui::Widget* parent) {
+  return std::make_unique<WaylandWindowToy>(parent, *this);
+}
+
+}  // namespace automat::library

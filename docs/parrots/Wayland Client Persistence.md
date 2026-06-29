@@ -13,7 +13,7 @@ cloning a window means.
 
 This document lays out the options that were considered, their entailments,
 and which one Automat implements today. The implementation lives in
-`src/library_wayland_window.*` (recipe storage, respawn flag) and
+`src/wayland.hpp` (the window object's recipe storage and respawn flag) and
 `src/wayland.cpp` (respawn and adoption in `UIFrame`).
 
 ## Option 1: Recipe — save the argv, re-run it (implemented)

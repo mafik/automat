@@ -12,8 +12,8 @@ import src
 if sys.platform == 'linux':
   generated_cpp = fs_utils.generated_dir / 'wayland_generated.cpp'
   generated_hpp = fs_utils.generated_dir / 'wayland_generated.hpp'
-  wayland_hpp = fs_utils.src_dir / 'wayland.hpp'
-  wayland_hpp_fixed = fs_utils.src_dir / 'wayland.hpp.fixed'
+  wayland_hpp = fs_utils.src_dir / 'wayland_protocol.hpp'
+  wayland_hpp_fixed = fs_utils.src_dir / 'wayland_protocol.hpp.fixed'
   xml_dir = fs_utils.src_dir / 'wayland'
 
   TYPE_MAP = {
@@ -344,7 +344,7 @@ if sys.platform == 'linux':
         print(line, file=out)
       w('// SPDX-FileCopyrightText: Copyright 2026 Automat Authors')
       w('// SPDX-License-Identifier: MIT')
-      w('#include "../../src/wayland.hpp"\n')
+      w('#include "../../src/wayland_protocol.hpp"\n')
       w('#include <cstring>')
       w('#include <utility>\n')
       w('namespace automat::wayland {')

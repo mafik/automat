@@ -158,7 +158,7 @@ int Main() {
     ERROR << "Couldn't start the epoll thread: " << status;
     status.Reset();
   }
-  wayland::server = wayland::MakeServer(mux::epoll, status);
+  wayland::Start(mux::epoll, status);
   if (!OK(status)) {
     ERROR << "Couldn't start the Wayland compositor: " << status;
     status.Reset();
@@ -197,7 +197,7 @@ int Main() {
   root_widget.reset();
 
 #if defined(__linux__)
-  wayland::server.reset();
+  wayland::Stop();
 #endif
 
   vm.root_board.reset();

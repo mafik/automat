@@ -8,9 +8,10 @@ object connect to Automat's socket, and every window they map becomes a
 like any other object. This turns external programs into board citizens
 instead of things that live outside the canvas.
 
-Code map: `src/wayland.hpp` (the interface definitions and the compositor's public surface),
-`src/wayland.cpp` (the protocol runtime and the compositor proper),
-`src/library_wayland_window.{hpp,cpp}` (the board object and its toy),
+Code map: `src/wayland.hpp` (the public surface: the board window object and the four compositor
+lifecycle calls), `src/wayland_protocol.hpp` (the protocol interface definitions, `Server` and
+`Client`, included only by the implementation and the generated dispatcher),
+`src/wayland.cpp` (the protocol runtime, the compositor proper, and the board object with its toy),
 `src/wayland.py` (protocol code generation and validation),
 `build/generated/wayland_generated.{hpp,cpp}` (generated forward declarations and wire code).
 
@@ -18,13 +19,13 @@ Code map: `src/wayland.hpp` (the interface definitions and the compositor's publ
 
 The compositor speaks the Wayland wire protocol directly; there is no libwayland and no
 third-party scanner. Each Wayland interface is one plain `struct Interface : Common` in the
-hand-written `src/wayland.hpp`.
+hand-written `src/wayland_protocol.hpp`.
 
 `src/wayland.py` owns the half of each struct that follows mechanically from the protocol XML -
 the request and event declarations, the enums, the accounting metadata - and emits it as a block
 fenced by `clang-format off/on: generated <Interface> from <xml>` markers. On build it
-re-derives that text and compares it to `src/wayland.hpp` exactly; a mismatch fails the build and
-writes `src/wayland.hpp.fixed` (the generated blocks corrected and any missing interface added in
+re-derives that text and compares it to `src/wayland_protocol.hpp` exactly; a mismatch fails the build and
+writes `src/wayland_protocol.hpp.fixed` (the generated blocks corrected and any missing interface added in
 dependency order, every hand-written field kept), which the developer diffs in. It also writes
 `build/generated/wayland_generated.{hpp,cpp}`: the interface forward declarations and the wire
 code - event encoders and the dispatch that reads a request, validates its new-id arguments,
@@ -43,7 +44,7 @@ shutdown additionally unlinks both the socket and its lock file in `~Server`. Wi
 sockets would pile up.
 
 Per-interface storage is the point of the bespoke stack. Below its generated block each
-interface struct in `src/wayland.hpp` carries its own hand-written fields, so a surface's role
+interface struct in `src/wayland_protocol.hpp` carries its own hand-written fields, so a surface's role
 chain, a buffer's planes, or a params object's accumulated plane fds live on the object itself. Cross-object links are typed
 pointers, each nulled in the peer's destructor; object lookup goes through the client's
 id table or the per-type colony that owns every live object of a type. This avoids the
@@ -173,7 +174,7 @@ area. Because both the window's board size and its surface-local input mapping
 derive from the surface size, a cropped or scaled window drags, seats and routes
 pointer events correctly with no further change. Resolution and the protocol are
 in `src/wayland.cpp` (`ResolveGeometry`, the `Viewport`/`Viewporter` handlers);
-the sampling is in `src/library_wayland_window.cpp`.
+the sampling is in `src/wayland.cpp`.
 
 A commit that changes only the viewport while attaching no new buffer does not
 resize the window until the next buffer arrives, because resolution runs on the
@@ -223,7 +224,7 @@ keyboard focus.
 The tree, the sync/desync rules and stacking are in `src/wayland.cpp`
 (`DoCommit`, `ApplyChildren`, `UpdateSurfaceNode`, `SyncWindowTree`, the
 `Subcompositor`/`Subsurface` handlers); the per-surface objects, their toys, the
-texture drawing and the per-surface input routing are in `src/library_wayland_window.cpp`.
+texture drawing and the per-surface input routing are in `src/wayland.cpp`.
 
 ## Popups (menus)
 
@@ -249,7 +250,7 @@ keyboard focus so the menu can be driven from the keyboard.
 
 The positioner is computed and encoded in `src/wayland.cpp`
 (`ResolvePopup`, `UpdateSurfaceNode`, `XdgSurface::OnGetPopup`) and resolved against the
-viewport in `src/library_wayland_window.cpp` (`PlacePopup`), which flips then slides a popup
+viewport in `src/wayland.cpp` (`PlacePopup`), which flips then slides a popup
 that would fall off screen, honoring the client's permitted adjustments so a menu
 opened near a screen edge stays usable.
 

@@ -80,10 +80,16 @@ void Pointer::UpdatePath() {
 
   FillPath(*this, root_widget);
 
-  if (path.empty()) {
-    hover = nullptr;
-  } else {
-    hover = path.back();
+  auto* old_hover = hover.Get();
+  auto* new_hover = path.empty() ? nullptr : path.back().Get();
+  if (old_hover != new_hover) {
+    if (old_hover) {
+      old_hover->PointerUnhover(*this);
+    }
+    hover = new_hover;
+    if (new_hover) {
+      new_hover->PointerHover(*this);
+    }
   }
 
   // Try to get references to all widgets in the path - during last & this frame.

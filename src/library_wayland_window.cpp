@@ -332,24 +332,75 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
   // subsurface); walks up to the owning WaylandWindowToy. Defined below.
   void FocusWindow(ui::Pointer& p);
 
-  void PointerOver(ui::Pointer& p) override {
+  void PointerHover(ui::Pointer& p) override {
     Vec2 px = p.PositionWithin(*this);
     ToSurfacePx(px);
-    if (auto s = LockSurface()) wayland::server->SendPointerEnter(*s, px.x, px.y);
+
+    if (auto w = LockSurface()) {
+      mux::epoll.Post([w = std::move(w), px] {
+        if (!w->surface_handle) return;
+        for (auto& wp : wayland::Pointer::colony) {
+          if (&wp.client != &w->surface_handle->client) continue;
+          wp.Enter(wayland::server->serial++, *w->surface_handle, px.x, px.y);
+          if (wp.version >= 5) wp.Frame();
+        }
+        wayland::server->FlushAll();
+      });
+    }
     StartWatching(p);
   }
-  void PointerLeave(ui::Pointer& p) override {
+  void PointerUnhover(ui::Pointer& p) override {
     StopWatching(p);
-    if (auto s = LockSurface()) wayland::server->SendPointerLeave(*s);
+    if (auto w = LockSurface()) {
+      mux::epoll.Post([w = std::move(w)] {
+        if (!w->surface_handle) return;
+        for (auto& p : wayland::Pointer::colony) {
+          if (&p.client != &w->surface_handle->client) continue;
+          p.Leave(wayland::server->serial++, *w->surface_handle);
+          if (p.version >= 5) p.Frame();
+        }
+        wayland::server->FlushAll();
+      });
+    }
   }
+
   void PointerMove(ui::Pointer& p, Vec2) override {
     Vec2 px = p.PositionWithin(*this);
     ToSurfacePx(px);
-    if (auto s = LockSurface()) wayland::server->SendPointerMotion(*s, px.x, px.y);
+    mux::epoll.Post([w = std::move(LockSurface()), px] {
+      if (!w->surface_handle) return;
+      U32 time = wayland::NowMs();
+      for (auto& p : wayland::Pointer::colony) {
+        if (&p.client != &w->surface_handle->client) continue;
+        p.Motion(time, px.x, px.y);
+        if (p.version >= 5) p.Frame();
+      }
+      wayland::server->FlushAll();
+    });
   }
   bool PointerWheel(ui::Pointer& p, float delta) override {
     if (!ui::RootWidget::kWaylandLock) return false;
-    if (auto s = LockSurface()) wayland::server->SendPointerAxis(*s, delta);
+    Vec2 px = p.PositionWithin(*this);
+    if (!ToSurfacePx(px)) return false;  // outside
+    if (auto obj = LockSurface()) {
+      mux::epoll.Post([obj = std::move(obj), delta] {
+        auto* h = obj->surface_handle.Get();
+        if (!h) return;
+        U32 time = wayland::NowMs();
+        float value = -delta * 10.0f;
+        int discrete = -(int)std::lround(delta);
+        for (auto& p : wayland::Pointer::colony) {
+          if (&p.client != &h->client) continue;
+          if (p.version >= 5) {
+            p.AxisSource(wayland::Pointer::AxisSourceWheel);
+            if (discrete != 0) p.AxisDiscrete(wayland::Pointer::AxisVerticalScroll, discrete);
+          }
+          p.Axis(time, wayland::Pointer::AxisVerticalScroll, value);
+          if (p.version >= 5) p.Frame();
+        }
+        wayland::server->FlushAll();
+      });
+    }
     return true;
   }
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
@@ -368,9 +419,7 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   bool client_gone_ = false;
   bool decorate_ = false;
   ui::Caret* caret_ = nullptr;  // present while the keyboard flows into the client
-  ui::Pointer* hover_pointer_ = nullptr;
   Optional<ui::Pointer::IconOverride> cursor_override_;
-  ui::Pointer::IconType cursor_icon_ = ui::Pointer::kIconArrow;
 
   WaylandWindowToy(ui::Widget* parent, Object& obj) : WaylandSurfaceToy(parent, obj) {
     PullState();
@@ -420,7 +469,6 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   Tock Tick(time::Timer&) override {
     PullState();
     SyncChildren(TopLeft());
-    ApplyCursor();  // the client may have changed its cursor while the pointer sat still
     if (caret_) caret_->shape = FocusCaretShape();
 
     if (Decorated()) {
@@ -459,21 +507,29 @@ struct WaylandWindowToy : WaylandSurfaceToy {
     return Tock::Draw;
   }
 
-  void ApplyCursor() {
-    if (!hover_pointer_) return;
-    Vec2 px = hover_pointer_->PositionWithin(*this);
-    bool inside = ToSurfacePx(px);
-    if (!inside) {
+  void ApplyCursor(ui::Pointer& p) {
+    if (p.hover.Get() != this) {
       cursor_override_.reset();
       return;
     }
-    auto win = LockWindow();
-    ui::Pointer::IconType want =
-        win ? ShapeToIcon(win->cursor_shape.load(std::memory_order_relaxed))
-            : ui::Pointer::kIconArrow;
-    if (cursor_override_ && cursor_icon_ == want) return;
-    cursor_icon_ = want;
-    cursor_override_.emplace(*hover_pointer_, want);
+    if (auto obj = LockWindow()) {
+      ui::Pointer::IconType want = ShapeToIcon(obj->cursor_shape.load(std::memory_order_relaxed));
+      if (cursor_override_ && cursor_override_->GetIconType() == want) return;
+      cursor_override_.emplace(p, want);
+    }
+  }
+
+  void PointerHover(ui::Pointer& p) override {
+    WaylandSurfaceToy::PointerHover(p);
+    ApplyCursor(p);
+  }
+  void PointerUnhover(ui::Pointer& p) override {
+    WaylandSurfaceToy::PointerUnhover(p);
+    cursor_override_.reset();
+  }
+  void PointerMove(ui::Pointer& p, Vec2 pos) override {
+    WaylandSurfaceToy::PointerMove(p, pos);
+    ApplyCursor(p);
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -516,35 +572,6 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   }
   void KeyDown(ui::Caret&, ui::Key key) override { ForwardKey(key, true); }
   void KeyUp(ui::Caret&, ui::Key key) override { ForwardKey(key, false); }
-
-  void PointerOver(ui::Pointer& p) override {
-    Vec2 px = p.PositionWithin(*this);
-    ToSurfacePx(px);
-    if (auto w = LockWindow()) wayland::server->SendPointerEnter(*w, px.x, px.y);
-    StartWatching(p);
-    hover_pointer_ = &p;
-    ApplyCursor();
-  }
-  void PointerLeave(ui::Pointer& p) override {
-    StopWatching(p);
-    cursor_override_.reset();
-    hover_pointer_ = nullptr;
-    if (auto w = LockWindow()) wayland::server->SendPointerLeave(*w);
-  }
-  void PointerMove(ui::Pointer& p, Vec2) override {
-    Vec2 px = p.PositionWithin(*this);
-    ToSurfacePx(px);
-    if (auto w = LockWindow()) wayland::server->SendPointerMotion(*w, px.x, px.y);
-    ApplyCursor();
-  }
-
-  bool PointerWheel(ui::Pointer& p, float delta) override {
-    if (!ui::RootWidget::kWaylandLock) return false;
-    Vec2 px = p.PositionWithin(*this);
-    if (!ToSurfacePx(px)) return false;  // outside
-    if (auto w = LockWindow()) wayland::server->SendPointerAxis(*w, delta);
-    return true;
-  }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
 
@@ -692,20 +719,44 @@ struct ClientInputAction : Action {
   ClientInputAction(ui::Pointer& p, WaylandSurfaceToy& toy, uint32_t button)
       : Action(p), toy(toy), button(button) {
     toy.FocusWindow(p);
-    Vec2 px = p.PositionWithin(toy);
-    toy.ToSurfacePx(px);
-    if (auto s = toy.LockSurface()) {
-      wayland::server->SendPointerMotion(*s, px.x, px.y);
-      wayland::server->SendPointerButton(*s, button, true);
+
+    if (auto obj = toy.LockSurface()) {
+      mux::epoll.Post([obj = std::move(obj), button] {
+        auto* h = obj->surface_handle.Get();
+        if (h == nullptr) return;
+        if (!(h->xdg && h->xdg->popup))
+          if (wayland::XdgToplevel* t = h->OwningToplevel())
+            if (t->xdg)
+              if (wayland::XdgPopup* top = t->xdg->TopmostPopup()) {
+                top->PopupDone();
+                wayland::server->FlushAll();
+                return;
+              }
+        U32 time = wayland::NowMs();
+        for (auto& p : wayland::Pointer::colony) {
+          if (&p.client != &h->client) continue;
+          p.Button(wayland::server->serial++, time, button, wayland::Pointer::ButtonStatePressed);
+          if (p.version >= 5) p.Frame();
+        }
+        wayland::server->FlushAll();
+      });
     }
   }
-  void Update() override {
-    Vec2 px = pointer.PositionWithin(toy);
-    toy.ToSurfacePx(px);
-    if (auto s = toy.LockSurface()) wayland::server->SendPointerMotion(*s, px.x, px.y);
-  }
+  void Update() override {}
   ~ClientInputAction() override {
-    if (auto s = toy.LockSurface()) wayland::server->SendPointerButton(*s, button, false);
+    if (auto obj = toy.LockSurface()) {
+      mux::epoll.Post([obj = std::move(obj), button = button] {
+        auto* h = obj->surface_handle.Get();
+        if (h == nullptr) return;
+        U32 time = wayland::NowMs();
+        for (auto& p : wayland::Pointer::colony) {
+          if (&p.client != &h->client) continue;
+          p.Button(wayland::server->serial++, time, button, wayland::Pointer::ButtonStateReleased);
+          if (p.version >= 5) p.Frame();
+        }
+        wayland::server->FlushAll();
+      });
+    }
   }
 };
 

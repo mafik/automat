@@ -16,6 +16,7 @@
 #include "base.hpp"
 #include "str.hpp"
 #include "vec.hpp"
+#include "wayland.hpp"
 
 namespace automat::library {
 
@@ -25,6 +26,7 @@ namespace automat::library {
 // TODO: this smells - get rid of this
 Vec2 WindowBoardSize(int width, int height);
 
+// Kept alive by the wayland::Surface
 struct WaylandSurface : Object {
   mutable std::mutex mutex;  // guards everything below
 
@@ -36,9 +38,9 @@ struct WaylandSurface : Object {
   // toy maps it to its Shape, so Automat's own hit-testing routes input to the
   // right surface and the compositor does no hit-testing of its own.
   SkPath input_region;
-  // The protocol wl_surface this object mirrors (a wl_resource*); the wayland
-  // thread resolves it to route input to this surface's client. Null until mapped.
-  std::atomic<void*> surface_handle{nullptr};
+
+  // Accessed only from the Wayland (epoll) thread.
+  MortalPtr<wayland::Surface> surface_handle;
 
   // A child surface and its placement within this surface (client pixels). The
   // placement lives on the edge, not the child, so the toy reads it and the

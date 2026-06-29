@@ -288,12 +288,10 @@ bool Server::Running() { return true; }
 using library::WaylandSurface;
 using library::WaylandWindow;
 
-namespace {
-
 // Walks up to the toplevel owning this surface's window, following subsurface- and popup-parent
 // links, or null if the surface is not part of a toplevel tree.
-XdgToplevel* OwningToplevel(Surface& surf) {
-  for (Surface* p = &surf; p;) {
+XdgToplevel* Surface::OwningToplevel() {
+  for (Surface* p = this; p;) {
     if (p->xdg && p->xdg->toplevel) return p->xdg->toplevel;
     if (p->xdg && p->xdg->popup && p->xdg->popup->parent) {
       p = p->xdg->popup->parent->surface;
@@ -304,11 +302,13 @@ XdgToplevel* OwningToplevel(Surface& surf) {
   return nullptr;
 }
 
-Ptr<WaylandSurface> GetOrCreateObject(Surface& surf) {
-  if (Ptr<ReferenceCounted> p = surf.object.Lock()) return p.Cast<WaylandSurface>();
-  auto created = MAKE_PTR(WaylandSurface);
-  surf.object = created->AcquireWeakPtr();
-  return created;
+namespace {
+
+WaylandSurface* GetOrCreateObject(Surface& surf) {
+  if (surf.object == nullptr) {
+    surf.object = MAKE_PTR(WaylandSurface);
+  }
+  return surf.object.Get<WaylandSurface>();
 }
 
 // Copies a surface's committed texture and input region into its board object. Subsurface and
@@ -321,17 +321,17 @@ void UpdateSurfaceNode(WaylandSurface& object, Surface& surf) {
       seen_self = true;
       continue;
     }
-    Ptr<WaylandSurface> child = GetOrCreateObject(*entry);
+    WaylandSurface* child = GetOrCreateObject(*entry);
     UpdateSurfaceNode(*child, *entry);
-    (seen_self ? above : below).push_back({std::move(child), entry->as_subsurface->pos});
+    (seen_self ? above : below).push_back({child->AcquirePtr(), entry->as_subsurface->pos});
   }
   if (surf.xdg) {
     for (XdgPopup* pp : surf.xdg->child_popups) {
       if (!pp->xdg || !pp->xdg->surface) continue;
-      Ptr<WaylandSurface> child = GetOrCreateObject(*pp->xdg->surface);
+      WaylandSurface* child = GetOrCreateObject(*pp->xdg->surface);
       UpdateSurfaceNode(*child, *pp->xdg->surface);
       SkIPoint base = surf.xdg->geo.topLeft();
-      above.push_back({std::move(child), base + pp->geo.topLeft(), true, base + pp->flipped,
+      above.push_back({child->AcquirePtr(), base + pp->geo.topLeft(), true, base + pp->flipped,
                        pp->flip_x, pp->flip_y, pp->slide_x, pp->slide_y});
     }
   }
@@ -348,7 +348,7 @@ void UpdateSurfaceNode(WaylandSurface& object, Surface& surf) {
     object.above = std::move(above);
     object.WakeToys();
   }
-  object.surface_handle.store(&surf);
+  object.surface_handle = &surf;
 }
 
 void UnmapToplevel(XdgToplevel& t) {
@@ -375,7 +375,7 @@ void UnmapToplevel(XdgToplevel& t) {
 void UpdateDecoration(XdgToplevel&);  // defined below
 
 void ApplyAndPublish(Surface& surf) {
-  XdgToplevel* owner = OwningToplevel(surf);
+  XdgToplevel* owner = surf.OwningToplevel();
   if (!owner) return;
   XdgToplevel& t = *owner;
   Server& s = t.client.server;
@@ -621,34 +621,9 @@ void DetachSubsurface(Subsurface& sub) {
   if (parent) ApplyAndPublish(*parent);
 }
 
-uint32_t NowMs() {
-  timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (uint32_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
-}
-
-// The surface/toplevel handles the toy hands back are raw protocol pointers; validate them against
-// the colony (the live-object registry) before use, since the object may have been destroyed
-// between the toy reading the handle and this running.
-bool LiveSurface(Surface* s) {
-  for (Surface& x : Surface::colony)
-    if (&x == s) return true;
-  return false;
-}
 XdgToplevel* LiveToplevel(XdgToplevel* t) {
   for (XdgToplevel& x : XdgToplevel::colony)
     if (&x == t) return &x;
-  return nullptr;
-}
-
-// The deepest open popup under `xdg`, or null; a press outside it dismisses it.
-XdgPopup* TopmostPopup(XdgSurface& xdg) {
-  for (auto it = xdg.child_popups.rbegin(); it != xdg.child_popups.rend(); ++it) {
-    XdgPopup* pp = *it;
-    if (!pp->xdg) continue;
-    if (XdgPopup* deeper = TopmostPopup(*pp->xdg)) return deeper;
-    return pp;
-  }
   return nullptr;
 }
 
@@ -764,6 +739,12 @@ void OfferSelectionTo(Server& s, DataDevice& dev) {
 
 }  // namespace
 
+uint32_t NowMs() {
+  timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (uint32_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+}
+
 Surface::~Surface() {
   ReleaseHeldDmabuf(*this);  // hand any zero-copy buffer back so the client may reuse it
   if (as_subsurface) DetachSubsurface(*as_subsurface);
@@ -777,7 +758,7 @@ XdgPopup::~XdgPopup() {
   if (s.grabbing_popup == this) {
     Surface* target = nullptr;
     if (parent && parent->surface)
-      if (XdgToplevel* t = OwningToplevel(*parent->surface))
+      if (XdgToplevel* t = parent->surface->OwningToplevel())
         if (t->xdg) target = t->xdg->surface;
     KeyboardFocusTo(s, target);
   }
@@ -1203,6 +1184,16 @@ void XdgSurface::OnGetPopup(XdgPopup& id, XdgSurface* parent, XdgPositioner& pos
   if (parent) parent->child_popups.push_back(&id);
 }
 
+XdgPopup* XdgSurface::TopmostPopup() {
+  for (auto it = child_popups.rbegin(); it != child_popups.rend(); ++it) {
+    XdgPopup* pp = *it;
+    if (!pp->xdg) continue;
+    if (XdgPopup* deeper = pp->xdg->TopmostPopup()) return deeper;
+    return pp;
+  }
+  return nullptr;
+}
+
 void XdgPopup::OnDestroy() {
   if (xdg && !xdg->child_popups.empty())
     client.ProtocolError(id, XdgWmBase::ErrorNotTheTopmostPopup,
@@ -1225,13 +1216,15 @@ void XdgPopup::OnReposition(XdgPositioner& positioner, U32 token) {
 
 void CursorShapeDeviceV1::OnSetShape(U32, enum Shape shape) {
   Server& s = client.server;
-  if (!s.pointer_surface) return;
-  if (XdgToplevel* t = OwningToplevel(*s.pointer_surface))
-    if (Ptr<ReferenceCounted> w = t->window.Lock()) {
-      auto win = w.Cast<WaylandWindow>();
-      win->cursor_shape.store((uint32_t)shape, std::memory_order_relaxed);
-      win->WakeToys();
+  for (auto* handle : client.client_ids) {
+    if (auto* t = dyn_cast_if_present<XdgToplevel>(handle)) {
+      if (Ptr<ReferenceCounted> w = t->window.Lock()) {
+        auto win = w.Cast<WaylandWindow>();
+        win->cursor_shape.store((uint32_t)shape, std::memory_order_relaxed);
+        win->WakeToys();
+      }
     }
+  }
 }
 
 void Seat::OnGetPointer(Pointer& id) { id.version = version; }
@@ -1359,91 +1352,6 @@ void AdvertiseDmabufOnBind(LinuxDmabufV1& obj, U32 version) {
   }
 }
 
-void Server::SendPointerEnter(library::WaylandSurface& ws, float lx, float ly) {
-  auto* h = (Surface*)ws.surface_handle.load();
-  if (!h) return;
-  epoll.Post([this, h, lx, ly] {
-    if (!LiveSurface(h)) return;
-    pointer_surface = h;
-    for (Pointer& p : Pointer::colony) {
-      if (&p.client != &h->client) continue;
-      p.Enter(serial++, *h, lx, ly);
-      if (p.version >= 5) p.Frame();
-    }
-    FlushAll();
-  });
-}
-void Server::SendPointerMotion(library::WaylandSurface& ws, float lx, float ly) {
-  auto* h = (Surface*)ws.surface_handle.load();
-  if (!h) return;
-  epoll.Post([this, h, lx, ly] {
-    if (!LiveSurface(h)) return;
-    U32 time = NowMs();
-    for (Pointer& p : Pointer::colony) {
-      if (&p.client != &h->client) continue;
-      p.Motion(time, lx, ly);
-      if (p.version >= 5) p.Frame();
-    }
-    FlushAll();
-  });
-}
-void Server::SendPointerButton(library::WaylandSurface& ws, uint32_t button, bool pressed) {
-  auto* h = (Surface*)ws.surface_handle.load();
-  if (!h) return;
-  epoll.Post([this, h, button, pressed] {
-    if (!LiveSurface(h)) return;
-    if (pressed && !(h->xdg && h->xdg->popup))
-      if (XdgToplevel* t = OwningToplevel(*h))
-        if (t->xdg)
-          if (XdgPopup* top = TopmostPopup(*t->xdg)) {
-            top->PopupDone();
-            FlushAll();
-            return;
-          }
-    U32 time = NowMs();
-    for (Pointer& p : Pointer::colony) {
-      if (&p.client != &h->client) continue;
-      p.Button(serial++, time, button,
-               pressed ? Pointer::ButtonStatePressed : Pointer::ButtonStateReleased);
-      if (p.version >= 5) p.Frame();
-    }
-    FlushAll();
-  });
-}
-void Server::SendPointerAxis(library::WaylandSurface& ws, float notches_up) {
-  auto* h = (Surface*)ws.surface_handle.load();
-  if (!h) return;
-  epoll.Post([this, h, notches_up] {
-    if (!LiveSurface(h)) return;
-    U32 time = NowMs();
-    float value = -notches_up * 10.0f;  // Wayland's axis is positive-down; our notches positive-up
-    int discrete = -(int)std::lround(notches_up);
-    for (Pointer& p : Pointer::colony) {
-      if (&p.client != &h->client) continue;
-      if (p.version >= 5) {
-        p.AxisSource(Pointer::AxisSourceWheel);
-        if (discrete != 0) p.AxisDiscrete(Pointer::AxisVerticalScroll, discrete);
-      }
-      p.Axis(time, Pointer::AxisVerticalScroll, value);
-      if (p.version >= 5) p.Frame();
-    }
-    FlushAll();
-  });
-}
-void Server::SendPointerLeave(library::WaylandSurface& ws) {
-  auto* h = (Surface*)ws.surface_handle.load();
-  if (!h) return;
-  epoll.Post([this, h] {
-    if (!LiveSurface(h)) return;
-    if (pointer_surface == h) pointer_surface = nullptr;
-    for (Pointer& p : Pointer::colony) {
-      if (&p.client != &h->client) continue;
-      p.Leave(serial++, *h);
-      if (p.version >= 5) p.Frame();
-    }
-    FlushAll();
-  });
-}
 void Server::SendKeyboardEnter(library::WaylandWindow& w) {
   auto* h = (XdgToplevel*)w.toplevel_handle.load();
   if (!h) return;

@@ -100,6 +100,8 @@ struct Pointer {
 
     Pointer& pointer;
     std::list<IconType>::iterator it;
+
+    IconType GetIconType() { return *it; }
   };
 
   IconType Icon() const;

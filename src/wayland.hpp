@@ -112,6 +112,8 @@ struct CursorShapeManagerV1 : Common {
   static constexpr int Version = 2;
   static constexpr Kind Kind = KindCursorShapeManagerV1;
 
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
+
   static Colony<CursorShapeManagerV1> colony;
 
   // Do not use directly. Instead use `ColonyMake`
@@ -143,6 +145,7 @@ struct CursorShapeManagerV1 : Common {
   // object becomes inert.
   void OnGetTabletToolV2(CursorShapeDeviceV1& cursor_shape_device, U32 tablet_tool);
   // clang-format on: generated CursorShapeManagerV1 from cursor-shape-v1.xml
+
 };
 
 // clang-format off: generated CursorShapeDeviceV1 from cursor-shape-v1.xml
@@ -153,6 +156,8 @@ struct CursorShapeManagerV1 : Common {
 struct CursorShapeDeviceV1 : Common {
   static constexpr int Version = 2;
   static constexpr Kind Kind = KindCursorShapeDeviceV1;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<CursorShapeDeviceV1> colony;
 
@@ -299,6 +304,7 @@ struct CursorShapeDeviceV1 : Common {
   // Otherwise the request will be ignored.
   void OnSetShape(U32 serial, enum Shape shape);
   // clang-format on: generated CursorShapeDeviceV1 from cursor-shape-v1.xml
+
 };
 
 // clang-format off: generated LinuxDmabufV1 from linux-dmabuf-v1.xml
@@ -370,6 +376,8 @@ struct CursorShapeDeviceV1 : Common {
 struct LinuxDmabufV1 : Common {
   static constexpr int Version = 5;
   static constexpr Kind Kind = KindLinuxDmabufV1;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<LinuxDmabufV1> colony;
 
@@ -455,6 +463,7 @@ struct LinuxDmabufV1 : Common {
   // get_surface_feedback.
   void Modifier(U32 format, U32 modifier_hi, U32 modifier_lo);
   // clang-format on: generated LinuxDmabufV1 from linux-dmabuf-v1.xml
+
 };
 
 // clang-format off: generated LinuxBufferParamsV1 from linux-dmabuf-v1.xml
@@ -480,6 +489,8 @@ struct LinuxDmabufV1 : Common {
 struct LinuxBufferParamsV1 : Common {
   static constexpr int Version = 5;
   static constexpr Kind Kind = KindLinuxBufferParamsV1;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<LinuxBufferParamsV1> colony;
 
@@ -709,6 +720,8 @@ struct LinuxDmabufFeedbackV1 : Common {
   static constexpr int Version = 5;
   static constexpr Kind Kind = KindLinuxDmabufFeedbackV1;
 
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
+
   static Colony<LinuxDmabufFeedbackV1> colony;
 
   // Do not use directly. Instead use `ColonyMake`
@@ -868,6 +881,7 @@ struct LinuxDmabufFeedbackV1 : Common {
   // This event is tied to a preference tranche, see the tranche_done event.
   void TrancheFlags(enum TrancheFlags flags);
   // clang-format on: generated LinuxDmabufFeedbackV1 from linux-dmabuf-v1.xml
+
 };
 
 // clang-format off: generated Viewporter from viewporter.xml
@@ -883,6 +897,8 @@ struct LinuxDmabufFeedbackV1 : Common {
 struct Viewporter : Common {
   static constexpr int Version = 1;
   static constexpr Kind Kind = KindViewporter;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<Viewporter> colony;
 
@@ -920,6 +936,7 @@ struct Viewporter : Common {
   // protocol error is raised.
   void OnGetViewport(Viewport& id, Surface& surface);
   // clang-format on: generated Viewporter from viewporter.xml
+
 };
 
 // clang-format off: generated Viewport from viewporter.xml
@@ -983,6 +1000,8 @@ struct Viewporter : Common {
 struct Viewport : Common {
   static constexpr int Version = 1;
   static constexpr Kind Kind = KindViewport;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<Viewport> colony;
 
@@ -1061,6 +1080,8 @@ struct Display : Common {
   static constexpr int Version = 1;
   static constexpr Kind Kind = KindDisplay;
 
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
+
   static Colony<Display> colony;
 
   // Do not use directly. Instead use `ColonyMake`
@@ -1138,6 +1159,7 @@ struct Display : Common {
   // it will know that it can safely reuse the object ID.
   void DeleteId(U32 id);
   // clang-format on: generated Display from wayland.xml
+
 };
 
 // clang-format off: generated Registry from wayland.xml
@@ -1167,6 +1189,8 @@ struct Display : Common {
 struct Registry : Common {
   static constexpr int Version = 1;
   static constexpr Kind Kind = KindRegistry;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<Registry> colony;
 
@@ -1205,6 +1229,7 @@ struct Registry : Common {
   // the global going away and a client sending a request to it.
   void GlobalRemove(U32 name);
   // clang-format on: generated Registry from wayland.xml
+
 };
 
 // clang-format off: generated Callback from wayland.xml
@@ -1220,6 +1245,8 @@ struct Callback : Common {
   static constexpr int Version = 1;
   static constexpr Kind Kind = KindCallback;
 
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
+
   static Colony<Callback> colony;
 
   // Do not use directly. Instead use `ColonyMake`
@@ -1233,6 +1260,7 @@ struct Callback : Common {
   // Notify the client when the related request is done.
   void Done(U32 callback_data);
   // clang-format on: generated Callback from wayland.xml
+
 };
 
 // clang-format off: generated Compositor from wayland.xml
@@ -1245,6 +1273,8 @@ struct Callback : Common {
 struct Compositor : Common {
   static constexpr int Version = 6;
   static constexpr Kind Kind = KindCompositor;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<Compositor> colony;
 
@@ -1264,6 +1294,7 @@ struct Compositor : Common {
   // sk the compositor to create a new region.
   void OnCreateRegion(Region& id);
   // clang-format on: generated Compositor from wayland.xml
+
 };
 
 // clang-format off: generated Shm from wayland.xml
@@ -1282,6 +1313,8 @@ struct Compositor : Common {
 struct Shm : Common {
   static constexpr int Version = 2;
   static constexpr Kind Kind = KindShm;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<Shm> colony;
 
@@ -1604,6 +1637,7 @@ struct Shm : Common {
   // argb8888 and xrgb8888.
   void Format(enum Format format);
   // clang-format on: generated Shm from wayland.xml
+
 };
 
 // clang-format off: generated Buffer from wayland.xml
@@ -1628,6 +1662,8 @@ struct Shm : Common {
 struct Buffer : Common {
   static constexpr int Version = 1;
   static constexpr Kind Kind = KindBuffer;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<Buffer> colony;
 
@@ -1690,6 +1726,8 @@ struct Buffer : Common {
 struct DataDevice : Common {
   static constexpr int Version = 3;
   static constexpr Kind Kind = KindDataDevice;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<DataDevice> colony;
 
@@ -1831,6 +1869,7 @@ struct DataDevice : Common {
   // data_offer, if any, upon receiving this event.
   void Selection(struct DataOffer* id);
   // clang-format on: generated DataDevice from wayland.xml
+
 };
 
 // clang-format off: generated DataDeviceManager from wayland.xml
@@ -1850,6 +1889,8 @@ struct DataDevice : Common {
 struct DataDeviceManager : Common {
   static constexpr int Version = 3;
   static constexpr Kind Kind = KindDataDeviceManager;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<DataDeviceManager> colony;
 
@@ -1911,6 +1952,7 @@ struct DataDeviceManager : Common {
   // reate a new data device for a given seat.
   void OnGetDataDevice(DataDevice& id, Seat& seat);
   // clang-format on: generated DataDeviceManager from wayland.xml
+
 };
 
 // clang-format off: generated Shell from wayland.xml
@@ -1929,6 +1971,8 @@ struct DataDeviceManager : Common {
 struct Shell : Common {
   static constexpr int Version = 1;
   static constexpr Kind Kind = KindShell;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<Shell> colony;
 
@@ -1958,6 +2002,7 @@ struct Shell : Common {
   // Only one shell surface can be associated with a given surface.
   void OnGetShellSurface(ShellSurface& id, Surface& surface);
   // clang-format on: generated Shell from wayland.xml
+
 };
 
 // clang-format off: generated ShellSurface from wayland.xml
@@ -1978,6 +2023,8 @@ struct Shell : Common {
 struct ShellSurface : Common {
   static constexpr int Version = 1;
   static constexpr Kind Kind = KindShellSurface;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<ShellSurface> colony;
 
@@ -2236,6 +2283,7 @@ struct ShellSurface : Common {
   // to the client owning the popup surface.
   void PopupDone();
   // clang-format on: generated ShellSurface from wayland.xml
+
 };
 
 // clang-format off: generated Seat from wayland.xml
@@ -2249,6 +2297,8 @@ struct ShellSurface : Common {
 struct Seat : Common {
   static constexpr int Version = 10;
   static constexpr Kind Kind = KindSeat;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<Seat> colony;
 
@@ -2403,6 +2453,8 @@ struct Seat : Common {
 struct Pointer : Common {
   static constexpr int Version = 10;
   static constexpr Kind Kind = KindPointer;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<Pointer> colony;
 
@@ -2827,6 +2879,8 @@ struct Keyboard : Common {
   static constexpr int Version = 10;
   static constexpr Kind Kind = KindKeyboard;
 
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
+
   static Colony<Keyboard> colony;
 
   // Do not use directly. Instead use `ColonyMake`
@@ -3004,6 +3058,8 @@ struct Touch : Common {
   static constexpr int Version = 10;
   static constexpr Kind Kind = KindTouch;
 
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
+
   static Colony<Touch> colony;
 
   // Do not use directly. Instead use `ColonyMake`
@@ -3117,6 +3173,7 @@ struct Touch : Common {
   // orientation reports.
   void Orientation(I32 id, float orientation);
   // clang-format on: generated Touch from wayland.xml
+
 };
 
 // clang-format off: generated Output from wayland.xml
@@ -3132,6 +3189,8 @@ struct Touch : Common {
 struct Output : Common {
   static constexpr int Version = 4;
   static constexpr Kind Kind = KindOutput;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<Output> colony;
 
@@ -3370,6 +3429,7 @@ struct Output : Common {
   // The description event will be followed by a done event.
   void Description(StrView description);
   // clang-format on: generated Output from wayland.xml
+
 };
 
 // clang-format off: generated Region from wayland.xml
@@ -3383,6 +3443,8 @@ struct Output : Common {
 struct Region : Common {
   static constexpr int Version = 1;
   static constexpr Kind Kind = KindRegion;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<Region> colony;
 
@@ -3440,6 +3502,8 @@ struct Subcompositor : Common {
   static constexpr int Version = 1;
   static constexpr Kind Kind = KindSubcompositor;
 
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
+
   static Colony<Subcompositor> colony;
 
   // Do not use directly. Instead use `ColonyMake`
@@ -3493,6 +3557,7 @@ struct Subcompositor : Common {
   // the sub-surface, see the documentation on wl_subsurface interface.
   void OnGetSubsurface(Subsurface& id, Surface& surface, Surface& parent);
   // clang-format on: generated Subcompositor from wayland.xml
+
 };
 
 // clang-format off: generated Subsurface from wayland.xml
@@ -3554,6 +3619,8 @@ struct Subcompositor : Common {
 struct Subsurface : Common {
   static constexpr int Version = 1;
   static constexpr Kind Kind = KindSubsurface;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<Subsurface> colony;
 
@@ -3685,6 +3752,8 @@ struct Fixes : Common {
   static constexpr int Version = 1;
   static constexpr Kind Kind = KindFixes;
 
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
+
   static Colony<Fixes> colony;
 
   // Do not use directly. Instead use `ColonyMake`
@@ -3711,6 +3780,7 @@ struct Fixes : Common {
   // wl_display.delete_id event.
   void OnDestroyRegistry(Registry& registry);
   // clang-format on: generated Fixes from wayland.xml
+
 };
 
 // clang-format off: generated ZxdgDecorationManagerV1 from xdg-decoration-unstable-v1.xml
@@ -3742,6 +3812,8 @@ struct Fixes : Common {
 struct ZxdgDecorationManagerV1 : Common {
   static constexpr int Version = 2;
   static constexpr Kind Kind = KindZxdgDecorationManagerV1;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<ZxdgDecorationManagerV1> colony;
 
@@ -3785,6 +3857,7 @@ struct ZxdgDecorationManagerV1 : Common {
   // destroyed, the decoration mode is assumed to be client-side.
   void OnGetToplevelDecoration(ZxdgToplevelDecorationV1& id, XdgToplevel& toplevel);
   // clang-format on: generated ZxdgDecorationManagerV1 from xdg-decoration-unstable-v1.xml
+
 };
 
 // clang-format off: generated ZxdgToplevelDecorationV1 from xdg-decoration-unstable-v1.xml
@@ -3800,6 +3873,8 @@ struct ZxdgDecorationManagerV1 : Common {
 struct ZxdgToplevelDecorationV1 : Common {
   static constexpr int Version = 2;
   static constexpr Kind Kind = KindZxdgToplevelDecorationV1;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<ZxdgToplevelDecorationV1> colony;
 
@@ -3912,6 +3987,8 @@ struct ZxdgToplevelDecorationV1 : Common {
 struct XdgWmBase : Common {
   static constexpr int Version = 7;
   static constexpr Kind Kind = KindXdgWmBase;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<XdgWmBase> colony;
 
@@ -4033,6 +4110,8 @@ struct XdgWmBase : Common {
 struct XdgPositioner : Common {
   static constexpr int Version = 7;
   static constexpr Kind Kind = KindXdgPositioner;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<XdgPositioner> colony;
 
@@ -4320,6 +4399,8 @@ struct XdgSurface : Common {
   static constexpr int Version = 7;
   static constexpr Kind Kind = KindXdgSurface;
 
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
+
   static Colony<XdgSurface> colony;
 
   // Do not use directly. Instead use `ColonyMake`
@@ -4480,6 +4561,9 @@ struct XdgSurface : Common {
   void Configure(U32 serial);
   // clang-format on: generated XdgSurface from xdg-shell.xml
 
+  // The deepest open popup under `xdg`, or null; a press outside it dismisses it.
+  XdgPopup* TopmostPopup();
+
   MortalPtr<Surface> surface;
   MortalPtr<XdgToplevel> toplevel;
   MortalPtr<XdgPopup> popup;
@@ -4518,6 +4602,8 @@ struct XdgSurface : Common {
 struct XdgToplevel : Common {
   static constexpr int Version = 7;
   static constexpr Kind Kind = KindXdgToplevel;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<XdgToplevel> colony;
 
@@ -5079,6 +5165,8 @@ struct XdgPopup : Common {
   static constexpr int Version = 7;
   static constexpr Kind Kind = KindXdgPopup;
 
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
+
   static Colony<XdgPopup> colony;
 
   // Do not use directly. Instead use `ColonyMake`
@@ -5243,6 +5331,8 @@ struct ShmPool : Common {
   static constexpr int Version = 2;
   static constexpr Kind Kind = KindShmPool;
 
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
+
   static Colony<ShmPool> colony;
 
   // Do not use directly. Instead use `ColonyMake`
@@ -5309,6 +5399,8 @@ struct ShmPool : Common {
 struct DataOffer : Common {
   static constexpr int Version = 3;
   static constexpr Kind Kind = KindDataOffer;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<DataOffer> colony;
 
@@ -5500,6 +5592,8 @@ struct DataOffer : Common {
 struct DataSource : Common {
   static constexpr int Version = 3;
   static constexpr Kind Kind = KindDataSource;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<DataSource> colony;
 
@@ -5697,6 +5791,8 @@ struct DataSource : Common {
 struct Surface : Common {
   static constexpr int Version = 6;
   static constexpr Kind Kind = KindSurface;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
 
   static Colony<Surface> colony;
 
@@ -6111,6 +6207,10 @@ struct Surface : Common {
   void PreferredBufferTransform(enum Output::Transform transform);
   // clang-format on: generated Surface from wayland.xml
 
+  // Walks up to the toplevel owning this surface's window, following subsurface- and popup-parent
+  // links, or null if the surface is not part of a toplevel tree.
+  XdgToplevel* OwningToplevel();
+
   MortalPtr<Buffer> pending_buffer;  // wl_buffer attached since the last commit (null = none)
   bool buffer_attached = false;      // an attach happened (a null buffer means unmap)
   Vec<U32> frame_callbacks;          // wl_callback ids from wl_surface.frame
@@ -6119,7 +6219,8 @@ struct Surface : Common {
   MortalPtr<Viewport> viewport;
   MortalPtr<Buffer> held_dmabuf;  // dmabuf wl_buffer held for zero-copy display
   SurfaceCutout content;
-  WeakPtr<ReferenceCounted> object;  // a library::WaylandSurface mirroring this
+  // library::WaylandSurface (must be Ptr because of MortalPtr pointing back here)
+  Ptr<ReferenceCounted> object;
   InputRegion input_region;
   Optional<InputRegion> pending_input_region;
   int buffer_scale = 1;
@@ -6172,7 +6273,6 @@ struct Server : mux::Epoll::Listener {
 
   // Input focus + keymap. Cleared in the surface destructor;
   // the keymap is the host X keymap, built once.
-  MortalPtr<Surface> pointer_surface;
   MortalPtr<Surface> keyboard_surface;
   MortalPtr<XdgPopup> grabbing_popup;
   MortalPtr<DataSource> selection;  // current clipboard owner (cleared in its destructor)
@@ -6200,11 +6300,6 @@ struct Server : mux::Epoll::Listener {
   bool Running();
   void UIFrame();
   void NotifyWindowDestroyed(void* toplevel_handle);
-  void SendPointerEnter(library::WaylandSurface&, float lx, float ly);
-  void SendPointerMotion(library::WaylandSurface&, float lx, float ly);
-  void SendPointerButton(library::WaylandSurface&, uint32_t button, bool pressed);
-  void SendPointerAxis(library::WaylandSurface&, float notches_up);
-  void SendPointerLeave(library::WaylandSurface&);
   void SendKeyboardEnter(library::WaylandWindow&);
   void SendKeyboardLeave(library::WaylandWindow&);
   void SendKey(library::WaylandWindow&, uint32_t evdev_keycode, bool pressed, bool ctrl, bool alt,
@@ -6260,6 +6355,8 @@ struct Client : mux::Epoll::Listener {
   void ProtocolError(U32 object_id, U32 code, StrView message);
   void Disconnect();
 };
+
+uint32_t NowMs();
 
 void AdvertiseDmabufOnBind(LinuxDmabufV1&, U32 version);
 

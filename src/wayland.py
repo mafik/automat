@@ -233,6 +233,8 @@ if sys.platform == 'linux':
     out.append(f'  static constexpr int Version = {iface.attrib["version"]};')
     out.append(f'  static constexpr Kind Kind = Kind{name};')
     out.append('')
+    out.append(f'  static constexpr bool classof(const Common* c) {{ return c->kind == Kind; }}')
+    out.append('')
     out.append(f'  static Colony<{name}> colony;')
     out.append('')
     out.append('  // Do not use directly. Instead use `ColonyMake`')

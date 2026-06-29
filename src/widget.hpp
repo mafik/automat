@@ -190,7 +190,10 @@ struct Widget : OptionsProvider {
   // Validates that the parent/children hierarchy is correctly maintained (in non-release builds).
   void ValidateHierarchy(std::source_location location = std::source_location::current());
 
-  virtual void PointerOver(Pointer&) {}
+  virtual void PointerHover(Pointer&) {}
+  virtual void PointerUnhover(Pointer&) {}
+
+  virtual void PointerOver(Pointer&) {}  // TODO: rename to PointerEnter
   virtual void PointerLeave(Pointer&) {}
 
   // Scroll wheel over this widget. `delta` is in notches, positive when the finger

@@ -64,9 +64,6 @@ struct WaylandSurface : Object {
   // placement lives on the edge, not the child, so the toy reads it and the
   // stack as one consistent snapshot under this surface's mutex.
   //
-  // A Child with a null `surface` is the self-content marker: it stands for this
-  // surface's own content within the stack (see `stack`).
-  //
   // Subsurfaces sit at `offset`. Popups carry their positioner instead: `offset`
   // is the unconstrained anchor position and `flipped` its mirror about the
   // anchor; the flags say which adjustments the client permits. The compositor
@@ -80,7 +77,9 @@ struct WaylandSurface : Object {
     SkIPoint flipped = {};
     bool flip_x = false, flip_y = false, slide_x = false, slide_y = false;
   };
-  Vec<Child> stack;  // Back-to-front surface stack
+  Vec<Child> stack;  // Back-to-front child surfaces
+  // Splits the stack: [0, i) below this surface's own content, [i, size) above.
+  int stack_self_i = 0;
 
   WaylandSurface() = default;
   WaylandSurface(const WaylandSurface&) = delete;

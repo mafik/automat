@@ -399,6 +399,12 @@ struct Widget : OptionsProvider {
       }
     }
 
+    // Move `child` (already a member) to the very front, the top of the Over range.
+    void OrderTop(Widget* child) { Place(IndexOf(child), 0, Layer::Over); }
+
+    // Move `child` (already a member) to the very back, the bottom of the Under range.
+    void OrderBottom(Widget* child) { Place(IndexOf(child), (int)vec.size() - 1, Layer::Under); }
+
     // Range of child widgets which are composited over their parent.
     Span<Widget*> Over() { return Span<Widget*>(vec).Resize(bake_begin); }
 

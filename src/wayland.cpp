@@ -420,9 +420,10 @@ WaylandSurface* GetOrCreateObject(Surface& surf) {
 // popup children are added in later stages.
 void UpdateSurfaceNode(WaylandSurface& object, Surface& surf) {
   Vec<WaylandSurface::Child> stack;
+  int self_i = 0;
   for (Surface* entry : surf.stack) {
     if (entry == &surf) {
-      stack.emplace_back();  // self-content marker (null surface)
+      self_i = (int)stack.size();
       continue;
     }
     WaylandSurface* child = GetOrCreateObject(*entry);
@@ -449,6 +450,7 @@ void UpdateSurfaceNode(WaylandSurface& object, Surface& surf) {
                                                              surf.content.dst_size.height()))
                               : surf.input_region.path;
     object.stack = std::move(stack);
+    object.stack_self_i = self_i;
     object.WakeToys();
   }
   object.surface_handle = &surf;
@@ -1865,6 +1867,7 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
   SkISize dst_size_ = {};
   SkPath input_shape_;  // this surface's input region, in toy-local coordinates
   Vec<WaylandSurface::Child> stack_;
+  int stack_self_i_ = 0;
   Optional<ui::Pointer::IconOverride> cursor_override_;
 
   WaylandSurfaceToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {}
@@ -1882,6 +1885,7 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
     src_crop_ = s->src_crop;
     dst_size_ = s->dst_size;
     stack_ = s->stack;
+    stack_self_i_ = s->stack_self_i;
     // The input region arrives in client pixels (y-down from the top-left); map it
     // to toy-local coordinates (board metres, y-up) for Shape().
     input_shape_ = s->input_region.makeTransform(SkMatrix::Scale(kClientPx, -kClientPx));
@@ -1889,27 +1893,16 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
 
   void SyncChildren(Vec2 content_origin) {
     auto& toys = ToyStore();
-    auto place = [&](WaylandSurface::Child& c, bool over) {
+    auto place = [&](const WaylandSurface::Child& c) {
       auto& ct = toys.FindOrMake(*c.surface, this);
       Vec2 p = c.is_popup
                    ? PlacePopup(c, content_origin)
                    : content_origin + Vec2(c.offset.x() * kClientPx, -c.offset.y() * kClientPx);
       ct.local_to_parent = SkM44(SkMatrix::Translate(p.x, p.y));
-      if (over)
-        layers.OrderAbove(&ct);
-      else
-        layers.OrderBelow(&ct);
+      return &ct;
     };
-    // The self-content marker (null surface) splits the stack: children before it
-    // composite below this surface's content, those after it above.
-    size_t self = stack_.size();
-    for (size_t i = 0; i < stack_.size(); ++i)
-      if (!stack_[i].surface) {
-        self = i;
-        break;
-      }
-    for (size_t i = 0; i < self; ++i) place(stack_[i], false);
-    for (size_t i = stack_.size(); i-- > self + 1;) place(stack_[i], true);
+    for (size_t i = stack_self_i_; i-- > 0;) layers.OrderBottom(place(stack_[i]));
+    for (size_t i = stack_self_i_; i < stack_.size(); ++i) layers.OrderTop(place(stack_[i]));
   }
 
   // Flips or slides (whichever the client permits) the popup to keep it inside

@@ -65,9 +65,8 @@ Pixels flow out as a tree of surface objects that mirrors the Wayland surface
 tree, so Automat's own widget compositing lays a window out. Every `wl_surface`
 becomes a `WaylandSurface` object
 holding its own imported `sk_sp<SkImage>`; a surface owns its subsurfaces and
-popups as `Ptr<WaylandSurface>` children, and the toplevel surface is the board's
-`WaylandWindow`, which derives from `WaylandSurface`. Each committed `wl_shm`
-buffer is row-copied once into a pooled allocation (the pool entry is reclaimed
+popups as `Ptr<WaylandSurface>` children in one back-to-front stack. Each committed
+`wl_shm` buffer is row-copied once into a pooled allocation (the pool entry is reclaimed
 when the previous frame's image lets go) and the raster image wraps it without
 further copies; a dmabuf becomes a GPU-backed image instead. Both imports happen
 on the compositor thread (see GPU buffer passing below), which writes each
@@ -200,11 +199,9 @@ the subtree the way it composites any widget tree, each surface a node with its
 own cached texture. A parent with a transparent centre (a client that draws its
 own decorations) shows its child's content through it. The window extent and board
 size come from the toplevel surface; subsurfaces are placed within it, and each can
-be stacked above the parent's own content or below it - a surface object keeps a
-child list on each side, drawn around its own texture, so a subsurface placed below
-an opaque parent is hidden, as the protocol requires. The offset of a child within
-its parent lives on the parent's child list, not on the child, so the toy reads a
-surface's geometry and its children as one consistent snapshot under one mutex.
+be stacked above the parent's own content or below it. The offset of a child within its parent lives on
+the stack entry, not on the child, so the toy reads a surface's geometry and its
+children as one consistent snapshot under one mutex.
 
 Subsurface state is double-buffered against the parent. `set_position` and, in
 sync mode (the default), the child's committed buffer apply at the parent
@@ -231,7 +228,8 @@ texture drawing and the per-surface input routing are in `src/wayland.cpp`.
 A client opens a menu, dropdown, autocomplete list or context menu as an
 `xdg_popup`: a transient child surface placed by an `xdg_positioner` relative to a
 parent `xdg_surface` (a toplevel or another popup). A popup becomes a
-`WaylandSurface` child of its parent surface object, in the above-content list. The
+`WaylandSurface` child of its parent surface object, after the self-content marker
+in the stack, so it always draws on top. The
 compositor does not pin a final position: it encodes the positioner onto the edge -
 the anchor/gravity/offset position, the alternative mirrored about the anchor, and
 the client's flip and slide permissions - and the popup's toy resolves the

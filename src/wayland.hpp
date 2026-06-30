@@ -28,6 +28,13 @@ struct Epoll;
 
 namespace automat::wayland {
 struct Surface;  // compositor handle; the window object holds a MortalPtr to it
+
+// Thread-aware part of wayland::Client
+struct ClientObject : ReferenceCounted {
+  // The cursor shape the client last requested over this window.
+  // See: wp_cursor_shape_device_v1.
+  std::atomic<uint32_t> cursor_shape{1};
+};
 }  // namespace automat::wayland
 
 namespace automat::ui {
@@ -40,6 +47,7 @@ namespace automat::library {
 struct WaylandSurface : Object {
   mutable std::mutex mutex;  // guards everything below
 
+  WeakPtr<wayland::ClientObject> client_object;
   sk_sp<SkImage> image;
   SkRect src_crop = SkRect::MakeEmpty();  // wp_viewport crop
   SkISize dst_size = {};                  // pixels
@@ -54,7 +62,10 @@ struct WaylandSurface : Object {
 
   // A child surface and its placement within this surface (client pixels). The
   // placement lives on the edge, not the child, so the toy reads it and the
-  // child list as one consistent snapshot under this surface's mutex.
+  // stack as one consistent snapshot under this surface's mutex.
+  //
+  // A Child with a null `surface` is the self-content marker: it stands for this
+  // surface's own content within the stack (see `stack`).
   //
   // Subsurfaces sit at `offset`. Popups carry their positioner instead: `offset`
   // is the unconstrained anchor position and `flipped` its mirror about the
@@ -69,11 +80,7 @@ struct WaylandSurface : Object {
     SkIPoint flipped = {};
     bool flip_x = false, flip_y = false, slide_x = false, slide_y = false;
   };
-  // Child surfaces owned by this one, back-to-front, split by whether they
-  // composite below or above this surface's own content. `above` also carries
-  // this surface's popups, which always draw on top.
-  Vec<Child> below;
-  Vec<Child> above;
+  Vec<Child> stack;  // Back-to-front surface stack
 
   WaylandSurface() = default;
   WaylandSurface(const WaylandSurface&) = delete;
@@ -83,12 +90,16 @@ struct WaylandSurface : Object {
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 };
 
-// Adds window's identity, chrome and persistence on top of WaylandSurface.
+// A top-level window
 //
 // Lifetime controlled by the client:
 // - unmapping/exiting removes the object,
 // - deleting the object asks the client to close.
-struct WaylandWindow : WaylandSurface {
+struct WaylandWindow : Object {
+  mutable std::mutex mutex;  // guards non-atomics below
+
+  Ptr<WaylandSurface> surface;  // Root content surface
+
   Str title;
   Str app_id;
   bool client_gone = false;
@@ -102,11 +113,6 @@ struct WaylandWindow : WaylandSurface {
 
   // Compositor-side identity; only the wayland thread dereferences it.
   std::atomic<void*> toplevel_handle{nullptr};
-
-  // The cursor shape the client last requested over this window.
-  // See: wp_cursor_shape_device_v1.
-  // The wayland thread writes it.
-  std::atomic<uint32_t> cursor_shape{1};
 
   enum class DecorationPreference { Auto = 0, ServerSide = 1, ClientSide = 2 };
   std::atomic<DecorationPreference> decoration_preference{DecorationPreference::Auto};
@@ -124,7 +130,7 @@ struct WaylandWindow : WaylandSurface {
   INTERFACES(launcher);
 
   WaylandWindow() = default;
-  WaylandWindow(const WaylandWindow& o) : WaylandSurface(), launcher(o.launcher) {
+  WaylandWindow(const WaylandWindow& o) : launcher(o.launcher) {
     auto lock = std::lock_guard(o.mutex);
     recipe = o.recipe;
     title = o.title;

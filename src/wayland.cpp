@@ -411,6 +411,7 @@ namespace {
 WaylandSurface* GetOrCreateObject(Surface& surf) {
   if (surf.object == nullptr) {
     surf.object = MAKE_PTR(WaylandSurface);
+    surf.object->client_object = surf.client.client_object;
   }
   return surf.object.Get();
 }
@@ -418,16 +419,15 @@ WaylandSurface* GetOrCreateObject(Surface& surf) {
 // Copies a surface's committed texture and input region into its board object. Subsurface and
 // popup children are added in later stages.
 void UpdateSurfaceNode(WaylandSurface& object, Surface& surf) {
-  Vec<WaylandSurface::Child> below, above;
-  bool seen_self = false;
+  Vec<WaylandSurface::Child> stack;
   for (Surface* entry : surf.stack) {
     if (entry == &surf) {
-      seen_self = true;
+      stack.emplace_back();  // self-content marker (null surface)
       continue;
     }
     WaylandSurface* child = GetOrCreateObject(*entry);
     UpdateSurfaceNode(*child, *entry);
-    (seen_self ? above : below).push_back({child->AcquirePtr(), entry->as_subsurface->pos});
+    stack.push_back({child->AcquirePtr(), entry->as_subsurface->pos});
   }
   if (surf.xdg) {
     for (XdgPopup* pp : surf.xdg->child_popups) {
@@ -435,7 +435,7 @@ void UpdateSurfaceNode(WaylandSurface& object, Surface& surf) {
       WaylandSurface* child = GetOrCreateObject(*pp->xdg->surface);
       UpdateSurfaceNode(*child, *pp->xdg->surface);
       SkIPoint base = surf.xdg->geo.topLeft();
-      above.push_back({child->AcquirePtr(), base + pp->geo.topLeft(), true, base + pp->flipped,
+      stack.push_back({child->AcquirePtr(), base + pp->geo.topLeft(), true, base + pp->flipped,
                        pp->flip_x, pp->flip_y, pp->slide_x, pp->slide_y});
     }
   }
@@ -448,8 +448,7 @@ void UpdateSurfaceNode(WaylandSurface& object, Surface& surf) {
                               ? SkPath::Rect(SkRect::MakeIWH(surf.content.dst_size.width(),
                                                              surf.content.dst_size.height()))
                               : surf.input_region.path;
-    object.below = std::move(below);
-    object.above = std::move(above);
+    object.stack = std::move(stack);
     object.WakeToys();
   }
   object.surface_handle = &surf;
@@ -528,17 +527,18 @@ void ApplyAndPublish(Surface& surf) {
   }
   if (!win_obj) return;
 
-  // Mirror the toplevel's surface tree into the window object.
+  // Mirror the toplevel's surface tree into a content surface the window hosts.
   WaylandWindow& wwin = *win_obj;
   if (t.xdg && t.xdg->surface) {
-    UpdateSurfaceNode(wwin, *t.xdg->surface);
+    GetOrCreateObject(*t.xdg->surface);
+    {
+      auto lock = std::lock_guard(wwin.mutex);
+      wwin.surface = t.xdg->surface->object;
+    }
+    UpdateSurfaceNode(*t.xdg->surface->object, *t.xdg->surface);
   } else {
     auto lock = std::lock_guard(wwin.mutex);
-    wwin.image = nullptr;
-    wwin.dst_size = {};
-    wwin.below.clear();
-    wwin.above.clear();
-    wwin.WakeToys();
+    wwin.surface = nullptr;
   }
 
   // Wake the toy; on the first frame insert the window onto the board (unless it was adopted, in
@@ -1298,13 +1298,10 @@ void XdgPopup::OnReposition(XdgPositioner& positioner, U32 token) {
 }
 
 void CursorShapeDeviceV1::OnSetShape(U32, enum Shape shape) {
-  Server& s = client.server;
-  for (auto* handle : client.client_ids) {
-    if (auto* t = dyn_cast_if_present<XdgToplevel>(handle)) {
-      if (Ptr<WaylandWindow> win = t->window.Lock()) {
-        win->cursor_shape.store((uint32_t)shape, std::memory_order_relaxed);
-        win->WakeToys();
-      }
+  client.client_object->cursor_shape.store((uint32_t)shape, std::memory_order_relaxed);
+  for (auto& surf : Surface::colony) {
+    if (&surf.client == &client && surf.object) {
+      surf.object->WakeToys();
     }
   }
 }
@@ -1516,10 +1513,15 @@ void UIFrame() {
     library::Command* command = nullptr;
     SkISize win_size = {};
     I64 cpid;
+    Ptr<WaylandSurface> content;
     {
       auto lock = std::lock_guard(win.mutex);
       cpid = win.client_pid;
-      win_size = win.dst_size;
+      content = win.surface;
+    }
+    if (content) {
+      auto lock = std::lock_guard(content->mutex);
+      win_size = content->dst_size;
     }
     if (cpid) {
       for (auto& loc : vm.root_board->locations) {
@@ -1855,12 +1857,15 @@ static Vec2 WindowBoardSize(int width, int height) {
   return Vec2(content_w + 2 * kFrame, content_h + 2 * kFrame + kTitleH);
 }
 
+struct WaylandWindowToy;
+
 struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
   sk_sp<SkImage> image_;
   SkRect src_crop_ = SkRect::MakeEmpty();
   SkISize dst_size_ = {};
   SkPath input_shape_;  // this surface's input region, in toy-local coordinates
-  Vec<WaylandSurface::Child> below_, above_;
+  Vec<WaylandSurface::Child> stack_;
+  Optional<ui::Pointer::IconOverride> cursor_override_;
 
   WaylandSurfaceToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {}
 
@@ -1876,8 +1881,7 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
     image_ = s->image;
     src_crop_ = s->src_crop;
     dst_size_ = s->dst_size;
-    below_ = s->below;
-    above_ = s->above;
+    stack_ = s->stack;
     // The input region arrives in client pixels (y-down from the top-left); map it
     // to toy-local coordinates (board metres, y-up) for Shape().
     input_shape_ = s->input_region.makeTransform(SkMatrix::Scale(kClientPx, -kClientPx));
@@ -1896,8 +1900,16 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
       else
         layers.OrderBelow(&ct);
     };
-    for (auto& c : below_) place(c, false);
-    for (auto it = above_.rbegin(); it != above_.rend(); ++it) place(*it, true);
+    // The self-content marker (null surface) splits the stack: children before it
+    // composite below this surface's content, those after it above.
+    size_t self = stack_.size();
+    for (size_t i = 0; i < stack_.size(); ++i)
+      if (!stack_[i].surface) {
+        self = i;
+        break;
+      }
+    for (size_t i = 0; i < self; ++i) place(stack_[i], false);
+    for (size_t i = stack_.size(); i-- > self + 1;) place(stack_[i], true);
   }
 
   // Flips or slides (whichever the client permits) the popup to keep it inside
@@ -1975,9 +1987,22 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
     }
     return inside;
   }
-  // Gives the keyboard to the toplevel window (keyboard focus is never on a
-  // subsurface); walks up to the owning WaylandWindowToy. Defined below.
-  void FocusWindow(ui::Pointer& p);
+
+  // Applies the client-requested cursor while this surface is hovered.
+  void ApplyCursor(ui::Pointer& p) {
+    if (p.hover.Get() != this) {
+      cursor_override_.reset();
+      return;
+    }
+    if (auto surf = LockSurface()) {
+      if (auto client_obj = surf->client_object.Lock()) {
+        ui::Pointer::IconType want =
+            ShapeToIcon(client_obj->cursor_shape.load(std::memory_order_relaxed));
+        if (cursor_override_ && cursor_override_->GetIconType() == want) return;
+        cursor_override_.emplace(p, want);
+      }
+    }
+  }
 
   void PostPointer(ui::Pointer& p,
                    std::move_only_function<void(wayland::Surface&, wayland::Pointer&)> cb) {
@@ -2001,9 +2026,11 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
       wayland::server->FlushAll();
     });
     StartWatching(p);
+    ApplyCursor(p);
   }
   void PointerUnhover(ui::Pointer& p) override {
     StopWatching(p);
+    cursor_override_.reset();
     PostPointer(p, [](wayland::Surface& h, wayland::Pointer& wp) {
       wp.Leave(wayland::server->serial++, h);
       if (wp.version >= 5) wp.Frame();
@@ -2020,6 +2047,7 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
       if (wp.version >= 5) wp.Frame();
       wayland::server->FlushAll();
     });
+    ApplyCursor(p);
   }
   bool PointerWheel(ui::Pointer& p, float delta) override {
     if (!ui::RootWidget::kWaylandLock) return false;
@@ -2046,18 +2074,19 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
   }
 };
 
-// The toy of a mapped toplevel: hand-drawn chrome (title band + frame) around
-// the toplevel surface's content, which it draws and whose child surfaces it
-// hosts (inherited from WaylandSurfaceToy). It also owns all input routing for
-// the window tree: presses, motion, scroll and keys forwarded to the client.
-struct WaylandWindowToy : WaylandSurfaceToy {
+// The toy of a mapped toplevel: hand-drawn chrome (title band + frame) hosting
+// the toplevel's content surface toy below it, so the chrome draws on top. It
+// owns the window-level input: the keyboard caret forwarded to the client, the
+// decoration menu, and dragging via the chrome.
+struct WaylandWindowToy : ui::beta::ObjectToy {
   Str title_;
   bool client_gone_ = false;
   bool decorate_ = false;
-  ui::Caret* caret_ = nullptr;  // present while the keyboard flows into the client
-  Optional<ui::Pointer::IconOverride> cursor_override_;
+  SkISize content_size_ = {};     // the content surface's size, in client pixels
+  bool content_present_ = false;  // the content surface currently has an image
+  ui::Caret* caret_ = nullptr;    // present while the keyboard flows into the client
 
-  WaylandWindowToy(ui::Widget* parent, Object& obj) : WaylandSurfaceToy(parent, obj) {
+  WaylandWindowToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     PullState();
   }
   ~WaylandWindowToy() override {
@@ -2067,23 +2096,34 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   Ptr<WaylandWindow> LockWindow() const { return LockObject<WaylandWindow>(); }
 
   void PullState() {
-    PullSurfaceState();
     auto win = LockWindow();
     if (!win) return;
-    auto lock = std::lock_guard(win->mutex);
-    title_ = win->title.empty() ? win->app_id : win->title;
-    client_gone_ = win->client_gone;
-    decorate_ = win->server_side_decorated.load(std::memory_order_relaxed);
+    Ptr<WaylandSurface> content;
+    {
+      auto lock = std::lock_guard(win->mutex);
+      title_ = win->title.empty() ? win->app_id : win->title;
+      client_gone_ = win->client_gone;
+      decorate_ = win->server_side_decorated.load(std::memory_order_relaxed);
+      content = win->surface;
+    }
+    if (content) {
+      auto lock = std::lock_guard(content->mutex);
+      content_size_ = content->dst_size;
+      content_present_ = (bool)content->image;
+    } else {
+      content_size_ = {};
+      content_present_ = false;
+    }
   }
 
-  bool Decorated() const { return decorate_ || client_gone_ || !image_; }
+  bool Decorated() const { return decorate_ || client_gone_ || !content_present_; }
   float Frame() const { return Decorated() ? kFrame : 0; }
   float TitleH() const { return Decorated() ? kTitleH : 0; }
 
-  // Size of the main (toplevel) surface
+  // Size of the toplevel content surface.
   Vec2 ContentSize() const {
-    return {dst_size_.width() > 0 ? dst_size_.width() * kClientPx : kMinContentW,
-            dst_size_.height() > 0 ? dst_size_.height() * kClientPx : kMinContentH};
+    return {content_size_.width() > 0 ? content_size_.width() * kClientPx : kMinContentW,
+            content_size_.height() > 0 ? content_size_.height() * kClientPx : kMinContentH};
   }
   Rect ContentRect() const { return Rect::MakeAtZero(ContentSize()); }
   RRect ContentRRect() const { return RRect::MakeSimple(ContentRect(), kContentRadius); }
@@ -2091,9 +2131,25 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   RRect FrameLightsRRect() const { return ContentRRect().Outset(kFrame * 11 / 16); }
   RRect FrameOutRRect() const { return ContentRRect().Outset(kFrame); }
 
-  // The content area's top-left, where the toplevel surface (and its children)
-  // sit, below the title band and inside the frame.
-  Vec2 TopLeft() const override { return ContentRect().TopLeftCorner(); }
+  // The content area's top-left, where the toplevel surface toy sits, below the
+  // title band and inside the frame.
+  Vec2 TopLeft() const { return ContentRect().TopLeftCorner(); }
+
+  // Hosts the toplevel content surface toy below the chrome.
+  void SyncContent() {
+    auto win = LockWindow();
+    if (!win) return;
+    Ptr<WaylandSurface> content;
+    {
+      auto lock = std::lock_guard(win->mutex);
+      content = win->surface;
+    }
+    if (!content) return;
+    auto& ct = ToyStore().FindOrMake(*content, this);
+    Vec2 tl = TopLeft();
+    ct.local_to_parent = SkM44(SkMatrix::Translate(tl.x, tl.y));
+    layers.OrderBelow(&ct);
+  }
 
   SkPath shape;
 
@@ -2104,7 +2160,7 @@ struct WaylandWindowToy : WaylandSurfaceToy {
 
   Tock Tick(time::Timer&) override {
     PullState();
-    SyncChildren(TopLeft());
+    SyncContent();
     if (caret_) caret_->shape = FocusCaretShape();
 
     if (Decorated()) {
@@ -2143,34 +2199,9 @@ struct WaylandWindowToy : WaylandSurfaceToy {
     return Tock::Draw;
   }
 
-  void ApplyCursor(ui::Pointer& p) {
-    if (p.hover.Get() != this) {
-      cursor_override_.reset();
-      return;
-    }
-    if (auto obj = LockWindow()) {
-      ui::Pointer::IconType want = ShapeToIcon(obj->cursor_shape.load(std::memory_order_relaxed));
-      if (cursor_override_ && cursor_override_->GetIconType() == want) return;
-      cursor_override_.emplace(p, want);
-    }
-  }
-
-  void PointerHover(ui::Pointer& p) override {
-    WaylandSurfaceToy::PointerHover(p);
-    ApplyCursor(p);
-  }
-  void PointerUnhover(ui::Pointer& p) override {
-    WaylandSurfaceToy::PointerUnhover(p);
-    cursor_override_.reset();
-  }
-  void PointerMove(ui::Pointer& p, Vec2 pos) override {
-    WaylandSurfaceToy::PointerMove(p, pos);
-    ApplyCursor(p);
-  }
-
   bool CenteredAtZero() const override { return true; }
 
-  // ---- client input routing (the content area belongs to the client) ----
+  // ---- keyboard focus (the toplevel owns the client's keyboard) ----
 
   SkPath FocusCaretShape() const {
     if (!Decorated()) return SkPath();
@@ -2208,8 +2239,6 @@ struct WaylandWindowToy : WaylandSurfaceToy {
   }
   void KeyDown(ui::Caret&, ui::Key key) override { ForwardKey(key, true); }
   void KeyUp(ui::Caret&, ui::Key key) override { ForwardKey(key, false); }
-
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
 
   void VisitOptions(const OptionsVisitor& visitor) const override {
     ObjectToy::VisitOptions(visitor);
@@ -2262,10 +2291,6 @@ struct WaylandWindowToy : WaylandSurfaceToy {
 
       canvas.drawDRRect(frame_mid.Outset(one_pixel), frame_inner.Outset(-one_pixel),
                         bevel_border_paint);
-      canvas.save();
-      canvas.clipRRect(frame_inner);
-      DrawSurfaceImage(canvas, image_, src_crop_, dst_size_, TopLeft());
-      canvas.restore();
 
       {  // Lights
 
@@ -2318,8 +2343,6 @@ struct WaylandWindowToy : WaylandSurfaceToy {
       canvas.translate(-w / 2, frame_outer.rect.top);
       font.DrawText(canvas, title_, title_paint);
       canvas.restore();
-    } else {
-      DrawSurfaceImage(canvas, image_, src_crop_, dst_size_, TopLeft());
     }
   }
 };
@@ -2338,14 +2361,6 @@ uint32_t EvdevButtonCode(ui::ActionTrigger btn) {
   }
 }
 
-void WaylandSurfaceToy::FocusWindow(ui::Pointer& p) {
-  for (ui::Widget* w = this; w; w = w->parent)
-    if (auto* wt = dynamic_cast<WaylandWindowToy*>(w)) {
-      wt->FocusClient(p);
-      return;
-    }
-}
-
 // Held while a button initiated over a surface is down: routes press, motion and
 // release to that surface's client (with the keyboard going to the toplevel)
 // instead of dragging the window object.
@@ -2354,7 +2369,7 @@ struct ClientInputAction : Action {
   uint32_t button;
   ClientInputAction(ui::Pointer& p, WaylandSurfaceToy& toy, uint32_t button)
       : Action(p), toy(toy), button(button) {
-    toy.FocusWindow(p);
+    if (auto* wt = Closest<WaylandWindowToy>(toy)) wt->FocusClient(p);
 
     toy.PostPointer(pointer, [button](wayland::Surface& h, wayland::Pointer& wp) {
       if (!(h.xdg && h.xdg->popup))
@@ -2390,18 +2405,6 @@ std::unique_ptr<Action> WaylandSurfaceToy::FindAction(ui::Pointer& p, ui::Action
   if (ForwardsToClient(btn))
     if (uint32_t code = EvdevButtonCode(btn))
       return std::make_unique<ClientInputAction>(p, *this, code);
-  return ObjectToy::FindAction(p, btn);
-}
-
-std::unique_ptr<Action> WaylandWindowToy::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
-  if (ForwardsToClient(btn)) {
-    if (uint32_t code = EvdevButtonCode(btn)) {
-      Vec2 px = p.PositionWithin(*this);
-      bool inside = ToSurfacePx(px);
-      if (inside) return std::make_unique<ClientInputAction>(p, *this, code);
-    }
-  }
-  // Title bar and frame: the standard object behaviors (drag, menu).
   return ObjectToy::FindAction(p, btn);
 }
 

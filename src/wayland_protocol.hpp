@@ -6249,9 +6249,10 @@ struct Client : mux::Epoll::Listener {
   IdPool<0xff000000> server_id_pool;
   U32 next_id = 2;
   bool errored = false;
+  Ptr<ClientObject> client_object;
   static Colony<Client> colony;
 
-  Client(Server& s) : server(s) {}
+  Client(Server& s) : server(s) { client_object = MAKE_PTR(ClientObject); }
   ~Client() {
     for (Common* o : client_ids)
       if (o) o->GenericColonyDestroy();

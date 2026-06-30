@@ -2841,6 +2841,7 @@ struct Pointer : Common {
   // clang-format on: generated Pointer from wayland.xml
 
   U32 version = 1;
+  WeakPtr<ui::PointerObject> pointer_object;
 };
 
 // clang-format off: generated Keyboard from wayland.xml

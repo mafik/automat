@@ -30,6 +30,10 @@ namespace automat::wayland {
 struct Surface;  // compositor handle; the window object holds a MortalPtr to it
 }  // namespace automat::wayland
 
+namespace automat::ui {
+struct PointerObject;
+}  // namespace automat::ui
+
 namespace automat::library {
 
 // Kept alive by the wayland::Surface
@@ -146,5 +150,7 @@ void Start(mux::Epoll&, Status&);  // pick a free WAYLAND_DISPLAY, flock its loc
 void Stop();       // controlled teardown (frame timer unregisters before mux::epoll dies)
 Str SocketName();  // bound display name, empty if not started
 void UIFrame();    // per-frame board reconcile, no-op if not started
+
+void RegisterPointer(ui::PointerObject&);
 
 }  // namespace automat::wayland

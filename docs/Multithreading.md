@@ -47,6 +47,18 @@ Because of their irregular lifetimes, Tasks are managed through raw pointers and
 
 Automat also has a timer thread - a dedicated thread that ensures that events are delivered with accurate timing. See `timer_thread.hpp` for details. There is only one timer thread per Automat's instance.
 
+## Wayland <=> Objects <=> UI
+
+There are three different categories of objects in Automat:
+- Wayland state, managed from a single epoll thread (one day may be split into more)
+- UI state, owned & managed by UI threads (one per Window / RootWidget)
+- VM objects, owned cuncurrently from arbitrary threads through ref-counted Ptr/WeakPtr
+
+Wayland & UI are both single-threaded and use MortalPtr-based pointers.
+
+References between UI & Wayland threads rely on intermediate thread-aware objects that store
+their mapping. These intermediate objects ara managed using ref-counted Ptr/WeakPtr
+
 ## Summary
 
 - Automat's threading implementation doesn't include all of the features that are part of the design

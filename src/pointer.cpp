@@ -17,6 +17,10 @@
 #include "time.hpp"
 #include "widget.hpp"
 
+#if defined(__linux__)
+#include "wayland.hpp"
+#endif
+
 using namespace std;
 
 namespace automat::ui {
@@ -41,6 +45,10 @@ Pointer::Pointer(RootWidget& root_widget, Vec2 position)
   keyboard->pointer = this;
   pointer_widget->local_to_parent = SkM44(root_widget.CanvasToWindow());
   root_widget.layers.OrderAbove(pointer_widget.get(), &root_widget.black_hole);
+  pointer_object = MAKE_PTR(PointerObject);
+#if defined(__linux__)
+  wayland::RegisterPointer(*pointer_object);
+#endif
 }
 Pointer::~Pointer() { Leave(); }
 

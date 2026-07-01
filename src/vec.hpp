@@ -78,8 +78,8 @@ Vec<T> MakeVec(Args&&... t) {
   return vec;
 }
 
-template <typename T>
-void FastRemove(std::vector<T>& vec, const T& value) {
+template <typename V, typename T>
+void FastRemove(V& vec, const T& value) {
   auto it = std::find(vec.begin(), vec.end(), value);
   if (it != vec.end()) {
     *it = std::move(vec.back());

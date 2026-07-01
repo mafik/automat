@@ -1931,33 +1931,55 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
   }
   void TransformUpdated(time::Timer& t) override { WakeAnimationAt(t.now); }
 
+  ankerl::unordered_dense::map<WaylandSurface*, animation::SpringV2<Vec2>> popup_positions;
+
   Tock Tick(time::Timer& timer) override {
     if (!LockSurface()) {
       MarkDead(timer.now);
       return {};
     }
+    Tock tock = Tock::Draw;
     PullSurfaceState();
 
     auto content_origin = TopLeft();
     auto& toys = ToyStore();
+
+    SmallVec<WaylandSurface*> untouched = {};  // used to remove animation entries for old popups
+    for (auto& entry : popup_positions) {
+      untouched.push_back(entry.first);
+    }
     auto place = [&](WaylandSurface::Child& c) {
       auto& ct = toys.FindOrMake(*c.surface, this);
-      Vec2 p = c.is_popup
-                   ? PlacePopup(c, content_origin)
-                   : content_origin + Vec2(c.offset.x() * kClientPx, -c.offset.y() * kClientPx);
-      if (c.offset_animated.has_value()) {
-        // TODO: make sure this gets called
-        // TODO: make animation snappy
-        c.offset_animated->SpringTowards(p, timer.d, 1, 1);
+      Vec2 p;
+      if (c.is_popup) {
+        Vec2 target = PlacePopup(c, content_origin);
+        auto* surface = c.surface.Get();
+        FastRemove(untouched, surface);
+        auto it = popup_positions.find(surface);
+        if (it == popup_positions.end()) {
+          it = popup_positions.emplace_hint(it, std::make_pair(surface, target));
+        } else {
+          // Popup movement <2cm is instant
+          if (LengthSquared(it->second.velocity) == 0 && Length(target - it->second.value) < 2_cm) {
+            it->second.value = target;
+          } else {
+            tock.drawing |= it->second.SineTowards(target, timer.d, 0.3);
+          }
+        }
+        p = it->second.value;
       } else {
-        c.offset_animated.emplace(p);
+        p = content_origin + Vec2(c.offset.x() * kClientPx, -c.offset.y() * kClientPx);
       }
-      ct.local_to_parent = SkM44(SkMatrix::Translate(c.offset_animated->value));
+      ct.local_to_parent = SkM44(SkMatrix::Translate(p));
       return &ct;
     };
     for (size_t i = stack_self_i_; i-- > 0;) layers.OrderBottom(place(stack_[i]));
     for (size_t i = stack_self_i_; i < stack_.size(); ++i) layers.OrderTop(place(stack_[i]));
-    return Tock::Draw;
+    for (auto* surf : untouched) {
+      popup_positions.erase(surf);
+    }
+
+    return tock;
   }
 
   bool CenteredAtZero() const override { return false; }

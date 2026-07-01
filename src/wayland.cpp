@@ -1937,6 +1937,7 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
     }
     return Vec2(x, y);
   }
+  void TransformUpdated() override { SyncChildren(TopLeft()); }
 
   Tock Tick(time::Timer& timer) override {
     if (!LockSurface()) {

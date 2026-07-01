@@ -428,7 +428,7 @@ void UpdateSurfaceNode(WaylandSurface& object, Surface& surf) {
     }
     WaylandSurface* child = GetOrCreateObject(*entry);
     UpdateSurfaceNode(*child, *entry);
-    stack.push_back({child->AcquirePtr(), entry->as_subsurface->pos});
+    stack.push_back({.surface = child->AcquirePtr(), .offset = entry->as_subsurface->pos});
   }
   if (surf.xdg) {
     for (XdgPopup* pp : surf.xdg->child_popups) {
@@ -436,8 +436,14 @@ void UpdateSurfaceNode(WaylandSurface& object, Surface& surf) {
       WaylandSurface* child = GetOrCreateObject(*pp->xdg->surface);
       UpdateSurfaceNode(*child, *pp->xdg->surface);
       SkIPoint base = surf.xdg->geo.topLeft();
-      stack.push_back({child->AcquirePtr(), base + pp->geo.topLeft(), true, base + pp->flipped,
-                       pp->flip_x, pp->flip_y, pp->slide_x, pp->slide_y});
+      stack.push_back({.surface = child->AcquirePtr(),
+                       .offset = base + pp->geo.topLeft(),
+                       .is_popup = true,
+                       .flipped = base + pp->flipped,
+                       .flip_x = pp->flip_x,
+                       .flip_y = pp->flip_y,
+                       .slide_x = pp->slide_x,
+                       .slide_y = pp->slide_y});
     }
   }
   {
@@ -1891,20 +1897,6 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
     input_shape_ = s->input_region.makeTransform(SkMatrix::Scale(kClientPx, -kClientPx));
   }
 
-  void SyncChildren(Vec2 content_origin) {
-    auto& toys = ToyStore();
-    auto place = [&](const WaylandSurface::Child& c) {
-      auto& ct = toys.FindOrMake(*c.surface, this);
-      Vec2 p = c.is_popup
-                   ? PlacePopup(c, content_origin)
-                   : content_origin + Vec2(c.offset.x() * kClientPx, -c.offset.y() * kClientPx);
-      ct.local_to_parent = SkM44(SkMatrix::Translate(p.x, p.y));
-      return &ct;
-    };
-    for (size_t i = stack_self_i_; i-- > 0;) layers.OrderBottom(place(stack_[i]));
-    for (size_t i = stack_self_i_; i < stack_.size(); ++i) layers.OrderTop(place(stack_[i]));
-  }
-
   // Flips or slides (whichever the client permits) the popup to keep it inside
   // the viewport.
   Vec2 PlacePopup(const WaylandSurface::Child& c, Vec2 top_left) {
@@ -1937,7 +1929,7 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
     }
     return Vec2(x, y);
   }
-  void TransformUpdated() override { SyncChildren(TopLeft()); }
+  void TransformUpdated(time::Timer& t) override { WakeAnimationAt(t.now); }
 
   Tock Tick(time::Timer& timer) override {
     if (!LockSurface()) {
@@ -1945,7 +1937,26 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
       return {};
     }
     PullSurfaceState();
-    SyncChildren(TopLeft());
+
+    auto content_origin = TopLeft();
+    auto& toys = ToyStore();
+    auto place = [&](WaylandSurface::Child& c) {
+      auto& ct = toys.FindOrMake(*c.surface, this);
+      Vec2 p = c.is_popup
+                   ? PlacePopup(c, content_origin)
+                   : content_origin + Vec2(c.offset.x() * kClientPx, -c.offset.y() * kClientPx);
+      if (c.offset_animated.has_value()) {
+        // TODO: make sure this gets called
+        // TODO: make animation snappy
+        c.offset_animated->SpringTowards(p, timer.d, 1, 1);
+      } else {
+        c.offset_animated.emplace(p);
+      }
+      ct.local_to_parent = SkM44(SkMatrix::Translate(c.offset_animated->value));
+      return &ct;
+    };
+    for (size_t i = stack_self_i_; i-- > 0;) layers.OrderBottom(place(stack_[i]));
+    for (size_t i = stack_self_i_; i < stack_.size(); ++i) layers.OrderTop(place(stack_[i]));
     return Tock::Draw;
   }
 

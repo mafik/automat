@@ -46,6 +46,7 @@ union Vec2 {
   constexpr Vec2(float xy) : x(xy), y(xy) {}
   constexpr Vec2(float x, float y) : x(x), y(y) {}
   constexpr Vec2(SkPoint p) : sk(p) {}
+  constexpr Vec2(SkIPoint p) : x(p.x()), y(p.y()) {}
   constexpr static Vec2 Polar(automat::SinCos angle, float length) {
     return Vec2((float)angle.cos * length, (float)angle.sin * length);
   }

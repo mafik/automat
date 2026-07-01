@@ -35,7 +35,7 @@ struct EnumKnobWidget : ui::Widget {
   EnumKnobWidget(ui::Widget* parent, int n_options);
 
   SkPath Shape() const override;
-  void TransformUpdated() override { WakeAnimation(); }
+  void TransformUpdated(time::Timer& t) override { WakeAnimationAt(t.now); }
 
   static constexpr float kBorderWidth = 0.5_mm;
   static constexpr float kBorderHalf = kBorderWidth / 2;

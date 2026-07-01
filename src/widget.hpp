@@ -210,7 +210,7 @@ struct Widget : OptionsProvider {
   // changed.
   //
   // This may be used by some widgets to trigger re-rendering.
-  virtual void TransformUpdated() {}
+  virtual void TransformUpdated(time::Timer&) {}
 
   void DrawCached(SkCanvas&) const;
   void WakeAnimation() const;

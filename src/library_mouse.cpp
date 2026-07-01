@@ -295,7 +295,7 @@ struct MouseIcon : ui::Widget {
     return MouseWidgetCommon::Tick(timer, *this, button, std::nullopt, presser_widget.get());
   }
 
-  void TransformUpdated() override { WakeAnimation(); }
+  void TransformUpdated(time::Timer& t) override { WakeAnimationAt(t.now); }
 
   SkPath Shape() const override { return MouseWidgetCommon::Shape(); }
 
@@ -881,7 +881,7 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
     return MouseWidgetCommon::Tick(timer, *this, button, std::nullopt, &presser_widget);
   }
 
-  void TransformUpdated() override { WakeAnimation(); }
+  void TransformUpdated(time::Timer& t) override { WakeAnimationAt(t.now); }
 
   void Draw(SkCanvas& canvas) const override {
     krita::mouse::base.draw(canvas);

@@ -332,7 +332,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
     }
   }
 
-  void TransformUpdated() override { WakeAnimation(); }
+  void TransformUpdated(time::Timer& t) override { WakeAnimationAt(t.now); }
 
   Tock Tick(time::Timer& timer) override {
     Tock tock;

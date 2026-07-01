@@ -13,7 +13,9 @@
 #include <atomic>
 #include <memory>
 #include <mutex>
+#include <optional>
 
+#include "animation.hpp"
 #include "base.hpp"
 #include "int.hpp"
 #include "mortal.hpp"
@@ -76,6 +78,7 @@ struct WaylandSurface : Object {
     bool is_popup = false;
     SkIPoint flipped = {};
     bool flip_x = false, flip_y = false, slide_x = false, slide_y = false;
+    Optional<animation::SpringV2<Vec2>> offset_animated = std::nullopt;
   };
   Vec<Child> stack;  // Back-to-front child surfaces
   // Splits the stack: [0, i) below this surface's own content, [i, size) above.

@@ -836,7 +836,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
         (void)local_to_window.invert(&node.window_to_local);
         if (widget->local_to_window != local_to_window) {
           widget->local_to_window = local_to_window;
-          widget->TransformUpdated();
+          widget->TransformUpdated(rw.timer);
         }
       }
 

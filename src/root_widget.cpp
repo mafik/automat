@@ -617,11 +617,6 @@ void RootWidget::DeserializeState(Deserializer& d, Status& status) {
   }
 }
 
-SkPath RootWidget::TrashShape() const {
-  SkPath trash_area_path = SkPath::Circle(size.width, size.height, trash_radius);
-  return trash_area_path.makeTransform(this->WindowToCanvas());
-}
-
 SkMatrix RootWidget::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point) {
   auto* mw = toys.FindOrNull(*vm.root_board);
   Rect board_bounds = mw ? Rect(mw->Shape().getBounds()) : Rect{};
@@ -681,6 +676,8 @@ void RootWidget::RestoreFromTray() {
 
 void RootWidget::Resized(Vec2 size) {
   this->size = size;
+  shape = Shape();
+  subtree_shape = shape;
   UpdateLocalToParent(*this);
   if (toolbar) {
     toolbar->WakeAnimation();

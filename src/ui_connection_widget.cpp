@@ -433,7 +433,8 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
   }
 
   Tock tock;
-  tock.drawing |= animation::LinearApproach(should_be_hidden ? 1 : 0, timer.d, 5, transparency);
+  // `transparency` gates Shape() (empty once >= 0.99)
+  tock.shaping |= animation::LinearApproach(should_be_hidden ? 1 : 0, timer.d, 5, transparency);
 
   float loc_transparency = (a.StartObj()->here && a.StartObj()->here->widget)
                                ? a.StartObj()->here->widget->transparency
@@ -458,6 +459,7 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
 
   if (state) {
     if (state->stabilized && !state->stabilized_end.has_value()) {
+      if (state->sections.front().pos != pos_dir.pos) tock |= Tock::Shape;
       state->stabilized_start = pos_dir.pos;
       state->sections.front().pos = pos_dir.pos;
       state->sections.back().pos = pos_dir.pos;
@@ -470,7 +472,7 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
     } else {
       state->steel_insert_hidden.target = 0;
     }
-    tock.drawing |= state->steel_insert_hidden.Tick(timer);
+    tock.shaping |= state->steel_insert_hidden.Tick(timer);
 
     uint32_t last_activity = arg.state->last_activity.load(std::memory_order_relaxed);
     if (state->last_activity != last_activity) {
@@ -478,7 +480,7 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
       state->last_activity = last_activity;
     }
 
-    tock.drawing |= SimulateCablePhysics(timer, *state, pos_dir, to_points);
+    tock.shaping |= SimulateCablePhysics(timer, *state, pos_dir, to_points);
   } else if (style != Argument::Style::Arrow) {
     cable_width.target = a.end_iface ? 2_mm : 0;
     cable_width.speed = 5;

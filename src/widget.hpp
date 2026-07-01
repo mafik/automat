@@ -111,6 +111,9 @@ struct Widget : OptionsProvider {
   MortalPtr<Widget> parent;
   SkM44 local_to_parent = SkM44();
 
+  // TODO: maybe replace with subtree_shape_invalid
+  SkM44 packed_local_to_parent = SkM44();  // used by PackFrame to recompute subtree_shape
+
   // This is updated by renderer, right before the call to Tick.
   //
   // This is same as the CTM in the SkCanvas passed to Draw().
@@ -150,9 +153,10 @@ struct Widget : OptionsProvider {
   // Moment when the on-screen texture stopped matching this widget's content.
   time::SteadyPoint invalidated = time::SteadyPoint::min();
 
-  bool rendering = false;  // Whether the widget is currently being rendered by the client.
-  // Set to true by `MarkDead`.
-  bool dead = false;
+  bool rendering = false;     // Whether the widget is currently being rendered by the client.
+  bool dead = false;          // Set to true by `MarkDead`.
+  bool shape_invalid = true;  // Cleared by `PackFrame`.
+  bool subtree_shape_invalid = true;  // Cleared by `PackFrame`.
 
   // Due to the concurrent nature of Automat's objects the Widgets only keep a weak reference to the
   // underlying objects. When these objects are deleted, on the next lock attempt, the widget
@@ -221,16 +225,22 @@ struct Widget : OptionsProvider {
     struct DrawingProxy {
       void operator|=(animation::Progress);
       void operator|=(bool keep_going);
-    } drawing [[no_unique_address]];  // bool-like adapter that sets both `next_tick` & `draw`
+    } drawing [[no_unique_address]];  // bool-like that sets both `next_tick` & `draw`
+    struct ShapingProxy {
+      void operator|=(animation::Progress);
+      void operator|=(bool keep_going);
+    } shaping [[no_unique_address]];  // bool-like that sets both `next_tick`, `draw` & `shape`
     struct TickingProxy {
       void operator|=(bool keep_going);
       explicit operator bool() const;
-    } ing [[no_unique_address]];  // bool-like adapter for whether widget is animating
+    } ing [[no_unique_address]];  // bool-like for whether widget is animating
     time::SteadyPoint next_tick = time::SteadyPoint::max();
     bool draw = false;
+    bool shape = false;
 
     Tock& operator|=(Tock o) {
       draw |= o.draw;
+      shape |= o.shape;
       next_tick = std::min(next_tick, o.next_tick);
       return *this;
     }
@@ -238,6 +248,8 @@ struct Widget : OptionsProvider {
 
     static const Tock Draw;     // repaint once, then sleep
     static const Tock Drawing;  // repaint and tick again next frame
+    static const Tock Shape;    // update shape & repaint once, then sleep
+    static const Tock Shaping;  // update shape & repaint and tick again next frame
     static const Tock Ing;      // tick again next frame without repainting
   };
 
@@ -270,42 +282,36 @@ struct Widget : OptionsProvider {
 
   virtual Compositor GetCompositor() const { return Compositor::GLITCH; }
 
-  // Each Widget has a shape that defines its region of reactivity.
-  // The Shape of a widget is used to constrain the search process.
-  // If children extend beyond the shape of their parent, they are not traversed.
-  // Widgets with empty shape do not react themselves but are still traversed, allowing their
-  // children to extend to arbitrary shapes.
+  // Each Widget has a shape that defines its region of reactivity, in local coordinates.
   virtual SkPath Shape() const = 0;
 
-  // Widgets that don't have shape (infinite layers) but which have some child widgets may attempt
-  // to report some shape by taking a union of their child shapes.
-  //
-  // This function defaults to Shape() - if not empty.
-  // Otherwise it combines the shapes of this Widget's children.
-  SkPath ShapeRecursive() const;
+  SkPath shape;          // Cached result of the last `Shape()` call.
+  SkPath subtree_shape;  // Union of `shape` and every child's `subtree_shape`
 
-  // Each Widget has some shape where it can function as a rigid base for other Widgets.
-  // This is used for ExtractStack - to grab a whole stack of objects.
-  //
-  // This defaults to ShapeRecursive().
-  virtual SkPath ShapeRigid() const;
+  void RecomputeSubtreeShape();
 
-  // Can be overridden to provide a more efficient alternative to `Shape()->getBounds()`.
-  // When not overridden, `Shape().getBounds()` is used.
+  // Can be overridden to provide a more efficient alternative to `shape.getBounds()`.
   // Local (metric) coordinates.
   virtual RRect CoarseBounds() const {
-    auto shape = Shape();
+    // `shape` is only populated by PackFrame; before the first tick (e.g. when a parent lays out
+    // freshly created children in its constructor) it is empty, so fall back to a live `Shape()`.
+    SkPath fresh;
+    const SkPath* s = &shape;
+    if (s->isEmpty()) {
+      fresh = Shape();
+      s = &fresh;
+    }
     RRect ret{};
-    if (shape.isRect(&ret.rect.sk)) {
+    if (s->isRect(&ret.rect.sk)) {
       ret.type = SkRRect::kRect_Type;
-    } else if (shape.isRRect(&ret.sk)) {
+    } else if (s->isRRect(&ret.sk)) {
       // cool
-    } else if (shape.isOval(&ret.rect.sk)) {
+    } else if (s->isOval(&ret.rect.sk)) {
       auto r = ret.rect.Size() / 2;
       ret.radii[0] = ret.radii[1] = ret.radii[2] = ret.radii[3] = r;
       ret.type = SkRRect::kOval_Type;
     } else {
-      ret.rect = shape.getBounds();
+      ret.rect = s->getBounds();
       ret.type = SkRRect::kRect_Type;
     }
     return ret;
@@ -342,7 +348,7 @@ struct Widget : OptionsProvider {
   virtual DropTarget* AsDropTarget() { return nullptr; }
 
   // If the object should be cached into a texture, return its bounds in local coordinates.
-  virtual Optional<Rect> TextureBounds() const { return Shape().getBounds(); }
+  virtual Optional<Rect> TextureBounds() const { return shape.getBounds(); }
   virtual Vec<Vec2> TextureAnchors() { return {}; }
 
   // This will draw the given child widget using it's precomputed texture (if available).
@@ -447,6 +453,7 @@ struct Widget : OptionsProvider {
       vec.insert(vec.begin(), w);
       ++bake_begin;
       ++bake_end;
+      InvalidateSubtreeShape();
     }
 
     void Remove(Widget* w) {
@@ -455,6 +462,12 @@ struct Widget : OptionsProvider {
       if (i < bake_begin) --bake_begin;
       if (i < bake_end) --bake_end;
       vec.erase(vec.begin() + i);
+      InvalidateSubtreeShape();
+    }
+
+    void InvalidateSubtreeShape() {
+      reinterpret_cast<Widget*>(reinterpret_cast<uintptr_t>(this) - offsetof(Widget, layers))
+          ->subtree_shape_invalid = true;
     }
 
     friend struct Widget;
@@ -510,6 +523,23 @@ inline void Tock::DrawingProxy::operator|=(bool keep_going) {
   t.next_tick = time::SteadyPoint::min();
 }
 
+static_assert(offsetof(Tock, shaping) == 0, "ShapingProxy assumes offset = 0");
+inline void Tock::ShapingProxy::operator|=(animation::Progress p) {
+  auto& t = *reinterpret_cast<Tock*>(this);
+  if (p.value_changed) {
+    t.draw = true;
+    t.shape = true;
+  }
+  if (!p.settled) t.next_tick = time::SteadyPoint::min();
+}
+inline void Tock::ShapingProxy::operator|=(bool keep_going) {
+  if (!keep_going) return;
+  auto& t = *reinterpret_cast<Tock*>(this);
+  t.draw = true;
+  t.shape = true;
+  t.next_tick = time::SteadyPoint::min();
+}
+
 static_assert(offsetof(Tock, ing) == 0, "TickingProxy assumes offset = 0");
 inline void Tock::TickingProxy::operator|=(bool keep_going) {
   if (!keep_going) return;
@@ -523,6 +553,8 @@ inline Tock::TickingProxy::operator bool() const {
 
 inline const Tock Tock::Draw{.draw = true};
 inline const Tock Tock::Drawing{.next_tick = time::SteadyPoint::min(), .draw = true};
+inline const Tock Tock::Shape{.draw = true, .shape = true};
+inline const Tock Tock::Shaping{.next_tick = time::SteadyPoint::min(), .draw = true, .shape = true};
 inline const Tock Tock::Ing{.next_tick = time::SteadyPoint::min()};
 
 template <typename T>

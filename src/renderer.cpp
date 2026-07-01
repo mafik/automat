@@ -32,6 +32,7 @@
 
 #include "../build/generated/embedded.hpp"
 #include "blockingconcurrentqueue.hpp"
+#include "color.hpp"
 #include "drawable_rtti.hpp"
 #include "font.hpp"
 #include "global_resources.hpp"
@@ -54,6 +55,8 @@
 constexpr bool kDebugRendering = false;
 constexpr bool kDebugRenderEvents = false;
 constexpr bool kDebugPackFrame = false;
+constexpr bool kDebugVisual = false;
+constexpr bool kDebugShapes = false;
 
 using namespace automat::ui;
 using namespace std;
@@ -452,7 +455,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     // This widget wasn't included by frame packing - there is no need to draw anything.
     return;
   }
-  if constexpr (kDebugRendering) {
+  if constexpr (kDebugVisual) {
     SkPaint texture_bounds_paint;  // translucent black
     texture_bounds_paint.setStyle(SkPaint::kStroke_Style);
     texture_bounds_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
@@ -569,7 +572,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     paint.setShader(shader);
     canvas->drawRect(draw_bounds, paint);
 
-    if constexpr (kDebugRendering) {
+    if constexpr (kDebugVisual) {
       SkPaint surface_bounds_paint;
       constexpr int kNumColors = 10;
       SkColor4f colors[kNumColors];
@@ -636,7 +639,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     }
   }
 
-  if constexpr (kDebugRendering) {
+  if constexpr (kDebugVisual) {
     SkPaint old_anchor_paint;
     old_anchor_paint.setStyle(SkPaint::kStroke_Style);
     old_anchor_paint.setColor(SkColorSetARGB(255, 255, 0, 0));
@@ -654,7 +657,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     }
   }
 
-  if constexpr (kDebugRendering) {
+  if constexpr (kDebugVisual) {
     auto& font = GetFont();
     SkPaint text_paint;
     canvas->translate(pack_frame_texture_bounds->left(),
@@ -705,7 +708,8 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     Widget* widget;
     Verdict verdict = Verdict::Unknown;
     int baker;
-    int repack_parent;      // Ancestor this node folds its render cost into.
+    int repack_parent;  // Ancestor this node folds its render cost into.
+    int parent;
     bool detached = false;  // an Over()/Under() child, composited into its baker rather than parent
     int prev_job = -1;
     int next_job = -1;
@@ -813,6 +817,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       tree.push_back(WidgetTree{
           .widget = widget,
           .baker = detached ? tree[parent].baker : parent,
+          .parent = parent,
           .detached = detached,
       });
       int tree_index = tree.size() - 1;
@@ -847,6 +852,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
         if (widget->last_tick == time::SteadyPoint::min()) {
           // This is the first time this widget is being ticked - use `true_d` to animate it.
           fake_d = true_d;
+          widget->shape_invalid = true;
         }
         rw.timer.d = fake_d;
         auto tock = widget->Tick(rw.timer);
@@ -854,6 +860,18 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
         widget->last_tick = now;
         widget->next_tick = tock.next_tick;
         node.wants_to_draw = tock.draw;
+        widget->shape_invalid |= tock.shape;
+      }
+
+      if (parent != tree_index && widget->local_to_parent != widget->packed_local_to_parent) {
+        tree[parent].widget->subtree_shape_invalid = true;
+      }
+      widget->packed_local_to_parent = widget->local_to_parent;
+
+      if (widget->shape_invalid) {
+        widget->shape = widget->Shape();
+        widget->shape_invalid = false;
+        widget->subtree_shape_invalid = true;
       }
 
       widget->pack_frame_texture_bounds = widget->TextureBounds();
@@ -932,6 +950,14 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     // Record anchor positions, after all animations have "Tick"-ed.
     for (auto& node : tree) {
       node.pack_frame_texture_anchors = node.widget->TextureAnchors();
+    }
+
+    // Update `subtree_shape`.
+    for (int i = (int)tree.size() - 1; i >= 0; --i) {
+      if (tree[i].widget->subtree_shape_invalid) {
+        tree[i].widget->RecomputeSubtreeShape();
+        tree[tree[i].parent].widget->subtree_shape_invalid = true;
+      }
     }
   }
 
@@ -1167,6 +1193,21 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     // DRAW //
     //////////
     widget.Draw(*rec_canvas);  // This is where we actually draw stuff!
+    if constexpr (kDebugShapes) {
+      if (i == 0) {
+        for (int j = 0; j < tree.size(); ++j) {
+          auto& other = *tree[j].widget;
+          rec_canvas->setMatrix(other.local_to_window);
+          SkPaint shape_paint;
+          shape_paint.setStroke(true);
+          auto c = color::HSLuv(20 * 360.f * j / tree.size(), 100, 50);
+          shape_paint.setColor(c);
+          shape_paint.setStrokeWidth(1_mm);
+          shape_paint.setAlphaf(0.5f);
+          rec_canvas->drawPath(other.subtree_shape, shape_paint);
+        }
+      }
+    }
     update.compositor = widget.GetCompositor();
 
     constexpr bool kSerializeRecording = false;

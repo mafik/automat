@@ -277,12 +277,12 @@ void BoardWidget::DropLocation(Ptr<Location>&& l) {
                                  [&](const Ptr<Location>& loc) { return loc.get() == other; });
     if (other_it == board->locations.end()) continue;
     int other_index = std::distance(board->locations.begin(), other_it);
-    SkPath other_shape = other->widget->ShapeRigid();
+    SkPath other_shape = other->widget->subtree_shape;
     // Check if any location above `other` obscures it.
     for (int i = other_index - 1; i >= 0; --i) {
       Location& above = *board->locations[i];
       if (&above == &dropped) continue;
-      SkPath above_shape = above.widget->ShapeRigid();
+      SkPath above_shape = above.widget->subtree_shape;
       SkPath intersection;
       if (Op(above_shape, other_shape, kIntersect_SkPathOp, &intersection) &&
           intersection.countVerbs() > 0) {
@@ -389,11 +389,11 @@ void BoardWidget::ForStack(Location& base, std::function<void(Location&, int ind
                               [&base](const Ptr<Location>& l) { return l.get() == &base; });
   if (base_it == board->locations.end()) return;
   int base_index = std::distance(board->locations.begin(), base_it);
-  SkPath base_shape = base.widget->ShapeRigid();
+  SkPath base_shape = base.widget->subtree_shape;
   callback(base, base_index);
   for (int atop_index = base_index - 1; atop_index >= 0; --atop_index) {
     Location& atop = *board->locations[atop_index];
-    SkPath atop_shape = atop.widget->ShapeRigid();
+    SkPath atop_shape = atop.widget->subtree_shape;
     SkPath intersection;
     if (Op(atop_shape, base_shape, kIntersect_SkPathOp, &intersection) &&
         intersection.countVerbs() > 0) {
@@ -407,7 +407,7 @@ SkPath BoardWidget::StackShape(Location& base) {
   SkPath stack_shape;
   ForStack(base, [&](Location& loc, int) {
     if (&loc != &base) {
-      Op(stack_shape, loc.widget->ShapeRecursive(), kUnion_SkPathOp, &stack_shape);
+      Op(stack_shape, loc.widget->subtree_shape, kUnion_SkPathOp, &stack_shape);
     }
   });
   return stack_shape;

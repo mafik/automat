@@ -174,14 +174,11 @@ struct KeyPresserWidget : ObjectToy {
   }
 
   SkPath Shape() const override {
-    static SkPath shape = [this]() {
-      auto button_shape = shortcut_button->Shape();
-      auto hand_shape = GetHandShape();
-      SkPath joined_shape;
-      Op(button_shape, hand_shape, kUnion_SkPathOp, &joined_shape);
-      return joined_shape;
-    }();
-    return shape;
+    auto button_shape = shortcut_button->Shape();
+    auto hand_shape = GetHandShape();
+    SkPath joined_shape;
+    Op(button_shape, hand_shape, kUnion_SkPathOp, &joined_shape);
+    return joined_shape;
   }
 
   bool CenteredAtZero() const override { return true; }

@@ -396,7 +396,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
         target_aspect_ratio = 1.618f;
       }
 
-      tock.drawing |= aspect_ratio.SineTowards(target_aspect_ratio, timer.d, 0.3);
+      tock.shaping |= aspect_ratio.SineTowards(target_aspect_ratio, timer.d, 0.3);
 
       layout = Layout(aspect_ratio, region_rect);
 

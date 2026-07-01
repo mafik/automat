@@ -31,8 +31,7 @@ static ui::DropTarget* FindDropTarget(DragLocationAction& a, Widget& widget) {
   }
   if (auto drop_target = widget.AsDropTarget()) {
     Vec2 point = a.pointer.PositionWithin(widget);
-    auto shape = widget.Shape();
-    if (shape.isEmpty() || shape.contains(point.x, point.y)) {
+    if (widget.shape.isEmpty() || widget.shape.contains(point.x, point.y)) {
       if (drop_target->CanDrop(*a.locations.back())) {
         return drop_target;
       }

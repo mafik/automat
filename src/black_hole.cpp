@@ -27,7 +27,7 @@ Tock BlackHole::Tick(time::Timer& timer) {
   auto& root_widget = ParentRootWidget();
   float target_radius = root_widget.drag_action_count > 0 ? kMaxRadius : 0;
   Tock tock;
-  tock.drawing |= animation::ExponentialApproach(target_radius, timer.d, 0.1, radius);
+  tock.shaping |= animation::ExponentialApproach(target_radius, timer.d, 0.1, radius);
   if (radius > 0) {
     tock |= Tock::Drawing;
   }

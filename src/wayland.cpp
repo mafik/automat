@@ -1939,7 +1939,9 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
       return {};
     }
     Tock tock = Tock::Draw;
+    SkPath prev_input_shape = input_shape_;
     PullSurfaceState();
+    if (input_shape_ != prev_input_shape) tock |= Tock::Shape;
 
     auto content_origin = TopLeft();
     auto& toys = ToyStore();
@@ -1963,7 +1965,7 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
           if (LengthSquared(it->second.velocity) == 0 && Length(target - it->second.value) < 2_cm) {
             it->second.value = target;
           } else {
-            tock.drawing |= it->second.SineTowards(target, timer.d, 0.3);
+            tock.shaping |= it->second.SineTowards(target, timer.d, 0.3);
           }
         }
         p = it->second.value;
@@ -2178,52 +2180,25 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
     layers.OrderBelow(&ct);
   }
 
-  SkPath shape;
-
   static ui::Font& GetFont() {
     static auto font = ui::Font::MakeV2(ui::Font::GetBelanosimaRegular(), kTitleH);
     return *font;
   }
 
   Tock Tick(time::Timer&) override {
+    Str prev_title = title_;
+    bool prev_decorated = Decorated();
+    SkISize prev_content_size = content_size_;
     PullState();
     SyncContent();
     if (caret_) caret_->shape = FocusCaretShape();
 
-    if (Decorated()) {
-      auto& font = GetFont();
-
-      float w = font.sk_font.measureText(title_.c_str(), title_.size(), SkTextEncoding::kUTF8);
-      SkPath title_fill;
-      SkTextUtils::GetPath(title_.c_str(), title_.size(), SkTextEncoding::kUTF8, -w / 2, 0,
-                           font.sk_font, &title_fill);
-
-      SkPaint paint;
-      paint.setStyle(SkPaint::kStroke_Style);
-      // 0.3 is larger than 0.2 used for the real outline - this is to help in filling the holes in
-      // the text
-      paint.setStrokeWidth(kTitleH * 0.3 / font.font_scale);
-      SkPath title_outline = skpathutils::FillPathWithPaint(title_fill, paint);
-      auto uni = Op(title_fill, title_outline, SkPathOp::kUnion_SkPathOp);
-      if (uni) {
-        shape = *uni;
-      }
-      auto shift =
-          Op(shape, shape.makeOffset(0, 2_mm / font.font_scale), SkPathOp::kUnion_SkPathOp);
-      if (shift) {
-        shape = *shift;
-      }
-      auto frame = FrameOutRRect();
-      auto matrix = SkMatrix::ScaleTranslate(font.font_scale, -font.font_scale, 0, frame.rect.top);
-      auto with_frame =
-          Op(shape.makeTransform(matrix), SkPath::RRect(frame), SkPathOp::kUnion_SkPathOp);
-      if (with_frame) {
-        shape = *with_frame;
-      }
-    } else {
-      shape = SkPath::Rect(ContentRect());
+    Tock tock = Tock::Draw;
+    if (title_ != prev_title || Decorated() != prev_decorated ||
+        content_size_ != prev_content_size) {
+      tock |= Tock::Shape;
     }
-    return Tock::Draw;
+    return tock;
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -2273,8 +2248,35 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
     visitor(deco);
   }
 
-  SkPath Shape() const override { return shape; }
-  Optional<Rect> TextureBounds() const override { return shape.getBounds(); }
+  SkPath Shape() const override {
+    if (!Decorated()) return SkPath::Rect(ContentRect());
+
+    auto& font = GetFont();
+    float w = font.sk_font.measureText(title_.c_str(), title_.size(), SkTextEncoding::kUTF8);
+    SkPath title_fill;
+    SkTextUtils::GetPath(title_.c_str(), title_.size(), SkTextEncoding::kUTF8, -w / 2, 0,
+                         font.sk_font, &title_fill);
+
+    SkPaint paint;
+    paint.setStyle(SkPaint::kStroke_Style);
+    // 0.3 is larger than 0.2 used for the real outline - this is to help in filling the holes in
+    // the text
+    paint.setStrokeWidth(kTitleH * 0.3 / font.font_scale);
+    SkPath title_outline = skpathutils::FillPathWithPaint(title_fill, paint);
+
+    SkPath s = title_fill;
+    if (auto uni = Op(title_fill, title_outline, SkPathOp::kUnion_SkPathOp)) s = *uni;
+    if (auto shift = Op(s, s.makeOffset(0, 2_mm / font.font_scale), SkPathOp::kUnion_SkPathOp)) {
+      s = *shift;
+    }
+    auto frame = FrameOutRRect();
+    auto matrix = SkMatrix::ScaleTranslate(font.font_scale, -font.font_scale, 0, frame.rect.top);
+    if (auto with_frame =
+            Op(s.makeTransform(matrix), SkPath::RRect(frame), SkPathOp::kUnion_SkPathOp)) {
+      s = *with_frame;
+    }
+    return s;
+  }
 
   void Draw(SkCanvas& canvas) const override {
     if (Decorated()) {

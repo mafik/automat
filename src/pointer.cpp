@@ -56,11 +56,7 @@ static bool FillPath(Pointer& p, Widget& w) {
   p.path.emplace_back(&w);
   Vec2 point = TransformDown(w).mapPoint(p.pointer_position);
 
-  auto shape = w.Shape();
-  bool p_inside_w = shape.contains(point.x, point.y);
-  bool w_is_unbounded = shape.isEmpty();
-
-  if (p_inside_w || w_is_unbounded) {
+  if (w.subtree_shape.contains(point.x, point.y)) {
     for (auto* child : w.layers) {
       if (w.AllowChildPointerEvents(*child)) {
         if (FillPath(p, *child)) {
@@ -71,7 +67,7 @@ static bool FillPath(Pointer& p, Widget& w) {
   }
   // This condition happens at most once per search. All of the parent stack frames are
   // short-circuited by `return true`.
-  if (p_inside_w) {
+  if (w.shape.contains(point.x, point.y)) {
     return true;
   }
 
@@ -449,8 +445,7 @@ SkPath Outset(const SkPath& path, float distance) {
 
 void PointerWidget::Draw(SkCanvas& canvas) const {
   for (auto& state : highlight_current) {
-    auto shape = state.widget->Shape();
-    SkPath outset_shape = Outset(shape, 2.5_mm * state.highlight);
+    SkPath outset_shape = Outset(state.widget->shape, 2.5_mm * state.highlight);
     outset_shape.setIsVolatile(true);
     canvas.save();
     canvas.concat(TransformBetween(*state.widget, *this));

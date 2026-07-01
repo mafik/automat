@@ -193,11 +193,6 @@ SkPath LocationWidget::Shape() const {
   return empty_path;
 }
 
-SkPath LocationWidget::ShapeRigid() const {
-  if (!toy) return SkPath();
-  return toy->ShapeRigid().makeTransform(toy->local_to_parent.asM33());
-}
-
 Optional<Rect> LocationWidget::TextureBounds() const { return nullopt; }
 
 ui::Tock LocationWidget::Tick(time::Timer& timer) {
@@ -260,7 +255,7 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
   if (toy == nullptr) {
     return;  // TODO: Draw a placeholder, we should support empty locations
   }
-  SkPath my_shape = toy->Shape();
+  SkPath my_shape = toy->shape;
   Rect bounds = Rect(my_shape.getBounds());
   toy->local_to_parent.asM33().mapRect(&bounds.sk);
 

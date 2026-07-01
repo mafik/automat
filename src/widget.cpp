@@ -308,25 +308,27 @@ void Widget::ValidateHierarchy(std::source_location location) {
   }
 }
 
-SkPath Widget::ShapeRecursive() const {
-  SkPath shape = Shape();
-  if (shape.isEmpty()) {  // only descend into children if the parent widget has no shape
-    SkPathBuilder builder;
-    builder.addPath(shape);
-    for (auto* child : layers) {
-      SkPath child_shape = child->ShapeRigid().makeTransform(child->local_to_parent.asM33());
-      builder.addPath(child_shape);
-    }
-    shape = builder.detach();
+void Widget::RecomputeSubtreeShape() {
+  SkOpBuilder builder;
+  builder.add(shape, kUnion_SkPathOp);
+  for (int i = 0; i < layers.size();) {
+    auto* child = layers[i];
+    SkPath child_shape = child->subtree_shape.makeTransform(child->local_to_parent.asM33());
+    builder.add(child_shape, kUnion_SkPathOp);
+    if (++i == layers.bake_begin) i = layers.bake_end;  // advance skipping baked children
   }
-  return shape;
+  if (auto new_subtree_shape = builder.resolve()) {
+    subtree_shape = std::move(*new_subtree_shape);
+    subtree_shape.setIsVolatile(true);
+  } else {
+    subtree_shape = shape;
+  }
+  subtree_shape_invalid = false;
 }
 
-SkPath Widget::ShapeRigid() const { return ShapeRecursive(); }
-
 bool Widget::Intersects(const Widget& a, const Widget& b) {
-  SkPath a_shape = a.ShapeRigid().makeTransform(TransformBetween(a, b));
-  SkPath b_shape = b.ShapeRigid();
+  SkPath a_shape = a.subtree_shape.makeTransform(TransformBetween(a, b));
+  SkPath b_shape = b.subtree_shape;
   SkPath intersection;
   bool result = Op(a_shape, b_shape, kIntersect_SkPathOp, &intersection);
   return result && intersection.countVerbs() > 0;

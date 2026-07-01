@@ -927,6 +927,7 @@ struct TimelineWidget : ObjectToy {
       auto& track_widget = toy_store.FindOrMake(*tracks[i], this);
       track_widgets.emplace_back(&track_widget);
       layers.OrderInside(&track_widget);
+      shape_invalid = true;
     }
   }
 

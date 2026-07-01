@@ -149,6 +149,9 @@ void Pointer::Enter() { root_widget.pointers.Add(*this); }
 void Pointer::Leave() {
   auto old_path = std::move(path);
   path.clear();
+  if (hover) {
+    hover->PointerUnhover(*this);
+  }
   hover = nullptr;
   for (auto& w : old_path) {
     if (w) {

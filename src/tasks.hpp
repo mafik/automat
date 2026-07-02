@@ -51,8 +51,8 @@ struct Task {
 };
 
 struct RunTask : Task {
-  Interface::Table* runnable;
-  RunTask(WeakPtr<Object> target, Interface::Table* runnable) : Task(target), runnable(runnable) {}
+  Interface::Table* signal;
+  RunTask(WeakPtr<Object> target, Interface::Table* signal) : Task(target), signal(signal) {}
   std::string Format() override;
   void OnExecute(std::unique_ptr<Task>& self) override;
 

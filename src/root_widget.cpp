@@ -168,14 +168,16 @@ void RootWidget::Init() {
   RendererInit();
   PersistentImage::PreloadAll();
 
-  render_thread = std::jthread(RenderThread, std::ref(*this), stop_source.get_token());
-
   // Only show loading animation in release builds.
   if (build_variant::Release) {
     loading_animation = std::make_unique<HypnoRect>();
   }
 
   BuildToolbar(*this);
+
+  // Started last: the render thread ticks the toolbar and the toy store, so both must be fully
+  // built before it exists.
+  render_thread = std::jthread(RenderThread, std::ref(*this), stop_source.get_token());
 }
 
 ui::Tock RootWidget::ZoomWarning::Tick(time::Timer& timer) {

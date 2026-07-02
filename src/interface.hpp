@@ -49,8 +49,9 @@ struct Interface {
     kArgument,
     kObjectArgument,
     kInterfaceArgument,
-    kNextArg,  // sub-kind of InterfaceArgument
-    kLastInterfaceArgument = kNextArg,
+    kNextArg,    // sub-kind of InterfaceArgument
+    kStreamArg,  // sub-kind of InterfaceArgument; connects to a StreamInput
+    kLastInterfaceArgument = kStreamArg,
     kSyncable,     // also an Argument (via Syncable)
     kOnOff,        // also a Syncable
     kLongRunning,  // also an OnOff
@@ -58,8 +59,9 @@ struct Interface {
     kLastSyncable = kLastOnOff,
     kLastArgument = kLastSyncable,
     // Standalone interfaces
-    kRunnable,
+    kSignal,
     kImageProvider,
+    kStreamInput,
   };
 
   struct Table {
@@ -105,7 +107,7 @@ struct Interface {
     }
 
     template <typename T>
-    operator typename T::Bound(this const T& self) {
+    operator typename T::Bound(this const T & self) {
       return self.Bind();
     }
 

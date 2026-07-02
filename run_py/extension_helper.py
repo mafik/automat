@@ -120,10 +120,12 @@ class ExtensionHelper:
       self.old_hook_recipe(recipe)
 
     if self.git_url:
+      # The stamp only exists after a completed clone, so an interrupted download
+      # (partial checkout without a stamp) re-runs and repairs itself.
       recipe.add_step(
           git.clone(self.git_url, self.checkout_dir, self.git_tag),
-          outputs=[self.checkout_dir],
-          inputs=[self.module_globals['__file__'], __file__],
+          outputs=[self.checkout_dir, git.clone_stamp(self.checkout_dir)],
+          inputs=[self.module_globals['__file__'], __file__, git.__file__],
           desc = f'Downloading {self.name}',
           shortcut=f'get {self.name}')
       self.beam = [self.checkout_dir]

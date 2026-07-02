@@ -9,12 +9,15 @@
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPathBuilder.h>
+#include <include/core/SkPathMeasure.h>
+#include <include/core/SkPathUtils.h>
 #include <include/core/SkRRect.h>
 #include <include/core/SkRSXform.h>
 #include <include/core/SkShader.h>
 #include <include/core/SkTextBlob.h>
 #include <include/core/SkTileMode.h>
 #include <include/core/SkVertices.h>
+#include <include/effects/SkDashPathEffect.h>
 #include <include/effects/SkGradient.h>
 #include <include/effects/SkRuntimeEffect.h>
 #include <src/core/SkPathPriv.h>
@@ -62,12 +65,27 @@ Location* ConnectionWidget::EndLocation() const {
 ConnectionWidget::ConnectionWidget(Widget* parent, Object& start, Argument::Table& arg)
     : ArgumentToy(parent, start, &arg) {}
 
+constexpr float kStreamBore = 4_mm;
+constexpr float kStreamWall = 0.5_mm;
+
 SkPath ConnectionWidget::Shape() const {
   if (state && transparency < 0.99f) {
     return state->Shape();
-  } else {
-    return SkPath();
   }
+  if (style == Argument::Style::Stream && transparency < 0.99f) {
+    // The pipe itself is grabbable: a stub around the start plus the routed bore.
+    SkPathBuilder builder;
+    builder.addRect(Rect::MakeCenter(pos_dir.pos, kStreamBore * 2, kStreamBore * 2).sk);
+    if (arcline) {
+      SkPaint outline;
+      outline.setStyle(SkPaint::kStroke_Style);
+      outline.setStrokeWidth(cable_width + 2 * kStreamWall);
+      SkPath bore_path = arcline->ToPath(false);
+      builder.addPath(skpathutils::FillPathWithPaint(bore_path, outline));
+    }
+    return builder.detach();
+  }
+  return SkPath();
 }
 
 struct ConnectionSpotlight : Widget {
@@ -446,8 +464,65 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
 
   if (state) {
     arcline.reset();
+  } else if (style == Argument::Style::Stream && to_points.empty()) {
+    // Unconnected stream port: a short downward stub that can still be grabbed.
+    Vec<Vec2AndDir> stub;
+    stub.push_back(Vec2AndDir{.pos = pos_dir.pos + Vec2(0, -8_mm), .dir = -90_deg});
+    arcline = RouteCable(pos_dir, stub, nullptr);
   } else {
     arcline = RouteCable(pos_dir, to_points, nullptr);
+  }
+
+  if (style == Argument::Style::Stream) {
+    if (auto stream_arg = dyn_cast<StreamArgument>(arg)) {
+      stream_format = stream_arg.Format();
+      auto stats = stream_arg.Stats();
+      stream_bytes_per_s = (float)stream_byte_rate.Update(timer.NowSeconds(), stats.bytes);
+      stream_units_per_s = (float)stream_unit_rate.Update(timer.NowSeconds(), stats.units);
+      stream_fill = stats.fill;
+      stream_capacity = stats.capacity;
+      if (stats.blocked != StreamBlocked::None) {
+        if (stats.blocked != stream_blocked) {
+          stream_blocked = stats.blocked;
+          stream_blocked_score = 0;
+        }
+        stream_blocked_score = std::min(1.f, stream_blocked_score + 3.f * (float)timer.d);
+      } else {
+        stream_blocked_score = std::max(0.f, stream_blocked_score - 1.5f * (float)timer.d);
+      }
+      // Hysteresis: appears after roughly a third of a second of mostly
+      // blocked samples, disappears after sustained free running.
+      bool blocked_shown =
+          stream_blocked_shown ? stream_blocked_score > 0.1f : stream_blocked_score > 0.85f;
+      bool moving = a.end_iface && stream_bytes_per_s > 1;
+      if (moving) {
+        // Dash speed grows with the logarithm of the byte rate so slow and
+        // fast streams both read as motion without becoming a blur.
+        float speed = std::min<float>(30_mm, 2_mm * log2f(1 + stream_bytes_per_s / 1024));
+        stream_dash_phase -= speed * timer.d;
+      }
+      float fill_fraction = stream_capacity ? (float)stream_fill / stream_capacity : 0;
+      if (moving || fabsf(stream_bytes_per_s - stream_rate_drawn) > 0.5f ||
+          fabsf(fill_fraction - stream_fill_drawn) > 0.02f ||
+          blocked_shown != stream_blocked_shown) {
+        tock |= Tock::Drawing;
+        stream_rate_drawn = stream_bytes_per_s;
+        stream_fill_drawn = fill_fraction;
+        stream_blocked_shown = blocked_shown;
+      }
+      // A connected stream keeps observing its counters; the meters are the
+      // only way the widget learns that flow started or stopped.
+      if (a.end_iface) tock |= Tock::Ing;
+    }
+  }
+
+  if (!refusal_text.empty()) {
+    if (timer.now < refusal_until) {
+      tock |= Tock::Drawing;
+    } else {
+      refusal_text.clear();
+      tock |= Tock::Drawing;
+    }
   }
 
   if (!state.has_value() && style != Argument::Style::Arrow && alpha > 0.01f) {
@@ -484,6 +559,12 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
     }
 
     tock.shaping |= SimulateCablePhysics(timer, *state, pos_dir, to_points);
+  } else if (style == Argument::Style::Stream) {
+    // The bore stays visible as a stub even while unconnected, so the port
+    // can be grabbed and dragged to a StreamInput.
+    cable_width.target = a.end_iface ? kStreamBore : 1.2_mm;
+    cable_width.speed = 5;
+    tock.shaping |= cable_width.Tick(timer);
   } else if (style != Argument::Style::Arrow) {
     cable_width.target = a.end_iface ? 2_mm : 0;
     cable_width.speed = 5;
@@ -862,6 +943,184 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
       if (!to_shape.isEmpty()) {
         DrawArrow(canvas, from_shape, to_shape);
       }
+    } else if (style == Argument::Style::Stream) {
+      if (cable_width > 0.2_mm && alpha > 0.01f && arcline) {
+        SkPath path = arcline->ToPath(false);
+        float bore = cable_width;
+        SkPaint wall_paint;
+        wall_paint.setStyle(SkPaint::kStroke_Style);
+        wall_paint.setStrokeWidth(bore + 2 * kStreamWall);
+        wall_paint.setColor(tint);
+        wall_paint.setStrokeCap(SkPaint::kRound_Cap);
+        wall_paint.setAntiAlias(true);
+        canvas.drawPath(path, wall_paint);
+
+        SkPaint interior_paint;
+        interior_paint.setStyle(SkPaint::kStroke_Style);
+        interior_paint.setStrokeWidth(bore);
+        interior_paint.setColor(SkColorSetRGB(0xff, 0xfd, 0xf0));
+        interior_paint.setStrokeCap(SkPaint::kRound_Cap);
+        interior_paint.setAntiAlias(true);
+        canvas.drawPath(path, interior_paint);
+
+        bool connected = !to_shape.isEmpty();
+        if (connected) {  // the dash pattern advances with the measured byte rate
+          SkPaint dash_paint;
+          dash_paint.setStyle(SkPaint::kStroke_Style);
+          dash_paint.setStrokeWidth(bore * 0.45f);
+          dash_paint.setColor(SkColorSetRGB(0x4a, 0x4a, 0x4a));
+          dash_paint.setAlphaf(stream_bytes_per_s > 1 ? 0.55f : 0.15f);
+          dash_paint.setStrokeCap(SkPaint::kRound_Cap);
+          dash_paint.setAntiAlias(true);
+          float intervals[2] = {4_mm, 6_mm};
+          dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, stream_dash_phase));
+          canvas.drawPath(path, dash_paint);
+        }
+
+        bool chip_wanted = !stream_format.empty() || stream_bytes_per_s > 1 ||
+                           stream_capacity > 0 || stream_blocked_shown;
+        if (connected && chip_wanted) {
+          // The stream's meters beside the middle of the run, on a small
+          // paper chip so they stay readable on any board: format and rate
+          // in the library's own words, the buffer's fill against its
+          // capacity, and the blocked side once it persists.
+          SkPathMeasure measure(path, false);
+          SkPoint mid_pos;
+          if (measure.getPosTan(measure.getLength() / 2, &mid_pos, nullptr)) {
+            auto& font = GetFont();
+            const SkColor kInk = SkColorSetRGB(0x1a, 0x1a, 0x1a);
+            const SkColor kInkSoft = SkColorSetRGB(0x4a, 0x4a, 0x4a);
+            struct ChipLine {
+              Str text;
+              SkColor color;
+            };
+            Vec<ChipLine> lines;
+            if (!stream_format.empty()) lines.push_back({stream_format, kInk});
+            if (stream_bytes_per_s > 1) {
+              // Buffers are the library's own transfer unit; byte streams
+              // (units = 0) print the byte rate alone.
+              Str rate = stream_units_per_s > 0.1f ? f("{:.1f} buf/s · {}", stream_units_per_s,
+                                                       FormatBytesPerSecond(stream_bytes_per_s))
+                                                   : FormatBytesPerSecond(stream_bytes_per_s);
+              lines.push_back({rate, kInkSoft});
+            }
+            int fill_line = -1;
+            constexpr float kBarW = 12_mm;
+            if (stream_capacity > 0) {
+              fill_line = (int)lines.size();
+              lines.push_back(
+                  {f("{} / {}", FormatBytes(stream_fill), FormatBytes(stream_capacity)), kInkSoft});
+            }
+            if (stream_blocked_shown) {
+              lines.push_back({stream_blocked == StreamBlocked::Producer
+                                   ? Str("backpressured producer")
+                                   : Str("starved consumer"),
+                               kInk});
+            }
+            float line_height = kLetterSizeMM / 1000;
+            float line_step = line_height * 1.5f;
+            float pad = 0.8_mm;
+            float text_w = 0;
+            for (int i = 0; i < (int)lines.size(); ++i) {
+              float w = font.MeasureText(lines[i].text);
+              if (i == fill_line) w += kBarW + 1_mm;
+              text_w = std::max(text_w, w);
+            }
+            float x0 = mid_pos.fX + bore / 2 + kStreamWall + 1.2_mm;
+            Rect back(x0 - pad, mid_pos.fY - ((int)lines.size() - 1) * line_step - pad,
+                      x0 + text_w + pad, mid_pos.fY + line_height + pad);
+            SkPaint back_paint;
+            back_paint.setColor(SkColorSetARGB(0xe6, 0xff, 0xfd, 0xf0));
+            back_paint.setAntiAlias(true);
+            canvas.drawRRect(RRect::MakeSimple(back, 0.8_mm).sk, back_paint);
+            SkPaint back_stroke;
+            back_stroke.setStyle(SkPaint::kStroke_Style);
+            back_stroke.setStrokeWidth(0.15_mm);
+            back_stroke.setColor(SkColorSetRGB(0x7f, 0x7f, 0x7f));
+            back_stroke.setAntiAlias(true);
+            canvas.drawRRect(RRect::MakeSimple(back, 0.8_mm).sk, back_stroke);
+            for (int i = 0; i < (int)lines.size(); ++i) {
+              float baseline = mid_pos.fY - i * line_step;
+              float text_x = x0;
+              if (i == fill_line) {
+                // The fill bar, then the numbers after it.
+                Rect bar(x0, baseline, x0 + kBarW, baseline + line_height);
+                float fraction =
+                    std::min(1.f, (float)stream_fill / std::max<uint64_t>(1, stream_capacity));
+                SkPaint bar_fill;
+                bar_fill.setColor(SkColorSetRGB(0x99, 0xd9, 0xea));
+                bar_fill.setAntiAlias(true);
+                canvas.drawRect(
+                    SkRect::MakeLTRB(bar.left, bar.bottom, bar.left + kBarW * fraction, bar.top),
+                    bar_fill);
+                SkPaint bar_stroke;
+                bar_stroke.setStyle(SkPaint::kStroke_Style);
+                bar_stroke.setStrokeWidth(0.15_mm);
+                bar_stroke.setColor(kInkSoft);
+                bar_stroke.setAntiAlias(true);
+                canvas.drawRect(bar.sk, bar_stroke);
+                text_x += kBarW + 1_mm;
+              }
+              SkPaint text_paint;
+              text_paint.setColor(lines[i].color);
+              text_paint.setAntiAlias(true);
+              canvas.save();
+              canvas.translate(text_x, baseline);
+              font.DrawText(canvas, lines[i].text, text_paint);
+              canvas.restore();
+            }
+          }
+        }
+
+        if (!connected && !refusal_text.empty()) {
+          // A refused link: the oracle's reason on the same paper chip,
+          // beside the port, fading out toward the deadline.
+          float remaining = time::ToSeconds(refusal_until - time::SteadyNow());
+          float fade = std::clamp(remaining, 0.f, 1.f);
+          if (fade > 0) {
+            auto& font = GetFont();
+            const SkColor kRefusalInk = SkColorSetRGB(0xa0, 0x10, 0x10);
+            Vec<Str> lines;
+            for (size_t start = 0; start < refusal_text.size();) {
+              size_t end = refusal_text.find('\n', start);
+              if (end == Str::npos) end = refusal_text.size();
+              lines.push_back(refusal_text.substr(start, end - start));
+              start = end + 1;
+            }
+            float line_height = kLetterSizeMM / 1000;
+            float line_step = line_height * 1.5f;
+            float pad = 0.8_mm;
+            float text_w = 0;
+            for (auto& line : lines) text_w = std::max(text_w, font.MeasureText(line));
+            // Below the port's stub: open board in typical layouts, and the
+            // spot the rejected connector snaps back to.
+            float x0 = pos_dir.pos.x + 2_mm;
+            float y0 = pos_dir.pos.y - 12_mm;
+            Rect back(x0 - pad, y0 - ((int)lines.size() - 1) * line_step - pad, x0 + text_w + pad,
+                      y0 + line_height + pad);
+            SkPaint back_paint;
+            back_paint.setColor(SkColorSetARGB((uint8_t)(0xe6 * fade), 0xff, 0xfd, 0xf0));
+            back_paint.setAntiAlias(true);
+            canvas.drawRRect(RRect::MakeSimple(back, 0.8_mm).sk, back_paint);
+            SkPaint back_stroke;
+            back_stroke.setStyle(SkPaint::kStroke_Style);
+            back_stroke.setStrokeWidth(0.15_mm);
+            back_stroke.setColor(SkColorSetARGB((uint8_t)(0xff * fade), 0xa0, 0x10, 0x10));
+            back_stroke.setAntiAlias(true);
+            canvas.drawRRect(RRect::MakeSimple(back, 0.8_mm).sk, back_stroke);
+            SkPaint text_paint;
+            text_paint.setColor(kRefusalInk);
+            text_paint.setAlphaf(fade);
+            text_paint.setAntiAlias(true);
+            for (int i = 0; i < (int)lines.size(); ++i) {
+              canvas.save();
+              canvas.translate(x0, y0 - i * line_step);
+              font.DrawText(canvas, lines[i], text_paint);
+              canvas.restore();
+            }
+          }
+        }
+      }
     } else if (cable_width > 0.01_mm && alpha > 0.01f && arcline) {
       auto color = SkColorSetA(tint, 255 * cable_width.value / 2_mm);
       auto color_filter = color::MakeTintFilter(color, 30);
@@ -872,6 +1131,12 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
   if (using_layer) {
     canvas.restore();
   }
+}
+
+void ConnectionWidget::ShowRefusal(Str text) {
+  refusal_text = std::move(text);
+  refusal_until = time::SteadyNow() + std::chrono::seconds(6);
+  WakeAnimation();
 }
 
 std::unique_ptr<Action> ConnectionWidget::FindAction(Pointer& pointer, ActionTrigger trigger) {
@@ -933,7 +1198,8 @@ void DragConnectionAction::Update() {
     return;
   }
   Vec2 new_position = pointer.PositionWithinRootBoard();
-  widget->manual_position = new_position - grab_offset * widget->state->connector_scale;
+  float connector_scale = widget->state ? (float)widget->state->connector_scale : 1.f;
+  widget->manual_position = new_position - grab_offset * connector_scale;
   widget->WakeAnimation();
 }
 
@@ -959,6 +1225,14 @@ Optional<Rect> ConnectionWidget::TextureBounds() const {
     }
     return bounds;
   } else if (arcline) {
+    if (style == Argument::Style::Stream) {
+      // Room for the bore walls plus the format/rate labels beside the middle.
+      Rect bounds = arcline->Bounds().Outset(cable_width / 2 + kStreamWall + 40_mm);
+      if (!refusal_text.empty()) {
+        bounds.ExpandToInclude(Rect::MakeCenter(pos_dir.pos - Vec2(0, 2_cm), 24_cm, 6_cm));
+      }
+      return bounds;
+    }
     return arcline->Bounds().Outset(cable_width / 2);
   }
   return std::nullopt;

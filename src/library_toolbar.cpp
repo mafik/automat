@@ -27,6 +27,9 @@ void PrototypeButton::Init() {
 }
 
 std::unique_ptr<Action> PrototypeButton::FindAction(ui::Pointer& pointer, ui::ActionTrigger btn) {
+  if (btn == ui::PointerButton::Right) {
+    return proto_widget->OpenMenu(pointer);
+  }
   if (btn != ui::PointerButton::Left) {
     return nullptr;
   }

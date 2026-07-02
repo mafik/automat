@@ -3,8 +3,12 @@
 #include "prototypes.hpp"
 
 #include "library_assembler.hpp"
+#include "library_beta_shelf.hpp"
 #include "library_command.hpp"
+#include "library_ffmpeg.hpp"
 #include "library_flip_flop.hpp"
+#include "library_gegl.hpp"
+#include "library_gstreamer.hpp"
 #include "library_hotkey.hpp"
 #include "library_instruction_library.hpp"
 #include "library_key_presser.hpp"
@@ -12,7 +16,9 @@
 #include "library_macro_recorder.hpp"
 #include "library_mouse.hpp"
 #include "library_number.hpp"
+#include "library_pipewire.hpp"
 #include "library_sources.hpp"
+#include "library_tensorflow.hpp"
 #include "library_tesseract_ocr.hpp"
 #include "library_timeline.hpp"
 #include "library_timer.hpp"
@@ -51,7 +57,7 @@ PrototypeLibrary::PrototypeLibrary() {
   IndexHelper index(*this);
 
   index.Register<FlipFlop>();
-  index.Register<Command>();
+  index.Register<Command, HideInToolbar>();
   index.Register<MacroRecorder>();
   index.Register<Timer>();
   index.Register<HotKey>();
@@ -74,8 +80,25 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<Gear, HideInToolbar>();
   index.Register<WaylandWindow, HideInToolbar>();
   index.Register<X11Window, HideInToolbar>();
+  index.Register<BetaShelf>();
+#if !defined(_WIN32)
+  index.Register<GStreamerElement, HideInToolbar>("videotestsrc", "pattern");
+  index.Register<GStreamerElement, HideInToolbar>("videoflip", "video-direction");
+  index.Register<GStreamerElement, HideInToolbar>("videoconvert");
+  index.Register<GStreamerElement, HideInToolbar>("audiotestsrc", "wave");
+  index.Register<GStreamerElement, HideInToolbar>("audioconvert");
+  index.Register<GStreamerElement, HideInToolbar>("level");
+  index.Register<AppSinkBoundary, HideInToolbar>();
+  index.Register<AppSrcBoundary, HideInToolbar>();
+  index.Register<MediaFile, HideInToolbar>();
+  index.Register<FfmpegDecoder, HideInToolbar>();
+  index.Register<GeglBlur, HideInToolbar>();
+  index.Register<PipeWireNode, HideInToolbar>();
+  index.Register<TfTensor, HideInToolbar>();
+  index.Register<TfOp, HideInToolbar>("Square");
+#endif
   {  // The Leptonica tools are reached through the shelf, not the toolbar.
-    index.Register<LeptonicaShelf>();
+    index.Register<LeptonicaShelf, HideInToolbar>();
     index.Register<LeptonicaImage, HideInToolbar>();
     index.Register<Generate, HideInToolbar>();
     index.Register<Threshold, HideInToolbar>();

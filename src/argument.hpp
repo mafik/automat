@@ -50,7 +50,7 @@ struct Argument : Interface {
       return i->kind >= Interface::kArgument && i->kind <= Interface::kLastArgument;
     }
 
-    enum class Style { Arrow, Cable, Spotlight, Invisible };
+    enum class Style { Arrow, Cable, Spotlight, Invisible, Stream };
 
     // The primary color of this connection.
     SkColor4f tint = "#404040"_color4f;
@@ -68,6 +68,12 @@ struct Argument : Interface {
     // end.table may be nullptr if the connection targets the object itself (not a specific
     // interface). Issues should be reported through the Status argument.
     void (*can_connect)(Argument, Interface end, Status&) = nullptr;
+
+    // Whether `end` has the shape this argument targets (right interface kind or object type),
+    // regardless of deeper compatibility. When an end matches in kind but `can_connect` refuses,
+    // the refusal is worth showing to the user (the two formats of an impossible stream link);
+    // a plain kind mismatch is not.
+    bool (*end_kind_matches)(Argument, Interface end) = [](Argument, Interface) { return false; };
 
     // Establishes or breaks a connection. A null end means disconnect.
     // If end.object_ptr is non-null, it's guaranteed to be alive during this call but not
@@ -257,6 +263,9 @@ struct ObjectArgument : Argument {
       can_connect = &DefaultCanConnect;
       on_connect = &DefaultOnConnect;
       find = &DefaultFind;
+      end_kind_matches = [](Argument, Interface end) {
+        return !end.has_table() && dynamic_cast<T*>(end.object_ptr) != nullptr;
+      };
     }
   };
 
@@ -326,6 +335,9 @@ struct InterfaceArgument : Argument {
       can_connect = &DefaultCanConnect;
       on_connect = &DefaultOnConnect;
       find = &DefaultFind;
+      end_kind_matches = [](Argument, Interface end) {
+        return dyn_cast_if_present<typename T::Table>(end.table_ptr) != nullptr;
+      };
       if constexpr (kKind == Interface::kNextArg) make_icon = &DefaultMakeIcon;
     }
   };

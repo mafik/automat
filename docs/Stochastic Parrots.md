@@ -106,7 +106,7 @@ Documentation maintained using stochastic parrots should be placed in `docs/parr
 - `docs/parrots/Clone Pile.md` - describes how elements that create a new object when touched present themselves
 - `docs/parrots/Command Launcher.md` - the Command object: argv tiles, no shell, run states, composition points
 - `docs/parrots/Leptonica Language.md` - documents the visual language of Leptonica objects
-- `docs/parrots/Pipeline Language.md` - the visual language for pipeline systems (GStreamer, PipeWire, FFmpeg, GEGL, TensorFlow, UNIX pipes): pipes, capsules, vessels, pumps, taps, and how push, pull & sequential drive mix
+- `docs/parrots/Pipeline Language.md` - the design for pipeline libraries (GStreamer, PipeWire, FFmpeg, GEGL, TensorFlow, UNIX pipes): blocks that work the moment they are dropped, previews and meters fed by real API counters, native format labels, visible adapters, and how self-running and Automat-driven blocks mix
 - `docs/parrots/Beta Brand.md` - describes the visual identification for Toys made with stochastic parrots
 - `docs/parrots/Wayland Client Persistence.md` - options for saving/cloning windows backed by live processes; why recipes won
 - `docs/parrots/Wayland Compositor.md` - Automat as a Wayland compositor: the bespoke protocol stack, the epoll event loop, protocol surface, GPU buffer passing (dmabuf), surface cropping and scaling (viewporter), subsurface compositing, popups, clipboard, input pass-through, window lifetime
@@ -213,6 +213,8 @@ GOOD example: "The output is cached so after each include-graph changes, you mus
 ### Build System Gotchas
 
 - **Stale third-party build dirs**: After system package updates, dependency build dirs under `build/{variant}/` can hold stale paths to removed system files and fail in odd ways (PipeWire: "missing libcap.so"; fmt: "/usr/lib/llvm/20/bin/llvm-ar: No such file or directory" after an LLVM upgrade; libsystemd: "loading 'build.ninja': No such file or directory"). Fix: delete that dependency's build directory (e.g. `rm -rf build/fast/fmt`) and rebuild. Several deps may be affected in sequence.
+- **Link args alone do not trigger a relink**: the link step's freshness is file-based, so editing only an extension's `AddLinkArg` list leaves a stale binary. You must run `rm build/{variant}/automat` and build again to force the relink.
+- **Never let `-Wl,--export-dynamic` into the link**: gmodule-2.0.pc injects it, and it exports the entire statically linked binary (GLib, LLVM) into the dynamic symbol table, where dlopen'd libraries such as software Vulkan drivers bind against those symbols and hang rendering at startup (the white-window signature). `StaticLibs()` in src/glib.py strips the flag for every consumer, so pkg-config-based link args must go through it.
 
 ### Renderer & Widget Lifecycle Gotchas
 

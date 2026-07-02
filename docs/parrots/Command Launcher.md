@@ -87,6 +87,44 @@ appears seated next to the Command's plate and keeps a `Launcher` connection
 back to it — the visible cable that also makes the relationship survive saves
 (see `Wayland Compositor.md` and `Wayland Client Persistence.md`).
 
-Deliberately absent: environment editing, working-directory control and
-stdio plumbing. The plate's left edge is kept free for those as future
-connection points, per the data-on-the-left grammar.
+## stdio streams
+
+The Command exposes two stream ports (`src/stream.hpp`): `stdout` leaves at
+the plate's lower left and `stdin` accepts connections at the top edge.
+Connecting one Command's stdout to another's stdin is recipe data, like the
+argv tiles: nothing happens until start. Starting a Command starts the
+stages downstream of it, the way a shell starts every stage of `a | b | c`
+together, because an anonymous pipe needs both ends at spawn. The pipe is
+created with pipe2 and installed through posix_spawn_file_actions; Automat
+keeps no end of it, because a held read end would suppress the writer's
+SIGPIPE and a held write end would suppress the reader's EOF. Stopping has
+no counterpart rule: when one stage exits, the kernel propagates EOF and
+SIGPIPE and the exit chips report it (a `SIGPIPE` chip is the normal way a
+pipeline ends early).
+
+The stream connection renders as a pipe and prints its meters on a chip
+beside its middle. The chip carries only what the kernel attributes to the
+pipe itself: the format ("bytes" — byte streams have no formats to
+negotiate), the pipe's fill against its capacity as a bar, and, once it
+persists, the blocked side ("backpressured producer" or "starved
+consumer"). Fill and capacity come from FIONREAD and F_GETPIPE_SZ through
+a transient pidfd_getfd dup of the child's own write end, closed
+immediately because a held end would distort the pipeline's EOF and
+SIGPIPE semantics; the blocked side comes from /proc/pid/syscall of the
+two children (write on fd 1, read on fd 0 — the fd argument ties the
+blocked state to this pipe), smoothed with hysteresis because a producer
+under flow is momentarily blocked on many samples.
+
+Throughput is deliberately NOT on the pipe. The kernel keeps no
+per-descriptor byte counters; /proc/pid/io wchar counts the whole
+process's writes, so a rate derived from it is a process property and a
+pipe label would misattribute the process's other traffic to this
+connection. Write totals and rates therefore belong on the Command object
+itself, beside its pid and exit readouts. Everything is sampled on every
+UI tick, so the meters move at the same rate as the rest of the
+interface.
+
+Deliberately absent: environment editing, working-directory control,
+stderr and extra-descriptor ports, terminal (pty) bindings for unconnected
+stdio, and starting stages upstream of the started one. The stdio design
+these grow into is recorded in `Pipeline Language.md`.

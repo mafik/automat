@@ -1,0 +1,122 @@
+// SPDX-FileCopyrightText: Copyright 2026 Automat Authors
+// SPDX-License-Identifier: MIT
+
+// Warning: coded with a stochastic parrot
+
+#include "library_beta_shelf.hpp"
+
+#include <include/core/SkCanvas.h>
+
+#include "make_object_option.hpp"
+#include "prototypes.hpp"
+#include "ui_beta.hpp"
+#include "units.hpp"
+
+namespace automat::library {
+
+namespace {
+
+constexpr float kStampRadius = 1.1_cm;
+
+void VisitProto(const OptionsVisitor& visitor, StrView name, Option::Dir dir) {
+  if (auto* proto = prototypes ? prototypes->Find(name) : nullptr) {
+    MakeObjectOption opt(proto->AcquirePtr(), dir);
+    visitor(opt);
+  }
+}
+
+// A named sub-menu; activating it opens a ring with the visited options.
+struct GroupOption : TextOption, OptionsProvider {
+  GroupOption(Str label) : TextOption(label) {}
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    return OpenMenu(pointer);
+  }
+};
+
+struct GStreamerOption : GroupOption {
+  GStreamerOption() : GroupOption("GStreamer") {}
+  std::unique_ptr<Option> Clone() const override { return std::make_unique<GStreamerOption>(); }
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    VisitProto(visitor, "videotestsrc", Option::NW);
+    VisitProto(visitor, "videoflip", Option::N);
+    VisitProto(visitor, "videoconvert", Option::NE);
+    VisitProto(visitor, "audiotestsrc", Option::W);
+    VisitProto(visitor, "audioconvert", Option::E);
+    VisitProto(visitor, "level", Option::S);
+    VisitProto(visitor, "appsink", Option::SW);
+    VisitProto(visitor, "appsrc", Option::SE);
+  }
+  // The shelf sits on the toolbar at the window's bottom edge, so every
+  // group points upward to keep its ring inside the window.
+  Dir PreferredDir() const override { return NW; }
+};
+
+struct FfmpegOption : GroupOption {
+  FfmpegOption() : GroupOption("FFmpeg") {}
+  std::unique_ptr<Option> Clone() const override { return std::make_unique<FfmpegOption>(); }
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    VisitProto(visitor, "avformat", Option::N);
+    VisitProto(visitor, "avcodec", Option::S);
+  }
+  Dir PreferredDir() const override { return N; }
+};
+
+struct TensorFlowOption : GroupOption {
+  TensorFlowOption() : GroupOption("TensorFlow") {}
+  std::unique_ptr<Option> Clone() const override { return std::make_unique<TensorFlowOption>(); }
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    VisitProto(visitor, "tf:tensor", Option::N);
+    VisitProto(visitor, "Square", Option::S);
+  }
+  Dir PreferredDir() const override { return NE; }
+};
+
+struct PipelinesOption : GroupOption {
+  PipelinesOption() : GroupOption("Pipelines") {}
+  std::unique_ptr<Option> Clone() const override { return std::make_unique<PipelinesOption>(); }
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    static GStreamerOption gstreamer;
+    visitor(gstreamer);
+    static FfmpegOption ffmpeg;
+    visitor(ffmpeg);
+    VisitProto(visitor, "gegl:gaussian-blur", Option::SW);
+    VisitProto(visitor, "pipewire:node", Option::SE);
+    static TensorFlowOption tensorflow;
+    visitor(tensorflow);
+  }
+  Dir PreferredDir() const override { return N; }
+};
+
+struct BetaShelfToy : ObjectToy {
+  BetaShelfToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {}
+
+  StrView Name() const override { return "BetaShelfToy"; }
+
+  SkPath Shape() const override { return SkPath::Circle(0, 0, kStampRadius); }
+
+  Optional<Rect> TextureBounds() const override {
+    return Shape().getBounds().makeOutset(2_mm, 2_mm);
+  }
+
+  void Draw(SkCanvas& canvas) const override {
+    ui::beta::DrawBetaStamp(canvas, {0, 0}, kStampRadius - 1_mm, -12, ID());
+  }
+
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    ObjectToy::VisitOptions(visitor);
+    VisitProto(visitor, "Command", Option::W);
+    VisitProto(visitor, "Leptonica", Option::E);
+#if !defined(_WIN32)
+    static PipelinesOption pipelines;
+    visitor(pipelines);
+#endif
+  }
+};
+
+}  // namespace
+
+std::unique_ptr<ObjectToy> BetaShelf::MakeToy(ui::Widget* parent) {
+  return std::make_unique<BetaShelfToy>(parent, *this);
+}
+
+}  // namespace automat::library

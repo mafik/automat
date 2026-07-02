@@ -150,15 +150,15 @@ void ScheduleArgumentTargets(Argument arg) {
   arg.state->last_activity.fetch_add(1, std::memory_order_relaxed);
 
   if (auto next = arg.Find()) {
-    // The target may be the Object itself (with AsRunnable) or a Runnable sub-interface.
-    Runnable runnable;
-    if (auto* r = dyn_cast_if_present<Runnable::Table>(next.Get())) {
-      runnable = Runnable(next.Owner<Object>(), r);
+    // The target may be a Signal sub-interface or the Object itself (its first Signal).
+    Signal signal;
+    if (auto* s = dyn_cast_if_present<Signal::Table>(next.Get())) {
+      signal = Signal(next.Owner<Object>(), s);
     } else if (auto* obj = next.Owner<Object>()) {
-      runnable = obj->As<Runnable>();
+      signal = obj->As<Signal>();
     }
-    if (runnable) {
-      runnable.ScheduleRun();
+    if (signal) {
+      signal.ScheduleRun();
     }
   }
   arg.WakeToys();
@@ -167,15 +167,16 @@ void ScheduleArgumentTargets(Argument arg) {
 void RunTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("RunTask");
   if (auto s = target.lock()) {
-    if (auto lr = s->As<LongRunning>(); lr && lr.IsRunning()) {
+    auto* sig = static_cast<Signal::Table*>(signal);
+    if (auto lr = s->As<LongRunning>();
+        lr && lr.IsRunning() && sig->while_long_running == Signal::kInhibit) {
       return;
     }
     s->ClearOwnError();
-    auto* r = static_cast<Runnable::Table*>(runnable);
     // Cast the `self` to RunTask for the OnRun invocation
     std::unique_ptr<RunTask> self_as_run_task((RunTask*)self.release());
-    if (r->on_run) {
-      r->on_run(Runnable(*s, *r), self_as_run_task);
+    if (sig->on_run) {
+      sig->on_run(Signal(*s, *sig), self_as_run_task);
     }
     // If OnRun didn't "steal" the ownership then we have to return it back.
     self.reset(self_as_run_task.release());

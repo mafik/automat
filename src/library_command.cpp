@@ -19,11 +19,15 @@
 #include "x11.hpp"
 
 #if !defined(_WIN32)
+#include <fcntl.h>
 #include <spawn.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <cerrno>
 #include <csignal>
 #include <cstring>
 
@@ -54,6 +58,13 @@ Vec<Str> SplitWords(StrView line) {
     i = j;
   }
   return words;
+}
+
+Command::~Command() {
+#if !defined(_WIN32)
+  auto lock = std::lock_guard(mutex);
+  if (child_pidfd >= 0) close(child_pidfd);
+#endif
 }
 
 std::string Command::GetText() const {
@@ -111,7 +122,7 @@ bool Command::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 #if defined(_WIN32)
 
-I64 SpawnArgv(const Vec<Str>&, Status& status) {
+I64 SpawnArgv(const Vec<Str>&, Status& status, const StdioFds&) {
   AppendErrorMessage(status) += "Command is not implemented on Windows yet.";
   return 0;
 }
@@ -122,11 +133,16 @@ I64 Command::AdoptiveLaunch(Status& status) {
   AppendErrorMessage(status) += "Command is not implemented on Windows yet.";
   return 0;
 }
+bool Command::SpawnStage(const StdioFds&, std::unique_ptr<RunTask>&, Status& status) {
+  AppendErrorMessage(status) += "Command is not implemented on Windows yet.";
+  return false;
+}
 void Command::Terminate() {}
+StreamStats Command::StdoutStats() { return {}; }
 
 #else
 
-I64 SpawnArgv(const Vec<Str>& argv_in, Status& status) {
+I64 SpawnArgv(const Vec<Str>& argv_in, Status& status, const StdioFds& stdio) {
   Vec<Str> words;
   for (auto& w : argv_in) {
     if (!w.empty()) words.push_back(w);
@@ -159,8 +175,14 @@ I64 SpawnArgv(const Vec<Str>& argv_in, Status& status) {
   if (!x11_socket.empty()) envp.push_back(display_entry.data());
   envp.push_back(nullptr);
 
+  posix_spawn_file_actions_t actions;
+  posix_spawn_file_actions_init(&actions);
+  if (stdio.in >= 0) posix_spawn_file_actions_adddup2(&actions, stdio.in, 0);
+  if (stdio.out >= 0) posix_spawn_file_actions_adddup2(&actions, stdio.out, 1);
+
   pid_t pid = 0;
-  int err = posix_spawnp(&pid, argv[0], nullptr, nullptr, argv.data(), envp.data());
+  int err = posix_spawnp(&pid, argv[0], &actions, nullptr, argv.data(), envp.data());
+  posix_spawn_file_actions_destroy(&actions);
   if (err) {
     AppendErrorMessage(status) += f("{}: {}", words[0], strerror(err));
     return 0;
@@ -175,7 +197,13 @@ static void WatchChild(Command& cmd, I64 pid) {
                       if (auto obj = weak.Lock()) {
                         auto& cmd = static_cast<Command&>(*obj);
                         auto lock = std::lock_guard(cmd.mutex);
-                        if (cmd.child_pid == pid) cmd.child_pid = 0;
+                        if (cmd.child_pid == pid) {
+                          cmd.child_pid = 0;
+                          if (cmd.child_pidfd >= 0) {
+                            close(cmd.child_pidfd);
+                            cmd.child_pidfd = -1;
+                          }
+                        }
                         cmd.wait_status = wait_status;
                         // Cancel() may have already consumed the task; Done()
                         // requires one.
@@ -187,57 +215,188 @@ static void WatchChild(Command& cmd, I64 pid) {
   if (!OK(status)) cmd.ReportError(status.ToStr());
 }
 
-void Command::Launch(std::unique_ptr<RunTask>& task) {
-  Vec<Str> argv_copy;
-  {
-    auto lock = std::lock_guard(mutex);
-    if (child_pid) return;  // already running; STOP is the way to a restart
-    argv_copy = argv;
-  }
-  Status status;
-  I64 pid = SpawnArgv(argv_copy, status);
-  if (!pid) {
-    ReportError(status.ToStr());
-    return;
-  }
-  {
-    auto lock = std::lock_guard(mutex);
-    child_pid = pid;
-    ever_ran = true;
-    running->BeginLongRunning(std::move(task));
-  }
-  ClearOwnError();
-  WakeToys();
-  WatchChild(*this, pid);
-}
-
-I64 Command::AdoptiveLaunch(Status& status) {
+bool Command::SpawnStage(const StdioFds& stdio, std::unique_ptr<RunTask>& task, Status& status) {
   Vec<Str> argv_copy;
   {
     auto lock = std::lock_guard(mutex);
     if (child_pid) {
       AppendErrorMessage(status) += "Already running.";
-      return 0;
+      return false;
     }
     argv_copy = argv;
   }
-  I64 pid = SpawnArgv(argv_copy, status);
-  if (!pid) return 0;
+  I64 pid = SpawnArgv(argv_copy, status, stdio);
+  if (!pid) return false;
   {
     auto lock = std::lock_guard(mutex);
     child_pid = pid;
     ever_ran = true;
-    running->BeginLongRunning(std::make_unique<RunTask>(AcquireWeakPtr(), &Command::run_tbl));
+    io_wchar = 0;
+    stdout_piped = stdio.out >= 0;
+    if (child_pidfd >= 0) close(child_pidfd);
+    child_pidfd = (int)syscall(SYS_pidfd_open, (pid_t)pid, 0);
+    if (!task) task = std::make_unique<RunTask>(AcquireWeakPtr(), &Command::run_tbl);
+    running->BeginLongRunning(std::move(task));
   }
   ClearOwnError();
   WakeToys();
   WatchChild(*this, pid);
-  return pid;
+  return true;
+}
+
+void Command::Launch(std::unique_ptr<RunTask>& task) {
+  {
+    auto lock = std::lock_guard(mutex);
+    if (child_pid) return;  // already running; STOP is the way to a restart
+  }
+
+  // The downstream chain connected through stdout -> stdin. An anonymous pipe
+  // needs both ends at spawn, so the chain starts together, the way a shell
+  // starts every stage of `a | b | c` before any of them runs. Stages that
+  // are already running end the chain: their descriptors are fixed.
+  Vec<Command*> chain;
+  Vec<NestedPtr<StreamInput::Table> > keep_alive;  // holds the chain owners
+  chain.push_back(this);
+  for (Command* cur = this; chain.size() < 32;) {
+    auto target = cur->out_stream->FindInterface();
+    auto* next = dynamic_cast<Command*>(target.Owner<Object>());
+    if (!next) break;
+    bool seen = false;
+    for (auto* c : chain) seen |= (c == next);
+    if (seen) break;  // a cycle; stop where the pipe would bite its own tail
+    {
+      auto lock = std::lock_guard(next->mutex);
+      if (next->child_pid) break;
+    }
+    keep_alive.push_back(std::move(target));
+    chain.push_back(next);
+    cur = next;
+  }
+
+  // Pipes between consecutive stages. O_CLOEXEC keeps the parent's copies
+  // out of every child; posix_spawn's dup2 clears it on the installed ends.
+  int n = (int)chain.size();
+  Vec<StdioFds> stdio(n);
+  Vec<int> to_close;
+  for (int i = 0; i + 1 < n; ++i) {
+    int fds[2];
+    if (pipe2(fds, O_CLOEXEC) != 0) {
+      ReportError(f("pipe2: {}", strerror(errno)));
+      for (int fd : to_close) close(fd);
+      return;
+    }
+    stdio[i].out = fds[1];
+    stdio[i + 1].in = fds[0];
+    to_close.push_back(fds[0]);
+    to_close.push_back(fds[1]);
+  }
+
+  for (int i = 0; i < n; ++i) {
+    Status status;
+    // The head consumes the caller's task; downstream stages synthesize their
+    // own, the way AdoptiveLaunch does.
+    std::unique_ptr<RunTask> stage_task;
+    if (!chain[i]->SpawnStage(stdio[i], i == 0 ? task : stage_task, status)) {
+      // A failed stage reports its own error; the rest of the chain still
+      // runs and the kernel propagates EOF / SIGPIPE past the gap.
+      chain[i]->ReportError(status.ToStr());
+    }
+  }
+  // The parent never keeps pipe ends: a held read end would suppress the
+  // writer's SIGPIPE and a held write end would suppress the reader's EOF.
+  for (int fd : to_close) close(fd);
+}
+
+I64 Command::AdoptiveLaunch(Status& status) {
+  std::unique_ptr<RunTask> task;
+  if (!SpawnStage({}, task, status)) return 0;
+  auto lock = std::lock_guard(mutex);
+  return child_pid;
 }
 
 void Command::Terminate() {
   auto lock = std::lock_guard(mutex);
   if (child_pid) kill((pid_t)child_pid, SIGTERM);
+}
+
+static bool ReadProcFile(const char* path, char* buf, size_t size) {
+  int fd = open(path, O_RDONLY);
+  if (fd < 0) return false;
+  ssize_t len = read(fd, buf, size - 1);
+  close(fd);
+  if (len <= 0) return false;
+  buf[len] = 0;
+  return true;
+}
+
+// True when /proc/<pid>/syscall says the process is blocked in the given
+// syscall on the given fd (x86_64 numbering; read = 0, write = 1).
+static bool BlockedInSyscall(I64 pid, long syscall_nr, long fd_arg) {
+  char path[64];
+  snprintf(path, sizeof(path), "/proc/%lld/syscall", (long long)pid);
+  char buf[256];
+  if (!ReadProcFile(path, buf, sizeof(buf))) return false;
+  char* end = nullptr;
+  long nr = strtol(buf, &end, 10);
+  if (end == buf || nr != syscall_nr) return false;
+  long arg0 = strtol(end, nullptr, 0);
+  return arg0 == fd_arg;
+}
+
+StreamStats Command::StdoutStats() {
+  StreamStats stats;
+  I64 pid = 0;
+  int pidfd = -1;
+  bool piped = false;
+  {
+    auto lock = std::lock_guard(mutex);
+    if (child_pid) {
+      char path[64];
+      snprintf(path, sizeof(path), "/proc/%lld/io", (long long)child_pid);
+      char buf[512];
+      if (ReadProcFile(path, buf, sizeof(buf))) {
+        if (const char* p = strstr(buf, "wchar: ")) io_wchar = strtoull(p + 7, nullptr, 10);
+      }
+      pid = child_pid;
+      pidfd = child_pidfd;
+      piped = stdout_piped;
+    }
+    stats.bytes = io_wchar;
+  }
+  if (!pid || !piped) return stats;
+
+  // Pipe fill and capacity, read through a transient dup of the child's own
+  // write end. The dup lives only for these two calls: a held write end
+  // would suppress the reader's EOF.
+  if (pidfd >= 0) {
+    int fd1 = (int)syscall(SYS_pidfd_getfd, pidfd, 1, 0);
+    if (fd1 >= 0) {
+      int fill = 0;
+      if (ioctl(fd1, FIONREAD, &fill) == 0) stats.fill = (uint64_t)std::max(0, fill);
+      int capacity = fcntl(fd1, F_GETPIPE_SZ);
+      if (capacity > 0) stats.capacity = (uint64_t)capacity;
+      close(fd1);
+    }
+  }
+
+  // The blocked side: this child stuck writing its stdout, or the
+  // downstream peer's child stuck reading its stdin.
+  if (BlockedInSyscall(pid, /*write*/ 1, 1)) {
+    stats.blocked = StreamBlocked::Producer;
+  } else {
+    auto target = out_stream->FindInterface();
+    if (auto* peer = dynamic_cast<Command*>(target.Owner<Object>())) {
+      I64 peer_pid = 0;
+      {
+        auto lock = std::lock_guard(peer->mutex);
+        peer_pid = peer->child_pid;
+      }
+      if (peer_pid && BlockedInSyscall(peer_pid, /*read*/ 0, 0)) {
+        stats.blocked = StreamBlocked::Consumer;
+      }
+    }
+  }
+  return stats;
 }
 
 static bool IsExecutableFile(const char* path) {
@@ -461,6 +620,10 @@ struct CommandToy : ui::beta::ObjectToy {
     return Shape().getBounds().makeOutset(4_mm, 4_mm);
   }
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
+    if (&arg == static_cast<const Interface::Table*>(&decltype(Command::out_stream)::tbl)) {
+      // The stdout port exits at the lower left, clear of the run disc.
+      return Vec2AndDir{.pos = Vec2(-kPlateW / 2 + 10_mm, -kPlateH / 2), .dir = -90_deg};
+    }
     return ui::beta::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
@@ -553,6 +716,15 @@ struct CommandToy : ui::beta::ObjectToy {
         ui::beta::DrawText(canvas, "arguments...", {ax, cap_y}, ui::beta::kMicroSize,
                            ui::beta::kInkSoft, false, Seed(kSeed));
       }
+    }
+
+    {  // stdio port labels: stdout above its port, stdin where connections land
+      ui::beta::DrawText(canvas, "stdout", {-kPlateW / 2 + 6.2_mm, -kPlateH / 2 + 0.8_mm},
+                         ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
+      StrView stdin_label = "stdin";
+      float stdin_w = ui::beta::TextWidth(stdin_label, ui::beta::kMicroSize);
+      ui::beta::DrawText(canvas, stdin_label, {-stdin_w / 2, kPlateH / 2 - kBand - 1.6_mm},
+                         ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
     }
 
     // Status corner, lower-left: pid while alive, exit chip afterwards.

@@ -90,3 +90,15 @@ Thin colored lines are never used to indicate state.
 Automat's board is a warm dark texture. White and cream panels have high
 contrast against it, so no dark theme is needed. Ink strokes drawn directly
 on the board have low contrast; marks should be drawn on a panel.
+
+## The beta shelf
+
+Parrot-made objects do not occupy individual toolbar slots. The toolbar
+carries one object drawn as the BETA starburst stamp (src/library_beta_shelf.hpp),
+and its bubble menu offers the parrot-made objects, grouped by library
+(Command and Leptonica directly; GStreamer, FFmpeg, GEGL, PipeWire and
+TensorFlow under a Pipelines group). Right-clicking any toolbar button opens
+its object's bubble menu, so the shelf is usable without dragging it onto
+the board first. Because the shelf sits at the window's bottom edge, its
+menu groups prefer upward directions, keeping the sub-menu rings inside the
+window. Nothing beyond the stamp is rendered until the menu is opened.

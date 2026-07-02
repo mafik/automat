@@ -15,6 +15,7 @@
 #include <tracy/Tracy.hpp>
 
 #include "animation.hpp"
+#include "make_object_option.hpp"
 #include "menu.hpp"
 #include "optional.hpp"
 
@@ -91,38 +92,6 @@ const char* ButtonEnumToName(ui::PointerButton button) {
       return "unknown";
   }
 }
-
-struct MakeObjectOption : Option {
-  Ptr<Object> proto;
-  Dir dir;
-  MortalPtr<ui::Widget> icon;
-  MakeObjectOption(Ptr<Object> proto, Dir dir = DIR_NONE) : proto(proto), dir(dir), icon(nullptr) {}
-  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
-    auto new_icon = proto->MakeToy(parent);
-    icon = new_icon.get();
-    return new_icon;
-  }
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<MakeObjectOption>(proto, dir);
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    // Idea: reuse the `icon` widget.
-    // The icon is the right widget type for the given proto, so theoretically it could be
-    // reattached to the newly cloned object.
-    // This could be even handled by the "Create" method - it could take existing widget to "adopt".
-    auto loc = MAKE_PTR(Location, vm.root_location);
-    auto obj = proto->Clone();
-    pointer.root_widget.toys.FindOrMake(*obj, icon.Get());
-    loc->InsertHere(std::move(obj));
-    audio::Play(embedded::assets_SFX_toolbar_pick_wav);
-    auto action = std::make_unique<DragLocationAction>(pointer, std::move(loc));
-    // Resetting the anchor makes the object dragged by the center point
-    if (action->locations.front()->widget)
-      action->locations.front()->widget->local_anchor = Vec2(0, 0);
-    return action;
-  }
-  Dir PreferredDir() const override { return dir; }
-};
 
 static float FindLoD(const SkMatrix& ctm, float local_x, float min_x_px, float max_x_px) {
   float device_height_px = ctm.mapRadius(krita::mouse::base.height());

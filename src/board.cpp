@@ -297,11 +297,17 @@ void BoardWidget::ConnectAtPoint(Argument arg, Vec2 point) {
   auto board = LockBoard();
   if (!board) return;
   bool connected = false;
+  Str refusal;  // the oracle's reason for the first end that matched in kind but refused
   auto TryConnect = [&](Interface end) {
     if (connected) return;
-    if (arg.CanConnect(end)) {
+    Status status;
+    arg.CanConnect(end, status);
+    if (OK(status)) {
       arg.Connect(end);
       connected = true;
+    } else if (refusal.empty() && arg.table->end_kind_matches(arg, end) && status.entry) {
+      // The entry text alone - ToStr would append source locations.
+      refusal = status.entry->message;
     }
   };
   for (auto& loc : board->locations) {
@@ -320,6 +326,11 @@ void BoardWidget::ConnectAtPoint(Argument arg, Vec2 point) {
       }
       return LoopControl::Continue;
     });
+  }
+  if (!connected && !refusal.empty()) {
+    if (auto* widget = dynamic_cast<ui::ConnectionWidget*>(ToyStore().FindOrNull(arg))) {
+      widget->ShowRefusal(std::move(refusal));
+    }
   }
 }
 

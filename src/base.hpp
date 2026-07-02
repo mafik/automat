@@ -48,28 +48,36 @@ struct Error;
 struct Object;
 struct Location;
 
-struct Runnable : Interface {
+// A deliverable impulse: something an Object exposes so that control flow
+// (run buttons, Next chains, Timers) can poke it. Delivery runs the handler
+// on a worker thread through a RunTask.
+struct Signal : Interface {
+  // What to do with a signal that arrives while the object's LongRunning is
+  // active. An object's starting signal is inhibited (a running thing is not
+  // started twice); a signal that performs one bounded unit of work (pull one
+  // buffer, decode one frame) is delivered.
+  enum WhileLongRunning : bool { kDeliver, kInhibit };
+
   struct Table : Interface::Table {
-    static bool classof(const Interface::Table* i) { return i->kind == Interface::kRunnable; }
+    static bool classof(const Interface::Table* i) { return i->kind == Interface::kSignal; }
 
-    void (*on_run)(Runnable, std::unique_ptr<RunTask>&) = nullptr;
+    void (*on_run)(Signal, std::unique_ptr<RunTask>&) = nullptr;
 
-    constexpr Table(StrView name) : Interface::Table(Interface::kRunnable, name) {
-      // can_sync = &DefaultCanSync;
-    }
+    WhileLongRunning while_long_running;
+
+    constexpr Table(StrView name, WhileLongRunning while_long_running = kDeliver)
+        : Interface::Table(Interface::kSignal, name), while_long_running(while_long_running) {}
 
     template <typename ImplT>
     constexpr void FillFrom() {
       Interface::Table::FillFrom<ImplT>();
-      on_run = [](Runnable self, std::unique_ptr<RunTask>& t) {
-        static_cast<ImplT&>(self).OnRun(t);
-      };
+      on_run = [](Signal self, std::unique_ptr<RunTask>& t) { static_cast<ImplT&>(self).OnRun(t); };
     }
   };
 
   struct State {};
 
-  INTERFACE_BOUND(Runnable, Interface)
+  INTERFACE_BOUND(Signal, Interface)
 
   void Run(std::unique_ptr<RunTask>& run_task) const { table->on_run(*this, run_task); }
 
@@ -86,6 +94,37 @@ struct Runnable : Interface {
   //   static constexpr StrView kName = "..."sv;
   //   static constexpr int Offset();  // offsetof(Parent, def_member)
   //   void OnRun(std::unique_ptr<RunTask>&);
+  template <typename ImplT>
+  struct Def : Interface::DefBase {
+    using Impl = ImplT;
+    using Bound = Signal;
+
+    static constexpr Table MakeTable() {
+      Table t(ImplT::kName);
+      t.FillFrom<ImplT>();
+      return t;
+    }
+
+    inline constinit static Table tbl = MakeTable();
+
+    ~Def() {}
+  };
+};
+
+// The signal that starts an Object's work. While the object's LongRunning is
+// active the work is already happening, so this signal is inhibited.
+struct Runnable : Signal {
+  struct Table : Signal::Table {
+    static bool classof(const Interface::Table* i) {
+      return Signal::Table::classof(i) &&
+             static_cast<const Signal::Table*>(i)->while_long_running == kInhibit;
+    }
+
+    constexpr Table(StrView name) : Signal::Table(name, kInhibit) {}
+  };
+
+  INTERFACE_BOUND(Runnable, Signal)
+
   template <typename ImplT>
   struct Def : Interface::DefBase {
     using Impl = ImplT;
@@ -178,7 +217,7 @@ struct LongRunning : OnOff {
   };
 };
 
-using NextArg = InterfaceArgument<Runnable, Interface::kNextArg>;
+using NextArg = InterfaceArgument<Signal, Interface::kNextArg>;
 
 struct RunOption : TextOption {
   WeakPtr<Object> weak;

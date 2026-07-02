@@ -106,9 +106,11 @@ Documentation maintained using stochastic parrots should be placed in `docs/parr
 - `docs/parrots/Clone Pile.md` - describes how elements that create a new object when touched present themselves
 - `docs/parrots/Command Launcher.md` - the Command object: argv tiles, no shell, run states, composition points
 - `docs/parrots/Leptonica Language.md` - documents the visual language of Leptonica objects
+- `docs/parrots/Pipeline Language.md` - the visual language for pipeline systems (GStreamer, PipeWire, FFmpeg, GEGL, TensorFlow, UNIX pipes): pipes, capsules, vessels, pumps, taps, and how push, pull & sequential drive mix
 - `docs/parrots/Beta Brand.md` - describes the visual identification for Toys made with stochastic parrots
 - `docs/parrots/Wayland Client Persistence.md` - options for saving/cloning windows backed by live processes; why recipes won
 - `docs/parrots/Wayland Compositor.md` - Automat as a Wayland compositor: the bespoke protocol stack, the epoll event loop, protocol surface, GPU buffer passing (dmabuf), surface cropping and scaling (viewporter), subsurface compositing, popups, clipboard, input pass-through, window lifetime
+- `docs/parrots/X11 Server.md` - Automat as an X11 display server (the analog of the Wayland compositor): the generated protocol stack, the resource tree, acting as a minimal window manager, SHM and DRI3 display, RENDER on Skia, the SendEvent sequence and keymap rules, window lifetime
 - `docs/parrots/Fable Mode.md` - (`/fable-mode` skill) enforces staged execution discipline on large tasks
 
 Parrot docs must be written using plain language, using proper technical terminology. Plain language means plain declarative sentences: no personification ("selection wears the dashed ring" — write "selected controls are marked with a dashed ring"), no figurative phrasing, no tone words such as "honest" or "cheerful". State facts without decorating them. They should use full sentences, without abbreviations. They should follow either a problem-solution format, high-level-to-low-level format, or a hierarchical-tree-of-topics format, depending on what suits the content best. They should focus on rationales, design intent, constraints & principles which produced some decision. They should avoid repeating implementation details and instead link to relevant code.

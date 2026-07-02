@@ -13,7 +13,7 @@
 #include "fn.hpp"
 #include "root_widget.hpp"
 #include "vec.hpp"
-#include "x11.hpp"
+#include "x11_keys.hpp"
 #include "xcb.hpp"
 
 using namespace automat;
@@ -948,7 +948,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
           // This is only called by registered hotkeys
           xcb_key_press_event_t* ev = (xcb_key_press_event_t*)event;
           xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
-          auto key = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail);
+          auto key = automat::x11::X11KeyCodeToKey((automat::x11::KeyCode)ev->detail);
           // LOG << "Key event: " << dump_struct(*ev) << " " << automat::ui::ToStr(key);
           if (opcode == XCB_KEY_RELEASE) {
             peeked_event = xcb_poll_for_event(connection);

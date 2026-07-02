@@ -20,6 +20,7 @@
 #include "object.hpp"
 #include "sync.hpp"
 #include "wayland.hpp"
+#include "x11.hpp"
 
 using namespace automat::library;
 
@@ -72,6 +73,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<Sources>();
   index.Register<Gear, HideInToolbar>();
   index.Register<WaylandWindow, HideInToolbar>();
+  index.Register<X11Window, HideInToolbar>();
   {  // The Leptonica tools are reached through the shelf, not the toolbar.
     index.Register<LeptonicaShelf>();
     index.Register<LeptonicaImage, HideInToolbar>();

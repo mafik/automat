@@ -30,7 +30,8 @@
 #include <xkbcommon/xkbcommon.h>
 
 #include "format.hpp"
-#include "x11.hpp"
+#include "x11_keys.hpp"
+#include "x11_xkb.hpp"
 #include "xcb.hpp"
 #include "xcb_window.hpp"
 
@@ -382,13 +383,11 @@ struct Keyboard::LinuxKeyboardState {
 
 void Keyboard::KeyDown(xcb_input_key_press_event_t& ev) {
   ui::Key key = {
-      .ctrl = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_CONTROL),
-      .alt = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_1),
-      .shift = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_SHIFT),
-      .windows = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_4),
+      .layout = ev.group.effective,
       .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
       .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
   };
+  x11::xkb::FillModifiers(key, ev.mods.effective);
 
   auto& device = linux_state->GetDevice(ev.deviceid);
   xkb_state_update_key(device.state.get(), ev.detail, XKB_KEY_DOWN);
@@ -416,12 +415,10 @@ void Keyboard::KeyDown(xcb_key_press_event_t& ev) {
 }
 
 void Keyboard::KeyUp(xcb_input_key_release_event_t& ev) {
-  ui::Key key = {.ctrl = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_CONTROL),
-                 .alt = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_1),
-                 .shift = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_SHIFT),
-                 .windows = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_4),
+  ui::Key key = {.layout = ev.group.effective,
                  .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
                  .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
+  x11::xkb::FillModifiers(key, ev.mods.effective);
 
   auto& device = linux_state->GetDevice(ev.deviceid);
   xkb_state_update_key(device.state.get(), ev.detail, XKB_KEY_UP);

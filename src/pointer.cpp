@@ -19,6 +19,7 @@
 
 #if defined(__linux__)
 #include "wayland.hpp"
+#include "x11.hpp"
 #endif
 
 using namespace std;
@@ -48,6 +49,7 @@ Pointer::Pointer(RootWidget& root_widget, Vec2 position)
   pointer_object = MAKE_PTR(PointerObject);
 #if defined(__linux__)
   wayland::RegisterPointer(*pointer_object);
+  x11::RegisterPointer(*pointer_object);
 #endif
 }
 Pointer::~Pointer() { Leave(); }

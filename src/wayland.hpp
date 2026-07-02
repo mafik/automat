@@ -23,6 +23,7 @@
 #include "status.hpp"
 #include "str.hpp"
 #include "vec.hpp"
+#include "window_frame.hpp"
 
 namespace automat::mux {
 struct Epoll;
@@ -96,7 +97,7 @@ struct WaylandSurface : Object {
 // Lifetime controlled by the client:
 // - unmapping/exiting removes the object,
 // - deleting the object asks the client to close.
-struct WaylandWindow : Object {
+struct WaylandWindow : Object, DecoratedWindow {
   mutable std::mutex mutex;  // guards non-atomics below
 
   Ptr<WaylandSurface> surface;  // Root content surface
@@ -114,9 +115,6 @@ struct WaylandWindow : Object {
 
   // Compositor-side identity; only the wayland thread dereferences it.
   std::atomic<void*> toplevel_handle{nullptr};
-
-  enum class DecorationPreference { Auto = 0, ServerSide = 1, ClientSide = 2 };
-  std::atomic<DecorationPreference> decoration_preference{DecorationPreference::Auto};
 
   std::atomic<bool> server_side_decorated{false};
 
@@ -138,8 +136,12 @@ struct WaylandWindow : Object {
     app_id = o.app_id;
     client_gone = true;
     pending_respawn = !recipe.empty();
+    decoration_preference.store(o.decoration_preference.load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
   }
   ~WaylandWindow() override;
+
+  void DecorationPreferenceChanged() override;
 
   void SerializeState(ObjectSerializer&) const override;
   bool DeserializeKey(ObjectDeserializer&, StrView key) override;

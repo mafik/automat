@@ -20,6 +20,7 @@
 #include "automat.hpp"
 #include "embedded.hpp"
 #include "global_resources.hpp"
+#include "keymap.hpp"
 #include "loading_animation.hpp"
 #include "persistence.hpp"
 #include "prototypes.hpp"
@@ -32,6 +33,7 @@
 #include "tracy_client.hpp"  // IWYU pragma: keep
 #include "vk.hpp"
 #include "wayland.hpp"
+#include "x11.hpp"
 
 #if defined(__linux__)
 #include "mux_epoll.hpp"
@@ -139,6 +141,7 @@ int Main() {
   vm.root_board = vm.root_location->Create<Board>();
 
   root_widget->Init();  // needs vm.root_board
+  keymap.emplace();     // reads the layout of the host connection Init() opened
   StartTimeThread(stop_source.get_token());
 
   RefreshTrayIcon();
@@ -161,6 +164,11 @@ int Main() {
   wayland::Start(mux::epoll, status);
   if (!OK(status)) {
     ERROR << "Couldn't start the Wayland compositor: " << status;
+    status.Reset();
+  }
+  x11::Start(mux::epoll, status);
+  if (!OK(status)) {
+    ERROR << "Couldn't start the X11 server: " << status;
     status.Reset();
   }
 #endif
@@ -197,8 +205,10 @@ int Main() {
   root_widget.reset();
 
 #if defined(__linux__)
+  x11::Stop();
   wayland::Stop();
 #endif
+  keymap.reset();  // after the servers that read it have stopped
 
   vm.root_board.reset();
   vm.root_location.reset();

@@ -11,9 +11,7 @@
 #include <include/core/SkM44.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
-#include <include/core/SkPathUtils.h>
 #include <include/core/SkSamplingOptions.h>
-#include <include/effects/SkGradient.h>
 #include <include/pathops/SkPathOps.h>
 #include <sys/file.h>
 #include <sys/mman.h>
@@ -21,8 +19,6 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <xkbcommon/xkbcommon-x11.h>
-#include <xkbcommon/xkbcommon.h>
 
 #include <algorithm>
 #include <cerrno>
@@ -35,10 +31,9 @@
 
 #include "animation.hpp"
 #include "dmabuf.hpp"
-#include "drawing.hpp"
-#include "font.hpp"
 #include "format.hpp"
 #include "keyboard.hpp"
+#include "keymap.hpp"
 #include "library_command.hpp"
 #include "location.hpp"
 #include "log.hpp"
@@ -52,10 +47,12 @@
 #include "vk.hpp"
 #include "vm.hpp"
 #include "wayland_protocol.hpp"
+#include "window_frame.hpp"
 #include "xcb.hpp"
 
 #if defined(__linux__)
-#include "x11.hpp"
+#include "x11_keys.hpp"
+#include "x11_xkb.hpp"
 #endif
 
 namespace automat::library {
@@ -83,14 +80,13 @@ struct Server : mux::Epoll::Listener {
   std::mutex adoption_mutex;
   Vec<std::pair<I64, WeakPtr<library::WaylandWindow>>> adoptions;  // respawned clients, by pid
 
-  // Input focus + keymap. Cleared in the surface destructor;
-  // the keymap is the host X keymap, built once.
+  // Input focus + keymap. Cleared in the surface destructor. The keymap is Automat's shared
+  // keymap (see keymap.hpp), serialized into a memfd once and handed to each keyboard.
   MortalPtr<Surface> keyboard_surface;
   MortalPtr<XdgPopup> grabbing_popup;
   MortalPtr<DataSource> selection;  // current clipboard owner (cleared in its destructor)
   int keymap_fd = -1;
   U32 keymap_size = 0;
-  U32 mod_shift = 0, mod_ctrl = 0, mod_alt = 0, mod_super = 0;
 
   // dmabuf version-4 feedback inputs, built lazily on the first feedback request.
   FD dmabuf_format_table_fd;
@@ -161,8 +157,8 @@ struct Server : mux::Epoll::Listener {
   void NotifyWindowDestroyed(void* toplevel_handle);
   void SendKeyboardEnter(library::WaylandWindow&);
   void SendKeyboardLeave(library::WaylandWindow&);
-  void SendKey(library::WaylandWindow&, uint32_t evdev_keycode, bool pressed, bool ctrl, bool alt,
-               bool shift, bool super);
+  void SendKey(library::WaylandWindow&, uint32_t evdev_keycode, bool pressed, uint32_t mods,
+               uint32_t group);
   void SendDecorationPreference(library::WaylandWindow&);
 };
 
@@ -1325,39 +1321,10 @@ void Seat::OnGetPointer(Pointer& pointer) {
 void Seat::OnGetKeyboard(Keyboard& id) {
   id.version = version;
   Server& s = client.server;
-  if (s.keymap_fd < 0) {
-    if (xkb_context* ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS)) {
-      xkb_keymap* keymap = nullptr;
-      if (xcb::connection) {
-        xkb_x11_setup_xkb_extension(
-            xcb::connection, XKB_X11_MIN_MAJOR_XKB_VERSION, XKB_X11_MIN_MINOR_XKB_VERSION,
-            XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS, nullptr, nullptr, nullptr, nullptr);
-        int32_t device = xkb_x11_get_core_keyboard_device_id(xcb::connection);
-        if (device >= 0)
-          keymap = xkb_x11_keymap_new_from_device(ctx, xcb::connection, device,
-                                                  XKB_KEYMAP_COMPILE_NO_FLAGS);
-      }
-      if (!keymap) keymap = xkb_keymap_new_from_names(ctx, nullptr, XKB_KEYMAP_COMPILE_NO_FLAGS);
-      if (!keymap) {
-        ERROR << "Wayland: couldn't build an xkb keymap; keyboard input disabled.";
-      } else {
-        char* str = xkb_keymap_get_as_string(keymap, XKB_KEYMAP_FORMAT_TEXT_V1);
-        s.keymap_size = strlen(str) + 1;
-        s.keymap_fd = memfd_create("automat-keymap", MFD_CLOEXEC);
-        if (s.keymap_fd >= 0) (void)!write(s.keymap_fd, str, s.keymap_size);
-        auto Mask = [&](const char* name) -> U32 {
-          xkb_mod_index_t i = xkb_keymap_mod_get_index(keymap, name);
-          return i == XKB_MOD_INVALID ? 0 : (1u << i);
-        };
-        s.mod_shift = Mask(XKB_MOD_NAME_SHIFT);
-        s.mod_ctrl = Mask(XKB_MOD_NAME_CTRL);
-        s.mod_alt = Mask(XKB_MOD_NAME_ALT);
-        s.mod_super = Mask(XKB_MOD_NAME_LOGO);
-        free(str);
-        xkb_keymap_unref(keymap);
-      }
-      xkb_context_unref(ctx);
-    }
+  if (s.keymap_fd < 0 && keymap && !keymap->text.empty()) {
+    s.keymap_size = keymap->text.size() + 1;  // the client mmaps a NUL-terminated string
+    s.keymap_fd = memfd_create("automat-keymap", MFD_CLOEXEC);
+    if (s.keymap_fd >= 0) (void)!write(s.keymap_fd, keymap->text.c_str(), s.keymap_size);
   }
   if (s.keymap_fd >= 0) id.Keymap(Keyboard::KeymapFormatXkbV1, FD(dup(s.keymap_fd)), s.keymap_size);
   // Automat forwards the host's key auto-repeat, so clients must not also repeat.
@@ -1455,19 +1422,17 @@ void Server::SendKeyboardLeave(library::WaylandWindow& w) {
     FlushAll();
   });
 }
-void Server::SendKey(library::WaylandWindow& w, uint32_t evdev_keycode, bool pressed, bool ctrl,
-                     bool alt, bool shift, bool super) {
+void Server::SendKey(library::WaylandWindow& w, uint32_t evdev_keycode, bool pressed, uint32_t mods,
+                     uint32_t group) {
   auto* h = (XdgToplevel*)w.toplevel_handle.load();
   if (!h) return;
-  epoll.Post([this, h, evdev_keycode, pressed, ctrl, alt, shift, super] {
+  epoll.Post([this, h, evdev_keycode, pressed, mods, group] {
     if (!LiveToplevel(h) || !keyboard_surface) return;
     Client* c = &keyboard_surface->client;
-    U32 mods = (ctrl ? mod_ctrl : 0) | (alt ? mod_alt : 0) | (shift ? mod_shift : 0) |
-               (super ? mod_super : 0);
     U32 time = NowMs();
     for (Keyboard& k : Keyboard::colony) {
       if (&k.client != c) continue;
-      k.Modifiers(serial++, mods, 0, 0, 0);
+      k.Modifiers(serial++, mods, 0, 0, group);
       k.Key(serial++, time, evdev_keycode,
             pressed ? Keyboard::KeyStatePressed : Keyboard::KeyStateReleased);
     }
@@ -1716,12 +1681,7 @@ void WaylandWindow::SerializeState(ObjectSerializer& writer) const {
     writer.Key("title");
     writer.String(title.data(), title.size());
   }
-  auto pref = decoration_preference.load(std::memory_order_relaxed);
-  if (pref != DecorationPreference::Auto) {
-    StrView v = pref == DecorationPreference::ServerSide ? "server" : "client";
-    writer.Key("decoration");
-    writer.String(v.data(), v.size());
-  }
+  SerializeDecoration(writer);
 }
 
 bool WaylandWindow::DeserializeKey(ObjectDeserializer& d, StrView key) {
@@ -1743,26 +1703,14 @@ bool WaylandWindow::DeserializeKey(ObjectDeserializer& d, StrView key) {
     d.Get(title, status);
     return true;
   }
-  if (key == "decoration") {
-    Str v;
-    d.Get(v, status);
-    DecorationPreference pref = DecorationPreference::Auto;
-    if (v == "server")
-      pref = DecorationPreference::ServerSide;
-    else if (v == "client")
-      pref = DecorationPreference::ClientSide;
-    decoration_preference.store(pref, std::memory_order_relaxed);
-    return true;
-  }
-  return false;
+  return DeserializeDecoration(d, key);
 }
 
 namespace {
 
 constexpr float kClientPx = 0.20_mm;  // one client pixel on the board
-constexpr float kTitleH = 7_mm;
-constexpr float kFrame = 5_mm;
-constexpr float kContentRadius = 4_mm;
+constexpr float kTitleH = ui::WindowFrame::kTitleH;
+constexpr float kFrame = ui::WindowFrame::kFrame;
 constexpr float kMinContentW = 3_cm;
 constexpr float kMinContentH = 3_cm;
 
@@ -1815,49 +1763,11 @@ void DrawSurfaceImage(SkCanvas& canvas, const sk_sp<SkImage>& image, const SkRec
   canvas.restore();
 }
 
-struct DecorationOption : TextOption {
-  WeakPtr<WaylandWindow> window;
-  WaylandWindow::DecorationPreference pref;
-  Option::Dir dir;
-  DecorationOption(Str label, WeakPtr<WaylandWindow> window,
-                   WaylandWindow::DecorationPreference pref, Option::Dir dir)
-      : TextOption(std::move(label)), window(window), pref(pref), dir(dir) {}
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<DecorationOption>(text, window, pref, dir);
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer&) const override {
-    if (auto w = window.Lock()) {
-      w->decoration_preference.store(pref, std::memory_order_relaxed);
-      if (wayland::server) wayland::server->SendDecorationPreference(*w);
-    }
-    return nullptr;
-  }
-  Option::Dir PreferredDir() const override { return dir; }
-};
-
-struct DecorationMenuOption : TextOption, OptionsProvider {
-  WeakPtr<WaylandWindow> window;
-  DecorationMenuOption(WeakPtr<WaylandWindow> window)
-      : TextOption("Decoration..."), window(window) {}
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<DecorationMenuOption>(window);
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    return OpenMenu(pointer);
-  }
-  void VisitOptions(const OptionsVisitor& visitor) const override {
-    using P = WaylandWindow::DecorationPreference;
-    DecorationOption automat_auto("Auto", window, P::Auto, Option::S);
-    visitor(automat_auto);
-    DecorationOption server_side("Automat", window, P::ServerSide, Option::W);
-    visitor(server_side);
-    DecorationOption client_side("App", window, P::ClientSide, Option::E);
-    visitor(client_side);
-  }
-  Option::Dir PreferredDir() const override { return Option::S; }
-};
-
 }  // namespace
+
+void WaylandWindow::DecorationPreferenceChanged() {
+  if (wayland::server) wayland::server->SendDecorationPreference(*this);
+}
 
 static Vec2 WindowBoardSize(int width, int height) {
   float content_w = width > 0 ? width * kClientPx : kMinContentW;
@@ -2147,7 +2057,6 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
 
   bool Decorated() const { return decorate_ || client_gone_ || !content_present_; }
   float Frame() const { return Decorated() ? kFrame : 0; }
-  float TitleH() const { return Decorated() ? kTitleH : 0; }
 
   // Size of the toplevel content surface.
   Vec2 ContentSize() const {
@@ -2155,10 +2064,7 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
             content_size_.height() > 0 ? content_size_.height() * kClientPx : kMinContentH};
   }
   Rect ContentRect() const { return Rect::MakeAtZero(ContentSize()); }
-  RRect ContentRRect() const { return RRect::MakeSimple(ContentRect(), kContentRadius); }
-  RRect FrameMidRRect() const { return ContentRRect().Outset(kFrame * 3 / 8); }
-  RRect FrameLightsRRect() const { return ContentRRect().Outset(kFrame * 11 / 16); }
-  RRect FrameOutRRect() const { return ContentRRect().Outset(kFrame); }
+  ui::WindowFrame Chrome() const { return {ContentSize(), title_}; }
 
   // The content area's top-left, where the toplevel surface toy sits, below the
   // title band and inside the frame.
@@ -2178,11 +2084,6 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
     Vec2 tl = TopLeft();
     ct.local_to_parent = SkM44(SkMatrix::Translate(tl.x, tl.y));
     layers.OrderBelow(&ct);
-  }
-
-  static ui::Font& GetFont() {
-    static auto font = ui::Font::MakeV2(ui::Font::GetBelanosimaRegular(), kTitleH);
-    return *font;
   }
 
   Tock Tick(time::Timer&) override {
@@ -2205,13 +2106,7 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
 
   // ---- keyboard focus (the toplevel owns the client's keyboard) ----
 
-  SkPath FocusCaretShape() const {
-    if (!Decorated()) return SkPath();
-    auto [w, h] = ContentSize().xy;
-    float band_bottom = h / 2 - kTitleH;
-    return SkPath::Rect(
-        Rect{-w / 2 + 1.5_mm, band_bottom + 1.1_mm, w / 2 - 6_mm, band_bottom + 1.9_mm});
-  }
+  SkPath FocusCaretShape() const { return Decorated() ? Chrome().FocusCaretShape() : SkPath(); }
 
   void FocusClient(ui::Pointer& p) {
     if (caret_ || !p.keyboard) return;
@@ -2234,8 +2129,7 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
     if (keycode <= 8) return;
     if (auto win = LockWindow()) {
       // Wayland keyboards speak evdev; X11 keycodes are evdev + 8.
-      wayland::server->SendKey(*win, keycode - 8, pressed, key.ctrl, key.alt, key.shift,
-                               key.windows);
+      wayland::server->SendKey(*win, keycode - 8, pressed, x11::xkb::ModifierMask(key), key.layout);
     }
 #endif
   }
@@ -2244,135 +2138,16 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
 
   void VisitOptions(const OptionsVisitor& visitor) const override {
     ObjectToy::VisitOptions(visitor);
-    DecorationMenuOption deco{owner.Copy<WaylandWindow>()};
-    visitor(deco);
+    VisitDecorationOptions(owner, visitor);
   }
 
   SkPath Shape() const override {
     if (!Decorated()) return SkPath::Rect(ContentRect());
-
-    auto& font = GetFont();
-    float w = font.sk_font.measureText(title_.c_str(), title_.size(), SkTextEncoding::kUTF8);
-    SkPath title_fill;
-    SkTextUtils::GetPath(title_.c_str(), title_.size(), SkTextEncoding::kUTF8, -w / 2, 0,
-                         font.sk_font, &title_fill);
-
-    SkPaint paint;
-    paint.setStyle(SkPaint::kStroke_Style);
-    // 0.3 is larger than 0.2 used for the real outline - this is to help in filling the holes in
-    // the text
-    paint.setStrokeWidth(kTitleH * 0.3 / font.font_scale);
-    SkPath title_outline = skpathutils::FillPathWithPaint(title_fill, paint);
-
-    SkPath s = title_fill;
-    if (auto uni = Op(title_fill, title_outline, SkPathOp::kUnion_SkPathOp)) s = *uni;
-    if (auto shift = Op(s, s.makeOffset(0, 2_mm / font.font_scale), SkPathOp::kUnion_SkPathOp)) {
-      s = *shift;
-    }
-    auto frame = FrameOutRRect();
-    auto matrix = SkMatrix::ScaleTranslate(font.font_scale, -font.font_scale, 0, frame.rect.top);
-    if (auto with_frame =
-            Op(s.makeTransform(matrix), SkPath::RRect(frame), SkPathOp::kUnion_SkPathOp)) {
-      s = *with_frame;
-    }
-    return s;
+    return Chrome().Shape();
   }
 
   void Draw(SkCanvas& canvas) const override {
-    if (Decorated()) {
-      auto frame_inner = ContentRRect();
-      auto frame_mid = FrameMidRRect();
-      auto frame_outer = FrameOutRRect();
-      auto lights_rrect = FrameLightsRRect();
-
-      auto& font = GetFont();
-
-      float w = font.MeasureText(title_);
-
-      float one_pixel = 1.0f / canvas.getTotalMatrix().getScaleX();
-
-      canvas.save();
-      canvas.translate(-w / 2, frame_outer.rect.top - kTitleH * 0.1);
-      SkPaint title_side_paint;
-      title_side_paint.setColor("#3a2021"_color);
-      title_side_paint.setStyle(SkPaint::kStrokeAndFill_Style);
-      title_side_paint.setStrokeWidth(kTitleH * 0.2 / GetFont().font_scale);
-      font.DrawText(canvas, title_, title_side_paint);
-      canvas.restore();
-
-      SkPaint flat_border_paint;
-      flat_border_paint.setColor("#9b252a"_color);
-      canvas.drawDRRect(frame_outer, frame_mid, flat_border_paint);
-
-      canvas.save();
-      canvas.translate(-w / 2, frame_outer.rect.top);
-      SkPaint text_outline_paint;
-      text_outline_paint.setColor(flat_border_paint.getColor());
-      text_outline_paint.setStyle(SkPaint::kStrokeAndFill_Style);
-      text_outline_paint.setStrokeWidth(kTitleH * 0.2 / font.font_scale);
-      font.DrawText(canvas, title_, text_outline_paint);
-      canvas.restore();
-
-      SkPaint bevel_border_paint;
-      bevel_border_paint.setColor("#7d2627"_color);
-      SetRRectShader(bevel_border_paint, frame_outer, "#3a2021"_color4f, "#7e2627"_color4f,
-                     "#d86355"_color4f);
-
-      canvas.drawDRRect(frame_mid.Outset(one_pixel), frame_inner.Outset(-one_pixel),
-                        bevel_border_paint);
-
-      {  // Lights
-
-        constexpr int kNumLights = 4 * 6;
-        Vec2 light_positions[kNumLights];
-        lights_rrect.EquidistantPoints(light_positions);
-        Vec2 center{};
-        constexpr float kLightRange = 5_mm;
-        constexpr float kLightRadius = 1_mm;
-
-        SkColor4f bulb_colors[] = {
-            "#ffffa2"_color4f,  // light center
-            "#ffff70"_color4f,  // light mid
-            "#ffff93"_color4f,  // outer light edge (faint yellow)
-        };
-        SkPaint bulb_paint;
-        bulb_paint.setShader(SkShaders::RadialGradient(
-            center, kLightRadius,
-            SkGradient{SkGradient::Colors{bulb_colors, SkTileMode::kClamp}, {}}));
-
-        SkColor4f glow_colors[] = {
-            "#5b0e00"_color4f,    // shadow
-            "#5b0e00"_color4f,    // shadow
-            "#ec4329"_color4f,    // warm red
-            "#ec432980"_color4f,  // half-transparent warm red
-            "#ec432900"_color4f,  // transparent warm red
-        };
-        SkPaint glow_paint;
-        float glow_positions[] = {0, kLightRadius / kLightRange, kLightRadius * 1.1 / kLightRange,
-                                  kLightRadius * 2 / kLightRange, 1};
-        glow_paint.setShader(SkShaders::RadialGradient(
-            center, kLightRange,
-            SkGradient{SkGradient::Colors{glow_colors, glow_positions, SkTileMode::kClamp}, {}}));
-        canvas.save();
-        canvas.clipRRect(frame_outer);
-        canvas.clipRRect(frame_mid, SkClipOp::kDifference);
-        for (int i = 0; i < kNumLights; ++i) {
-          canvas.save();
-          canvas.translate(light_positions[i].x, light_positions[i].y);
-          canvas.drawCircle(0, 0, kLightRange, glow_paint);
-          canvas.drawCircle(0, 0, kLightRadius, bulb_paint);
-          canvas.restore();
-        }
-        canvas.restore();
-      }
-
-      SkPaint title_paint;
-      title_paint.setColor("#e7e5cd"_color);
-      canvas.save();
-      canvas.translate(-w / 2, frame_outer.rect.top);
-      font.DrawText(canvas, title_, title_paint);
-      canvas.restore();
-    }
+    if (Decorated()) Chrome().Draw(canvas);
   }
 };
 

@@ -304,12 +304,16 @@ Escape and forwarding it while a quick second press defocuses, or a
 per-window passthrough toggle on the title bar.
 
 Keycodes pass through Automat verbatim: an X11 keycode becomes an `AnsiKey`
-and back through the fixed tables in `src/x11.cpp`, then minus 8 to evdev.
-Because of that, the keymap advertised to clients must be the host X
-server's actual keymap, fetched with `xkbcommon-x11` — building a default
-"us" keymap garbles every non-qwerty layout (the development host runs
-Programmer Dvorak, which is how this rule was learned). Modifier masks are
-taken from the same keymap and sent before every key event.
+and back through the fixed tables in `src/x11_keys.cpp`, then minus 8 to evdev.
+Because of that, the keymap advertised to clients must be the layout those
+keycodes were produced with — building a default "us" keymap garbles every
+non-qwerty layout (the development host runs Programmer Dvorak, which is how
+this rule was learned). The advertised keymap is Automat's shared keymap
+(`src/keymap.hpp`, serialized once into a memfd), the same source the X11
+server serves, so a client sees the same layout whichever protocol its window
+speaks. Each key event is preceded by a modifier update carrying the effective
+modifier mask and the active layout group exactly as the platform reported
+them on the originating input event (`ui::Key`).
 
 Not yet routed: the relative-pointer / pointer-constraints used for pointer lock
 (Firefox binds them but works without).

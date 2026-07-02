@@ -43,6 +43,7 @@
 #include "win32_window.hpp"
 #elif defined(__linux__)
 #include "wayland.hpp"
+#include "x11.hpp"
 #include "xcb_window.hpp"
 #endif
 
@@ -249,6 +250,7 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
 
 #if defined(__linux__)
   wayland::UIFrame();
+  x11::UIFrame();
 #endif
 
   if (loading_animation) {

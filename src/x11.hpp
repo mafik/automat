@@ -1,182 +1,109 @@
 #pragma once
-// SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+// SPDX-FileCopyrightText: Copyright 2026 Automat Authors
 // SPDX-License-Identifier: MIT
 
-#include "keyboard.hpp"
+// Public interface to Automat's X11 server. The design mirrors wayland.hpp: an X11
+// window a client maps becomes a board object, and a small set of lifecycle calls run
+// the server on the shared mux::Epoll thread.
 
-namespace x11 {
-enum class KeyCode {
-  Unknown = 0,
-  Esc = 9,
-  Digit1 = 10,
-  Digit2 = 11,
-  Digit3 = 12,
-  Digit4 = 13,
-  Digit5 = 14,
-  Digit6 = 15,
-  Digit7 = 16,
-  Digit8 = 17,
-  Digit9 = 18,
-  Digit0 = 19,
-  Minus = 20,
-  Equals = 21,
-  Backspace = 22,
-  Tab = 23,
-  Q = 24,
-  W = 25,
-  E = 26,
-  R = 27,
-  T = 28,
-  Y = 29,
-  U = 30,
-  I = 31,
-  O = 32,
-  P = 33,
-  LeftBracket = 34,
-  RightBracket = 35,
-  Return = 36,
-  CtrlLeft = 37,
-  A = 38,
-  S = 39,
-  D = 40,
-  F = 41,
-  G = 42,
-  H = 43,
-  J = 44,
-  K = 45,
-  L = 46,
-  Semicolon = 47,
-  Apostrophe = 48,
-  Grave = 49,
-  ShiftLeft = 50,
-  BackSlash = 51,
-  Z = 52,
-  X = 53,
-  C = 54,
-  V = 55,
-  B = 56,
-  N = 57,
-  M = 58,
-  Comma = 59,
-  Dot = 60,
-  Slash = 61,
-  ShiftRight = 62,
-  KpMultiply = 63,
-  AltLeft = 64,
-  Space = 65,
-  CapsLock = 66,
-  F1 = 67,
-  F2 = 68,
-  F3 = 69,
-  F4 = 70,
-  F5 = 71,
-  F6 = 72,
-  F7 = 73,
-  F8 = 74,
-  F9 = 75,
-  F10 = 76,
-  NumLock = 77,
-  ScrollLock = 78,
-  Kp7 = 79,
-  Kp8 = 80,
-  Kp9 = 81,
-  KpMinus = 82,
-  Kp4 = 83,
-  Kp5 = 84,
-  Kp6 = 85,
-  KpPlus = 86,
-  Kp1 = 87,
-  Kp2 = 88,
-  Kp3 = 89,
-  Kp0 = 90,
-  KpDot = 91,
-  Unknown1 = 92,         // ???
-  Zenkaku_Hankaku = 93,  // ???
-  International = 94,    // ???
-  F11 = 95,
-  F12 = 96,
+#include <include/core/SkImage.h>
+#include <include/core/SkPath.h>
+#include <include/core/SkRect.h>
+#include <include/core/SkSize.h>
 
-  OEM_102 = 97,   // ???
-  Katakana = 98,  // ???
-  Hiragana = 99,  // ???
-  Henkan = 100,   // ???
-  Katakana_Hiragana = 101,
-  Muhenkan = 102,  // ???
+#include <atomic>
+#include <mutex>
 
-  KpSeparator = 103,
-  KpEnter = 104,
-  CtrlRight = 105,
-  KpDivide = 106,
-  PrintScrn = 107,
-  AltRight = 108,
-  LineFeed = 109,  // ???
-  Home = 110,
-  Up = 111,
-  PageUp = 112,
-  Left = 113,
-  Right = 114,
-  End = 115,
-  Down = 116,
-  PageDown = 117,
-  Insert = 118,
-  Delete = 119,
-  Macro = 120,  // ???
-  Mute = 121,
-  VolumeDown = 122,
-  VolumeUp = 123,
-  Power = 124,
-  KpEqual = 125,
-  KpPlusMinus = 126,
-  Pause = 127,
-  MediaLaunchApp1 = 128,
-  KpDecimal = 129,
-  Hangul = 130,  // ???
-  Hanja = 131,   // ???
-  Yen = 132,
-  SuperLeft = 133,
-  SuperRight = 134,
-  Compose = 135,
+#include "base.hpp"
+#include "int.hpp"
+#include "mortal.hpp"
+#include "ptr.hpp"
+#include "status.hpp"
+#include "str.hpp"
+#include "vec.hpp"
+#include "window_frame.hpp"
+
+namespace automat::mux {
+struct Epoll;
+}  // namespace automat::mux
+
+namespace automat::x11 {
+struct Window;  // server-side window resource; the board object holds a MortalPtr to it
+}  // namespace automat::x11
+
+namespace automat::ui {
+struct PointerObject;
+}  // namespace automat::ui
+
+namespace automat::library {
+
+// A top-level X11 window shown on the board.
+//
+// Lifetime controlled by the client:
+// - unmapping/destroying removes the object,
+// - deleting the object asks the client to close (WM_DELETE_WINDOW, then a kill).
+struct X11Window : Object, DecoratedWindow {
+  mutable std::mutex mutex;  // guards the non-atomic fields below
+
+  Str title;
+  Str app_id;  // WM_CLASS instance/class
+  bool client_gone = false;
+  bool override_redirect = false;  // menus/tooltips: drawn without chrome
+  bool client_decorated = false;   // the client draws its own frame (Motif hints / GTK CSD)
+
+  // The composited snapshot of this window's tree and its size in client pixels.
+  sk_sp<SkImage> image;
+  SkISize content_size = {};
+  SkPath input_region;  // client pixels (the whole window; shaped windows narrow it)
+
+  // Recipe-level persistence: the argv whose child mapped this window. Serialized;
+  // deserializing (or cloning) re-runs it and the new client is adopted.
+  Vec<Str> recipe;
+  I64 client_pid = 0;
+  bool pending_respawn = false;
+
+  // Server-side identity; only the x11 thread dereferences it.
+  std::atomic<void*> window_handle{nullptr};
+
+  DEF_INTERFACE(X11Window, ObjectArgument<Object>, launcher, "Launcher")
+  static constexpr auto kStyle = Argument::Style::Cable;
+  static constexpr float kAutoconnectRadius = 0.f;
+  DEF_END(launcher);
+
+  INTERFACES(launcher);
+
+  X11Window() = default;
+  X11Window(const X11Window& o) : launcher(o.launcher) {
+    auto lock = std::lock_guard(o.mutex);
+    recipe = o.recipe;
+    title = o.title;
+    app_id = o.app_id;
+    client_gone = true;
+    pending_respawn = !recipe.empty();
+    decoration_preference.store(o.decoration_preference.load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
+  }
+  ~X11Window() override;
+
+  void DecorationPreferenceChanged() override;
+
+  void SerializeState(ObjectSerializer&) const override;
+  bool DeserializeKey(ObjectDeserializer&, StrView key) override;
+
+  StrView Name() const override { return "X11 Window"; }
+  Ptr<Object> Clone() const override { return MAKE_PTR(X11Window, *this); }
+  std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 };
 
-constexpr KeyCode kKeyCodesArray[] = {
-    KeyCode::Esc,        KeyCode::Digit1,      KeyCode::Digit2,
-    KeyCode::Digit3,     KeyCode::Digit4,      KeyCode::Digit5,
-    KeyCode::Digit6,     KeyCode::Digit7,      KeyCode::Digit8,
-    KeyCode::Digit9,     KeyCode::Digit0,      KeyCode::Minus,
-    KeyCode::Equals,     KeyCode::Backspace,   KeyCode::Tab,
-    KeyCode::Q,          KeyCode::W,           KeyCode::E,
-    KeyCode::R,          KeyCode::T,           KeyCode::Y,
-    KeyCode::U,          KeyCode::I,           KeyCode::O,
-    KeyCode::P,          KeyCode::LeftBracket, KeyCode::RightBracket,
-    KeyCode::Return,     KeyCode::CtrlLeft,    KeyCode::A,
-    KeyCode::S,          KeyCode::D,           KeyCode::F,
-    KeyCode::G,          KeyCode::H,           KeyCode::J,
-    KeyCode::K,          KeyCode::L,           KeyCode::Semicolon,
-    KeyCode::Apostrophe, KeyCode::Grave,       KeyCode::ShiftLeft,
-    KeyCode::BackSlash,  KeyCode::Z,           KeyCode::X,
-    KeyCode::C,          KeyCode::V,           KeyCode::B,
-    KeyCode::N,          KeyCode::M,           KeyCode::Comma,
-    KeyCode::Dot,        KeyCode::Slash,       KeyCode::ShiftRight,
-    KeyCode::KpMultiply, KeyCode::AltLeft,     KeyCode::Space,
-    KeyCode::CapsLock,   KeyCode::F1,          KeyCode::F2,
-    KeyCode::F3,         KeyCode::F4,          KeyCode::F5,
-    KeyCode::F6,         KeyCode::F7,          KeyCode::F8,
-    KeyCode::F9,         KeyCode::F10,         KeyCode::NumLock,
-    KeyCode::ScrollLock, KeyCode::Kp7,         KeyCode::Kp8,
-    KeyCode::Kp9,        KeyCode::KpMinus,     KeyCode::Kp4,
-    KeyCode::Kp5,        KeyCode::Kp6,         KeyCode::KpPlus,
-    KeyCode::Kp1,        KeyCode::Kp2,         KeyCode::Kp3,
-    KeyCode::Kp0,        KeyCode::KpDot,       KeyCode::International,
-    KeyCode::F11,        KeyCode::F12,         KeyCode::Home,
-    KeyCode::Up,         KeyCode::PageUp,      KeyCode::Left,
-    KeyCode::Right,      KeyCode::Down,        KeyCode::End,
-    KeyCode::PageDown,   KeyCode::Insert,      KeyCode::Delete,
-    KeyCode::KpEnter,    KeyCode::CtrlRight,   KeyCode::Pause,
-    KeyCode::PrintScrn,  KeyCode::KpDivide,    KeyCode::AltRight,
-    KeyCode::SuperLeft,  KeyCode::SuperRight,  KeyCode::Compose,
-};
+}  // namespace automat::library
 
-automat::ui::AnsiKey X11KeyCodeToKey(KeyCode key_code);
-KeyCode KeyToX11KeyCode(automat::ui::AnsiKey key);
+namespace automat::x11 {
 
-}  // namespace x11
+void Start(mux::Epoll&, Status&);  // pick a free DISPLAY, listen on epoll
+void Stop();                       // controlled teardown
+Str SocketName();                  // bound display name (e.g. ":3"), empty if not started
+void UIFrame();                    // per-frame board reconcile, no-op if not started
+
+void RegisterPointer(ui::PointerObject&);
+
+}  // namespace automat::x11

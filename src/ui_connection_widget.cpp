@@ -342,6 +342,9 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
   ConnectionWidgetLocker a(*this);
 
   if (!a.start_arg) {
+    // The owning object is gone; its widgets (including the cable's cached start_widget)
+    // may already be freed, so drop the physical simulation before Draw dereferences it.
+    state.reset();
     Tock tock;
     tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.1, alpha);
     if (!tock.ing) {

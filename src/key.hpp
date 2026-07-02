@@ -121,10 +121,16 @@ StrView ToStr(AnsiKey) noexcept;
 AnsiKey AnsiKeyFromStr(StrView) noexcept;
 
 struct Key {
+  // The effective modifier state (held, latched or locked). Loosely based on XKB.
   bool ctrl;
   bool alt;
   bool shift;
-  bool windows;
+  bool windows;  // Super, the OS key
+  bool caps_lock;
+  bool num_lock;
+  bool alt_gr;         // ISO_Level3_Shift, picks shift levels 3 & 4
+  bool level5;         // ISO_Level5_Shift, picks shift levels 5+
+  uint8_t layout = 0;  // active keyboard group (XKB layout index)
   AnsiKey physical;
   AnsiKey logical;
   std::string text;

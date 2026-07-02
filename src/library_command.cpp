@@ -16,6 +16,7 @@
 #include "ui_button.hpp"
 #include "units.hpp"
 #include "wayland.hpp"
+#include "x11.hpp"
 
 #if !defined(_WIN32)
 #include <spawn.h>
@@ -139,26 +140,23 @@ I64 SpawnArgv(const Vec<Str>& argv_in, Status& status) {
   for (auto& w : words) argv.push_back(w.data());
   argv.push_back(nullptr);
 
-  // Children talk to Automat's own Wayland compositor: WAYLAND_DISPLAY points
-  // at our socket and DISPLAY is dropped so toolkits don't fall back to the
-  // host X server.
+  // Children talk to Automat's own display servers: WAYLAND_DISPLAY and DISPLAY both
+  // point at our sockets. GDK is left unset so a toolkit picks its own backend (GTK
+  // prefers Wayland when both are offered); a client that only speaks X11 uses DISPLAY.
   Str wayland_socket = wayland::SocketName();
+  Str x11_socket = x11::SocketName();
   Str wayland_entry = "WAYLAND_DISPLAY=" + wayland_socket;
-  Str gdk_entry = "GDK_BACKEND=wayland";
+  Str display_entry = "DISPLAY=" + x11_socket;
   std::vector<char*> envp;
   for (char** e = environ; *e; ++e) {
     StrView entry(*e);
-    if (!wayland_socket.empty() &&
-        (entry.starts_with("WAYLAND_DISPLAY=") || entry.starts_with("DISPLAY=") ||
-         entry.starts_with("GDK_BACKEND="))) {
-      continue;
-    }
+    if (!wayland_socket.empty() && entry.starts_with("WAYLAND_DISPLAY=")) continue;
+    if (!x11_socket.empty() && entry.starts_with("DISPLAY=")) continue;
+    if (entry.starts_with("GDK_BACKEND=")) continue;
     envp.push_back(*e);
   }
-  if (!wayland_socket.empty()) {
-    envp.push_back(wayland_entry.data());
-    envp.push_back(gdk_entry.data());
-  }
+  if (!wayland_socket.empty()) envp.push_back(wayland_entry.data());
+  if (!x11_socket.empty()) envp.push_back(display_entry.data());
   envp.push_back(nullptr);
 
   pid_t pid = 0;

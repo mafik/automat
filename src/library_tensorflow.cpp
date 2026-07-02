@@ -5,9 +5,10 @@
 
 #include "library_tensorflow.hpp"
 
-#include <dlfcn.h>
 #include <include/core/SkCanvas.h>
 #include <include/core/SkData.h>
+#include <tensorflow/c/c_api.h>
+#include <tensorflow/c/eager/c_api.h>
 
 #include "format.hpp"
 #include "ui_beta.hpp"
@@ -17,92 +18,19 @@ namespace automat::library {
 
 using ui::beta::Hash2;
 
-// ============================================================================
-// libtensorflow, dlopen'd at first use. RTLD_DEEPBIND keeps its bundled
-// runtime resolving against itself (the same hazard class as GEGL's OpenCL).
-// The declarations below stand in for the TensorFlow C headers, so the
-// build needs no TensorFlow at all; they state stable C-ABI facts
-// (TF_OK = 0, TF_FLOAT = 1).
-// ============================================================================
-
-struct TF_Status;
-struct TF_Tensor;
-struct TFE_Context;
-struct TFE_ContextOptions;
-struct TFE_TensorHandle;
-struct TFE_Op;
-using TF_Code = int;
-constexpr TF_Code TF_OK = 0;
-using TF_DataType = int;
-constexpr TF_DataType TF_FLOAT = 1;
-
-struct TfApi {
-  bool ok = false;
-  TFE_Context* ctx = nullptr;  // one eager context, made at load
-
-  TF_Status* (*NewStatus)();
-  void (*DeleteStatus)(TF_Status*);
-  TF_Code (*GetCode)(const TF_Status*);
-  const char* (*Message)(const TF_Status*);
-
-  TF_Tensor* (*AllocateTensor)(TF_DataType, const int64_t*, int, size_t);
-  void* (*TensorData)(const TF_Tensor*);
-  size_t (*TensorByteSize)(const TF_Tensor*);
-  int (*NumDims)(const TF_Tensor*);
-  int64_t (*Dim)(const TF_Tensor*, int);
-  void (*DeleteTensor)(TF_Tensor*);
-
-  TFE_TensorHandle* (*NewTensorHandle)(const TF_Tensor*, TF_Status*);
-  TF_Tensor* (*HandleResolve)(TFE_TensorHandle*, TF_Status*);
-  const char* (*HandleDeviceName)(TFE_TensorHandle*, TF_Status*);
-  void (*DeleteTensorHandle)(TFE_TensorHandle*);
-
-  TFE_Op* (*NewOp)(TFE_Context*, const char*, TF_Status*);
-  void (*OpAddInput)(TFE_Op*, TFE_TensorHandle*, TF_Status*);
-  void (*Execute)(TFE_Op*, TFE_TensorHandle**, int*, TF_Status*);
-  void (*DeleteOp)(TFE_Op*);
-};
-
-static TfApi& Api() {
-  static TfApi api = [] {
-    TfApi a{};
-    void* handle = dlopen("libtensorflow.so.2", RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
-    if (!handle) {
-      handle = dlopen("/opt/libtensorflow/lib/libtensorflow.so.2",
-                      RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
-    }
-    if (!handle) return a;
-    auto sym = [&](auto& fn, const char* name) {
-      fn = reinterpret_cast<std::decay_t<decltype(fn)>>(dlsym(handle, name));
-      return fn != nullptr;
-    };
-    TFE_ContextOptions* (*NewContextOptions)() = nullptr;
-    void (*DeleteContextOptions)(TFE_ContextOptions*) = nullptr;
-    TFE_Context* (*NewContext)(const TFE_ContextOptions*, TF_Status*) = nullptr;
-    a.ok = sym(a.NewStatus, "TF_NewStatus") && sym(a.DeleteStatus, "TF_DeleteStatus") &&
-           sym(a.GetCode, "TF_GetCode") && sym(a.Message, "TF_Message") &&
-           sym(a.AllocateTensor, "TF_AllocateTensor") && sym(a.TensorData, "TF_TensorData") &&
-           sym(a.TensorByteSize, "TF_TensorByteSize") && sym(a.NumDims, "TF_NumDims") &&
-           sym(a.Dim, "TF_Dim") && sym(a.DeleteTensor, "TF_DeleteTensor") &&
-           sym(a.NewTensorHandle, "TFE_NewTensorHandle") &&
-           sym(a.HandleResolve, "TFE_TensorHandleResolve") &&
-           sym(a.HandleDeviceName, "TFE_TensorHandleDeviceName") &&
-           sym(a.DeleteTensorHandle, "TFE_DeleteTensorHandle") && sym(a.NewOp, "TFE_NewOp") &&
-           sym(a.OpAddInput, "TFE_OpAddInput") && sym(a.Execute, "TFE_Execute") &&
-           sym(a.DeleteOp, "TFE_DeleteOp") && sym(NewContextOptions, "TFE_NewContextOptions") &&
-           sym(DeleteContextOptions, "TFE_DeleteContextOptions") &&
-           sym(NewContext, "TFE_NewContext");
-    if (a.ok) {
-      TF_Status* status = a.NewStatus();
-      TFE_ContextOptions* opts = NewContextOptions();
-      a.ctx = NewContext(opts, status);
-      DeleteContextOptions(opts);
-      a.ok = a.ctx && a.GetCode(status) == TF_OK;
-      a.DeleteStatus(status);
-    }
-    return a;
+// TensorFlow is statically linked (src/tensorflow.py). One eager context is
+// made at first use and lives for the process; null only if creation failed.
+static TFE_Context* TfContext() {
+  static TFE_Context* ctx = [] {
+    TF_Status* status = TF_NewStatus();
+    TFE_ContextOptions* opts = TFE_NewContextOptions();
+    TFE_Context* c = TFE_NewContext(opts, status);
+    TFE_DeleteContextOptions(opts);
+    if (TF_GetCode(status) != TF_OK) c = nullptr;
+    TF_DeleteStatus(status);
+    return c;
   }();
-  return api;
+  return ctx;
 }
 
 // All TensorFlow work is serialized under one mutex.
@@ -111,27 +39,26 @@ static std::mutex tf_mutex;
 // Fills the printed facts from a handle: format string, device, and the
 // min/mean/max computed over the resolved floats.
 static bool FillFacts(TFE_TensorHandle* handle, TensorFacts& facts) {
-  auto& tf = Api();
-  TF_Status* status = tf.NewStatus();
-  TF_Tensor* tensor = tf.HandleResolve(handle, status);
-  if (!tensor || tf.GetCode(status) != TF_OK) {
-    tf.DeleteStatus(status);
+  TF_Status* status = TF_NewStatus();
+  TF_Tensor* tensor = TFE_TensorHandleResolve(handle, status);
+  if (!tensor || TF_GetCode(status) != TF_OK) {
+    TF_DeleteStatus(status);
     return false;
   }
   Str dims;
-  for (int i = 0; i < tf.NumDims(tensor); ++i) {
+  for (int i = 0; i < TF_NumDims(tensor); ++i) {
     if (!dims.empty()) dims += ",";
-    dims += f("{}", tf.Dim(tensor, i));
+    dims += f("{}", TF_Dim(tensor, i));
   }
   facts.format = f("f32[{}]", dims);
-  if (const char* device = tf.HandleDeviceName(handle, status)) {
+  if (const char* device = TFE_TensorHandleDeviceName(handle, status)) {
     StrView d = device;
     // The device in TensorFlow's own words, without the job/replica prefix.
     if (auto pos = d.rfind('/'); pos != StrView::npos) d = d.substr(pos + 1);
     facts.device = d;
   }
-  const float* data = (const float*)tf.TensorData(tensor);
-  size_t n = tf.TensorByteSize(tensor) / sizeof(float);
+  const float* data = (const float*)TF_TensorData(tensor);
+  size_t n = TF_TensorByteSize(tensor) / sizeof(float);
   float min = n ? data[0] : 0, max = n ? data[0] : 0;
   double sum = 0;
   for (size_t i = 0; i < n; ++i) {
@@ -142,8 +69,8 @@ static bool FillFacts(TFE_TensorHandle* handle, TensorFacts& facts) {
   facts.min = min;
   facts.max = max;
   facts.mean = n ? (float)(sum / n) : 0;
-  tf.DeleteTensor(tensor);
-  tf.DeleteStatus(status);
+  TF_DeleteTensor(tensor);
+  TF_DeleteStatus(status);
   return true;
 }
 
@@ -153,7 +80,7 @@ static bool FillFacts(TFE_TensorHandle* handle, TensorFacts& facts) {
 
 TfTensor::~TfTensor() {
   auto lock = std::lock_guard(mutex);
-  if (handle) Api().DeleteTensorHandle((TFE_TensorHandle*)handle);
+  if (handle) TFE_DeleteTensorHandle((TFE_TensorHandle*)handle);
 }
 
 sk_sp<SkImage> TfTensor::InputImage() {
@@ -174,7 +101,6 @@ void* TfTensor::Handle(uint64_t& version_out) {
 }
 
 void TfTensor::Materialize() {
-  auto& tf = Api();
   sk_sp<SkImage> input = InputImage();
   {
     auto lock = std::lock_guard(mutex);
@@ -184,9 +110,7 @@ void TfTensor::Materialize() {
   TFE_TensorHandle* new_handle = nullptr;
   TensorFacts new_facts;
   Str error;
-  if (!tf.ok) {
-    error = "TensorFlow is not available (libtensorflow.so.2)";
-  } else if (input) {
+  if (input) {
     int width = input->width();
     int height = input->height();
     Vec<uint8_t> rgba((size_t)width * height * 4);
@@ -195,21 +119,21 @@ void TfTensor::Materialize() {
       auto lock = std::lock_guard(tf_mutex);
       int64_t dims[4] = {1, height, width, 3};
       TF_Tensor* tensor =
-          tf.AllocateTensor(TF_FLOAT, dims, 4, (size_t)height * width * 3 * sizeof(float));
-      float* out = (float*)tf.TensorData(tensor);
+          TF_AllocateTensor(TF_FLOAT, dims, 4, (size_t)height * width * 3 * sizeof(float));
+      float* out = (float*)TF_TensorData(tensor);
       for (size_t i = 0; i < (size_t)width * height; ++i) {
         out[i * 3 + 0] = rgba[i * 4 + 0] / 255.f;
         out[i * 3 + 1] = rgba[i * 4 + 1] / 255.f;
         out[i * 3 + 2] = rgba[i * 4 + 2] / 255.f;
       }
-      TF_Status* status = tf.NewStatus();
-      new_handle = tf.NewTensorHandle(tensor, status);
-      if (tf.GetCode(status) != TF_OK) {
-        error = f("tf: {}", tf.Message(status));
+      TF_Status* status = TF_NewStatus();
+      new_handle = TFE_NewTensorHandle(tensor, status);
+      if (TF_GetCode(status) != TF_OK) {
+        error = f("tf: {}", TF_Message(status));
         new_handle = nullptr;
       }
-      tf.DeleteTensor(tensor);
-      tf.DeleteStatus(status);
+      TF_DeleteTensor(tensor);
+      TF_DeleteStatus(status);
       if (new_handle) FillFacts(new_handle, new_facts);
     } else {
       error = "tf:tensor: the image pixels are not readable on the CPU";
@@ -218,7 +142,7 @@ void TfTensor::Materialize() {
   {
     auto lock = std::lock_guard(mutex);
     computing = false;
-    if (handle) Api().DeleteTensorHandle((TFE_TensorHandle*)handle);
+    if (handle) TFE_DeleteTensorHandle((TFE_TensorHandle*)handle);
     handle = new_handle;
     facts = new_facts;
     computed_input = std::move(input);
@@ -234,7 +158,7 @@ void TfTensor::Materialize() {
 
 TfOp::~TfOp() {
   auto lock = std::lock_guard(mutex);
-  if (handle) Api().DeleteTensorHandle((TFE_TensorHandle*)handle);
+  if (handle) TFE_DeleteTensorHandle((TFE_TensorHandle*)handle);
 }
 
 Str TfOp::Format() {
@@ -256,12 +180,11 @@ sk_sp<SkImage> TfOp::ResultImage() {
 // The result tensor [1,H,W,3] rendered back into the image world, clamped
 // to [0,1].
 static sk_sp<SkImage> TensorToImage(TF_Tensor* tensor) {
-  auto& tf = Api();
-  if (tf.NumDims(tensor) != 4) return nullptr;
-  int height = (int)tf.Dim(tensor, 1);
-  int width = (int)tf.Dim(tensor, 2);
-  if ((int)tf.Dim(tensor, 3) != 3 || width <= 0 || height <= 0) return nullptr;
-  const float* data = (const float*)tf.TensorData(tensor);
+  if (TF_NumDims(tensor) != 4) return nullptr;
+  int height = (int)TF_Dim(tensor, 1);
+  int width = (int)TF_Dim(tensor, 2);
+  if ((int)TF_Dim(tensor, 3) != 3 || width <= 0 || height <= 0) return nullptr;
+  const float* data = (const float*)TF_TensorData(tensor);
   sk_sp<SkData> out = SkData::MakeUninitialized((size_t)width * height * 4);
   uint8_t* px = (uint8_t*)out->writable_data();
   for (size_t i = 0; i < (size_t)width * height; ++i) {
@@ -275,7 +198,6 @@ static sk_sp<SkImage> TensorToImage(TF_Tensor* tensor) {
 }
 
 void TfOp::Execute() {
-  auto& tf = Api();
   Ptr<Object> producer = in_stream->Producer();
   uint64_t in_version = 0;
   TFE_TensorHandle* in_handle = nullptr;
@@ -295,38 +217,38 @@ void TfOp::Execute() {
   TensorFacts new_facts;
   sk_sp<SkImage> new_image;
   Str error;
-  if (!tf.ok) {
-    error = "TensorFlow is not available (libtensorflow.so.2)";
+  if (!TfContext()) {
+    error = "TensorFlow context creation failed";
   } else if (in_handle) {
     // The producer keeps the input handle alive: handles die only in their
     // owner's Materialize/Execute/dtor, and the board is quiescent between
     // Automat-driven runs of one linear chain.
     auto lock = std::lock_guard(tf_mutex);
-    TF_Status* status = tf.NewStatus();
-    TFE_Op* op = tf.NewOp(tf.ctx, op_type.c_str(), status);
-    if (tf.GetCode(status) == TF_OK) tf.OpAddInput(op, in_handle, status);
+    TF_Status* status = TF_NewStatus();
+    TFE_Op* op = TFE_NewOp(TfContext(), op_type.c_str(), status);
+    if (TF_GetCode(status) == TF_OK) TFE_OpAddInput(op, in_handle, status);
     int nret = 1;
-    if (tf.GetCode(status) == TF_OK) tf.Execute(op, &new_handle, &nret, status);
-    if (tf.GetCode(status) != TF_OK) {
-      error = f("{}: {}", op_type, tf.Message(status));
+    if (TF_GetCode(status) == TF_OK) TFE_Execute(op, &new_handle, &nret, status);
+    if (TF_GetCode(status) != TF_OK) {
+      error = f("{}: {}", op_type, TF_Message(status));
       new_handle = nullptr;
     }
-    if (op) tf.DeleteOp(op);
+    if (op) TFE_DeleteOp(op);
     if (new_handle) {
       FillFacts(new_handle, new_facts);
-      TF_Tensor* resolved = tf.HandleResolve(new_handle, status);
+      TF_Tensor* resolved = TFE_TensorHandleResolve(new_handle, status);
       if (resolved) {
         new_image = TensorToImage(resolved);
-        tf.DeleteTensor(resolved);
+        TF_DeleteTensor(resolved);
       }
     }
-    tf.DeleteStatus(status);
+    TF_DeleteStatus(status);
   }
   {
     auto lock = std::lock_guard(mutex);
     computing = false;
     if (new_handle) {
-      if (handle) Api().DeleteTensorHandle((TFE_TensorHandle*)handle);
+      if (handle) TFE_DeleteTensorHandle((TFE_TensorHandle*)handle);
       handle = new_handle;
       facts = new_facts;
       result_image = std::move(new_image);

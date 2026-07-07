@@ -295,10 +295,8 @@ class ExtensionHelper:
         desc=f'Installing {self.name}',
         shortcut=f'install {self.name}')
     elif makefile.name == 'Makefile':
-      # On Windows the env carries Git's usr/bin so make can spawn sh.
-      make_env = env if build.platform == 'win32' else None
       recipe.add_step(
-          partial(Popen, [self.make_exe, 'install', '-j', '8'], env=make_env, cwd=build_dir),
+          partial(Popen, [self.make_exe, 'install', '-j', '8'], env=env, cwd=build_dir),
           outputs=self.outputs,
           inputs=[makefile],
           desc=f'Installing {self.name}',

@@ -101,7 +101,13 @@ PrototypeLibrary::PrototypeLibrary() {
     }
   }
   index.Register<GStreamerShelf, HideInToolbar>();
-  index.Register<GeglBlur, HideInToolbar>();
+  index.Register<MediaFile, HideInToolbar>();
+  index.Register<FfmpegDecoder, HideInToolbar>();
+  // Every registered GEGL operation; the shelf presents them by category.
+  for (auto& op : ListGeglOperations()) {
+    index.Register<GeglOperation, HideInToolbar>(op.name);
+  }
+  index.Register<GeglShelf, HideInToolbar>();
 #if defined(__linux__)
   index.Register<WaylandWindow, HideInToolbar>();
   index.Register<PipeWireNode, HideInToolbar>();

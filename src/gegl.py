@@ -219,10 +219,17 @@ def _patch_opencl_off(marker):
 hook.PatchSources(_patch_opencl_off)
 
 
-# One static operation bundle. The core operations join the common source
-# list, except json.c: its hand-written registration dereferences the
-# GTypeModule and only scans (now empty) module paths. The x86-64-v2/v3
-# duplicates of the bundle stay loadable-module territory and are dropped.
+# One static operation bundle. The core, transform and generated (the SVG
+# compositing family) operations join the common source list: operations
+# reference each other by name across directories (meta-operations build
+# gegl:scale-ratio and svg blend children), so an incomplete bundle leaves
+# passthrough nops behind and their property bindings fail. Excluded stay:
+# json.c (its hand-written registration dereferences the GTypeModule and only
+# scans now-empty module paths), common-cxx (its C++ operations each carry
+# their own module entry points, which collide when folded into one library),
+# common-gpl3+ (GPL3 operations in an MIT binary), external (system library
+# dependencies), seamless-clone and workshop. The x86-64-v2/v3 duplicates of
+# the bundle stay loadable-module territory and are dropped.
 def _patch_static_operations(marker):
   _replace(hook.src_dir / 'operations' / 'meson.build',
     """subdir('common-gpl3+')
@@ -239,22 +246,46 @@ if get_option('workshop')
 endif""",
     "subdir('common')")
   path = hook.src_dir / 'operations' / 'common' / 'meson.build'
+  folded = [
+    '../core/cache.c', '../core/cast-format.c', '../core/cast-space.c',
+    '../core/clone.c', '../core/convert-format.c', '../core/convert-space.c',
+    '../core/crop.c', '../core/load.c', '../core/nop.c',
+  ]
+  for sibling in ('transform', 'generated'):
+    sibling_dir = hook.src_dir / 'operations' / sibling
+    names = sorted(f.name for f in sibling_dir.iterdir() if f.suffix == '.c')
+    folded += [f'../{sibling}/{name}' for name in names]
+  folded_lines = ''.join(f"  '{f}',\n" for f in folded)
+
+  # The transform family registers through its own module singleton:
+  # module.c's entry points are renamed (only dlopen would call them by the
+  # generic names), the generated registrar calls the renamed register first
+  # (it stores the GTypeModule the per-operation registrations need), and the
+  # loader scan skips transform files so they are not registered twice.
+  module_c = hook.src_dir / 'operations' / 'transform' / 'module.c'
+  _replace(module_c, 'gegl_module_query', 'transform_module_query')
+  _replace(module_c, 'gegl_module_register', 'transform_module_register')
+  gen_loader = hook.src_dir / 'tools' / 'gen-loader.py'
+  _replace(gen_loader,
+    "for file_path in sys.argv[1:]:\n",
+    "for file_path in sys.argv[1:]:\n"
+    "  if '/transform/' in file_path:\n"
+    "    continue\n")
+  _replace(gen_loader,
+    'print(f"void gegl_op_{a}_register_type(GTypeModule *module);")',
+    'print(f"void gegl_op_{a}_register_type(GTypeModule *module);")\n'
+    'print("gboolean transform_module_register (GTypeModule *module);")')
+  _replace(gen_loader,
+    'for a in operation_names:\n  print(f"  gegl_op_{a}_register_type(module);")',
+    'print("  transform_module_register (module);")\n'
+    'for a in operation_names:\n  print(f"  gegl_op_{a}_register_type(module);")')
   _replace(path,
     """  'weighted-blend.c',
   'write-buffer.c',
 )""",
-    """  'weighted-blend.c',
+    f"""  'weighted-blend.c',
   'write-buffer.c',
-  '../core/cache.c',
-  '../core/cast-format.c',
-  '../core/cast-space.c',
-  '../core/clone.c',
-  '../core/convert-format.c',
-  '../core/convert-space.c',
-  '../core/crop.c',
-  '../core/load.c',
-  '../core/nop.c',
-)""")
+{folded_lines})""")
   _replace(path,
     "gegl_common = shared_library('gegl-common',",
     "gegl_common = static_library('gegl-common',")
@@ -262,7 +293,8 @@ endif""",
   # GEGL_OP_C_FILE); the folded core sources need their directory searched.
   _replace(path,
     "  include_directories: [ rootInclude, geglInclude, ],\n  dependencies: [",
-    "  include_directories: [ rootInclude, geglInclude, include_directories('../core'), ],\n"
+    "  include_directories: [ rootInclude, geglInclude, include_directories('../core'),"
+    " include_directories('../transform'), include_directories('../generated'), ],\n"
     '  dependencies: [')
   _replace(path,
     """  name_prefix: '',

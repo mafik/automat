@@ -60,7 +60,7 @@ struct PipelinesOption : GroupOption {
     VisitProto(visitor, "GStreamer", Option::NW);
     static FfmpegOption ffmpeg;
     visitor(ffmpeg);
-    VisitProto(visitor, "gegl:gaussian-blur", Option::SW);
+    VisitProto(visitor, "GEGL", Option::SW);
     VisitProto(visitor, "PipeWire", Option::SE);
     VisitProto(visitor, "pipewire:node", Option::S);
     static TensorFlowOption tensorflow;

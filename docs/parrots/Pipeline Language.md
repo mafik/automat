@@ -218,7 +218,9 @@ every factory compiled into the static build registers as a prototype, and
 the shelf groups them by the first segment of their klass strings, ordered
 Source, Filter, Sink, Generic — the direction data flows on the board. The
 PipeWire shelf exists too (src/library_pipewire.cpp, PipeWireShelfToy),
-with its groups ordered the same producer-to-consumer way. Both are
+with its groups ordered the same producer-to-consumer way, and so does the
+GEGL shelf (src/library_gegl.cpp, GeglShelfToy), grouped by the categories
+key with render sources first and programming plumbing last. All are
 reached through the beta stamp's bubble menu, like the Leptonica shelf,
 and all shelves place their entries with the shared ui::ShelfButton.
 
@@ -448,14 +450,16 @@ stay in each stream's own time_base and are rescaled exactly at block
 boundaries (av_rescale_q); the format label includes the time base so a
 mismatch is visible rather than mysterious.
 
-**GEGL.** Operations join the Leptonica shelf structure and control
-vocabulary; the paper is the data object. The reference composition
-gives every operation a truthful face before it is connected. Blits and
-exports run through GeglProcessor so progress is a number, and the
-"computed"/"invalidated" signals drive the paper's progressive repaint.
-Operations whose required input region is the whole image
-(gegl:stretch-contrast and other histogram operations) are marked on
-the shelf, because they make small previews expensive by nature.
+**GEGL.** Every registered operation wraps generically
+(src/library_gegl.cpp): the face's instruments come from GParamSpec
+introspection using the same grammar as the GStreamer wrapper (a GEnum is
+a chip that cycles its nicks, a boolean is a checkbox, a bounded number
+is a slider over the spec's ui range), and the GEGL shelf groups the
+operations by the library's own categories key, the way the GStreamer
+shelf groups by klass. Blits and exports run through GeglProcessor so
+progress is a number, and the "computed"/"invalidated" signals drive the
+previews' progressive repaint. The paper is the data object at the
+chain's edges.
 
 **TensorFlow.** Tensors are data objects with dtype, shape, and device
 printed; operations and layers compute eagerly against them. tf.data
@@ -600,3 +604,20 @@ tap) or through an explicitly inserted tee Command.
   through the FdProvider interface); the pty terminal binding for
   unconnected stdio, /dev/null, Closed, the share-offset file option,
   stderr, and request ports beyond fd 2 are not built.
+- The hidden GEGL graph is one global root rather than one per connected
+  component, because a GEGL parent node carries no clock or bus that
+  would need per-component scoping. Previews longer than 1024 pixels on
+  an edge are sampled at reduced scale through the blit's scale factor.
+  The negotiated babl format is not printed at GEGL edges: the node
+  cache's format is not reachable through public GEGL API.
+- The GEGL bundle folds in the common, core, transform and generated
+  operation directories, and babl's extensions are compiled in because
+  they register the format families operations look up by name
+  (src/gegl.py, src/babl.py). Not compiled in: common-gpl3+ (GPL3
+  operations in an MIT binary), common-cxx (each C++ operation carries
+  its own module entry points, which collide in one library), and
+  external (system library dependencies). gegl:bevel, gegl:layer and
+  gegl:styles are excluded from the shelf and the prototype registry
+  because their internal children live in those excluded sets; two
+  startup log lines remain from a stray gegl:text reference and a
+  buffer-property demonstration reading a null buffer.

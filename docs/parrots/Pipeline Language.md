@@ -412,14 +412,23 @@ connected image and sends it in as one buffer. Sources with a duration show a po
 Sinks that sync to the clock show the pipeline latency
 (GST_QUERY_LATENCY).
 
-**PipeWire.** The board mirrors the daemon's graph through the registry;
-node and link proxies update from their info events. Deleting a link
-object destroys the link; deleting a node proxy only removes it from
-the board — the node belongs to the daemon. Creating a link is
-pw_core_create_object("link-factory", ...) with object.linger so it
-outlives Automat. WirePlumber policy links still happen behind the
-scenes; links it creates simply appear, because the board mirrors
-reality.
+**PipeWire.** The board mirrors the daemon's graph through the registry:
+nodes, ports, and links, with each node's state, its SPA Props (volume
+and mute), and its negotiated format following the daemon's update
+events. The volume instrument shows and moves the cubic-scaled value
+that wpctl prints; the daemon stores channel volumes linear. A stream
+connection between two node proxies stands for the whole set of daemon
+links between that pair of nodes; making the connection creates the
+links (output ports paired to input ports by audio channel, with
+object.linger so they outlive Automat) and breaking it destroys them. A
+connection is board intent until the daemon carries it: while one of the
+named nodes is missing from the graph, the connection keeps trying, so a
+saved board recreates its links when its nodes return. Once realized,
+the connection follows reality in both directions — when another tool
+destroys the links, the board connection disconnects, and links created
+behind the scenes (WirePlumber policy) appear as connections wherever
+both ends have proxies on the same board. Deleting a node proxy only
+removes it from the board, because the node belongs to the daemon.
 
 **FFmpeg.** The media file, codec, filter, and muxer blocks are
 Automat-driven. Packets and frames are refcounted (av_packet_ref,
@@ -573,5 +582,9 @@ tap) or through an explicitly inserted tee Command.
   shows at most four property instruments; the further pads and
   properties exist only through saved recipes. A media file exposes at
   most six stream ports.
+- A PipeWire node proxy's out connection names one peer node. When the
+  daemon fans a node's links out to several nodes, the board shows the
+  link to the first peer that has a proxy; the others exist without a
+  connection on the board.
 - The media file's position is a readout only; the live seek bar
   (av_seek_frame with a codec flush) is not built.

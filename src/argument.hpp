@@ -184,6 +184,7 @@ struct Argument : Interface {
 
   void Connect(Interface end) const {
     if (table->on_connect) table->on_connect(*this, end);
+    state->wake_counter.fetch_add(1, std::memory_order_relaxed);
     object_ptr->WakeToys();
   }
 

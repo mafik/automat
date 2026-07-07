@@ -47,7 +47,11 @@ struct PipeWireNode : Object {
   // Peak of the capture stream, 0..1, written on the PipeWire loop thread.
   std::atomic<float> vu{0};
 
-  // The VU capture stream (a VuStream*), managed on the PipeWire loop.
+  // The VU capture stream (a VuStream*), managed on the PipeWire loop. It
+  // exists only while the proxy sits on a board (RefreshFromMirror keeps it
+  // in step with `here`): shelf entries and toolbar prototypes must not open
+  // daemon streams - a capture stream is itself a node, so a shelf that
+  // attached one per entry would list its own streams and grow without end.
   void* stream = nullptr;
 
   DEF_INTERFACE(PipeWireNode, StreamInput, in_stream, "input")
@@ -74,7 +78,8 @@ struct PipeWireNode : Object {
   void SerializeState(ObjectSerializer&) const override;
   bool DeserializeKey(ObjectDeserializer&, StrView key) override;
 
-  // Points the proxy at a daemon node and re-attaches the capture stream.
+  // Points the proxy at a daemon node; the capture stream follows on the
+  // next tick.
   void SetNodeName(StrView name);
   Str NodeName() const;
   // Refreshes the mirrored fields from the daemon's registry. Called on
@@ -100,6 +105,18 @@ struct PipeWireNode : Object {
   // link whose peer has a proxy on the same board appears as a connection.
   // Called on every toy tick (UI thread).
   void SyncBoardLinks();
+};
+
+// The PipeWire shelf lists the live nodes of the running system, grouped by
+// media.class and shown as their proxies' own faces (so each entry carries
+// its current state). PipeWire objects are not prototypes to instantiate but
+// existing things to use: dragging an entry out places that node's proxy on
+// the board. The shelf follows the daemon - nodes appearing and disappearing
+// rebuild it.
+struct PipeWireShelf : Object {
+  StrView Name() const override { return "PipeWire"; }
+  Ptr<Object> Clone() const override { return MAKE_PTR(PipeWireShelf); }
+  std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 };
 
 }  // namespace automat::library

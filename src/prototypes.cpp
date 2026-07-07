@@ -97,6 +97,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<FfmpegDecoder, HideInToolbar>();
   index.Register<GeglBlur, HideInToolbar>();
   index.Register<PipeWireNode, HideInToolbar>();
+  index.Register<PipeWireShelf, HideInToolbar>();
   index.Register<TfTensor, HideInToolbar>();
   index.Register<TfOp, HideInToolbar>("Square");
 #endif

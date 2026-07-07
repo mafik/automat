@@ -185,10 +185,12 @@ on the library; each library has a real mechanism for it.
 - **A PipeWire node object is already live**, because it is a proxy for
   a node that exists in the daemon's graph. Its face shows node name,
   media.class, state (suspended, idle, running), the negotiated format,
-  and a level meter (Automat attaches a small capture stream to the
-  node's monitor or output ports on demand). Volume and mute are
-  instruments backed by SPA Props. Automat runs as root and talks to
-  the daemon directly; no portals are involved.
+  and a level meter. The meter's capture stream exists only while the
+  proxy stands on a board: a capture stream is itself a node in the
+  graph, so a shelf that attached one per entry would list its own
+  streams and grow without end. Volume and mute are instruments backed
+  by SPA Props. Automat runs as root and talks to the daemon directly;
+  no portals are involved.
 - **A TensorFlow operation or layer** computes eagerly. Pointed at a
   tensor object, it produces its output tensor immediately and keeps it
   current when the input changes. Alone, it shows its signature
@@ -214,9 +216,11 @@ codec/filter/muxer registries, Keras layer families.
 The GStreamer shelf exists (src/library_gstreamer.cpp, GStreamerShelfToy):
 every factory compiled into the static build registers as a prototype, and
 the shelf groups them by the first segment of their klass strings, ordered
-Source, Filter, Sink, Generic — the direction data flows on the board. It is
-reached through the beta stamp's bubble menu, like the Leptonica shelf, and
-both shelves place their entries with the shared ui::ShelfButton.
+Source, Filter, Sink, Generic — the direction data flows on the board. The
+PipeWire shelf exists too (src/library_pipewire.cpp, PipeWireShelfToy),
+with its groups ordered the same producer-to-consumer way. Both are
+reached through the beta stamp's bubble menu, like the Leptonica shelf,
+and all shelves place their entries with the shared ui::ShelfButton.
 
 A shelf entry answers "what is this" before it is touched:
 
@@ -230,8 +234,12 @@ A shelf entry answers "what is this" before it is touched:
 - The PipeWire shelf is different in kind: it lists the live nodes of
   the running system, grouped by media.class, with their current states —
   because PipeWire objects are not prototypes to instantiate but
-  existing things to use. Dragging one out places its proxy on the
-  board.
+  existing things to use. Each entry is the node proxy's own face, so it
+  carries the state word and format the node has right now; dragging one
+  out places its proxy on the board. The shelf follows the daemon: nodes
+  appearing and disappearing rebuild it. Several nodes sharing one
+  node.name are shown as one entry, because a proxy addresses its node
+  by name.
 
 Shelf entries present as clone piles, unchanged.
 

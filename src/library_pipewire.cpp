@@ -18,6 +18,7 @@
 #include "log.hpp"
 #include "text_field.hpp"
 #include "ui_beta.hpp"
+#include "ui_shelf_button.hpp"
 #include "units.hpp"
 
 namespace automat::library {
@@ -98,6 +99,10 @@ struct PwHost {
   Vec<MirrorPort> ports;
   Vec<MirrorLink> links;
 
+  // Bumped whenever the node set changes (arrival, removal, rename,
+  // media.class change), so the shelf can notice without comparing lists.
+  std::atomic<uint32_t> graph_generation{0};
+
   // Board proxies that tick, for mirroring daemon links into board
   // connections. Expired entries are pruned on iteration.
   std::mutex objects_mutex;
@@ -162,8 +167,13 @@ struct PwHost {
     auto lock = std::lock_guard(host.mirror_mutex);
     node.state = pw_node_state_as_string(info->state);
     if (info->props) {
+      Str name = node.name;
+      Str media_class = node.media_class;
       if (const char* v = spa_dict_lookup(info->props, PW_KEY_NODE_NAME)) node.name = v;
       if (const char* v = spa_dict_lookup(info->props, PW_KEY_MEDIA_CLASS)) node.media_class = v;
+      if (name != node.name || media_class != node.media_class) {
+        host.graph_generation.fetch_add(1, std::memory_order_relaxed);
+      }
     }
   }
 
@@ -228,6 +238,7 @@ struct PwHost {
       }
       auto lock = std::lock_guard(host.mirror_mutex);
       host.nodes.push_back(std::move(node));
+      host.graph_generation.fetch_add(1, std::memory_order_relaxed);
     } else if (spa_streq(type, PW_TYPE_INTERFACE_Port)) {
       MirrorPort port;
       port.id = id;
@@ -263,6 +274,7 @@ struct PwHost {
       spa_hook_remove(&host.nodes[i]->listener);
       if (host.nodes[i]->proxy) pw_proxy_destroy(host.nodes[i]->proxy);
       host.nodes.erase(host.nodes.begin() + i);
+      host.graph_generation.fetch_add(1, std::memory_order_relaxed);
       return;
     }
     std::erase_if(host.ports, [&](const MirrorPort& p) { return p.id == id; });
@@ -517,6 +529,22 @@ struct PwHost {
     });
     return live;
   }
+
+  // The live node set for the shelf, in registry order. Nodes without a
+  // node.name are skipped (a proxy addresses its node by name).
+  struct NodeListing {
+    Str name;
+    Str media_class;
+  };
+  Vec<NodeListing> ListNodes() {
+    auto lock = std::lock_guard(mirror_mutex);
+    Vec<NodeListing> listing;
+    for (auto& node : nodes) {
+      if (node->name.empty()) continue;
+      listing.push_back({node->name, node->media_class});
+    }
+    return listing;
+  }
 };
 
 // ============================================================================
@@ -623,10 +651,9 @@ void PipeWireNode::SetNodeName(StrView name) {
     node_name = name;
     vu.store(0, std::memory_order_relaxed);
   }
-  if (host.connected) {
+  if (host.loop && stream) {
     pw_thread_loop_lock(host.loop);
     DestroyVuStreamLocked(*this);
-    if (!name.empty()) CreateVuStreamLocked(*this, Str(name));
     pw_thread_loop_unlock(host.loop);
   }
   WakeToys();
@@ -640,8 +667,18 @@ Str PipeWireNode::NodeName() const {
 void PipeWireNode::RefreshFromMirror() {
   auto& host = PwHost::Get();
   host.Register(AcquireWeakPtr());
+  Str name = NodeName();
+  // The capture stream follows board membership: only a proxy standing on a
+  // board listens to its node.
+  bool want_stream = host.connected && here != nullptr && !name.empty();
+  if (want_stream != (stream != nullptr)) {
+    pw_thread_loop_lock(host.loop);
+    DestroyVuStreamLocked(*this);
+    if (want_stream) CreateVuStreamLocked(*this, name);
+    pw_thread_loop_unlock(host.loop);
+  }
   PwHost::NodeFacts facts;
-  bool found = host.connected && host.Find(NodeName(), facts);
+  bool found = host.connected && host.Find(name, facts);
   auto lock = std::lock_guard(mutex);
   daemon = host.connected;
   if (found) {
@@ -1053,6 +1090,199 @@ void VolumeDrag::Update() {
 
 std::unique_ptr<ObjectToy> PipeWireNode::MakeToy(ui::Widget* parent) {
   return std::make_unique<PipeWireNodeToy>(parent, *this);
+}
+
+// ============================================================================
+// Shelf
+// ============================================================================
+
+// Groups are ordered the way data flows on the board: producers above
+// consumers, matching the GStreamer shelf's Source-to-Sink order.
+static int MediaClassRank(StrView media_class) {
+  if (media_class.contains("Source")) return 0;
+  if (media_class.contains("Stream/Output")) return 1;
+  if (media_class.contains("Duplex") || media_class.contains("Filter")) return 2;
+  if (media_class.contains("Stream/Input")) return 3;
+  if (media_class.contains("Sink")) return 4;
+  if (media_class.empty()) return 6;
+  return 5;
+}
+
+static SkColor MediaClassAccent(StrView media_class) {
+  switch (MediaClassRank(media_class)) {
+    case 0:
+      return ui::beta::kGold;
+    case 1:
+      return ui::beta::kCyan;
+    case 2:
+      return ui::beta::kPurple;
+    case 3:
+      return ui::beta::kSky;
+    case 4:
+      return ui::beta::kBlue;
+    default:
+      return ui::beta::kGrayDark;
+  }
+}
+
+struct PipeWireShelfToy : ui::beta::ObjectToy {
+  static constexpr float kCell = 3.6_cm;
+  static constexpr float kPad = 0.3_cm;
+  static constexpr float kGroupGap = 0.95_cm;  // room for the next frame's tab
+  static constexpr float kHeader = 2.4_cm;
+  static constexpr float kMargin = 0.85_cm;
+  static constexpr int kMaxCols = 4;
+
+  struct PlacedGroup {
+    Str label;
+    SkColor accent;
+    Rect frame;
+  };
+
+  Vec<std::unique_ptr<ui::ShelfButton>> buttons;
+  Vec<PlacedGroup> groups;
+  uint32_t generation_seen = 0;  // the graph_generation the current layout shows
+  bool daemon = false;
+  float sheet_w = 0;
+  float sheet_h = 0;
+
+  PipeWireShelfToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
+    auto& host = PwHost::Get();
+    generation_seen = host.graph_generation.load(std::memory_order_relaxed);
+    daemon = host.connected;
+    Rebuild(host.ListNodes());
+  }
+
+  // Lays the shelf out for `listing`: one clone-pile entry per distinct
+  // node.name, framed by media.class group.
+  void Rebuild(Vec<PwHost::NodeListing> listing) {
+    buttons.clear();
+    groups.clear();
+
+    struct Group {
+      Str label;
+      Vec<Str> names;
+    };
+    Vec<Group> grouped;
+    for (auto& node : listing) {
+      Group* group = nullptr;
+      for (auto& g : grouped) {
+        if (g.label == node.media_class) group = &g;
+      }
+      if (!group) group = &grouped.emplace_back(Group{node.media_class});
+      bool seen = false;  // several nodes may share a name; one entry serves them
+      for (auto& n : group->names) seen |= (n == node.name);
+      if (!seen) group->names.push_back(node.name);
+    }
+    std::stable_sort(grouped.begin(), grouped.end(), [](const Group& a, const Group& b) {
+      if (MediaClassRank(a.label) != MediaClassRank(b.label)) {
+        return MediaClassRank(a.label) < MediaClassRank(b.label);
+      }
+      return a.label < b.label;
+    });
+
+    float widest = ui::beta::TextWidth("PipeWire", 8.2_mm) + 2 * kMargin;
+    float total_h = 0;
+    for (auto& g : grouped) {
+      int cols = std::min<int>(kMaxCols, (int)g.names.size());
+      int rows = ((int)g.names.size() + kMaxCols - 1) / kMaxCols;
+      widest = std::max(widest, cols * kCell + 2 * kPad);
+      total_h += rows * kCell + 2 * kPad;
+    }
+    if (!grouped.empty()) total_h += kGroupGap * ((float)grouped.size() - 1);
+    sheet_w = widest + 2 * kMargin;
+    sheet_h = kHeader + total_h + kMargin;
+
+    Rect sheet = Rect::MakeCenterZero(sheet_w, sheet_h);
+    float y = sheet.top - kHeader;
+    for (auto& g : grouped) {
+      int cols = std::min<int>(kMaxCols, (int)g.names.size());
+      int rows = ((int)g.names.size() + kMaxCols - 1) / kMaxCols;
+      float fw = cols * kCell + 2 * kPad;
+      float fh = rows * kCell + 2 * kPad;
+      Rect frame{-fw / 2, y - fh, fw / 2, y};
+      Str label = g.label.empty() ? Str("no media.class") : g.label;
+      groups.push_back({label, MediaClassAccent(g.label), frame});
+      for (int i = 0; i < (int)g.names.size(); ++i) {
+        auto proxy = MAKE_PTR(PipeWireNode);
+        proxy->SetNodeName(g.names[i]);
+        buttons.emplace_back(std::make_unique<ui::ShelfButton>(this, std::move(proxy)));
+        buttons.back()->Init();
+        float cx = frame.left + kPad + kCell * (i % kMaxCols + 0.5f);
+        float cy = frame.top - kPad - kCell * (i / kMaxCols + 0.5f);
+        Rect src = buttons.back()->CoarseBounds().rect;
+        Rect dst = Rect::MakeCenter({cx, cy}, kCell * 0.88f, kCell * 0.88f);
+        buttons.back()->local_to_parent =
+            SkM44(SkMatrix::RectToRect(src.sk, dst.sk, SkMatrix::kCenter_ScaleToFit));
+      }
+      y -= fh + kGroupGap;
+    }
+  }
+
+  bool CenteredAtZero() const override { return true; }
+
+  SkPath Shape() const override {
+    return SkPath::RRect(RRect::MakeSimple(Rect::MakeCenterZero(sheet_w, sheet_h), 4_mm).sk);
+  }
+
+  // The BETA stamp overhangs the top-right corner; without this it gets clipped at the sheet.
+  Optional<Rect> TextureBounds() const override {
+    return Shape().getBounds().makeOutset(2_cm, 2_cm);
+  }
+
+  // The shelf follows the daemon: it keeps observing and relays out when the
+  // node set changes.
+  Tock Tick(time::Timer&) override {
+    auto& host = PwHost::Get();
+    uint32_t generation = host.graph_generation.load(std::memory_order_relaxed);
+    if (generation != generation_seen || daemon != host.connected) {
+      generation_seen = generation;
+      daemon = host.connected;
+      Rebuild(host.ListNodes());
+      return Tock::Shape | Tock::Ing;
+    }
+    return Tock::Ing;
+  }
+
+  void Draw(SkCanvas& canvas) const override {
+    Rect sheet = Rect::MakeCenterZero(sheet_w, sheet_h);
+    SkPath body = Shape();
+    SkPaint bg;
+    bg.setAntiAlias(true);
+    bg.setColor(ui::beta::kPaperCream);
+    canvas.drawPath(body, bg);
+    ui::beta::SketchyStroke(canvas, body, ui::beta::kInk, ui::beta::kStroke, Seed(0x2D), 1);
+
+    StrView heading = "PipeWire";
+    float hw = ui::beta::TextWidth(heading, 8.2_mm);
+    Vec2 hb = {-hw * 0.5f, sheet.top - 1.6_cm};
+    ui::beta::DrawText(canvas, heading, hb, 8.2_mm, ui::beta::kInk, true, Seed(0x2E));
+    canvas.drawPath(
+        ui::beta::WobbleLine({hb.x - 0.9_mm, hb.y - 2.3_mm}, {hb.x + hw + 0.9_mm, hb.y - 2.3_mm},
+                             ui::beta::kWonk, ui::beta::kSeg, Seed(0x2F)),
+        ui::beta::InkPaint(ui::beta::kRose, ui::beta::kStrokeBold));
+
+    if (!daemon) {
+      StrView note = "no daemon";
+      float w = ui::beta::TextWidth(note, ui::beta::kBodySize);
+      ui::beta::DrawText(canvas, note, {-w / 2, sheet.top - kHeader - 1_cm}, ui::beta::kBodySize,
+                         ui::beta::kGrayDark, false, Seed(0x30));
+    }
+
+    for (int i = 0; i < (int)groups.size(); ++i) {
+      ui::beta::GroupFrame(canvas, groups[i].frame, groups[i].label, groups[i].accent,
+                           Seed(Hash2(0x70, (uint32_t)i)));
+    }
+
+    BakeChildren(canvas);
+
+    ui::beta::DrawBetaStamp(canvas, {sheet.right - 0.6_cm, sheet.top - 0.6_cm}, 2.2_cm, -15.f,
+                            Seed(0xB3), "BETA");
+  }
+};
+
+std::unique_ptr<ObjectToy> PipeWireShelf::MakeToy(ui::Widget* parent) {
+  return std::make_unique<PipeWireShelfToy>(parent, *this);
 }
 
 }  // namespace automat::library

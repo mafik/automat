@@ -6,6 +6,7 @@
 
 #include <include/core/SkImage.h>
 
+#include <memory>
 #include <mutex>
 
 #include "base.hpp"
@@ -13,12 +14,16 @@
 #include "str.hpp"
 #include "stream.hpp"
 
+namespace automat::tf {
+struct Value;
+}
+
 namespace automat::library {
 
-// TensorFlow blocks compute eagerly (TFE C API), as designed in
-// docs/parrots/Pipeline Language.md: tensors are data objects with dtype,
-// shape and device printed on the face; the tensor port's format label uses
-// the "f32[1,240,320,3]" notation. libtensorflow is dlopen'd at first use.
+// TensorFlow blocks run on the CPU through the statically linked C++ graph API
+// (src/tensorflow.py), as designed in docs/parrots/Pipeline Language.md:
+// tensors are data objects with dtype, shape and device printed on the face;
+// the tensor port's format label uses the "f32[1,240,320,3]" notation.
 
 // The printed facts of one held tensor.
 struct TensorFacts {
@@ -35,7 +40,7 @@ struct TensorFacts {
 struct TfTensor : Object {
   mutable std::mutex mutex;  // guards the runtime state below
 
-  void* handle = nullptr;  // TFE_TensorHandle*
+  std::shared_ptr<tf::Value> tensor;  // the materialized value; null = none
   TensorFacts facts;
   uint64_t version = 0;  // bumped per materialize; consumers compare
   sk_sp<SkImage> computed_input;
@@ -66,13 +71,13 @@ struct TfTensor : Object {
   Ptr<Object> Clone() const override { return MAKE_PTR(TfTensor, *this); }
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 
-  // Reads the connected image and builds the tensor handle from it.
+  // Reads the connected image and builds the tensor from it.
   void Materialize();
   sk_sp<SkImage> InputImage();
   Str Format();
-  // Returns the current handle and its version. The handle stays owned by
-  // this object; the caller uses it under TensorFlow's own thread safety.
-  void* Handle(uint64_t& version_out);
+  // Returns the current tensor and its version; the shared_ptr keeps the value
+  // alive for the caller.
+  std::shared_ptr<tf::Value> Value(uint64_t& version_out);
 };
 
 // One eager TensorFlow op (a unary one, "Square" in the slice) applied to
@@ -83,7 +88,7 @@ struct TfOp : Object {
 
   Str op_name;  // the TensorFlow op type, also this object's Name
 
-  void* handle = nullptr;  // the result TFE_TensorHandle*
+  std::shared_ptr<tf::Value> tensor;  // the result value; null = none
   TensorFacts facts;
   uint64_t version = 0;
   uint64_t computed_version = 0;  // the input version `handle` came from
@@ -123,7 +128,7 @@ struct TfOp : Object {
   // Runs the op on the producer's current tensor.
   void Execute();
   Str Format();
-  void* Handle(uint64_t& version_out);
+  std::shared_ptr<tf::Value> Value(uint64_t& version_out);
   sk_sp<SkImage> ResultImage();
 };
 

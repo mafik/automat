@@ -7,10 +7,9 @@
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkData.h>
-#include <tensorflow/c/c_api.h>
-#include <tensorflow/c/eager/c_api.h>
 
 #include "format.hpp"
+#include "tensorflow_runtime.hpp"
 #include "ui_beta.hpp"
 #include "units.hpp"
 
@@ -18,70 +17,28 @@ namespace automat::library {
 
 using ui::beta::Hash2;
 
-// TensorFlow is statically linked (src/tensorflow.py). One eager context is
-// made at first use and lives for the process; null only if creation failed.
-static TFE_Context* TfContext() {
-  static TFE_Context* ctx = [] {
-    TF_Status* status = TF_NewStatus();
-    TFE_ContextOptions* opts = TFE_NewContextOptions();
-    TFE_Context* c = TFE_NewContext(opts, status);
-    TFE_DeleteContextOptions(opts);
-    if (TF_GetCode(status) != TF_OK) c = nullptr;
-    TF_DeleteStatus(status);
-    return c;
-  }();
-  return ctx;
+// Packs the runtime's plain facts into the printed TensorFacts.
+static TensorFacts ToFacts(const tf::Facts& raw) {
+  return {
+      .format = raw.format, .device = raw.device, .min = raw.min, .mean = raw.mean, .max = raw.max};
 }
 
-// All TensorFlow work is serialized under one mutex.
-static std::mutex tf_mutex;
-
-// Fills the printed facts from a handle: format string, device, and the
-// min/mean/max computed over the resolved floats.
-static bool FillFacts(TFE_TensorHandle* handle, TensorFacts& facts) {
-  TF_Status* status = TF_NewStatus();
-  TF_Tensor* tensor = TFE_TensorHandleResolve(handle, status);
-  if (!tensor || TF_GetCode(status) != TF_OK) {
-    TF_DeleteStatus(status);
-    return false;
-  }
-  Str dims;
-  for (int i = 0; i < TF_NumDims(tensor); ++i) {
-    if (!dims.empty()) dims += ",";
-    dims += f("{}", TF_Dim(tensor, i));
-  }
-  facts.format = f("f32[{}]", dims);
-  if (const char* device = TFE_TensorHandleDeviceName(handle, status)) {
-    StrView d = device;
-    // The device in TensorFlow's own words, without the job/replica prefix.
-    if (auto pos = d.rfind('/'); pos != StrView::npos) d = d.substr(pos + 1);
-    facts.device = d;
-  }
-  const float* data = (const float*)TF_TensorData(tensor);
-  size_t n = TF_TensorByteSize(tensor) / sizeof(float);
-  float min = n ? data[0] : 0, max = n ? data[0] : 0;
-  double sum = 0;
-  for (size_t i = 0; i < n; ++i) {
-    min = std::min(min, data[i]);
-    max = std::max(max, data[i]);
-    sum += data[i];
-  }
-  facts.min = min;
-  facts.max = max;
-  facts.mean = n ? (float)(sum / n) : 0;
-  TF_DeleteTensor(tensor);
-  TF_DeleteStatus(status);
-  return true;
+// Renders a value back into the image world, or null if it is not a [1,h,w,3]
+// float value.
+static sk_sp<SkImage> ToImage(const tf::Value& v) {
+  std::vector<uint8_t> rgba;
+  int width = 0, height = 0;
+  if (!tf::ValueToImage(v, rgba, width, height)) return nullptr;
+  sk_sp<SkData> data = SkData::MakeWithCopy(rgba.data(), rgba.size());
+  auto info = SkImageInfo::Make(width, height, kRGBA_8888_SkColorType, kUnpremul_SkAlphaType);
+  return SkImages::RasterFromData(info, std::move(data), (size_t)width * 4);
 }
 
 // ============================================================================
 // TfTensor
 // ============================================================================
 
-TfTensor::~TfTensor() {
-  auto lock = std::lock_guard(mutex);
-  if (handle) TFE_DeleteTensorHandle((TFE_TensorHandle*)handle);
-}
+TfTensor::~TfTensor() = default;
 
 sk_sp<SkImage> TfTensor::InputImage() {
   auto ip_ptr = image->FindInterface();
@@ -94,10 +51,10 @@ Str TfTensor::Format() {
   return facts.format;
 }
 
-void* TfTensor::Handle(uint64_t& version_out) {
+std::shared_ptr<tf::Value> TfTensor::Value(uint64_t& version_out) {
   auto lock = std::lock_guard(mutex);
   version_out = version;
-  return handle;
+  return tensor;
 }
 
 void TfTensor::Materialize() {
@@ -107,7 +64,7 @@ void TfTensor::Materialize() {
     if (computing) return;
     computing = true;
   }
-  TFE_TensorHandle* new_handle = nullptr;
+  std::shared_ptr<tf::Value> new_tensor;
   TensorFacts new_facts;
   Str error;
   if (input) {
@@ -116,25 +73,8 @@ void TfTensor::Materialize() {
     Vec<uint8_t> rgba((size_t)width * height * 4);
     auto info = SkImageInfo::Make(width, height, kRGBA_8888_SkColorType, kUnpremul_SkAlphaType);
     if (input->readPixels(nullptr, info, rgba.data(), (size_t)width * 4, 0, 0)) {
-      auto lock = std::lock_guard(tf_mutex);
-      int64_t dims[4] = {1, height, width, 3};
-      TF_Tensor* tensor =
-          TF_AllocateTensor(TF_FLOAT, dims, 4, (size_t)height * width * 3 * sizeof(float));
-      float* out = (float*)TF_TensorData(tensor);
-      for (size_t i = 0; i < (size_t)width * height; ++i) {
-        out[i * 3 + 0] = rgba[i * 4 + 0] / 255.f;
-        out[i * 3 + 1] = rgba[i * 4 + 1] / 255.f;
-        out[i * 3 + 2] = rgba[i * 4 + 2] / 255.f;
-      }
-      TF_Status* status = TF_NewStatus();
-      new_handle = TFE_NewTensorHandle(tensor, status);
-      if (TF_GetCode(status) != TF_OK) {
-        error = f("tf: {}", TF_Message(status));
-        new_handle = nullptr;
-      }
-      TF_DeleteTensor(tensor);
-      TF_DeleteStatus(status);
-      if (new_handle) FillFacts(new_handle, new_facts);
+      new_tensor = tf::ImageToValue(rgba.data(), width, height);
+      new_facts = ToFacts(tf::Describe(*new_tensor));
     } else {
       error = "tf:tensor: the image pixels are not readable on the CPU";
     }
@@ -142,8 +82,7 @@ void TfTensor::Materialize() {
   {
     auto lock = std::lock_guard(mutex);
     computing = false;
-    if (handle) TFE_DeleteTensorHandle((TFE_TensorHandle*)handle);
-    handle = new_handle;
+    tensor = std::move(new_tensor);
     facts = new_facts;
     computed_input = std::move(input);
     version += 1;
@@ -156,20 +95,17 @@ void TfTensor::Materialize() {
 // TfOp
 // ============================================================================
 
-TfOp::~TfOp() {
-  auto lock = std::lock_guard(mutex);
-  if (handle) TFE_DeleteTensorHandle((TFE_TensorHandle*)handle);
-}
+TfOp::~TfOp() = default;
 
 Str TfOp::Format() {
   auto lock = std::lock_guard(mutex);
   return facts.format;
 }
 
-void* TfOp::Handle(uint64_t& version_out) {
+std::shared_ptr<tf::Value> TfOp::Value(uint64_t& version_out) {
   auto lock = std::lock_guard(mutex);
   version_out = version;
-  return handle;
+  return tensor;
 }
 
 sk_sp<SkImage> TfOp::ResultImage() {
@@ -177,34 +113,16 @@ sk_sp<SkImage> TfOp::ResultImage() {
   return result_image;
 }
 
-// The result tensor [1,H,W,3] rendered back into the image world, clamped
-// to [0,1].
-static sk_sp<SkImage> TensorToImage(TF_Tensor* tensor) {
-  if (TF_NumDims(tensor) != 4) return nullptr;
-  int height = (int)TF_Dim(tensor, 1);
-  int width = (int)TF_Dim(tensor, 2);
-  if ((int)TF_Dim(tensor, 3) != 3 || width <= 0 || height <= 0) return nullptr;
-  const float* data = (const float*)TF_TensorData(tensor);
-  sk_sp<SkData> out = SkData::MakeUninitialized((size_t)width * height * 4);
-  uint8_t* px = (uint8_t*)out->writable_data();
-  for (size_t i = 0; i < (size_t)width * height; ++i) {
-    for (int c = 0; c < 3; ++c) {
-      px[i * 4 + c] = (uint8_t)(std::clamp(data[i * 3 + c], 0.f, 1.f) * 255.f + 0.5f);
-    }
-    px[i * 4 + 3] = 255;
-  }
-  auto info = SkImageInfo::Make(width, height, kRGBA_8888_SkColorType, kUnpremul_SkAlphaType);
-  return SkImages::RasterFromData(info, std::move(out), (size_t)width * 4);
-}
-
 void TfOp::Execute() {
   Ptr<Object> producer = in_stream->Producer();
   uint64_t in_version = 0;
-  TFE_TensorHandle* in_handle = nullptr;
+  // The shared_ptr copy keeps the input alive for the whole run, even if the
+  // producer re-materializes concurrently.
+  std::shared_ptr<tf::Value> in_tensor;
   if (auto* t = dynamic_cast<TfTensor*>(producer.get())) {
-    in_handle = (TFE_TensorHandle*)t->Handle(in_version);
+    in_tensor = t->Value(in_version);
   } else if (auto* op = dynamic_cast<TfOp*>(producer.get())) {
-    in_handle = (TFE_TensorHandle*)op->Handle(in_version);
+    in_tensor = op->Value(in_version);
   }
   Str op_type;
   {
@@ -213,43 +131,22 @@ void TfOp::Execute() {
     computing = true;
     op_type = op_name;
   }
-  TFE_TensorHandle* new_handle = nullptr;
+  std::shared_ptr<tf::Value> new_tensor;
   TensorFacts new_facts;
   sk_sp<SkImage> new_image;
   Str error;
-  if (!TfContext()) {
-    error = "TensorFlow context creation failed";
-  } else if (in_handle) {
-    // The producer keeps the input handle alive: handles die only in their
-    // owner's Materialize/Execute/dtor, and the board is quiescent between
-    // Automat-driven runs of one linear chain.
-    auto lock = std::lock_guard(tf_mutex);
-    TF_Status* status = TF_NewStatus();
-    TFE_Op* op = TFE_NewOp(TfContext(), op_type.c_str(), status);
-    if (TF_GetCode(status) == TF_OK) TFE_OpAddInput(op, in_handle, status);
-    int nret = 1;
-    if (TF_GetCode(status) == TF_OK) TFE_Execute(op, &new_handle, &nret, status);
-    if (TF_GetCode(status) != TF_OK) {
-      error = f("{}: {}", op_type, TF_Message(status));
-      new_handle = nullptr;
+  if (in_tensor) {
+    new_tensor = tf::RunUnaryOp(op_type, *in_tensor, error);
+    if (new_tensor) {
+      new_facts = ToFacts(tf::Describe(*new_tensor));
+      new_image = ToImage(*new_tensor);
     }
-    if (op) TFE_DeleteOp(op);
-    if (new_handle) {
-      FillFacts(new_handle, new_facts);
-      TF_Tensor* resolved = TFE_TensorHandleResolve(new_handle, status);
-      if (resolved) {
-        new_image = TensorToImage(resolved);
-        TF_DeleteTensor(resolved);
-      }
-    }
-    TF_DeleteStatus(status);
   }
   {
     auto lock = std::lock_guard(mutex);
     computing = false;
-    if (new_handle) {
-      if (handle) TFE_DeleteTensorHandle((TFE_TensorHandle*)handle);
-      handle = new_handle;
+    if (new_tensor) {
+      tensor = std::move(new_tensor);
       facts = new_facts;
       result_image = std::move(new_image);
       version += 1;
@@ -322,8 +219,8 @@ struct TfToy : ui::beta::ObjectToy {
         {
           Ptr<Object> p = op->in_stream->Producer();
           producer = p.get();
-          if (auto* t = dynamic_cast<TfTensor*>(p.get())) t->Handle(producer_version);
-          if (auto* o = dynamic_cast<TfOp*>(p.get())) o->Handle(producer_version);
+          if (auto* t = dynamic_cast<TfTensor*>(p.get())) t->Value(producer_version);
+          if (auto* o = dynamic_cast<TfOp*>(p.get())) o->Value(producer_version);
         }
         bool stale;
         {
@@ -366,7 +263,7 @@ struct TfToy : ui::beta::ObjectToy {
                     ui::beta::State::Default, Seed(kSeed), true);
 
     {  // credit
-      StrView credit = "TensorFlow · eager";
+      StrView credit = "TensorFlow";
       float w = ui::beta::TextWidth(credit, ui::beta::kMicroSize);
       ui::beta::DrawText(canvas, credit, {kPlateW / 2 - kSide - w, kPlateH / 2 - kBand - 1.6_mm},
                          ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));

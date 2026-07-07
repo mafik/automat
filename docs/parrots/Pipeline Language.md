@@ -521,18 +521,20 @@ tap) or through an explicitly inserted tee Command.
   download at preview rate unless the sink path is used.
 - The pipeline libraries are vendored into third_party and linked
   statically (GStreamer with its plugins compiled in, FFmpeg, GEGL with
-  its operations compiled in, plus their static GLib stack), like every
-  other Automat dependency; only Vulkan and PipeWire come from the host,
-  because they are the official interfaces to host drivers and services.
+  its operations compiled in, TensorFlow with its op kernels compiled in,
+  plus their static GLib stack), like every other Automat dependency;
+  only Vulkan and PipeWire come from the host, because they are the
+  official interfaces to host drivers and services.
 - A library's compute runtime must not collide with Automat's statically
   linked LLVM inside software Vulkan drivers. Two rules keep that true:
   runtimes are excluded at build time (GEGL is built with OpenCL disabled),
   and the binary must not export its statically linked symbols into the
   dynamic symbol table, where a dlopen'd driver would bind against them —
   gmodule's -Wl,--export-dynamic is stripped from every link
-  (src/glib.py StaticLibs). TensorFlow, which bundles its own runtime and
-  is not yet vendored, still loads lazily at first use (dlopen with
-  RTLD_DEEPBIND) and its blocks degrade to an error face when absent.
+  (src/glib.py StaticLibs). TensorFlow bundles its own LLVM, so when its
+  archive is assembled, every symbol outside its public C++ API namespaces
+  is localized (src/tensorflow.py); the bundled LLVM can neither clash
+  with Automat's own LLVM nor leak into the dynamic symbol table.
 - Two interfaces of one object must not share a display name: connections
   are saved as "object.interface" and load by name lookup, so a block
   with an "Image" input names its image output "Result".

@@ -71,6 +71,7 @@ class ExtensionHelper:
   # - configure (cmake / meson)
   # - build & install (ninja)
   # - post-install hooks
+  # - custom steps added by the extension's own hook_recipe
   # - (inject deps & compile args) compile object files with sources that match include_regex
   # - (inject link args) link binaries
 
@@ -116,9 +117,13 @@ class ExtensionHelper:
     self.meson_build_targets = ['all']
 
   def _hook_recipe(self, recipe):
+    self._standard_recipe(recipe)
+    # The extension's own hook_recipe runs after the standard steps so that its
+    # steps can consume the beam and extend it with their own outputs.
     if self.old_hook_recipe:
       self.old_hook_recipe(recipe)
 
+  def _standard_recipe(self, recipe):
     if self.git_url:
       # The stamp only exists after a completed clone, so an interrupted download
       # (partial checkout without a stamp) re-runs and repairs itself.

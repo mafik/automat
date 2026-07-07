@@ -1,5 +1,7 @@
 [Unit]
 Description=Release a new version of the Automat
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=oneshot

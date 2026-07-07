@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: MIT
 
 import argparse
+import datetime
 import json
 import subprocess
-import urllib
 import urllib.parse
 import sys, os
 
@@ -25,9 +25,6 @@ if __name__ == '__main__':
     it possible to pull in ''')
   args = args.parse_args()
 
-  repo = Path(subprocess.check_output(['git', 'rev-parse', '--show-toplevel']).decode().strip())
-  git_refs = repo / '.git' / 'refs'
-
   if args.pull_and_restart:
     # Report an error if there are uncommited changes
     uncommited_changes = bool(subprocess.run(['git', 'diff', '--quiet']).returncode)
@@ -38,21 +35,20 @@ if __name__ == '__main__':
     subprocess.run(['git', 'fetch', 'origin', 'main'], check=True)
 
     # Report an error if the current branch is not main
-    git_head_branch = subprocess.Popen(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], stdout=subprocess.PIPE)
-    head_branch = git_head_branch.stdout.read().decode().strip() # type: ignore
+    head_branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).decode().strip()
     if head_branch != 'main':
       raise Exception('Not on the main branch, please switch to main before building the release')
 
-    # Attempt fast-forward to origin/HEAD
-    subprocess.run(['git', 'merge', '--ff-only', 'origin/main'], check=True)
+    # Mirror origin/main exactly so that rewrites of its history don't break future releases
+    subprocess.run(['git', 'reset', '--hard', 'origin/main'], check=True)
 
     returncode = subprocess.run(['python', sys.argv[0]], check=True).returncode
 
     sys.exit(returncode)
 
   # Report an error if the local has unpushed changes
-  main_hash = (git_refs / 'heads' / 'main').read_text().strip()
-  origin_sha = (git_refs / 'remotes' / 'origin' / 'main').read_text().strip()
+  main_hash = subprocess.check_output(['git', 'rev-parse', 'main']).decode().strip()
+  origin_sha = subprocess.check_output(['git', 'rev-parse', 'origin/main']).decode().strip()
   if main_hash != origin_sha:
     raise Exception('Local and origin main hashes are different, please push the changes before building the release')
 
@@ -152,7 +148,6 @@ if __name__ == '__main__':
     release_assets.append(out)
 
   # Upload to github
-  import datetime
   today = datetime.date.today()
   year, week, weekday = today.isocalendar()
   TAG = f'{year}-W{week:02d}' # ISO 8601
@@ -185,19 +180,7 @@ if __name__ == '__main__':
 
   try:
     release = github_call('releases/tags/' + TAG)
-    print('Release already exists...')
-
-    tag_hash = git_refs / 'tags' / TAG
-    if not tag_hash.exists():
-      raise Exception(f"GitHub contains release {TAG} but local git tag couldn't be found at {tag_hash}.")
-    tag_hash = tag_hash.read_text().strip()
-
-    if main_hash != tag_hash:
-      print('Local and remote tags are different, updating the tag...')
-      subprocess.run(['git', 'tag', '-f', TAG, main_hash], check=True)
-      subprocess.run(['git', 'push', 'origin', 'tag', TAG, '--force'], check=True)
-
-  except Exception as e:
+  except Exception:
     release = None
 
   if release is None:
@@ -206,6 +189,14 @@ if __name__ == '__main__':
       'tag_name': TAG,
       'generate_release_notes': True,
     })
+  else:
+    print('Release already exists...')
+    tag_check = subprocess.run(['git', 'rev-parse', '--verify', '--quiet', f'refs/tags/{TAG}'], stdout=subprocess.PIPE)
+    tag_hash = tag_check.stdout.decode().strip() if tag_check.returncode == 0 else None
+    if tag_hash != main_hash:
+      print('Updating the tag to match main...')
+      subprocess.run(['git', 'tag', '-f', TAG, main_hash], check=True)
+      subprocess.run(['git', 'push', 'origin', 'tag', TAG, '--force'], check=True)
 
   if release is None:
     raise Exception("Couldn't get/create a new release")

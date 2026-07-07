@@ -25,34 +25,48 @@ namespace automat::library {
 
 // libavformat demuxer. Opens `path` immediately (avformat_open_input,
 // avformat_find_stream_info); shows container, duration, and stream rows.
-// The "video" port hands out the best video stream's packets to a connected
-// decoder, which pulls them through ReadVideoPacket.
+// Every stream in the file is a port: "#0", "#1", ... in the file's own
+// order, plus the "video" port for the best video stream
+// (av_find_best_stream) so a decoder connects without knowing indices.
+// Connected decoders pull packets through ReadPacketFor; packets that
+// belong to another connected stream wait in that stream's bounded queue,
+// whose fill is the port's meter.
 struct MediaFile : Object {
+  static constexpr int kMaxStreams = 6;
+  static constexpr int kQueueCap = 256;  // packets per stream; oldest drop first
+
   mutable std::mutex mutex;  // guards path and the runtime state below
 
   Str path;  // recipe data; empty = closed
 
-  // Runtime, guarded by `mutex`. `fmt` is an AVFormatContext*; the type is
-  // erased so FFmpeg headers stay out of this header.
+  // Per-stream ports, named "#0".."#5" at construction; the open file sets
+  // how many are active.
+  StreamOutSlot stream_ports[kMaxStreams];
+  int n_streams = 0;  // active ports; min(file streams, kMaxStreams)
+
+  // Runtime, guarded by `mutex`. `fmt` is an AVFormatContext*; queued
+  // packets are AVPacket*. The types are erased so FFmpeg headers stay out
+  // of this header.
   void* fmt = nullptr;
   int video_stream = -1;  // index of the stream behind the "video" port
   Str container;          // demuxer long name, FFmpeg's own words
   double duration_s = 0;
   Vec<Str> rows;          // one printed row per stream
   double position_s = 0;  // pts of the last packet handed out
-  uint64_t packets = 0;
-  uint64_t packet_bytes = 0;
+  Vec<void*> queues[kMaxStreams];
+  uint64_t packets[kMaxStreams] = {};  // handed-out totals per stream
+  uint64_t packet_bytes[kMaxStreams] = {};
 
   DEF_INTERFACE(MediaFile, StreamArgument, out_stream, "video")
-  Str OnFormat() { return obj->PacketFormat(); }
-  StreamStats OnStats() { return obj->PacketStats(); }
+  Str OnFormat() { return obj->PacketFormat(obj->BestVideoStream()); }
+  StreamStats OnStats() { return obj->PacketStats(obj->BestVideoStream()); }
   void OnConnect(Interface end) { obj->OnOutStreamConnect(*this, end); }
   DEF_END(out_stream);
 
-  INTERFACES(out_stream);
+  void Interfaces(const std::function<LoopControl(Interface)>& cb) override;
 
-  MediaFile() = default;
-  MediaFile(const MediaFile& o) : Object(o), path(o.path), out_stream(o.out_stream) {}
+  MediaFile();
+  MediaFile(const MediaFile& o);
   ~MediaFile() override;
 
   StrView Name() const override { return "avformat"; }
@@ -66,24 +80,36 @@ struct MediaFile : Object {
   // just closes. Errors land on this object.
   void SetPath(StrView new_path);
 
-  // out_stream's OnConnect: a decoder that changes its packet source must
-  // reopen its codec, so both ends of the change reset.
+  // Every out port's OnConnect: a decoder that changes its packet source
+  // must reopen its codec, so both ends of the change reset.
   void OnOutStreamConnect(StreamArgument self, Interface end);
 
-  // Reads the next packet of the video stream into `av_packet` (AVPacket*),
-  // skipping other streams. Returns 0 or a libav error (AVERROR_EOF at the
-  // end). Called by the connected decoder on a worker thread.
-  int ReadVideoPacket(void* av_packet);
-  // Copies the video stream's codec parameters into `av_params`
-  // (AVCodecParameters*). False when no file or no video stream is open.
-  bool CopyVideoCodecParams(void* av_params);
-  // The video stream's time base, in seconds per pts unit.
-  double VideoTimeBase();
+  // The stream index feeding `consumer`, or -1. The "video" port counts as
+  // the best video stream; a consumer on several ports gets the first.
+  int StreamIndexFeeding(const Object* consumer);
+  int BestVideoStream();
 
-  Str PacketFormat();
-  StreamStats PacketStats();
+  // Reads the next packet of stream `index` into `av_packet` (AVPacket*):
+  // from the stream's queue when one waits, else forward through the file,
+  // parking packets that belong to other connected streams. Returns 0 or a
+  // libav error (AVERROR_EOF at the end). Called by connected decoders on
+  // worker threads.
+  int ReadPacketFor(int index, void* av_packet);
+  // Copies stream `index`'s codec parameters into `av_params`
+  // (AVCodecParameters*). False when no file or no such stream.
+  bool CopyCodecParams(int index, void* av_params);
+  // Stream `index`'s time base, in seconds per pts unit.
+  double TimeBase(int index);
+
+  Str PacketFormat(int index);
+  StreamStats PacketStats(int index);
+
+  // The port slot owning `table`, or -1 for the "video" port's table.
+  int SlotOf(const Interface::Table* table) const;
 
  private:
+  bool StreamConsumedLocked(int index);
+  void InitPorts();
   void CloseLocked();
 };
 

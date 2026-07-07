@@ -224,10 +224,8 @@ void GStreamerElement::InitPorts() {
 
   for (int i = 0; i < n_extra_out; ++i) {
     auto& p = extra_out[i];
-    p.pad_name = out_pad_names[i + 1];
-    p.table = StreamArgument::Table(p.pad_name);
-    p.table.state_off =
-        int(offsetof(GStreamerElement, extra_out) + i * sizeof(OutPort) + offsetof(OutPort, state));
+    p.Init(out_pad_names[i + 1], int(offsetof(GStreamerElement, extra_out) +
+                                     i * sizeof(StreamOutSlot) + offsetof(StreamOutSlot, state)));
     p.table.can_connect = [](Argument self, Interface end, Status& status) {
       StreamArgument::Table::DefaultCanConnect(self, end, status);
       if (OK(status)) static_cast<GStreamerElement*>(self.object_ptr)->CanFeedStream(end, status);
@@ -247,10 +245,8 @@ void GStreamerElement::InitPorts() {
   }
   for (int i = 0; i < n_extra_in; ++i) {
     auto& p = extra_in[i];
-    p.pad_name = in_pad_names[i + 1];
-    p.table = StreamInput::Table(p.pad_name);
-    p.table.state_off =
-        int(offsetof(GStreamerElement, extra_in) + i * sizeof(InPort) + offsetof(InPort, state));
+    p.Init(in_pad_names[i + 1], int(offsetof(GStreamerElement, extra_in) +
+                                    i * sizeof(StreamInSlot) + offsetof(StreamInSlot, state)));
   }
 }
 

@@ -77,6 +77,7 @@ struct ConnectionWidget : ArgumentToy {
   float stream_rate_drawn = 0;
   uint64_t stream_fill = 0;
   uint64_t stream_capacity = 0;
+  StrView stream_fill_unit = {};
   float stream_fill_drawn = 0;
   // The blocked side flickers under flow (a fast producer is momentarily
   // blocked on many samples and free on others), so each side accumulates a

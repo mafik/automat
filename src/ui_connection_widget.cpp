@@ -481,6 +481,7 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
       stream_units_per_s = (float)stream_unit_rate.Update(timer.NowSeconds(), stats.units);
       stream_fill = stats.fill;
       stream_capacity = stats.capacity;
+      stream_fill_unit = stats.fill_unit;
       if (stats.blocked != StreamBlocked::None) {
         if (stats.blocked != stream_blocked) {
           stream_blocked = stats.blocked;
@@ -1008,8 +1009,13 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
             constexpr float kBarW = 12_mm;
             if (stream_capacity > 0) {
               fill_line = (int)lines.size();
-              lines.push_back(
-                  {f("{} / {}", FormatBytes(stream_fill), FormatBytes(stream_capacity)), kInkSoft});
+              // Fill and capacity are bytes unless the library counts them
+              // in its own quantum (packets, buffers).
+              Str fill_text =
+                  stream_fill_unit.empty()
+                      ? f("{} / {}", FormatBytes(stream_fill), FormatBytes(stream_capacity))
+                      : f("{} / {} {}", stream_fill, stream_capacity, stream_fill_unit);
+              lines.push_back({fill_text, kInkSoft});
             }
             if (stream_blocked_shown) {
               lines.push_back({stream_blocked == StreamBlocked::Producer

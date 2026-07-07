@@ -171,12 +171,17 @@ on the library; each library has a real mechanism for it.
 - **An FFmpeg media file object** opens the file the moment its path is
   set (avformat_open_input, avformat_find_stream_info) and shows the
   container, duration, and one row per stream with codec, resolution or
-  sample rate, and bit rate — each row is an output port producing that
-  stream's packets. A seek bar is live (av_seek_frame). No pipeline is
-  needed for any of this. An FFmpeg codec object alone shows its
-  AVCodecDescriptor facts (name, capabilities, supported formats) and
-  lights up when dragged near a matching packet stream (codec_id
-  match).
+  sample rate, and bit rate — each row is an output port ("#0", "#1")
+  producing that stream's packets, and the "video" port doubles the best
+  video stream (av_find_best_stream) so a decoder connects without
+  knowing indices. Reading is shared: a decoder pulling its stream parks
+  packets that belong to other connected streams in their bounded
+  queues, and each queue's fill is its port's meter, so one consumer
+  outpacing another is visible on the cable. No pipeline is needed for
+  any of this. An FFmpeg codec object decodes whichever stream feeds it
+  — a video stream becomes the held image, an audio stream shows the
+  decoded sample format — and lights up when dragged near a matching
+  packet stream.
 - **A PipeWire node object is already live**, because it is a proxy for
   a node that exists in the daemon's graph. Its face shows node name,
   media.class, state (suspended, idle, running), the negotiated format,
@@ -566,4 +571,7 @@ tap) or through an explicitly inserted tee Command.
   what the block does. Today a shelf entry shows the block's idle face.
 - A GStreamer block exposes at most four extra port slots and its face
   shows at most four property instruments; the further pads and
-  properties exist only through saved recipes.
+  properties exist only through saved recipes. A media file exposes at
+  most six stream ports.
+- The media file's position is a readout only; the live seek bar
+  (av_seek_frame with a codec flush) is not built.

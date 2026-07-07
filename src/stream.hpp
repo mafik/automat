@@ -38,12 +38,14 @@ enum class StreamBlocked : uint8_t {
 // by the UI with RateEstimator. `units` counts library-specific quanta
 // (buffers, frames, lines); zero means bytes are the only unit. `fill` and
 // `capacity` describe the stream's buffer when it has one (a kernel pipe, a
-// queue); capacity zero means unknown.
+// queue); capacity zero means unknown. They are byte counts unless
+// `fill_unit` names the library's own quantum ("packets", "buffers").
 struct StreamStats {
   uint64_t bytes = 0;
   uint64_t units = 0;
   uint64_t fill = 0;
   uint64_t capacity = 0;
+  StrView fill_unit = {};
   StreamBlocked blocked = StreamBlocked::None;
 };
 
@@ -200,6 +202,35 @@ struct StreamArgument : InterfaceArgument<StreamInput, Interface::kStreamArg> {
 
     inline constinit static Table tbl = MakeTable();
   };
+};
+
+// A dynamically-named stream port slot. Owner objects embed fixed arrays of
+// these and call Init at construction: the Table is per-instance, its name
+// views the slot's own storage, and its state offset points at the slot's
+// state. Interfaces are identified by Table address, so slots live exactly
+// as long as the object; only the active count varies.
+struct StreamOutSlot {
+  StreamArgument::Table table{""};
+  StreamArgument::State state;
+  Str name;
+
+  void Init(Str port_name, int state_off) {
+    name = std::move(port_name);
+    table = StreamArgument::Table(name);
+    table.state_off = state_off;
+  }
+};
+
+struct StreamInSlot {
+  StreamInput::Table table{""};
+  StreamInput::State state;
+  Str name;
+
+  void Init(Str port_name, int state_off) {
+    name = std::move(port_name);
+    table = StreamInput::Table(name);
+    table.state_off = state_off;
+  }
 };
 
 // Windowed rate estimator: feed cumulative totals, read a per-second rate.

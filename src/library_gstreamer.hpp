@@ -59,21 +59,6 @@ struct GStreamerElement : Object {
 
   enum class PadMode : uint8_t { kNone, kAlways, kRequest, kSometimes };
 
-  // One extra stream port. The Table is per-instance, initialized at
-  // construction: its name is this slot's pad name and its state offset
-  // points at this slot's state. Interfaces are identified by Table address,
-  // so slots live exactly as long as the object.
-  struct OutPort {
-    StreamArgument::Table table{""};
-    StreamArgument::State state;
-    Str pad_name;
-  };
-  struct InPort {
-    StreamInput::Table table{""};
-    StreamInput::State state;
-    Str pad_name;
-  };
-
   mutable std::mutex mutex;  // guards props and the runtime state below
 
   Str factory;  // GStreamer element factory name; also this object's Name()
@@ -81,8 +66,9 @@ struct GStreamerElement : Object {
   Vec<std::pair<Str, Str>> props;  // property values, applied at start and live
 
   // Port layout, fixed at construction from the factory's pad templates.
-  OutPort extra_out[kMaxExtraPorts];
-  InPort extra_in[kMaxExtraPorts];
+  // Each slot's name is its gst pad name.
+  StreamOutSlot extra_out[kMaxExtraPorts];
+  StreamInSlot extra_in[kMaxExtraPorts];
   int n_extra_out = 0;
   int n_extra_in = 0;
   PadMode out_mode = PadMode::kNone;  // the primary src template's presence

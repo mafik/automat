@@ -38,9 +38,51 @@ static Str AvErrWord(int err) {
 // MediaFile
 // ============================================================================
 
+void MediaFile::InitPorts() {
+  for (int i = 0; i < kMaxStreams; ++i) {
+    auto& p = stream_ports[i];
+    p.Init(f("#{}", i), int(offsetof(MediaFile, stream_ports) + i * sizeof(StreamOutSlot) +
+                            offsetof(StreamOutSlot, state)));
+    p.table.on_connect = [](Argument self, Interface end) {
+      static_cast<MediaFile*>(self.object_ptr)->OnOutStreamConnect(cast<StreamArgument>(self), end);
+    };
+    p.table.format = [](StreamArgument self) {
+      auto* file = static_cast<MediaFile*>(self.object_ptr);
+      return file->PacketFormat(file->SlotOf(self.table_ptr));
+    };
+    p.table.stats = [](StreamArgument self) {
+      auto* file = static_cast<MediaFile*>(self.object_ptr);
+      return file->PacketStats(file->SlotOf(self.table_ptr));
+    };
+  }
+}
+
+int MediaFile::SlotOf(const Interface::Table* table) const {
+  for (int i = 0; i < kMaxStreams; ++i) {
+    if (table == &stream_ports[i].table) return i;
+  }
+  return -1;
+}
+
+MediaFile::MediaFile() { InitPorts(); }
+
+MediaFile::MediaFile(const MediaFile& o) : Object(o), out_stream(o.out_stream) {
+  InitPorts();
+  // Reopen rather than copy the handle: the clone probes its own streams
+  // and activates its own ports.
+  if (!o.path.empty()) SetPath(o.path);
+}
+
 MediaFile::~MediaFile() {
   auto lock = std::lock_guard(mutex);
   CloseLocked();
+}
+
+void MediaFile::Interfaces(const std::function<LoopControl(Interface)>& cb) {
+  if (cb(out_stream.Bind()) == LoopControl::Break) return;
+  for (int i = 0; i < n_streams; ++i) {
+    if (cb(Interface(*this, stream_ports[i].table)) == LoopControl::Break) return;
+  }
 }
 
 void MediaFile::CloseLocked() {
@@ -50,12 +92,20 @@ void MediaFile::CloseLocked() {
     fmt = nullptr;
   }
   video_stream = -1;
+  n_streams = 0;
   container.clear();
   duration_s = 0;
   rows.clear();
   position_s = 0;
-  packets = 0;
-  packet_bytes = 0;
+  for (int i = 0; i < kMaxStreams; ++i) {
+    for (void* pkt : queues[i]) {
+      auto* p = (AVPacket*)pkt;
+      av_packet_free(&p);
+    }
+    queues[i].clear();
+    packets[i] = 0;
+    packet_bytes[i] = 0;
+  }
 }
 
 // One printed row per stream, in FFmpeg's own words: codec, resolution or
@@ -93,6 +143,7 @@ void MediaFile::SetPath(StrView new_path) {
         if (ctx->duration > 0) duration_s = (double)ctx->duration / AV_TIME_BASE;
         for (int i = 0; i < (int)ctx->nb_streams; ++i) rows.push_back(StreamRow(ctx, i));
         video_stream = av_find_best_stream(ctx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+        n_streams = std::min<int>((int)ctx->nb_streams, kMaxStreams);
       }
     }
   }
@@ -120,58 +171,123 @@ bool MediaFile::DeserializeKey(ObjectDeserializer& d, StrView key) {
   return true;
 }
 
-int MediaFile::ReadVideoPacket(void* av_packet) {
+int MediaFile::BestVideoStream() {
   auto lock = std::lock_guard(mutex);
-  if (!fmt || video_stream < 0) return AVERROR_EOF;
+  return video_stream;
+}
+
+int MediaFile::StreamIndexFeeding(const Object* consumer) {
+  auto video_target = out_stream.target.Lock();
+  if (video_target.Owner<Object>() == consumer) {
+    auto lock = std::lock_guard(mutex);
+    return video_stream;
+  }
+  for (int i = 0; i < kMaxStreams; ++i) {
+    auto target = stream_ports[i].state.target.Lock();
+    if (target.Owner<Object>() == consumer) return i;
+  }
+  return -1;
+}
+
+// Whether any port hands out stream `index`'s packets; such packets park in
+// the stream's queue instead of being dropped. Callers hold `mutex`.
+bool MediaFile::StreamConsumedLocked(int index) {
+  if (index == video_stream && !out_stream.target.IsExpired()) return true;
+  if (index >= 0 && index < kMaxStreams && !stream_ports[index].state.target.IsExpired())
+    return true;
+  return false;
+}
+
+int MediaFile::ReadPacketFor(int index, void* av_packet) {
+  auto lock = std::lock_guard(mutex);
+  if (!fmt || index < 0) return AVERROR_EOF;
   auto* ctx = (AVFormatContext*)fmt;
   auto* pkt = (AVPacket*)av_packet;
+  auto hand_out = [&](AVPacket* out) {
+    if (index < kMaxStreams) {
+      packets[index] += 1;
+      packet_bytes[index] += out->size;
+    }
+    if (out->pts != AV_NOPTS_VALUE && index < (int)ctx->nb_streams) {
+      position_s = out->pts * av_q2d(ctx->streams[index]->time_base);
+    }
+    WakeToys();
+  };
+  if (index < kMaxStreams && !queues[index].empty()) {
+    auto* queued = (AVPacket*)queues[index][0];
+    queues[index].erase(queues[index].begin());
+    av_packet_move_ref(pkt, queued);
+    av_packet_free(&queued);
+    hand_out(pkt);
+    return 0;
+  }
   for (;;) {
     int err = av_read_frame(ctx, pkt);
     if (err < 0) return err;
-    if (pkt->stream_index != video_stream) {
+    if (pkt->stream_index == index) {
+      hand_out(pkt);
+      return 0;
+    }
+    int other = pkt->stream_index;
+    if (other < kMaxStreams && StreamConsumedLocked(other)) {
+      auto& queue = queues[other];
+      if ((int)queue.size() >= kQueueCap) {
+        auto* oldest = (AVPacket*)queue[0];
+        queue.erase(queue.begin());
+        av_packet_free(&oldest);
+      }
+      AVPacket* parked = av_packet_alloc();
+      av_packet_move_ref(parked, pkt);
+      queue.push_back(parked);
+    } else {
       av_packet_unref(pkt);
-      continue;
     }
-    packets += 1;
-    packet_bytes += pkt->size;
-    if (pkt->pts != AV_NOPTS_VALUE) {
-      position_s = pkt->pts * av_q2d(ctx->streams[video_stream]->time_base);
-    }
-    WakeToys();
-    return 0;
   }
 }
 
-bool MediaFile::CopyVideoCodecParams(void* av_params) {
+bool MediaFile::CopyCodecParams(int index, void* av_params) {
   auto lock = std::lock_guard(mutex);
-  if (!fmt || video_stream < 0) return false;
+  if (!fmt || index < 0) return false;
   auto* ctx = (AVFormatContext*)fmt;
-  return avcodec_parameters_copy((AVCodecParameters*)av_params,
-                                 ctx->streams[video_stream]->codecpar) >= 0;
+  if (index >= (int)ctx->nb_streams) return false;
+  return avcodec_parameters_copy((AVCodecParameters*)av_params, ctx->streams[index]->codecpar) >= 0;
 }
 
-double MediaFile::VideoTimeBase() {
+double MediaFile::TimeBase(int index) {
   auto lock = std::lock_guard(mutex);
-  if (!fmt || video_stream < 0) return 0;
+  if (!fmt || index < 0) return 0;
   auto* ctx = (AVFormatContext*)fmt;
-  return av_q2d(ctx->streams[video_stream]->time_base);
+  if (index >= (int)ctx->nb_streams) return 0;
+  return av_q2d(ctx->streams[index]->time_base);
 }
 
-Str MediaFile::PacketFormat() {
+Str MediaFile::PacketFormat(int index) {
   auto lock = std::lock_guard(mutex);
-  if (!fmt || video_stream < 0) return "";
+  if (!fmt || index < 0) return "";
   auto* ctx = (AVFormatContext*)fmt;
-  AVStream* stream = ctx->streams[video_stream];
+  if (index >= (int)ctx->nb_streams) return "";
+  AVStream* stream = ctx->streams[index];
   AVCodecParameters* par = stream->codecpar;
-  // The packet stream in FFmpeg's words: codec, size, and the time base the
-  // timestamps live in.
-  return f("{} {}x{} tb {}/{}", avcodec_get_name(par->codec_id), par->width, par->height,
-           stream->time_base.num, stream->time_base.den);
+  // The packet stream in FFmpeg's words: codec, size or rate, and the time
+  // base the timestamps live in.
+  Str format = avcodec_get_name(par->codec_id);
+  if (par->codec_type == AVMEDIA_TYPE_VIDEO) {
+    format += f(" {}x{}", par->width, par->height);
+  } else if (par->codec_type == AVMEDIA_TYPE_AUDIO) {
+    format += f(" {} Hz {}ch", par->sample_rate, par->ch_layout.nb_channels);
+  }
+  format += f(" tb {}/{}", stream->time_base.num, stream->time_base.den);
+  return format;
 }
 
-StreamStats MediaFile::PacketStats() {
+StreamStats MediaFile::PacketStats(int index) {
   auto lock = std::lock_guard(mutex);
-  return {.bytes = packet_bytes, .units = packets};
+  if (index < 0 || index >= kMaxStreams) return {};
+  return {.bytes = packet_bytes[index],
+          .units = packets[index],
+          .fill = queues[index].size(),
+          .capacity = kQueueCap,
+          .fill_unit = "packets"};
 }
 
 void MediaFile::OnOutStreamConnect(StreamArgument self, Interface end) {
@@ -217,6 +333,11 @@ Str FfmpegDecoder::FrameFormat() {
   auto lock = std::lock_guard(mutex);
   if (!ctx) return "";
   auto* c = (AVCodecContext*)ctx;
+  if (c->codec_type == AVMEDIA_TYPE_AUDIO) {
+    if (c->sample_fmt == AV_SAMPLE_FMT_NONE) return "";
+    const char* name = av_get_sample_fmt_name(c->sample_fmt);
+    return f("{} {} Hz {}ch", name ? name : "?", c->sample_rate, c->ch_layout.nb_channels);
+  }
   if (c->pix_fmt == AV_PIX_FMT_NONE) return "";
   const char* name = av_get_pix_fmt_name(c->pix_fmt);
   return f("{} {}x{}", name ? name : "?", c->width, c->height);
@@ -254,13 +375,14 @@ void FfmpegDecoder::Step() {
     }
     if (!frame) frame = av_frame_alloc();
     if (!packet) packet = av_packet_alloc();
+    int stream_index = file->StreamIndexFeeding(this);
     if (!ctx) {
       AVCodecParameters* par = avcodec_parameters_alloc();
       const AVCodec* codec = nullptr;
       AVCodecContext* c = nullptr;
       int err = 0;
-      if (!file->CopyVideoCodecParams(par)) {
-        error = "avcodec: the media file has no video stream";
+      if (!file->CopyCodecParams(stream_index, par)) {
+        error = "avcodec: the connected port has no stream";
       } else if (!(codec = avcodec_find_decoder(par->codec_id))) {
         error = f("avcodec: no decoder for {}", avcodec_get_name(par->codec_id));
       } else if (!(c = avcodec_alloc_context3(codec))) {
@@ -273,7 +395,7 @@ void FfmpegDecoder::Step() {
         ctx = c;
         codec_name = codec->name;
         eof_sent = false;
-        time_base = file->VideoTimeBase();
+        time_base = file->TimeBase(stream_index);
       }
       avcodec_parameters_free(&par);
       if (!error.empty()) {
@@ -288,7 +410,7 @@ void FfmpegDecoder::Step() {
       auto* pkt = (AVPacket*)packet;
       int ret = avcodec_receive_frame(c, fr);
       if (ret == AVERROR(EAGAIN)) {
-        int read = file->ReadVideoPacket(pkt);
+        int read = file->ReadPacketFor(stream_index, pkt);
         if (read == 0) {
           avcodec_send_packet(c, pkt);
           av_packet_unref(pkt);
@@ -303,11 +425,16 @@ void FfmpegDecoder::Step() {
       if (error.empty()) {
         ret_word = AvErrWord(ret);
         if (ret == 0) {
-          if (auto image = FrameToImage(sws, fr)) {
-            held = std::move(image);
-            frames += 1;
-            frame_bytes += (uint64_t)fr->width * fr->height * 4;
+          if (fr->width > 0) {
+            if (auto image = FrameToImage(sws, fr)) {
+              held = std::move(image);
+              frame_bytes += (uint64_t)fr->width * fr->height * 4;
+            }
+          } else if (fr->nb_samples > 0) {
+            frame_bytes += (uint64_t)fr->nb_samples * fr->ch_layout.nb_channels *
+                           av_get_bytes_per_sample((AVSampleFormat)fr->format);
           }
+          frames += 1;
           if (fr->pts != AV_NOPTS_VALUE && time_base > 0) position_s = fr->pts * time_base;
           av_frame_unref(fr);
         }
@@ -362,12 +489,22 @@ struct MediaFileToy : ui::beta::ObjectToy {
   Vec<Str> rows_;
   double position_s_ = 0;
   bool open_ = false;
+  int n_streams_ = 0;
+  int video_stream_ = -1;
+  Vec<const Interface::Table*> port_tables_;  // anchor identities; never dereferenced
+  Vec<bool> port_connected_;
 
   MediaFileToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     if (auto file = LockObject<MediaFile>()) {
-      auto lock = std::lock_guard(file->mutex);
-      path_edit_ = file->path;
-      path_applied_ = file->path;
+      {
+        auto lock = std::lock_guard(file->mutex);
+        path_edit_ = file->path;
+        path_applied_ = file->path;
+      }
+      for (int i = 0; i < MediaFile::kMaxStreams; ++i) {
+        port_tables_.push_back(&file->stream_ports[i].table);
+      }
+      port_connected_.resize(MediaFile::kMaxStreams);
     }
     field = std::make_unique<PathField>(this, &path_edit_, kPlateW - 2 * kSide);
     float field_bottom = kFilePlateH / 2 - (kBand + kCreditRow + kPathRow);
@@ -375,6 +512,8 @@ struct MediaFileToy : ui::beta::ObjectToy {
         SkM44::Translate(-kPlateW / 2 + kSide, field_bottom) * SkM44::Scale(0.55f, 0.55f, 1);
     UpdateFromObject();
   }
+
+  float PortX(int index) const { return -kPlateW / 2 + 19_mm + index * 8_mm; }
 
   bool CenteredAtZero() const override { return true; }
   SkPath Shape() const override {
@@ -386,6 +525,11 @@ struct MediaFileToy : ui::beta::ObjectToy {
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&decltype(MediaFile::out_stream)::tbl)) {
       return Vec2AndDir{.pos = Vec2(-kPlateW / 2 + 10_mm, -kFilePlateH / 2), .dir = -90_deg};
+    }
+    for (int i = 0; i < (int)port_tables_.size(); ++i) {
+      if (&arg == port_tables_[i]) {
+        return Vec2AndDir{.pos = Vec2(PortX(i), -kFilePlateH / 2), .dir = -90_deg};
+      }
     }
     return ObjectToy::ArgStart(arg);
   }
@@ -400,12 +544,17 @@ struct MediaFileToy : ui::beta::ObjectToy {
           file->SetPath(path_applied_);
         }
       }
+      for (int i = 0; i < MediaFile::kMaxStreams; ++i) {
+        port_connected_[i] = !file->stream_ports[i].state.target.IsExpired();
+      }
       auto lock = std::lock_guard(file->mutex);
       open_ = file->fmt != nullptr;
       container_ = file->container;
       duration_s_ = file->duration_s;
       rows_ = file->rows;
       position_s_ = file->position_s;
+      n_streams_ = file->n_streams;
+      video_stream_ = file->video_stream;
     }
   }
 
@@ -453,15 +602,29 @@ struct MediaFileToy : ui::beta::ObjectToy {
       }
     }
 
-    {  // position readout at the lower left; the port label at the port
+    {  // position readout at the lower left
       float row_mid = -kFilePlateH / 2 + kBottomPad + kStatusRow * 0.5f;
       if (open_) {
         Str pos = f("at {:.2f} s", position_s_);
         ui::beta::DrawText(canvas, pos, {-kPlateW / 2 + kSide, row_mid - 0.7_mm},
                            ui::beta::kMicroSize + 0.3_mm, ui::beta::kInk, false, Seed(kFileSeed));
       }
+    }
+
+    {  // stream ports along the bottom edge: "video" plus one per stream
       ui::beta::DrawText(canvas, "video", {-kPlateW / 2 + 6.4_mm, -kFilePlateH / 2 + 0.8_mm},
                          ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kFileSeed));
+      for (int i = 0; i < n_streams_; ++i) {
+        Vec2 c{PortX(i), -kFilePlateH / 2 + 1.4_mm};
+        uint32_t ps = Seed(Hash2(kFileSeed, 0x90 + (uint32_t)i));
+        ui::beta::Port(canvas, c, 1.4_mm, true, ui::beta::kBlue, port_connected_[i],
+                       port_connected_[i] ? ui::beta::State::Default : ui::beta::State::Disabled,
+                       ps);
+        Str label = f("#{}", i);
+        float w = ui::beta::TextWidth(label, ui::beta::kMicroSize);
+        ui::beta::DrawText(canvas, label, {c.x - w / 2, c.y + 2.2_mm}, ui::beta::kMicroSize,
+                           ui::beta::kInkSoft, false, ps);
+      }
     }
     BakeChildren(canvas);
   }
@@ -489,6 +652,7 @@ struct FfmpegDecoderToy : ui::beta::ObjectToy {
   // Tick-cached object state (UI thread only):
   Str codec_name_;
   Str ret_word_;
+  Str format_;
   double position_s_ = 0;
   uint64_t frames_ = 0;
   sk_sp<SkImage> held_;
@@ -516,6 +680,7 @@ struct FfmpegDecoderToy : ui::beta::ObjectToy {
 
   void UpdateFromObject() {
     if (auto decoder = LockObject<FfmpegDecoder>()) {
+      format_ = decoder->FrameFormat();
       auto lock = std::lock_guard(decoder->mutex);
       codec_name_ = decoder->codec_name;
       ret_word_ = decoder->ret_word;
@@ -566,6 +731,12 @@ struct FfmpegDecoderToy : ui::beta::ObjectToy {
         canvas.concat(m);
         canvas.drawImage(held_, 0, 0, SkSamplingOptions(SkFilterMode::kLinear), nullptr);
         canvas.restore();
+      } else if (!format_.empty()) {
+        // An audio decoder holds no image; its data face is the decoded
+        // format in FFmpeg's own words.
+        float w = ui::beta::TextWidth(format_, ui::beta::kMicroSize);
+        ui::beta::DrawText(canvas, format_, {-w / 2, frame_rect.CenterY()}, ui::beta::kMicroSize,
+                           ui::beta::kPaper, false, Seed(kDecoderSeed));
       } else {
         StrView hint = "Run decodes one frame";
         float w = ui::beta::TextWidth(hint, ui::beta::kMicroSize);

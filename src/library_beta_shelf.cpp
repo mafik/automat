@@ -87,6 +87,7 @@ struct BetaShelfToy : ObjectToy {
   void VisitOptions(const OptionsVisitor& visitor) const override {
     ObjectToy::VisitOptions(visitor);
     VisitProto(visitor, "Command", Option::W);
+    VisitProto(visitor, "File", Option::SW);
     VisitProto(visitor, "Leptonica", Option::E);
 #if !defined(_WIN32)
     static PipelinesOption pipelines;

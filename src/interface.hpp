@@ -62,6 +62,7 @@ struct Interface {
     kSignal,
     kImageProvider,
     kStreamInput,
+    kFdProvider,
   };
 
   struct Table {

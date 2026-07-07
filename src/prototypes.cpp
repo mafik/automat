@@ -6,6 +6,7 @@
 #include "library_beta_shelf.hpp"
 #include "library_command.hpp"
 #include "library_ffmpeg.hpp"
+#include "library_file.hpp"
 #include "library_flip_flop.hpp"
 #include "library_gegl.hpp"
 #include "library_gstreamer.hpp"
@@ -98,6 +99,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<GeglBlur, HideInToolbar>();
   index.Register<PipeWireNode, HideInToolbar>();
   index.Register<PipeWireShelf, HideInToolbar>();
+  index.Register<RegularFile, HideInToolbar>();
   index.Register<TfTensor, HideInToolbar>();
   index.Register<TfOp, HideInToolbar>("Square");
 #endif

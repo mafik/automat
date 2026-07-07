@@ -22,10 +22,13 @@ Vec<Str> SplitWords(StrView line);
 Vec2 CommandPlateSize();
 
 // File descriptors to install on the child's stdio at spawn (dup2 through
-// posix_spawn_file_actions). -1 leaves the descriptor inherited.
+// posix_spawn_file_actions). -1 leaves the descriptor inherited. `out_pipe`
+// says fd 1 is a pipe to a downstream stage - the case the stdout meters
+// can sample (FIONREAD and F_GETPIPE_SZ mean nothing on a regular file).
 struct StdioFds {
   int in = -1;
   int out = -1;
+  bool out_pipe = false;
 };
 
 // Spawns argv[0] via posix_spawnp (PATH search) with the Wayland compositor

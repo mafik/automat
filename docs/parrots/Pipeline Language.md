@@ -596,3 +596,7 @@ tap) or through an explicitly inserted tee Command.
   connection on the board.
 - The media file's position is a readout only; the live seek bar
   (av_seek_frame with a codec flush) is not built.
+- Of the stdio bindings, Pipe and File exist (the File object resolves
+  through the FdProvider interface); the pty terminal binding for
+  unconnected stdio, /dev/null, Closed, the share-offset file option,
+  stderr, and request ports beyond fd 2 are not built.

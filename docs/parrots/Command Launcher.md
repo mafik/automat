@@ -102,6 +102,20 @@ no counterpart rule: when one stage exits, the kernel propagates EOF and
 SIGPIPE and the exit chips report it (a `SIGPIPE` chip is the normal way a
 pipeline ends early).
 
+A stream port may also connect to a File object (`src/library_file.*`)
+instead of another Command: the head's stdin reads it and the tail's stdout
+writes it, which is shell redirection made visible on the board. At start
+the Command resolves the file object to a concrete descriptor through the
+`FdProvider` interface (`src/fd_provider.hpp`) — a fresh open per run, so a
+rerun rebuilds the file the way `>` does, and the file object's append flag
+turns that into `>>`. A failed open aborts the whole launch, the way a shell
+refuses the command when its redirection fails, and the error lands on the
+file object. The file object's face shows the file as it is on disk — size
+and the tail of its content, polled while visible — so output arriving in
+the file is watchable in real time. Files end the start-together rule: a
+chain start stops at a file, because unlike a pipe a file needs no second
+process, and `a > f` followed by `b < f` are separate runs in a shell too.
+
 The stream connection renders as a pipe and prints its meters on a chip
 beside its middle. The chip carries only what the kernel attributes to the
 pipe itself: the format ("bytes" — byte streams have no formats to

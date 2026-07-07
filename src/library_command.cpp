@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include "animation.hpp"
+#include "fd_provider.hpp"
 #include "format.hpp"
 #include "text_field.hpp"
 #include "ui_beta.hpp"
@@ -232,7 +233,7 @@ bool Command::SpawnStage(const StdioFds& stdio, std::unique_ptr<RunTask>& task, 
     child_pid = pid;
     ever_ran = true;
     io_wchar = 0;
-    stdout_piped = stdio.out >= 0;
+    stdout_piped = stdio.out_pipe;
     if (child_pidfd >= 0) close(child_pidfd);
     child_pidfd = (int)syscall(SYS_pidfd_open, (pid_t)pid, 0);
     if (!task) task = std::make_unique<RunTask>(AcquireWeakPtr(), &Command::run_tbl);
@@ -273,11 +274,45 @@ void Command::Launch(std::unique_ptr<RunTask>& task) {
     cur = next;
   }
 
-  // Pipes between consecutive stages. O_CLOEXEC keeps the parent's copies
-  // out of every child; posix_spawn's dup2 clears it on the installed ends.
   int n = (int)chain.size();
   Vec<StdioFds> stdio(n);
   Vec<int> to_close;
+
+  // A file at either end of the chain resolves to a descriptor instead of a
+  // pipe: the head's stdin reads it, the tail's stdout writes it - shell
+  // redirection. A failed open aborts the launch, the way a shell refuses
+  // the whole command when its redirection fails.
+  if (auto producer = in_stream->Producer()) {
+    if (auto fd_provider = FindFdProvider(*producer)) {
+      Status status;
+      int fd = fd_provider.Resolve(FdProvider::Dir::Read, status);
+      if (fd < 0) {
+        ReportError(f("stdin: {}", status.ToStr()));
+        return;
+      }
+      stdio[0].in = fd;
+      to_close.push_back(fd);
+    }
+  }
+  {
+    auto target = chain.back()->out_stream->FindInterface();
+    if (auto* end_owner = target.Owner<Object>()) {
+      if (auto fd_provider = FindFdProvider(*end_owner)) {
+        Status status;
+        int fd = fd_provider.Resolve(FdProvider::Dir::Write, status);
+        if (fd < 0) {
+          chain.back()->ReportError(f("stdout: {}", status.ToStr()));
+          for (int held : to_close) close(held);
+          return;
+        }
+        stdio[n - 1].out = fd;
+        to_close.push_back(fd);
+      }
+    }
+  }
+
+  // Pipes between consecutive stages. O_CLOEXEC keeps the parent's copies
+  // out of every child; posix_spawn's dup2 clears it on the installed ends.
   for (int i = 0; i + 1 < n; ++i) {
     int fds[2];
     if (pipe2(fds, O_CLOEXEC) != 0) {
@@ -286,6 +321,7 @@ void Command::Launch(std::unique_ptr<RunTask>& task) {
       return;
     }
     stdio[i].out = fds[1];
+    stdio[i].out_pipe = true;
     stdio[i + 1].in = fds[0];
     to_close.push_back(fds[0]);
     to_close.push_back(fds[1]);

@@ -33,24 +33,6 @@ struct GroupOption : TextOption, OptionsProvider {
   }
 };
 
-struct GStreamerOption : GroupOption {
-  GStreamerOption() : GroupOption("GStreamer") {}
-  std::unique_ptr<Option> Clone() const override { return std::make_unique<GStreamerOption>(); }
-  void VisitOptions(const OptionsVisitor& visitor) const override {
-    VisitProto(visitor, "videotestsrc", Option::NW);
-    VisitProto(visitor, "videoflip", Option::N);
-    VisitProto(visitor, "videoconvert", Option::NE);
-    VisitProto(visitor, "audiotestsrc", Option::W);
-    VisitProto(visitor, "audioconvert", Option::E);
-    VisitProto(visitor, "level", Option::S);
-    VisitProto(visitor, "appsink", Option::SW);
-    VisitProto(visitor, "appsrc", Option::SE);
-  }
-  // The shelf sits on the toolbar at the window's bottom edge, so every
-  // group points upward to keep its ring inside the window.
-  Dir PreferredDir() const override { return NW; }
-};
-
 struct FfmpegOption : GroupOption {
   FfmpegOption() : GroupOption("FFmpeg") {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<FfmpegOption>(); }
@@ -75,8 +57,7 @@ struct PipelinesOption : GroupOption {
   PipelinesOption() : GroupOption("Pipelines") {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<PipelinesOption>(); }
   void VisitOptions(const OptionsVisitor& visitor) const override {
-    static GStreamerOption gstreamer;
-    visitor(gstreamer);
+    VisitProto(visitor, "GStreamer", Option::NW);
     static FfmpegOption ffmpeg;
     visitor(ffmpeg);
     VisitProto(visitor, "gegl:gaussian-blur", Option::SW);

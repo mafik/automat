@@ -668,6 +668,23 @@ void Panel(SkCanvas& canvas, const Rect& r, std::string_view title, SkColor acce
     BangChip(canvas, {r.right - (sticker ? 7.3_mm : 2.6_mm), r.top - titleH * 0.5f}, 1.3_mm);
 }
 
+void GroupFrame(SkCanvas& canvas, const Rect& r, std::string_view label, SkColor accent,
+                uint32_t seed) {
+  SkPath frame = WonkyRoundRect(r, 1.5_mm, kWonk * 0.7f, Hash2(seed, 0x70));
+  SketchyStroke(canvas, frame, accent, kStroke, Hash2(seed, 0x71), 1);
+  float fs = 2.2_mm;
+  float lw = TextWidth(label, fs);
+  // The tab straddles the frame's top border.
+  float tab_left = r.left + 1.5_mm;
+  float tab_top = r.top + fs * 0.78f;
+  Rect tab{tab_left, tab_top - fs * 1.35f, tab_left + lw + 1.75_mm, tab_top};
+  SkPath tabp = WonkyRoundRect(tab, 0.6_mm, kWonk * 0.5f, Hash2(seed, 0x72));
+  MisregFill(canvas, tabp, accent, Hash2(seed, 0x74));
+  SketchyStroke(canvas, tabp, kInk, kStrokeHair, Hash2(seed, 0x73), 1);
+  DrawText(canvas, label, {tab.left + 0.9_mm, tab.bottom + fs * 0.28f}, fs, TextOn(accent), false,
+           Hash2(seed, 0x75));
+}
+
 void Button(SkCanvas& canvas, const Rect& r, std::string_view label, SkColor color, State state,
             uint32_t seed) {
   bool disabled = state == State::Disabled;

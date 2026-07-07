@@ -40,15 +40,11 @@
 #include <string>
 #include <vector>
 
-#include "automat.hpp"  // vm
 #include "color.hpp"
-#include "drag_action.hpp"
 #include "font.hpp"
 #include "library_window.hpp"
-#include "location.hpp"
 #include "path.hpp"
 #include "pointer.hpp"
-#include "root_widget.hpp"
 #include "svg.hpp"
 #include "text_widget.hpp"
 #include "ui_beta.hpp"
@@ -56,6 +52,7 @@
 #include "ui_enum_knob_widget.hpp"
 #include "ui_leptonica.hpp"
 #include "ui_shape_widget.hpp"
+#include "ui_shelf_button.hpp"
 #include "units.hpp"
 #include "widget.hpp"
 
@@ -1022,38 +1019,6 @@ struct LeptonicaImageWidget : beta::ObjectToy {
   }
 };
 
-struct ShelfButton : ui::Widget {
-  Ptr<Object> proto;
-  MortalPtr<Widget> proto_widget;
-
-  ShelfButton(ui::Widget* parent, Ptr<Object> proto)
-      : ui::Widget(parent), proto(std::move(proto)) {}
-
-  void Init() {
-    proto_widget = &ToyStore().FindOrMake(*proto, this);
-    layers.OrderInside(proto_widget);
-  }
-
-  StrView Name() const override { return "ShelfButton"; }
-  SkPath Shape() const override { return proto_widget->Shape(); }
-  RRect CoarseBounds() const override { return proto_widget->CoarseBounds(); }
-  Optional<Rect> TextureBounds() const override { return std::nullopt; }
-  bool AllowChildPointerEvents(Widget&) const override { return false; }
-
-  void PointerEnter(ui::Pointer& p) override { hand_icon.emplace(p, ui::Pointer::kIconHand); }
-  void PointerLeave(ui::Pointer&) override { hand_icon.reset(); }
-  Optional<ui::Pointer::IconOverride> hand_icon;
-
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn != ui::PointerButton::Left) return nullptr;
-    auto obj = proto->Clone();
-    p.root_widget.toys.FindOrMake(*obj, this);
-    auto loc = MAKE_PTR(Location, vm.root_location);
-    loc->InsertHere(std::move(obj));
-    return std::make_unique<DragLocationAction>(p, std::move(loc));
-  }
-};
-
 struct LeptonicaShelfWidget : beta::ObjectToy {
   // The curated tool set; each group is a framed row and the objects' own
   // widgets are the icons.
@@ -1076,7 +1041,7 @@ struct LeptonicaShelfWidget : beta::ObjectToy {
     int first_button, count;
   };
 
-  Vec<std::unique_ptr<ShelfButton>> buttons;
+  Vec<std::unique_ptr<ui::ShelfButton>> buttons;
   Vec<PlacedGroup> groups;
   float sheet_w = 20_cm;
   float sheet_h = 16_cm;
@@ -1128,7 +1093,7 @@ struct LeptonicaShelfWidget : beta::ObjectToy {
             fprintf(stderr, "LeptonicaShelf: no prototype named \"%s\"\n", name);
             continue;
           }
-          buttons.emplace_back(std::make_unique<ShelfButton>(this, proto->Clone()));
+          buttons.emplace_back(std::make_unique<ui::ShelfButton>(this, proto->Clone()));
           buttons.back()->Init();
           float cx = x + kPad + kCell * (i + 0.5f);
           float cy = y - row_h * 0.5f;
@@ -1187,25 +1152,8 @@ struct LeptonicaShelfWidget : beta::ObjectToy {
           beta::InkPaint(beta::kGold, beta::kStrokeBold));
 
       for (auto& pg : groups) {
-        const Rect& fr = pg.frame;
-        SkPath frame = beta::WonkyRoundRect(fr, 1.5_mm, beta::kWonk * 0.7f,
-                                            Seed(beta::Hash2(0x70, (uint32_t)(intptr_t)pg.label)));
-        beta::SketchyStroke(canvas, frame, pg.accent, beta::kStroke,
-                            Seed(beta::Hash2(0x71, (uint32_t)(intptr_t)pg.label)), 1);
-        float fs = 2.2_mm;
-        float lw = beta::TextWidth(pg.label, fs);
-        // The tab straddles the frame's top border.
-        float tab_left = fr.left + 1.5_mm;
-        float tab_top = fr.top + fs * 0.78f;
-        Rect tab{tab_left, tab_top - fs * 1.35f, tab_left + lw + 1.75_mm, tab_top};
-        SkPath tabp = beta::WonkyRoundRect(tab, 0.6_mm, beta::kWonk * 0.5f,
-                                           Seed(beta::Hash2(0x72, (uint32_t)(intptr_t)pg.label)));
-        beta::MisregFill(canvas, tabp, pg.accent,
-                         Seed(beta::Hash2(0x74, (uint32_t)(intptr_t)pg.label)));
-        beta::SketchyStroke(canvas, tabp, beta::kInk, beta::kStrokeHair,
-                            Seed(beta::Hash2(0x73, (uint32_t)(intptr_t)pg.label)), 1);
-        beta::DrawText(canvas, pg.label, {tab.left + 0.9_mm, tab.bottom + fs * 0.28f}, fs,
-                       beta::TextOn(pg.accent), false, Seed(0));
+        beta::GroupFrame(canvas, pg.frame, pg.label, pg.accent,
+                         Seed(beta::Hash2(0x70, (uint32_t)(intptr_t)pg.label)));
       }
 
       beta::DrawSparkle(canvas, {sheet.right - 3.6_cm, sheet.top - 1.0_cm}, 5_mm, beta::kCyan,

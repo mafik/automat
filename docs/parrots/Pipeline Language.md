@@ -206,21 +206,22 @@ strings ("Source/Video", "Codec/Decoder/Video", "Filter/Effect/Audio"),
 GEGL categories, PipeWire media.class values, FFmpeg's
 codec/filter/muxer registries, Keras layer families.
 
+The GStreamer shelf exists (src/library_gstreamer.cpp, GStreamerShelfToy):
+every factory compiled into the static build registers as a prototype, and
+the shelf groups them by the first segment of their klass strings, ordered
+Source, Filter, Sink, Generic — the direction data flows on the board. It is
+reached through the beta stamp's bubble menu, like the Leptonica shelf, and
+both shelves place their entries with the shared ui::ShelfButton.
+
 A shelf entry answers "what is this" before it is touched:
 
 - The name is the library's real name for the thing: `videoconvert`,
   `gegl:gaussian-blur`, `avdec_h264`. A muted credit line names the
   library and category. This is the existing rule of exposing the
   primitives Automat is built on.
-- Where the library can demonstrate the block, the shelf face is that
-  demonstration: GEGL operations show their reference composition;
-  GStreamer and FFmpeg video filters show a standard sample frame pushed
-  once through the element offline; audio effects show the processed
-  waveform of a standard click. A face computed by the block itself
-  cannot lie about what the block does.
-- The one-line description from the library's metadata (factory
-  description, AVFilter.description, operation "description" key) is
-  shown on hover or at larger zoom.
+- The shelf entry is the block's own face at reduced scale; an idle face
+  shows the one-line description from the library's metadata (factory
+  description, AVFilter.description, operation "description" key).
 - The PipeWire shelf is different in kind: it lists the live nodes of
   the running system, grouped by media.class, with their current states —
   because PipeWire objects are not prototypes to instantiate but
@@ -373,14 +374,27 @@ instead of hiding it:
 ## Library notes
 
 **GStreamer.** Elements are blocks; the hidden per-component GstPipeline
-carries clocking and the bus. Starting any element of a linked run
-starts the whole run, and every member shows the run's state. While the
-run's tail has an unlinked source pad, an internal preview branch
-(videoconvert, videoscale, appsink) feeds the tail's face; the branch
-takes part in caps negotiation like any sink, so a chain with no real
-sink negotiates toward the preview's format. Editing the topology of a
-running chain stops it and starts the new arrangement — the state word
-shows the transition. Bus messages route to blocks: ERROR marks the
+carries clocking and the bus. Any factory in the registry wraps
+generically: the face's instruments come from GParamSpec introspection
+(a GEnum is a chip that cycles its nicks, a boolean is a checkbox, a
+bounded number is a slider; unbounded and exotic properties stay
+recipe-only), and the block's ports come from the factory's pad
+templates. A request template mints its pad when the chain builds; a
+sometimes template's port waits as a faint socket until pad-added
+delivers the pad, at which point the deferred link completes on the
+streaming thread. Chains are graphs, not lines: starting any element
+starts the whole linked component, and every member shows the run's
+state. Every unconsumed always-source pad ends in an internal preview
+branch (queue, videoconvert, videoscale, appsink) when it can carry raw
+video, or a queue and fakesink otherwise; the leading queue gives each
+branch its own streaming thread, so a tee's fan-out prerolls without
+one branch starving the others. The branch takes part in caps
+negotiation like any sink, so a chain with no real sink negotiates
+toward the preview's format. A sometimes pad that appears with no
+consumer waiting gets the same terminal branch, so a demuxer's
+unclaimed streams keep flowing and show themselves. Editing the
+topology of a running chain stops it and starts the new arrangement —
+the state word shows the transition. Bus messages route to blocks: ERROR marks the
 failing element with the existing error state and keeps the message
 text on it; EOS appears on the sink block and is an event output usable
 by control flow ("when playback ends, run this"); STATE_CHANGED updates
@@ -544,3 +558,12 @@ tap) or through an explicitly inserted tee Command.
   graph; runtime commands cover only some properties.
 - Byte-stream previews of binary data need a hex view; the text tail is
   only right for text.
+- Shelf faces should become demonstrations where the library can compute
+  one: GEGL operations showing their reference composition, GStreamer and
+  FFmpeg video filters showing a standard sample frame pushed once through
+  the element offline, audio effects showing the processed waveform of a
+  standard click. A face computed by the block itself cannot lie about
+  what the block does. Today a shelf entry shows the block's idle face.
+- A GStreamer block exposes at most four extra port slots and its face
+  shows at most four property instruments; the further pads and
+  properties exist only through saved recipes.

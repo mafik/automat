@@ -82,14 +82,17 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<X11Window, HideInToolbar>();
   index.Register<BetaShelf>();
 #if !defined(_WIN32)
-  index.Register<GStreamerElement, HideInToolbar>("videotestsrc", "pattern");
-  index.Register<GStreamerElement, HideInToolbar>("videoflip", "video-direction");
-  index.Register<GStreamerElement, HideInToolbar>("videoconvert");
-  index.Register<GStreamerElement, HideInToolbar>("audiotestsrc", "wave");
-  index.Register<GStreamerElement, HideInToolbar>("audioconvert");
-  index.Register<GStreamerElement, HideInToolbar>("level");
-  index.Register<AppSinkBoundary, HideInToolbar>();
-  index.Register<AppSrcBoundary, HideInToolbar>();
+  // Every compiled-in GStreamer factory; the shelf presents them by klass.
+  for (auto& factory : ListGstFactories()) {
+    if (factory.name == "appsink") {
+      index.Register<AppSinkBoundary, HideInToolbar>();
+    } else if (factory.name == "appsrc") {
+      index.Register<AppSrcBoundary, HideInToolbar>();
+    } else {
+      index.Register<GStreamerElement, HideInToolbar>(factory.name);
+    }
+  }
+  index.Register<GStreamerShelf, HideInToolbar>();
   index.Register<MediaFile, HideInToolbar>();
   index.Register<FfmpegDecoder, HideInToolbar>();
   index.Register<GeglBlur, HideInToolbar>();

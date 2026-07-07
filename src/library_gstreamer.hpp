@@ -21,19 +21,74 @@ namespace automat::library {
 
 struct GstChain;
 
+// One element factory compiled into the static GStreamer build, with the
+// metadata the shelf presents.
+struct GstFactoryInfo {
+  Str name;
+  Str klass;
+};
+
+// Every compiled-in element factory, sorted by name. Initializes GStreamer.
+Vec<GstFactoryInfo> ListGstFactories();
+
+// The GStreamer shelf: every compiled-in factory as a clone pile, grouped by
+// the library's own klass taxonomy.
+struct GStreamerShelf : Object {
+  StrView Name() const override { return "GStreamer"; }
+  Ptr<Object> Clone() const override { return MAKE_PTR(GStreamerShelf); }
+  std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
+};
+
 // One GStreamer element on the board. The object is named after its element
 // factory ("videotestsrc", "videoflip"), holds property values as recipe
 // data, and runs inside a hidden GstPipeline that Automat manages. Elements
 // linked through stream connections share one pipeline (the chain); starting
-// any element starts the whole linked run, and a preview branch
-// (videoconvert ! videoscale ! appsink) feeds the face of the chain's tail.
+// any element starts the whole linked run, and every unconsumed source pad
+// terminates in a preview branch (queue ! videoconvert ! videoscale !
+// appsink) shown on its element's face, or a fakesink when the pad cannot
+// carry raw video.
+//
+// Stream ports mirror the factory's pad templates. The base "src"/"sink"
+// ports are the first expansion of the factory's primary template in each
+// direction; when that template is a request or sometimes template
+// ("src_%u"), extra port slots expose the further expansions. Request ports
+// mint their pad when the chain builds; sometimes ports wait for the
+// element's pad-added signal.
 struct GStreamerElement : Object {
+  static constexpr int kMaxExtraPorts = 4;
+
+  enum class PadMode : uint8_t { kNone, kAlways, kRequest, kSometimes };
+
+  // One extra stream port. The Table is per-instance, initialized at
+  // construction: its name is this slot's pad name and its state offset
+  // points at this slot's state. Interfaces are identified by Table address,
+  // so slots live exactly as long as the object.
+  struct OutPort {
+    StreamArgument::Table table{""};
+    StreamArgument::State state;
+    Str pad_name;
+  };
+  struct InPort {
+    StreamInput::Table table{""};
+    StreamInput::State state;
+    Str pad_name;
+  };
+
   mutable std::mutex mutex;  // guards props and the runtime state below
 
-  Str factory;    // GStreamer element factory name; also this object's Name()
-  Str knob_prop;  // enum property cycled by the face's chip ("" = none)
+  Str factory;  // GStreamer element factory name; also this object's Name()
 
   Vec<std::pair<Str, Str>> props;  // property values, applied at start and live
+
+  // Port layout, fixed at construction from the factory's pad templates.
+  OutPort extra_out[kMaxExtraPorts];
+  InPort extra_in[kMaxExtraPorts];
+  int n_extra_out = 0;
+  int n_extra_in = 0;
+  PadMode out_mode = PadMode::kNone;  // the primary src template's presence
+  PadMode in_mode = PadMode::kNone;
+  Vec<Str> out_pad_names;  // gst pad names by port index; [0] is the base port
+  Vec<Str> in_pad_names;
 
   // Runtime, guarded by `mutex`. While running, `chain` is the hidden
   // GstPipeline shared by every element of the linked run; `element` is a
@@ -41,8 +96,8 @@ struct GStreamerElement : Object {
   // GStreamer headers stay out of this header.
   std::shared_ptr<GstChain> chain;
   void* element = nullptr;
-  int chain_index = -1;       // position within the chain, head = 0
-  bool preview_tail = false;  // this element's face shows the chain's preview
+  int chain_index = -1;       // this element's member index within the chain
+  bool preview_tail = false;  // this element's face shows a preview branch
   Str state_word = "NULL";    // pipeline state, in GStreamer's own words
 
   // Frozen copies of this element's chain counters, kept after Stop so the
@@ -82,9 +137,9 @@ struct GStreamerElement : Object {
   DEF_INTERFACE(GStreamerElement, StreamInput, in_stream, "sink")
   DEF_END(in_stream);
 
-  INTERFACES(run, running, next, out_stream, in_stream);
+  void Interfaces(const std::function<LoopControl(Interface)>& cb) override;
 
-  GStreamerElement(StrView factory, StrView knob_prop = "");
+  GStreamerElement(StrView factory);
   GStreamerElement(const GStreamerElement&);
   ~GStreamerElement() override;
 
@@ -107,11 +162,20 @@ struct GStreamerElement : Object {
   void SetProp(StrView name, StrView value);
   Str GetProp(StrView name) const;
 
-  // The negotiated caps of the element's src pad while running, in
-  // GStreamer's own notation; empty until known.
+  // The negotiated caps of the port's pad while running, in GStreamer's own
+  // notation; empty until known. Port 0 is the base "src" port.
   virtual Str OutFormat();
-  // Byte and buffer totals through the element's src pad, from its pad probe.
+  Str PortFormat(int port);
+  // Byte and buffer totals through the port's pad, from its pad probe.
   virtual StreamStats OutStats();
+  StreamStats PortStats(int port);
+
+  // The extra-port slot owning `table`, or -1 for the base port tables.
+  int OutSlotOf(const Interface::Table* table) const;
+  int InSlotOf(const Interface::Table* table) const;
+
+  // Whether the port's gst pad currently exists on the live element.
+  bool PortPadLive(int port);
 
   // Configures this object's GstElement at chain build, after the recipe
   // props are applied. `gst_element` is a GstElement*.
@@ -119,15 +183,20 @@ struct GStreamerElement : Object {
   // Called with `mutex` held when this element detaches from its chain.
   virtual void OnChainStopped() {}
 
-  // out_stream's OnConnect: stores the target, maintains the downstream
-  // peer's `upstream` back-pointer, and rebuilds any running chain the
-  // change touches.
+  // An out port's OnConnect: stores the target, maintains the downstream
+  // peer's producer back-pointer, and rebuilds any running chain the change
+  // touches.
   void OnOutStreamConnect(StreamArgument self, Interface end);
 
   // The link oracle: refuses ends whose pad template caps can never
   // intersect this element's source caps, naming both formats and any
   // converter factories that would bridge them.
   void CanFeedStream(Interface end, Status& status);
+
+ private:
+  // Reads the factory's pad templates and fills the port layout: pad names,
+  // extra slot counts, and the per-instance slot tables.
+  void InitPorts();
 };
 
 // ============================================================================

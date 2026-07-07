@@ -184,6 +184,10 @@ void DrawBetaStamp(SkCanvas& canvas, Vec2 c, float r, float rotation_deg, uint32
 void Panel(SkCanvas& canvas, const Rect& r, std::string_view title, SkColor accent = kBlue,
            State state = State::Default, uint32_t seed = 0, bool sticker = true);
 
+// A shelf group: a sketchy accent frame whose label tab straddles the top border.
+void GroupFrame(SkCanvas& canvas, const Rect& r, std::string_view label, SkColor accent,
+                uint32_t seed = 0);
+
 void Button(SkCanvas& canvas, const Rect& r, std::string_view label, SkColor color = kGreen,
             State state = State::Default, uint32_t seed = 0);
 

@@ -22,6 +22,7 @@
 #include "global_resources.hpp"
 #include "keymap.hpp"
 #include "loading_animation.hpp"
+#include "mux.hpp"
 #include "persistence.hpp"
 #include "prototypes.hpp"
 #include "renderer.hpp"
@@ -32,11 +33,10 @@
 #include "timer_thread.hpp"
 #include "tracy_client.hpp"  // IWYU pragma: keep
 #include "vk.hpp"
-#include "wayland.hpp"
 #include "x11.hpp"
 
 #if defined(__linux__)
-#include "mux_epoll.hpp"
+#include "wayland.hpp"
 #endif
 
 using namespace automat::ui;
@@ -155,23 +155,23 @@ int Main() {
 
   StartWorkerThreads(stop_source.get_token());
 
-#if defined(__linux__)
   mux::Init(status);
   if (!OK(status)) {
-    ERROR << "Couldn't start the epoll thread: " << status;
+    ERROR << "Couldn't start the mux reactor thread: " << status;
     status.Reset();
   }
+#if defined(__linux__)
   wayland::Start(mux::epoll, status);
   if (!OK(status)) {
     ERROR << "Couldn't start the Wayland compositor: " << status;
     status.Reset();
   }
+#endif
   x11::Start(mux::epoll, status);
   if (!OK(status)) {
     ERROR << "Couldn't start the X11 server: " << status;
     status.Reset();
   }
-#endif
 
   if (root_widget->loading_animation) {
     root_widget->loading_animation->LoadingCompleted();
@@ -189,11 +189,9 @@ int Main() {
 
   JoinWorkerThreads();
 
-#if defined(__linux__)
   // Workers are joined, so nothing more will register a watch; stop the shared
-  // epoll thread before objects are torn down so exit callbacks can't race it.
+  // mux thread before objects are torn down so exit callbacks can't race it.
   mux::Stop();
-#endif
 
   SaveState(*root_widget, status);
   if (!OK(status)) {
@@ -204,8 +202,8 @@ int Main() {
 
   root_widget.reset();
 
-#if defined(__linux__)
   x11::Stop();
+#if defined(__linux__)
   wayland::Stop();
 #endif
   keymap.reset();  // after the servers that read it have stopped

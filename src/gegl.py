@@ -98,6 +98,108 @@ def _patch_no_module_scanning(marker):
 hook.PatchSources(_patch_no_module_scanning)
 
 
+# proxy-libintl declares no wide-character gettext variants, and the pruned
+# tree ships no translation catalogs in the first place.
+def _patch_narrow_bindtextdomain(marker):
+  _replace(hook.src_dir / 'gegl' / 'gegl-init.c',
+    'wbindtextdomain (GETTEXT_PACKAGE, dir_name_utf16);',
+    'bindtextdomain (GETTEXT_PACKAGE, localedir);')
+  marker.touch()
+hook.PatchSources(_patch_narrow_bindtextdomain)
+
+
+# The sources assume a mingw runtime on Windows: <unistd.h> is included
+# unconditionally and a few POSIX calls appear in the buffer code. This shim
+# supplies the MSVC equivalents; only the win32 c_args below put it on the
+# include path, so other platforms never see it.
+def _patch_msvc_compat(marker):
+  compat = hook.src_dir / 'msvc-compat'
+  compat.mkdir(exist_ok=True)
+  (compat / 'unistd.h').write_text('''#pragma once
+#include <io.h>
+#include <process.h>
+#include <direct.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+
+/* rpcndr.h claims this as a macro; ctx.h uses it as an identifier. near & far
+   must stay defined: winsock headers still spell out FAR. */
+#undef small
+
+#ifndef _SSIZE_T_DEFINED
+#define _SSIZE_T_DEFINED
+typedef SSIZE_T ssize_t;
+#endif
+
+#ifndef _PID_T_DEFINED
+#define _PID_T_DEFINED
+typedef int pid_t;
+#endif
+
+#define fsync _commit
+#define ftruncate _chsize_s
+
+#define F_OK 0
+#define X_OK 1
+#define W_OK 2
+#define R_OK 4
+
+static inline int usleep(unsigned int usec)
+{
+  Sleep((usec + 999) / 1000);
+  return 0;
+}
+''')
+  (compat / 'strings.h').write_text('''#pragma once
+#include <string.h>
+
+#define strcasecmp _stricmp
+#define strncasecmp _strnicmp
+''')
+  # UCRT ships exp2f; the op's _MSC_VER fallback macro is malformed anyway.
+  _replace(hook.src_dir / 'operations' / 'common' / 'exposure.c',
+    """#ifdef _MSC_VER
+#define exp2f (b) ((gfloat) pow (2.0, b))
+#endif
+
+""", '')
+  # clang's MSVC mode gives C `inline` MSVC semantics and emits no external
+  # definition, which the cross-TU callers need.
+  _replace(hook.src_dir / 'gegl' / 'gegl-parallel.c',
+    """inline gint
+gegl_parallel_distribute_get_optimal_n_threads (gdouble n_elements,""",
+    """gint
+gegl_parallel_distribute_get_optimal_n_threads (gdouble n_elements,""")
+  (compat / 'sys').mkdir(exist_ok=True)
+  (compat / 'sys' / 'time.h').write_text('''#pragma once
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>  /* struct timeval */
+#include <stdint.h>
+
+/* rpcndr.h claims this as a macro; ctx.h uses it as an identifier. */
+#undef small
+
+static inline int gettimeofday(struct timeval *tv, void *tz)
+{
+  uint64_t t;
+  FILETIME ft;
+  (void)tz;
+  GetSystemTimePreciseAsFileTime(&ft);
+  t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+  t -= 116444736000000000ULL;  /* 1601 -> 1970 */
+  tv->tv_sec = (long)(t / 10000000ULL);
+  tv->tv_usec = (long)((t % 10000000ULL) / 10);
+  return 0;
+}
+''')
+  marker.touch()
+hook.PatchSources(_patch_msvc_compat)
+
+
 # OpenCL must never load, no matter what GEGL_USE_OPENCL says: its runtime
 # historically collided with Automat's statically linked LLVM inside software
 # Vulkan drivers (white-window hang at startup).
@@ -176,7 +278,18 @@ hook.PatchSources(_patch_static_operations)
 
 
 hook.ConfigureDependsOn(babl.hook, json_glib.hook, glib.hook)
+glib.UsePkgConfig(hook)
 hook.ConfigureWithMeson(build.PREFIX / 'include' / 'gegl-0.4' / 'gegl.h')
+if build.platform == 'win32':
+  # M_PI & friends hide behind _USE_MATH_DEFINES; the S_I?USR permission bits
+  # take their MSVC spellings, mirroring mingw's sys/stat.h.
+  hook.ConfigureOption('c_args', ' '.join([
+    '-D_USE_MATH_DEFINES',
+    '-DS_IRUSR=_S_IREAD',
+    '-DS_IWUSR=_S_IWRITE',
+    '-DS_IXUSR=_S_IEXEC',
+    f'-I{hook.src_dir.as_posix()}/msvc-compat',
+  ]))
 hook.ConfigureOptions(**{
   'docs': 'false',
   'gtk-doc': 'false',
@@ -224,7 +337,9 @@ gegl_libs = glib.StaticLibs('gegl-0.4')
 
 
 def _link_args():
-  return ['-lgegl-common'] + gegl_libs()
+  common = (str(build.PREFIX / 'lib64' / 'libgegl-common.a')
+            if build.platform == 'win32' else '-lgegl-common')
+  return [common] + gegl_libs()
 
 
 hook.AddLinkArg(_link_args)

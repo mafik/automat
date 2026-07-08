@@ -21,7 +21,7 @@ import fs_utils
 import make
 import src
 
-if sys.platform == 'linux':
+if sys.platform in ('linux', 'win32'):
   generated_cpp = fs_utils.generated_dir / 'x11_generated.cpp'
   generated_hpp = fs_utils.generated_dir / 'x11_generated.hpp'
   protocol_hpp = fs_utils.src_dir / 'x11_protocol.hpp'

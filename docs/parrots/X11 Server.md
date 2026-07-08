@@ -57,6 +57,13 @@ uses. The listening socket and every client socket are `mux::Epoll::Listener`s. 
 requests are read, dispatched and the replies flushed in one pass; board structure is
 mutated only on the UI thread in `UIFrame()`, exactly as for Wayland.
 
+On Linux the server listens on a filesystem UNIX socket. On Windows it listens on TCP
+loopback, display number n mapping to port 6000+n, because Windows AF_UNIX sockets cannot
+carry file descriptors. TCP provides no SO_PEERCRED, so the client's process id — which
+window adoption relies on — is recovered from the system TCP table by locating the
+mirrored connection. TCP also carries no file descriptors, so the SHM and DRI3 display
+paths never activate on Windows and clients paint through plain protocol requests.
+
 X resources — windows, pixmaps, graphics contexts, colormaps, cursors, fonts, and the
 RENDER pictures and glyph sets — live in one server-global table keyed by XID, because X
 resources are shareable across clients and a client may name another's resource. Each

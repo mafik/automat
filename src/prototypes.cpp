@@ -17,17 +17,23 @@
 #include "library_macro_recorder.hpp"
 #include "library_mouse.hpp"
 #include "library_number.hpp"
-#include "library_pipewire.hpp"
 #include "library_sources.hpp"
-#include "library_tensorflow.hpp"
 #include "library_tesseract_ocr.hpp"
 #include "library_timeline.hpp"
 #include "library_timer.hpp"
 #include "library_window.hpp"
 #include "object.hpp"
 #include "sync.hpp"
-#include "wayland.hpp"
 #include "x11.hpp"
+
+// The libraries below are Linux-only. PipeWire has no Windows port, the Wayland
+// compositor needs SCM_RIGHTS fd passing, which Windows AF_UNIX sockets lack,
+// and TensorFlow's static C++ build relies on ELF-only relocatable linking.
+#if defined(__linux__)
+#include "library_pipewire.hpp"
+#include "library_tensorflow.hpp"
+#include "wayland.hpp"
+#endif
 
 using namespace automat::library;
 
@@ -79,10 +85,11 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<TesseractOCR>();
   index.Register<Sources>();
   index.Register<Gear, HideInToolbar>();
-  index.Register<WaylandWindow, HideInToolbar>();
-  index.Register<X11Window, HideInToolbar>();
   index.Register<BetaShelf>();
-#if !defined(_WIN32)
+  index.Register<X11Window, HideInToolbar>();
+  index.Register<RegularFile, HideInToolbar>();
+  index.Register<MediaFile, HideInToolbar>();
+  index.Register<FfmpegDecoder, HideInToolbar>();
   // Every compiled-in GStreamer factory; the shelf presents them by klass.
   for (auto& factory : ListGstFactories()) {
     if (factory.name == "appsink") {
@@ -94,12 +101,11 @@ PrototypeLibrary::PrototypeLibrary() {
     }
   }
   index.Register<GStreamerShelf, HideInToolbar>();
-  index.Register<MediaFile, HideInToolbar>();
-  index.Register<FfmpegDecoder, HideInToolbar>();
   index.Register<GeglBlur, HideInToolbar>();
+#if defined(__linux__)
+  index.Register<WaylandWindow, HideInToolbar>();
   index.Register<PipeWireNode, HideInToolbar>();
   index.Register<PipeWireShelf, HideInToolbar>();
-  index.Register<RegularFile, HideInToolbar>();
   index.Register<TfTensor, HideInToolbar>();
   index.Register<TfOp, HideInToolbar>("Square");
 #endif

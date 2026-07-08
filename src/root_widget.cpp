@@ -37,13 +37,13 @@
 #include "touchpad.hpp"
 #include "ui_connection_widget.hpp"
 #include "vk.hpp"
+#include "x11.hpp"
 
 #if defined(_WIN32)
 #include "win32.hpp"
 #include "win32_window.hpp"
 #elif defined(__linux__)
 #include "wayland.hpp"
-#include "x11.hpp"
 #include "xcb_window.hpp"
 #endif
 
@@ -252,8 +252,8 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
 
 #if defined(__linux__)
   wayland::UIFrame();
-  x11::UIFrame();
 #endif
+  x11::UIFrame();
 
   if (loading_animation) {
     tock |= loading_animation->Tick(timer);

@@ -28,6 +28,12 @@
 #include "time.hpp"
 #include "vec.hpp"
 
+#if defined(_MSC_VER)
+#define NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
+#else
+#define NO_UNIQUE_ADDRESS [[no_unique_address]]
+#endif
+
 namespace automat {
 struct Object;
 struct Argument;
@@ -225,15 +231,15 @@ struct Widget : OptionsProvider {
     struct DrawingProxy {
       void operator|=(animation::Progress);
       void operator|=(bool keep_going);
-    } drawing [[no_unique_address]];  // bool-like that sets both `next_tick` & `draw`
+    } drawing NO_UNIQUE_ADDRESS;  // bool-like that sets both `next_tick` & `draw`
     struct ShapingProxy {
       void operator|=(animation::Progress);
       void operator|=(bool keep_going);
-    } shaping [[no_unique_address]];  // bool-like that sets both `next_tick`, `draw` & `shape`
+    } shaping NO_UNIQUE_ADDRESS;  // bool-like that sets both `next_tick`, `draw` & `shape`
     struct TickingProxy {
       void operator|=(bool keep_going);
       explicit operator bool() const;
-    } ing [[no_unique_address]];  // bool-like for whether widget is animating
+    } ing NO_UNIQUE_ADDRESS;  // bool-like for whether widget is animating
     time::SteadyPoint next_tick = time::SteadyPoint::max();
     bool draw = false;
     bool shape = false;

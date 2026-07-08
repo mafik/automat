@@ -4,6 +4,14 @@
 
 '''Run Automat.'''
 
+import sys
+
+# Tool output (e.g. compiler warnings quoting UTF-8 sources) may not fit the console
+# code page on Windows; degrade to replacement characters instead of crashing.
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, 'reconfigure'):
+        stream.reconfigure(errors='replace')
+
 from args import args
 from sys import platform, exit, executable
 

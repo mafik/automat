@@ -16,8 +16,6 @@
 #include "ui_beta.hpp"
 #include "ui_button.hpp"
 #include "units.hpp"
-#include "wayland.hpp"
-#include "x11.hpp"
 
 #if !defined(_WIN32)
 #include <fcntl.h>
@@ -33,6 +31,8 @@
 #include <cstring>
 
 #include "mux_epoll.hpp"
+#include "wayland.hpp"
+#include "x11.hpp"
 
 extern "C" char** environ;
 #endif

@@ -8,7 +8,14 @@
 #include <fcntl.h>
 #include <include/core/SkCanvas.h>
 #include <sys/stat.h>
+
+#include <cstdio>
+
+#if defined(_WIN32)
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
 #include "format.hpp"
 #include "text_field.hpp"
@@ -88,11 +95,22 @@ int RegularFile::Open(FdProvider::Dir dir, Status& status) {
     return -1;
   }
   int fd;
+#if defined(_WIN32)
+  // _O_NOINHERIT stands in for O_CLOEXEC; binary mode keeps redirection byte-exact.
+  if (dir == FdProvider::Dir::Read) {
+    fd = _open(p.c_str(), _O_RDONLY | _O_BINARY | _O_NOINHERIT);
+  } else {
+    fd = _open(p.c_str(),
+               _O_WRONLY | _O_CREAT | _O_BINARY | _O_NOINHERIT | (a ? _O_APPEND : _O_TRUNC),
+               _S_IREAD | _S_IWRITE);
+  }
+#else
   if (dir == FdProvider::Dir::Read) {
     fd = open(p.c_str(), O_RDONLY | O_CLOEXEC);
   } else {
     fd = open(p.c_str(), O_WRONLY | O_CREAT | O_CLOEXEC | (a ? O_APPEND : O_TRUNC), 0644);
   }
+#endif
   if (fd < 0) {
     Str msg = f("{}: {}", p, strerror(errno));
     AppendErrorMessage(status) += msg;
@@ -132,7 +150,7 @@ constexpr int kTailLines = 7;
 constexpr size_t kTailBytes = 4096;
 
 Str Basename(StrView path) {
-  auto slash = path.rfind('/');
+  auto slash = path.find_last_of("/\\");
   StrView base = slash == StrView::npos ? path : path.substr(slash + 1);
   return Str(base);
 }
@@ -190,14 +208,19 @@ struct RegularFileToy : ui::beta::ObjectToy {
   // Reads the last lines of the file into tail_.
   void ReadTail() {
     tail_.clear();
-    int fd = open(path_applied_.c_str(), O_RDONLY | O_CLOEXEC);
-    if (fd < 0) return;
-    off_t seek_to = size_ > kTailBytes ? (off_t)(size_ - kTailBytes) : 0;
+    FILE* file = fopen(path_applied_.c_str(), "rb");
+    if (!file) return;
+    bool partial_first = size_ > kTailBytes;
+    long back = (long)std::min<uint64_t>(size_, kTailBytes);
     char buf[kTailBytes];
-    ssize_t len = pread(fd, buf, sizeof(buf), seek_to);
-    close(fd);
-    if (len <= 0) return;
-    Str text(buf, (size_t)len);
+    if (fseek(file, -back, SEEK_END) != 0) {
+      fclose(file);
+      return;
+    }
+    size_t len = fread(buf, 1, sizeof(buf), file);
+    fclose(file);
+    if (len == 0) return;
+    Str text(buf, len);
     Vec<Str> lines;
     size_t start = 0;
     while (start <= text.size()) {
@@ -210,7 +233,7 @@ struct RegularFileToy : ui::beta::ObjectToy {
       start = nl + 1;
     }
     if (!lines.empty() && lines.back().empty()) lines.pop_back();
-    if (seek_to > 0 && !lines.empty()) lines.erase(lines.begin());  // partial first line
+    if (partial_first && !lines.empty()) lines.erase(lines.begin());  // partial first line
     int first = std::max(0, (int)lines.size() - kTailLines);
     for (int i = first; i < (int)lines.size(); ++i) {
       Str& line = lines[i];
@@ -235,9 +258,16 @@ struct RegularFileToy : ui::beta::ObjectToy {
       changed |= (append != append_);
       append_ = append;
     }
+#if defined(_WIN32)
+    // Whole-second mtime; sub-second rewrites are still caught through the size.
+    struct _stat64 st;
+    bool exists = !path_applied_.empty() && _stat64(path_applied_.c_str(), &st) == 0;
+    int64_t mtime_ns = exists ? (int64_t)st.st_mtime * 1'000'000'000ll : 0;
+#else
     struct stat st;
     bool exists = !path_applied_.empty() && stat(path_applied_.c_str(), &st) == 0;
     int64_t mtime_ns = exists ? st.st_mtim.tv_sec * 1'000'000'000ll + st.st_mtim.tv_nsec : 0;
+#endif
     uint64_t size = exists ? (uint64_t)st.st_size : 0;
     if (exists != exists_ || size != size_ || mtime_ns != mtime_ns_) {
       exists_ = exists;

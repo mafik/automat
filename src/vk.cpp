@@ -3,8 +3,6 @@
 #include "vk.hpp"
 
 #include <VkBootstrap.h>
-#include <drm/drm_fourcc.h>
-#include <fcntl.h>
 #include <include/core/SkAlphaType.h>
 #include <include/core/SkColorSpace.h>
 #include <include/core/SkColorType.h>
@@ -29,14 +27,19 @@
 #include <include/gpu/vk/VulkanMemoryAllocator.h>
 #include <include/gpu/vk/VulkanMutableTextureState.h>
 #include <include/gpu/vk/VulkanPreferredFeatures.h>
-#include <linux/dma-buf.h>
 #include <src/gpu/GpuTypesPriv.h>
 #include <src/gpu/graphite/vk/VulkanGraphiteUtils.h>
 #include <src/gpu/vk/vulkanmemoryallocator/VulkanMemoryAllocatorPriv.h>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
+
+#if defined(__linux__)
+#include <drm/drm_fourcc.h>
+#include <fcntl.h>
+#include <linux/dma-buf.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#endif
 
 #include <cerrno>
 #include <cstring>
@@ -1339,6 +1342,8 @@ SkCanvas* AcquireCanvas() { return swapchain.AcquireCanvas(); }
 
 void Present() { swapchain.Present(); }
 
+#if defined(__linux__)
+
 namespace {
 // Keeps an imported VkImage + VkDeviceMemory alive for the wrapped SkImage's
 // lifetime; Skia's release proc frees them once the GPU is done sampling.
@@ -1540,5 +1545,7 @@ sk_sp<SkImage> ImportDmabuf(DmabufImage desc) {
   }
   return ImportDmabufByCopy(desc);
 }
+
+#endif  // defined(__linux__)
 
 }  // namespace automat::vk

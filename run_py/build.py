@@ -9,6 +9,7 @@ import make
 import os
 import functools
 import json
+import subprocess
 import build_variant
 from args import args
 from dataclasses import dataclass
@@ -245,6 +246,11 @@ compiler_c = os.environ['CC'] = os.environ['CC'] if 'CC' in os.environ else clan
 if platform == 'win32':
     compile_args += ['-D_USE_MATH_DEFINES', '-DNODRAWTEXT']
     link_args += ['-Wl,/opt:ref', '-Wl,/opt:icf']
+    # 128-bit arithmetic (GLib) calls compiler-rt builtins such as __udivti3,
+    # which the MSVC runtime does not carry.
+    link_args += [subprocess.check_output(
+        [compiler_c, '--rtlib=compiler-rt', '-print-libgcc-file-name'],
+        text=True).strip()]
     if debug:
         link_args += ['-Wl,/debug']
 else:

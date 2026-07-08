@@ -44,8 +44,11 @@ def extract_tar(archive : Path, output : Path):
     tar = tarfile.open(archive, 'r:gz')
   elif archive.name.endswith('.tar.xz'):
     tar = tarfile.open(archive, 'r:xz')
+  elif archive.name.endswith('.zip'):
+    import zipfile
+    tar = zipfile.ZipFile(archive)
   else:
-    raise ValueError(f'Unknown archive format for {archive} (supported: .tar.gz, .tar.xz)')
+    raise ValueError(f'Unknown archive format for {archive} (supported: .tar.gz, .tar.xz, .zip)')
   tar.extractall(tmp_dir)
   children = list(tmp_dir.iterdir())
 
@@ -113,6 +116,8 @@ class ExtensionHelper:
     self.configure_inputs = []
     self.link_deps = []
     self.ninja_target = 'install'
+    self.make_exe = 'make'
+    self.configure_src_link = False
     self.meson_install_tags = ''
     self.meson_build_targets = ['all']
 
@@ -144,7 +149,7 @@ class ExtensionHelper:
           desc = f'Downloading {self.name}',
           shortcut=f'get {self.name}')
 
-      if archive.name.endswith('.tar.gz') or archive.name.endswith('.tar.xz'):
+      if archive.name.endswith(('.tar.gz', '.tar.xz', '.zip')):
         recipe.add_step(
             partial(extract_tar, archive, self.checkout_dir),
             outputs=[self.checkout_dir],
@@ -152,7 +157,7 @@ class ExtensionHelper:
             desc = f'Extracting {self.name}',
             shortcut=f'extract {self.name}')
       else:
-        raise ValueError(f'Unknown archive format for {archive} (supported: .tar.gz, .tar.xz)')
+        raise ValueError(f'Unknown archive format for {archive} (supported: .tar.gz, .tar.xz, .zip)')
       self.beam = [self.checkout_dir]
 
     for i, patch_func in enumerate(self.patch_sources_funcs):
@@ -192,9 +197,18 @@ class ExtensionHelper:
 
     elif self.configure == 'meson':
       import meson
-      meson_args = meson.ARGS + ['setup']
+      meson_args = meson.ARGS + ['setup', '--reconfigure']
       if 'prefer_static' not in self.configure_opts:
-        self.configure_opts['prefer_static'] = 'true'
+        # On Windows prefer_static blocks the -l fallback through which meson
+        # resolves system import libs (LIB env); PREFIX carries only static
+        # libs anyway, so nothing is lost.
+        self.configure_opts['prefer_static'] = 'false' if build.platform == 'win32' else 'true'
+      if build.platform == 'win32':
+        # MSVC link.exe cannot read the thin archives meson creates for
+        # internal static libs; lld-link can.
+        for lang_link_args in ('c_link_args', 'cpp_link_args'):
+          if lang_link_args not in self.configure_opts:
+            self.configure_opts[lang_link_args] = '-fuse-ld=lld'
       for key, value in self.configure_opts.items():
         meson_args.append(f'-D{key}={value}')
       if build.fast:
@@ -234,8 +248,25 @@ class ExtensionHelper:
         else:
           configure_args.append(f'--{key}')
 
+      if build.platform == 'win32':
+        # configure is a POSIX shell script, so Git's bash runs it. Git's
+        # usr/bin supplies sh and coreutils to configure and to make recipes.
+        env['PATH'] = 'C:\\Program Files\\Git\\usr\\bin' + os.pathsep + env['PATH']
+        if self.configure_src_link:
+          configure_args[0] = 'src/configure'
+        configure_args = ['C:\\Program Files\\Git\\bin\\bash.exe'] + [
+            str(arg).replace('\\', '/') for arg in configure_args]
+
+      def run_configure():
+        if self.configure_src_link and build.platform == 'win32':
+          link = build_dir / 'src'
+          if not link.exists():
+            import _winapi
+            _winapi.CreateJunction(str(self.src_dir.absolute()), str(link))
+        return Popen(configure_args, env=env, cwd=build_dir)
+
       recipe.add_step(
-          partial(Popen, configure_args, env=env, cwd=build_dir),
+          run_configure,
           outputs=[makefile],
           inputs=configure_inputs + [build_dir],
           desc=f'Configuring {self.name}',
@@ -264,8 +295,10 @@ class ExtensionHelper:
         desc=f'Installing {self.name}',
         shortcut=f'install {self.name}')
     elif makefile.name == 'Makefile':
+      # On Windows the env carries Git's usr/bin so make can spawn sh.
+      make_env = env if build.platform == 'win32' else None
       recipe.add_step(
-          partial(Popen, ['make', 'install', '-j', '8'], cwd=build_dir),
+          partial(Popen, [self.make_exe, 'install', '-j', '8'], env=make_env, cwd=build_dir),
           outputs=self.outputs,
           inputs=[makefile],
           desc=f'Installing {self.name}',
@@ -280,8 +313,11 @@ class ExtensionHelper:
         desc=f'Building {self.name}',
         shortcut=f'build {self.name}',
         post_success=build_stamp.touch)
+      install_cmd = meson.ARGS + ['install', '-C', build_dir, '--no-rebuild']
+      if self.meson_install_tags:
+        install_cmd += ['--tags', self.meson_install_tags]
       recipe.add_step(
-        partial(Popen, meson.ARGS + ['install', '-C', build_dir, '--no-rebuild', '--tags', self.meson_install_tags]),
+        partial(Popen, install_cmd),
         outputs=self.outputs,
         inputs=configure_inputs + [makefile, ninja.BIN, build_stamp],
         desc=f'Installing {self.name}',

@@ -2,8 +2,13 @@
 // SPDX-License-Identifier: MIT
 #include "fd.hpp"
 
+#if defined(_WIN32)
+#include <winsock2.h>
+#pragma comment(lib, "ws2_32")
+#else
 #include <fcntl.h>
 #include <unistd.h>
+#endif
 
 #include "status.hpp"
 
@@ -20,6 +25,27 @@ FD& FD::operator=(FD&& other) {
   other.fd = -1;
   return *this;
 }
+
+#if defined(_WIN32)
+
+// On Windows an FD holds a WinSock SOCKET. Kernel handles are guaranteed to fit
+// in the lower 32 bits, so the int storage is safe.
+
+void FD::SetNonBlocking(Status& status) {
+  u_long nonblocking = 1;
+  if (ioctlsocket((SOCKET)(intptr_t)fd, FIONBIO, &nonblocking) != 0) {
+    AppendErrorMessage(status) += "ioctlsocket(FIONBIO) failed";
+  }
+}
+
+void FD::Close() {
+  if (fd >= 0) {
+    closesocket((SOCKET)(intptr_t)fd);
+    fd = -1;
+  }
+}
+
+#else
 
 void FD::SetNonBlocking(Status& status) {
   int flags = fcntl(fd, F_GETFL);
@@ -40,6 +66,8 @@ void FD::Close() {
     fd = -1;
   }
 }
+
+#endif
 
 bool FD::Opened() const { return fd >= 0; }
 

@@ -3,7 +3,6 @@
 
 #include "x11.hpp"
 
-#include <fcntl.h>
 #include <include/core/SkCanvas.h>
 #include <include/core/SkColorFilter.h>
 #include <include/core/SkFont.h>
@@ -17,6 +16,30 @@
 #include <include/core/SkTextBlob.h>
 #include <include/effects/SkGradient.h>
 #include <include/pathops/SkPathOps.h>
+#include <xkbcommon/xkbcommon.h>
+
+#include <algorithm>
+#include <cerrno>
+#include <cmath>
+#include <cstring>
+
+#if defined(_WIN32)
+// clang-format off
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#include <iphlpapi.h>
+// clang-format on
+#pragma comment(lib, "iphlpapi.lib")
+#pragma comment(lib, "ws2_32.lib")
+// windows.h macros that collide with X11 request names and our helpers.
+#undef CreateWindow
+#undef GetAtomName
+#undef SetProp
+#undef GetProp
+#undef RemoveProp
+#else
+#include <fcntl.h>
 #include <sys/file.h>
 #include <sys/ipc.h>
 #include <sys/mman.h>
@@ -25,12 +48,9 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <xkbcommon/xkbcommon.h>
 
-#include <algorithm>
-#include <cerrno>
-#include <cmath>
 #include <csignal>
+#endif
 
 #include "color.hpp"
 #include "drawing.hpp"
@@ -52,7 +72,6 @@
 #include "x11_keys.hpp"
 #include "x11_protocol.hpp"
 #include "x11_xkb.hpp"
-#include "xcb.hpp"
 
 using namespace automat::x11;
 
@@ -80,6 +99,31 @@ constexpr float kMinContent = 3_cm;
 // The virtual root screen. Clients place windows in this space; Automat lays them out on
 // the board instead, but apps still query these dimensions.
 constexpr int kScreenW = 1920, kScreenH = 1080;
+
+#if defined(_WIN32)
+// TCP loopback carries no SO_PEERCRED; find the peer's pid by locating the mirrored
+// connection (their local == our remote) in the system TCP table.
+static I64 PeerPid(int socket_fd) {
+  sockaddr_in peer{}, local{};
+  int peer_len = sizeof(peer), local_len = sizeof(local);
+  if (getpeername((SOCKET)socket_fd, (sockaddr*)&peer, &peer_len) != 0) return 0;
+  if (getsockname((SOCKET)socket_fd, (sockaddr*)&local, &local_len) != 0) return 0;
+  ULONG size = 0;
+  GetExtendedTcpTable(nullptr, &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_CONNECTIONS, 0);
+  std::string buf(size, '\0');
+  auto* table = (MIB_TCPTABLE_OWNER_PID*)buf.data();
+  if (GetExtendedTcpTable(table, &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_CONNECTIONS, 0) !=
+      NO_ERROR)
+    return 0;
+  for (DWORD i = 0; i < table->dwNumEntries; ++i) {
+    auto& row = table->table[i];
+    if ((row.dwLocalPort & 0xffff) == peer.sin_port && row.dwLocalAddr == peer.sin_addr.s_addr &&
+        (row.dwRemotePort & 0xffff) == local.sin_port && row.dwRemoteAddr == local.sin_addr.s_addr)
+      return row.dwOwningPid;
+  }
+  return 0;
+}
+#endif
 
 // ---- wire helpers ------------------------------------------------------------------
 
@@ -210,11 +254,13 @@ StrView Server::AtomName(U32 atom) {
 // ---- resource cleanup --------------------------------------------------------------
 
 ShmSeg::~ShmSeg() {
+#if !defined(_WIN32)
   if (!addr) return;
   if (sysv)
     shmdt(addr);
   else
     munmap(addr, size);
+#endif
 }
 
 void UnmapAndForgetToplevel(Window& w);  // fwd
@@ -461,6 +507,18 @@ bool DispatchExtension(Client& client, U8 major, U8 opcode, Reader& r, const U8*
 void Client::NotifyRead(Status&) {
   for (;;) {
     char buf[8192];
+#if defined(_WIN32)
+    // Plain TCP: no ancillary data, so recv_fds stays empty.
+    int n = recv((SOCKET)fd.fd, buf, sizeof(buf), 0);
+    if (n > 0) {
+      in.append(buf, n);
+      continue;
+    }
+    if (n == 0 || WSAGetLastError() != WSAEWOULDBLOCK) {
+      Disconnect();
+      return;
+    }
+#else
     alignas(cmsghdr) char control[CMSG_SPACE(sizeof(int) * 16)];
     iovec iov{buf, sizeof(buf)};
     msghdr msg{};
@@ -486,6 +544,7 @@ void Client::NotifyRead(Status&) {
       Disconnect();
       return;
     }
+#endif
     break;
   }
 
@@ -567,6 +626,14 @@ void Client::Flush() {
     return;
   }
   size_t sent_total = 0;
+#if defined(_WIN32)
+  // TCP carries no fds; the handlers never queue any on Windows.
+  while (sent_total < out.size()) {
+    int n = send((SOCKET)fd.fd, out.data() + sent_total, (int)(out.size() - sent_total), 0);
+    if (n <= 0) break;
+    sent_total += n;
+  }
+#else
   while (sent_total < out.size()) {
     msghdr msg{};
     iovec iov{out.data() + sent_total, out.size() - sent_total};
@@ -590,6 +657,7 @@ void Client::Flush() {
     if (n <= 0) break;
     sent_total += n;
   }
+#endif
   out.erase(0, sent_total);
   out_fds.clear();
 }
@@ -799,9 +867,13 @@ void MapWindow::Handle(Client& client) {
   }
   if (w->is_toplevel && !w->object.Lock()) {
     I64 pid = 0;
+#if defined(_WIN32)
+    pid = PeerPid(client.fd.fd);
+#else
     ucred cred{};
     socklen_t len = sizeof(cred);
     if (getsockopt(client.fd.fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) == 0) pid = cred.pid;
+#endif
     w->client_pid = pid;
 
     // A respawned window is adopted into its existing board object (its Location already
@@ -1377,9 +1449,14 @@ struct ExtEntry {
 };
 static const ExtEntry kExtensions[] = {
     {"BIG-REQUESTS", bigreq::kMajorOpcode, 0, 0},
+#if !defined(_WIN32)
+    // Both need shared memory / fd passing, which the TCP transport cannot carry.
     {"MIT-SHM", shm::kMajorOpcode, shm::kFirstEvent, shm::kFirstError},
+#endif
     {"RENDER", render::kMajorOpcode, 0, render::kFirstError},
+#if !defined(_WIN32)
     {"DRI3", dri3::kMajorOpcode, 0, 0},
+#endif
     {"Present", present::kMajorOpcode, 0, 0},
     {"XC-MISC", xc_misc::kMajorOpcode, 0, 0},
     {"XKEYBOARD", xkb::kMajorOpcode, xkb::kFirstEvent, xkb::kFirstError},
@@ -1762,12 +1839,18 @@ void QueryVersion::Handle(Client& client) {
   reply.shared_pixmaps = 1;
   reply.major_version = 1;
   reply.minor_version = 2;
+#if !defined(_WIN32)
   reply.uid = getuid();
   reply.gid = getgid();
+#endif
   reply.pixmap_format = 2;  // ZPixmap
   Reply(client, std::move(reply));
 }
 void Attach::Handle(Client& client) {
+#if defined(_WIN32)
+  // MIT-SHM is not advertised on Windows; register the id so Detach stays harmless.
+  server->Add<ShmSeg>(shmseg, ResType::ShmSeg, client);
+#else
   // Classic MIT-SHM: the client allocated a SysV segment (shmget) and asks the server to
   // attach it by id. This is what libXext's XShmAttach uses; GTK renders through it.
   ShmSeg& seg = server->Add<ShmSeg>(shmseg, ResType::ShmSeg, client);
@@ -1778,8 +1861,12 @@ void Attach::Handle(Client& client) {
     struct shmid_ds ds;
     if (shmctl(shmid, IPC_STAT, &ds) == 0) seg.size = ds.shm_segsz;
   }
+#endif
 }
 void AttachFd::Handle(Client& client) {
+#if defined(_WIN32)
+  server->Add<ShmSeg>(shmseg, ResType::ShmSeg, client);
+#else
   ShmSeg& seg = server->Add<ShmSeg>(shmseg, ResType::ShmSeg, client);
   seg.fd = std::move(shm_fd);
   struct stat st;
@@ -1788,8 +1875,14 @@ void AttachFd::Handle(Client& client) {
     seg.addr = mmap(nullptr, seg.size, PROT_READ, MAP_SHARED, seg.fd.fd, 0);
     if (seg.addr == MAP_FAILED) seg.addr = nullptr;
   }
+#endif
 }
 void CreateSegment::Handle(Client& client) {
+#if defined(_WIN32)
+  server->Add<ShmSeg>(shmseg, ResType::ShmSeg, client);
+  CreateSegmentReply reply{};  // nfd = 0: fds cannot travel over TCP
+  Reply(client, std::move(reply));
+#else
   // The client asks the server to allocate the shared memory and hand back an fd.
   ShmSeg& seg = server->Add<ShmSeg>(shmseg, ResType::ShmSeg, client);
   int fd = memfd_create("automat-x11-shm", MFD_CLOEXEC);
@@ -1805,6 +1898,7 @@ void CreateSegment::Handle(Client& client) {
     if (fd >= 0) close(fd);
   }
   Reply(client, std::move(reply));
+#endif
 }
 void Detach::Handle(Client& client) { server->Free(shmseg); }
 void PutImage::Handle(Client& client) {
@@ -2310,11 +2404,14 @@ void QueryVersion::Handle(Client& client) {
 }
 void Open::Handle(Client& client) {
   OpenReply reply{};
+#if !defined(_WIN32)
   reply.nfd = 1;
   int fd = open("/dev/dri/renderD128", O_RDWR | O_CLOEXEC);
   reply.device_fd = FD(fd >= 0 ? fd : open("/dev/null", O_RDONLY | O_CLOEXEC));
+#endif
   Reply(client, std::move(reply));
 }
+#if defined(__linux__)
 static void ImportDmabufPixmap(Client& client, U32 pixmap, int width, int height, U8 depth,
                                U32 format, U64 modifier, int plane_count, FD* fds, U32* strides,
                                U32* offsets) {
@@ -2339,14 +2436,18 @@ static void ImportDmabufPixmap(Client& client, U32 pixmap, int width, int height
   }
   if (ok) p.imported = vk::ImportDmabuf(std::move(desc));
 }
+#endif
 void PixmapFromBuffer::Handle(Client& client) {
+#if defined(__linux__)
   FD fds[1];
   fds[0] = std::move(pixmap_fd);
   U32 strides[1] = {stride}, offsets[1] = {0};
   ImportDmabufPixmap(client, pixmap, width, height, depth, 0x34325258 /* XR24 */,
                      0 /* DRM_FORMAT_MOD_LINEAR */, 1, fds, strides, offsets);
+#endif
 }
 void PixmapFromBuffers::Handle(Client& client) {
+#if defined(__linux__)
   U32 strides[4] = {stride0, stride1, stride2, stride3};
   U32 offsets[4] = {offset0, offset1, offset2, offset3};
   FD fds[4];
@@ -2354,6 +2455,7 @@ void PixmapFromBuffers::Handle(Client& client) {
   U32 fourcc = depth >= 32 ? 0x34325241 /* AR24 */ : 0x34325258 /* XR24 */;
   ImportDmabufPixmap(client, pixmap, width, height, depth, fourcc, modifier, num_buffers, fds,
                      strides, offsets);
+#endif
 }
 void BufferFromPixmap::Handle(Client& client) {
   BufferFromPixmapReply reply{};
@@ -2369,7 +2471,9 @@ void GetSupportedModifiers::Handle(Client& client) {
 }
 void FDFromFence::Handle(Client& client) {
   FDFromFenceReply reply{};
+#if !defined(_WIN32)
   reply.fence_fd = FD(open("/dev/null", O_RDONLY | O_CLOEXEC));
+#endif
   Reply(client, std::move(reply));
 }
 void FenceFromFD::Handle(Client& client) {}
@@ -2620,7 +2724,16 @@ void Server::CloseWindow(void* handle) {
       } else if (w.owner) {
         // No graceful path: signal the client to exit. The board object may already be
         // gone (this runs from its destructor), so use the pid saved on the window.
-        if (w.client_pid > 0) kill((pid_t)w.client_pid, SIGTERM);
+        if (w.client_pid > 0) {
+#if defined(_WIN32)
+          if (HANDLE h = OpenProcess(PROCESS_TERMINATE, FALSE, (DWORD)w.client_pid)) {
+            TerminateProcess(h, 1);
+            CloseHandle(h);
+          }
+#else
+          kill((pid_t)w.client_pid, SIGTERM);
+#endif
+        }
       }
       break;
     }
@@ -2990,11 +3103,19 @@ Server::~Server() {
 
 void Server::NotifyRead(Status&) {
   for (;;) {
+#if defined(_WIN32)
+    SOCKET accepted = accept((SOCKET)fd.fd, nullptr, nullptr);
+    if (accepted == INVALID_SOCKET) break;
+    u_long non_blocking = 1;
+    ioctlsocket(accepted, FIONBIO, &non_blocking);
+    int client_fd = (int)accepted;
+#else
     int client_fd = accept4(fd.fd, nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK);
     if (client_fd < 0) {
       if (errno == EINTR) continue;
       break;
     }
+#endif
     Client& client = *Client::colony.emplace(*this);
     client.fd = FD(client_fd);
     client.index = next_client_index++;
@@ -3008,9 +3129,42 @@ void Server::FlushAll() {
 }
 
 void Start(mux::Epoll& epoll, Status& status) {
-  const char* runtime = getenv("XDG_RUNTIME_DIR");
-  (void)runtime;
   int chosen = -1;
+#if defined(_WIN32)
+  // X11-over-TCP convention: display :n is TCP port 6000+n; stay on loopback.
+  SOCKET listen_fd = INVALID_SOCKET;
+  for (int n = 0; n <= 32; ++n) {
+    SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (s == INVALID_SOCKET) break;
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons((u_short)(6000 + n));
+    if (bind(s, (sockaddr*)&addr, sizeof(addr)) != 0) {
+      closesocket(s);  // port taken (another X server?) - try the next display
+      continue;
+    }
+    u_long non_blocking = 1;
+    ioctlsocket(s, FIONBIO, &non_blocking);
+    listen_fd = s;
+    chosen = n;
+    break;
+  }
+  if (chosen < 0) {
+    AppendErrorMessage(status) += "no free X11 display port in 6000-6032";
+    return;
+  }
+  if (listen(listen_fd, 16) != 0) {
+    closesocket(listen_fd);
+    AppendErrorMessage(status) += f("x11 listen(): error {}", WSAGetLastError());
+    return;
+  }
+  LOG << f("X11 server listening on 127.0.0.1:{} (DISPLAY=127.0.0.1:{})", 6000 + chosen, chosen);
+
+  server = std::make_unique<Server>(epoll);
+  server->fd = FD((int)listen_fd);
+  server->display_number = chosen;
+#else
   int listen_fd = -1;
   FD lock_fd;
   Str sock_path;
@@ -3060,6 +3214,7 @@ void Start(mux::Epoll& epoll, Status& status) {
   server->socket_path = sock_path;
   server->lock_fd = std::move(lock_fd);
   server->display_number = chosen;
+#endif
 
   // Seed predefined atoms 1..68.
   server->atom_names.push_back("");  // atom 0 = None
@@ -3114,7 +3269,15 @@ void Start(mux::Epoll& epoll, Status& status) {
 }
 
 void Stop() { server.reset(); }
-Str SocketName() { return server ? f(":{}", server->display_number) : Str{}; }
+Str SocketName() {
+  if (!server) return {};
+#if defined(_WIN32)
+  // Host form: Xlib/xcb parse "host:display" and dial TCP port 6000+display.
+  return f("127.0.0.1:{}", server->display_number);
+#else
+  return f(":{}", server->display_number);
+#endif
+}
 void RegisterPointer(ui::PointerObject& obj) {
   mux::epoll.Post([weak = obj.AcquireWeakPtr()] {
     if (server) server->pointer_object = weak;

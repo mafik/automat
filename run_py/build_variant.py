@@ -50,6 +50,9 @@ class BuildVariant:
 release = BuildVariant('release')
 fast = BuildVariant('fast')
 debug = BuildVariant('debug')
+# The sanitizer variants are only offered on Linux; the names stay defined
+# everywhere so `if build_variant.tsan:` reads the same on every platform.
+asan = tsan = ubsan = None
 if platform == 'linux':
   asan = BuildVariant('asan', debug)
   tsan = BuildVariant('tsan', debug)

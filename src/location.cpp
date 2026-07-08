@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <ranges>
 
 #include "animation.hpp"
 #include "automat.hpp"

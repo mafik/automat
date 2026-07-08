@@ -18,6 +18,7 @@ hook = extension_helper.ExtensionHelper('GStreamer', globals())
 
 hook.FetchFromGit('https://github.com/GStreamer/gstreamer.git', '1.26.2')
 hook.DependsOn(glib.hook)
+glib.UsePkgConfig(hook)
 hook.ConfigureWithMeson(
   build.PREFIX / 'include' / 'gstreamer-1.0' / 'gst' / 'gst.h',
   build.PREFIX / 'lib64' / 'libgstreamer-full-1.0.a',

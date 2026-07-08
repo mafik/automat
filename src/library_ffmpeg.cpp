@@ -14,7 +14,12 @@ extern "C" {
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkData.h>
+
+#if defined(_WIN32)
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
 #include "format.hpp"
 #include "text_field.hpp"
@@ -538,7 +543,11 @@ struct MediaFileToy : ui::beta::ObjectToy {
     if (auto file = LockObject<MediaFile>()) {
       // The file opens the moment its path names a readable file.
       if (Str(path_edit_) != path_applied_) {
+#if defined(_WIN32)
+        bool exists = !path_edit_.empty() && _access(path_edit_.c_str(), 4) == 0;
+#else
         bool exists = !path_edit_.empty() && access(path_edit_.c_str(), R_OK) == 0;
+#endif
         if (exists || path_edit_.empty()) {
           path_applied_ = path_edit_;
           file->SetPath(path_applied_);

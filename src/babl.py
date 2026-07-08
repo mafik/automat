@@ -54,6 +54,9 @@ subdir('bin')""",
 hook.PatchSources(_patch_static_core_only)
 
 hook.ConfigureWithMeson(build.PREFIX / 'include' / 'babl-0.1' / 'babl' / 'babl.h')
+if build.platform == 'win32':
+  # MSVC headers only define M_LN2 & friends under _USE_MATH_DEFINES.
+  hook.ConfigureOption('c_args', '-D_USE_MATH_DEFINES')
 hook.ConfigureOptions(**{
   'with-docs': 'false',
   'enable-gir': 'false',
@@ -63,4 +66,7 @@ hook.ConfigureOptions(**{
 })
 hook.InstallWhenIncluded(r'babl/babl\.h')
 hook.AddCompileArgs(f'-I{build.PREFIX / "include" / "babl-0.1"}')
-hook.AddLinkArgs('-lbabl-0.1', '-lm', '-ldl', '-pthread')
+if build.platform == 'win32':
+  hook.AddLinkArg(str(build.PREFIX / 'lib64' / 'libbabl-0.1.a'))
+else:
+  hook.AddLinkArgs('-lbabl-0.1', '-lm', '-ldl', '-pthread')

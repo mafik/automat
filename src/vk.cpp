@@ -408,18 +408,17 @@ void Device::Init(Status& status) {
 
   vkGetPhysicalDeviceFeatures2(vk::physical_device, &features);
 
-  std::vector<const char*> app_extensions;
-  skia_features.addFeaturesToEnable(app_extensions, features);
-  app_extensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
-  // dmabuf import (Wayland GPU buffer passing): external-memory-fd, dma-buf
-  // external memory, DRM format modifiers and foreign-queue ownership.
-  app_extensions.push_back(VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME);
-  app_extensions.push_back(VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME);
-  app_extensions.push_back(VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME);
-  app_extensions.push_back(VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME);
-  vk::physical_device.enable_extensions_if_present(app_extensions);
+  std::vector<const char*> skia_extensions;
+  skia_features.addFeaturesToEnable(skia_extensions, features);
+  vk::physical_device.enable_extensions_if_present(skia_extensions);
   memory_budget_available =
-      vk::physical_device.is_extension_present(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+      vk::physical_device.enable_extension_if_present(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+  vk::physical_device.enable_extensions_if_present({
+      VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
+      VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME,
+      VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME,
+      VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME,
+  });
 
   // Workaround for a Skia bug: VulkanPreferredFeatures::addFeaturesToEnable unconditionally
   // chains uninitialized fSamplerYcbcrConversion (happens when fAPIVersion >= 1.2).

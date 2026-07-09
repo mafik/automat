@@ -28,6 +28,30 @@ else:
 HASH_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def path_exists(p):
+    try:
+        return Path(p).exists()
+    except OSError:
+        return os.path.lexists(p)
+
+
+def path_mtime(p):
+    try:
+        return Path(p).stat().st_mtime
+    except OSError:
+        try:
+            return os.lstat(p).st_mtime
+        except OSError:
+            return 0
+
+
+def path_is_dir(p):
+    try:
+        return Path(p).is_dir()
+    except OSError:
+        return False
+
+
 def Popen(args, **kwargs):
     '''Wrapper around subprocess.Popen which captures STDERR into a temporary file.'''
     f = tempfile.TemporaryFile()
@@ -133,25 +157,23 @@ class Step:
     def dirty_inputs(self):
         # Check 1: If the output doesn't exist, report that all inputs have changed.
         for out in self.outputs:
-            if not Path(out).exists():
+            if not path_exists(out):
                 return self.inputs
 
         # Check 2: Check whether the inputs are older than outputs.
         if self.outputs:
-            build_time = min(
-                Path(t).stat().st_mtime if Path(t).exists() else 0
-                for t in self.outputs)
+            build_time = min(path_mtime(t) for t in self.outputs)
         else:
             build_time = 0
         updated_inputs = []
         for inp in self.inputs:
             p = Path(inp)
             # Prevent infinite rebuild loops when outputting to an input directory.
-            if p.is_dir() and any(Path(out).is_relative_to(p) and Path(out).exists() for out in self.outputs):
+            if path_is_dir(p) and any(Path(out).is_relative_to(p) and path_exists(out) for out in self.outputs):
                 continue
-            if p.exists() and p.stat().st_mtime < build_time:
+            if path_exists(p) and path_mtime(p) < build_time:
                 continue
-            if not p.exists():
+            if not path_exists(p):
                 continue
             updated_inputs.append(inp)
 
@@ -173,7 +195,7 @@ class Step:
         return changed_inputs
 
     def build_if_needed(self):
-        if len(self.inputs) == 0 and any(not Path(out).exists()
+        if len(self.inputs) == 0 and any(not path_exists(out)
                                          for out in self.outputs):
             if cmdline_args.args.verbose:
                 print(f'Running "{self.shortcut}" because some of the outputs don\'t exist')

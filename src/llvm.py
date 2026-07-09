@@ -36,11 +36,6 @@ def PostInstallProcess(BASE, PREFIX, checkout_dir):
   PREFIX = Path(PREFIX)
   checkout_dir = Path(checkout_dir)
 
-  llvm_lib = PREFIX / 'include' / 'llvm' / 'lib'
-  if llvm_lib.exists() and llvm_lib.is_symlink():
-    llvm_lib.unlink()
-  llvm_lib.symlink_to(checkout_dir / 'llvm' / 'lib')
-
   ldflags_path = BASE / 'LLVM.ldflags'
   cxxflags_path = BASE / 'LLVM.cxxflags'
 
@@ -58,6 +53,7 @@ def PostInstallProcess(BASE, PREFIX, checkout_dir):
   cxxflags = [f for f in cxxflags if not f.startswith('-std=') and not f == '-fno-exceptions']
   extra_dir = BASE / 'LLVM' / 'lib' / 'Target' / 'X86'
   cxxflags.append(f'-I{extra_dir}')
+  cxxflags.append(f'-I{checkout_dir}') # for <llvm/lib/...>
   cxxflags_path.write_text(' '.join(cxxflags))
 
 # We need this in order to isolate the build system from extra

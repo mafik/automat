@@ -64,9 +64,7 @@ if build.platform == 'win32':
   gnu_make.SkipConfigure()
   hook.make_exe = str(gnu_make.checkout_dir / 'bin' / 'make.exe')
   hook.ConfigureDependsOn(gnu_make.checkout_dir)
-  # Invoked as src/configure (through a junction), configure keeps SRC_PATH
-  # relative; the /c/... paths its pwd would emit are unreadable to native make.
-  hook.configure_src_link = True
+  hook.configure_in_tree = True
 
   hook.ConfigureOptions(**{
     # git-bash's uname says MSYS_NT, which configure rejects; win64 (not mingw64)

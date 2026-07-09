@@ -56,3 +56,45 @@ def close_window(pid):
     user32.PostMessageW(hwnd, 0x0010, 0, 0)
     return True
 
+
+def _redirection_guard_enforced():
+    kernel32 = ctypes.windll.kernel32
+    kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+    get_policy = kernel32.GetProcessMitigationPolicy
+    get_policy.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_size_t]
+    get_policy.restype = ctypes.c_int
+    ProcessRedirectionTrustPolicy = 16
+    policy = ctypes.c_uint32(0)
+    ok = get_policy(kernel32.GetCurrentProcess(), ProcessRedirectionTrustPolicy,
+                    ctypes.byref(policy), ctypes.sizeof(policy))
+    return bool(ok) and bool(policy.value & 1)
+
+
+def check_redirection_guard():
+    if not _redirection_guard_enforced():
+        return
+    sys.stderr.write(r'''
+This build cannot proceed because Windows RedirectionGuard is active.
+
+Fix it by doing ONE of the following:
+
+  1. Build from a local interactive session instead of over SSH.
+
+  2. In an elevated ("Run as administrator") PowerShell:
+
+       $k = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options'
+       Remove-ItemProperty "$k\sshd.exe"      MitigationOptions
+       Remove-ItemProperty "$k\ssh-agent.exe" MitigationOptions
+       Restart-Service sshd
+
+     Then reconnect over SSH and build again.
+
+Documentation:
+  https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-process-mitigation-redirection-trust-policy
+  https://www.microsoft.com/en-us/msrc/blog/2025/06/redirectionguard-mitigating-unsafe-junction-traversal-in-windows
+''')
+    sys.exit(1)
+
+
+check_redirection_guard()
+

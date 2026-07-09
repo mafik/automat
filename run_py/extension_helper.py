@@ -117,7 +117,7 @@ class ExtensionHelper:
     self.link_deps = []
     self.ninja_target = 'install'
     self.make_exe = 'make'
-    self.configure_src_link = False
+    self.configure_in_tree = False
     self.meson_install_tags = ''
     self.meson_build_targets = ['all']
 
@@ -181,6 +181,7 @@ class ExtensionHelper:
     env = os.environ.copy()
     env['CC'] = build.compiler_c
     env['CXX'] = build.compiler
+    env['NINJA'] = str(ninja.BIN)
     env.update(self.configure_env_replacements)
     # env['CFLAGS'] = ' '.join(f for f in build.CFLAGS() if not f.startswith('-Werror'))
 
@@ -228,17 +229,19 @@ class ExtensionHelper:
         shortcut=f'configure {self.name}')
 
     elif self.configure == 'autotools':
+      if self.configure_in_tree:
+        build_dir = self.src_dir
+      else:
+        recipe.add_step(
+          partial(build_dir.mkdir, parents=True, exist_ok=True),
+          outputs=[build_dir],
+          inputs=[],
+          desc=f'Creating build directory for {self.name}',
+          shortcut=f'mkdir {self.name}')
       makefile = build_dir / 'Makefile'
 
-      recipe.add_step(
-        partial(build_dir.mkdir, parents=True, exist_ok=True),
-        outputs=[build_dir],
-        inputs=[],
-        desc=f'Creating build directory for {self.name}',
-        shortcut=f'mkdir {self.name}')
-
       configure_args = [
-        (self.src_dir / 'configure').absolute(),
+        'configure' if self.configure_in_tree else (self.src_dir / 'configure').absolute(),
         f'--prefix={build.PREFIX}',
         f'--libdir={build.PREFIX}/lib64',
         '--disable-shared']
@@ -252,17 +255,10 @@ class ExtensionHelper:
         # configure is a POSIX shell script, so Git's bash runs it. Git's
         # usr/bin supplies sh and coreutils to configure and to make recipes.
         env['PATH'] = 'C:\\Program Files\\Git\\usr\\bin' + os.pathsep + env['PATH']
-        if self.configure_src_link:
-          configure_args[0] = 'src/configure'
         configure_args = ['C:\\Program Files\\Git\\bin\\bash.exe'] + [
             str(arg).replace('\\', '/') for arg in configure_args]
 
       def run_configure():
-        if self.configure_src_link and build.platform == 'win32':
-          link = build_dir / 'src'
-          if not link.exists():
-            import _winapi
-            _winapi.CreateJunction(str(self.src_dir.absolute()), str(link))
         return Popen(configure_args, env=env, cwd=build_dir)
 
       recipe.add_step(

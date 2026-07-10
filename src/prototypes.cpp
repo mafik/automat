@@ -18,6 +18,7 @@
 #include "library_mouse.hpp"
 #include "library_number.hpp"
 #include "library_sources.hpp"
+#include "library_tensorflow.hpp"
 #include "library_tesseract_ocr.hpp"
 #include "library_timeline.hpp"
 #include "library_timer.hpp"
@@ -26,12 +27,11 @@
 #include "sync.hpp"
 #include "x11.hpp"
 
-// The libraries below are Linux-only. PipeWire has no Windows port, the Wayland
-// compositor needs SCM_RIGHTS fd passing, which Windows AF_UNIX sockets lack,
-// and TensorFlow's static C++ build relies on ELF-only relocatable linking.
+// The libraries below are Linux-only. PipeWire has no Windows port and the
+// Wayland compositor needs SCM_RIGHTS fd passing, which Windows AF_UNIX
+// sockets lack.
 #if defined(__linux__)
 #include "library_pipewire.hpp"
-#include "library_tensorflow.hpp"
 #include "wayland.hpp"
 #endif
 
@@ -108,12 +108,12 @@ PrototypeLibrary::PrototypeLibrary() {
     index.Register<GeglOperation, HideInToolbar>(op.name);
   }
   index.Register<GeglShelf, HideInToolbar>();
+  index.Register<TfTensor, HideInToolbar>();
+  index.Register<TfOp, HideInToolbar>("Square");
 #if defined(__linux__)
   index.Register<WaylandWindow, HideInToolbar>();
   index.Register<PipeWireNode, HideInToolbar>();
   index.Register<PipeWireShelf, HideInToolbar>();
-  index.Register<TfTensor, HideInToolbar>();
-  index.Register<TfOp, HideInToolbar>("Square");
 #endif
   {  // The Leptonica tools are reached through the shelf, not the toolbar.
     index.Register<LeptonicaShelf, HideInToolbar>();

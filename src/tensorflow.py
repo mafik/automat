@@ -3,37 +3,32 @@
 
 # Warning: coded with a stochastic parrot
 
-# Static TensorFlow C++ API. Upstream ships no static library and no static
-# target, so this extension builds the C++ API with bazel and folds it into one
-# archive that Automat links directly - there is no C wrapper:
+# TensorFlow, as upstream's official self-contained shared library on both
+# platforms: bazel builds `//tensorflow:libtensorflow.so.2.20.0` on Linux and
+# `//tensorflow:tensorflow.dll` on Windows with supported flags only; nothing
+# in the TensorFlow tree is written or patched. --config=monolithic folds the
+# whole runtime into the one file (a separate framework library would rerun
+# its registrars when both halves load), and keeps TF's bundled LLVM and MLIR
+# inside it, where they cannot collide with Automat's own LLVM.
 #
-#  1. A patched-in cc_binary (tensorflow/automat/BUILD) does a relocatable link
-#     ("ld -r") of the C++ graph API and the op kernels into one object.
-#     root.cc names the API entry points so the relocatable link retains them.
-#     all_kernels, the op registry and the direct-session factory are alwayslink,
-#     so every kernel, every op definition and the session factory come along -
-#     the C++ Session path needs all three registered at process start.
-#     Empty stub archives shadow glibc/libstdc++ so the C runtime stays external
-#     and resolves in the final Automat link.
-#  2. llvm-objcopy keeps the C++ API namespaces global (tensorflow, tsl,
-#     protobuf, absl, Eigen) and localizes everything else, so TF's bundled
-#     LLVM and MLIR can never collide with Automat's own LLVM (nor leak into the
-#     dynamic symbol table - the lavapipe rule). Automat keeps full control of
-#     its own LLVM; this one stays hidden inside the archive.
-#  3. ar wraps the single object as PREFIX/lib64/libtensorflow.a. Because the
-#     archive holds one object, referencing any TF symbol pulls the whole thing,
-#     so the kernel registrations survive into the binary.
+# The library installs under PREFIX/share; src/tensorflow_runtime.cpp #embeds
+# it and loads it on first use - memfd + dlopen on Linux, an extract-once
+# cache file + LoadLibrary on Windows. Automat calls the TensorFlow C++ API
+# directly, and the calls reach the loaded copy late-bound: on Linux through
+# the dlsym trampolines in tensorflow_trampolines.cpp (automat does not link
+# the library at all), on Windows through /DELAYLOAD thunks resolved by the
+# hook in tensorflow_runtime.cpp.
 #
 # Automat compiles against the C++ headers in place - the tensorflow source
-# tree, the generated headers under bazel-bin, and the absl/Eigen/protobuf/tsl/
-# xla/ml_dtypes repos that bazel fetched - so there is no header copy step.
-#
-# bazel reuses the warm output root under the user's home (also where bazel
-# fsyncs during extraction, which network filesystems may reject).
+# tree, the generated headers under bazel-bin, and the absl/Eigen/protobuf/
+# tsl/xla/ml_dtypes repos that bazel fetched - so there is no header copy
+# step.
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
+from sys import platform
 
 import build
 import extension_helper
@@ -43,63 +38,206 @@ import src
 
 llvm = src.load_extension('llvm')
 
-BAZELISK_URL = 'https://github.com/bazelbuild/bazelisk/releases/download/v1.27.0/bazelisk-linux-amd64'
-
 CHECKOUT = fs_utils.third_party_dir / 'TensorFlow'
+# Kept in the home directory: warm across variants, and bazel fsyncs while
+# extracting repositories, which network filesystems may reject.
 BAZEL_ROOT = Path.home() / 'bazel_root'
-BAZELISK = BAZEL_ROOT / 'bazelisk'
-MERGED = CHECKOUT / 'bazel-bin' / 'tensorflow' / 'automat' / 'automat_tf'
-ARCHIVE = build.PREFIX / 'lib64' / 'libtensorflow.a'
+VERSION = '2.20.0'
 
-BAZEL_FLAGS = [
-  '-c', 'opt',
-  '--config=monolithic',
-  '--force_pic',
-  '--spawn_strategy=local',
-  # clang-20 module layering rejects grpc's zconf.h use.
-  '--per_file_copt=external/com_github_grpc_grpc/.*@-Wno-private-header',
-]
+# TensorFlow's .bazelrc turns on the pywrap (python wheel) packaging mode,
+# which does not declare the standalone shared-library targets. The empty
+# value selects the classic packaging (the repo rule treats any non-empty
+# string, even "False", as true).
+PACKAGING_MODE = '--repo_env=USE_PYWRAP_RULES='
+
+if platform == 'win32':
+  import ctypes
+  import sys
+  from glob import glob
+
+  BAZELISK_URL = 'https://github.com/bazelbuild/bazelisk/releases/download/v1.27.0/bazelisk-windows-amd64.exe'
+  BAZELISK = BAZEL_ROOT / 'bazelisk.exe'
+  # A short output root keeps generated paths under the 260-char MAX_PATH.
+  OUTPUT_USER_ROOT = Path('C:/b')
+
+  def BazelJobs():
+    # The biggest kernel TUs peak around 2 GiB each under clang-cl, so the
+    # bazel default of one job per core thrashes; cap concurrency so the peak
+    # working set fits in RAM, keeping 2 GiB for the OS and the bazel server.
+    class MemoryStatusEx(ctypes.Structure):
+      _fields_ = [('dwLength', ctypes.c_uint32), ('dwMemoryLoad', ctypes.c_uint32)] + [
+          (name, ctypes.c_uint64)
+          for name in ('ullTotalPhys', 'ullAvailPhys', 'ullTotalPageFile', 'ullAvailPageFile',
+                       'ullTotalVirtual', 'ullAvailVirtual', 'ullAvailExtendedVirtual')]
+    status = MemoryStatusEx(dwLength=ctypes.sizeof(MemoryStatusEx))
+    ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status))
+    return max(1, min(os.cpu_count(), (status.ullTotalPhys - (2 << 30)) // (2 << 30)))
+
+  # The .def file that gives tensorflow.dll its exports is produced by
+  # upstream's def_file_filter tool, which appends hardcoded manglings frozen at
+  # abseil 2023 / an older protobuf; nothing defines those symbols in TF 2.20
+  # and the tensorflow.dll link fails on them. The tool is instantiated as the
+  # external repository @local_config_def_file_filter, so a corrected copy
+  # (upstream's template, same undname substitution, dead lines dropped) is
+  # generated under the build dir and substituted with --override_repository;
+  # the TensorFlow tree stays untouched.
+  STALE_DEF_EXPORTS = ('lts_20230802', '?Set@ArenaStringPtr', '??0CoordinatedTask')
+  FILTER_REPO = build.PREFIX / 'tensorflow_def_file_filter'
+
+  def WriteDefFileFilterRepo():
+    tools = CHECKOUT / 'tensorflow' / 'tools' / 'def_file_filter'
+    msvc = Path(os.environ['BAZEL_VC']) / 'Tools' / 'MSVC'
+    undname = max(msvc.glob('*/bin/HostX64/x64/undname.exe'))
+    filter_py = (tools / 'def_file_filter.py.tpl').read_text()
+    filter_py = filter_py.replace('%{undname_bin_path}', str(undname).replace('\\', '\\\\'))
+    filter_py = filter_py.replace('%{dumpbin_bin_path}',
+                                  str(undname.parent / 'dumpbin.exe').replace('\\', '\\\\'))
+    kept = [line for line in filter_py.splitlines(keepends=True)
+            if not any(stale in line for stale in STALE_DEF_EXPORTS)]
+    FILTER_REPO.mkdir(parents=True, exist_ok=True)
+    (FILTER_REPO / 'WORKSPACE').write_text('')
+    (FILTER_REPO / 'BUILD').write_text((tools / 'BUILD.tpl').read_text())
+    (FILTER_REPO / 'def_file_filter.py').write_text(''.join(kept))
+    shutil.copyfile(tools / 'symbols_pybind.txt', FILTER_REPO / 'symbols_pybind.txt')
+
+  # clang-cl builds TF; msvc-cl miscompiles TF's bundled LLVM. static_link_msvcrt
+  # plus the ucrt linkopts give the DLL the same hybrid CRT automat.exe uses
+  # (run_py/build.py): C++ objects cross the module boundary, so both modules
+  # must share the ucrt heap.
+  BAZEL_FLAGS = ['-c', 'opt', '--config=monolithic', PACKAGING_MODE, '--compiler=clang-cl',
+                 '--features=static_link_msvcrt',
+                 '--linkopt=/NODEFAULTLIB:libucrt.lib', '--linkopt=/DEFAULTLIB:ucrt.lib',
+                 f'--jobs={BazelJobs()}',
+                 f'--override_repository=local_config_def_file_filter={FILTER_REPO.as_posix()}',
+                 # grpc's C++ TUs include both <windows.h> and clang's <x86intrin.h>,
+                 # whose _m_prefetchw definitions clash (C vs C++ linkage); predefine
+                 # the include guard so only the SDK declaration is seen.
+                 '--per_file_copt=external/com_github_grpc_grpc/.*@-D__PRFCHWINTRIN_H',
+                 # The filtered .def keeps no absl names, and delay-load binding needs
+                 # every referenced symbol exported; /EXPORT merges with the .def and
+                 # flows into the import library. Regenerate like the trampolines: the
+                 # symbols tensorflow_runtime.obj leaves undefined that the .def lacks.
+                 '--linkopt=/EXPORT:?Unref@StatusRep@status_internal@lts_20250127@absl@@QEBAXXZ']
+
+  # The import library derives from that .def, which exports the core C++ API
+  # alongside the C API, so automat's delay-loaded TensorFlow references all
+  # resolve against it.
+  BAZEL_TARGETS = ['//tensorflow:tensorflow.dll', '//tensorflow:tensorflow_dll_import_lib']
+  BUILT = [CHECKOUT / 'bazel-bin' / 'tensorflow' / 'tensorflow.dll',
+           CHECKOUT / 'bazel-bin' / 'tensorflow' / 'tensorflow.lib']
+  INSTALLED_LIB = build.PREFIX / 'share' / 'tensorflow.dll'
+  INSTALLED_IMPLIB = build.PREFIX / 'lib64' / 'tensorflow.lib'
+  INSTALLED = [INSTALLED_LIB, INSTALLED_IMPLIB]
+  BAZEL_EXTRA_INPUTS = []
+
+  def BazelEnv():
+    # bazel autodetects its clang-cl toolchain from these variables; a missing
+    # one produces a cryptic toolchain error, so derive them here and fail
+    # loudly only when the underlying tool truly is absent.
+    if 'BAZEL_LLVM' not in os.environ:
+      clang = shutil.which('clang')
+      if clang:
+        os.environ['BAZEL_LLVM'] = str(Path(clang).parent.parent)
+    if 'BAZEL_SH' not in os.environ:
+      for bash in (Path('C:/Program Files/Git/bin/bash.exe'),
+                   Path('C:/Program Files/Git/usr/bin/bash.exe')):
+        if bash.exists():
+          os.environ['BAZEL_SH'] = str(bash)
+          break
+    if 'BAZEL_VC' not in os.environ:
+      candidates = glob('C:/Program Files*/Microsoft Visual Studio/*/*/VC')
+      if candidates:
+        os.environ['BAZEL_VC'] = max(candidates)
+    os.environ.setdefault('PYTHON_BIN_PATH', sys.executable)
+    missing = [name for name in ('BAZEL_LLVM', 'BAZEL_SH', 'BAZEL_VC')
+               if name not in os.environ]
+    if missing:
+      raise RuntimeError(
+        f'TensorFlow needs {", ".join(missing)} (LLVM, Git bash and VS Build Tools '
+        'with the C++ workload); install them or set the variables manually')
+    return os.environ.copy()
+
+  def Install():
+    for built, installed in zip(BUILT, INSTALLED):
+      installed.parent.mkdir(parents=True, exist_ok=True)
+      shutil.copyfile(built, installed)
+
+else:
+  BAZELISK_URL = 'https://github.com/bazelbuild/bazelisk/releases/download/v1.27.0/bazelisk-linux-amd64'
+  BAZELISK = BAZEL_ROOT / 'bazelisk'
+  OUTPUT_USER_ROOT = BAZEL_ROOT
+
+  def BazelJobs():
+    # The biggest MLIR TUs peak around 3 GiB each, so the bazel default of one
+    # job per core OOM-kills the bazel server; cap concurrency so the peak
+    # working set fits in RAM, keeping 3 GiB for the OS and the bazel server.
+    total = os.sysconf('SC_PHYS_PAGES') * os.sysconf('SC_PAGE_SIZE')
+    return max(1, min(os.cpu_count(), (total - (3 << 30)) // (3 << 30)))
+
+  # The library hides its C++ API behind upstream's version script; EXPORTS_LDS
+  # is a second version-script node returning the tensorflow/tsl/absl symbols
+  # automat binds (tensorflow_trampolines.cpp) to the dynamic table.
+  EXPORTS_LDS = fs_utils.src_dir / 'tensorflow_exports.lds'
+  BAZEL_FLAGS = [
+    '-c', 'opt',
+    '--config=monolithic',
+    PACKAGING_MODE,
+    '--force_pic',
+    '--spawn_strategy=local',
+    f'--jobs={BazelJobs()}',
+    f'--linkopt=-Wl,--version-script={EXPORTS_LDS}',
+    # clang-20 module layering rejects grpc's zconf.h use.
+    '--per_file_copt=external/com_github_grpc_grpc/.*@-Wno-private-header',
+  ]
+
+  BAZEL_TARGETS = [f'//tensorflow:libtensorflow.so.{VERSION}']
+  BUILT = [CHECKOUT / 'bazel-bin' / 'tensorflow' / f'libtensorflow.so.{VERSION}']
+  INSTALLED_LIB = build.PREFIX / 'share' / 'libtensorflow.so'
+  INSTALLED = [INSTALLED_LIB]
+  BAZEL_EXTRA_INPUTS = [EXPORTS_LDS]
+
+  def BazelEnv():
+    env = os.environ.copy()
+    env['CC'] = build.compiler_c
+    env['CXX'] = build.compiler
+    return env
+
+  def Install():
+    # Strip the symbol table; the dynamic section, including the C++ exports
+    # EXPORTS_LDS added, survives. It more than halves what #embed carries.
+    INSTALLED_LIB.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run([build.PREFIX / 'bin' / 'llvm-strip', '--strip-all', '-o', INSTALLED_LIB,
+                    BUILT[0]], check=True)
+
+
+def FetchBazelisk():
+  BAZEL_ROOT.mkdir(parents=True, exist_ok=True)
+  extension_helper.download_from_url(BAZELISK_URL, BAZELISK)
+  if platform != 'win32':
+    BAZELISK.chmod(0o755)
+
+
+def BazelBuild():
+  env = BazelEnv()
+  if platform == 'win32':
+    WriteDefFileFilterRepo()
+  return make.Popen(
+    [BAZELISK, f'--output_user_root={OUTPUT_USER_ROOT}', 'build'] + BAZEL_FLAGS + BAZEL_TARGETS,
+    env=env, cwd=CHECKOUT)
+
 
 # The C++ API's public headers live in these bazel-fetched repos, alongside the
 # tensorflow source tree and its generated headers.
 INCLUDE_REPOS = ['com_google_absl', 'eigen_archive', 'com_google_protobuf/src', 'local_tsl',
                  'local_xla', 'ml_dtypes_py']
 
-# Namespaces of the C++ API that Automat links against. Everything outside them
-# is localized so it cannot clash with Automat's own copies (notably LLVM). The
-# keep patterns match the mangled namespace component (e.g. "3tsl"), not a bare
-# substring, so an unrelated symbol like llvm's remove_leading_dotslash - whose
-# name happens to contain "tsl" - is still localized.
-KEEP_NAMESPACES = ['tensorflow', 'tsl', 'protobuf', 'absl', 'Eigen']
-
-
-def FetchBazelisk():
-  BAZEL_ROOT.mkdir(parents=True, exist_ok=True)
-  extension_helper.download_from_url(BAZELISK_URL, BAZELISK)
-  BAZELISK.chmod(0o755)
-
-
-def BazelBuild():
-  env = os.environ.copy()
-  env['CC'] = build.compiler_c
-  env['CXX'] = build.compiler
-  return make.Popen(
-    [BAZELISK, f'--output_user_root={BAZEL_ROOT}', 'build'] + BAZEL_FLAGS +
-    ['//tensorflow/automat:automat_tf'],
-    env=env, cwd=CHECKOUT)
-
-
-def ExternalRepos():
-  # bazel-bin resolves to <output_base>/execroot/org_tensorflow/bazel-out/k8-opt/bin.
-  return (CHECKOUT / 'bazel-bin').resolve().parents[4] / 'external'
-
 
 def IncludeArgs(*_):
   # Each dependency repo has two header roots: the fetched source under
   # <output_base>/external and bazel's generated output (the .pb.h protobuf
   # headers) under bazel-bin/external.
-  source_external = ExternalRepos()
   bin_dir = (CHECKOUT / 'bazel-bin').resolve()
+  source_external = bin_dir.parents[4] / 'external'
   gen_external = bin_dir / 'external'
   roots = [CHECKOUT, bin_dir]
   for repo in INCLUDE_REPOS:
@@ -107,18 +245,16 @@ def IncludeArgs(*_):
   return [f'-I{root}' for root in roots if root.exists()]
 
 
-def MergeArchive():
-  ARCHIVE.parent.mkdir(parents=True, exist_ok=True)
-  localized = BAZEL_ROOT / 'tf_localized.o'
-  objcopy = build.PREFIX / 'bin' / 'llvm-objcopy'
-  keep = []
-  for ns in KEEP_NAMESPACES:
-    # Itanium mangling prefixes each namespace with its length: "3tsl", not "tsl".
-    keep += ['--keep-global-symbol', f'*{len(ns)}{ns}*']
-  subprocess.run([objcopy, '-w', *keep, MERGED, localized], check=True)
-  ARCHIVE.unlink(missing_ok=True)
-  subprocess.run(['ar', 'rcs', ARCHIVE, localized], check=True)
-  localized.unlink()
+SRC_EMBED = fs_utils.src_dir / 'tensorflow_embed.c'
+
+
+def hook_plan(srcs, objs, bins, recipe):
+  for obj in objs:
+    if obj.source.path == SRC_EMBED:
+      # Wired here rather than through install_srcs because the extension's
+      # other compile args (-std=gnu++17, the include roots) are C++-only.
+      obj.deps.update(hook.beam)
+      obj.compile_args.append(f'--embed-dir={INSTALLED_LIB.parent}')
 
 
 def hook_recipe(recipe):
@@ -130,106 +266,34 @@ def hook_recipe(recipe):
     shortcut='get bazelisk')
   recipe.add_step(
     BazelBuild,
-    outputs=[MERGED],
-    inputs=[BAZELISK, *hook.beam, __file__],
+    outputs=BUILT,
+    inputs=[BAZELISK, *hook.beam, *BAZEL_EXTRA_INPUTS, __file__],
     desc='Building TensorFlow (bazel; takes a long time)',
     shortcut='build tensorflow')
-  # MergeArchive runs llvm-objcopy, so it waits for the LLVM install.
+  # Install runs llvm-strip on Linux, so it waits for the LLVM install.
   recipe.add_step(
-    MergeArchive,
-    outputs=[ARCHIVE],
-    inputs=[MERGED, *llvm.hook.beam, __file__],
+    Install,
+    outputs=INSTALLED,
+    inputs=[*BUILT, *llvm.hook.beam, __file__],
     desc='Installing TensorFlow',
     shortcut='install TensorFlow')
-  # Sources that include TensorFlow headers wait for the archive; by then the
+  # Sources that include TensorFlow headers wait for the install; by then the
   # bazel-fetched header repos that IncludeArgs points at exist as well.
-  hook.beam = [ARCHIVE]
+  hook.beam = INSTALLED
 
 
 hook = extension_helper.ExtensionHelper('TensorFlow', globals())
-hook.FetchFromGit('https://github.com/tensorflow/tensorflow.git', 'v2.20.0')
+hook.FetchFromGit('https://github.com/tensorflow/tensorflow.git', f'v{VERSION}')
 hook.SkipConfigure()
-
-
-# An empty ar archive is just its magic line.
-EMPTY_ARCHIVE = b'!<arch>\n'
-
-AUTOMAT_BUILD = '''# One relocatable object holding the TensorFlow C++ API and its op kernels;
-# Automat turns it into libtensorflow.a (see src/tensorflow.py). root.cc names
-# the API so the relocatable link retains it; the op registry, all_kernels and
-# the direct-session factory are alwayslink, so their registrars come along.
-cc_binary(
-    name = "automat_tf",
-    srcs = ["root.cc"],
-    linkopts = [
-        # Empty stubs shadow the glibc/libstdc++ static archives that the dep
-        # linkopts (-lm, -lstdc++, ...) would otherwise merge in; the C runtime
-        # stays external and resolves in the final Automat link.
-        "-Ltensorflow/automat/stubs",
-        "-r",
-        "-nostdlib",
-        "-no-pie",
-        "-fuse-ld=lld",
-        "-Wl,--no-gc-sections",
-    ],
-    linkstatic = True,
-    deps = [
-        "//tensorflow/cc:cc_ops",
-        "//tensorflow/cc:client_session",
-        "//tensorflow/core:framework",
-        "//tensorflow/core:core_cpu",
-        "//tensorflow/core:ops",
-        "//tensorflow/core:all_kernels",
-        "//tensorflow/core:direct_session",
-    ],
-)
-'''
-
-AUTOMAT_ROOT = '''// Warning: coded with a stochastic parrot
-// References the TensorFlow C++ API so the relocatable ("-r") link in
-// tensorflow/automat/BUILD retains it in libtensorflow.a (see src/tensorflow.py).
-// This mirrors the surface src/library_tensorflow.cpp uses: Automat builds ops
-// by runtime name through NodeBuilder, so only the graph, session and tensor
-// machinery is named here - the op kernels come from all_kernels (alwayslink).
-#include "tensorflow/cc/client/client_session.h"
-#include "tensorflow/cc/framework/scope.h"
-#include "tensorflow/cc/ops/array_ops.h"
-#include "tensorflow/core/framework/tensor.h"
-#include "tensorflow/core/graph/node_builder.h"
-
-extern "C" void automat_tf_link_root() {
-  using namespace tensorflow;
-  Scope scope = Scope::NewRootScope();
-  auto input = ops::Placeholder(scope.WithOpName("input"), DT_FLOAT);
-  Node* node = nullptr;
-  (void)NodeBuilder(scope.GetUniqueNameForOp("op"), "Square")
-      .Input(input.node())
-      .Finalize(scope.graph(), &node);
-  ClientSession session(scope);
-  Tensor input_tensor(DT_FLOAT, TensorShape({1}));
-  std::vector<Tensor> outputs;
-  (void)session.Run({{input, input_tensor}}, {Output(node)}, &outputs);
-}
-'''
-
-
-def _patch_automat_target(marker):
-  pkg = hook.src_dir / 'tensorflow' / 'automat'
-  stubs = pkg / 'stubs'
-  stubs.mkdir(parents=True, exist_ok=True)
-  (pkg / 'BUILD').write_text(AUTOMAT_BUILD)
-  (pkg / 'root.cc').write_text(AUTOMAT_ROOT)
-  for lib in ('m', 'pthread', 'dl', 'rt', 'stdc++'):
-    (stubs / f'lib{lib}.a').write_bytes(EMPTY_ARCHIVE)
-  marker.touch()
-
-
-hook.PatchSources(_patch_automat_target)
 hook.InstallWhenIncluded(r'tensorflow/(cc|core)/')
 hook.AddCompileArg(IncludeArgs)
-# TensorFlow's headers use enum arithmetic that -std=gnu++26 rejects, so the one
-# translation unit that includes them (tensorflow_runtime.cpp) compiles as
-# gnu++17 - the standard TensorFlow itself builds with. This overrides the
-# global -std because it is appended after it.
+# TensorFlow's headers use enum arithmetic that -std=gnu++26 rejects, so the
+# translation unit that includes them compiles as gnu++17 - the standard
+# TensorFlow itself builds with (appended after the global -std, so it wins).
 hook.AddCompileArg('-std=gnu++17')
-hook.AddLinkArgs('-ltensorflow')
+if platform == 'win32':
+  hook.AddCompileArgs('-DNOMINMAX', '-DWIN32_LEAN_AND_MEAN', '-DNOGDI')
+  hook.AddLinkArgs(str(INSTALLED_IMPLIB), '-Wl,/delayload:tensorflow.dll',
+                   '-Wl,/defaultlib:delayimp.lib')
+# On Linux automat links no TensorFlow library at all; the trampolines stand in
+# for it (tensorflow_trampolines.cpp).

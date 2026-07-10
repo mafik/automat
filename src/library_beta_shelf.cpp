@@ -89,10 +89,8 @@ struct BetaShelfToy : ObjectToy {
     VisitProto(visitor, "Command", Option::W);
     VisitProto(visitor, "File", Option::SW);
     VisitProto(visitor, "Leptonica", Option::E);
-#if !defined(_WIN32)
     static PipelinesOption pipelines;
     visitor(pipelines);
-#endif
   }
 };
 

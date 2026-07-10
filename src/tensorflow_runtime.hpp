@@ -4,11 +4,11 @@
 
 // Warning: coded with a stochastic parrot
 
-// A thin quarantine around the TensorFlow C++ API. TensorFlow's headers define
-// their own logging macros (LOG/CHECK) and use enum arithmetic that Automat's
-// macros and -std=gnu++26 reject, so every translation unit that includes them
-// is confined to tensorflow_runtime.cpp - built on its own as gnu++17 (see
-// src/tensorflow.py) - and the rest of Automat sees only the plain types below.
+// Automat's interface to TensorFlow. TensorFlow's headers define their own
+// logging macros (LOG/CHECK) and use enum arithmetic that Automat's macros and
+// -std=gnu++26 reject, so tensorflow_runtime.cpp is the only file that
+// includes them - built on its own as gnu++17 (see src/tensorflow.py) - and
+// the rest of Automat sees only the plain types below.
 
 #include <cstdint>
 #include <memory>

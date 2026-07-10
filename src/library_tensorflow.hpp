@@ -20,7 +20,7 @@ struct Value;
 
 namespace automat::library {
 
-// TensorFlow blocks run on the CPU through the statically linked C++ graph API
+// TensorFlow blocks run on the CPU through the C++ graph API
 // (src/tensorflow.py), as designed in docs/parrots/Pipeline Language.md:
 // tensors are data objects with dtype, shape and device printed on the face;
 // the tensor port's format label uses the "f32[1,240,320,3]" notation.

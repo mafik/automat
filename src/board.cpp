@@ -184,25 +184,21 @@ ui::Tock BoardWidget::Tick(time::Timer&) {
     layers.OrderAbove(&lw);
   }
 
-  // Once every endpoint location exists:
-  // - raise each argument in front of its endpoint location and
-  // - tuck each sync belt behind its source.
   for (auto& loc : board->locations) {
     auto& lw = toys.FindOrMake(*loc, this);
     loc->object->Each<Argument>([&](Argument arg) {
-      if (auto syncable = dyn_cast<Syncable>(arg)) {
-        if (auto* belt = toys.FindOrNull(syncable)) {
-          layers.OrderAbove(belt);
-          layers.OrderBelow(belt, &lw);
+      auto* conn = toys.FindOrNull(arg);
+      if (!conn) return LoopControl::Continue;
+      ui::Widget* higher = &lw;
+      auto end = arg.Find();
+      if (auto* end_obj = end.Owner<Object>()) {
+        if (end_obj->here) {
+          if (auto* end_lw = toys.FindOrNull(*end_obj->here)) {
+            if (end_lw->IsAbove(*higher)) higher = end_lw;
+          }
         }
-        return LoopControl::Continue;
       }
-      auto& arg_toy = toys.FindOrMake(arg, this);
-      layers.OrderAbove(&arg_toy);
-      if (auto end = arg.Find())
-        if (auto* end_obj = end.Owner<Object>())
-          if (end_obj->here)
-            if (auto* end_lw = toys.FindOrNull(*end_obj->here)) layers.OrderAbove(&arg_toy, end_lw);
+      layers.OrderAbove(conn, higher);
       return LoopControl::Continue;
     });
   }

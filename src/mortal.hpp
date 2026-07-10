@@ -191,7 +191,7 @@ struct MortalFn40 : mortal_priv::Callback<mortal_priv::Fn40Node, mortal_priv::Ki
 
 // A collection of Mortal references. The entries are removed when the Mortals die.
 // Backed by Colony, so entry addresses are stable.
-template <Mortal T>
+template <typename T>
 struct MortalList {
  private:
   struct Entry : mortal_priv::ListNode {

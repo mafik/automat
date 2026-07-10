@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "widget.hpp"
 
+#include <include/core/SkClipOp.h>
 #include <include/core/SkColor.h>
 #include <include/core/SkColorSpace.h>
 #include <include/core/SkDrawable.h>
@@ -100,20 +101,68 @@ void Widget::WakeAnimationAt(time::SteadyPoint when) const {
   next_tick = min(next_tick, when);
 }
 
+static SkIRect TextureBoundsInWindowPx(const Widget& widget) {
+  Rect local = widget.TextureBounds().value_or(widget.CoarseBounds().rect);
+  SkRect device;
+  widget.local_to_window.mapRect(&device, local.sk);
+  SkIRect out;
+  device.roundOut(&out);
+  return out;
+}
+
+void Widget::DrawWithSplits(SkCanvas& canvas) const {
+  if (!splits_under.empty()) {  // Draw splits
+    canvas.save();
+    canvas.resetMatrix();
+    canvas.clipIRect(TextureBoundsInWindowPx(*this));
+    for (Widget& split : splits_under) {
+      canvas.setMatrix(SkM44(split.local_to_window));
+      split.DrawCached(canvas);
+    }
+    canvas.restore();
+  }
+  if (splits_over.empty()) {  // Draw body
+    DrawCached(canvas);
+  } else {
+    canvas.save();
+    canvas.resetMatrix();
+    for (Widget& cover : splits_over) {
+      canvas.clipIRect(TextureBoundsInWindowPx(cover), SkClipOp::kDifference);
+    }
+    canvas.setMatrix(SkM44(local_to_window));
+    DrawCached(canvas);
+    canvas.restore();
+  }
+}
+
+void Widget::DrawStack(SkCanvas& canvas) const {
+  // The Over()/Under() bands are not baked into the widget's texture; they composite here, in the
+  // widget's baker (this surface), wrapped around the widget. Recursing lands a whole detached
+  // subtree in its nearest baking ancestor.
+  for (auto* under : ranges::reverse_view(layers.Under())) {
+    BakeChildStack(canvas, *under);
+  }
+  DrawWithSplits(canvas);
+  for (auto* over : ranges::reverse_view(layers.Over())) {
+    BakeChildStack(canvas, *over);
+  }
+}
+
 void Widget::BakeChildStack(SkCanvas& canvas, const Widget& child) {
   canvas.save();
   canvas.concat(child.local_to_parent);
-  // The child's Over()/Under() bands are not baked into the child's texture; they composite here,
-  // in the child's baker (this surface), wrapped around the child. Recursing lands a whole detached
-  // subtree in its nearest baking ancestor.
-  for (auto* under : ranges::reverse_view(child.layers.Under())) {
-    BakeChildStack(canvas, *under);
-  }
-  child.DrawCached(canvas);
-  for (auto* over : ranges::reverse_view(child.layers.Over())) {
-    BakeChildStack(canvas, *over);
-  }
+  child.DrawStack(canvas);
   canvas.restore();
+}
+
+void Widget::SplitUnder(Widget& cover) {
+  cover.splits_under.Add(*this);
+  splits_over.Add(cover);
+}
+
+void Widget::UnsplitUnder(Widget& cover) {
+  cover.splits_under.Erase(*this);
+  splits_over.Erase(cover);
 }
 
 void Widget::BakeChildren(SkCanvas& canvas) const {

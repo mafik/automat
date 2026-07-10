@@ -77,6 +77,8 @@ struct FlipFlopWidget : ObjectToy {
 
   RRect CoarseBounds() const override { return kBounds; }
 
+  ui::Widget* ConnectionCover() override { return rocker.get(); }
+
   Tock Tick(time::Timer& timer) override {
     if (auto ptr = LockObject<FlipFlop>()) {
       current_state = ptr->current_state;

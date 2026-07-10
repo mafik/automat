@@ -61,6 +61,10 @@ struct Toy : ui::Widget {
 
   // Walk the parent chain up to LocationWidget, then return the last Toy before that.
   Toy* BaseToy() const;
+
+  // The widget beneath which connections to this toy terminate
+  // TODO: this should be removed - interfaces should decide this instead
+  virtual ui::Widget* ConnectionCover() { return this; }
 };
 
 // ToyMaker is a Part that can make toys

@@ -405,9 +405,8 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
   // Find the gear via the syncable's sync state
   auto& state = syncable.state;
   auto gear = state->gear_weak.Lock();
+  auto* gear_widget = gear ? toy_store.FindOrNull(*gear) : nullptr;
   if (gear) {
-    // Find the gear widget
-    auto* gear_widget = toy_store.FindOrNull(*gear);
     if (gear_widget) {
       angle = gear_widget->angle;
       if (gear_widget->IsAnimating()) {
@@ -443,6 +442,28 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
     tock.drawing |= animation::ExponentialApproach(1, t.d, 0.1, scale);
   } else {
     pinion_deflection.SmoothTargetUpdate(pinion, origin);
+  }
+
+  ui::Widget* owner_over = owner_widget->ConnectionCover();
+  ui::Widget* gear_over = gear_widget ? gear_widget->ConnectionCover() : nullptr;
+  if (gear_over == owner_over) gear_over = nullptr;
+  int matching = 0;
+  bool foreign = false;
+  for (ui::Widget& over : splits_over) {
+    if (&over == owner_over || &over == gear_over) {
+      ++matching;
+    } else {
+      foreign = true;
+    }
+  }
+  int wanted = (owner_over != nullptr) + (gear_over != nullptr);
+  if (foreign || matching != wanted) {
+    while (!splits_over.empty()) {
+      UnsplitUnder(*splits_over.begin());
+    }
+    if (owner_over) SplitUnder(*owner_over);
+    if (gear_over) SplitUnder(*gear_over);
+    if (parent) parent->WakeAnimation();
   }
 
   tock.drawing |= animation::LowLevelSineTowards(pinion.x <= origin.x ? 0 : 1, t.d, 0.5,

@@ -20,7 +20,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <ranges>
 
 #include "animation.hpp"
 #include "automat.hpp"
@@ -295,13 +294,7 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
   paint.setAlphaf(1.f - transparency);
   canvas.saveLayer(nullptr, &paint);
 
-  for (auto* under : ranges::reverse_view(toy->layers.Under())) {
-    BakeChildStack(canvas, *under);
-  }
-  toy->DrawCached(canvas);
-  for (auto* over : ranges::reverse_view(toy->layers.Over())) {
-    BakeChildStack(canvas, *over);
-  }
+  toy->DrawStack(canvas);
 
   canvas.restoreToCount(saveCount);
 

@@ -223,6 +223,8 @@ struct Widget : OptionsProvider {
   virtual void TransformUpdated(time::Timer&) {}
 
   void DrawCached(SkCanvas&) const;
+  void DrawWithSplits(SkCanvas&) const;
+  void DrawStack(SkCanvas&) const;
   void WakeAnimation() const;
   void WakeAnimationAt(time::SteadyPoint) const;
 
@@ -481,6 +483,12 @@ struct Widget : OptionsProvider {
   } mutable layers;  // protected by RootWidget::mutex;
 
   bool IsAbove(Widget& other) const;
+
+  mutable MortalList<Widget> splits_under;  // other widgets that are rendered UNDER this widget
+  mutable MortalList<Widget> splits_over;   // other widgets that are rendered OVER this widget
+
+  void SplitUnder(Widget& over);
+  void UnsplitUnder(Widget& over);
 
   // This can be used to block pointer events from propagating to children.
   virtual bool AllowChildPointerEvents(Widget& child) const { return true; }

@@ -191,11 +191,10 @@ ui::Tock BoardWidget::Tick(time::Timer&) {
     auto& lw = toys.FindOrMake(*loc, this);
     loc->object->Each<Argument>([&](Argument arg) {
       if (auto syncable = dyn_cast<Syncable>(arg)) {
-        if (arg.IsConnected())
-          if (auto* belt = toys.FindOrNull(syncable)) {
-            layers.OrderAbove(belt);
-            layers.OrderBelow(belt, &lw);
-          }
+        if (auto* belt = toys.FindOrNull(syncable)) {
+          layers.OrderAbove(belt);
+          layers.OrderBelow(belt, &lw);
+        }
         return LoopControl::Continue;
       }
       auto& arg_toy = toys.FindOrMake(arg, this);

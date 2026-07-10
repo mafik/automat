@@ -253,6 +253,8 @@ struct SyncBelt : ArgumentToy {
   float target_scroll_ratio = 0;
   int last_sync_balance = 0;
   bool is_dragged = false;
+  bool initialized = false;  // both ends were placed under the owner object
+  Vec2 shaped_pinion{};      // pinion position at the last Shape() refresh
 
   SyncBelt(ui::Widget* parent, Object& object, Syncable::Table& syncable);
 

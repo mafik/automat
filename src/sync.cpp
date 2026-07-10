@@ -73,6 +73,7 @@ void Syncable::Table::DefaultOnConnect(Argument self, Interface end) {
   } else if (auto* gear = dynamic_cast<Gear*>(end.object_ptr)) {
     gear->FullSync(*self_obj, *self_tab);
   }
+  vm.root_board->WakeToys();
 }
 
 NestedPtr<Interface::Table> Syncable::Table::DefaultFind(Argument self) {
@@ -363,6 +364,10 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
 
   auto origin_shape = owner_widget->Shape().makeTransform(TransformBetween(*owner_widget, *this));
   origin = origin_shape.getBounds().center();
+  if (!initialized) {
+    initialized = true;
+    pinion = origin;
+  }
   if (auto new_label = syncable.Name(); label != new_label) {
     label = new_label;
 
@@ -449,17 +454,15 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
     MarkDead(t.now);
   }
 
+  if (pinion != shaped_pinion) {
+    shaped_pinion = pinion;
+    tock |= Tock::Shape;
+  }
+
   return tock;
 }
 
-Vec<Vec2> SyncBelt::TextureAnchors() {
-  time::Timer t;
-  t.last = t.now = time::SteadyNow();
-  t.d = 0;
-  // TODO: figure out what to do with this tick
-  // Tick(t);
-  return {pinion + pinion_deflection, origin};
-}
+Vec<Vec2> SyncBelt::TextureAnchors() { return {pinion + pinion_deflection, origin}; }
 
 void SyncBelt::Draw(SkCanvas& canvas) const {
   auto& effect = GearShader();
@@ -565,13 +568,16 @@ bool Gear::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 SyncAction::SyncAction(ui::Pointer& pointer, Syncable syncable) : Action(pointer) {
   syncable.Unsync();
-  auto& sync_widget = pointer.root_widget.toys.FindOrMake(syncable, &pointer.root_widget);
-  sync_widget.is_dragged = true;
-  sync_widget.pinion_deflection.SmoothTargetUpdate(sync_widget.pinion,
-                                                   pointer.PositionWithinRootBoard());
-  sync_widget.WakeAnimation();
+  weak = NestedWeakPtr<Syncable::Table>(syncable.GetOwner().AcquireWeakPtr(), syncable.table);
+  if (auto* origin_widget = pointer.root_widget.toys.FindOrNull(*syncable.object_ptr)) {
+    if (auto* board_widget = BoardOrNull(*origin_widget)) {
+      auto& sync_widget = pointer.root_widget.toys.FindOrMake(syncable, board_widget);
+      sync_widget.is_dragged = true;
+      sync_widget.WakeAnimation();
+      board_widget->WakeAnimation();
+    }
+  }
   Update();
-  this->weak = NestedWeakPtr<Syncable::Table>(syncable.GetOwner().AcquireWeakPtr(), syncable.table);
   pointer.root_widget.WakeAnimation();
 }
 SyncAction::~SyncAction() {
@@ -582,8 +588,7 @@ SyncAction::~SyncAction() {
     if (sync_widget) {
       sync_widget->is_dragged = false;
       sync_widget->WakeAnimation();
-      auto* bw = pointer.root_widget.toys.FindOrNull(*vm.root_board);
-      if (bw) {
+      if (auto* bw = BoardOrNull(*sync_widget)) {
         bw->ConnectAtPoint(syncable, sync_widget->pinion);
         // TODO: animate towards the true target rather than origin
         sync_widget->pinion_deflection.SmoothTargetUpdate(sync_widget->pinion, sync_widget->origin);
@@ -595,15 +600,23 @@ void SyncAction::Update() {
   if (auto syncable_ptr = weak.Lock()) {
     Syncable syncable(syncable_ptr.Owner<Object>(), syncable_ptr.Get());
     auto* origin_widget = pointer.root_widget.toys.FindOrNull(*syncable.object_ptr);
-    auto* bw = origin_widget ? BoardOrNull(*origin_widget) : nullptr;
+    if (!origin_widget) return;
+    auto* sync_widget = pointer.root_widget.toys.FindOrNull(syncable);
+    if (!sync_widget) return;
+    auto* bw = BoardOrNull(*sync_widget);
+    if (!bw) return;
     auto start_local = origin_widget->Shape().getBounds().center();
-    auto start = bw ? TransformBetween(*origin_widget, *bw).mapPoint(start_local) : start_local;
-    if (auto* sync_widget = pointer.root_widget.toys.FindOrNull(syncable)) {
-      sync_widget->origin = start;
-      sync_widget->pinion_deflection.InteractiveTargetUpdate(sync_widget->pinion,
-                                                             pointer.PositionWithinRootBoard());
-      sync_widget->WakeAnimation();
+    auto start = TransformBetween(*origin_widget, *bw).mapPoint(start_local);
+    auto pointer_pos = pointer.PositionWithin(*bw);
+    sync_widget->origin = start;
+    if (!sync_widget->initialized) {
+      sync_widget->initialized = true;
+      sync_widget->pinion = start;
+      sync_widget->pinion_deflection.SmoothTargetUpdate(sync_widget->pinion, pointer_pos);
+    } else {
+      sync_widget->pinion_deflection.InteractiveTargetUpdate(sync_widget->pinion, pointer_pos);
     }
+    sync_widget->WakeAnimation();
   } else {
     pointer.ReplaceAction(*this, nullptr);
   }

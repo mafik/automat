@@ -16,8 +16,8 @@
 namespace automat::ui {
 
 // Helper for widgets that can be clicked. Takes care of changing the pointer icon and animating
-// a `highlight` value. Users of this class should make sure to call the `PointerEnter`,
-// `PointerLeave`, `Tick` and `FindAction` methods.
+// a `highlight` value. Users of this class should make sure to call the `PointerHover`,
+// `PointerUnhover`, `Tick` and `FindAction` methods.
 struct Clickable {
   const Widget& widget;
   int pointers_over = 0;
@@ -28,8 +28,8 @@ struct Clickable {
 
   Clickable(Widget& widget) : widget(widget) {}
 
-  void PointerEnter(Pointer&);
-  void PointerLeave(Pointer&);
+  void PointerHover(Pointer&);
+  void PointerUnhover(Pointer&);
   Tock Tick(time::Timer&);
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger);
 };
@@ -43,8 +43,8 @@ struct Button : Widget {
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   virtual SkRRect RRect() const;
-  void PointerEnter(Pointer& p) override { clickable.PointerEnter(p); }
-  void PointerLeave(Pointer& p) override { clickable.PointerLeave(p); }
+  void PointerHover(Pointer& p) override { clickable.PointerHover(p); }
+  void PointerUnhover(Pointer& p) override { clickable.PointerUnhover(p); }
   std::unique_ptr<Action> FindAction(Pointer& p, ActionTrigger a) override {
     return clickable.FindAction(p, a);
   }

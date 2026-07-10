@@ -25,8 +25,8 @@ struct TypeButton : ShapeWidget {
 
   TypeButton(ui::Widget* parent, SkPath path) : ShapeWidget(parent, path), clickable(*this) {}
 
-  void PointerEnter(Pointer& p) override { clickable.PointerEnter(p); }
-  void PointerLeave(Pointer& p) override { clickable.PointerLeave(p); }
+  void PointerHover(Pointer& p) override { clickable.PointerHover(p); }
+  void PointerUnhover(Pointer& p) override { clickable.PointerUnhover(p); }
   Tock Tick(time::Timer& t) override { return clickable.Tick(t); }
   std::unique_ptr<Action> FindAction(Pointer& p, ActionTrigger a) override {
     return clickable.FindAction(p, a);

@@ -2,45 +2,28 @@
 // SPDX-License-Identifier: MIT
 #include "library_flip_flop.hpp"
 
+#include <include/core/SkBlendMode.h>
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkColor.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkPaint.h>
-#include <include/core/SkPathBuilder.h>
-#include <include/core/SkSamplingOptions.h>
 #include <include/core/SkShader.h>
+#include <include/core/SkTileMode.h>
 #include <include/effects/SkGradient.h>
-#include <include/pathops/SkPathOps.h>
 
-#include <tracy/Tracy.hpp>
+#include <memory>
 
-#include "../build/generated/embedded.hpp"
 #include "animation.hpp"
-#include "arcline.hpp"
 #include "color.hpp"
-#include "sincos.hpp"
-#include "textures.hpp"
-#include "ui_button.hpp"
+#include "drawing.hpp"
+#include "font.hpp"
+#include "math.hpp"
+#include "ui_rocker.hpp"
 #include "widget.hpp"
 
 using namespace std;
 
 namespace automat::library {
-
-constexpr float kYingYangRadius = 1.2_cm / 2 - 1_mm;
-constexpr float kYingYangRadiusSmall = kYingYangRadius / 2;
-constexpr float kYingYangButtonRadius = kYingYangRadius + 0.5_mm;
-constexpr float kFlipFlopWidth = 1.8_cm;
-
-static PersistentImage& FlipFlopColor() {
-  static auto flip_flop_color = PersistentImage::MakeFromAsset(
-      embedded::assets_flip_flop_color_webp, {.width = kFlipFlopWidth});
-  return flip_flop_color;
-}
-
-Rect FlipFlopRect() {
-  return Rect::MakeCornerZero(FlipFlopColor().width(), FlipFlopColor().height());
-}
 
 string_view FlipFlop::Name() const { return "Flip-Flop"; }
 
@@ -67,124 +50,118 @@ bool FlipFlop::DeserializeKey(ObjectDeserializer& d, StrView key) {
   return false;
 }
 
-struct YingYangIcon : ui::Widget, ui::PaintMixin {
-  YingYangIcon(ui::Widget* parent) : ui::Widget(parent) {}
-  void Draw(SkCanvas& canvas) const override {
-    ArcLine tear = ArcLine(Vec2(0, kYingYangRadius), 0_deg);
-    tear.TurnConvex(180_deg, -kYingYangRadius);
-    tear.TurnConvex(180_deg, -kYingYangRadiusSmall);
-    tear.TurnConvex(180_deg, kYingYangRadiusSmall);
-    SkPathBuilder black_builder;
-    black_builder.addPath(tear.ToPath());
-    black_builder.addCircle(0, kYingYangRadiusSmall, kYingYangRadiusSmall / 4);
-    black_builder.addCircle(0, -kYingYangRadiusSmall, kYingYangRadiusSmall / 4);
-    auto black_path = black_builder.detach();
-    canvas.drawPath(black_path, paint);
-  }
-  SkPath Shape() const override { return SkPath::Circle(0, 0, kYingYangRadius); }
-  bool CenteredAtZero() const override { return true; }
-};
-
-struct YingYangButton : ui::ColoredButton {
-  YingYangButton(ui::Widget* parent, SkColor4f fg, SkColor4f bg)
-      : ColoredButton(parent,
-                      ui::ColoredButtonArgs{.fg = fg, .bg = bg, .radius = kYingYangButtonRadius}) {
-    child = make_unique<YingYangIcon>(this);
-    layers.OrderInside(child.get());
-    UpdateChildTransform();
-  }
-};
-
-struct FlipFlopButton : ui::ToggleButton {
-  WeakPtr<FlipFlop> flip_flop;
-
-  FlipFlopButton(ui::Widget* parent, WeakPtr<FlipFlop> flip_flop)
-      : ui::ToggleButton(parent), flip_flop(flip_flop) {
-    on = make_unique<YingYangButton>(this, "#eae9e8"_color4f, "#1d1d1d"_color4f);
-    off = make_unique<YingYangButton>(this, "#1d1d1d"_color4f, "#eae9e8"_color4f);
-    layers.OrderInside(on.get());
-    layers.OrderInside(off.get());
-    static_cast<YingYangButton*>(this->off.get())->on_click =
-        static_cast<YingYangButton*>(this->on.get())->on_click = [this](ui::Pointer&) {
-          if (auto flip_flop_ptr = this->flip_flop.Lock()) {
-            flip_flop_ptr->enabled->Toggle();
-          }
-        };
-  }
-  bool Filled() const override {
-    if (auto flip_flop_ptr = flip_flop.Lock()) {
-      return flip_flop_ptr->current_state;
-    }
-    return false;
-  }
-};
-
 struct FlipFlopWidget : ObjectToy {
   float light = 0;
   bool current_state = false;
-  std::unique_ptr<FlipFlopButton> button;
+  std::unique_ptr<ui::Rocker> rocker;
 
-  FlipFlopWidget(ui::Widget* parent, Object& object)
-      : ObjectToy(parent, object),
-        button(new FlipFlopButton(this, static_cast<FlipFlop&>(object).AcquireWeakPtr())) {
-    auto rect = FlipFlopRect();
-    button->local_to_parent = SkM44::Translate(rect.CenterX() - kYingYangButtonRadius,
-                                               rect.CenterY() - kYingYangButtonRadius);
+  constexpr static SkColor4f kBgLight = "#216778"_color4f;
+  constexpr static SkColor4f kBgDark = "#164450"_color4f;
+  constexpr static SkColor4f kBorderLight = "#6ea7a7"_color4f;
+  constexpr static SkColor4f kBorderSide = "#386f7d"_color4f;
+  constexpr static SkColor4f kBorderDark = "#00363f"_color4f;
+
+  constexpr static auto kBounds = RRect::MakeSimple(Rect::MakeCenterZero(3_cm, 5_cm), 5_mm);
+  constexpr static auto kFlatRRect = kBounds.Outset(-2_mm);
+  // The raised part of the panel that the rocker is mounted in.
+  constexpr static auto kSocketRRect = ui::Rocker::kBounds.Outset(1_mm);
+
+  FlipFlopWidget(ui::Widget* parent, Object& object) : ObjectToy(parent, object) {
+    rocker = std::make_unique<ui::Rocker>(this);
+    rocker->clickable.activate = [this](ui::Pointer&) {
+      if (auto ptr = LockObject<FlipFlop>()) {
+        ptr->enabled->Toggle();
+      }
+    };
   }
 
+  RRect CoarseBounds() const override { return kBounds; }
+
   Tock Tick(time::Timer& timer) override {
-    auto ptr = LockObject<FlipFlop>();
-    if (ptr) {
+    if (auto ptr = LockObject<FlipFlop>()) {
       current_state = ptr->current_state;
     }
-    button->WakeAnimationAt(next_tick);
+    rocker->SetOn(current_state);
     Tock tock;
     tock.drawing |= animation::LinearApproach(current_state, timer.d, 10, light);
     return tock;
   }
+
   void Draw(SkCanvas& canvas) const override {
-    FlipFlopColor().draw(canvas);
+    SkPaint border_paint;
+    SetRRectShader(border_paint, kBounds, kBorderLight, kBorderSide, kBorderDark);
+    canvas.drawRRect(kBounds, border_paint);
+
+    auto& flat = kFlatRRect.rect;
+    SkPaint flat_paint;
+    SkPoint flat_pts[] = {flat.TopCenter(), flat.BottomCenter()};
+    SkColor4f flat_colors[] = {kBgLight, kBgDark};
+    flat_paint.setShader(SkShaders::LinearGradient(
+        flat_pts, SkGradient{SkGradient::Colors{flat_colors, SkTileMode::kClamp}, {}}));
+
+    flat_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 1_mm));
+    canvas.drawRRect(kFlatRRect, flat_paint);
+
+    SkPaint socket_paint;
+    SetRRectShader(socket_paint, kSocketRRect, kBorderLight, kBorderSide, kBorderDark);
+    socket_paint.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, 2_mm));
+    canvas.drawRRect(kSocketRRect, socket_paint);
 
     {  // Red indicator light
-      SkPaint gradient;
-      SkPoint center = {kFlipFlopWidth / 2, 2_cm};
-      float radius = 0.5_mm;
+      SkPoint center = {0, (flat.top + kSocketRRect.rect.top) / 2};
+      float radius = 2_mm;
+
+      SkPaint inset_paint;
+      SkColor4f inset_colors[] = {
+          kBorderSide,  kBorderDark,  kBorderDark, kBorderSide,
+          kBorderLight, kBorderLight, kBorderSide,
+      };
+      inset_paint.setShader(SkShaders::SweepGradient(
+          center, SkGradient{SkGradient::Colors{inset_colors, SkTileMode::kClamp}, {}}));
+      inset_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, radius));
+      canvas.drawCircle(center, radius * 1.5, inset_paint);
+
       float a = light;
-      SkColor4f colors[] = {color::MixColors("#725016"_color4f, "#ff8786"_color4f, a),
-                            color::MixColors("#2b1e07"_color4f, "#ff3e3e"_color4f, a)};
+      SkColor4f gradient_colors[] = {color::MixColors("#725016"_color4f, "#ff8786"_color4f, a),
+                                     color::MixColors("#2b1e07"_color4f, "#ff3e3e"_color4f, a)};
+      SkPaint gradient;
       gradient.setShader(SkShaders::RadialGradient(
-          center + SkPoint(0, 0.25_mm), radius,
-          SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
+          center + SkPoint(0, radius * 0.25), radius,
+          SkGradient{SkGradient::Colors{gradient_colors, SkTileMode::kClamp}, {}}));
       canvas.drawCircle(center, radius, gradient);
 
       SkPaint shine;
       SkColor4f shine_colors[] = {color::MixColors("#d2b788ff"_color4f, "#ffe8e8ff"_color4f, a),
                                   color::MixColors("#d2b78800"_color4f, "#ffe8e800"_color4f, a),
                                   color::MixColors("#d2b788ff"_color4f, "#ffe8e8ff"_color4f, a)};
-      SkPoint shine_pts[] = {center + SkPoint{0, 0.5_mm}, center - SkPoint{0, 0.5_mm}};
+      SkPoint shine_pts[] = {center + SkPoint{0, radius}, center - SkPoint{0, radius}};
       shine.setShader(SkShaders::LinearGradient(
           shine_pts, SkGradient{SkGradient::Colors{shine_colors, SkTileMode::kClamp}, {}}));
       shine.setStyle(SkPaint::kStroke_Style);
-      shine.setStrokeWidth(0.06_mm);
-      shine.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.05_mm));
-      canvas.drawCircle(center, radius - 0.1_mm, shine);
-
-      SkPaint stroke;
-      stroke.setColor(color::MixColors("#110902"_color4f, "#930d0d"_color4f, a));
-      stroke.setStroke(SkPaint::kStroke_Style);
-      stroke.setStrokeWidth(0.1_mm);
-      canvas.drawCircle(center, radius + 0.04_mm, stroke);
+      shine.setStrokeWidth(radius / 9);
+      shine.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, radius / 10));
+      canvas.drawCircle(center, radius * 0.8, shine);
 
       SkPaint red_glow;
       red_glow.setColor("#ff3e3e"_color);
       red_glow.setAlphaf(a);
-      red_glow.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.5_mm));
+      red_glow.setBlendMode(SkBlendMode::kHardLight);
+      red_glow.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, radius));
       canvas.drawCircle(center, radius, red_glow);
     }
-
-    BakeChildren(canvas);
+    static auto font = ui::Font::MakeV2(ui::Font::GetHelsinki(), 4_mm);
+    SkPaint label_paint;
+    label_paint.setColor(SK_ColorWHITE);
+    label_paint.setAlphaf(0.9f);
+    auto label = "On/Off"sv;
+    auto label_w = font->MeasureText(label);
+    canvas.save();
+    canvas.translate(-label_w / 2,
+                     (flat.bottom + kSocketRRect.rect.bottom) / 2 - font->letter_height / 2);
+    font->DrawText(canvas, label, label_paint);
+    canvas.restore();
   }
-  SkPath Shape() const override { return SkPath::Rect(FlipFlopRect()); }
+  SkPath Shape() const override { return SkPath::RRect(CoarseBounds()); }
   bool CenteredAtZero() const override { return true; }
 };
 

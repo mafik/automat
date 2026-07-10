@@ -27,13 +27,13 @@ using namespace std;
 
 namespace automat::ui {
 
-void Clickable::PointerEnter(Pointer& pointer) {
+void Clickable::PointerHover(Pointer& pointer) {
   pointers_over++;
   hand_icon.emplace(pointer, Pointer::kIconHand);
   widget.WakeAnimation();
 }
 
-void Clickable::PointerLeave(Pointer& pointer) {
+void Clickable::PointerUnhover(Pointer& pointer) {
   pointers_over--;
   hand_icon.reset();  // Reset Optional to release icon
   widget.WakeAnimation();

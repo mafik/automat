@@ -289,8 +289,8 @@ struct RunButton : Widget {
   Optional<Rect> TextureBounds() const override {
     return Shape().getBounds().makeOutset(4_mm, 4_mm);
   }
-  void PointerEnter(Pointer& p) override { clickable.PointerEnter(p); }
-  void PointerLeave(Pointer& p) override { clickable.PointerLeave(p); }
+  void PointerHover(Pointer& p) override { clickable.PointerHover(p); }
+  void PointerUnhover(Pointer& p) override { clickable.PointerUnhover(p); }
   std::unique_ptr<Action> FindAction(Pointer& p, ActionTrigger a) override {
     if (!enabled) return nullptr;
     return clickable.FindAction(p, a);

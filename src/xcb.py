@@ -41,16 +41,11 @@ libxcb = extension_helper.ExtensionHelper('libxcb', globals())
 libxcb.FetchFromURL('https://xcb.freedesktop.org/dist/libxcb-1.17.0.tar.xz')
 libxcb.ConfigureDependsOn(xcb_proto, libXau, libXdmcp, libXext, libX11)
 libxcb.ConfigureWithAutotools(build.PREFIX / 'lib64' / 'libxcb.a')
-# '-l:libxcb-glx.a', '-l:libxcb-randr.a', '-l:libxcb-dri3.a', '-l:libX11.a', '-l:libX11-xcb.a', '-l:libXext.a', '-l:libXau.a', '-l:libXdmcp.a'
 libxcb.AddLinkArgs('-l:libxcb.so',
-                   '-Wl,--export-dynamic',
-                   '-Wl,--whole-archive',
                    '-l:libxcb-xtest.a',
                    '-l:libxcb-xinput.a',
                    '-l:libxcb-shm.a',
-                   '-l:libxcb-render.a',
-                   '-Wl,--no-whole-archive',
-                   '-Wl,--no-export-dynamic')
+                   '-l:libxcb-render.a')
 libxcb.InstallWhenIncluded(r'^xcb/.+\.h')
 
 xcb_util_renderutil = extension_helper.ExtensionHelper('xcb-util-renderutil', globals())
@@ -83,14 +78,10 @@ xcb_util_cursor = extension_helper.ExtensionHelper('xcb-util-cursor', globals())
 xcb_util_cursor.FetchFromURL('https://xcb.freedesktop.org/dist/xcb-util-cursor-0.1.5.tar.xz')
 xcb_util_cursor.ConfigureDependsOn(xcb_proto, xcb_util_image, xcb_util_renderutil)
 xcb_util_cursor.ConfigureWithAutotools(build.PREFIX / 'lib64' / 'libxcb-cursor.a')
-xcb_util_cursor.AddLinkArgs('-Wl,--export-dynamic',
-                            '-Wl,--whole-archive',
-                            '-l:libxcb-cursor.a',
+xcb_util_cursor.AddLinkArgs('-l:libxcb-cursor.a',
                             '-l:libxcb-util.a',
                             '-l:libxcb-image.a',
-                            '-l:libxcb-render-util.a',
-                            '-Wl,--no-whole-archive',
-                            '-Wl,--no-export-dynamic')
+                            '-l:libxcb-render-util.a')
 xcb_util_cursor.InstallWhenIncluded(r'^xcb/xcb_cursor\.h$')
 
 xcb_util_errors = extension_helper.ExtensionHelper('xcb-util-errors', globals())
@@ -98,8 +89,4 @@ xcb_util_errors.FetchFromURL('https://www.x.org/archive/individual/xcb/xcb-util-
 xcb_util_errors.ConfigureDependsOn(xcb_proto, libxcb)
 xcb_util_errors.ConfigureWithAutotools(build.PREFIX / 'lib64' / 'libxcb-errors.a')
 xcb_util_errors.InstallWhenIncluded(r'^xcb/xcb_errors\.h$')
-xcb_util_errors.AddLinkArgs('-Wl,--export-dynamic',
-                            '-Wl,--whole-archive',
-                            '-l:libxcb-errors.a',
-                            '-Wl,--no-whole-archive',
-                            '-Wl,--no-export-dynamic')
+xcb_util_errors.AddLinkArgs('-l:libxcb-errors.a')

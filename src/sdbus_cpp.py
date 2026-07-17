@@ -32,9 +32,10 @@ if sys.platform == 'linux':
     hook = extension_helper.ExtensionHelper('sdbus-cpp', globals())
     hook.FetchFromGit('https://github.com/Kistler-Group/sdbus-cpp.git', 'v2.2.1')
     hook.ConfigureDependsOn(libsystemd.hook)
+    hook.LinkDependsOn(libsystemd.hook)
     hook.ConfigureOptions(BUILD_SHARED_LIBS='OFF',
                           SDBUSCPP_BUILD_DOCS='OFF',
                           SDBUSCPP_BUILD_CODEGEN='ON')
     hook.ConfigureWithCMake(build.PREFIX / 'lib64' / 'libsdbus-c++.a', xml2cpp)
-    hook.AddLinkArgs('-l:libsdbus-c++.a', '-lsystemd')
+    hook.AddLinkArgs('-l:libsdbus-c++.a')
     hook.InstallWhenIncluded(r'^sdbus-c[+][+]/.*')

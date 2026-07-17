@@ -1206,14 +1206,12 @@ constexpr const char* kHeapBudgetPlotNames[kMaxTrackedHeaps] = {
 };
 
 static void ConfigureGpuMemoryPlots() {
-  constexpr auto kMemory = tracy::PlotFormatType::Memory;
-  constexpr auto kNumber = tracy::PlotFormatType::Number;
-  TracyPlotConfig("VMA allocated", kMemory, false, true, 0);
-  TracyPlotConfig("VMA used", kMemory, false, true, 0);
+  TracyPlotConfig("VMA allocated", tracy::PlotFormatType::Memory, false, true, 0);
+  TracyPlotConfig("VMA used", tracy::PlotFormatType::Memory, false, true, 0);
   for (int i = 0; i < kMaxTrackedHeaps; ++i) {
-    TracyPlotConfig(kHeapUsageDevicePlotNames[i], kMemory, false, true, 0);
-    TracyPlotConfig(kHeapUsageHostPlotNames[i], kMemory, false, true, 0);
-    TracyPlotConfig(kHeapBudgetPlotNames[i], kMemory, true, false, 0);
+    TracyPlotConfig(kHeapUsageDevicePlotNames[i], tracy::PlotFormatType::Memory, false, true, 0);
+    TracyPlotConfig(kHeapUsageHostPlotNames[i], tracy::PlotFormatType::Memory, false, true, 0);
+    TracyPlotConfig(kHeapBudgetPlotNames[i], tracy::PlotFormatType::Memory, true, false, 0);
   }
 }
 

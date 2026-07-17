@@ -14,12 +14,8 @@ tracy.SkipConfigure()
 
 tracy.InstallWhenIncluded(r'^tracy/.*')
 tracy.AddCompileArgs('-I', tracy.src_dir / 'public')
-tracy.AddCompileArgs('-DTRACY_ENABLE', '-DTRACY_ON_DEMAND')
 
-
-if platform == 'linux':
-  tracy.AddCompileArgs('-DTRACY_LIBUNWIND_BACKTRACE')
-
-if build.release:
-  tracy.ConfigureOptions(only_localhost='true', no_broadcast='true')
-  tracy.AddCompileArgs('-DTRACY_ONLY_LOCALHOST', '-DTRACY_NO_BROADCAST')
+if not build.release:
+  tracy.AddCompileArgs('-DTRACY_ENABLE', '-DTRACY_ON_DEMAND')
+  if platform == 'linux':
+    tracy.AddCompileArgs('-DTRACY_LIBUNWIND_BACKTRACE')

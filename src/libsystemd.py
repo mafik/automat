@@ -109,5 +109,5 @@ if sys.platform == 'linux':
     hook.ConfigureWithMeson(build.PREFIX / 'lib64' / 'libsystemd.a',
                             install_tags='devel,libsystemd',
                             build_targets=('libsystemd', 'devel'))
-    hook.AddLinkArgs('-l:libsystemd.a', '-lcap', '-lm')
+    hook.AddLinkArgs('-l:libsystemd.a', '-l:libcap.a', '-lm')
     hook.InstallWhenIncluded(r'^systemd/.*')

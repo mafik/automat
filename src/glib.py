@@ -115,6 +115,9 @@ def StaticLibs(*pkgs, pc_dirs=()):
     args = subprocess.check_output([exe, '--libs', '--static', *pkgs],
                                    env=env, text=True).split()
     args = [arg for arg in args if arg != '-Wl,--export-dynamic']
+    if build.platform == 'linux':
+      static = {'-lffi': '-l:libffi.a', '-lpcre2-8': '-l:libpcre2-8.a', '-lz': '-l:libz.a'}
+      args = [static.get(arg, arg) for arg in args]
     if build.platform == 'win32':
       # lld-link resolves -lfoo as foo.lib and never finds meson's libfoo.a;
       # name the archives directly. System import libs stay -l and resolve

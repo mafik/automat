@@ -121,6 +121,15 @@ if debug:
     compile_args += ['-O0', '-g', '-D_DEBUG', '-fno-omit-frame-pointer']
 
 if platform == 'linux':
+    # TSan's shadow layout requires PIE
+    if not (build_variant.asan or build_variant.tsan or build_variant.ubsan):
+        compile_args += ['-fno-pie']
+        link_args += ['-no-pie']
+
+    if fast or debug:
+        compile_args += ['-gz=zstd']
+        link_args += ['-gz=zstd']
+
     if build_variant.asan:
         compile_args += ['-fsanitize=address', '-fsanitize-address-use-after-return=always']
         link_args += ['-fsanitize=address']
@@ -260,7 +269,8 @@ if platform == 'win32':
     if debug:
         link_args += ['-Wl,/debug']
 else:
-    link_args += ['-Wl,--gc-sections', '-Wl,--build-id=none', '-Wl,-z,relro', '-Wl,-z,now']
+    link_args += ['-Wl,--as-needed', '-Wl,--exclude-libs,ALL', '-Wl,--gc-sections',
+                  '-Wl,--build-id=none', '-Wl,-z,relro', '-Wl,-z,now']
     if release:
         link_args += ['-Wl,--strip-all']
 

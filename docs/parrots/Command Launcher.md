@@ -4,32 +4,33 @@
 
 Automat needs a way to start operating-system programs: directly useful on
 its own, and the source of clients for Automat's Wayland compositor. The
-dangerous part of every launcher is the shell between the user and the
-kernel — quoting rules, expansion surprises, the gap between what was typed
-and what the program receives. The Command object removes the shell entirely
-and makes the one structure that matters — the argv array — directly visible.
+error-prone part of every launcher is the shell between the user and the
+kernel: quoting rules, expansions, and the resulting gap between what was
+typed and what the program receives. The Command object removes the shell
+entirely and makes the one structure that matters — the argv array —
+directly visible.
 
 Implementation: `src/library_command.*`. The object follows Automat's
-device-noun naming (Timer, Key Presser): the object *is* a command; its RUN
-button supplies the verb.
+device-noun naming (Timer, Key Presser): the object is named after the
+command it holds, and the RUN button performs it.
 
 ## The model is the argv vector
 
 The object stores `Vec<Str> argv` — not a command-line string. One element is
 one argument, by construction, and that is also the serialized form
 (`"argv": ["notify-send", "Hello world"]`). The flat string exists only as a
-derived view: `GetText` joins with single spaces, `SetText` splits on spaces
-and is lossy by design — flat text has no way to say "this space is part of
-an argument", which is exactly the ambiguity the object exists to remove.
+derived view: `GetText` joins with single spaces, and `SetText` splits on
+spaces and is lossy by design, because flat text cannot express that a space
+is part of an argument — exactly the ambiguity the object exists to remove.
 
 An element may legitimately contain spaces. Where such elements come from is
-governed by provenance: the space *key* always commits a tile — that is the
-teaching gesture, and no quoting syntax will ever weaken it — while *atomic*
-insertions keep their spaces. Today the atomic sources are deserialized
-states and values pushed through links; clipboard paste and file drops join
-them when the text-field layer gains a paste event. Inside a tile, a literal
-space renders as a gray midline dot: the content stays ink, the invisible
-byte gets a visible, structural mark that says "NOT a tile boundary".
+governed by provenance: the space key always commits a tile, and no quoting
+syntax weakens that rule, while atomic insertions keep their spaces. The
+atomic sources are deserialized states and values pushed through links;
+clipboard paste and file drops join them when the text-field layer gains a
+paste event. Inside a tile, a literal space is drawn as a gray midline dot:
+the content stays ink, and the invisible byte receives a visible mark that
+distinguishes it from a tile boundary.
 
 ## Tiles are argv
 
@@ -52,12 +53,11 @@ the plate it scales down uniformly rather than hiding anything.
 Layout follows the DRAKON grammar used across Automat: title and credit on
 top, the data row under them, readouts in the lower-left corner. The run
 control is the shared `ui::beta::RunButton` — a hand-drawn disc with a play
-triangle (a stop square on red while the child runs) that seats itself at
-the plate's lower center, dipping slightly past the border, where the
-"next" connector leaves the object. The disc splits the bottom row: status
-readouts live on its left, the right side stays free. Micro gray captions —
-"program", "arguments…" — sit under the tiles; nouns naming parts, the
-entire glossary a novice needs.
+triangle (a stop square on red while the child runs), placed at the plate's
+lower center and dipping slightly past the border, where the "next"
+connector leaves the object. The disc splits the bottom row: status readouts
+are placed on its left, and the right side stays free. Small gray captions —
+"program", "arguments…" — under the tiles name the parts.
 
 ## States
 
@@ -77,13 +77,15 @@ Pressing Enter inside the tiles is equivalent to pressing RUN.
 
 The object exposes the standard `Runnable` (spawn) and `LongRunning`
 (STOP/cancel, `Done` on reap) interfaces plus `Next` chaining, so
-Timers, Gears, chains and the bubble menu drive it without special cases. A
-detached reaper thread waits on the child and reports the exit status.
+Timers, Gears, chains and the bubble menu drive it without special cases.
+The child is watched through a pidfd registered on the shared epoll thread
+(`mux::WatchProcess`), which reaps it and reports the exit status.
 
 Children are launched with `WAYLAND_DISPLAY` pointing at Automat's own
-compositor, without `DISPLAY`, and with `GDK_BACKEND` pinned to `wayland`
-(`library::SpawnArgv`, errors through `Status`). A window mapped by the child
-appears seated next to the Command's plate and keeps a `Launcher` connection
+compositor and `DISPLAY` pointing at Automat's own X11 server; `GDK_BACKEND`
+is removed so a toolkit picks its preferred backend (`library::SpawnArgv`,
+errors through `Status`). A window mapped by the child is placed next to the
+Command's plate, on the Command's board, and keeps a `Launcher` connection
 back to it — the visible cable that also makes the relationship survive saves
 (see `Wayland Compositor.md` and `Wayland Client Persistence.md`).
 
@@ -109,12 +111,13 @@ the Command resolves the file object to a concrete descriptor through the
 `FdProvider` interface (`src/fd_provider.hpp`) — a fresh open per run, so a
 rerun rebuilds the file the way `>` does, and the file object's append flag
 turns that into `>>`. A failed open aborts the whole launch, the way a shell
-refuses the command when its redirection fails, and the error lands on the
-file object. The file object's face shows the file as it is on disk — size
-and the tail of its content, polled while visible — so output arriving in
-the file is watchable in real time. Files end the start-together rule: a
-chain start stops at a file, because unlike a pipe a file needs no second
-process, and `a > f` followed by `b < f` are separate runs in a shell too.
+refuses the command when its redirection fails, and the error is reported on
+the file object. The file object's face shows the file as it is on disk —
+size and the tail of its content, polled while visible — so output arriving
+in the file is watchable in real time. A file also bounds the start-together
+rule: a chain start stops at a file, because unlike a pipe a file needs no
+second process, and `a > f` followed by `b < f` are separate runs in a shell
+too.
 
 The stream connection renders as a pipe and prints its meters on a chip
 beside its middle. The chip carries only what the kernel attributes to the

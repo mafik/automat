@@ -5,7 +5,7 @@ objects: the intent behind their shapes, the control vocabulary, and the rules
 that keep new work consistent. The objects are implemented in
 `src/library_leptonica.hpp` and `src/library_leptonica.cpp`; the controls in
 `src/ui_leptonica.hpp` and `src/ui_leptonica.cpp`. This document records the
-reasoning; the implementation details live in the code.
+reasoning; the implementation details are in the code.
 
 ## The model
 
@@ -16,8 +16,8 @@ points at the image it edits through an "Image" cable, applies its operation
 in place when run, and chains to the next step through "Next". Keeping a
 single editable noun means tools never need to answer "where does my result
 go" — it goes back onto the paper, which is what a person editing a photo
-expects. The Image cable connects itself when a tool is dropped near a paper,
-because wiring the obvious case by hand would be pure friction. Other image
+expects. The Image cable auto-connects when a tool is dropped near a paper,
+because the obvious case should not require manual wiring. Other image
 providers, such as a Window capture, are read-only sources; a tool asked to
 develop onto one reports an error instead of guessing.
 
@@ -51,35 +51,35 @@ Each control's form is chosen so that the form itself teaches the parameter's
 meaning. The forms are drawn by `src/ui_leptonica.hpp`; the reasoning:
 
 - **Level** sets one value on the intensity axis (a threshold, a clip point, a
-  fraction). It is a marker riding a band drawn over the image's own
-  brightness histogram, because the right threshold can only be judged against
-  the data it cuts; the band darkens on one side of the marker and lightens on
-  the other, so the control previews the result before the operation runs.
+  fraction). It is a marker on a band drawn over the image's own brightness
+  histogram, because the right threshold can only be judged against the data
+  it cuts; the band darkens on one side of the marker and lightens on the
+  other, so the control previews the result before the operation runs.
 - **Window** sets a low and high pair by placing two Level markers that
   bracket the active range, with everything outside visibly clipped.
 - **Curve** sets a value-to-value remap (gamma, levels, inversion). It is a
   graph drawn over the identity diagonal, because the meaning of a tone curve
   is exactly its deviation from identity.
 - **Stamp** edits a neighborhood pattern (a structuring element or kernel) as
-  a small grid — the literal face of a rubber stamp that the operation presses
-  onto every pixel. The origin cell is marked because the pattern is anchored
-  there.
+  a small grid, drawn as the face of a rubber stamp because the operation
+  applies the pattern at every pixel. The origin cell is marked because the
+  pattern is anchored there.
 - The **Mode wheel** picks which member of an operation family runs. Every
   option stays visible around the dial, because a closed dropdown hides the
   family structure that the wheel is meant to teach; the selected option can
   show a small before-and-after glyph on the face.
 - **Connectivity** chooses 4- or 8-connectivity with two cells whose spokes
-  are literally the directions a fill may travel.
-- **Polarity** states which value counts as foreground — a two-ended pill with
+  are the directions a fill may spread.
+- **Polarity** shows which value counts as foreground — a two-ended pill with
   a dark and a light end, the active end ringed.
 - **Region** selects a rectangle by dragging a marquee directly on the
-  preview. A rectangle is spatial, so the control lives on the image itself;
-  the area outside the selection dims, previewing the cut.
+  preview. A rectangle is spatial, so the control is placed on the image
+  itself; the area outside the selection dims, previewing the cut.
 - The **Transform ring** sets an angle by dragging a ring drawn around the
   preview; the **Dial** is the off-image fallback when no preview is present.
 - The **Channel tap** selects a color channel from a row of taps.
-- The **Palette** picks a paint color from the literal MS-Paint swatch strip,
-  which is both familiar and on brand.
+- The **Palette** picks a paint color from the MS-Paint swatch strip, which
+  is familiar and matches the beta palette (docs/parrots/Beta Brand.md).
 - The **Depth chip** is a readout, not a control: a corner badge stating the
   image's bits per pixel, because depth gates what each operation can accept.
 
@@ -112,8 +112,8 @@ These rules hold for every object; each exists for a reason.
   be seen, not in the label, where it must be decoded.
 - The silhouette signals the function and is never a rounded rectangle,
   because the outline is the identity signal that survives distance and low
-  zoom. Threshold's top edge is the live brightness histogram; Posterize
-  climbs in steps; Quantize is crenellated with palette chips.
+  zoom. Threshold's top edge is the live brightness histogram; Posterize's
+  edge is a staircase; Quantize is crenellated with palette chips.
 - The underlying Leptonica function appears as a small, muted credit near the
   name. Automat deliberately exposes the primitives it is built on; hiding
   them would limit the user.
@@ -123,21 +123,21 @@ These rules hold for every object; each exists for a reason.
   constraint and its mechanics are recorded at the texture-bounds override in
   `src/library_leptonica.cpp`.
 - The live preview never stretches the image. The preview is a measurement,
-  and a stretched measurement is a lie; the shared preview helper centres the
-  image at its true aspect ratio.
+  and a stretched measurement misrepresents the data; the shared preview
+  helper centres the image at its true aspect ratio.
 - Run is one shared green disc, identical on every object, placed clear of
   the name, so the most important affordance is learned exactly once.
 
 ## Layout
 
-Data lives on the left edge with inputs above outputs: the Image input docks
-at the left, data outputs sit below it, and the Depth chip readout sits at
-the preview's lower left. Control flow exits downward through Develop and
-Next, so a pipeline reads as a vertical run of bodies joined by cables, like
-a list of instructions. Spatial controls live on the preview itself, because
-separating a control from the thing it changes forces the eye to commute.
-Every control carries a word as well as a glyph; an unlabeled icon is a
-guess.
+Data is placed on the left edge with inputs above outputs: the Image input
+attaches at the left, data outputs are placed below it, and the Depth chip
+readout is placed at the preview's lower left. Control flow exits downward
+through Develop and Next, so a pipeline reads as a vertical run of bodies
+joined by cables, like a list of instructions. Spatial controls are placed on
+the preview itself, because separating a control from the thing it changes
+forces the reader to look back and forth. Every control carries a word as
+well as a glyph, because an icon without a label forces the user to guess.
 
 ## States
 

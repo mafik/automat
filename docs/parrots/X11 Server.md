@@ -5,9 +5,9 @@
 Automat is an X11 display server as well as a Wayland compositor. Processes started by
 the Command object connect to Automat's X socket, and every top-level window they map
 becomes an "X11 Window" object on the board, draggable and deletable like any other
-object. This lets programs that speak X11 rather than Wayland — which includes most
-applications that need more access than Wayland grants — live inside the canvas instead of
-outside it. The design deliberately mirrors the Wayland compositor so the two share the
+object. Programs that speak X11 rather than Wayland — which includes most applications
+that need more access than Wayland grants — are thereby composed on the board like
+Automat's own objects. The design deliberately mirrors the Wayland compositor so the two share the
 board integration, the input bridge, and the GPU import path; read `Wayland Compositor.md`
 first, because this document only describes where X11 differs.
 
@@ -17,7 +17,7 @@ only by the implementation and the generated dispatcher), `src/x11.cpp` (the pro
 handlers, the drawing, the board object and its toy), `src/x11.py` (protocol code
 generation), `src/x11/*.xml` (the vendored xcb-proto definitions),
 `build/generated/x11_generated.{hpp,cpp}` (generated structs and wire code). The
-keycode tables shared with the host-X client code live in `src/x11_keys.{hpp,cpp}`.
+keycode tables shared with the host-X client code are in `src/x11_keys.{hpp,cpp}`.
 
 ## Protocol stack
 
@@ -27,7 +27,7 @@ xcb-proto XML by `src/x11.py`. The generator is the counterpart of `src/wayland.
 one deliberate difference: all generated text goes to `build/generated/x11_generated.hpp`
 rather than into validated blocks in a hand-written header. Wayland interfaces mix
 generated declarations with hand-written per-object state, so their structs must be
-editable in place; X11 messages are pure data, because server state lives on the resource
+editable in place; X11 messages are pure data, because server state is stored on the resource
 structs in `src/x11_protocol.hpp` instead, so nothing hand-written needs to sit next to
 the generated message. Adding an extension is dropping its XML in `src/x11/` and
 implementing the new `Handle` methods — a missing one is a link error, which is the intended
@@ -42,13 +42,13 @@ a connection that announces big-endian byte order is refused at the setup handsh
 because every client that reaches this host is little-endian and supporting both doubles
 the codec for no benefit.
 
-Extensions live in nested namespaces (`x11::shm`, `x11::render`, `x11::dri3`,
+Extensions are declared in nested namespaces (`x11::shm`, `x11::render`, `x11::dri3`,
 `x11::present`, `x11::bigreq`, `x11::xc_misc`). The generator assigns each a major opcode
 and a first-event and first-error base and emits them as constants, so the dispatcher and
 `QueryExtension` agree without a hand-maintained table. XKEYBOARD (`x11::xkb`,
 `src/x11_xkb.cpp`) is the one extension that is not generated from XML: its replies are
 synthesized from the shared keymap and the handful of request fields it reads are fixed
-offsets, so generated decode structs would buy nothing (see Keyboard layout below).
+offsets, so generated decode structs would add nothing (see Keyboard layout below).
 
 ## Threading and resources
 
@@ -65,7 +65,7 @@ mirrored connection. TCP also carries no file descriptors, so the SHM and DRI3 d
 paths never activate on Windows and clients paint through plain protocol requests.
 
 X resources — windows, pixmaps, graphics contexts, colormaps, cursors, fonts, and the
-RENDER pictures and glyph sets — live in one server-global table keyed by XID, because X
+RENDER pictures and glyph sets — are stored in one server-global table keyed by XID, because X
 resources are shareable across clients and a client may name another's resource. Each
 resource records its owning client so a disconnect frees exactly that client's resources.
 Freeing a window frees its children; the recursion snapshots the child ids and erases the
@@ -75,8 +75,8 @@ child list, which would invalidate an iterator or index held across them.
 A window or a pixmap is a drawable and owns a raster `SkSurface` as its backing store, so
 core drawing and RENDER are both ordinary Skia drawing. A top-level window's board
 snapshot is the composite of its own backing store and its mapped child windows, taken as
-an `SkImage` and handed to the board object under its mutex — the same field a Wayland
-surface publishes, so the renderer treats an X11 window and a Wayland window identically.
+an `SkImage` and handed to the board object under its mutex — the same handover a Wayland
+surface uses, so the renderer treats an X11 window and a Wayland window identically.
 
 ## Acting as a window manager
 
@@ -88,9 +88,9 @@ reports zero `_NET_FRAME_EXTENTS`, and synthesises the post-map `ConfigureNotify
 real manager would send. Without these a GTK client maps its window and then sits idle,
 never running its draw cycle.
 
-On the board, a mapped top-level wears the shared window chrome (`src/window_frame.hpp`)
-— the same frame the Wayland compositor draws for its server-side-decorated toplevels —
-with the window title standing on top of it. The title and `WM_CLASS` fallback are seeded
+On the board, a mapped top-level is drawn with the shared window chrome
+(`src/window_frame.hpp`) — the same frame the Wayland compositor draws for its
+server-side-decorated toplevels — with the window title drawn on it. The title and `WM_CLASS` fallback are seeded
 from the window's properties when the board object is created, because clients set them
 before mapping; later `WM_NAME`/`_NET_WM_NAME` changes update it live. Override-redirect
 windows (menus, tooltips) stay bare.
@@ -105,7 +105,7 @@ Wayland compositor: both window objects implement `DecoratedWindow` (`src/window
 and persist the choice under the same `decoration` key. A window whose client is gone is
 always framed, so the placeholder of a pending respawn stays visible and draggable.
 
-Two rules were learned the same way the Wayland handshake rules were. A client-supplied
+Two wire rules that clients depend on. A client-supplied
 event delivered by `SendEvent` must have its sequence-number field overwritten with the
 receiving client's current sequence; the client fills that field with a meaningless value,
 and xcb widens 16-bit event sequence numbers by comparing against the last one it saw, so a
@@ -121,7 +121,7 @@ The core keymap reply satisfies programs that read the keyboard through the core
 but GTK and every client built on xkbcommon require the XKEYBOARD extension and will either
 refuse to start or fall back to a compiled-in US layout without it.
 
-The layout itself lives outside the server, in the process-wide shared keymap
+The layout itself is stored outside the server, in the process-wide shared keymap
 (`src/keymap.hpp`): an `xkb_keymap` built from whatever the platform offers — the host X
 server's layout when Automat runs as an X client, the OS layout on Windows and macOS, a
 compiled default otherwise. Both embedded servers express the same object, the Wayland
@@ -138,14 +138,14 @@ each shift level, then deduplicated into a table shared by `GetMap` and `GetName
 structure and labels always agree. The keymap is expressed in real modifiers only: xkbcommon
 resolves virtual modifiers (LevelThree, NumLock, ...) to the real masks the key events
 already carry, so clients pick the correct shift level without any virtual-modifier
-machinery. Two reply subtleties are load-bearing: `GetMap`'s `present` and `GetNames`'
+machinery. Two reply details are required: `GetMap`'s `present` and `GetNames`'
 `which` must echo every component bit the client asked for, even the ones that are empty
 here (actions, behaviors, virtual-modifier names), because xkbcommon-x11 refuses the whole
 keymap otherwise; and the compat map carries a single catch-all interpretation ("any keysym,
 any modifier: set the key's modmap modifiers"), because Xlib cannot parse an entirely empty
 compat reply — it restates what the modifier map already says. The Set-family requests are
-swallowed: the synthetic keyboard has nothing to reconfigure, and an embedded client must
-not affect the rest of the system.
+accepted and ignored: the synthetic keyboard has nothing to reconfigure, and an embedded
+client must not affect the rest of the system.
 
 The keymap can define several groups (layouts), and which one is active is not part of the
 keymap but of the keyboard state. The active group is therefore carried in each forwarded
@@ -186,10 +186,10 @@ is present only where a client needs it.
 
 ## Window objects and lifetime
 
-A mapped top-level becomes a `library::X11Window`, which the board Location owns and the
-server holds only weakly — the same ownership rule as the Wayland window, and load-bearing
-for the same reason: dragging extracts the Location from the board, so "is it still on the
-board" is not a safe liveness test. Deleting the object asks the client to close through
+A mapped top-level becomes a `library::X11Window`, which the board Locations own and the
+server holds only weakly — the same ownership rule as the Wayland window, required
+for the same reason: a drag that leaves a board extracts the Location into the pointer, so
+"is it still on a board" is not a safe liveness test. Deleting the object asks the client to close through
 `WM_DELETE_WINDOW`, falling back to a signal to the client's process. A client that
 disconnects or unmaps has its window removed by `UIFrame`. Persistence and respawn reuse
 the recipe and adoption mechanism documented for Wayland: the argv that mapped a window is

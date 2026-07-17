@@ -9,7 +9,7 @@ Other modalities may be built later around the same objects: text, 3D objects, R
 Everything specific to one medium belongs to that modality's layer, not to the objects.
 
 For the 2D modality this means: instance geometry (shapes, connector positions, anchors) and
-placement decisions live in Widgets and Toys. VM code must not create, look up, or measure
+placement decisions belong to Widgets and Toys. VM code must not create, look up, or measure
 widgets.
 
 ## Where data belongs

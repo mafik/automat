@@ -39,7 +39,7 @@ connection is `video/x-raw(memory:DMABuf) format=NV12 1280x720`,
 `R'G'B'A u8`, `f32[?,224,224,3]`, or `S16LE 2ch 48000Hz` — never a
 paraphrase. The native notation is precise, it teaches the library, and
 for GStreamer the caps features already state the memory type, which is
-the whole zero-copy story in the library's own words.
+all the zero-copy information, in the library's own notation.
 
 **Nothing converts silently.** Every conversion or copy that a library
 would insert implicitly becomes a visible adapter object on the board.
@@ -99,7 +99,8 @@ the pipeline. Each domain has a standard preview:
 - Tensors: dtype, shape, device, and min/mean/max, with a small heat
   strip for two-dimensional slices.
 - Compressed media: stream description (codec, resolution, bit rate) and
-  position, since showing encoded bytes as pixels would be a lie.
+  position, because encoded bytes shown as pixels would misrepresent the
+  data.
 
 **Meter.** A numeric or bar readout of a measured quantity. Every meter
 maps to a specific API: GStreamer queue fill from the queue element's
@@ -121,9 +122,9 @@ buffer out and turns it into an ordinary board object: a video frame
 becomes an image on a paper, audio becomes a clip, a tensor becomes a
 tensor object, text becomes a text object. The copy uses the library's
 sanctioned mechanism: an appsink pulling one sample in GStreamer, a
-short pw_stream capture in PipeWire, the frame already in hand in libav,
-gegl_node_blit in GEGL, Dataset.take(1) in tf.data, tee(2) on a byte
-pipe. Taps connect streaming to the rest of Automat: a tapped frame can
+short pw_stream capture in PipeWire, the frame the decoder already
+produced in libav, gegl_node_blit in GEGL, Dataset.take(1) in tf.data,
+tee(2) on a byte pipe. Taps connect streaming to the rest of Automat: a tapped frame can
 feed Threshold like any other image.
 
 **Adapter.** A block that converts between formats or memory types:
@@ -180,8 +181,8 @@ on the library; each library has a real mechanism for it.
   outpacing another is visible on the cable. No pipeline is needed for
   any of this. An FFmpeg codec object decodes whichever stream feeds it
   — a video stream becomes the held image, an audio stream shows the
-  decoded sample format — and lights up when dragged near a matching
-  packet stream.
+  decoded sample format — and the radar offers the connection when it is
+  dragged near a matching packet stream.
 - **A PipeWire node object is already live**, because it is a proxy for
   a node that exists in the daemon's graph. Its face shows node name,
   media.class, state (suspended, idle, running), the negotiated format,
@@ -201,7 +202,7 @@ on the library; each library has a real mechanism for it.
   input line; while stdout is unconnected, the face shows the scrolling
   output tail. So dropping `grep --line-buffered error` alone gives a
   working playground: type a line, see whether it passes. This is the
-  discovery story for a library that has no machine-readable
+  discovery mechanism for a library that has no machine-readable
   introspection at all.
 
 ## Browsing the shelves
@@ -220,7 +221,7 @@ Source, Filter, Sink, Generic — the direction data flows on the board. The
 PipeWire shelf exists too (src/library_pipewire.cpp, PipeWireShelfToy),
 with its groups ordered the same producer-to-consumer way, and so does the
 GEGL shelf (src/library_gegl.cpp, GeglShelfToy), grouped by the categories
-key with render sources first and programming plumbing last. All are
+key with render sources first and programming operations last. All are
 reached through the beta stamp's bubble menu, like the Leptonica shelf,
 and all shelves place their entries with the shared ui::ShelfButton.
 
@@ -300,8 +301,8 @@ Previews on every block, meters on connections and queue blocks, and
 taps for pulling single buffers out cover the fifth goal. The cost model
 is stated plainly: previews sample at a bounded rate through the
 library's cheap path (pad probe and appsink in GStreamer, monitor-port
-capture in PipeWire, the frame already in hand in libav, the node cache
-in GEGL); meters read counters that the libraries maintain anyway; a
+capture in PipeWire, the frame the decoder already produced in libav, the
+node cache in GEGL); meters read counters that the libraries maintain anyway; a
 tap costs one buffer copy when the user asks for it. Because Automat is
 itself a Wayland compositor and an X11 server, a video sink is not a
 special case: waylandsink or ximagesink content arrives through the
@@ -351,7 +352,7 @@ instead of hiding it:
   button: run starts the flow, stop ends it. The PipeWire driver block
   prints its quantum and rate ("1024/48000"); all nodes it drives show
   their busy time against that quantum, which is exactly what pw-top
-  reports and is the honest way to see who is close to an xrun.
+  reports and shows directly which node is close to an xrun.
 - **Automat-driven**: FFmpeg codecs and filter graphs, GEGL processors,
   TensorFlow steps, and tf.data iterators do nothing until called. These
   blocks are driven by Automat's existing control flow: Run performs one
@@ -407,15 +408,15 @@ one branch starving the others. The branch takes part in caps
 negotiation like any sink, so a chain with no real sink negotiates
 toward the preview's format. A sometimes pad that appears with no
 consumer waiting gets the same terminal branch, so a demuxer's
-unclaimed streams keep flowing and show themselves. Editing the
+unclaimed streams keep flowing and stay visible. Editing the
 topology of a running chain stops it and starts the new arrangement —
 the state word shows the transition. Bus messages route to blocks: ERROR marks the
 failing element with the existing error state and keeps the message
 text on it; EOS appears on the sink block and is an event output usable
 by control flow ("when playback ends, run this"); STATE_CHANGED updates
 the printed state word. The appsink boundary block queues frames without
-dropping, so a full queue backpressures the chain — the honest boundary
-behavior — and each Pull takes one frame out as an image the rest of
+dropping, so a full queue backpressures the chain — the boundary is shown
+as the bottleneck it is — and each Pull takes one frame out as an image the rest of
 Automat can consume; the appsrc boundary block's Push reads its
 connected image and sends it in as one buffer. Sources with a duration show a position bar
 (gst_element_query_position); dragging it performs a flushing seek.
@@ -448,7 +449,7 @@ shows the hardware pixel format, and pulling such a frame to a preview
 goes through av_hwframe_transfer_data at preview rate only. Timestamps
 stay in each stream's own time_base and are rescaled exactly at block
 boundaries (av_rescale_q); the format label includes the time base so a
-mismatch is visible rather than mysterious.
+mismatch is visible instead of surfacing as unexplained timing errors.
 
 **GEGL.** Every registered operation wraps generically
 (src/library_gegl.cpp): the face's instruments come from GParamSpec
@@ -495,11 +496,11 @@ Each stdio port has a binding, and the binding is printed on the port:
   matching shell `< file` semantics; sharing the file object's own
   descriptor is an explicit option, because a dup shares the file
   offset and a rerun would resume where the last run stopped.
-- /dev/null is silence, and the clean choice for both directions,
-  because reads from it return EOF and writes to it succeed.
-- Closed is the sharp variant, offered explicitly and never as the
-  default silence: the child gets EBADF and its next open() lands on a
-  low descriptor, which is sometimes exactly the failure one wants to
+- /dev/null discards the stream in either direction without errors:
+  reads from it return EOF and writes to it succeed.
+- Closed is the erroring variant, offered explicitly and never as a
+  default: the child gets EBADF and its next open() lands on a low
+  descriptor, which is sometimes exactly the failure one wants to
   reproduce.
 
 Because bindings are resolved at start, changing the binding of an
@@ -593,7 +594,7 @@ tap) or through an explicitly inserted tee Command.
   one: GEGL operations showing their reference composition, GStreamer and
   FFmpeg video filters showing a standard sample frame pushed once through
   the element offline, audio effects showing the processed waveform of a
-  standard click. A face computed by the block itself cannot lie about
+  standard click. A face computed by the block itself always matches
   what the block does. Today a shelf entry shows the block's idle face.
 - A GStreamer block exposes at most four extra port slots and its face
   shows at most four property instruments; the further pads and
@@ -623,6 +624,6 @@ tap) or through an explicitly inserted tee Command.
   its own module entry points, which collide in one library), and
   external (system library dependencies). gegl:bevel, gegl:layer and
   gegl:styles are excluded from the shelf and the prototype registry
-  because their internal children live in those excluded sets; two
+  because their internal children are in those excluded sets; two
   startup log lines remain from a stray gegl:text reference and a
   buffer-property demonstration reading a null buffer.

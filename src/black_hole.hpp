@@ -20,7 +20,7 @@ struct BlackHole : Widget, DropTarget {
   RootWidget& ParentRootWidget() const;
   SkPath Shape() const override;
   Tock Tick(time::Timer&) override;
-  Optional<Rect> TextureBounds() const override { return std::nullopt; }
+  Optional<Rect> DrawBounds() const override { return std::nullopt; }
   void Draw(SkCanvas&) const override;
 
   // DropTarget interface

@@ -119,4 +119,7 @@ struct PipeWireShelf : Object {
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 };
 
+// Disconnects from the daemon and joins the mirror thread.
+void StopPipeWire();
+
 }  // namespace automat::library

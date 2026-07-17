@@ -265,11 +265,8 @@ Vec2 Pointer::PositionWithin(const Widget& widget) const {
   SkMatrix transform_down = TransformDown(widget);
   return Vec2(transform_down.mapPoint(pointer_position));
 }
-Vec2 Pointer::PositionWithinRootBoard() const {
-  auto* mw = root_widget.toys.FindOrNull(*vm.root_board);
-  if (!mw) return pointer_position;
-  SkMatrix transform_down = TransformDown(*mw);
-  return Vec2(transform_down.mapPoint(pointer_position));
+Vec2 Pointer::PositionOnCanvas() const {
+  return Vec2(root_widget.PointerToCanvas().mapPoint(pointer_position));
 }
 
 Str Pointer::ToStr() const {
@@ -358,14 +355,19 @@ ui::Tock PointerWidget::Tick(time::Timer& timer) {
     }
   };
   // Note: this could only iterate over visible locations
-  for (auto& loc : vm.root_board->locations) {
-    auto& obj = *loc->object;
-    if (!loc->widget || !loc->widget->toy) continue;
-    HighlightCheck(obj, *loc->widget->toy, nullptr);
-    obj.Interfaces([&](Interface iface) {
-      HighlightCheck(obj, *loc->widget->toy, iface.table_ptr);
-      return LoopControl::Continue;
-    });
+  {
+    auto lock = std::lock_guard(vm.mutex);
+    for (auto& board : vm.boards) {
+      for (auto& loc : board->locations) {
+        auto& obj = *loc->object;
+        if (!loc->widget || !loc->widget->toy) continue;
+        HighlightCheck(obj, *loc->widget->toy, nullptr);
+        obj.Interfaces([&](Interface iface) {
+          HighlightCheck(obj, *loc->widget->toy, iface.table_ptr);
+          return LoopControl::Continue;
+        });
+      }
+    }
   }
 
   sort_heap(highlight_target.begin(), highlight_target.end());

@@ -209,7 +209,7 @@ struct Keyboard final : Widget {
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
-  Optional<Rect> TextureBounds() const override { return std::nullopt; }
+  Optional<Rect> DrawBounds() const override { return std::nullopt; }
 
 #if defined(__linux__)
   struct LinuxKeyboardState;

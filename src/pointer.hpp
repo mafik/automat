@@ -133,7 +133,8 @@ struct Pointer {
   void UpdatePath();
 
   Vec2 PositionWithin(const Widget&) const;
-  Vec2 PositionWithinRootBoard() const;
+  // Pointer position in canvas (starfield) coordinates.
+  Vec2 PositionOnCanvas() const;
 
   Str ToStr() const;
 
@@ -218,7 +219,7 @@ struct PointerWidget : Widget {
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas& canvas) const override;
 
-  Optional<Rect> TextureBounds() const override { return std::nullopt; }
+  Optional<Rect> DrawBounds() const override { return std::nullopt; }
 };
 
 }  // namespace automat::ui

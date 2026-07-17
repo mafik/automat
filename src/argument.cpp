@@ -30,12 +30,16 @@ Object& Argument::ObjectOrMake() const {
     return *o;
   }
   auto proto = table->prototype();
-  Location* start_loc = object_ptr->here;
-  auto board = start_loc->ParentAs<Board>();
+  Location* start_loc = object_ptr->MyLocation();
+  Ptr<Board> board = start_loc ? start_loc->LockBoard() : nullptr;
+  if (!board) {
+    board = DefaultBoard().AcquirePtr();
+  }
   auto& loc = board->Create(*proto);
 
-  PositionAhead(*start_loc, *table, loc);
-  PositionBelow(loc, *start_loc);
+  if (start_loc) {
+    loc.placement = Location::PlaceAhead{start_loc->AcquireWeakPtr(), table};
+  }
   Connect(*loc.object);
 
   return *loc.object;

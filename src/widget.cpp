@@ -24,8 +24,8 @@
 
 #include <ranges>
 
+#include "board.hpp"
 #include "build_variant.hpp"
-#include "log.hpp"
 #include "renderer.hpp"
 #include "root_widget.hpp"
 #include "time.hpp"
@@ -80,7 +80,7 @@ void Widget::Reparent(Widget& new_parent) {
 }
 
 void Widget::DrawCached(SkCanvas& canvas) const {
-  if (pack_frame_texture_bounds == nullopt) {
+  if (pack_frame_draw_bounds == nullopt) {
     Draw(canvas);
   } else {
     canvas.drawDrawable(sk_drawable.get());
@@ -101,8 +101,8 @@ void Widget::WakeAnimationAt(time::SteadyPoint when) const {
   next_tick = min(next_tick, when);
 }
 
-static SkIRect TextureBoundsInWindowPx(const Widget& widget) {
-  Rect local = widget.TextureBounds().value_or(widget.CoarseBounds().rect);
+static SkIRect CoverBoundsInWindowPx(const Widget& widget) {
+  Rect local = widget.CoverBounds();
   SkRect device;
   widget.local_to_window.mapRect(&device, local.sk);
   SkIRect out;
@@ -112,14 +112,19 @@ static SkIRect TextureBoundsInWindowPx(const Widget& widget) {
 
 void Widget::DrawWithSplits(SkCanvas& canvas) const {
   if (!splits_under.empty()) {  // Draw splits
-    canvas.save();
-    canvas.resetMatrix();
-    canvas.clipIRect(TextureBoundsInWindowPx(*this));
     for (Widget& split : splits_under) {
+      canvas.save();
+      canvas.resetMatrix();
+      canvas.clipIRect(CoverBoundsInWindowPx(*this));
+      for (Widget& cover : split.splits_over) {
+        if (&cover != this && IsAbove(cover)) {
+          canvas.clipIRect(CoverBoundsInWindowPx(cover), SkClipOp::kDifference);
+        }
+      }
       canvas.setMatrix(SkM44(split.local_to_window));
       split.DrawCached(canvas);
+      canvas.restore();
     }
-    canvas.restore();
   }
   if (splits_over.empty()) {  // Draw body
     DrawCached(canvas);
@@ -127,7 +132,7 @@ void Widget::DrawWithSplits(SkCanvas& canvas) const {
     canvas.save();
     canvas.resetMatrix();
     for (Widget& cover : splits_over) {
-      canvas.clipIRect(TextureBoundsInWindowPx(cover), SkClipOp::kDifference);
+      canvas.clipIRect(CoverBoundsInWindowPx(cover), SkClipOp::kDifference);
     }
     canvas.setMatrix(SkM44(local_to_window));
     DrawCached(canvas);
@@ -317,7 +322,7 @@ void Widget::CheckAllWidgetsReleased() {
 }
 
 void Widget::RedrawThisFrame() {
-  if (pack_frame_texture_bounds) {
+  if (pack_frame_draw_bounds) {
     invalidated = time::SteadyPoint::min();
   } else {
     for (auto* child : layers) {
@@ -360,12 +365,23 @@ void Widget::ValidateHierarchy(std::source_location location) {
 void Widget::RecomputeSubtreeShape() {
   SkOpBuilder builder;
   builder.add(shape, kUnion_SkPathOp);
+  Optional<Rect> bounds = draw_bounds;
   for (int i = 0; i < layers.size();) {
     auto* child = layers[i];
     SkPath child_shape = child->subtree_shape.makeTransform(child->local_to_parent.asM33());
     builder.add(child_shape, kUnion_SkPathOp);
+    if (!child->subtree_draw_bounds.sk.isEmpty()) {
+      Rect child_bounds;
+      child->local_to_parent.asM33().mapRect(&child_bounds.sk, child->subtree_draw_bounds.sk);
+      if (bounds.has_value()) {
+        bounds->ExpandToInclude(child_bounds);
+      } else {
+        bounds = child_bounds;
+      }
+    }
     if (++i == layers.bake_begin) i = layers.bake_end;  // advance skipping baked children
   }
+  subtree_draw_bounds = bounds.value_or(Rect{});
   if (auto new_subtree_shape = builder.resolve()) {
     subtree_shape = std::move(*new_subtree_shape);
     subtree_shape.setIsVolatile(true);
@@ -393,7 +409,12 @@ RootWidget& Widget::FindRootWidget() const {
   return *root;
 }
 
-ToyStore& Widget::ToyStore() const { return FindRootWidget().toys; }
+ToyStore& Widget::ToyStore() const {
+  if (auto* board_widget = BoardOrNull(*this)) {
+    return board_widget->toys;
+  }
+  return FindRootWidget().toys;
+}
 
 std::unique_ptr<Action> Widget::FindAction(Pointer& pointer, ActionTrigger btn) {
   if (btn == PointerButton::Right) {

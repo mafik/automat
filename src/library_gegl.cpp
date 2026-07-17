@@ -712,9 +712,7 @@ struct GeglOperationToy : ui::beta::ObjectToy {
   SkPath Shape() const override {
     return SkPath::RRect(RRect::MakeSimple(Rect::MakeCenterZero(kPlateW, plate_h_), 3_mm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
-    return Shape().getBounds().makeOutset(4_mm, 4_mm);
-  }
+  Optional<Rect> DrawBounds() const override { return Shape().getBounds().makeOutset(4_mm, 4_mm); }
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&GeglOperation::out_stream_tbl)) {
       return Vec2AndDir{.pos = Vec2(-kPlateW / 2 + 10_mm, -plate_h_ / 2), .dir = -90_deg};
@@ -1035,9 +1033,7 @@ struct GeglShelfToy : ui::beta::ObjectToy {
   }
 
   // The BETA stamp overhangs the top-right corner; without this it gets clipped at the sheet.
-  Optional<Rect> TextureBounds() const override {
-    return Shape().getBounds().makeOutset(2_cm, 2_cm);
-  }
+  Optional<Rect> DrawBounds() const override { return Shape().getBounds().makeOutset(2_cm, 2_cm); }
 
   void Draw(SkCanvas& canvas) const override {
     Rect sheet = Rect::MakeCenterZero(sheet_w, sheet_h);

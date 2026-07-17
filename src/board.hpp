@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "base.hpp"
+#include "vm.hpp"
 
 namespace automat {
 
@@ -11,12 +12,20 @@ struct BoardWidget;
 // 2D Canvas holding objects & a spaghetti of connections.
 struct Board : Object {
   Board();
+
+  // Center of the board in RootWidget's coordinates.
+  Vec2 position = {0, 0};
+
   deque<Ptr<Location>> locations;
 
   using Toy = BoardWidget;
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 
   Ptr<Location> Extract(Location& location);
+
+  void MoveToTop(Location& location);
+
+  Location* LocationOrNull(Object& object);
 
   // Create a new location on top of all the others.
   Location& CreateEmpty();
@@ -30,10 +39,9 @@ struct Board : Object {
   // Adds the given object to the Board. Returns a pointer to the Location that stores the object.
   // Existing Location is returned, if the object was already part of the Board.
   Location& Insert(Ptr<Object>&& obj) {
-    for (auto& loc : locations) {
-      if (loc->object == obj) {
-        return *loc;
-      }
+    auto lock = std::lock_guard(vm.mutex);
+    if (auto* loc = LocationOrNull(*obj)) {
+      return *loc;
     }
     auto& h = CreateEmpty();
     h.InsertHere(std::move(obj));
@@ -61,42 +69,28 @@ struct Board : Object {
     return m;
   }
 
-  void Relocate(Location* parent) override;
-
   string ToStr() const { return "Board"; }
-
-  // Report all errors that occured within this board.
-  //
-  // This function will return all errors held by locations of this board &
-  // recurse into sub-boards.
-  void Diagnostics(function<void(Location*, Error&)> error_callback) {
-    for (auto& location : locations) {
-      ManipulateError(*location->object, [&](Error& err) {
-        if (!err.IsPresent()) {
-          return;
-        }
-        error_callback(location.get(), err);
-      });
-      if (auto subboard = dynamic_cast<Board*>(location->object.get())) {
-        subboard->Diagnostics(error_callback);
-      }
-    }
-  }
 };
 
 // UI widget for Board. Handles drawing, drop target, and spatial queries.
 struct BoardWidget : ObjectToy, ui::DropTarget {
+  struct ToyStore toys;
+
   BoardWidget(ui::Widget* parent, Board& board);
 
   Ptr<Board> LockBoard() const { return LockOwner<Board>(); }
 
   std::string_view Name() const override { return "BoardWidget"; }
 
+  void Poll(time::Timer& timer) { toys.Poll(timer); }
+
   // Widget overrides
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   Compositor GetCompositor() const override { return Compositor::QUANTUM_REALM; }
+  void VisitOptions(const OptionsVisitor&) const override;
+  std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
 
   // DropTarget overrides
   ui::DropTarget* AsDropTarget() override { return this; }
@@ -104,6 +98,8 @@ struct BoardWidget : ObjectToy, ui::DropTarget {
   SkMatrix DropSnap(const Rect& bounds_local, Vec2 bounds_origin,
                     Vec2* fixed_point = nullptr) override;
   void DropLocation(Ptr<Location>&&) override;
+
+  void RebuildOverlaps(Board&);
 
   // Spatial queries (these use widget shape data)
   void ConnectAtPoint(Argument, Vec2);
@@ -113,7 +109,7 @@ struct BoardWidget : ObjectToy, ui::DropTarget {
       std::function<void(ObjectToy&, Interface::Table*, Vec<Vec2AndDir>&)> callback);
   void ForStack(Location& base, std::function<void(Location&, int index)> callback);
   SkPath StackShape(Location& base);
-  Vec<Ptr<Location>> ExtractStack(Location& base);
+  Vec<Ptr<Location>> DragStack(Location& base);
   Vec<Ptr<Location>> CloneStack(Location& base);
   void RaiseStack(Location& base);
 };

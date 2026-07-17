@@ -76,9 +76,7 @@ struct BetaShelfToy : ObjectToy {
 
   SkPath Shape() const override { return SkPath::Circle(0, 0, kStampRadius); }
 
-  Optional<Rect> TextureBounds() const override {
-    return Shape().getBounds().makeOutset(2_mm, 2_mm);
-  }
+  Optional<Rect> DrawBounds() const override { return Shape().getBounds().makeOutset(2_mm, 2_mm); }
 
   void Draw(SkCanvas& canvas) const override {
     ui::beta::DrawBetaStamp(canvas, {0, 0}, kStampRadius - 1_mm, -12, ID());

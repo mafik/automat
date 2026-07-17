@@ -14,10 +14,10 @@ std::unique_ptr<ui::Font> kHelsinkiFont = ui::Font::MakeV2(ui::Font::GetHelsinki
 
 TextWidget::TextWidget(ui::Widget* parent, Str text)
     : ui::Widget(parent), width(kHelsinkiFont->MeasureText(text)), text(text) {}
-Optional<Rect> TextWidget::TextureBounds() const {
+Optional<Rect> TextWidget::DrawBounds() const {
   return Rect(0, -kHelsinkiFont->descent, width, -kHelsinkiFont->ascent);
 }
-SkPath TextWidget::Shape() const { return SkPath::Rect(*TextureBounds()); }
+SkPath TextWidget::Shape() const { return SkPath::Rect(*DrawBounds()); }
 void TextWidget::Draw(SkCanvas& canvas) const {
   if constexpr (false) {  // outline
     SkPaint outline;

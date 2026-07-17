@@ -22,9 +22,10 @@ itself stays a single object: one parent, one `Tick`, one cached texture, one hi
 ## Terminology
 
 - **split widget** — a widget whose drawing is divided between screen regions with different
-  depths. Sync belts are currently the only split widgets.
+  depths. Sync belts and connection cables are the current split widgets.
 - **cover** — a widget that is drawn over some region of a split widget. Example: the
-  FlipFlop's rocker is the cover of the sync belt end that connects to the FlipFlop.
+  FlipFlop's rocker is the cover of the sync belt end that connects to the FlipFlop; a
+  location resting on a connection's endpoint is a cover of that connection.
 - **`splits_under`, `splits_over`** — two lists present on every widget (src/widget.hpp) that
   store the relation from both sides. The `splits_under` list of a cover holds the split
   widgets drawn under it. The `splits_over` list of a split widget holds its covers.
@@ -40,16 +41,24 @@ itself stays a single object: one parent, one `Tick`, one cached texture, one hi
 split widgets:
 
 1. Directly before a widget's own texture is drawn, the widgets from its `splits_under` list
-   are drawn, clipped to the widget's rectangle. Because this happens immediately before the
-   widget itself, the clipped parts are covered by the widget but drawn over everything that
-   comes earlier in the drawing order.
+   are drawn, clipped to the widget's rectangle minus the rectangles of each split's lower
+   covers. Because this happens immediately before the widget itself, the clipped parts are
+   covered by the widget but drawn over everything that comes earlier in the drawing order.
+   Pixels claimed by several covers belong to the lowest one: it draws the split before any of
+   the other covers paint, which keeps the split under all of them. Without the subtraction, a
+   higher cover whose rectangle overlaps a lower cover — easy with stack rectangles, whose
+   empty corners can stretch over another cover — would repaint the split on top of it.
 2. A widget with a non-empty `splits_over` list has each cover's rectangle subtracted from the
    clip before its own texture is drawn. The remaining part is the body.
 
-The rectangle of a cover is its `TextureBounds` transformed to window coordinates and rounded
-to whole pixels (`TextureBoundsInWindowPx`, src/widget.cpp). It is computed again on every
-frame, because the whole scene is re-recorded every frame and panning or zooming changes the
-rectangle continuously.
+The rectangle of a cover is its `Widget::CoverBounds()` transformed to window coordinates and
+rounded to whole pixels (`CoverBoundsInWindowPx`, src/widget.cpp). The default `CoverBounds`
+is the widget's own drawn extent: `DrawBounds()`, queried by PackFrame every frame and cached
+in `Widget::draw_bounds` (widgets whose extent follows the window size, such as the root,
+change it without any shape update). `Widget::subtree_draw_bounds` unions the cache over the
+child tree in the pass that maintains `subtree_shape`. The window-space rectangle is computed
+again on every frame, because the whole scene is re-recorded every frame and panning or
+zooming changes it continuously.
 
 The rectangles and the body partition the screen: every pixel of the split widget is drawn
 exactly once, from the same cached texture, with the same transform and the same per-frame
@@ -75,15 +84,38 @@ on top of a connection.
   detached child (the Over or Under band of `layers`), not baked into its parent's texture. A
   baked child provides no position at which a split could be inserted.
 - A split widget may have any number of covers. A sync belt keeps at most two, one per
-  endpoint. Each endpoint toy returns its cover from `Toy::ConnectionCover` (src/toy.hpp). The
-  default implementation returns the toy itself: the connection is then drawn under the entire
-  widget and is visible only outside of it. A toy can return a child widget instead: the
-  FlipFlop returns its rocker, so belts are visible between the rocker and the panel's edge.
-  `ConnectionCover` is temporary; the TODO at its declaration states that interfaces should
-  make this decision instead.
-- `SyncBelt::Tick` compares its `splits_over` list with the covers of its two endpoint toys
-  and rebuilds the list when they differ. After a change it calls `WakeAnimation` on the board
-  so that the ordering pass runs again.
+  endpoint. The cover of an endpoint is the widget of the endpoint's interface, resolved with
+  `Toy::FindWidget` (src/toy.hpp; see docs/parrots/Objects and Modalities.md). The default
+  implementation returns the toy itself: the connection is then drawn under the entire widget
+  and is visible only outside of it. A toy can map an interface to a child widget instead: the
+  FlipFlop maps its State interface to the rocker, so belts are visible between the rocker and
+  the panel's edge.
+- `SyncBelt::Tick` and `ConnectionWidget::Tick` compare their `splits_over` list with the
+  wanted cover set and rebuild it when they differ. After a change they call `WakeAnimation`
+  on the board so that the ordering pass runs again.
+
+## Covers from stacking
+
+An object dropped onto a connection's endpoint must cover the connection, or the cable would
+be drawn across the object while ending under the endpoint beneath it — a depth contradiction
+in exactly the area the user is looking at.
+
+Each board maintains the direct overlap relation between its locations:
+`LocationWidget::overlapping_above` and `overlapping_below` (src/location.hpp) hold the
+locations whose `subtree_shape` intersects this one's, split by z-order. `BoardWidget::Tick`
+compares every location's (shape generation, z-index) against a snapshot and rebuilds the
+whole relation when anything changed (`BoardWidget::RebuildOverlaps`, src/board.cpp), so the
+lists are derived state with a single writer, one frame behind at most. `ForStack` walks the
+same relation, so pile pick-up and covers share one source of truth.
+
+A connection's wanted covers are its endpoint covers plus the locations directly overlapping
+either endpoint (`AppendObscurers`, src/location.cpp), excluding the two endpoints themselves —
+a cable is supposed to be drawn over the faces of the objects it connects. One cover entry per
+direct obscurer suffices, because a location's cover rectangle spans its whole pile:
+`LocationWidget::CoverBounds()` returns `stack_draw_bounds` — the location's
+`subtree_draw_bounds` united with those of everything transitively above it, computed during
+the same rebuild. An object overhanging the pile is therefore inside the rectangle without its
+own entry, and pile growth changes only the rectangle, never the cover lists.
 
 ## Limitations
 

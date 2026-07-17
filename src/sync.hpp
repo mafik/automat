@@ -13,6 +13,7 @@ namespace automat {
 struct Gear;
 struct SyncBelt;
 struct GearWidget;
+struct BoardWidget;
 
 struct Syncable : Argument {
   struct Table : Argument::Table {
@@ -264,13 +265,15 @@ struct SyncBelt : ArgumentToy {
   Compositor GetCompositor() const override { return Compositor::ANCHOR_WARP; }
   Vec<Vec2> TextureAnchors() override;
   void Draw(SkCanvas& canvas) const override;
-  Optional<Rect> TextureBounds() const override;
+  Optional<Rect> DrawBounds() const override;
 };
 
 static_assert(ToyMaker<Syncable>);
 
 struct SyncAction : Action {
   NestedWeakPtr<Syncable::Table> weak;
+  // TODO: syncing across the Boards
+  MortalPtr<BoardWidget> board_widget;
   SyncAction(ui::Pointer& pointer, Syncable syncable);
   ~SyncAction();
   void Update() override;

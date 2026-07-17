@@ -36,6 +36,7 @@
 #include "x11.hpp"
 
 #if defined(__linux__)
+#include "library_pipewire.hpp"
 #include "wayland.hpp"
 #endif
 
@@ -137,11 +138,8 @@ int Main() {
 
   root_widget = make_unique<RootWidget>();
 
-  vm.root_location = MAKE_PTR(Location);
-  vm.root_board = vm.root_location->Create<Board>();
-
-  root_widget->Init();  // needs vm.root_board
-  keymap.emplace();     // reads the layout of the host connection Init() opened
+  root_widget->Init();
+  keymap.emplace();  // reads the layout of the host connection Init() opened
   StartTimeThread(stop_source.get_token());
 
   RefreshTrayIcon();
@@ -152,6 +150,8 @@ int Main() {
     ERROR << "Couldn't load saved state: " << status;
   }
   status.Reset();
+
+  DefaultBoard();  // fresh start: at least one board should exist
 
   StartWorkerThreads(stop_source.get_token());
 
@@ -198,7 +198,12 @@ int Main() {
     ERROR << "Failed to save state: " << status;
   }
 
-  vm.root_board->locations.clear();
+  {
+    auto lock = std::lock_guard(vm.mutex);
+    for (auto& board : vm.boards) {
+      board->locations.clear();
+    }
+  }
 
   root_widget.reset();
 
@@ -208,8 +213,10 @@ int Main() {
 #endif
   keymap.reset();  // after the servers that read it have stopped
 
-  vm.root_board.reset();
-  vm.root_location.reset();
+  {
+    auto lock = std::lock_guard(vm.mutex);
+    vm.boards.clear();
+  }
 
   prototypes.reset();
 
@@ -221,6 +228,10 @@ int Main() {
   Widget::CheckAllWidgetsReleased();
 
   vk::Destroy();
+
+#if defined(__linux__)
+  library::StopPipeWire();
+#endif
 
   audio::Stop();
 

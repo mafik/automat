@@ -180,7 +180,7 @@ void EnumKnobWidget::Draw(SkCanvas& canvas) const {
   DrawKnobOverGlass(canvas);
 }
 
-Optional<Rect> EnumKnobWidget::TextureBounds() const {
+Optional<Rect> EnumKnobWidget::DrawBounds() const {
   if (kDebugKnob || is_dragging) {
     return std::nullopt;
   }

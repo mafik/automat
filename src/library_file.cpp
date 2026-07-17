@@ -190,9 +190,7 @@ struct RegularFileToy : ui::beta::ObjectToy {
   SkPath Shape() const override {
     return SkPath::RRect(RRect::MakeSimple(Rect::MakeCenterZero(kPlateW, kPlateH), 3_mm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
-    return Shape().getBounds().makeOutset(4_mm, 4_mm);
-  }
+  Optional<Rect> DrawBounds() const override { return Shape().getBounds().makeOutset(4_mm, 4_mm); }
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&RegularFile::out_stream_tbl)) {
       return Vec2AndDir{.pos = Vec2(-kPlateW / 2 + 10_mm, -kPlateH / 2), .dir = -90_deg};

@@ -50,7 +50,7 @@ namespace automat::library {
 struct ImageWidget : ui::Widget {
   PersistentImage& image;
   ImageWidget(ui::Widget* parent, PersistentImage& image) : ui::Widget(parent), image(image) {}
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect::MakeCornerZero(image.width(), image.height());
   }
   SkPath Shape() const override {
@@ -166,7 +166,7 @@ void UpdateCode(automat::mc::Controller& controller,
   for (int i = 0; i < n; ++i) {
     automat::library::Instruction* obj_raw = instructions[i].get();
     const automat::mc::Inst* inst_raw = &obj_raw->mc_inst;
-    auto* loc = obj_raw->here;
+    auto* loc = obj_raw->MyLocation();
     int next = -1;
     int jump = -1;
     if (loc) {
@@ -216,10 +216,11 @@ std::vector<Ptr<Instruction>> FindInstructions(Location& assembler_loc) {
 }
 
 void Assembler::UpdateMachineCode() {
-  if (!here) {
+  auto* location = MyLocation();
+  if (!location) {
     return;
   }
-  auto instructions = FindInstructions(*here);
+  auto instructions = FindInstructions(*location);
   Status status;
   if (mc_controller == nullptr) {
     ERROR_ONCE << "Unable to update Assembler: no mc_controller";

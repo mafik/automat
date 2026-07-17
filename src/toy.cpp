@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "toy.hpp"
 
+#include "board.hpp"
 #include "location.hpp"
 #include "root_widget.hpp"
 
@@ -21,15 +22,24 @@ Toy* Toy::BaseToy() const {
 
 void ToyMakerMixin::ForEachToyImpl(Object& owner, Interface::Table* iface,
                                    std::function<void(ui::RootWidget&, Toy&)> cb) {
+  auto key = ToyStore::Key(&owner, iface);
   for (auto* root_widget : ui::root_widgets) {
-    auto it = root_widget->toys.container.find(ToyStore::Key(&owner, iface));
+    auto it = root_widget->toys.container.find(key);
     if (it != root_widget->toys.container.end()) {
       cb(*root_widget, *it->second);
+    }
+    for (auto& [root_key, root_toy] : root_widget->toys.container) {
+      if (auto* board_widget = dynamic_cast<BoardWidget*>(root_toy.get())) {
+        auto board_it = board_widget->toys.container.find(key);
+        if (board_it != board_widget->toys.container.end()) {
+          cb(*root_widget, *board_it->second);
+        }
+      }
     }
   }
 }
 
-void ToyStore::Tick(time::Timer& timer) {
+void ToyStore::Poll(time::Timer& timer) {
   // Remove dead toys
   std::erase_if(container, [](auto& entry) { return entry.second->dead; });
 

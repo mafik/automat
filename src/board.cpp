@@ -10,8 +10,10 @@
 #include <include/effects/SkRuntimeEffect.h>
 #include <include/pathops/SkPathOps.h>
 
+#include <algorithm>
 #include <ranges>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "argument.hpp"
 #include "control_flow.hpp"
@@ -37,6 +39,11 @@ std::unique_ptr<ObjectToy> Board::MakeToy(ui::Widget* parent) {
 }
 
 void Board::SerializeState(ObjectSerializer& writer) const {
+  writer.Key("position");
+  writer.StartArray();
+  writer.Double(round(position.x * 1000000.) / 1000000.);
+  writer.Double(round(position.y * 1000000.) / 1000000.);
+  writer.EndArray();
   if (!locations.empty()) {
     writer.Key("locations");
     writer.StartObject();
@@ -46,9 +53,9 @@ void Board::SerializeState(ObjectSerializer& writer) const {
       auto& name = writer.ResolveName(*location->object);
       writer.Key(name);
       writer.StartArray();
-      writer.Double(round(location->position.x * 1000000.) /
-                    1000000.);  // round to 6 decimal places
-      writer.Double(round(location->position.y * 1000000.) / 1000000.);
+      Vec2 pos = location->PeekPosition();
+      writer.Double(round(pos.x * 1000000.) / 1000000.);  // round to 6 decimal places
+      writer.Double(round(pos.y * 1000000.) / 1000000.);
       writer.EndArray();
     }
     writer.EndObject();
@@ -57,7 +64,17 @@ void Board::SerializeState(ObjectSerializer& writer) const {
 
 bool Board::DeserializeKey(ObjectDeserializer& d, StrView key) {
   Status status;
-  if (key == "locations") {
+  if (key == "position") {
+    for (auto i : ArrayView(d, status)) {
+      if (i == 0) {
+        d.Get(position.x, status);
+      } else if (i == 1) {
+        d.Get(position.y, status);
+      } else {
+        d.Skip();
+      }
+    }
+  } else if (key == "locations") {
     for (auto& object_name : ObjectView(d, status)) {
       auto* object = d.LookupObject(object_name);
 
@@ -66,15 +83,15 @@ bool Board::DeserializeKey(ObjectDeserializer& d, StrView key) {
         locations.emplace_back(std::move(locations.front()));
         locations.pop_front();
       }
-      object->here = &loc;
       loc.InsertHere(object->AcquirePtr());
 
       // Read the [x, y] position array
+      auto& direct = *std::get_if<Location::Direct>(&loc.placement);
       for (auto i : ArrayView(d, status)) {
         if (i == 0) {
-          d.Get(loc.position.x, status);
+          d.Get(direct.position.x, status);
         } else if (i == 1) {
-          d.Get(loc.position.y, status);
+          d.Get(direct.position.y, status);
         } else {
           d.Skip();
         }
@@ -90,29 +107,46 @@ bool Board::DeserializeKey(ObjectDeserializer& d, StrView key) {
 }
 
 Ptr<Location> Board::Extract(Location& location) {
+  auto lock = std::lock_guard(vm.mutex);
   auto it = std::find_if(locations.begin(), locations.end(),
                          [&location](const auto& l) { return l.get() == &location; });
   if (it != locations.end()) {
     auto result = std::move(*it);
     locations.erase(it);
+    result->board = {};
     WakeToys();
     return result;
   }
   return nullptr;
 }
 
+void Board::MoveToTop(Location& location) {
+  auto lock = std::lock_guard(vm.mutex);
+  auto it = std::find_if(locations.begin(), locations.end(),
+                         [&location](const auto& l) { return l.get() == &location; });
+  if (it == locations.end() || it == locations.begin()) return;
+  auto ptr = std::move(*it);
+  locations.erase(it);
+  locations.emplace_front(std::move(ptr));
+  WakeToys();
+}
+
+Location* Board::LocationOrNull(Object& object) {
+  auto lock = std::lock_guard(vm.mutex);
+  for (auto& loc : locations) {
+    if (loc->object.get() == &object) {
+      return loc.get();
+    }
+  }
+  return nullptr;
+}
+
 Location& Board::CreateEmpty() {
-  auto& it = locations.emplace_front(new Location(here));
+  auto lock = std::lock_guard(vm.mutex);
+  auto& it = locations.emplace_front(new Location(AcquireWeakPtr()));
   Location* h = it.get();
   WakeToys();
   return *h;
-}
-
-void Board::Relocate(Location* new_here) {
-  Object::Relocate(new_here);
-  for (auto& it : locations) {
-    it->parent_location = here;
-  }
 }
 
 BoardWidget::BoardWidget(ui::Widget* parent, Board& board) : ObjectToy(parent, board) {
@@ -163,21 +197,32 @@ SkPaint& GetBackgroundPaint(float px_per_m) {
   return paint;
 }
 
-ui::Tock BoardWidget::Tick(time::Timer&) {
+ui::Tock BoardWidget::Tick(time::Timer& timer) {
   auto board = LockBoard();
   if (!board) return {};
-  auto& toys = ToyStore();
+  auto lock = std::lock_guard(vm.mutex);
 
-  // Ensure Locations exist
   for (auto& loc : board->locations) {
     auto& lw = toys.FindOrMake(*loc, this);
     lw.local_to_parent = SkM44();
     lw.ToyForObject();
     loc->object->Each<Argument>([&](Argument arg) {
       if (auto syncable = dyn_cast<Syncable>(arg)) {
-        if (arg.IsConnected()) toys.FindOrMake(syncable, this).local_to_parent = SkM44();
+        if (arg.IsConnected()) {
+          auto* gear_obj = arg.Find().Owner<Object>();
+          if (gear_obj && board->LocationOrNull(*gear_obj)) {
+            toys.FindOrMake(syncable, this).local_to_parent = SkM44();
+          }
+        }
       } else {
-        toys.FindOrMake(arg, this).local_to_parent = SkM44();
+        bool visible = true;
+        if (arg.IsConnected()) {
+          auto* end_obj = arg.Find().Owner<Object>();
+          visible = end_obj && (end_obj == loc->object.get() || board->LocationOrNull(*end_obj));
+        }
+        if (visible) {
+          toys.FindOrMake(arg, this).local_to_parent = SkM44();
+        }
       }
       return LoopControl::Continue;
     });
@@ -192,8 +237,8 @@ ui::Tock BoardWidget::Tick(time::Timer&) {
       ui::Widget* higher = &lw;
       auto end = arg.Find();
       if (auto* end_obj = end.Owner<Object>()) {
-        if (end_obj->here) {
-          if (auto* end_lw = toys.FindOrNull(*end_obj->here)) {
+        if (auto* end_loc = board->LocationOrNull(*end_obj)) {
+          if (auto* end_lw = toys.FindOrNull(*end_loc)) {
             if (end_lw->IsAbove(*higher)) higher = end_lw;
           }
         }
@@ -202,7 +247,79 @@ ui::Tock BoardWidget::Tick(time::Timer&) {
       return LoopControl::Continue;
     });
   }
+
+  bool overlaps_dirty = false;
+  int z = 0;
+  for (auto& loc : board->locations) {
+    if (auto* lw = toys.FindOrNull(*loc)) {
+      uint32_t genid = lw->subtree_shape.getGenerationID();
+      if (lw->overlap_genid != genid || lw->overlap_zindex != z) {
+        lw->overlap_genid = genid;
+        lw->overlap_zindex = z;
+        overlaps_dirty = true;
+      }
+    }
+    ++z;
+  }
+  if (overlaps_dirty) {
+    RebuildOverlaps(*board);
+  }
   return {};
+}
+
+void BoardWidget::RebuildOverlaps(Board& board) {
+  Vec<LocationWidget*> lws;
+  Vec<Location*> locs;
+  for (auto& loc : board.locations) {
+    if (auto* lw = toys.FindOrNull(*loc)) {
+      lws.push_back(lw);
+      locs.push_back(loc.get());
+    }
+  }
+  int n = lws.size();
+  Vec<Vec<LocationWidget*>> old_above(n);
+  for (int i = 0; i < n; ++i) {
+    for (LocationWidget& above : lws[i]->overlapping_above) {
+      old_above[i].push_back(&above);
+    }
+    lws[i]->overlapping_above.Clear();
+    lws[i]->overlapping_below.Clear();
+  }
+  for (int upper = 0; upper < n; ++upper) {
+    for (int lower = upper + 1; lower < n; ++lower) {
+      SkPath intersection;
+      if (Op(lws[upper]->subtree_shape, lws[lower]->subtree_shape, kIntersect_SkPathOp,
+             &intersection) &&
+          intersection.countVerbs() > 0) {
+        lws[lower]->overlapping_above.Add(*lws[upper]);
+        lws[upper]->overlapping_below.Add(*lws[lower]);
+      }
+    }
+  }
+  for (int i = 0; i < n; ++i) {
+    Optional<Rect> bounds;
+    if (!lws[i]->subtree_draw_bounds.sk.isEmpty()) {
+      bounds = lws[i]->subtree_draw_bounds;
+    }
+    for (LocationWidget& above : lws[i]->overlapping_above) {
+      if (above.stack_draw_bounds.sk.isEmpty()) continue;
+      if (bounds.has_value()) {
+        bounds->ExpandToInclude(above.stack_draw_bounds);
+      } else {
+        bounds = above.stack_draw_bounds;
+      }
+    }
+    lws[i]->stack_draw_bounds = bounds.value_or(Rect{});
+  }
+  for (int i = 0; i < n; ++i) {
+    Vec<LocationWidget*> now_above;
+    for (LocationWidget& above : lws[i]->overlapping_above) {
+      now_above.push_back(&above);
+    }
+    if (now_above != old_above[i]) {
+      locs[i]->InvalidateConnectionWidgets(true, false);
+    }
+  }
 }
 
 void BoardWidget::Draw(SkCanvas& canvas) const {
@@ -241,56 +358,27 @@ SkMatrix BoardWidget::DropSnap(const Rect& rect_ref, Vec2 bounds_origin, Vec2* f
 void BoardWidget::DropLocation(Ptr<Location>&& l) {
   auto board = LockBoard();
   if (!board) return;
-  l->parent_location = board->here;
-  board->locations.insert(board->locations.begin(), std::move(l));
+  l->board = board->AcquireWeakPtr();
+  Location* dropped;
+  {
+    auto lock = std::lock_guard(vm.mutex);
+    board->locations.insert(board->locations.begin(), std::move(l));
+    dropped = board->locations.front().get();
+  }
   WakeAnimation();
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
-  Location& dropped = *board->locations.front();
-  if (dropped.widget) {  // TODO: FindOrNull
-    dropped.widget->Reparent(*this);
-  } else {
-    ToyStore().FindOrMake(dropped, this);
+  if (dropped->widget && dropped->widget->parent != this) {  // TODO: FindOrNull
+    dropped->widget->Reparent(*this);
+  } else if (!dropped->widget) {
+    toys.FindOrMake(*dropped, this);
   }
-  dropped.object->ForEachToy([](ui::RootWidget&, automat::Toy& w) { w.RedrawThisFrame(); });
-  // Walk over connections that start/end in the dropped location.
-  // If the other end of the connection is obscured by another location, raise that obscurer
-  // (and its whole stack) to the front.
-  auto& root = FindRootWidget();
-  for (auto& [key, toy] : root.toys.container) {
-    auto* conn = dynamic_cast<ui::ConnectionWidget*>(toy.get());
-    if (!conn) continue;
-    Location* start_loc = conn->StartLocation();
-    Location* end_loc = conn->EndLocation();
-    Location* other = nullptr;
-    if (start_loc == &dropped) {
-      other = end_loc;
-    } else if (end_loc == &dropped) {
-      other = start_loc;
-    }
-    if (!other) continue;
-    auto other_it = std::find_if(board->locations.begin(), board->locations.end(),
-                                 [&](const Ptr<Location>& loc) { return loc.get() == other; });
-    if (other_it == board->locations.end()) continue;
-    int other_index = std::distance(board->locations.begin(), other_it);
-    SkPath other_shape = other->widget->subtree_shape;
-    // Check if any location above `other` obscures it.
-    for (int i = other_index - 1; i >= 0; --i) {
-      Location& above = *board->locations[i];
-      if (&above == &dropped) continue;
-      SkPath above_shape = above.widget->subtree_shape;
-      SkPath intersection;
-      if (Op(above_shape, other_shape, kIntersect_SkPathOp, &intersection) &&
-          intersection.countVerbs() > 0) {
-        RaiseStack(above);
-        break;
-      }
-    }
-  }
+  dropped->object->ForEachToy([](ui::RootWidget&, automat::Toy& w) { w.RedrawThisFrame(); });
 }
 
 void BoardWidget::ConnectAtPoint(Argument arg, Vec2 point) {
   auto board = LockBoard();
   if (!board) return;
+  auto lock = std::lock_guard(vm.mutex);
   bool connected = false;
   Str refusal;  // the oracle's reason for the first end that matched in kind but refused
   auto TryConnect = [&](Interface end) {
@@ -306,8 +394,9 @@ void BoardWidget::ConnectAtPoint(Argument arg, Vec2 point) {
     }
   };
   for (auto& loc : board->locations) {
-    Vec2 local_point = (point - loc->position) / loc->scale;
-    SkPath shape = loc->ToyForObject().Shape();
+    auto& lw = toys.FindOrMake(*loc, this);
+    Vec2 local_point = (point - loc->Position(lw)) / loc->Scale(lw);
+    SkPath shape = lw.ToyForObject().Shape();
     if (!shape.contains(local_point.x, local_point.y)) {
       continue;
     }
@@ -323,7 +412,7 @@ void BoardWidget::ConnectAtPoint(Argument arg, Vec2 point) {
     });
   }
   if (!connected && !refusal.empty()) {
-    if (auto* widget = dynamic_cast<ui::ConnectionWidget*>(ToyStore().FindOrNull(arg))) {
+    if (auto* widget = dynamic_cast<ui::ConnectionWidget*>(toys.FindOrNull(arg))) {
       widget->ShowRefusal(std::move(refusal));
     }
   }
@@ -332,10 +421,12 @@ void BoardWidget::ConnectAtPoint(Argument arg, Vec2 point) {
 void* BoardWidget::Nearby(Vec2 start, float radius, std::function<void*(Location&)> callback) {
   auto board = LockBoard();
   if (!board) return nullptr;
+  auto lock = std::lock_guard(vm.mutex);
   float radius2 = radius * radius;
   for (auto& loc : board->locations) {
-    auto dist2 = (loc->object ? loc->ToyForObject().CoarseBounds().rect : Rect{})
-                     .MoveBy(loc->position)
+    auto& lw = toys.FindOrMake(*loc, this);
+    auto dist2 = (loc->object ? lw.ToyForObject().CoarseBounds().rect : Rect{})
+                     .MoveBy(loc->Position(lw))
                      .DistanceSquared(start);
     if (dist2 > radius2) {
       continue;
@@ -351,27 +442,7 @@ void BoardWidget::NearbyCandidates(
     Location& here, Argument::Table& arg, float radius,
     std::function<void(ObjectToy&, Interface::Table*, Vec<Vec2AndDir>&)> callback) {
   Argument bound(*here.object, arg);
-  // Check the currently dragged object
-  auto& root_widget = *ui::root_widget;
-  for (Action& action : root_widget.active_actions) {
-    if (auto* drag_location_action = dynamic_cast<DragLocationAction*>(&action)) {
-      for (auto& location : drag_location_action->locations) {
-        if (location.get() == &here) {
-          continue;
-        }
-        auto iface = bound.CanConnect(*location->object);
-        if (!iface) {
-          continue;
-        }
-        auto& toy = location->ToyForObject();
-        Vec<Vec2AndDir> to_points;
-        toy.ConnectionPositions(to_points);
-        callback(toy, *iface, to_points);
-      }
-    }
-  }
-  // Query nearby objects in the board
-  Vec2 center = here.ToyForObject().ArgStart(arg, this).pos;
+  Vec2 center = toys.FindOrMake(here, this).ToyForObject().ArgStart(arg, this).pos;
   Nearby(center, radius, [&](Location& other) -> void* {
     if (&other == &here) {
       return nullptr;
@@ -380,7 +451,7 @@ void BoardWidget::NearbyCandidates(
     if (!iface) {
       return nullptr;
     }
-    auto& toy = other.ToyForObject();
+    auto& toy = toys.FindOrMake(other, this).ToyForObject();
     Vec<Vec2AndDir> to_points;
     toy.ConnectionPositions(to_points);
     callback(toy, *iface, to_points);
@@ -391,21 +462,33 @@ void BoardWidget::NearbyCandidates(
 void BoardWidget::ForStack(Location& base, std::function<void(Location&, int index)> callback) {
   auto board = LockBoard();
   if (!board) return;
-  auto base_it = std::find_if(board->locations.begin(), board->locations.end(),
-                              [&base](const Ptr<Location>& l) { return l.get() == &base; });
-  if (base_it == board->locations.end()) return;
-  int base_index = std::distance(board->locations.begin(), base_it);
-  SkPath base_shape = base.widget->subtree_shape;
-  callback(base, base_index);
-  for (int atop_index = base_index - 1; atop_index >= 0; --atop_index) {
-    Location& atop = *board->locations[atop_index];
-    SkPath atop_shape = atop.widget->subtree_shape;
-    SkPath intersection;
-    if (Op(atop_shape, base_shape, kIntersect_SkPathOp, &intersection) &&
-        intersection.countVerbs() > 0) {
-      callback(atop, atop_index);
-      Op(base_shape, atop_shape, kUnion_SkPathOp, &base_shape);
+  auto lock = std::lock_guard(vm.mutex);
+  std::unordered_map<LocationWidget*, std::pair<Location*, int>> index_of;
+  int index = 0;
+  for (auto& loc : board->locations) {
+    if (auto* lw = toys.FindOrNull(*loc)) {
+      index_of[lw] = {loc.get(), index};
     }
+    ++index;
+  }
+  auto* base_lw = toys.FindOrNull(base);
+  auto base_it = index_of.find(base_lw);
+  if (!base_lw || base_it == index_of.end()) return;
+  Vec<LocationWidget*> pile{base_lw};
+  std::unordered_set<LocationWidget*> seen{base_lw};
+  for (size_t i = 0; i < pile.size(); ++i) {
+    for (LocationWidget& above : pile[i]->overlapping_above) {
+      if (seen.insert(&above).second && index_of.contains(&above)) {
+        pile.push_back(&above);
+      }
+    }
+  }
+  std::sort(pile.begin(), pile.end(), [&](LocationWidget* a, LocationWidget* b) {
+    return index_of[a].second > index_of[b].second;
+  });
+  for (auto* lw : pile) {
+    auto [loc, idx] = index_of[lw];
+    callback(*loc, idx);
   }
 }
 
@@ -419,22 +502,14 @@ SkPath BoardWidget::StackShape(Location& base) {
   return stack_shape;
 }
 
-Vec<Ptr<Location>> BoardWidget::ExtractStack(Location& base) {
-  auto board = LockBoard();
-  if (!board) return {};
-  Vec<int> stack_indices;
-  ForStack(base, [&](Location&, int index) { stack_indices.push_back(index); });
-  if (stack_indices.empty()) return {};
-
+Vec<Ptr<Location>> BoardWidget::DragStack(Location& base) {
   Vec<Ptr<Location>> result;
-  // Indices are in decreasing order (base is always first/highest), so erasing in order is safe.
-  for (int idx : stack_indices) {
-    result.insert(result.begin(), std::move(board->locations[idx]));
-    board->locations.erase(board->locations.begin() + idx);
+  ForStack(base,
+           [&](Location& loc, int index) { result.insert(result.begin(), loc.AcquirePtr()); });
+  if (!result.empty()) {
+    RaiseStack(base);
+    audio::Play(embedded::assets_SFX_canvas_pick_wav);
   }
-
-  WakeAnimation();
-  audio::Play(embedded::assets_SFX_canvas_pick_wav);
   return result;
 }
 
@@ -474,9 +549,6 @@ Vec<Ptr<Location>> BoardWidget::CloneStack(Location& base) {
 
   // Prevent default toy appearance animation by pre-creating toys for the clones.
   // Anchoring to the original toys makes the new toys appear in the same place as the originals.
-  // This violates some parent/child properties (parent is not aware of the child toys) but it
-  // shouldn't cause any big issues.
-  // (if it does - move this part out of CloneStack and into the caller)
   auto& root = FindRootWidget();
   for (size_t i = 0; i < originals.size(); ++i) {
     auto* orig_lw = originals[i]->widget.Get();
@@ -491,9 +563,11 @@ Vec<Ptr<Location>> BoardWidget::CloneStack(Location& base) {
 void BoardWidget::RaiseStack(Location& base) {
   auto board = LockBoard();
   if (!board) return;
+  auto lock = std::lock_guard(vm.mutex);
   Vec<int> stack_indices;
   ForStack(base, [&](Location&, int index) { stack_indices.push_back(index); });
   if (stack_indices.empty()) return;
+  board->WakeToys();
 
   Vec<Ptr<Location>> stack;
   // Indices are in decreasing order (highest first), so erasing in order is safe.
@@ -502,10 +576,60 @@ void BoardWidget::RaiseStack(Location& base) {
     board->locations.erase(board->locations.begin() + idx);
   }
 
-  // Re-insert at the front (top of Z-order).
   for (int i = stack.size() - 1; i >= 0; --i) {
     board->locations.insert(board->locations.begin(), std::move(stack[i]));
   }
+}
+
+struct MoveBoardAction : Action {
+  Ptr<Board> board;
+  Vec2 grab_offset;
+
+  MoveBoardAction(ui::Pointer& pointer, Ptr<Board>&& board_arg)
+      : Action(pointer), board(std::move(board_arg)) {
+    grab_offset = board->position - pointer.PositionOnCanvas();
+    auto lock = std::lock_guard(vm.mutex);
+    auto it = std::find(vm.boards.begin(), vm.boards.end(), board);
+    if (it != vm.boards.end()) {
+      std::rotate(vm.boards.begin(), it, it + 1);
+    }
+    audio::Play(embedded::assets_SFX_canvas_pick_wav);
+  }
+
+  ~MoveBoardAction() override { audio::Play(embedded::assets_SFX_canvas_drop_wav); }
+
+  void Update() override {
+    board->position = pointer.PositionOnCanvas() + grab_offset;
+    board->WakeToys();
+    pointer.root_widget.WakeAnimation();
+  }
+};
+
+struct MoveBoardOption : TextOption {
+  WeakPtr<Board> weak;
+  MoveBoardOption(WeakPtr<Board> weak) : TextOption("Move"), weak(weak) {}
+  std::unique_ptr<Option> Clone() const override { return std::make_unique<MoveBoardOption>(weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    if (auto board = weak.Lock()) {
+      return std::make_unique<MoveBoardAction>(pointer, std::move(board));
+    }
+    return nullptr;
+  }
+  Dir PreferredDir() const override { return N; }
+};
+
+void BoardWidget::VisitOptions(const OptionsVisitor& visitor) const {
+  if (auto board = LockBoard()) {
+    MoveBoardOption move{board->AcquireWeakPtr()};
+    visitor(move);
+  }
+}
+
+std::unique_ptr<Action> BoardWidget::FindAction(ui::Pointer& pointer, ui::ActionTrigger btn) {
+  if (btn == ui::PointerButton::Right) {
+    return OpenMenu(pointer);
+  }
+  return nullptr;
 }
 
 }  // namespace automat

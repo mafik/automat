@@ -108,10 +108,7 @@ struct PwHost {
   std::mutex objects_mutex;
   Vec<WeakPtr<PipeWireNode>> objects;
 
-  static PwHost& Get() {
-    static PwHost host;
-    return host;
-  }
+  static PwHost& Get();
 
   PwHost() {
     pw_init(nullptr, nullptr);
@@ -139,6 +136,29 @@ struct PwHost {
       SyncLocked();  // the initial registry dump completes before first use
     }
     pw_thread_loop_unlock(loop);
+  }
+
+  ~PwHost() {
+    if (!loop) return;
+    pw_thread_loop_lock(loop);
+    for (auto& node : nodes) {
+      if (node->proxy) {
+        spa_hook_remove(&node->listener);
+        pw_proxy_destroy(node->proxy);
+      }
+    }
+    if (registry) {
+      spa_hook_remove(&registry_listener);
+      pw_proxy_destroy((pw_proxy*)registry);
+    }
+    if (core) {
+      spa_hook_remove(&core_listener);
+      pw_core_disconnect(core);
+    }
+    pw_thread_loop_unlock(loop);
+    pw_thread_loop_stop(loop);
+    if (context) pw_context_destroy(context);
+    pw_thread_loop_destroy(loop);
   }
 
   static void OnCoreDone(void* data, uint32_t id, int seq) {
@@ -547,6 +567,16 @@ struct PwHost {
   }
 };
 
+static Optional<PwHost> pw_host;
+static std::once_flag pw_host_once;
+
+PwHost& PwHost::Get() {
+  std::call_once(pw_host_once, [] { pw_host.emplace(); });
+  return *pw_host;
+}
+
+void StopPipeWire() { pw_host.reset(); }
+
 // ============================================================================
 // The VU capture stream: a tiny pw_stream targeting the node (capturing the
 // monitor when the node is a sink). Peaks land in the object's atomic.
@@ -670,7 +700,7 @@ void PipeWireNode::RefreshFromMirror() {
   Str name = NodeName();
   // The capture stream follows board membership: only a proxy standing on a
   // board listens to its node.
-  bool want_stream = host.connected && here != nullptr && !name.empty();
+  bool want_stream = host.connected && MyLocation() != nullptr && !name.empty();
   if (want_stream != (stream != nullptr)) {
     pw_thread_loop_lock(host.loop);
     DestroyVuStreamLocked(*this);
@@ -770,11 +800,12 @@ void PipeWireNode::OnOutConnect(StreamArgument self, Interface end) {
   out_links_realized = realized;
 }
 
-static bool SameBoard(const Object& a, const Object& b) {
-  if (!a.here || !b.here) return false;
-  auto board_a = a.here->parent_location.Lock();
-  auto board_b = b.here->parent_location.Lock();
-  return board_a && board_a == board_b;
+static bool SameBoard(Object& a, Object& b) {
+  auto lock = std::lock_guard(vm.mutex);
+  for (auto& board : vm.boards) {
+    if (board->LocationOrNull(a) && board->LocationOrNull(b)) return true;
+  }
+  return false;
 }
 
 void PipeWireNode::SyncBoardLinks() {
@@ -898,9 +929,7 @@ struct PipeWireNodeToy : ui::beta::ObjectToy {
   SkPath Shape() const override {
     return SkPath::RRect(RRect::MakeSimple(Rect::MakeCenterZero(kPlateW, kPlateH), 3_mm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
-    return Shape().getBounds().makeOutset(4_mm, 4_mm);
-  }
+  Optional<Rect> DrawBounds() const override { return Shape().getBounds().makeOutset(4_mm, 4_mm); }
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&PipeWireNode::out_stream_tbl)) {
       return Vec2AndDir{.pos = Vec2(-kPlateW / 2 + 10_mm, -kPlateH / 2), .dir = -90_deg};
@@ -1226,9 +1255,7 @@ struct PipeWireShelfToy : ui::beta::ObjectToy {
   }
 
   // The BETA stamp overhangs the top-right corner; without this it gets clipped at the sheet.
-  Optional<Rect> TextureBounds() const override {
-    return Shape().getBounds().makeOutset(2_cm, 2_cm);
-  }
+  Optional<Rect> DrawBounds() const override { return Shape().getBounds().makeOutset(2_cm, 2_cm); }
 
   // The shelf follows the daemon: it keeps observing and relays out when the
   // node set changes.

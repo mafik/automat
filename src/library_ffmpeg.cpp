@@ -524,9 +524,7 @@ struct MediaFileToy : ui::beta::ObjectToy {
   SkPath Shape() const override {
     return SkPath::RRect(RRect::MakeSimple(Rect::MakeCenterZero(kPlateW, kFilePlateH), 3_mm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
-    return Shape().getBounds().makeOutset(4_mm, 4_mm);
-  }
+  Optional<Rect> DrawBounds() const override { return Shape().getBounds().makeOutset(4_mm, 4_mm); }
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&decltype(MediaFile::out_stream)::tbl)) {
       return Vec2AndDir{.pos = Vec2(-kPlateW / 2 + 10_mm, -kFilePlateH / 2), .dir = -90_deg};
@@ -677,9 +675,7 @@ struct FfmpegDecoderToy : ui::beta::ObjectToy {
   SkPath Shape() const override {
     return SkPath::RRect(RRect::MakeSimple(Rect::MakeCenterZero(kPlateW, kDecoderPlateH), 3_mm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
-    return Shape().getBounds().makeOutset(4_mm, 4_mm);
-  }
+  Optional<Rect> DrawBounds() const override { return Shape().getBounds().makeOutset(4_mm, 4_mm); }
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&decltype(FfmpegDecoder::out_stream)::tbl)) {
       return Vec2AndDir{.pos = Vec2(-kPlateW / 2 + 10_mm, -kDecoderPlateH / 2), .dir = -90_deg};

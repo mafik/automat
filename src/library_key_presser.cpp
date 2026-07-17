@@ -144,7 +144,7 @@ struct KeyPresserWidget : ObjectToy {
       } else if (pointer.keyboard) {
         auto* child = shortcut_button->child.get();
         Vec2 caret_position =
-            TransformBetween(*child, *this).mapPoint(child->TextureBounds()->TopLeftCorner());
+            TransformBetween(*child, *this).mapPoint(child->DrawBounds()->TopLeftCorner());
         key_selector = &pointer.keyboard->RequestCaret(*this, caret_position);
       }
       WakeAnimation();

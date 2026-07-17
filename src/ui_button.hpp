@@ -62,7 +62,7 @@ struct Button : Widget {
 
   virtual void DrawButtonFace(SkCanvas&, SkColor4f bg, SkColor4f fg) const;
 
-  Optional<Rect> TextureBounds() const override;
+  Optional<Rect> DrawBounds() const override;
 
   void UpdateChildTransform();
 
@@ -128,7 +128,7 @@ struct ToggleButton : Widget {
   void Draw(SkCanvas&) const override;
   SkRRect RRect() const { return off->RRect(); }
   SkPath Shape() const override { return off->Shape(); }
-  Optional<Rect> TextureBounds() const override { return off->TextureBounds()->Outset(2 * 1_mm); }
+  Optional<Rect> DrawBounds() const override { return off->DrawBounds()->Outset(2 * 1_mm); }
 
   virtual bool Filled() const { return false; }
 };

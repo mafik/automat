@@ -150,7 +150,7 @@ struct Widget : OptionsProvider {
   float smooth_render_millis = NAN;
 
   // TODO: remove / clean up
-  Optional<SkRect> pack_frame_texture_bounds;
+  Optional<SkRect> pack_frame_draw_bounds;
 
   // Whenever PackFrame decides to render a widget, it stores the rendered bounds in this field.
   // This is then used later to check if the old surface can be reused.
@@ -296,6 +296,9 @@ struct Widget : OptionsProvider {
   SkPath shape;          // Cached result of the last `Shape()` call.
   SkPath subtree_shape;  // Union of `shape` and every child's `subtree_shape`
 
+  Optional<Rect> draw_bounds;
+  Rect subtree_draw_bounds;
+
   void RecomputeSubtreeShape();
 
   // Can be overridden to provide a more efficient alternative to `shape.getBounds()`.
@@ -356,7 +359,12 @@ struct Widget : OptionsProvider {
   virtual DropTarget* AsDropTarget() { return nullptr; }
 
   // If the object should be cached into a texture, return its bounds in local coordinates.
-  virtual Optional<Rect> TextureBounds() const { return shape.getBounds(); }
+  virtual Optional<Rect> DrawBounds() const { return shape.getBounds(); }
+
+  virtual Rect CoverBounds() const {
+    return draw_bounds.has_value() ? *draw_bounds : CoarseBounds().rect;
+  }
+
   virtual Vec<Vec2> TextureAnchors() { return {}; }
 
   // This will draw the given child widget using it's precomputed texture (if available).

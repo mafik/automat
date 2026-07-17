@@ -4,8 +4,10 @@
 
 #include <atomic>
 #include <cstdint>
+#include <mutex>
 
 #include "ptr.hpp"
+#include "vec.hpp"
 
 namespace automat {
 
@@ -24,12 +26,20 @@ struct Board;
 struct VM {
   std::atomic<uint32_t> wake_counter = 0;
 
-  Ptr<Location> root_location;
-  Ptr<Board> root_board;
+  // Guards `boards` and every Board::locations. Recursive because board mutations can happen
+  // inside argument connection callbacks that run under an outer lock (ConnectAtPoint).
+  std::recursive_mutex mutex;
+
+  // Boards in front-to-back order.
+  Vec<Ptr<Board>> boards;
 
   void WakeToys() { wake_counter.fetch_add(1, std::memory_order_relaxed); }
 };
 
 extern VM vm;
+
+// The board where externally-created objects land when no better board is known.
+// Creates a board at the origin when none exists.
+Board& DefaultBoard();
 
 }  // namespace automat

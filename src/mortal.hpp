@@ -235,6 +235,16 @@ struct MortalList {
   bool empty() const { return colony.empty(); }
   size_t size() const { return colony.size(); }
 
+  void Clear() {
+    for (auto& entry : colony) {
+      if (entry.pprev) {
+        mortal_priv::UnlinkFast(&entry);
+        entry.pprev = nullptr;
+      }
+    }
+    colony.clear();
+  }
+
   struct Iterator {
     typename Colony<Entry>::iterator it;
     T& operator*() const { return *static_cast<T*>(it->mortal); }

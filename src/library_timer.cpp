@@ -130,7 +130,7 @@ static const char* RangeName(Timer::Range range) {
 static void SetDuration(Timer& timer, Duration new_duration) {
   auto lock = std::lock_guard(timer.mtx);
   if (timer.running->IsRunning()) {
-    if (auto h = timer.here) {
+    if (auto* h = timer.MyLocation()) {
       RescheduleAt(*h, timer.start_time + timer.duration_value, timer.start_time + new_duration);
     }
   }
@@ -140,7 +140,7 @@ static void SetDuration(Timer& timer, Duration new_duration) {
 }
 
 static void PropagateDurationOutwards(Timer& timer) {
-  if (auto h = timer.here) {
+  if (auto* h = timer.MyLocation()) {
     // auto duration_obj = timer.duration_arg.GetLocation(*h);
     // if (duration_obj.ok && duration_obj.location) {
     //   duration_obj.location->SetNumber(timer.duration_value * TickCount(timer.range) /
@@ -153,14 +153,16 @@ void Timer::StartTimer(std::unique_ptr<RunTask>& run_task) {
   auto lock = std::lock_guard(mtx);
   ZoneScopedN("Timer");
   start_time = time::SteadyClock::now();
-  ScheduleAt(*here, start_time + duration_value);
+  if (auto* location = MyLocation()) {
+    ScheduleAt(*location, start_time + duration_value);
+  }
   WakeToys();
   running->BeginLongRunning(std::move(run_task));
 }
 
 void Timer::CancelTimer() {
-  if (here) {
-    CancelScheduledAt(*here, start_time + duration_value);
+  if (auto* location = MyLocation()) {
+    CancelScheduledAt(*location, start_time + duration_value);
   }
   WakeToys();
 }
@@ -236,14 +238,18 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
     d.Get(value, status);
     running->BeginLongRunning(make_unique<RunTask>(AcquireWeakPtr(), &Timer::run_tbl));
     start_time = time::SteadyNow() - time::FromSeconds(value);
-    ScheduleAt(*here, start_time + duration_value);
+    if (auto* location = MyLocation()) {
+      ScheduleAt(*location, start_time + duration_value);
+    }
   } else if (key == "duration_seconds") {
     double value;
     d.Get(value, status);
     if (OK(status)) {
       duration_value = time::FromSeconds(value);
       if (running->IsRunning()) {
-        ScheduleAt(*here, start_time + duration_value);
+        if (auto* location = MyLocation()) {
+          ScheduleAt(*location, start_time + duration_value);
+        }
       }
     }
   } else if (key == "range") {

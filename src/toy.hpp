@@ -62,9 +62,8 @@ struct Toy : ui::Widget {
   // Walk the parent chain up to LocationWidget, then return the last Toy before that.
   Toy* BaseToy() const;
 
-  // The widget beneath which connections to this toy terminate
-  // TODO: this should be removed - interfaces should decide this instead
-  virtual ui::Widget* ConnectionCover() { return this; }
+  // Find a widget that represents the given interface.
+  virtual ui::Widget* FindWidget(Interface::Table*) { return this; }
 };
 
 // ToyMaker is a Part that can make toys
@@ -116,7 +115,7 @@ struct ToyStore {
 
   // Called once per frame on the UI thread.
   // Removes dead toys and wakes toys whose owners have updated state.
-  void Tick(time::Timer&);
+  void Poll(time::Timer&);
 
   template <ToyMaker T>
   T::Toy& FindOrMake(T& maker, ui::Widget* parent) {
@@ -135,6 +134,25 @@ struct ToyStore {
       }
     }
     return static_cast<T::Toy&>(*it->second);
+  }
+
+  // Extract a toy out of this store (null if not found).
+  // The widget keeps its parent.
+  template <Part T>
+  std::unique_ptr<Toy> Extract(T& part) {
+    auto it = container.find(MakeKey(part));
+    if (it == container.end()) {
+      return nullptr;
+    }
+    auto toy = std::move(it->second);
+    container.erase(it);
+    return toy;
+  }
+
+  // Insert an externally-owned toy into the store, replacing any existing entry.
+  template <Part T>
+  void Insert(T& part, std::unique_ptr<Toy>&& toy) {
+    container[MakeKey(part)] = std::move(toy);
   }
 };
 

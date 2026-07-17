@@ -140,7 +140,7 @@ struct TextSelectAction : Action {
     if (text_field.argument) {
       Argument arg(text_field.argument.OwnerUnsafe<Object>(), text_field.argument.GetUnsafe());
       if (auto* connection_widget =
-              dynamic_cast<ConnectionWidget*>(pointer.root_widget.toys.FindOrNull(arg))) {
+              dynamic_cast<ConnectionWidget*>(text_field.ToyStore().FindOrNull(arg))) {
         drag.emplace(pointer, *connection_widget);
       }
     }

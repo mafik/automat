@@ -286,9 +286,7 @@ struct RunButton : Widget {
   bool CenteredAtZero() const override { return true; }
   SkPath Shape() const override { return SkPath::Circle(0, 0, kRadius); }
   // Outset so the outline overshoot and the offset shadow aren't clipped.
-  Optional<Rect> TextureBounds() const override {
-    return Shape().getBounds().makeOutset(4_mm, 4_mm);
-  }
+  Optional<Rect> DrawBounds() const override { return Shape().getBounds().makeOutset(4_mm, 4_mm); }
   void PointerHover(Pointer& p) override { clickable.PointerHover(p); }
   void PointerUnhover(Pointer& p) override { clickable.PointerUnhover(p); }
   std::unique_ptr<Action> FindAction(Pointer& p, ActionTrigger a) override {

@@ -938,7 +938,7 @@ struct LeptonicaImageWidget : beta::ObjectToy {
 
   SkPath Shape() const override { return SkPath::Rect(PaperRect().sk); }
 
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     Rect p = PaperRect();
     return Rect(p.left - 1_mm, p.bottom - 7_mm, p.right + 1.5_mm, p.top + 1_mm);
   }
@@ -1118,9 +1118,7 @@ struct LeptonicaShelfWidget : beta::ObjectToy {
   }
 
   // The BETA stamp overhangs the top-right corner; without this it gets clipped at the sheet.
-  Optional<Rect> TextureBounds() const override {
-    return Shape().getBounds().makeOutset(2_cm, 2_cm);
-  }
+  Optional<Rect> DrawBounds() const override { return Shape().getBounds().makeOutset(2_cm, 2_cm); }
 
   void Draw(SkCanvas& canvas) const override {
     Rect sheet = Rect::MakeCenterZero(sheet_w, sheet_h);
@@ -1287,7 +1285,7 @@ struct ThresholdToy : beta::ObjectToy {
   // overhang Shape() if they stay inside THIS rect — but anything INTERACTIVE must be unioned into
   // Shape() itself: the pointer path (FillPath, pointer.cpp) only reaches a widget where
   // Shape().contains() the point, so a control outside the outline is dead to the mouse.
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.4_cm, CardBottomM() - 0.4_cm, kHalfW + 1.2_cm, CardTopM() + 0.5_cm);
   }
 
@@ -2055,7 +2053,7 @@ struct MorphologyToy : beta::ObjectToy {
     return SkPath::RRect(RRect::MakeSimple(Rect(-kHalfW, FaceBottom(), kHalfW, kFaceTop), 4_mm).sk);
   }
 
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, FaceBottom() - 0.6_cm, kHalfW + 0.5_cm,
                 HandleCY() + kHandleR + 0.4_cm);
   }
@@ -2561,7 +2559,7 @@ struct ToneToy : beta::ObjectToy {
     b.close();
     return b.detach();
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kFaceBottom - 0.5_cm, kHalfW + 0.5_cm, kTopHump + 0.5_cm);
   }
 
@@ -3054,7 +3052,7 @@ struct GeometryToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::RRect(RRect::MakeSimple(Rect(kDialCX, kFaceBottom, kHalfW, kFaceTop), 4_mm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(kDialCX - 2.1_cm, kFaceBottom - 1.2_cm, kHalfW + 0.5_cm, kFaceTop + 0.5_cm);
   }
 
@@ -3646,7 +3644,7 @@ struct ChannelToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::RRect(RRect::MakeSimple(Rect(-kHalfW, kFaceBottom, kHalfW, kFaceTop), 4_mm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kFaceBottom - 1.0_cm, kHalfW + 0.5_cm, kPeakTopY + 0.7_cm);
   }
 
@@ -4052,7 +4050,7 @@ struct ConvolveToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::RRect(RRect::MakeSimple(Rect(-kHalfW, kFaceBottom, kHalfW, kFaceTop), 4_mm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kFaceBottom - 1.0_cm, kHalfW + 0.5_cm, kLensCY + kLensR + 0.5_cm);
   }
 
@@ -4573,7 +4571,7 @@ struct BlendToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::RRect(RRect::MakeSimple(Rect(-kHalfW, kFaceBottom, kHalfW, kFaceTop), 4_mm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kFaceBottom - 1.0_cm, kHalfW + 1.0_cm, kFaceTop + 1.0_cm);
   }
 
@@ -5033,7 +5031,7 @@ struct QuantizeToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, kTabTop).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kBottom - 0.4_cm, kHalfW + 0.5_cm, kTabTop + 0.3_cm);
   }
 
@@ -5566,7 +5564,7 @@ struct FlattenToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, kShadeTop).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kBottom - 0.4_cm, kHalfW + 0.5_cm, kShadeTop + 0.6_cm);
   }
 
@@ -5930,7 +5928,7 @@ struct PosterizeToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, kStairHigh).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kBottom - 0.4_cm, kHalfW + 0.5_cm, kStairHigh + 0.4_cm);
   }
 
@@ -6213,7 +6211,7 @@ struct DitherToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, kBodyTop + 0.8_cm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kBottom - 0.4_cm, kHalfW + 0.5_cm, kBodyTop + 1.2_cm);
   }
 
@@ -6546,7 +6544,7 @@ struct DeskewToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, kTabT).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kBottom - 0.4_cm, kHalfW + 0.5_cm, kTabT + 0.8_cm);
   }
 
@@ -6988,7 +6986,7 @@ struct FindLevelToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, 2.85_cm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kBottom - 0.4_cm, kHalfW + 0.5_cm, 3.3_cm);
   }
 
@@ -7349,7 +7347,7 @@ struct CountToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, 2.2_cm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kBottom - 0.4_cm, kHalfW + 0.5_cm, 2.7_cm);
   }
 
@@ -7709,7 +7707,7 @@ struct SelectToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, kPlateauTop).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kBottom - 0.4_cm, kHalfW + 0.5_cm, kPlateauTop + 0.5_cm);
   }
 
@@ -8193,7 +8191,7 @@ struct FadeToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, kTop).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 1.1_cm, kBottom - 1.1_cm, kHalfW + 1.1_cm, kTop + 1.1_cm);
   }
 
@@ -8560,7 +8558,7 @@ struct ReduceToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, kTop).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kBottom - 0.5_cm, kHalfW + 0.5_cm, kTop + 0.5_cm);
   }
 
@@ -8997,7 +8995,7 @@ struct MeasureToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, 2.2_cm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kBottom - 0.4_cm, kHalfW + 0.5_cm, 2.6_cm);
   }
 
@@ -9422,7 +9420,7 @@ struct WarpToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, kBodyTop + 0.7_cm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kBottom - 0.4_cm, kHalfW + 0.5_cm, kBodyTop + 1.2_cm);
   }
 
@@ -9758,7 +9756,7 @@ struct ColorToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, kBodyTop + kWheelR).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kBottom - 0.4_cm, kHalfW + 0.5_cm, kBodyTop + kWheelR + 0.5_cm);
   }
 
@@ -10209,7 +10207,7 @@ struct SeedfillToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, 3.0_cm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kBottom - 0.4_cm, kHalfW + 0.5_cm, 3.4_cm);
   }
 
@@ -10675,7 +10673,7 @@ struct GenerateToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, kBodyTop + 1.8_cm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kBottom - 0.4_cm, kHalfW + 0.5_cm, kBodyTop + 2.6_cm);
   }
 
@@ -11033,7 +11031,7 @@ struct CropToy : beta::ObjectToy {
     if (Simplify(b.detach(), &out)) return out;
     return SkPath::Rect(Rect(-kHalfW, kBottom, kHalfW, 2.15_cm).sk);
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect(-kHalfW - 0.5_cm, kBottom - 0.4_cm, kHalfW + 0.5_cm, 2.6_cm);
   }
 

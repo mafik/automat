@@ -60,7 +60,7 @@ struct Rocker : Widget {
   }
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
   RRect CoarseBounds() const override { return kBounds; }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     auto bounds = kBounds.rect;
     bounds.left -= 2_mm;
     bounds.right += 2_mm;

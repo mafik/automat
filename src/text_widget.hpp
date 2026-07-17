@@ -10,7 +10,7 @@ struct TextWidget : ui::Widget {
   float width;
   Str text;
   TextWidget(ui::Widget* parent, Str text);
-  Optional<Rect> TextureBounds() const override;
+  Optional<Rect> DrawBounds() const override;
   SkPath Shape() const override;
   void Draw(SkCanvas& canvas) const override;
 };

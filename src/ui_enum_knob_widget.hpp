@@ -79,7 +79,7 @@ struct EnumKnobWidget : ui::Widget {
 
   void Draw(SkCanvas& canvas) const override;
 
-  Optional<Rect> TextureBounds() const override;
+  Optional<Rect> DrawBounds() const override;
 
   struct ChangeEnumKnobAction : public Action {
     MortalPtr<EnumKnobWidget> widget;

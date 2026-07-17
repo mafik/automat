@@ -33,7 +33,7 @@ std::unique_ptr<Action> ShelfButton::FindAction(Pointer& p, ActionTrigger btn) {
   if (btn != PointerButton::Left) return nullptr;
   auto obj = proto->Clone();
   p.root_widget.toys.FindOrMake(*obj, this);
-  auto loc = MAKE_PTR(Location, vm.root_location);
+  auto loc = MAKE_PTR(Location);
   loc->InsertHere(std::move(obj));
   return std::make_unique<DragLocationAction>(p, std::move(loc));
 }

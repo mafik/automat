@@ -26,7 +26,7 @@ struct PrototypeButton : Widget {
 
   RRect CoarseBounds() const override { return proto_widget->CoarseBounds(); }
 
-  Optional<Rect> TextureBounds() const override { return std::nullopt; }
+  Optional<Rect> DrawBounds() const override { return std::nullopt; }
 
   void PointerEnter(Pointer& pointer) override { hand_icon.emplace(pointer, Pointer::kIconHand); }
 
@@ -58,7 +58,7 @@ struct Toolbar : ui::Widget, ui::PointerMoveCallback {
   float CalculateWidth() const;
 
   // If the object should be cached into a texture, return its bounds in local coordinates.
-  Optional<Rect> TextureBounds() const override;
+  Optional<Rect> DrawBounds() const override;
 
   void PointerEnter(ui::Pointer& pointer) override { StartWatching(pointer); }
 

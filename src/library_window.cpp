@@ -572,7 +572,9 @@ void Window::Capture() {
 #endif
   WakeToys();
 
-  here->ScheduleUpdate();
+  if (auto* location = MyLocation()) {
+    location->ScheduleUpdate();
+  }
 }
 
 void Window::WindowWatcherForegroundChanged(ui::WindowWatching&, os::WindowHandle window) {
@@ -655,7 +657,7 @@ bool Window::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 void Window::on_off_Impl::OnSync() {
   if (obj->window_watching) return;  // Already watching
-  if (obj->here) {
+  if (obj->MyLocation()) {
     ui::root_widget->window->BeginWindowWatching(&*obj, &obj->window_watching);
   }
 }

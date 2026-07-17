@@ -23,7 +23,7 @@ struct KeyLabelWidget : Widget, LabelMixin {
   SkPath Shape() const override {
     return SkPath::Rect(SkRect::MakeXYWH(-width / 2, -kKeyLetterSize / 2, width, kKeyLetterSize));
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return SkRect::MakeLTRB(-width / 2, 1.5 * kLetterSize, width / 2, -0.5 * kLetterSize);
   }
   void Draw(SkCanvas& canvas) const override {

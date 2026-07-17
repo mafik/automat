@@ -12,7 +12,7 @@ struct Text : Widget, PaintMixin {
   SkPath Shape() const override;
   void Draw(SkCanvas&) const override;
   StrView Name() const override { return "Text"; }
-  Optional<Rect> TextureBounds() const override;
+  Optional<Rect> DrawBounds() const override;
 };
 
 }  // namespace automat::ui

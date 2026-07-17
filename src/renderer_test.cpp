@@ -157,7 +157,7 @@ vec4 main( float2 fragCoord ) {
   }
   SkPath Shape() const override {
     auto r =
-        Rect::MakeAtZero(1_cm, 2_cm).MoveBy(root_widget->TextureBounds()->Center() + Vec2(0, 3_cm));
+        Rect::MakeAtZero(1_cm, 2_cm).MoveBy(root_widget->DrawBounds()->Center() + Vec2(0, 3_cm));
     return SkPath::Oval(r);
   };
 };

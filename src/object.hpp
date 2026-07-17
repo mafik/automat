@@ -41,8 +41,6 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
 
   // Note: 3 bytes of padding here
 
-  Location* here = nullptr;
-
   // Bump the counter to notify Toys that state has changed.
   void WakeToys() { wake_counter.fetch_add(1, std::memory_order_relaxed); }
 
@@ -58,8 +56,6 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   // prototype instance. This prototype will be cloned when new objects are
   // created. See the `Board::Create` function for details.
   virtual Ptr<Object> Clone() const = 0;
-
-  virtual void Relocate(Location* new_here);
 
   // Release the memory occupied by this object.
   virtual ~Object();
@@ -131,7 +127,9 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   // Clears the error reported by the object itself
   void ClearOwnError();
 
-  // If this object is owned by a Board, return the Location that's used to store it.
+  // The first Location storing this object, scanning boards top to bottom. Null when no board
+  // owns it. Thread-safe (takes vm.mutex); the returned pointer is only stable while the
+  // object stays on its board.
   Location* MyLocation();
 
   Interface::Table* GetInterface() { return nullptr; }

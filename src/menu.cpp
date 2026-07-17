@@ -275,7 +275,7 @@ struct Menu : ui::Widget {
         return 1;
     }
   }
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     return Rect::MakeAtZero(kMenuSize * 3, kMenuSize * 3);
   }
   Tock Tick(time::Timer& timer) override;

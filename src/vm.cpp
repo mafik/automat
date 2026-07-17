@@ -8,4 +8,13 @@ namespace automat {
 
 VM vm;
 
+Board& DefaultBoard() {
+  auto lock = std::lock_guard(vm.mutex);
+  if (vm.boards.empty()) {
+    vm.boards.push_back(MAKE_PTR(Board));
+    vm.WakeToys();
+  }
+  return *vm.boards.front();
+}
+
 }  // namespace automat

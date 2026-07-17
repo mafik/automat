@@ -11,6 +11,10 @@ namespace automat {
 
 struct Object;
 
+namespace time {
+struct Timer;
+}  // namespace time
+
 namespace ui {
 struct Pointer;
 struct Widget;
@@ -38,6 +42,9 @@ struct Action {
 
   // Return true to highlight the given part of some object.
   virtual bool Highlight(Interface highlighted) const { return false; }
+
+  // Check the wake counters of referenced objects here.
+  virtual void Poll(time::Timer&) {}
 
   virtual ui::Widget* Widget() { return nullptr; }
 

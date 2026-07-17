@@ -72,10 +72,10 @@ Automat is a C++ application for semi-autonomous automation with a layered archi
 
 ### Key Components
 
-- **Location** (`src/location.hpp`) - Owns an Object and tracks its position/scale within a Board
-- **Board** (`src/base.hpp`) - Container for Locations; provides canvas, drop target, connection routing
-- **ToyStore** (`src/toy.hpp`) - Maps `(owner, atom)` keys to Toy widgets; lives on `RootWidget`
-- **Argument** (`src/argument.hpp`) - Typed connection between Objects; `ArgumentOf` is its ToyMaker
+- **Location** (`src/location.hpp`) - Owns an Object and tracks its position/scale within its Board
+- **Board** (`src/board.hpp`) - Container for Locations; several boards can own the same Object. The board list is `vm.boards` (`src/vm.hpp`); `vm.mutex` guards it together with every board's `locations`
+- **ToyStore** (`src/toy.hpp`) - Maps `(owner, atom)` keys to Toy widgets. Each `BoardWidget` owns the store for its board (this enforces one widget per object per board); `RootWidget` keeps the store for top-level widgets; `Widget::ToyStore()` resolves to the nearest enclosing store
+- **Argument** (`src/argument.hpp`) - Typed connection between Objects; `ArgumentOf` is its ToyMaker. Connections are drawn only on boards that own both endpoint objects (see `docs/parrots/Boards.md`)
 - **Syncable** (`src/sync.hpp`) - Sync interface allowing Objects to act as one via a shared Gear
 - **Custom Build System** - Python-based build system in `run_py/`
 - **Extensions** - Python modules in `src/*.py` that extend the build system
@@ -84,7 +84,7 @@ Automat is a C++ application for semi-autonomous automation with a layered archi
 
 Objects (multi-threaded) notify Toys (UI-thread) via `wake_counter`:
 - Object bumps `wake_counter.fetch_add(1, relaxed)` on state change
-- `ToyStore::WakeUpdatedToys()` scans each frame, comparing counters and calling `WakeAnimation()`
+- `RootWidget::Poll()` runs each frame, comparing counters and calling `WakeAnimation()`; it covers the root store, every board's store (`BoardWidget::Poll`) and in-progress actions holding toys (`Action::Poll`)
 - Toy pulls latest state in `Tick()` by locking the Object
 
 ## Project Structure
@@ -108,6 +108,8 @@ Documentation maintained using stochastic parrots should be placed in `docs/parr
 - `docs/parrots/Leptonica Language.md` - documents the visual language of Leptonica objects
 - `docs/parrots/Pipeline Language.md` - the design for pipeline libraries (GStreamer, PipeWire, FFmpeg, GEGL, TensorFlow, UNIX pipes): blocks that work the moment they are dropped, previews and meters fed by real API counters, native format labels, visible adapters, and how self-running and Automat-driven blocks mix
 - `docs/parrots/Beta Brand.md` - describes the visual identification for Toys made with stochastic parrots
+- `docs/parrots/Objects and Modalities.md` - the layering model: Objects are modality-independent cores; the 2D board UI is one modality among possible others (text, 3D, RPC); which data may live VM-side (O(1) per-type hints, Board/Location placement), placement requests instead of VM-side coordinates, interface-to-widget mapping, and wake counters as the modality-agnostic notification channel
+- `docs/parrots/Boards.md` - multi-board ownership: one Object owned by several Boards with one resident widget each, per-board ToyStores, the three drag modes with entry-time ownership transfer, the merge drop onto a board that already owns the object, dropping on the background to create a new board, and per-board connection drawing
 - `docs/parrots/Split Widgets.md` - drawing one widget at several depths (connections drawn under covers at their endpoints): the `splits_under`/`splits_over` lists, the per-region drawing order, the pixel-exact rectangle partition, and why one global z-order is impossible
 - `docs/parrots/Wayland Client Persistence.md` - options for saving/cloning windows backed by live processes; why recipes won
 - `docs/parrots/Wayland Compositor.md` - Automat as a Wayland compositor: the bespoke protocol stack, the epoll event loop, protocol surface, GPU buffer passing (dmabuf), surface cropping and scaling (viewporter), subsurface compositing, popups, clipboard, input pass-through, window lifetime
@@ -226,6 +228,7 @@ GOOD example: "The output is cached so after each include-graph changes, you mus
 - **Renderer tree build and Tick are interleaved**: The renderer builds the widget tree and ticks each widget in the same loop (renderer.cpp step 2). RootWidget is ticked first, which rebuilds `children`. Then `Children()` returns the fresh list for tree expansion. Widgets are NOT ticked from `RootWidget::Tick` — only from the renderer's tree traversal.
 - **`Syncable::Table::DefaultFind` returns a `NestedPtr` with null `Interface::Table*`**: Because Gears are top-level Objects, not interfaces. `NestedPtr::operator bool()` checks the nested pointer (null), not the owner. So `(bool)arg.Find()` returns false even when connected to a Gear. Use `Argument::IsConnected()` instead.
 - **ToyStore is UI-thread only**: Not synchronized. VM threads must not call `FindOrMake` or modify ToyStore. Signal via `wake_counter` instead.
-- **`ToyStore::Tick` runs before widget tree is built**: Dead entries should be cleaned here. But widgets that call `MarkDead` during the tree traversal (after `ToyStore::Tick`) won't be cleaned until the next frame.
+- **`RootWidget::Poll` runs before widget tree is built**: It polls the root store, every board's store and in-progress actions (boards sleep when idle, so their stores can't be polled from `BoardWidget::Tick`). Dead entries are cleaned here, but widgets that call `MarkDead` during the tree traversal (after `RootWidget::Poll`) won't be cleaned until the next frame.
+- **Board widgets must stay at the bottom of RootWidget's Baked band**: The toolbar and the black hole are also Baked children of RootWidget; a board reordered above them covers them (they are only visible over the starfield). `RootWidget::Tick` orders boards relative to each other only, keeping the position that `OrderInside` assigned at creation.
 - **Animating below frame rate**: return `animation::Finished` from `Tick` and call `WakeAnimationAt(when)` from the draw path to request the next step (see RunButton's hover shimmer). Returning `Animating` while parking `next_tick` in the future makes the renderer treat the texture as perpetually stale and present it with glitch artifacts.
 - **`RootWidget::OnChildDead` removes from `children`**: Dead children are removed immediately when `MarkDead` fires (during the child's Tick). The old `std::erase_if(children, dead)` sweep was removed because `ToyStore::Tick` may destroy widgets before the sweep runs, creating dangling pointers in `children`.

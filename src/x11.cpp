@@ -3306,78 +3306,86 @@ void UIFrame() {
       win_size = win.content_size;
     }
     if (cpid) {
-      for (auto& loc : vm.root_board->locations) {
-        auto* cmd = dynamic_cast<library::Command*>(loc->object.get());
-        if (!cmd) continue;
-        auto cmd_lock = std::lock_guard(cmd->mutex);
-        if (cmd->child_pid == cpid) {
-          auto lock = std::lock_guard(win.mutex);
-          win.recipe = cmd->argv;
-          command_location = loc.get();
-          command = cmd;
-          break;
+      auto vm_lock = std::lock_guard(vm.mutex);
+      for (auto& board : vm.boards) {
+        for (auto& loc : board->locations) {
+          auto* cmd = dynamic_cast<library::Command*>(loc->object.get());
+          if (!cmd) continue;
+          auto cmd_lock = std::lock_guard(cmd->mutex);
+          if (cmd->child_pid == cpid) {
+            auto lock = std::lock_guard(win.mutex);
+            win.recipe = cmd->argv;
+            command_location = loc.get();
+            command = cmd;
+            break;
+          }
         }
+        if (command) break;
       }
     }
     if (command && !win.launcher->IsConnected()) win.launcher->Connect(Interface(command, nullptr));
-    auto& loc = vm.root_board->CreateEmpty();
+    Board* board = command_location ? command_location->LockBoard().get() : nullptr;
+    if (!board) board = &DefaultBoard();
+    auto& loc = board->CreateEmpty();
     int n = spawn_count++;
     if (command_location) {
       Vec2 plate = library::CommandPlateSize();
       Vec2 size = library::WindowBoardSize(win_size.width(), win_size.height());
-      loc.position =
-          command_location->position + Vec2(plate.x / 2 + 0.008f + size.x / 2 + 0.006f * (n % 3),
-                                            plate.y / 2 - size.y / 2 - 0.012f * (n % 3));
+      loc.placement = Location::Direct{command_location->PeekPosition() +
+                                       Vec2(plate.x / 2 + 0.008f + size.x / 2 + 0.006f * (n % 3),
+                                            plate.y / 2 - size.y / 2 - 0.012f * (n % 3))};
     } else {
-      loc.position = Vec2(0.01f * (n % 3), -0.02f * (n % 5));
+      loc.placement = Location::Direct{Vec2(0.01f * (n % 3), -0.02f * (n % 5))};
     }
     loc.InsertHere(std::move(w));
-    vm.root_board->WakeToys();
+    board->WakeToys();
     vm.WakeToys();
   }
-  for (auto& loc : vm.root_board->locations) {
-    auto* win = dynamic_cast<X11Window*>(loc->object.get());
-    if (!win) continue;
-    Vec<Str> recipe;
-    {
-      auto lock = std::lock_guard(win->mutex);
-      if (!win->pending_respawn) continue;
-      win->pending_respawn = false;
-      recipe = win->recipe;
-    }
-    if (recipe.empty()) continue;
-    I64 pid = 0;
-    Status status;
-    auto found = win->launcher->Find();
-    if (auto* cmd = dynamic_cast<library::Command*>(found.Owner<Object>())) {
-      pid = cmd->AdoptiveLaunch(status);
-      if (!pid) status.Reset();
-    }
-    if (!pid) pid = library::SpawnArgv(recipe, status);
-    if (!pid) {
-      win->ReportError(status.ToStr());
-      continue;
-    }
-    {
-      auto lock = std::lock_guard(win->mutex);
-      win->client_pid = pid;
-    }
-    {
-      auto lock = std::lock_guard(s.adoption_mutex);
-      s.adoptions.emplace_back(pid, win->AcquireWeakPtr());
+  {
+    auto vm_lock = std::lock_guard(vm.mutex);
+    for (auto& board : vm.boards) {
+      for (auto& loc : board->locations) {
+        auto* win = dynamic_cast<X11Window*>(loc->object.get());
+        if (!win) continue;
+        Vec<Str> recipe;
+        {
+          auto lock = std::lock_guard(win->mutex);
+          if (!win->pending_respawn) continue;
+          win->pending_respawn = false;
+          recipe = win->recipe;
+        }
+        if (recipe.empty()) continue;
+        I64 pid = 0;
+        Status status;
+        auto found = win->launcher->Find();
+        if (auto* cmd = dynamic_cast<library::Command*>(found.Owner<Object>())) {
+          pid = cmd->AdoptiveLaunch(status);
+          if (!pid) status.Reset();
+        }
+        if (!pid) pid = library::SpawnArgv(recipe, status);
+        if (!pid) {
+          win->ReportError(status.ToStr());
+          continue;
+        }
+        {
+          auto lock = std::lock_guard(win->mutex);
+          win->client_pid = pid;
+        }
+        {
+          auto lock = std::lock_guard(s.adoption_mutex);
+          s.adoptions.emplace_back(pid, win->AcquireWeakPtr());
+        }
+      }
     }
   }
   for (auto& w : disappeared) {
-    Location* here = w->here;
-    if (!here) continue;
-    auto& locations = vm.root_board->locations;
-    for (auto it = locations.begin(); it != locations.end(); ++it) {
-      if (it->get() == here) {
-        locations.erase(it);
-        break;
+    auto vm_lock = std::lock_guard(vm.mutex);
+    for (auto& board : vm.boards) {
+      if (auto* here = board->LocationOrNull(*w)) {
+        board->Extract(*here);
+        board->WakeToys();
       }
     }
-    vm.root_board->WakeToys();
     vm.WakeToys();
   }
 }

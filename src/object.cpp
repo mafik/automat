@@ -99,7 +99,7 @@ struct DeleteOption : TextOption {
   std::unique_ptr<Option> Clone() const override { return std::make_unique<DeleteOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (Ptr<Location> loc = weak.lock()) {
-      if (auto parent_board = loc->ParentAs<Board>()) {
+      if (auto parent_board = loc->LockBoard()) {
         parent_board->Extract(*loc);
         audio::Play(embedded::assets_SFX_canvas_pick_wav);
       }
@@ -143,19 +143,55 @@ struct MoveLocationOption : TextOption {
             << " (not a Container)";
       }
     }
-    auto parent_location = location->parent_location.Lock();
-    auto* board = parent_location->ThisAs<Board>();
+    auto board = location->LockBoard();
     if (board && location->object) {
       board->ForEachToy([](ui::RootWidget&, automat::Toy& w) { w.RedrawThisFrame(); });
       auto* mw = pointer.root_widget.toys.FindOrNull(*board);
       if (mw) {
-        return std::make_unique<DragLocationAction>(pointer, mw->ExtractStack(*location));
+        return std::make_unique<DragLocationAction>(pointer, mw->DragStack(*location), *mw);
       }
     }
     return nullptr;
   }
 
   Dir PreferredDir() const override { return N; }
+};
+
+struct CopyOption : TextOption {
+  WeakPtr<Location> location_weak;
+  WeakPtr<Object> object_weak;
+
+  CopyOption(WeakPtr<Location> location_weak, WeakPtr<Object> object_weak)
+      : TextOption("Copy"), location_weak(location_weak), object_weak(object_weak) {}
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<CopyOption>(location_weak, object_weak);
+  }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    auto location = location_weak.lock();
+    if (location == nullptr) {
+      return nullptr;
+    }
+    auto object = object_weak.lock();
+    if (object == nullptr) {
+      return nullptr;
+    }
+    if (location->object != object) {
+      auto new_loc = MAKE_PTR(Location);
+      new_loc->InsertHere(object->Clone());
+      audio::Play(embedded::assets_SFX_canvas_pick_wav);
+      return std::make_unique<DragLocationAction>(pointer, std::move(new_loc));
+    }
+    auto board = location->LockBoard();
+    if (board && location->object) {
+      board->ForEachToy([](ui::RootWidget&, automat::Toy& w) { w.RedrawThisFrame(); });
+      auto* mw = pointer.root_widget.toys.FindOrNull(*board);
+      if (mw) {
+        audio::Play(embedded::assets_SFX_canvas_pick_wav);
+        return std::make_unique<DragLocationAction>(pointer, mw->CloneStack(*location));
+      }
+    }
+    return nullptr;
+  }
 };
 
 struct CloneOption : TextOption {
@@ -169,32 +205,39 @@ struct CloneOption : TextOption {
   }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     auto location = location_weak.lock();
-    if (location == nullptr) {
-      return nullptr;
-    }
     auto object = object_weak.lock();
-    if (object == nullptr) {
+    if (location == nullptr || object == nullptr) {
       return nullptr;
     }
-    // Cloning an object that lives inside a container: produce a fresh
-    // standalone Location holding the cloned inner object.
-    if (location->object != object) {
-      auto new_loc = MAKE_PTR(Location);
-      new_loc->InsertHere(object->Clone());
-      audio::Play(embedded::assets_SFX_canvas_pick_wav);
-      return std::make_unique<DragLocationAction>(pointer, std::move(new_loc));
+    auto new_loc = MAKE_PTR(Location);
+    new_loc->InsertHere(Ptr<Object>(object));
+    Vec2 position = location->PeekPosition();
+    if (auto board = location->LockBoard()) {
+      position += board->position;
     }
-    auto parent_location = location->parent_location.Lock();
-    auto* board = parent_location->ThisAs<Board>();
-    if (board && location->object) {
-      board->ForEachToy([](ui::RootWidget&, automat::Toy& w) { w.RedrawThisFrame(); });
-      auto* mw = pointer.root_widget.toys.FindOrNull(*board);
-      if (mw) {
-        audio::Play(embedded::assets_SFX_canvas_pick_wav);
-        return std::make_unique<DragLocationAction>(pointer, mw->CloneStack(*location));
-      }
-    }
-    return nullptr;
+    new_loc->placement = Location::Direct{position, location->PeekScale()};
+    audio::Play(embedded::assets_SFX_canvas_pick_wav);
+    return std::make_unique<DragLocationAction>(pointer, std::move(new_loc));
+  }
+};
+
+struct NewOption : TextOption, OptionsProvider {
+  WeakPtr<Location> location_weak;
+  WeakPtr<Object> object_weak;
+
+  NewOption(WeakPtr<Location> location_weak, WeakPtr<Object> object_weak)
+      : TextOption("New..."), location_weak(location_weak), object_weak(object_weak) {}
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<NewOption>(location_weak, object_weak);
+  }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    return OpenMenu(pointer);
+  }
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    CopyOption copy{location_weak, object_weak};
+    visitor(copy);
+    CloneOption clone{location_weak, object_weak};
+    visitor(clone);
   }
 };
 
@@ -326,8 +369,8 @@ void ObjectToy::VisitOptions(const OptionsVisitor& visitor) const {
       visitor(del);
       MoveLocationOption move{loc_weak, owner.Copy<Object>()};
       visitor(move);
-      CloneOption clone{loc_weak, owner.Copy<Object>()};
-      visitor(clone);
+      NewOption make_new{loc_weak, owner.Copy<Object>()};
+      visitor(make_new);
       if (auto runnable = loc->object->As<Runnable>()) {
         RunOption run{owner.Copy<Object>(), *runnable.table};
         visitor(run);
@@ -449,8 +492,6 @@ Vec2AndDir ObjectToy::ArgStart(const Interface::Table& arg, ui::Widget* coordina
   return pos_dir;
 }
 
-void Object::Relocate(Location* new_here) { here = new_here; }
-
 Object::~Object() {
   LifetimeObserver::CheckDestroyNotified(*this);
   WakeToys();  // wake the zombie toys
@@ -465,12 +506,15 @@ bool ObjectToy::IsIconified() const {
 void Object::Interfaces(const std::function<LoopControl(Interface)>& cb) {}
 
 Location* Object::MyLocation() {
-  for (auto& loc : vm.root_board->locations) {
-    if (loc->object == this) {
-      return loc.Get();
+  auto lock = std::lock_guard(vm.mutex);
+  for (auto& board : vm.boards) {
+    for (auto& loc : board->locations) {
+      if (loc->object == this) {
+        return loc.Get();
+      }
     }
   }
-  return here;
+  return nullptr;
 }
 
 Interface Object::InterfaceFromName(StrView needle) {

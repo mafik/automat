@@ -26,16 +26,25 @@ bool IsIconified(Object* object) {
   return iconified_objects.find(object) != iconified_objects.end();
 }
 
+static void InvalidateConnectionWidgetsEverywhere(Object& object) {
+  auto vm_lock = std::lock_guard(vm.mutex);
+  for (auto& board : vm.boards) {
+    if (auto* loc = board->LocationOrNull(object)) {
+      loc->InvalidateConnectionWidgets(false, false);
+    }
+  }
+}
+
 void Iconify(Object& object) {
   auto lock = std::unique_lock(iconified_objects_mutex);
   iconified_objects.emplace(&object, object);
-  if (object.here) object.here->InvalidateConnectionWidgets(false, false);
+  InvalidateConnectionWidgetsEverywhere(object);
 }
 
 void Deiconify(Object& object) {
   auto lock = std::unique_lock(iconified_objects_mutex);
   iconified_objects.erase(&object);
-  if (object.here) object.here->InvalidateConnectionWidgets(false, false);
+  InvalidateConnectionWidgetsEverywhere(object);
 }
 
 void SetIconified(Object& object, bool iconified) {

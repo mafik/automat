@@ -110,6 +110,7 @@ struct WidgetDrawableHolder {
 
 // Map used by the client to keep track of resources needed to render widgets.
 // TODO: replace with a set
+std::mutex cached_widget_drawables_mutex;
 map<uint32_t, WidgetDrawableHolder> cached_widget_drawables;
 
 // Holds all the data necessary to render a Widget (without refering to the Widget itself).
@@ -126,7 +127,7 @@ struct WidgetDrawable : SkDrawableRTTI {
   SkMatrix fresh_matrix;   // the most recent transform
   SkMatrix update_matrix;  // transform at the time of the last UpdateState
 
-  Optional<SkRect> pack_frame_texture_bounds;
+  Optional<SkRect> pack_frame_draw_bounds;
   Vec<Vec2> pack_frame_texture_anchors;
 
   Vec<Vec2> fresh_texture_anchors;
@@ -199,7 +200,7 @@ struct WidgetDrawable : SkDrawableRTTI {
     sk_sp<SkDrawable> recording_drawable;
     sk_sp<SkData> recording_data;
 
-    Optional<SkRect> pack_frame_texture_bounds;
+    Optional<SkRect> pack_frame_draw_bounds;
     Vec<Vec2> pack_frame_texture_anchors;
 
     Widget::Compositor compositor;
@@ -214,6 +215,7 @@ struct WidgetDrawable : SkDrawableRTTI {
   static sk_sp<SkFlattenable> CreateProc(SkReadBuffer& buffer);
 
   static WidgetDrawable* FindOrNull(uint32_t id) {
+    auto lock = std::lock_guard(cached_widget_drawables_mutex);
     if (auto it = cached_widget_drawables.find(id); it != cached_widget_drawables.end()) {
       return it->second.widget_drawable;
     }
@@ -247,12 +249,13 @@ static void WarnLargeRecording(StrView name, Size size) {
   }
 }
 
-SkRect WidgetDrawable::onGetBounds() { return *pack_frame_texture_bounds; }
+SkRect WidgetDrawable::onGetBounds() { return *pack_frame_draw_bounds; }
 void WidgetDrawable::flatten(SkWriteBuffer& buffer) const {
   // Normally this shouldn't be called. There is no point serializing the render state.
   buffer.writeInt(id);
 }
 WidgetDrawableHolder& WidgetDrawableHolder::FindOrMake(uint32_t id) {
+  auto lock = std::lock_guard(cached_widget_drawables_mutex);
   auto it = cached_widget_drawables.find(id);
   if (it == cached_widget_drawables.end()) {
     WidgetDrawable* typed_ptr = nullptr;
@@ -287,7 +290,7 @@ void WidgetDrawable::UpdateState(const Update& update) {
   }
 
   update_matrix = fresh_matrix;
-  pack_frame_texture_bounds = update.pack_frame_texture_bounds;
+  pack_frame_draw_bounds = update.pack_frame_draw_bounds;
   pack_frame_texture_anchors = update.pack_frame_texture_anchors;
   compositor = update.compositor;
 }
@@ -383,7 +386,10 @@ void RendererShutdown() {
     vk_recorder_threads[i].join();
   }
 
-  cached_widget_drawables.clear();
+  {
+    auto lock = std::lock_guard(cached_widget_drawables_mutex);
+    cached_widget_drawables.clear();
+  }
   next_frame_request.render_results.clear();
   if (image_provider) {
     image_provider->cache.clear();
@@ -660,8 +666,8 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
   if constexpr (kDebugVisual) {
     auto& font = GetFont();
     SkPaint text_paint;
-    canvas->translate(pack_frame_texture_bounds->left(),
-                      min(pack_frame_texture_bounds->top(), pack_frame_texture_bounds->bottom()));
+    canvas->translate(pack_frame_draw_bounds->left(),
+                      min(pack_frame_draw_bounds->top(), pack_frame_draw_bounds->bottom()));
     auto text = f("{:.1f}", average_draw_millis);
     font.DrawText(*canvas, text, text_paint);
   }
@@ -689,7 +695,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       rw.WakeAnimationAt(now);
     }
   }
-  rw.toys.Tick(rw.timer);
+  rw.Poll();
 
   enum class Verdict {
     Unknown = 0,
@@ -874,9 +880,10 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
         widget->subtree_shape_invalid = true;
       }
 
-      widget->pack_frame_texture_bounds = widget->TextureBounds();
+      widget->draw_bounds = widget->DrawBounds();
+      widget->pack_frame_draw_bounds = widget->draw_bounds;
       bool visible = true;
-      if (widget->pack_frame_texture_bounds.has_value()) {
+      if (widget->pack_frame_draw_bounds.has_value()) {
         // Note: child widgets are drawn using SkCanvas::drawDrawable(WidgetDrawable),
         // which in turn calls WidgetDrawable::onGetBounds to get the widget's bounds.
         // This creates a problem on the first animation frame because at this point,
@@ -888,11 +895,11 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
         // Right now a workaround is to directly update the WidgetDrawable bounds.
         auto& widget_drawable =
             static_cast<WidgetDrawable&>(SkDrawableRTTI::Unwrap(*widget->sk_drawable));
-        widget_drawable.pack_frame_texture_bounds = *widget->pack_frame_texture_bounds;
+        widget_drawable.pack_frame_draw_bounds = *widget->pack_frame_draw_bounds;
 
         // Compute the bounds of the widget - in local & root coordinates
         SkRect root_bounds;
-        widget->local_to_window.mapRect(&root_bounds, *widget->pack_frame_texture_bounds);
+        widget->local_to_window.mapRect(&root_bounds, *widget->pack_frame_draw_bounds);
 
         // Clip the `root_bounds` to the root widget bounds;
         if (root_bounds.width() * root_bounds.height() < 512 * 512) {
@@ -1217,7 +1224,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       update.recording_drawable = recorder.finishRecordingAsDrawable();
     }
 
-    update.pack_frame_texture_bounds = widget.pack_frame_texture_bounds;
+    update.pack_frame_draw_bounds = widget.pack_frame_draw_bounds;
     update.pack_frame_texture_anchors = node.pack_frame_texture_anchors;
 
     widget.rendering = true;
@@ -1404,7 +1411,7 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
     auto& frame = w->in_progress();
     frame.matrix = w->update_matrix;
     frame.surface_bounds_root = w->update_surface_bounds_root;
-    frame.surface_bounds_local = *w->pack_frame_texture_bounds;
+    frame.surface_bounds_local = *w->pack_frame_draw_bounds;
     frame.texture_anchors = w->pack_frame_texture_anchors;
     frame.image_info = canvas.imageInfo().makeDimensions(frame.surface_bounds_root.size());
     if (frame.texture.isValid() && frame.texture.dimensions() == frame.image_info.dimensions()) {

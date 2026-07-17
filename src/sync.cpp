@@ -61,19 +61,35 @@ void Syncable::Table::DefaultCanConnect(Argument self, Interface end, Status& st
 void Syncable::Table::DefaultOnConnect(Argument self, Interface end) {
   auto* self_obj = self.object_ptr;
   auto* self_tab = cast<Syncable::Table>(self.table_ptr);
+  Board* board = nullptr;
   if (auto end_syncable = dyn_cast_if_present<Syncable>(end)) {
     auto gear = FindGearOrNull(*end_syncable.object_ptr, *end_syncable.table);
     if (gear == nullptr) {
       gear = FindGearOrMake(*self_obj, *self_tab);
-      auto& loc = vm.root_board->Insert(gear);
-      loc.position = (end.object_ptr->here->position + self_obj->here->position) / 2;
+      Location* self_loc = self_obj->MyLocation();
+      board = self_loc ? self_loc->LockBoard().get() : nullptr;
+      if (!board) board = &DefaultBoard();
+      auto& loc = board->Insert(gear);
+      Location* end_loc = board->LocationOrNull(*end.object_ptr);
+      if (self_loc) {
+        loc.placement = Location::PlaceBetween{
+            self_loc->AcquireWeakPtr(),
+            end_loc ? end_loc->AcquireWeakPtr() : self_loc->AcquireWeakPtr()};
+      }
     }
     gear->FullSync(*self_obj, *self_tab);
     gear->FullSync(*end_syncable.object_ptr, *end_syncable.table);
   } else if (auto* gear = dynamic_cast<Gear*>(end.object_ptr)) {
     gear->FullSync(*self_obj, *self_tab);
   }
-  vm.root_board->WakeToys();
+  if (!board) {
+    if (Location* self_loc = self_obj->MyLocation()) {
+      board = self_loc->LockBoard().get();
+    }
+  }
+  if (board) {
+    board->WakeToys();
+  }
 }
 
 NestedPtr<Interface::Table> Syncable::Table::DefaultFind(Argument self) {
@@ -305,7 +321,7 @@ struct GearWidget : ObjectToy {
     canvas.drawCircle(0, 0, kPrimaryGearRadius + kTeethAmplitude, gear_paint);
   }
 
-  Optional<Rect> TextureBounds() const override { return Shape().getBounds(); }
+  Optional<Rect> DrawBounds() const override { return Shape().getBounds(); }
 };
 
 SyncBelt::SyncBelt(Widget* parent, Object& object, Syncable::Table& syncable)
@@ -406,6 +422,16 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
   auto& state = syncable.state;
   auto gear = state->gear_weak.Lock();
   auto* gear_widget = gear ? toy_store.FindOrNull(*gear) : nullptr;
+  if (gear && !gear_widget) {
+    tock.drawing |=
+        animation::LowLevelSpringTowards(pinion.x, t.d, 0.3, 0.05, origin.x, origin_velocity.x);
+    tock.drawing |=
+        animation::LowLevelSpringTowards(pinion.y, t.d, 0.3, 0.05, origin.y, origin_velocity.y);
+    if (!tock.ing) {
+      MarkDead(t.now);
+    }
+    return tock;
+  }
   if (gear) {
     if (gear_widget) {
       angle = gear_widget->angle;
@@ -444,25 +470,36 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
     pinion_deflection.SmoothTargetUpdate(pinion, origin);
   }
 
-  ui::Widget* owner_over = owner_widget->ConnectionCover();
-  ui::Widget* gear_over = gear_widget ? gear_widget->ConnectionCover() : nullptr;
+  ui::Widget* owner_over = owner_widget->FindWidget(iface);
+  ui::Widget* gear_over = gear_widget ? gear_widget->FindWidget(nullptr) : nullptr;
   if (gear_over == owner_over) gear_over = nullptr;
+  Vec<ui::Widget*> wanted;
+  if (owner_over) wanted.push_back(owner_over);
+  if (gear_over) wanted.push_back(gear_over);
+  if (auto* bw = BoardOrNull(*this)) {
+    if (auto board = bw->LockBoard()) {
+      Location* owner_loc = board->LocationOrNull(*syncable.object_ptr);
+      Location* gear_loc = gear ? board->LocationOrNull(*gear) : nullptr;
+      AppendObscurers(owner_loc, gear_loc, wanted);
+      AppendObscurers(gear_loc, owner_loc, wanted);
+    }
+  }
   int matching = 0;
   bool foreign = false;
   for (ui::Widget& over : splits_over) {
-    if (&over == owner_over || &over == gear_over) {
+    if (std::find(wanted.begin(), wanted.end(), &over) != wanted.end()) {
       ++matching;
     } else {
       foreign = true;
     }
   }
-  int wanted = (owner_over != nullptr) + (gear_over != nullptr);
-  if (foreign || matching != wanted) {
+  if (foreign || matching != (int)wanted.size()) {
     while (!splits_over.empty()) {
       UnsplitUnder(*splits_over.begin());
     }
-    if (owner_over) SplitUnder(*owner_over);
-    if (gear_over) SplitUnder(*gear_over);
+    for (auto* cover : wanted) {
+      SplitUnder(*cover);
+    }
     if (parent) parent->WakeAnimation();
   }
 
@@ -535,7 +572,7 @@ void SyncBelt::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-Optional<Rect> SyncBelt::TextureBounds() const {
+Optional<Rect> SyncBelt::DrawBounds() const {
   constexpr float r = kSecondaryGearRadius + kTeethAmplitude;
   auto bounds = Rect::MakeCenter(pinion + pinion_deflection, r * 2, r * 2);
   bounds.ExpandToInclude(Rect::MakeCenter(origin, r * 2, r * 2));
@@ -590,12 +627,15 @@ bool Gear::DeserializeKey(ObjectDeserializer& d, StrView key) {
 SyncAction::SyncAction(ui::Pointer& pointer, Syncable syncable) : Action(pointer) {
   syncable.Unsync();
   weak = NestedWeakPtr<Syncable::Table>(syncable.GetOwner().AcquireWeakPtr(), syncable.table);
-  if (auto* origin_widget = pointer.root_widget.toys.FindOrNull(*syncable.object_ptr)) {
-    if (auto* board_widget = BoardOrNull(*origin_widget)) {
-      auto& sync_widget = pointer.root_widget.toys.FindOrMake(syncable, board_widget);
+  if (pointer.hover) {
+    board_widget = BoardOrNull(*pointer.hover);
+  }
+  if (auto* bw = board_widget.Get()) {
+    if (bw->toys.FindOrNull(*syncable.object_ptr)) {
+      auto& sync_widget = bw->toys.FindOrMake(syncable, bw);
       sync_widget.is_dragged = true;
       sync_widget.WakeAnimation();
-      board_widget->WakeAnimation();
+      bw->WakeAnimation();
     }
   }
   Update();
@@ -603,29 +643,29 @@ SyncAction::SyncAction(ui::Pointer& pointer, Syncable syncable) : Action(pointer
 }
 SyncAction::~SyncAction() {
   // Check if the pointer is over a compatible Syncable
+  auto* bw = board_widget.Get();
+  if (!bw) return;
   if (auto syncable_ptr = weak.Lock()) {
     Syncable syncable(syncable_ptr.Owner<Object>(), syncable_ptr.Get());
-    auto* sync_widget = pointer.root_widget.toys.FindOrNull(syncable);
+    auto* sync_widget = bw->toys.FindOrNull(syncable);
     if (sync_widget) {
       sync_widget->is_dragged = false;
       sync_widget->WakeAnimation();
-      if (auto* bw = BoardOrNull(*sync_widget)) {
-        bw->ConnectAtPoint(syncable, sync_widget->pinion);
-        // TODO: animate towards the true target rather than origin
-        sync_widget->pinion_deflection.SmoothTargetUpdate(sync_widget->pinion, sync_widget->origin);
-      }
+      bw->ConnectAtPoint(syncable, sync_widget->pinion);
+      // TODO: animate towards the true target rather than origin
+      sync_widget->pinion_deflection.SmoothTargetUpdate(sync_widget->pinion, sync_widget->origin);
     }
   }
 }
 void SyncAction::Update() {
   if (auto syncable_ptr = weak.Lock()) {
     Syncable syncable(syncable_ptr.Owner<Object>(), syncable_ptr.Get());
-    auto* origin_widget = pointer.root_widget.toys.FindOrNull(*syncable.object_ptr);
-    if (!origin_widget) return;
-    auto* sync_widget = pointer.root_widget.toys.FindOrNull(syncable);
-    if (!sync_widget) return;
-    auto* bw = BoardOrNull(*sync_widget);
+    auto* bw = board_widget.Get();
     if (!bw) return;
+    auto* origin_widget = bw->toys.FindOrNull(*syncable.object_ptr);
+    if (!origin_widget) return;
+    auto* sync_widget = bw->toys.FindOrNull(syncable);
+    if (!sync_widget) return;
     auto start_local = origin_widget->Shape().getBounds().center();
     auto start = TransformBetween(*origin_widget, *bw).mapPoint(start_local);
     auto pointer_pos = pointer.PositionWithin(*bw);

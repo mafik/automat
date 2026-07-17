@@ -117,7 +117,7 @@ struct PresserWidget : ui::Widget {
 struct MouseWidgetCommon {
   static RRect CoarseBounds() { return RRect::MakeSimple(krita::mouse::base.rect, 0); }
 
-  static Optional<Rect> TextureBounds() { return krita::mouse::base.rect; }
+  static Optional<Rect> DrawBounds() { return krita::mouse::base.rect; }
 
   static SkPath Shape() {
     static auto shape = krita::mouse::Shape();
@@ -258,7 +258,7 @@ struct MouseIcon : ui::Widget {
 
   RRect CoarseBounds() const override { return MouseWidgetCommon::CoarseBounds(); }
 
-  Optional<Rect> TextureBounds() const override { return MouseWidgetCommon::TextureBounds(); }
+  Optional<Rect> DrawBounds() const override { return MouseWidgetCommon::DrawBounds(); }
 
   Tock Tick(time::Timer& timer) override {
     return MouseWidgetCommon::Tick(timer, *this, button, std::nullopt, presser_widget.get());
@@ -360,7 +360,7 @@ struct MouseWidgetBase : ObjectToy {
 
   RRect CoarseBounds() const override { return MouseWidgetCommon::CoarseBounds(); }
 
-  Optional<Rect> TextureBounds() const override { return MouseWidgetCommon::TextureBounds(); }
+  Optional<Rect> DrawBounds() const override { return MouseWidgetCommon::DrawBounds(); }
 
   SkPath Shape() const override { return MouseWidgetCommon::Shape(); }
 };
@@ -838,7 +838,7 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
 
   RRect CoarseBounds() const override { return RRect::MakeSimple(shape.getBounds(), 0); }
 
-  Optional<Rect> TextureBounds() const override { return shape.getBounds(); }
+  Optional<Rect> DrawBounds() const override { return shape.getBounds(); }
 
   SkPath Shape() const override { return shape; }
 

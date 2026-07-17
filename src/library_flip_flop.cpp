@@ -77,7 +77,10 @@ struct FlipFlopWidget : ObjectToy {
 
   RRect CoarseBounds() const override { return kBounds; }
 
-  ui::Widget* ConnectionCover() override { return rocker.get(); }
+  ui::Widget* FindWidget(Interface::Table* iface) override {
+    if (iface == &FlipFlop::enabled_tbl) return rocker.get();
+    return this;
+  }
 
   Tock Tick(time::Timer& timer) override {
     if (auto ptr = LockObject<FlipFlop>()) {

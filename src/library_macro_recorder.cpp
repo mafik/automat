@@ -147,9 +147,10 @@ Ptr<Object> MacroRecorder::Clone() const { return MAKE_PTR(MacroRecorder, *this)
 
 static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, PointerButton ptr_btn,
                              bool down) {
-  auto board = macro_recorder.here->ParentAs<Board>();
+  auto* macro_recorder_loc = macro_recorder.MyLocation();
+  auto board = macro_recorder_loc ? macro_recorder_loc->LockBoard() : nullptr;
   if (board == nullptr) {
-    FATAL << "MacroRecorder must be a child of a Board";
+    FATAL << "MacroRecorder must be placed on a Board";
     return;
   }
   // Find the nearby timeline (or create one)
@@ -202,8 +203,10 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
     Location& on_off_loc = make_fn();
     on_off_loc.Iconify();
     Argument::Table& track_arg = timeline->tracks.back()->arg_table;
-    PositionAhead(*timeline->here, track_arg, on_off_loc);
-    AnimateGrowFrom(*macro_recorder.here, on_off_loc);
+    if (auto* timeline_loc = timeline->MyLocation()) {
+      on_off_loc.placement = Location::PlaceAhead{timeline_loc->AcquireWeakPtr(), &track_arg};
+    }
+    AnimateGrowFrom(*macro_recorder_loc, on_off_loc);
     Argument(*timeline->tracks.back(), track_arg).Connect(Interface(*on_off_loc.object));
   }
 
@@ -308,17 +311,20 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
     auto track_ptr = MAKE_PTR(TrackT, track_name);
     timeline->AddTrack(std::move(track_ptr));
     track_index = timeline->tracks.size() - 1;
-    auto board = recorder.here->ParentAs<Board>();
+    auto* recorder_loc = recorder.MyLocation();
+    auto board = recorder_loc ? recorder_loc->LockBoard() : nullptr;
     if (board == nullptr) {
-      FATAL << "MacroRecorder must be a child of a Board";
+      FATAL << "MacroRecorder must be placed on a Board";
       return;
     }
     Location& receiver_loc = board->Create<ReceiverT>();
     receiver_loc.Iconify();
     Argument::Table& track_arg = timeline->tracks.back()->arg_table;
 
-    PositionAhead(*timeline->here, track_arg, receiver_loc);
-    AnimateGrowFrom(*recorder.here, receiver_loc);
+    if (auto* timeline_loc = timeline->MyLocation()) {
+      receiver_loc.placement = Location::PlaceAhead{timeline_loc->AcquireWeakPtr(), &track_arg};
+    }
+    AnimateGrowFrom(*recorder_loc, receiver_loc);
     Argument(*timeline->tracks.back(), track_arg).Connect(Interface(*receiver_loc.object));
   }
 

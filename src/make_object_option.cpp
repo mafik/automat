@@ -22,7 +22,7 @@ std::unique_ptr<Action> MakeObjectOption::Activate(ui::Pointer& pointer) const {
   // The icon is the right widget type for the given proto, so theoretically it could be
   // reattached to the newly cloned object.
   // This could be even handled by the "Create" method - it could take existing widget to "adopt".
-  auto loc = MAKE_PTR(Location, vm.root_location);
+  auto loc = MAKE_PTR(Location);
   auto obj = proto->Clone();
   pointer.root_widget.toys.FindOrMake(*obj, icon.Get());
   loc->InsertHere(std::move(obj));

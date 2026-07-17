@@ -103,7 +103,7 @@ SkRRect Button::RRect() const {
   return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, w, h), kRadius, kRadius);
 }
 
-Optional<Rect> Button::TextureBounds() const {
+Optional<Rect> Button::DrawBounds() const {
   auto rrect = RRect();
   // Tiny margin to avoid clipping into antialiased lines
   return rrect.rect().makeOutset(0.5_mm, 0.5_mm);

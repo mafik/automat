@@ -46,9 +46,18 @@ using namespace automat;
 
 namespace automat::ui {
 
+static Location* FindOnSameBoard(const ConnectionWidget& w, Object& obj) {
+  if (auto* bw = BoardOrNull(w)) {
+    if (auto board = bw->LockBoard()) {
+      return board->LocationOrNull(obj);
+    }
+  }
+  return nullptr;
+}
+
 Location* ConnectionWidget::StartLocation() const {
   if (auto obj = LockOwner<Object>()) {
-    return obj->MyLocation();
+    return FindOnSameBoard(*this, *obj);
   }
   return nullptr;
 }
@@ -56,7 +65,7 @@ Location* ConnectionWidget::StartLocation() const {
 Location* ConnectionWidget::EndLocation() const {
   if (auto arg = LockBind<Argument>()) {
     if (auto* end_obj = arg.Find().Owner<Object>()) {
-      return end_obj->MyLocation();
+      return FindOnSameBoard(*this, *end_obj);
     }
   }
   return nullptr;
@@ -94,15 +103,17 @@ struct ConnectionSpotlight : Widget {
   StrView Name() const override { return "ConnectionSpotlight"; }
   SkPath Shape() const override { return SkPath(); }
 
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     auto arg = connection.LockBind<Argument>();
     if (!arg) return std::nullopt;
-    auto* from = arg.object_ptr->MyLocation();
-    if (!from) return std::nullopt;
-    float radius = from->ToyForObject().CoarseBounds().rect.Hypotenuse() / 2;
-    Rect bounds = Rect::MakeCenter(from->position, radius * 2, radius * 2);
+    auto* from = FindOnSameBoard(connection, *arg.object_ptr);
+    if (!from || !from->widget || !from->widget->toy) return std::nullopt;
+    float radius = from->widget->toy->CoarseBounds().rect.Hypotenuse() / 2;
+    Rect bounds = Rect::MakeCenter(from->Position(*from->widget), radius * 2, radius * 2);
     if (auto* source = arg.ObjectOrNull()) {
-      bounds.ExpandToInclude(source->MyLocation()->position);
+      if (auto* source_loc = FindOnSameBoard(connection, *source)) {
+        bounds.ExpandToInclude(source_loc->PeekPosition());
+      }
     }
     return bounds;
   }
@@ -110,12 +121,12 @@ struct ConnectionSpotlight : Widget {
   void Draw(SkCanvas& canvas) const override {
     auto arg = connection.LockBind<Argument>();
     if (!arg) return;
-    auto* from_ptr = arg.object_ptr->MyLocation();
-    if (!from_ptr) return;
+    auto* from_ptr = FindOnSameBoard(connection, *arg.object_ptr);
+    if (!from_ptr || !from_ptr->widget || !from_ptr->widget->toy) return;
     Location& from = *from_ptr;
 
-    auto target_bounds = from.ToyForObject().CoarseBounds();
-    Vec2 target = from.position;
+    auto target_bounds = from.widget->toy->CoarseBounds();
+    Vec2 target = from.Position(*from.widget);
     float radius = target_bounds.rect.Hypotenuse() / 2;
 
     {  // Disc around the target
@@ -130,8 +141,10 @@ struct ConnectionSpotlight : Widget {
       canvas.drawCircle(target, radius, circle_paint);
     }
 
-    if (auto* source_object = arg.ObjectOrNull()) {  // Ray from the source to the target
-      Vec2 source = source_object->MyLocation()->position;
+    if (auto* source_loc =
+            arg.ObjectOrNull() ? FindOnSameBoard(connection, *arg.ObjectOrNull()) : nullptr) {
+      // Ray from the source to the target
+      Vec2 source = source_loc->PeekPosition();
       Vec2 diff = target - source;
       float dist = Length(diff);
       auto angle = SinCos::FromVec2(diff, dist);
@@ -158,7 +171,7 @@ struct AutoconnectRadar : Widget {
   StrView Name() const override { return "AutoconnectRadar"; }
   SkPath Shape() const override { return SkPath(); }
 
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     auto arg = connection.LockBind<Argument>();
     if (!arg) return std::nullopt;
     float reach = arg.table->autoconnect_radius * 2 + 10_cm;
@@ -168,7 +181,7 @@ struct AutoconnectRadar : Widget {
   void Draw(SkCanvas& canvas) const override {
     auto arg = connection.LockBind<Argument>();
     if (!arg) return;
-    auto* from_ptr = arg.object_ptr->MyLocation();
+    auto* from_ptr = FindOnSameBoard(connection, *arg.object_ptr);
     if (!from_ptr) return;
     Location& from = *from_ptr;
     auto* anim = &connection.animation_state;
@@ -279,7 +292,7 @@ struct PrototypeGhost : Widget {
   }
   StrView Name() const override { return "PrototypeGhost"; }
   SkPath Shape() const override { return SkPath(); }
-  Optional<Rect> TextureBounds() const override { return prototype_widget->Shape().getBounds(); }
+  Optional<Rect> DrawBounds() const override { return prototype_widget->Shape().getBounds(); }
 
   void Draw(SkCanvas& canvas) const override {
     Rect bounds = prototype_widget->Shape().getBounds();
@@ -387,8 +400,11 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
   }
 
   if (a.start_widget == nullptr) {
-    LOG << "ConnectionWidget::Tick: start widget not found for object " << a.StartObj()->Name();
-    return Tock::Draw;
+    state.reset();
+    Tock tock;
+    tock.shaping |= animation::LinearApproach(1, timer.d, 5, transparency);
+    tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.1, alpha);
+    return tock;
   }
 
   auto* start_base_widget = a.start_widget->BaseToy();
@@ -416,7 +432,7 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
     state.emplace(arg, *a.start_widget, pos_dir);
   }
 
-  if (a.end_iface) {
+  if (a.end_iface && a.end_widget) {
     to_shape = a.end_widget->Shape().makeTransform(a.end_transform);
   } else {
     to_shape.reset();
@@ -438,6 +454,10 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
 
   bool should_be_hidden = overlapping;
 
+  if (a.end_iface && a.end_widget == nullptr) {
+    should_be_hidden = true;
+  }
+
   bool start_iconified = IsIconified(a.StartObj());
   // Hide the disconnected connectors if the object is iconified
   if (start_iconified && !a.end_iface) {
@@ -457,9 +477,12 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
   // `transparency` gates Shape() (empty once >= 0.99)
   tock.shaping |= animation::LinearApproach(should_be_hidden ? 1 : 0, timer.d, 5, transparency);
 
-  float loc_transparency = (a.StartObj()->here && a.StartObj()->here->widget)
-                               ? a.StartObj()->here->widget->transparency
-                               : 0.f;
+  float loc_transparency = 0.f;
+  if (auto* start_loc = FindOnSameBoard(*this, *a.StartObj())) {
+    if (start_loc->widget) {
+      loc_transparency = start_loc->widget->transparency;
+    }
+  }
   alpha = (1.f - loc_transparency) * (1.f - transparency);
 
   if (state) {
@@ -612,7 +635,7 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
         ghost = static_cast<PrototypeGhost*>(prototype_ghost.get());
         layers.OrderBelow(prototype_ghost.get());
       }
-      if (auto* from = arg.object_ptr->MyLocation()) {
+      if (auto* from = FindOnSameBoard(*this, *arg.object_ptr)) {
         Vec2 pos = PositionAhead(*from, *arg.table, *ghost->prototype_widget);
         ghost->local_to_parent = SkM44(SkMatrix::Translate(pos.x, pos.y));
       }
@@ -623,6 +646,32 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
     } else {
       prototype_ghost.reset();
       if (!prototype_progress.settled) tock |= Tock::Ing;
+    }
+  }
+
+  {
+    Location* start_loc = StartLocation();
+    Location* end_loc = EndLocation();
+    Vec<ui::Widget*> wanted;
+    AppendObscurers(start_loc, end_loc, wanted);
+    AppendObscurers(end_loc, start_loc, wanted);
+    int matching = 0;
+    bool foreign = false;
+    for (ui::Widget& over : splits_over) {
+      if (std::find(wanted.begin(), wanted.end(), &over) != wanted.end()) {
+        ++matching;
+      } else {
+        foreign = true;
+      }
+    }
+    if (foreign || matching != (int)wanted.size()) {
+      while (!splits_over.empty()) {
+        UnsplitUnder(*splits_over.begin());
+      }
+      for (auto* cover : wanted) {
+        SplitUnder(*cover);
+      }
+      if (parent) parent->WakeAnimation();
     }
   }
   return tock;
@@ -1165,7 +1214,8 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& c
   grab_offset = Vec2(0, 0);
   if (widget->state) {
     // Position within parent board
-    auto pointer_pos = pointer.PositionWithinRootBoard();
+    auto* mw = BoardOrNull(*widget);
+    auto pointer_pos = mw ? pointer.PositionWithin(*mw) : pointer.PositionOnCanvas();
     auto mat = widget->state->ConnectorMatrix();
     SkMatrix mat_inv;
     if (mat.invert(&mat_inv)) {
@@ -1203,7 +1253,8 @@ void DragConnectionAction::Update() {
     pointer.ReplaceAction(*this, nullptr);
     return;
   }
-  Vec2 new_position = pointer.PositionWithinRootBoard();
+  auto* mw = BoardOrNull(*widget);
+  Vec2 new_position = mw ? pointer.PositionWithin(*mw) : pointer.PositionOnCanvas();
   float connector_scale = widget->state ? (float)widget->state->connector_scale : 1.f;
   widget->manual_position = new_position - grab_offset * connector_scale;
   widget->WakeAnimation();
@@ -1217,7 +1268,7 @@ bool DragConnectionAction::Highlight(Interface end) const {
   return false;
 }
 
-Optional<Rect> ConnectionWidget::TextureBounds() const {
+Optional<Rect> ConnectionWidget::DrawBounds() const {
   if (transparency >= 0.99f) {
     return std::nullopt;
   }

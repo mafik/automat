@@ -226,7 +226,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
     return image;
   }
 
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     auto r = layout.border_outer;
     r.top += EyeImage().height() / 2;
     return r;
@@ -358,23 +358,29 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
       ocr_text = tesseract->ocr_text;
       float target_aspect_ratio = 1.618f;
       iris_target.reset();
+      auto* board_widget = BoardOrNull(*this);
+      auto board = board_widget ? board_widget->LockBoard() : nullptr;
       {  // Update `source_image`
         sk_sp<SkImage> new_image = nullptr;
         auto ip_ptr = tesseract->image->FindInterface();
         ImageProvider ip(ip_ptr.Owner<Object>(), ip_ptr.Get());
         if (ip) {
           new_image = ip.GetImage();
-          iris_target = ip.object_ptr->MyLocation()->position;
+          if (auto* ip_loc = board ? board->LocationOrNull(*ip.object_ptr) : nullptr) {
+            iris_target = ip_loc->PeekPosition();
+          }
         }
 
         if (status_progress_ratio.has_value()) {
-          iris_target = tesseract->here->position;
+          if (auto* self_loc = board ? board->LocationOrNull(*tesseract) : nullptr) {
+            iris_target = self_loc->PeekPosition();
+          }
         }
         source_image = std::move(new_image);
       }
 
-      if (pointers.size() > 0) {
-        auto pointer_pos = pointers.front()->PositionWithinRootBoard();
+      if (pointers.size() > 0 && board_widget) {
+        auto pointer_pos = pointers.front()->PositionWithin(*board_widget);
         iris_target = pointer_pos;
       }
 
@@ -402,9 +408,8 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
 
       {  // animate iris
         Vec2 eye_delta;
-        if (iris_target.has_value()) {
-          auto* mw = ToyStore().FindOrNull(*vm.root_board);
-          auto matrix = mw ? TransformBetween(*mw, *this) : SkMatrix::I();
+        if (iris_target.has_value() && board_widget) {
+          auto matrix = TransformBetween(*board_widget, *this);
           eye_delta = matrix.mapPoint(iris_target->sk) - layout.eye_center;
         } else {
           eye_delta = Vec2(0, 0);

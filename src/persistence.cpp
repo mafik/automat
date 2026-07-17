@@ -31,7 +31,12 @@ void SaveState(ui::RootWidget& root_widget, Status& status) {
 
   writer.assigned_names.emplace("version");
   writer.assigned_names.emplace("window");
-  writer.Serialize(*vm.root_board);
+  {
+    auto lock = std::lock_guard(vm.mutex);
+    for (auto& board : vm.boards) {
+      writer.Serialize(*board);
+    }
+  }
 
   writer.EndObject();
   writer.Flush();
@@ -76,11 +81,14 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
             lookahead.Get(type, status);
             if (OK(status)) {
               if (type == "Board") {
-                d.RegisterObject(key, *vm.root_board);
+                auto board = MAKE_PTR(Board);
+                d.RegisterObject(key, *board);
+                auto lock = std::lock_guard(vm.mutex);
+                vm.boards.push_back(std::move(board));
               } else {
                 auto proto = prototypes->Find(type);
                 if (proto == nullptr) {
-                  vm.root_board->ReportError(f("Unknown object type: {}", type));
+                  DefaultBoard().ReportError(f("Unknown object type: {}", type));
                 } else {
                   auto object = proto->Clone();
                   object->inhibit_sync_notifications = true;
@@ -139,8 +147,13 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
   }
 
   // Objects may have been rendered in their incomplete state - re-render them all.
-  for (auto& loc : vm.root_board->locations) {
-    loc->WakeToys();
+  {
+    auto lock = std::lock_guard(vm.mutex);
+    for (auto& board : vm.boards) {
+      for (auto& loc : board->locations) {
+        loc->WakeToys();
+      }
+    }
   }
 
   bool fully_decoded = d.reader.IterativeParseComplete();

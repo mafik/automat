@@ -107,7 +107,7 @@ struct ConnectionWidget : ArgumentToy {
   void Draw(SkCanvas&) const override;
   Compositor GetCompositor() const override { return Compositor::ANCHOR_WARP; }
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
-  Optional<Rect> TextureBounds() const override;
+  Optional<Rect> DrawBounds() const override;
   Vec<Vec2> TextureAnchors() override;
 };
 

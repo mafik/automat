@@ -273,7 +273,7 @@ struct HotKeyWidget : ObjectToy {
         hotkey_selector->Release();  // This will also set itself to nullptr
       } else if (pointer.keyboard) {
         ui::Widget* label = shortcut_button->child.get();
-        auto bounds = *label->TextureBounds();
+        auto bounds = *label->DrawBounds();
         Vec2 caret_position = shortcut_button->RRect().rect().center();
         caret_position.x += bounds.left;
         hotkey_selector = &pointer.keyboard->RequestCaret(*this, caret_position);

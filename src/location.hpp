@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <unordered_set>
+#include <variant>
 
 #include "animation.hpp"
 #include "interface.hpp"
@@ -23,6 +24,7 @@ namespace automat {
 
 struct LongRunning;
 struct LocationWidget;
+struct Board;
 
 // Each Container holds its inner objects in Locations.
 //
@@ -35,14 +37,50 @@ struct LocationWidget;
 // Implementations of this interface would typically extend it with
 // container-specific functions.
 struct Location : Object {
-  WeakPtr<Location> parent_location;
+  // The Board holding this Location (null while outside of a Board).
+  WeakPtr<Board> board;
 
   using Toy = LocationWidget;
 
   Ptr<Object> object;
 
-  Vec2 position = {0, 0};
-  mutable float scale = 1.f;
+  struct Direct {
+    Vec2 position = {0, 0};
+    float scale = 1.f;
+  };
+  struct PlaceAhead {
+    WeakPtr<Location> origin;
+    Interface::Table* arg;
+  };
+  struct PlaceBetween {
+    WeakPtr<Location> a, b;
+  };
+  std::variant<Direct, PlaceAhead, PlaceBetween> placement = Direct{};
+
+  void FillPosition(LocationWidget& w);  // private
+
+  Vec2& Position(LocationWidget& w) {
+    if (!std::holds_alternative<Direct>(placement)) {
+      FillPosition(w);
+    }
+    return std::get_if<Direct>(&placement)->position;
+  }
+
+  float& Scale(LocationWidget& w) {
+    if (!std::holds_alternative<Direct>(placement)) {
+      FillPosition(w);
+    }
+    return std::get_if<Direct>(&placement)->scale;
+  }
+
+  Vec2 PeekPosition() const {
+    auto* direct = std::get_if<Direct>(&placement);
+    return direct ? direct->position : Vec2{};
+  }
+  float PeekScale() const {
+    auto* direct = std::get_if<Direct>(&placement);
+    return direct ? direct->scale : 1.f;
+  }
 
   std::unordered_set<Location*> update_observers;
   std::unordered_set<Location*> observing_updates;
@@ -64,12 +102,10 @@ struct Location : Object {
   void Iconify();
   void Deiconify();
 
-  explicit Location(WeakPtr<Location> parent_location = {});
+  explicit Location(WeakPtr<Board> board = {});
   ~Location();
 
-  // DEPRECATED: VM layer should not refer to UI-managed objects
-  // Find (or create if needed) the Widget for this location's object.
-  ObjectToy& ToyForObject();
+  Ptr<Board> LockBoard() const;
 
   // Call this when the object's shape or position change.
   //
@@ -84,7 +120,6 @@ struct Location : Object {
   Ptr<T> Create(Args&&... args) {
     auto typed = MAKE_PTR(T, std::forward<Args>(args)...);
     object = typed;
-    object->Relocate(this);
     return typed;
   }
 
@@ -170,14 +205,6 @@ struct Location : Object {
     return dynamic_cast<T*>(Follow());
   }
 
-  template <typename T>
-  T* ParentAs() const {
-    if (auto p = parent_location.lock()) {
-      return dynamic_cast<T*>(p->object.get());
-    }
-    return nullptr;
-  }
-
   void SetText(std::string_view text) {
     std::string current_text = GetText();
     if (current_text == text) {
@@ -188,12 +215,7 @@ struct Location : Object {
   }
   void SetNumber(double number);
 
-  Ptr<Object> Clone() const {
-    auto clone = MAKE_PTR(Location);
-    clone->position = position;
-    clone->scale = scale;
-    return clone;
-  }
+  Ptr<Object> Clone() const;
 };
 
 struct LocationWidget : ObjectToy {
@@ -212,18 +234,44 @@ struct LocationWidget : ObjectToy {
   MortalPtr<ObjectToy> toy;  // cached Object Toy (auto-nulled on destruction)
   std::vector<ui::Widget*> overlays;
 
-  LocationWidget(ui::Widget* parent, Location& loc);
+  // Set while the widget is dragged outside of a Board (toy is pointer-owned vs board-owned)
+  std::unique_ptr<Toy> owned_toy;
+
+  // A fading ghost of this widget's toy.
+  struct IncomingFlight {
+    Vec2 position;
+    float scale = 1;
+    Vec2 position_vel = {};
+    float scale_vel = 0;
+    float transparency = 0;
+  };
+  Vec<IncomingFlight> incoming_flights;
+
+  MortalList<LocationWidget> overlapping_above;
+  MortalList<LocationWidget> overlapping_below;
+  Rect stack_draw_bounds;
+  uint32_t overlap_genid = 0;
+  int overlap_zindex = -1;
+
+  Rect CoverBounds() const override { return stack_draw_bounds; }
+
+  // Keep Toy in the board's ToyStore.
+  static std::unique_ptr<LocationWidget> MakeBoardOwned(ui::Widget* parent, Location& loc);
+  // Keep Toy owned locally.
+  static std::unique_ptr<LocationWidget> MakePointerOwned(ui::Widget* parent, Location& loc);
 
   Ptr<Location> LockLocation() const { return location_weak.Lock(); }
 
   ObjectToy& ToyForObject();
   Vec2 LocalAnchor() const override;
 
+  void AddIncomingFlight(const SkMatrix& source);
+
   // Widget overrides
   Tock Tick(time::Timer& timer) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
-  Optional<Rect> TextureBounds() const override;
+  Optional<Rect> DrawBounds() const override;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
 
   // Call this when the position of this location changes to update the autoconnect arguments.
@@ -231,11 +279,16 @@ struct LocationWidget : ObjectToy {
 
   void OnReparent(ui::Widget& new_parent, SkM44& fix) override;
   void OnChildReparentedAway(ui::Widget& child) override;
+
+ private:
+  LocationWidget(ui::Widget* parent, Location& loc);
 };
 
 static_assert(ToyMaker<Location>);
 
 void PositionBelow(Location& origin, Location& below);
+
+void AppendObscurers(Location* loc, Location* other_end, Vec<ui::Widget*>& wanted);
 
 // Return position for the given `target_widget` ahead of the `origin`s `arg`.
 //
@@ -243,12 +296,6 @@ void PositionBelow(Location& origin, Location& below);
 //
 // This is a UI function.
 Vec2 PositionAhead(Location& origin, const Argument::Table& arg, const ObjectToy& target_widget);
-
-// Similar to the above, but also sets the target's position.
-//
-// This is a VM function. It's pretty expensive because it must create a fake Widget for the
-// target toy.
-void PositionAhead(Location& origin, const Argument::Table& arg, Location& target);
 
 // VM function for animating location appearance.
 //

@@ -34,9 +34,8 @@ std::unique_ptr<Action> PrototypeButton::FindAction(ui::Pointer& pointer, ui::Ac
     return nullptr;
   }
   auto obj = proto->Clone();
-  // Create a toy parented to this button. Location will reparent & animate it.
   pointer.root_widget.toys.FindOrMake(*obj, this);
-  auto loc = MAKE_PTR(Location, vm.root_location);
+  auto loc = MAKE_PTR(Location);
   loc->InsertHere(std::move(obj));
 
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
@@ -184,7 +183,7 @@ float Toolbar::CalculateWidth() const {
   return width;
 }
 StrView Toolbar::Name() const { return "Toolbar"sv; }
-Optional<Rect> Toolbar::TextureBounds() const {
+Optional<Rect> Toolbar::DrawBounds() const {
   float width = CalculateWidth();
   return Rect(-width / 2, 0, width / 2, kToolbarHeight * 2);
 }

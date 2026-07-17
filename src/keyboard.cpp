@@ -42,7 +42,7 @@ namespace automat::ui {
 static SkPath PointerIBeam(const Keyboard& keyboard) {
   if (keyboard.pointer) {
     float px = 1 / keyboard.root_widget.PxPerMeter();
-    Vec2 pos = keyboard.pointer->PositionWithinRootBoard();
+    Vec2 pos = keyboard.pointer->PositionOnCanvas();
     SkRect bounds = SkRect::MakeXYWH(pos.x, pos.y, 0, 0);
     switch (keyboard.pointer->Icon()) {
       case Pointer::IconType::kIconArrow:
@@ -86,10 +86,9 @@ void Caret::Release() {
 
 SkPath Caret::MakeRootShape() const {
   if (!owner) return shape;
-  auto* mw = owner->ToyStore().FindOrNull(*vm.root_board);
-  if (!mw) return shape;
-  SkMatrix text_to_root = TransformBetween(*owner, *mw);
-  return shape.makeTransform(text_to_root);
+  SkMatrix text_to_canvas =
+      SkMatrix::Concat(owner->FindRootWidget().WindowToCanvas(), TransformUp(*owner));
+  return shape.makeTransform(text_to_canvas);
 }
 
 // Called by objects that want to grab all keyboard events in the system.

@@ -355,7 +355,7 @@ Float64Track& Timeline::AddFloat64Track(Str name) {
 void Timeline::AddTrack(Ptr<TrackBase>&& track) {
   track->timeline = this;
   tracks.emplace_back(std::move(track));
-  if (auto h = here) {
+  if (auto* h = MyLocation()) {
     h->InvalidateConnectionWidgets(true, true);
   }
   WakeToys();
@@ -412,7 +412,7 @@ time::Duration Timeline::MaxTrackLength() const {
 }
 
 void TimelineCancelScheduled(Timeline& t) {
-  if (auto h = t.here) {
+  if (auto* h = t.MyLocation()) {
     CancelScheduledAt(*h);
   }
 }
@@ -437,7 +437,7 @@ void TimelineScheduleNextAfter(Timeline& t, time::SteadyPoint now) {
       next_update = min(next_update, next_update_point);
     }
   }
-  if (auto h = t.here) {
+  if (auto* h = t.MyLocation()) {
     ScheduleAt(*h, next_update);
   }
 }
@@ -1928,7 +1928,7 @@ struct TrackBaseWidget : ObjectToy {
 
   SkPath Shape() const override { return SkPath::Rect(shape.sk); }
 
-  Optional<Rect> TextureBounds() const override {
+  Optional<Rect> DrawBounds() const override {
     Context ctx(*this);
     if (ctx.timeline_widget == nullptr || ctx.timeline_widget->drag_zoom_action == nullptr) {
       return shape;
@@ -2776,7 +2776,6 @@ bool Float64Track::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 bool Timeline::DeserializeKey(ObjectDeserializer& d, StrView key) {
   Status status;
-  here = MyLocation();
   if (key == "tracks") {
     for (auto& track_name : ObjectView(d, status)) {
       Str track_type = "";

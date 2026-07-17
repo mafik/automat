@@ -98,6 +98,7 @@ void RenderThread(RootWidget& rw, std::stop_token stop_token) {
     if (rw.minimized.Get()) {
       {
         ZoneScopedN("ReleaseGpuResources");
+        rw.zombie_toys.clear();
         rw.toys.container.clear();
         rw.toolbar.reset();
         rw.sk_drawable.reset();
@@ -143,6 +144,7 @@ RootWidget::~RootWidget() {
   while (!keyboard.keyloggings.empty()) {
     keyboard.keyloggings.begin()->Release();
   }
+  window.reset();
 }
 
 void RootWidget::Init() {
@@ -370,6 +372,13 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
   }
 
   SkRect work_area = SkRect::MakeXYWH(-0.5, -0.5, 1, 1);
+  {
+    auto lock = std::lock_guard(vm.mutex);
+    for (auto& board : vm.boards) {
+      Rect board_rect = Rect::MakeCenterZero(100_cm, 100_cm).MoveBy(board->position);
+      work_area.join(board_rect.sk);
+    }
+  }
 
   // Make sure that work area doesn't leave the root widget bounds (so the user
   // doesn't get lost)
@@ -415,10 +424,38 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
       widget->local_to_parent = canvas_to_window44;
     }
   }
-  auto& board_widget = toys.FindOrMake(*vm.root_board, this);
-  board_widget.local_to_parent = canvas_to_window44;
+  {
+    auto lock = std::lock_guard(vm.mutex);
+    Widget* below = nullptr;
+    for (auto& board : std::ranges::reverse_view(vm.boards)) {
+      auto& board_widget = toys.FindOrMake(*board, this);
+      SkM44 board_transform = canvas_to_window44;
+      board_transform.preTranslate(board->position.x, board->position.y);
+      board_widget.local_to_parent = board_transform;
+      if (below) {
+        layers.OrderAbove(&board_widget, below);
+      } else {
+        layers.OrderInside(&board_widget);
+      }
+      below = &board_widget;
+    }
+  }
+
+  std::erase_if(zombie_toys, [](const std::unique_ptr<Toy>& toy) { return toy->dead; });
 
   return tock;
+}
+
+void RootWidget::Poll() {
+  toys.Poll(timer);
+  for (auto& [key, toy] : toys.container) {
+    if (auto* board_widget = dynamic_cast<BoardWidget*>(toy.get())) {
+      board_widget->Poll(timer);
+    }
+  }
+  for (Action& action : active_actions) {
+    action.Poll(timer);
+  }
 }
 
 void RootWidget::Draw(SkCanvas& canvas) const {
@@ -619,43 +656,6 @@ void RootWidget::DeserializeState(Deserializer& d, Status& status) {
       Maximized(new_maximized_horizontally, new_maximized_vertically);
     }
   }
-}
-
-SkMatrix RootWidget::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point) {
-  auto* mw = toys.FindOrNull(*vm.root_board);
-  Rect board_bounds = mw ? Rect(mw->Shape().getBounds()) : Rect{};
-
-  SkMatrix matrix;
-  if (fixed_point) {
-    matrix.setScale(0.5, 0.5, fixed_point->x, fixed_point->y);
-  } else {
-    matrix.setScale(0.5, 0.5);
-  }
-  {  // Find a snap position outside of the canvas
-
-    Rect scaled_object_bounds = matrix.mapRect(bounds.sk);
-    if (board_bounds.sk.intersects(scaled_object_bounds)) {
-      float move_up = fabsf(board_bounds.top - scaled_object_bounds.bottom);
-      float move_down = fabsf(scaled_object_bounds.top - board_bounds.bottom);
-      float move_left = fabsf(board_bounds.left - scaled_object_bounds.right);
-      float move_right = fabsf(scaled_object_bounds.left - board_bounds.right);
-      if (move_up < move_down && move_up < move_left && move_up < move_right) {
-        matrix.postTranslate(0, move_up);
-      } else if (move_down < move_up && move_down < move_left && move_down < move_right) {
-        matrix.postTranslate(0, -move_down);
-      } else if (move_left < move_up && move_left < move_down && move_left < move_right) {
-        matrix.postTranslate(-move_left, 0);
-      } else {
-        matrix.postTranslate(move_right, 0);
-      }
-    }
-  }
-  return matrix;
-}
-
-void RootWidget::DropLocation(Ptr<Location>&& location) {
-  // do nothing - location will be deleted by unique_ptr
-  audio::Play(embedded::assets_SFX_trash_wav);
 }
 
 static void UpdateLocalToParent(RootWidget& root_widget) {

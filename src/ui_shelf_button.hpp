@@ -29,7 +29,7 @@ struct ShelfButton : Widget {
   StrView Name() const override { return "ShelfButton"; }
   SkPath Shape() const override;
   RRect CoarseBounds() const override;
-  Optional<Rect> TextureBounds() const override { return std::nullopt; }
+  Optional<Rect> DrawBounds() const override { return std::nullopt; }
   bool AllowChildPointerEvents(Widget&) const override { return false; }
 
   void PointerEnter(Pointer&) override;

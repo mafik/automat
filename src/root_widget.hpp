@@ -37,7 +37,7 @@ struct Pointer;
 extern std::vector<RootWidget*> root_widgets;
 extern unique_ptr<RootWidget> root_widget;
 
-struct RootWidget final : Widget, DropTarget {
+struct RootWidget final : Widget {
   RootWidget();
   ~RootWidget();
 
@@ -58,7 +58,7 @@ struct RootWidget final : Widget, DropTarget {
       root_widget->layers.OrderInside(this);
     }
     SkPath Shape() const override { return SkPath(); }
-    Optional<Rect> TextureBounds() const override { return std::nullopt; }
+    Optional<Rect> DrawBounds() const override { return std::nullopt; }
     Tock Tick(time::Timer&) override;
     void Draw(SkCanvas&) const override;
   } zoom_warning;
@@ -70,13 +70,19 @@ struct RootWidget final : Widget, DropTarget {
   struct ToyStore toys;
   MortalList<Action> active_actions;
 
+  // Widgets that outlived their owners (deleted drags) finishing their disappearance
+  // animations. Swept in Tick once they mark themselves dead.
+  Vec<std::unique_ptr<Toy>> zombie_toys;
+  void AdoptZombie(std::unique_ptr<Toy>&& toy) {
+    if (toy) zombie_toys.push_back(std::move(toy));
+  }
+
   std::string_view Name() const override { return "RootWidget"; }
 
-  DropTarget* AsDropTarget() override { return this; }
-  bool CanDrop(Location&) const override { return true; }
-
-  SkMatrix DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point = nullptr) override;
-  void DropLocation(Ptr<Location>&&) override;
+  // Wake-counter polling: wakes every toy whose object has updated state. Runs once per frame
+  // (from PackFrame), even while widgets sleep. Covers the root store, every board's store
+  // (BoardWidget::Poll) and in-progress actions that hold toys (Action::Poll).
+  void Poll();
 
   float PxPerMeter() const { return display_pixels_per_meter * zoom; }
 

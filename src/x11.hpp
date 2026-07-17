@@ -31,10 +31,6 @@ namespace automat::x11 {
 struct Window;  // server-side window resource; the board object holds a MortalPtr to it
 }  // namespace automat::x11
 
-namespace automat::ui {
-struct PointerObject;
-}  // namespace automat::ui
-
 namespace automat::library {
 
 // A top-level X11 window shown on the board.
@@ -103,7 +99,5 @@ void Start(mux::Epoll&, Status&);  // pick a free DISPLAY, listen on epoll
 void Stop();                       // controlled teardown
 Str SocketName();                  // bound display name (e.g. ":3"), empty if not started
 void UIFrame();                    // per-frame board reconcile, no-op if not started
-
-void RegisterPointer(ui::PointerObject&);
 
 }  // namespace automat::x11

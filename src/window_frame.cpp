@@ -8,10 +8,15 @@
 #include <include/pathops/SkPathOps.h>
 #include <include/utils/SkTextUtils.h>
 
+#include "board.hpp"
 #include "color.hpp"
+#include "drag_action.hpp"
 #include "drawing.hpp"
 #include "font.hpp"
+#include "location.hpp"
 #include "object.hpp"
+#include "pointer.hpp"
+#include "root_widget.hpp"
 
 namespace automat {
 
@@ -86,6 +91,36 @@ bool DecoratedWindow::DeserializeDecoration(ObjectDeserializer& d, StrView key) 
   else if (v == "client")
     pref = DecorationPreference::ClientSide;
   decoration_preference.store(pref, std::memory_order_relaxed);
+  return true;
+}
+
+void ClientInputActionBase::LinkWindow(Object& obj) {
+  if (auto* w = dynamic_cast<DecoratedWindow*>(&obj)) {
+    window = obj.AcquireWeakPtr();
+    w->input_action = this;
+  }
+}
+
+ClientInputActionBase::~ClientInputActionBase() {
+  if (auto obj = window.Lock())
+    if (auto* w = dynamic_cast<DecoratedWindow*>(obj.get()))
+      if (w->input_action == this) w->input_action = nullptr;
+}
+
+bool StartClientMove(DecoratedWindow& window) {
+  auto* input = window.input_action;
+  if (!input) return false;
+  auto* lw = Closest<LocationWidget>(input->InitiatingWidget());
+  if (!lw) return false;
+  auto loc = lw->LockLocation();
+  if (!loc) return false;
+  auto board = loc->LockBoard();
+  if (!board) return false;
+  ui::Pointer& pointer = input->pointer;
+  auto* mw = pointer.root_widget.toys.FindOrNull(*board);
+  if (!mw) return false;
+  pointer.ReplaceAction(*input,
+                        std::make_unique<DragLocationAction>(pointer, mw->DragStack(*loc), *mw));
   return true;
 }
 

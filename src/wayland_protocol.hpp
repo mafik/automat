@@ -44,7 +44,8 @@
 // call them whenever they wish.
 //
 // *Events* are methods that do not start with 'On'. Server may call them whenever it wishes to.
-// They are buffered internally and will be sent over to the client at the next 'server.FlushAll()'.
+// They are buffered internally and will be sent over to the client at the next 'Client::Flush()'
+// (or 'server.FlushAll()', which flushes every client).
 //
 // *Lifetime* of the interfaces is entirely up to clients. Clients may allocate up to ~4.3 billion
 // objects and have no obligation to ever free them. Turns out DoS is a core feature of the Wayland
@@ -2840,7 +2841,6 @@ struct Pointer : Common {
   // clang-format on: generated Pointer from wayland.xml
 
   U32 version = 1;
-  WeakPtr<ui::PointerObject> pointer_object;
 };
 
 // clang-format off: generated Keyboard from wayland.xml
@@ -6190,6 +6190,16 @@ struct Surface : Common {
   // links, or null if the surface is not part of a toplevel tree.
   XdgToplevel* OwningToplevel();
 
+  // Each sends one input event to every matching handle (one shared serial), then flushes.
+  void PointerEnter(Vec2 px);
+  void PointerLeave();
+  void PointerMotion(Vec2 px);
+  void PointerAxis(float delta);
+  void PointerButton(U32 evdev_code, bool pressed);
+  void KeyboardEnter();
+  void KeyboardLeave();
+  void KeyboardKey(U32 evdev_keycode, bool pressed, U32 mods, U32 group);
+
   MortalPtr<Buffer> pending_buffer;  // wl_buffer attached since the last commit (null = none)
   bool buffer_attached = false;      // an attach happened (a null buffer means unmap)
   Vec<U32> frame_callbacks;          // wl_callback ids from wl_surface.frame
@@ -6249,6 +6259,8 @@ struct Client : mux::Epoll::Listener {
   U32 next_id = 2;
   bool errored = false;
   Ptr<ClientObject> client_object;
+  Vec<Pointer*> pointers;    // every live wl_pointer of this client; events go to each
+  Vec<Keyboard*> keyboards;  // likewise wl_keyboard
   static Colony<Client> colony;
 
   Client(Server& s) : server(s) { client_object = MAKE_PTR(ClientObject); }
@@ -6285,6 +6297,7 @@ struct Client : mux::Epoll::Listener {
   }
   void ProtocolError(U32 object_id, U32 code, StrView message);
   void Disconnect();
+  void Flush();  // sends buffered events + fds now; no-op when nothing is buffered
 };
 
 }  // namespace automat::wayland

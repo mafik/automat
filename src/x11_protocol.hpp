@@ -354,9 +354,9 @@ struct Server : mux::Epoll::Listener {
   std::mutex ui_mutex;
   Vec<Ptr<library::X11Window>> ui_appeared;
   Vec<Ptr<library::X11Window>> ui_disappeared;
+  Vec<WeakPtr<library::X11Window>> ui_move_requests;  // _NET_WM_MOVERESIZE, for StartClientMove
   std::mutex adoption_mutex;
   Vec<std::pair<I64, WeakPtr<library::X11Window>>> adoptions;
-  WeakPtr<ui::PointerObject> pointer_object;
 
   std::unique_ptr<mux::Timer> frame_timer;
 

@@ -168,13 +168,17 @@ protocol defers to commit, a non-integer crop with no destination and a source
 rectangle reaching outside the buffer, raise the protocol error there; the
 cheaper checks on negative or zero values raise it when the request arrives.
 
-The resolved surface size becomes the window object's size and the source
+The window object's size is the toplevel's xdg window geometry, which falls back
+to the resolved surface size when the client sets none. The geometry excludes
+client-drawn shadow margins around the content, so Automat's frame is drawn
+around the window the user sees, and the content buffer is shifted by the
+geometry's top-left so those margins hang outside the frame. The source
 rectangle travels with the frame to the toy, which samples it into the content
 area. Because both the window's board size and its surface-local input mapping
-derive from the surface size, a cropped or scaled window drags, seats and routes
-pointer events correctly with no further change. Resolution and the protocol are
-in `src/wayland.cpp` (`ResolveGeometry`, the `Viewport`/`Viewporter` handlers);
-the sampling is in `src/wayland.cpp`.
+derive from these sizes, a cropped, scaled or shadowed window drags, seats and
+routes pointer events correctly with no further change. Resolution and the
+protocol are in `src/wayland.cpp` (`ResolveGeometry`, the
+`Viewport`/`Viewporter` handlers); the sampling is in `src/wayland.cpp`.
 
 A commit that changes only the viewport while attaching no new buffer does not
 resize the window until the next buffer arrives, because resolution runs on the
@@ -277,6 +281,44 @@ becomes `wl_pointer.axis` over the content and falls through to canvas zoom over
 the chrome. The toy hands the compositor the surface plus surface-local
 coordinates; the compositor resolves the surface handle and relays the event.
 The title bar and frame fall through to the standard object behaviors (drag, menu).
+The object menu opened over client content is the window's: a surface toy forwards
+`VisitOptions` to the toy at the base of its tree (`BaseToy`), because a surface is
+window content rather than a board object of its own — a menu built for the surface
+object would target Move, Copy and New at the surface instead of the window.
+
+A client may hold several `wl_pointer` and `wl_keyboard` handles at once, because
+each library inside the process can bind `wl_seat` on its own: Firefox binds it
+once through GTK and once through its own Wayland integration, calling
+`get_pointer` on both, and attaches listeners only to the GTK handle. The
+protocol promises events to every handle created while the capability is
+present, and the compositor cannot know which handle the client listens on, so
+every event is sent to every handle the target client holds — the behavior of
+the reference compositors. Each `Client` tracks its live handles in `pointers`
+and `keyboards` vectors, appended by `wl_seat.get_pointer`/`get_keyboard` and
+pruned by `wl_pointer.release`/`wl_keyboard.release`, so delivery iterates only
+the target client's own handles. One logical event carries one serial: the
+serial is allocated once and broadcast to every handle, because a client quotes
+"the serial of the event" in requests such as `set_cursor` and
+`xdg_toplevel.move` regardless of which handle it read the event from. Each
+event is a named `Surface` method (`PointerEnter`, `PointerButton`,
+`KeyboardKey`, ...) that allocates the serial, iterates the handles, and flushes
+that one client; a whole-server flush happens only after a request batch and at
+the frame tick, where the set of dirtied clients is unbounded.
+
+A window that draws its own titlebar cannot be moved by the frame, so its titlebar
+drag reaches Automat as `xdg_toplevel.move`. The handler queues the window and wakes
+the root widget; the next `UIFrame` calls `StartClientMove` (src/window_frame.hpp).
+The window object records the action currently routing a pressed button into it
+(`DecoratedWindow::input_action`, set by the action's constructor and cleared by its
+destructor, both on the UI thread), so `StartClientMove` follows that link and
+replaces the routing action with the same board drag that a grab of the title band
+starts. Destroying the replaced action sends the client its button release, which is
+how the protocol expects the client's own drag state to end. The request's serial is
+not validated; a pressed button routed to the window is the physical fact the serial
+stands for, and without one the request is dropped. `xdg_toplevel.resize` is ignored
+because embedded windows are not resizable. The X11 server handles
+`_NET_WM_MOVERESIZE` through the same `StartClientMove`, so both protocols move
+windows identically.
 
 A surface's reactive shape is its `set_input_region`, not its texture, so a
 surface with an empty input region is transparent to the pointer and the hit falls

@@ -1641,7 +1641,26 @@ void ConvertSelection::Handle(Client& client) {
 
 void SendEvent::Handle(Client& client) {
   Window* w = server->Get<Window>(destination, ResType::Window);
-  if (!w || !w->owner) return;
+  if (!w) return;
+  if (w == server->root && (event[0] & 0x7f) == 33) {
+    U32 type, target, direction;
+    std::memcpy(&target, event + 4, 4);
+    std::memcpy(&type, event + 8, 4);
+    std::memcpy(&direction, event + 12 + 8, 4);
+    constexpr U32 kNetWmMoveResizeMove = 8;
+    if (type == server->InternAtom("_NET_WM_MOVERESIZE", false) &&
+        direction == kNetWmMoveResizeMove) {
+      if (Window* tw = server->Get<Window>(target, ResType::Window)) {
+        {
+          auto lock = std::lock_guard(server->ui_mutex);
+          server->ui_move_requests.push_back(tw->object);
+        }
+        vm.WakeToys();
+      }
+    }
+    return;
+  }
+  if (!w->owner) return;
   Client* saved = g_current_client;
   g_current_client = w->owner;
   Writer wr(*w->owner, 32);
@@ -2943,17 +2962,20 @@ struct X11WindowToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
 
 // Held while a button initiated over the window is down: routes the press/release to the
 // client and focuses it, instead of dragging the object.
-struct X11InputAction : Action {
+struct X11InputAction : ClientInputActionBase {
   X11WindowToy& toy;
   U32 button;
   X11InputAction(ui::Pointer& p, X11WindowToy& toy, U32 button)
-      : Action(p), toy(toy), button(button) {
+      : ClientInputActionBase(p), toy(toy), button(button) {
     toy.FocusClient(p);
     Vec2 px = toy.ToSurfacePx(p.PositionWithin(toy));
-    if (auto win = toy.LockWindow())
+    if (auto win = toy.LockWindow()) {
+      LinkWindow(*win);
       x11::server->SendButton(*win, button, true, (int)px.x, (int)px.y, 0);
+    }
   }
   void Update() override {}
+  ui::Widget& InitiatingWidget() override { return toy; }
   ~X11InputAction() override {
     Vec2 px = toy.ToSurfacePx(pointer.PositionWithin(toy));
     if (auto win = toy.LockWindow())
@@ -3254,6 +3276,7 @@ void Start(mux::Epoll& epoll, Status& status) {
         server->InternAtom("_NET_ACTIVE_WINDOW", false),
         server->InternAtom("_NET_FRAME_EXTENTS", false),
         server->InternAtom("_NET_WM_STATE_FOCUSED", false),
+        server->InternAtom("_NET_WM_MOVERESIZE", false),
     };
     SetProp(*server->root, "_NET_SUPPORTED", server->InternAtom("ATOM", false), 32, supported,
             sizeof(supported));
@@ -3278,20 +3301,19 @@ Str SocketName() {
   return f(":{}", server->display_number);
 #endif
 }
-void RegisterPointer(ui::PointerObject& obj) {
-  mux::epoll.Post([weak = obj.AcquireWeakPtr()] {
-    if (server) server->pointer_object = weak;
-  });
-}
-
 void UIFrame() {
   if (!server) return;
   Server& s = *server;
   Vec<Ptr<X11Window>> appeared, disappeared;
+  Vec<WeakPtr<X11Window>> move_requests;
   {
     auto lock = std::lock_guard(s.ui_mutex);
     appeared.swap(s.ui_appeared);
     disappeared.swap(s.ui_disappeared);
+    move_requests.swap(s.ui_move_requests);
+  }
+  for (auto& weak : move_requests) {
+    if (auto win = weak.Lock()) StartClientMove(*win);
   }
   static int spawn_count = 0;
   for (auto& w : appeared) {

@@ -145,7 +145,6 @@ struct MoveLocationOption : TextOption {
     }
     auto board = location->LockBoard();
     if (board && location->object) {
-      board->ForEachToy([](ui::RootWidget&, automat::Toy& w) { w.RedrawThisFrame(); });
       auto* mw = pointer.root_widget.toys.FindOrNull(*board);
       if (mw) {
         return std::make_unique<DragLocationAction>(pointer, mw->DragStack(*location), *mw);
@@ -183,7 +182,6 @@ struct CopyOption : TextOption {
     }
     auto board = location->LockBoard();
     if (board && location->object) {
-      board->ForEachToy([](ui::RootWidget&, automat::Toy& w) { w.RedrawThisFrame(); });
       auto* mw = pointer.root_widget.toys.FindOrNull(*board);
       if (mw) {
         audio::Play(embedded::assets_SFX_canvas_pick_wav);

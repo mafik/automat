@@ -12,6 +12,7 @@
 
 #include <atomic>
 
+#include "action.hpp"
 #include "math.hpp"
 #include "menu.hpp"
 #include "ptr.hpp"
@@ -23,6 +24,7 @@ namespace automat {
 struct Object;
 struct ObjectSerializer;
 struct ObjectDeserializer;
+struct ClientInputActionBase;
 
 // A window object that can wear the frame: the user's decoration preference plus the hook
 // the decoration menu calls after changing it. Both the X11 and the Wayland window objects
@@ -30,6 +32,9 @@ struct ObjectDeserializer;
 struct DecoratedWindow {
   enum class DecorationPreference { Auto = 0, ServerSide = 1, ClientSide = 2 };
   std::atomic<DecorationPreference> decoration_preference{DecorationPreference::Auto};
+
+  // UI thread: the action routing the held button into this window, for StartClientMove.
+  ClientInputActionBase* input_action = nullptr;
 
   virtual ~DecoratedWindow() = default;
 
@@ -44,6 +49,18 @@ struct DecoratedWindow {
 // Adds the "Decoration..." submenu (Auto / Automat / App) to an object menu; `window` is
 // the menu's window object, which implements DecoratedWindow.
 void VisitDecorationOptions(const WeakPtr<Object>& window, const OptionsVisitor&);
+
+struct ClientInputActionBase : Action {
+  WeakPtr<Object> window;
+
+  using Action::Action;
+  ~ClientInputActionBase() override;
+  virtual ui::Widget& InitiatingWidget() = 0;
+
+  void LinkWindow(Object&);  // records this action in the window's input_action
+};
+
+bool StartClientMove(DecoratedWindow& window);
 
 }  // namespace automat
 

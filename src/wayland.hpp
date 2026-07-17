@@ -40,10 +40,6 @@ struct ClientObject : ReferenceCounted {
 };
 }  // namespace automat::wayland
 
-namespace automat::ui {
-struct PointerObject;
-}  // namespace automat::ui
-
 namespace automat::library {
 
 // Kept alive by the wayland::Surface
@@ -54,6 +50,7 @@ struct WaylandSurface : Object {
   sk_sp<SkImage> image;
   SkRect src_crop = SkRect::MakeEmpty();  // wp_viewport crop
   SkISize dst_size = {};                  // pixels
+  SkIRect geo = SkIRect::MakeEmpty();     // xdg window geometry (whole buffer when unset)
   // The surface's input region, in client pixels (a closed path; empty means the
   // surface takes no pointer input, e.g. a render-only content subsurface). The
   // toy maps it to its Shape, so Automat's own hit-testing routes input to the
@@ -159,7 +156,5 @@ void Start(mux::Epoll&, Status&);  // pick a free WAYLAND_DISPLAY, flock its loc
 void Stop();       // controlled teardown (frame timer unregisters before mux::epoll dies)
 Str SocketName();  // bound display name, empty if not started
 void UIFrame();    // per-frame board reconcile, no-op if not started
-
-void RegisterPointer(ui::PointerObject&);
 
 }  // namespace automat::wayland

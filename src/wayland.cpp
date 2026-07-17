@@ -74,9 +74,10 @@ struct Server : mux::Epoll::Listener {
   uint32_t serial = 1;  // monotonic serial source for protocol events
   std::unique_ptr<mux::Timer> frame_timer;
   bool frame_pending = false;
-  std::mutex ui_mutex;                              // guards the two handoff vectors
-  Vec<Ptr<library::WaylandWindow>> ui_appeared;     // mapped windows awaiting board insert
-  Vec<Ptr<library::WaylandWindow>> ui_disappeared;  // unmapped windows awaiting board remove
+  std::mutex ui_mutex;                                    // guards the three handoff vectors
+  Vec<Ptr<library::WaylandWindow>> ui_appeared;           // mapped windows awaiting board insert
+  Vec<Ptr<library::WaylandWindow>> ui_disappeared;        // unmapped windows awaiting board remove
+  Vec<WeakPtr<library::WaylandWindow>> ui_move_requests;  // xdg_toplevel.move, for StartClientMove
   std::mutex adoption_mutex;
   Vec<std::pair<I64, WeakPtr<library::WaylandWindow>>> adoptions;  // respawned clients, by pid
 
@@ -94,8 +95,6 @@ struct Server : mux::Epoll::Listener {
   dev_t dmabuf_main_device = 0;
   bool dmabuf_has_device = false;
   bool dmabuf_inited = false;
-
-  WeakPtr<ui::PointerObject> pointer_object;
 
   Server(mux::Epoll& epoll) : epoll(epoll) {}
 
@@ -125,32 +124,7 @@ struct Server : mux::Epoll::Listener {
   }
 
   void FlushAll() {
-    for (Client& client : Client::colony) {
-      if (client.out.empty()) {
-        client.out_fds.clear();
-        continue;
-      }
-      msghdr msg{};
-      iovec iov{client.out.data(), client.out.size()};
-      msg.msg_iov = &iov;
-      msg.msg_iovlen = 1;
-      alignas(cmsghdr) char control[CMSG_SPACE(sizeof(int) * 16)];
-      if (!client.out_fds.empty()) {
-        int count = std::min<int>(client.out_fds.size(), 16);
-        msg.msg_control = control;
-        msg.msg_controllen = CMSG_SPACE(sizeof(int) * count);
-        cmsghdr* cm = CMSG_FIRSTHDR(&msg);
-        cm->cmsg_level = SOL_SOCKET;
-        cm->cmsg_type = SCM_RIGHTS;
-        cm->cmsg_len = CMSG_LEN(sizeof(int) * count);
-        int fds[16];
-        for (int k = 0; k < count; ++k) fds[k] = client.out_fds[k].fd;
-        std::memcpy(CMSG_DATA(cm), fds, sizeof(int) * count);
-      }
-      ssize_t n = sendmsg(client.fd.fd, &msg, MSG_NOSIGNAL | MSG_DONTWAIT);
-      if (n > 0) client.out.erase(0, n);
-      client.out_fds.clear();
-    }
+    for (Client& client : Client::colony) client.Flush();
   }
 
   // Compositor operations invoked from the UI/render thread (via the wayland::server global).
@@ -265,6 +239,33 @@ void Client::Disconnect() {
   server.epoll.Post([this] { Client::colony.erase(Client::colony.get_iterator(this)); });
 }
 
+void Client::Flush() {
+  if (out.empty()) {
+    out_fds.clear();
+    return;
+  }
+  msghdr msg{};
+  iovec iov{out.data(), out.size()};
+  msg.msg_iov = &iov;
+  msg.msg_iovlen = 1;
+  alignas(cmsghdr) char control[CMSG_SPACE(sizeof(int) * 16)];
+  if (!out_fds.empty()) {
+    int count = std::min<int>(out_fds.size(), 16);
+    msg.msg_control = control;
+    msg.msg_controllen = CMSG_SPACE(sizeof(int) * count);
+    cmsghdr* cm = CMSG_FIRSTHDR(&msg);
+    cm->cmsg_level = SOL_SOCKET;
+    cm->cmsg_type = SCM_RIGHTS;
+    cm->cmsg_len = CMSG_LEN(sizeof(int) * count);
+    int fds[16];
+    for (int k = 0; k < count; ++k) fds[k] = out_fds[k].fd;
+    std::memcpy(CMSG_DATA(cm), fds, sizeof(int) * count);
+  }
+  ssize_t n = sendmsg(fd.fd, &msg, MSG_NOSIGNAL | MSG_DONTWAIT);
+  if (n > 0) out.erase(0, n);
+  out_fds.clear();
+}
+
 void Client::NotifyRead(Status&) {
   for (;;) {
     char buf[4096];
@@ -373,17 +374,6 @@ void Start(mux::Epoll& epoll, Status& status) {
 }
 void Stop() { server.reset(); }
 Str SocketName() { return server ? server->socket_path.Name() : Str{}; }
-void RegisterPointer(ui::PointerObject& obj) {
-  mux::epoll.Post([weak = obj.AcquireWeakPtr()] {
-    if (!server) return;
-    server->pointer_object = weak;
-    if (auto obj = weak.Lock())
-      for (Pointer& p : Pointer::colony) {
-        obj->wl_handles[&p.client] = &p;
-        p.pointer_object = weak;
-      }
-  });
-}
 
 using library::WaylandSurface;
 using library::WaylandWindow;
@@ -453,6 +443,8 @@ void UpdateSurfaceNode(WaylandSurface& object, Surface& surf) {
                               : surf.input_region.path;
     object.stack = std::move(stack);
     object.stack_self_i = self_i;
+    object.geo = (surf.xdg && !surf.xdg->geo.isEmpty()) ? surf.xdg->geo
+                                                        : SkIRect::MakeSize(surf.content.dst_size);
     object.WakeToys();
   }
   object.surface_handle = &surf;
@@ -719,20 +711,9 @@ XdgToplevel* LiveToplevel(XdgToplevel* t) {
 
 void KeyboardFocusTo(Server& s, Surface* target) {
   if (s.keyboard_surface == target) return;
-  if (s.keyboard_surface) {
-    Client* c = &s.keyboard_surface->client;
-    for (Keyboard& k : Keyboard::colony)
-      if (&k.client == c) k.Leave(s.serial++, *s.keyboard_surface);
-  }
+  if (s.keyboard_surface) s.keyboard_surface->KeyboardLeave();
   s.keyboard_surface = target;
-  if (target) {
-    Client* c = &target->client;
-    for (Keyboard& k : Keyboard::colony) {
-      if (&k.client != c) continue;
-      k.Enter(s.serial++, *target, {});
-      k.Modifiers(s.serial++, 0, 0, 0, 0);
-    }
-  }
+  if (target) target->KeyboardEnter();
 }
 
 // Places the popup by its positioner's anchor, gravity and offset, and records the flipped
@@ -834,6 +815,87 @@ uint32_t NowMs() {
 }
 
 }  // namespace
+
+void Surface::PointerEnter(Vec2 px) {
+  U32 serial = client.server.serial++;
+  for (Pointer* wp : client.pointers) {
+    wp->Enter(serial, *this, px.x, px.y);
+    if (wp->version >= 5) wp->Frame();
+  }
+  client.Flush();
+}
+
+void Surface::PointerLeave() {
+  U32 serial = client.server.serial++;
+  for (Pointer* wp : client.pointers) {
+    wp->Leave(serial, *this);
+    if (wp->version >= 5) wp->Frame();
+  }
+  client.Flush();
+}
+
+void Surface::PointerMotion(Vec2 px) {
+  U32 time = NowMs();
+  for (Pointer* wp : client.pointers) {
+    wp->Motion(time, px.x, px.y);
+    if (wp->version >= 5) wp->Frame();
+  }
+  client.Flush();
+}
+
+void Surface::PointerAxis(float delta) {
+  U32 time = NowMs();
+  float value = -delta * 10.0f;
+  int discrete = -(int)std::lround(delta);
+  for (Pointer* wp : client.pointers) {
+    if (wp->version >= 5) {
+      wp->AxisSource(Pointer::AxisSourceWheel);
+      if (discrete != 0) wp->AxisDiscrete(Pointer::AxisVerticalScroll, discrete);
+    }
+    wp->Axis(time, Pointer::AxisVerticalScroll, value);
+    if (wp->version >= 5) wp->Frame();
+  }
+  client.Flush();
+}
+
+void Surface::PointerButton(U32 evdev_code, bool pressed) {
+  U32 serial = client.server.serial++;
+  U32 time = NowMs();
+  for (Pointer* wp : client.pointers) {
+    wp->Button(serial, time, evdev_code,
+               pressed ? Pointer::ButtonStatePressed : Pointer::ButtonStateReleased);
+    if (wp->version >= 5) wp->Frame();
+  }
+  client.Flush();
+}
+
+void Surface::KeyboardEnter() {
+  U32 enter_serial = client.server.serial++;
+  U32 mods_serial = client.server.serial++;
+  for (Keyboard* k : client.keyboards) {
+    k->Enter(enter_serial, *this, {});
+    k->Modifiers(mods_serial, 0, 0, 0, 0);
+  }
+  client.Flush();
+}
+
+void Surface::KeyboardLeave() {
+  U32 serial = client.server.serial++;
+  for (Keyboard* k : client.keyboards) k->Leave(serial, *this);
+  client.Flush();
+}
+
+void Surface::KeyboardKey(U32 evdev_keycode, bool pressed, U32 mods, U32 group) {
+  U32 mods_serial = client.server.serial++;
+  U32 key_serial = client.server.serial++;
+  U32 time = NowMs();
+  for (Keyboard* k : client.keyboards) {
+    k->Modifiers(mods_serial, mods, 0, 0, group);
+    k->Key(key_serial, time, evdev_keycode,
+           pressed ? Keyboard::KeyStatePressed : Keyboard::KeyStateReleased);
+  }
+  client.Flush();
+}
 
 Surface::~Surface() {
   ReleaseHeldDmabuf(*this);  // hand any zero-copy buffer back so the client may reuse it
@@ -1312,14 +1374,12 @@ void CursorShapeDeviceV1::OnSetShape(U32, enum Shape shape) {
 
 void Seat::OnGetPointer(Pointer& pointer) {
   pointer.version = version;
-  if (auto obj = client.server.pointer_object.Lock()) {
-    obj->wl_handles[&client] = &pointer;
-    pointer.pointer_object = client.server.pointer_object;
-  }
+  client.pointers.push_back(&pointer);
 }
 
 void Seat::OnGetKeyboard(Keyboard& id) {
   id.version = version;
+  client.keyboards.push_back(&id);
   Server& s = client.server;
   if (s.keymap_fd < 0 && keymap && !keymap->text.empty()) {
     s.keymap_size = keymap->text.size() + 1;  // the client mmaps a NUL-terminated string
@@ -1345,7 +1405,7 @@ void DataSource::OnOffer(StrView mime) { mimes.push_back(Str(mime)); }
 void DataOffer::OnReceive(StrView mime, FD&& fd) {
   if (source) {
     source->Send(mime, std::move(fd));
-    client.server.FlushAll();
+    source->client.Flush();
   }
 }
 
@@ -1410,7 +1470,6 @@ void Server::SendKeyboardEnter(library::WaylandWindow& w) {
     XdgToplevel* t = LiveToplevel(h);
     if (!t || !t->xdg || !t->xdg->surface) return;
     KeyboardFocusTo(*this, t->xdg->surface);
-    FlushAll();
   });
 }
 void Server::SendKeyboardLeave(library::WaylandWindow& w) {
@@ -1419,7 +1478,6 @@ void Server::SendKeyboardLeave(library::WaylandWindow& w) {
   epoll.Post([this, h] {
     if (!LiveToplevel(h)) return;
     KeyboardFocusTo(*this, nullptr);
-    FlushAll();
   });
 }
 void Server::SendKey(library::WaylandWindow& w, uint32_t evdev_keycode, bool pressed, uint32_t mods,
@@ -1428,15 +1486,7 @@ void Server::SendKey(library::WaylandWindow& w, uint32_t evdev_keycode, bool pre
   if (!h) return;
   epoll.Post([this, h, evdev_keycode, pressed, mods, group] {
     if (!LiveToplevel(h) || !keyboard_surface) return;
-    Client* c = &keyboard_surface->client;
-    U32 time = NowMs();
-    for (Keyboard& k : Keyboard::colony) {
-      if (&k.client != c) continue;
-      k.Modifiers(serial++, mods, 0, 0, group);
-      k.Key(serial++, time, evdev_keycode,
-            pressed ? Keyboard::KeyStatePressed : Keyboard::KeyStateReleased);
-    }
-    FlushAll();
+    keyboard_surface->KeyboardKey(evdev_keycode, pressed, mods, group);
   });
 }
 void Server::SendDecorationPreference(library::WaylandWindow& w) {
@@ -1445,7 +1495,7 @@ void Server::SendDecorationPreference(library::WaylandWindow& w) {
   epoll.Post([this, h] {
     if (XdgToplevel* t = LiveToplevel(h)) {
       UpdateDecoration(*t);
-      FlushAll();
+      t->client.Flush();
     }
   });
 }
@@ -1457,7 +1507,7 @@ void Server::NotifyWindowDestroyed(void* handle) {
     XdgToplevel* t = LiveToplevel(static_cast<XdgToplevel*>(handle));
     if (!t) return;
     t->Close();
-    FlushAll();
+    t->client.Flush();
     if (!t->sigterm_timer) {
       t->sigterm_timer = std::make_unique<mux::Timer>(epoll);
       t->sigterm_timer->handler = [pid = t->pid] {
@@ -1472,10 +1522,15 @@ void UIFrame() {
   if (!server) return;
   Server& s = *server;
   Vec<Ptr<WaylandWindow>> appeared, disappeared;
+  Vec<WeakPtr<WaylandWindow>> move_requests;
   {
     auto lock = std::lock_guard(s.ui_mutex);
     appeared.swap(s.ui_appeared);
     disappeared.swap(s.ui_disappeared);
+    move_requests.swap(s.ui_move_requests);
+  }
+  for (auto& weak : move_requests) {
+    if (auto win = weak.Lock()) StartClientMove(*win);
   }
   static int spawn_count = 0;
   for (auto& w : appeared) {
@@ -1494,7 +1549,7 @@ void UIFrame() {
     }
     if (content) {
       auto lock = std::lock_guard(content->mutex);
-      win_size = content->dst_size;
+      win_size = content->geo.size();
     }
     if (cpid) {
       auto vm_lock = std::lock_guard(vm.mutex);
@@ -1593,7 +1648,14 @@ void XdgPositioner::OnSetParentConfigure(U32 serial) {}
 void XdgToplevel::OnDestroy() {}
 void XdgToplevel::OnSetParent(XdgToplevel* parent) {}
 void XdgToplevel::OnShowWindowMenu(Seat& seat, U32 serial, I32 x, I32 y) {}
-void XdgToplevel::OnMove(Seat& seat, U32 serial) {}
+void XdgToplevel::OnMove(Seat& seat, U32 serial) {
+  // The serial is unchecked: a move starts only while a pressed button is routed to this window.
+  {
+    auto lock = std::lock_guard(server->ui_mutex);
+    server->ui_move_requests.push_back(window);
+  }
+  vm.WakeToys();
+}
 void XdgToplevel::OnResize(Seat& seat, U32 serial, enum ResizeEdge edges) {}
 void XdgToplevel::OnSetMaxSize(I32 width, I32 height) {}
 void XdgToplevel::OnSetMinSize(I32 width, I32 height) {}
@@ -1625,10 +1687,8 @@ void ShellSurface::OnSetClass(StrView class_) {}
 void Seat::OnGetTouch(Touch& id) {}
 void Seat::OnRelease() {}
 void Pointer::OnSetCursor(U32 serial, Surface* surface, I32 hotspot_x, I32 hotspot_y) {}
-void Pointer::OnRelease() {
-  if (auto obj = pointer_object.Lock()) obj->wl_handles.erase(&client);
-}
-void Keyboard::OnRelease() {}
+void Pointer::OnRelease() { std::erase(client.pointers, this); }
+void Keyboard::OnRelease() { std::erase(client.keyboards, this); }
 void Touch::OnRelease() {}
 void Output::OnRelease() {}
 void Region::OnDestroy() {}
@@ -1951,70 +2011,47 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
     }
   }
 
-  void PostPointer(ui::Pointer& p,
-                   std::move_only_function<void(wayland::Surface&, wayland::Pointer&)> cb) {
+  void PostSurface(std::move_only_function<void(wayland::Surface&)> cb) {
     auto obj = LockSurface();
     if (obj == nullptr) return;
-    mux::epoll.Post([obj = std::move(obj), cb = std::move(cb), po = p.pointer_object]() mutable {
-      auto* h = obj->surface_handle.Get();
-      if (h == nullptr) return;
-      auto* wp = po->WaylandHandle(obj->surface_handle->client);
-      if (wp == nullptr) return;
-      cb(*h, *wp);
+    mux::epoll.Post([obj = std::move(obj), cb = std::move(cb)]() mutable {
+      if (auto* h = obj->surface_handle.Get()) cb(*h);
     });
   }
 
   void PointerHover(ui::Pointer& p) override {
     Vec2 px = p.PositionWithin(*this);
     ToSurfacePx(px);
-    PostPointer(p, [px](wayland::Surface& h, wayland::Pointer& wp) {
-      wp.Enter(wayland::server->serial++, h, px.x, px.y);
-      if (wp.version >= 5) wp.Frame();
-      wayland::server->FlushAll();
-    });
+    PostSurface([px](wayland::Surface& h) { h.PointerEnter(px); });
     StartWatching(p);
     ApplyCursor(p);
   }
   void PointerUnhover(ui::Pointer& p) override {
     StopWatching(p);
     cursor_override_.reset();
-    PostPointer(p, [](wayland::Surface& h, wayland::Pointer& wp) {
-      wp.Leave(wayland::server->serial++, h);
-      if (wp.version >= 5) wp.Frame();
-      wayland::server->FlushAll();
-    });
+    PostSurface([](wayland::Surface& h) { h.PointerLeave(); });
   }
 
   void PointerMove(ui::Pointer& p, Vec2) override {
     Vec2 px = p.PositionWithin(*this);
     ToSurfacePx(px);
-    PostPointer(p, [px](wayland::Surface&, wayland::Pointer& wp) {
-      U32 time = wayland::NowMs();
-      wp.Motion(time, px.x, px.y);
-      if (wp.version >= 5) wp.Frame();
-      wayland::server->FlushAll();
-    });
+    PostSurface([px](wayland::Surface& h) { h.PointerMotion(px); });
     ApplyCursor(p);
   }
   bool PointerWheel(ui::Pointer& p, float delta) override {
     if (!ui::RootWidget::kWaylandLock) return false;
     Vec2 px = p.PositionWithin(*this);
     if (!ToSurfacePx(px)) return false;  // outside
-    PostPointer(p, [delta](wayland::Surface&, wayland::Pointer& wp) {
-      U32 time = wayland::NowMs();
-      float value = -delta * 10.0f;
-      int discrete = -(int)std::lround(delta);
-      if (wp.version >= 5) {
-        wp.AxisSource(wayland::Pointer::AxisSourceWheel);
-        if (discrete != 0) wp.AxisDiscrete(wayland::Pointer::AxisVerticalScroll, discrete);
-      }
-      wp.Axis(time, wayland::Pointer::AxisVerticalScroll, value);
-      if (wp.version >= 5) wp.Frame();
-      wayland::server->FlushAll();
-    });
+    PostSurface([delta](wayland::Surface& h) { h.PointerAxis(delta); });
     return true;
   }
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
+
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    Toy* base = BaseToy();  // the surface is window content; the object menu is the window's
+    if (base != this) return base->VisitOptions(visitor);
+    ObjectToy::VisitOptions(visitor);
+  }
 
   void Draw(SkCanvas& canvas) const override {
     DrawSurfaceImage(canvas, image_, src_crop_, dst_size_, TopLeft());
@@ -2029,7 +2066,7 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
   Str title_;
   bool client_gone_ = false;
   bool decorate_ = false;
-  SkISize content_size_ = {};     // the content surface's size, in client pixels
+  SkIRect geo_ = {};              // the window geometry within the content buffer, client px
   bool content_present_ = false;  // the content surface currently has an image
   ui::Caret* caret_ = nullptr;    // present while the keyboard flows into the client
 
@@ -2055,10 +2092,10 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
     }
     if (content) {
       auto lock = std::lock_guard(content->mutex);
-      content_size_ = content->dst_size;
+      geo_ = content->geo;
       content_present_ = (bool)content->image;
     } else {
-      content_size_ = {};
+      geo_ = {};
       content_present_ = false;
     }
   }
@@ -2066,10 +2103,10 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
   bool Decorated() const { return decorate_ || client_gone_ || !content_present_; }
   float Frame() const { return Decorated() ? kFrame : 0; }
 
-  // Size of the toplevel content surface.
+  // Size of the window: its xdg geometry, which excludes any client-drawn shadow margins.
   Vec2 ContentSize() const {
-    return {content_size_.width() > 0 ? content_size_.width() * kClientPx : kMinContentW,
-            content_size_.height() > 0 ? content_size_.height() * kClientPx : kMinContentH};
+    return {geo_.width() > 0 ? geo_.width() * kClientPx : kMinContentW,
+            geo_.height() > 0 ? geo_.height() * kClientPx : kMinContentH};
   }
   Rect ContentRect() const { return Rect::MakeAtZero(ContentSize()); }
   ui::WindowFrame Chrome() const { return {ContentSize(), title_}; }
@@ -2090,6 +2127,8 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
     if (!content) return;
     auto& ct = ToyStore().FindOrMake(*content, this);
     Vec2 tl = TopLeft();
+    tl.x -= geo_.x() * kClientPx;
+    tl.y += geo_.y() * kClientPx;
     ct.local_to_parent = SkM44(SkMatrix::Translate(tl.x, tl.y));
     layers.OrderBelow(&ct);
   }
@@ -2097,14 +2136,13 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
   Tock Tick(time::Timer&) override {
     Str prev_title = title_;
     bool prev_decorated = Decorated();
-    SkISize prev_content_size = content_size_;
+    SkIRect prev_geo = geo_;
     PullState();
     SyncContent();
     if (caret_) caret_->shape = FocusCaretShape();
 
     Tock tock = Tock::Draw;
-    if (title_ != prev_title || Decorated() != prev_decorated ||
-        content_size_ != prev_content_size) {
+    if (title_ != prev_title || Decorated() != prev_decorated || geo_ != prev_geo) {
       tock |= Tock::Shape;
     }
     return tock;
@@ -2176,36 +2214,32 @@ uint32_t EvdevButtonCode(ui::ActionTrigger btn) {
 // Held while a button initiated over a surface is down: routes press, motion and
 // release to that surface's client (with the keyboard going to the toplevel)
 // instead of dragging the window object.
-struct ClientInputAction : Action {
+struct ClientInputAction : ClientInputActionBase {
   WaylandSurfaceToy& toy;
   uint32_t button;
   ClientInputAction(ui::Pointer& p, WaylandSurfaceToy& toy, uint32_t button)
-      : Action(p), toy(toy), button(button) {
-    if (auto* wt = Closest<WaylandWindowToy>(toy)) wt->FocusClient(p);
+      : ClientInputActionBase(p), toy(toy), button(button) {
+    if (auto* wt = Closest<WaylandWindowToy>(toy)) {
+      wt->FocusClient(p);
+      if (auto win = wt->LockWindow()) LinkWindow(*win);
+    }
 
-    toy.PostPointer(pointer, [button](wayland::Surface& h, wayland::Pointer& wp) {
+    toy.PostSurface([button](wayland::Surface& h) {
       if (!(h.xdg && h.xdg->popup))
         if (wayland::XdgToplevel* t = h.OwningToplevel())
           if (t->xdg)
             if (wayland::XdgPopup* top = t->xdg->TopmostPopup()) {
               top->PopupDone();
-              wayland::server->FlushAll();
+              top->client.Flush();
               return;
             }
-      U32 time = wayland::NowMs();
-      wp.Button(wayland::server->serial++, time, button, wayland::Pointer::ButtonStatePressed);
-      if (wp.version >= 5) wp.Frame();
-      wayland::server->FlushAll();
+      h.PointerButton(button, true);
     });
   }
   void Update() override {}
+  ui::Widget& InitiatingWidget() override { return toy; }
   ~ClientInputAction() override {
-    toy.PostPointer(pointer, [button = button](wayland::Surface&, wayland::Pointer& wp) {
-      U32 time = wayland::NowMs();
-      wp.Button(wayland::server->serial++, time, button, wayland::Pointer::ButtonStateReleased);
-      if (wp.version >= 5) wp.Frame();
-      wayland::server->FlushAll();
-    });
+    toy.PostSurface([button = button](wayland::Surface& h) { h.PointerButton(button, false); });
   }
 };
 

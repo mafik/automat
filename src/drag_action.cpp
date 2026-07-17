@@ -333,6 +333,7 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
     location->WakeToys();
   }
   SetRadar(bw, 1);
+  bw.RedrawThisFrame();  // unbudgeted pick-up frame; other roots' views repaint via the wakes
   Init();
 }
 

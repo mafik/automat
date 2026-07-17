@@ -105,6 +105,18 @@ Wayland compositor: both window objects implement `DecoratedWindow` (`src/window
 and persist the choice under the same `decoration` key. A window whose client is gone is
 always framed, so the placeholder of a pending respawn stays visible and draggable.
 
+A bare window is moved by its own titlebar: the client turns the titlebar press into a
+`_NET_WM_MOVERESIZE` ClientMessage sent to the root window, which is how EWMH clients ask
+the window manager to take over a drag. `_NET_WM_MOVERESIZE` is advertised in
+`_NET_SUPPORTED` because GTK checks the list before using it. The `SendEvent` handler
+intercepts the message (the root is Automat itself, so nothing would deliver it), queues
+the window and wakes the root widget, and the next `UIFrame` calls `StartClientMove`
+(src/window_frame.hpp) — the same shared function the Wayland compositor uses for
+`xdg_toplevel.move` — which replaces the action routing the pressed button to the client
+with the standard board drag. The resize directions are ignored because embedded windows
+are not resizable, and cancel is ignored because the move ends with the physical button
+release.
+
 Two wire rules that clients depend on. A client-supplied
 event delivered by `SendEvent` must have its sequence-number field overwritten with the
 receiving client's current sequence; the client fills that field with a meaningless value,

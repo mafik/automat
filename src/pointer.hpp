@@ -4,10 +4,6 @@
 
 #include <list>
 
-#if defined(__linux__)
-#include <ankerl/unordered_dense.h>
-#endif
-
 #include "action.hpp"
 #include "colony.hpp"
 #include "math.hpp"
@@ -23,32 +19,12 @@ namespace automat::animation {
 struct Display;
 }  // namespace automat::animation
 
-#if defined(__linux__)
-namespace automat::wayland {
-struct Client;
-struct Pointer;
-}  // namespace automat::wayland
-#endif
-
 namespace automat::ui {
 
 struct Keyboard;
 struct PointerImpl;
 struct Widget;
 struct RootWidget;
-
-// Thread-aware part of ui::Pointer
-struct PointerObject : ReferenceCounted {
-#if defined(__linux__)
-  // Members reserved for the use on the Wayland thread.
-  ankerl::unordered_dense::map<wayland::Client*, wayland::Pointer*> wl_handles;
-
-  wayland::Pointer* WaylandHandle(wayland::Client& c) {
-    auto it = wl_handles.find(&c);
-    return it != wl_handles.end() ? it->second : nullptr;
-  }
-#endif
-};
 
 struct PointerMoveCallback {
   MortalCoil mortal_coil;
@@ -152,8 +128,6 @@ struct Pointer {
   RootWidget& root_widget;
   // The main keyboard associated with this pointer device. May be null!
   MortalPtr<Keyboard> keyboard;
-
-  Ptr<PointerObject> pointer_object;
 
   Vec2 pointer_position;
   std::list<Pointer::IconType> icons;

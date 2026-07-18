@@ -55,12 +55,12 @@ offsets, so generated decode structs would add nothing (see Keyboard layout belo
 The server runs on Automat's `mux::Epoll` thread, the same thread the Wayland compositor
 uses. The listening socket and every client socket are `mux::Epoll::Listener`s. A client's
 requests are read, dispatched and the replies flushed in one pass; board structure is
-mutated only on the UI thread in `UIFrame()`, exactly as for Wayland.
+mutated only on the UI thread in `x11::Tick()`, exactly as for Wayland.
 
 On Linux the server listens on a filesystem UNIX socket. On Windows it listens on TCP
 loopback, display number n mapping to port 6000+n, because Windows AF_UNIX sockets cannot
-carry file descriptors. TCP provides no SO_PEERCRED, so the client's process id — which
-window adoption relies on — is recovered from the system TCP table by locating the
+carry file descriptors. TCP provides no SO_PEERCRED, so the client's process id — the launch-matching
+hint — is recovered from the system TCP table by locating the
 mirrored connection. TCP also carries no file descriptors, so the SHM and DRI3 display
 paths never activate on Windows and clients paint through plain protocol requests.
 
@@ -103,14 +103,14 @@ it. The user can override the negotiation from the window's right-click menu, wh
 "Decoration..." submenu (Auto / Automat / App) is one implementation shared with the
 Wayland compositor: both window objects implement `DecoratedWindow` (`src/window_frame.hpp`)
 and persist the choice under the same `decoration` key. A window whose client is gone is
-always framed, so the placeholder of a pending respawn stays visible and draggable.
+always framed, so a ghost waiting for its launch stays visible and draggable.
 
 A bare window is moved by its own titlebar: the client turns the titlebar press into a
 `_NET_WM_MOVERESIZE` ClientMessage sent to the root window, which is how EWMH clients ask
 the window manager to take over a drag. `_NET_WM_MOVERESIZE` is advertised in
 `_NET_SUPPORTED` because GTK checks the list before using it. The `SendEvent` handler
 intercepts the message (the root is Automat itself, so nothing would deliver it), queues
-the window and wakes the root widget, and the next `UIFrame` calls `StartClientMove`
+the window and wakes the root widget, and the next `Tick` calls `StartClientMove`
 (src/window_frame.hpp) — the same shared function the Wayland compositor uses for
 `xdg_toplevel.move` — which replaces the action routing the pressed button to the client
 with the standard board drag. The resize directions are ignored because embedded windows
@@ -203,9 +203,9 @@ server holds only weakly — the same ownership rule as the Wayland window, requ
 for the same reason: a drag that leaves a board extracts the Location into the pointer, so
 "is it still on a board" is not a safe liveness test. Deleting the object asks the client to close through
 `WM_DELETE_WINDOW`, falling back to a signal to the client's process. A client that
-disconnects or unmaps has its window removed by `UIFrame`. Persistence and respawn reuse
-the recipe and adoption mechanism documented for Wayland: the argv that mapped a window is
-saved, and a restored or cloned window re-runs it and adopts the new client by process id.
+disconnects or unmaps has its window removed by `Tick`. Persistence reuses the launches
+system (`Launches.md`): the argv that mapped a window is saved, and a restored or copied
+window gets a Launch whose client is matched back to it by process id.
 
 The Command object sets both `WAYLAND_DISPLAY` and `DISPLAY` in the environment of the
 programs it launches, so a child picks whichever protocol it prefers and an X11-only

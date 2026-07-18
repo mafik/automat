@@ -34,7 +34,6 @@
 #include "format.hpp"
 #include "keyboard.hpp"
 #include "keymap.hpp"
-#include "library_command.hpp"
 #include "location.hpp"
 #include "log.hpp"
 #include "math.hpp"
@@ -48,18 +47,11 @@
 #include "vm.hpp"
 #include "wayland_protocol.hpp"
 #include "window_frame.hpp"
-#include "xcb.hpp"
 
 #if defined(__linux__)
 #include "x11_keys.hpp"
 #include "x11_xkb.hpp"
 #endif
-
-namespace automat::library {
-// Board-metric size of a window object showing a width x height client surface
-// (content + chrome), used to seat a new window next to its Command.
-static Vec2 WindowBoardSize(int width, int height);
-}  // namespace automat::library
 
 namespace automat::wayland {
 
@@ -74,12 +66,11 @@ struct Server : mux::Epoll::Listener {
   uint32_t serial = 1;  // monotonic serial source for protocol events
   std::unique_ptr<mux::Timer> frame_timer;
   bool frame_pending = false;
-  std::mutex ui_mutex;                                    // guards the three handoff vectors
-  Vec<Ptr<library::WaylandWindow>> ui_appeared;           // mapped windows awaiting board insert
+  std::mutex ui_mutex;  // guards the three handoff vectors
+  // Mapped windows awaiting board insert, with the launch that produced them.
+  Vec<std::pair<Ptr<library::WaylandWindow>, Ptr<Launch>>> ui_appeared;
   Vec<Ptr<library::WaylandWindow>> ui_disappeared;        // unmapped windows awaiting board remove
   Vec<WeakPtr<library::WaylandWindow>> ui_move_requests;  // xdg_toplevel.move, for StartClientMove
-  std::mutex adoption_mutex;
-  Vec<std::pair<I64, WeakPtr<library::WaylandWindow>>> adoptions;  // respawned clients, by pid
 
   // Input focus + keymap. Cleared in the surface destructor. The keymap is Automat's shared
   // keymap (see keymap.hpp), serialized into a memfd once and handed to each keyboard.
@@ -163,6 +154,7 @@ void Display::OnGetRegistry(Registry& registry) {
   registry.Global(9, "zxdg_decoration_manager_v1", 2);
   registry.Global(10, "wp_cursor_shape_manager_v1", 1);
   registry.Global(11, "zwp_linux_dmabuf_v1", 4);
+  registry.Global(12, "xdg_activation_v1", 1);
 }
 
 // The format/modifier pairs the compositor accepts. AR24/XR24 are the 32-bit BGRA formats every
@@ -216,6 +208,8 @@ void Registry::OnBind(U32, StrView id_interface, U32 id_version, U32 id) {
     ZxdgDecorationManagerV1::ColonyMake(id, client);
   } else if (id_interface == "wp_cursor_shape_manager_v1") {
     CursorShapeManagerV1::ColonyMake(id, client);
+  } else if (id_interface == "xdg_activation_v1") {
+    XdgActivationV1::ColonyMake(id, client);
   } else if (id_interface == "zwp_linux_dmabuf_v1") {
     auto& obj = LinuxDmabufV1::ColonyMake(id, client);
     if (id_version >= 4) return;  // version 4+ clients learn the formats through feedback
@@ -478,31 +472,28 @@ void ApplyAndPublish(Surface& surf) {
   XdgToplevel& t = *owner;
   Server& s = t.client.server;
 
-  bool adopted = false;
+  bool restored = false;
+  Ptr<Launch> launch;
   Ptr<WaylandWindow> win_obj;
   if (surf.xdg && surf.xdg->toplevel == owner) {
     if (Ptr<WaylandWindow> win = t.window.Lock()) {
       win_obj = win;
     } else if (!t.mapped) {
-      Ptr<WaylandWindow> win;
-      {
-        auto lock = std::lock_guard(s.adoption_mutex);
-        for (auto it = s.adoptions.begin(); it != s.adoptions.end(); ++it) {
-          if (it->first == t.pid) {
-            win = it->second.Lock();
-            s.adoptions.erase(it);
-            break;
-          }
-        }
-      }
+      launch = std::move(surf.activation_launch);
+      surf.activation_launch = nullptr;
+      if (!launch) launch = Launch::Find(t.pid);
+      Ptr<WaylandWindow> win = launch ? launch->LockRestoring<WaylandWindow>() : nullptr;
       if (win) {
-        adopted = true;
+        restored = true;
         win->toplevel_handle.store(&t);
-        auto lock = std::lock_guard(win->mutex);
-        win->client_gone = false;
-        win->client_pid = t.pid;
-        if (!t.title.empty()) win->title = t.title;
-        win->app_id = t.app_id;
+        {
+          auto lock = std::lock_guard(win->mutex);
+          win->client_gone = false;
+          win->client_pid = t.pid;
+          if (!t.title.empty()) win->title = t.title;
+          win->app_id = t.app_id;
+        }
+        launch->RestoredInto(*win);
       } else {
         win = MAKE_PTR(WaylandWindow);
         win->toplevel_handle.store(&t);
@@ -510,6 +501,10 @@ void ApplyAndPublish(Surface& surf) {
         win->title = t.title;
         win->app_id = t.app_id;
         win->client_pid = t.pid;
+        if (launch) {
+          win->recipe = launch->argv;
+          win->launched_by = launch;
+        }
       }
       t.window = win->AcquireWeakPtr();
       // Now that the window is linked, settle the decoration mode for its
@@ -537,15 +532,15 @@ void ApplyAndPublish(Surface& surf) {
     wwin.surface = nullptr;
   }
 
-  // Wake the toy; on the first frame insert the window onto the board (unless it was adopted, in
-  // which case its Location already exists).
+  // Wake the toy; on the first frame insert the window onto the board (unless it was restored,
+  // in which case its Location already exists).
   win_obj->WakeToys();
   vm.WakeToys();
   if (!t.mapped) {
     t.mapped = true;
-    if (!adopted) {
+    if (!restored) {
       auto lock = std::lock_guard(s.ui_mutex);
-      s.ui_appeared.push_back(std::move(win_obj));
+      s.ui_appeared.emplace_back(std::move(win_obj), std::move(launch));
     }
   }
 }
@@ -1191,6 +1186,59 @@ void XdgToplevel::OnSetAppId(StrView app_id) {
   }
 }
 
+void XdgActivationTokenV1::OnCommit() {
+  if (used) {
+    client.ProtocolError(id, ErrorAlreadyUsed, "the activation token was already committed");
+    return;
+  }
+  used = true;
+  Done(MintActivationToken());
+}
+
+void XdgActivationV1::OnActivate(StrView token, Surface& surface) {
+  Server& s = client.server;
+  Ptr<Launch> launch = Launch::Find(0, token);
+  if (!launch) return;
+  XdgToplevel* t = surface.OwningToplevel();
+  Ptr<WaylandWindow> existing = t ? t->window.Lock() : nullptr;
+  if (!existing) {
+    surface.activation_launch = std::move(launch);
+    return;
+  }
+  Ptr<WaylandWindow> restoring = launch->LockRestoring<WaylandWindow>();
+  if (!restoring || restoring == existing) {
+    launch->WindowAppeared();
+    return;
+  }
+  {
+    auto lock = std::lock_guard(s.ui_mutex);
+    auto it = std::find_if(s.ui_appeared.begin(), s.ui_appeared.end(),
+                           [&](auto& entry) { return entry.first == existing; });
+    if (it == s.ui_appeared.end()) return;
+    s.ui_appeared.erase(it);
+  }
+  restoring->toplevel_handle.store(t);
+  existing->toplevel_handle.store(nullptr);
+  Ptr<WaylandSurface> content;
+  {
+    auto lock = std::lock_guard(existing->mutex);
+    content = existing->surface;
+  }
+  {
+    auto lock = std::lock_guard(restoring->mutex);
+    restoring->client_gone = false;
+    restoring->client_pid = t->pid;
+    if (!t->title.empty()) restoring->title = t->title;
+    restoring->app_id = t->app_id;
+    restoring->surface = std::move(content);
+  }
+  launch->RestoredInto(*restoring);
+  t->window = restoring->AcquireWeakPtr();
+  UpdateDecoration(*t);
+  restoring->WakeToys();
+  vm.WakeToys();
+}
+
 void Subcompositor::OnGetSubsurface(Subsurface& id, Surface& surface, Surface& parent) {
   if (surface.as_subsurface || surface.xdg) {
     client.ProtocolError(this->id, Subcompositor::ErrorBadSurface,
@@ -1518,10 +1566,11 @@ void Server::NotifyWindowDestroyed(void* handle) {
   });
 }
 
-void UIFrame() {
+void Tick() {
   if (!server) return;
   Server& s = *server;
-  Vec<Ptr<WaylandWindow>> appeared, disappeared;
+  Vec<std::pair<Ptr<WaylandWindow>, Ptr<Launch>>> appeared;
+  Vec<Ptr<WaylandWindow>> disappeared;
   Vec<WeakPtr<WaylandWindow>> move_requests;
   {
     auto lock = std::lock_guard(s.ui_mutex);
@@ -1533,98 +1582,25 @@ void UIFrame() {
     if (auto win = weak.Lock()) StartClientMove(*win);
   }
   static int spawn_count = 0;
-  for (auto& w : appeared) {
+  for (auto& [w, launch] : appeared) {
     auto& win = *w;
-    // Find the Command whose child this client is: its argv becomes the respawn recipe, its plate
-    // anchors where the window is seated, and the window keeps a Launcher cable to it.
-    Location* command_location = nullptr;
-    library::Command* command = nullptr;
-    SkISize win_size = {};
-    I64 cpid;
-    Ptr<WaylandSurface> content;
-    {
-      auto lock = std::lock_guard(win.mutex);
-      cpid = win.client_pid;
-      content = win.surface;
+    Ptr<Object> source = launch ? launch->source.Lock() : nullptr;
+    Location* source_location = source ? source->MyLocation() : nullptr;
+    if (source && !win.launcher->IsConnected()) {
+      win.launcher->Connect(Interface(source.get(), nullptr));
     }
-    if (content) {
-      auto lock = std::lock_guard(content->mutex);
-      win_size = content->geo.size();
-    }
-    if (cpid) {
-      auto vm_lock = std::lock_guard(vm.mutex);
-      for (auto& board : vm.boards) {
-        for (auto& loc : board->locations) {
-          auto* cmd = dynamic_cast<library::Command*>(loc->object.get());
-          if (!cmd) continue;
-          auto cmd_lock = std::lock_guard(cmd->mutex);
-          if (cmd->child_pid == cpid) {
-            auto lock = std::lock_guard(win.mutex);
-            win.recipe = cmd->argv;
-            command_location = loc.get();
-            command = cmd;
-            break;
-          }
-        }
-        if (command) break;
-      }
-    }
-    if (command && !win.launcher->IsConnected()) win.launcher->Connect(Interface(command, nullptr));
-    Board* board = command_location ? command_location->LockBoard().get() : nullptr;
+    Board* board = source_location ? source_location->LockBoard().get() : nullptr;
     if (!board) board = &DefaultBoard();
     auto& loc = board->CreateEmpty();
-    int n = spawn_count++;
-    if (command_location) {
-      Vec2 plate = library::CommandPlateSize();
-      Vec2 size = library::WindowBoardSize(win_size.width(), win_size.height());
-      loc.placement = Location::Direct{command_location->PeekPosition() +
-                                       Vec2(plate.x / 2 + 0.008f + size.x / 2 + 0.006f * (n % 3),
-                                            plate.y / 2 - size.y / 2 - 0.012f * (n % 3))};
+    if (source_location) {
+      loc.placement = Location::PlaceBeside{source_location->AcquireWeakPtr()};
     } else {
+      int n = spawn_count++;
       loc.placement = Location::Direct{Vec2(0.01f * (n % 3), -0.02f * (n % 5))};
     }
     loc.InsertHere(std::move(w));
     board->WakeToys();
     vm.WakeToys();
-  }
-  // Respawn deserialized or cloned windows: re-run the recipe (preferring the linked Command) and
-  // register the new pid for adoption into the existing object.
-  {
-    auto vm_lock = std::lock_guard(vm.mutex);
-    for (auto& board : vm.boards) {
-      for (auto& loc : board->locations) {
-        auto* win = dynamic_cast<WaylandWindow*>(loc->object.get());
-        if (!win) continue;
-        Vec<Str> recipe;
-        {
-          auto lock = std::lock_guard(win->mutex);
-          if (!win->pending_respawn) continue;
-          win->pending_respawn = false;
-          recipe = win->recipe;
-        }
-        if (recipe.empty()) continue;
-        I64 pid = 0;
-        Status status;
-        auto found = win->launcher->Find();
-        if (auto* cmd = dynamic_cast<library::Command*>(found.Owner<Object>())) {
-          pid = cmd->AdoptiveLaunch(status);
-          if (!pid) status.Reset();
-        }
-        if (!pid) pid = library::SpawnArgv(recipe, status);
-        if (!pid) {
-          win->ReportError(status.ToStr());
-          continue;
-        }
-        {
-          auto lock = std::lock_guard(win->mutex);
-          win->client_pid = pid;
-        }
-        {
-          auto lock = std::lock_guard(s.adoption_mutex);
-          s.adoptions.emplace_back(pid, win->AcquireWeakPtr());
-        }
-      }
-    }
   }
   for (auto& w : disappeared) {
     auto vm_lock = std::lock_guard(vm.mutex);
@@ -1664,6 +1640,12 @@ void XdgToplevel::OnUnsetMaximized() {}
 void XdgToplevel::OnSetFullscreen(Output* output) {}
 void XdgToplevel::OnUnsetFullscreen() {}
 void XdgToplevel::OnSetMinimized() {}
+void XdgActivationV1::OnDestroy() {}
+void XdgActivationV1::OnGetActivationToken(XdgActivationTokenV1& id) {}
+void XdgActivationTokenV1::OnSetSerial(U32 serial, Seat& seat) {}
+void XdgActivationTokenV1::OnSetAppId(StrView app_id) {}
+void XdgActivationTokenV1::OnSetSurface(Surface& surface) {}
+void XdgActivationTokenV1::OnDestroy() {}
 void Viewporter::OnDestroy() {}
 void Viewport::OnDestroy() {}
 void Compositor::OnCreateRegion(Region& id) {}
@@ -1734,44 +1716,10 @@ WaylandWindow::~WaylandWindow() {
 #endif
 }
 
-void WaylandWindow::SerializeState(ObjectSerializer& writer) const {
-  auto lock = std::lock_guard(mutex);
-  if (!recipe.empty()) {
-    writer.Key("recipe");
-    writer.StartArray();
-    for (auto& w : recipe) {
-      if (w.empty()) continue;
-      writer.String(w.data(), w.size());
-    }
-    writer.EndArray();
-  }
-  if (!title.empty()) {
-    writer.Key("title");
-    writer.String(title.data(), title.size());
-  }
-  SerializeDecoration(writer);
-}
-
-bool WaylandWindow::DeserializeKey(ObjectDeserializer& d, StrView key) {
-  Status status;
-  auto lock = std::lock_guard(mutex);
-  if (key == "recipe") {
-    recipe.clear();
-    for (auto i : ArrayView(d, status)) {
-      (void)i;
-      Str word;
-      d.Get(word, status);
-      if (OK(status)) recipe.push_back(std::move(word));
-    }
-    client_gone = true;
-    pending_respawn = !recipe.empty();
-    return true;
-  }
-  if (key == "title") {
-    d.Get(title, status);
-    return true;
-  }
-  return DeserializeDecoration(d, key);
+Ptr<Object> WaylandWindow::Clone() const {
+  auto win = MAKE_PTR(WaylandWindow, *this);
+  LaunchClone(*this, *win);
+  return win;
 }
 
 namespace {
@@ -1835,12 +1783,6 @@ void DrawSurfaceImage(SkCanvas& canvas, const sk_sp<SkImage>& image, const SkRec
 
 void WaylandWindow::DecorationPreferenceChanged() {
   if (wayland::server) wayland::server->SendDecorationPreference(*this);
-}
-
-static Vec2 WindowBoardSize(int width, int height) {
-  float content_w = width > 0 ? width * kClientPx : kMinContentW;
-  float content_h = height > 0 ? height * kClientPx : kMinContentH;
-  return Vec2(content_w + 2 * kFrame, content_h + 2 * kFrame + kTitleH);
 }
 
 struct WaylandWindowToy;

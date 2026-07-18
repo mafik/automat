@@ -146,6 +146,12 @@ void Location::FillPosition(LocationWidget& w) {
     if (a && b) {
       std::get_if<Direct>(&placement)->position = (a->PeekPosition() + b->PeekPosition()) / 2;
     }
+  } else if (auto* beside = std::get_if<PlaceBeside>(&request)) {
+    if (auto origin = beside->origin.Lock()) {
+      std::get_if<Direct>(&placement)->position =
+          origin->widget ? PositionBeside(*origin, *this, w.ToyForObject())
+                         : origin->PeekPosition();
+    }
   }
   WakeToys();
   InvalidateConnectionWidgets(true, false);
@@ -709,7 +715,37 @@ Vec2 PositionAhead(Location& origin, const Argument::Table& arg, const ObjectToy
     best_connector_pos = m.mapPoint(best_connector_pos);
   }
 
-  return Round((drop_point - best_connector_pos) * 1000) / 1000;
+  return RoundToMilimeters(drop_point - best_connector_pos);
+}
+
+Vec2 PositionBeside(Location& origin, Location& target, const ObjectToy& target_widget) {
+  constexpr float kGap = 8_mm;
+  constexpr float kStep = 12_mm;
+  auto& origin_toy = origin.widget->ToyForObject();
+  SkMatrix origin_m = Location::ToMatrix(
+      origin.Position(*origin.widget), origin.Scale(*origin.widget), origin.widget->LocalAnchor());
+  Rect origin_bounds = origin_m.mapRect(origin_toy.CoarseBounds().rect);
+  SkMatrix target_m =
+      Location::ToMatrix(Vec2{}, target_widget.GetBaseScale(), target_widget.LocalAnchor());
+  Rect target_bounds = target_m.mapRect(target_widget.CoarseBounds().rect);
+  Vec2 pos =
+      Vec2(origin_bounds.right + kGap - target_bounds.left, origin_bounds.top - target_bounds.top);
+  if (auto board = origin.LockBoard()) {
+    auto lock = std::lock_guard(vm.mutex);
+    for (int tries = 0; tries < 16; ++tries) {
+      bool occupied = false;
+      for (auto& loc : board->locations) {
+        if (loc.get() == &origin || loc.get() == &target) continue;
+        if (Length(loc->PeekPosition() - pos) < kStep / 2) {
+          occupied = true;
+          break;
+        }
+      }
+      if (!occupied) break;
+      pos.y -= kStep;
+    }
+  }
+  return RoundToMilimeters(pos);
 }
 
 void AnimateGrowFrom(Location& source, Location& grown) {

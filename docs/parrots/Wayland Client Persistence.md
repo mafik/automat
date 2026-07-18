@@ -12,9 +12,9 @@ runtime state* of the process behind it. The same question decides what
 cloning a window means.
 
 This document lays out the options that were considered, their entailments,
-and which one Automat implements today. The implementation is in
-`src/wayland.hpp` (the window object's recipe storage and respawn flag) and
-`src/wayland.cpp` (respawn and adoption in `UIFrame`).
+and which one Automat implements today. The implementation is the launches
+system (`Launches.md`, `src/launcher.hpp`): the window object stores the
+recipe, and loading creates a Launch that fills it back in.
 
 ## Option 1: Recipe — save the argv, re-run it (implemented)
 
@@ -25,32 +25,30 @@ instance. Runtime state — terminal scrollback, an unsaved document, a
 half-played video — is lost, and the display does not suggest otherwise.
 
 One rule must be kept: when the re-run client maps its first window, it
-must become the same object on the board, not a second one. Automat does
-this with an adoption table: the respawn records the new child's pid, and the
-compositor routes that client's first toplevel into the existing object,
-preserving its position and connections. Without adoption, every save/load
-cycle would duplicate windows.
+must become the same object on the board, not a second one. The launches
+system (`Launches.md`) provides this: restoring creates a Launch aimed at
+the existing window object, and the display servers fill that object in
+place when the matching client appears, preserving its position and
+connections. Matching is by activation token first and process id second,
+which is what makes single-instance applications restorable — their spawned
+process forwards the launch over D-Bus and exits, and only the token
+survives that handoff.
 
 The window also keeps a real `Launcher` connection to the Command whose
 child mapped it — a visible cable, serialized through the ordinary links
-mechanism. On restore, the respawn goes *through* that Command
-(`Command::AdoptiveLaunch`): the Command spawns its own argv, synthesizes
-the running state the way Timer resumes from a save, and therefore keeps the
-pid readout and STOP control over the restored child. The window's own
+mechanism. On restore, the launch goes *through* that Command
+(`Command::RunFor`): the Command spawns its own argv, synthesizes the
+running state the way Timer resumes from a save, and therefore keeps the
+launch icon and STOP control over the restored child. The window's own
 recipe is the fallback for windows whose Command is gone or already busy
-(a cloned window whose original still runs, for example — the clone
-self-spawns a second instance while the Command keeps owning the first).
+(a copied window whose original still runs, for example — the copy's launch
+spawns a second instance while the Command keeps owning the first).
 
-How the association is captured matters too. At mapping time the compositor
-looks for the Command whose child has the client's pid. This only works for
-directly spawned clients; a process that forks before connecting (a browser
-launcher, a daemonizing application) breaks the pid match and the window
-saves without a recipe or link, loading as a dead ghost. The protocol-level
-hardening for this is xdg-activation: the launcher obtains a token from the
-compositor, passes it through `XDG_ACTIVATION_TOKEN`, and the client
-presents it on its first window — an association that survives forking
-because the token, not the pid, carries the identity. It should be
-implemented once clients that fork before connecting matter.
+Capturing the association for a *first* launch relies on the launch record
+of the spawning Command; a process that forks before connecting (a browser
+launcher, a daemonizing application) can still defeat the pid hint, and if
+it also drops the activation token the window saves without a recipe or
+link, loading as a dead ghost.
 
 Why this option won: it is fully implementable with what a compositor
 legitimately knows, it does not misrepresent what survived, it composes with
@@ -127,7 +125,7 @@ to continue past the recording. Replay is the right tool for testing
 compositors (a recorded session is a reproducible test case) and the wrong
 tool for persistence. It is recorded here so that it is not rediscovered.
 
-## Option 6: Zygote / fork-adoption — clone without restore
+## Option 6: Zygote — clone without restore
 
 For clone specifically (not save): keep a paused, pre-connection copy of the
 process (a zygote) and fork it on demand, so the clone shares the recipe's
@@ -140,7 +138,7 @@ cooperation. The idea only pays off for slow-starting applications.
 
 ## Where this leaves Automat
 
-The recipe with adoption is implemented and is the right default: simple,
+The recipe with launches is implemented and is the right default: simple,
 cheap, composable. The natural next steps, in order of value per effort:
 
 1. **Ghost snapshot** (option 2) — small, makes loaded boards legible.

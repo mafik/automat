@@ -3763,6 +3763,157 @@ struct Fixes : Common {
   // clang-format on: generated Fixes from wayland.xml
 };
 
+// clang-format off: generated XdgActivationV1 from xdg-activation-v1.xml
+
+// Interface for activating surfaces
+//
+// A global interface used for informing the compositor about applications
+// being activated or started, or for applications to request to be
+// activated.
+struct XdgActivationV1 : Common {
+  static constexpr int Version = 1;
+  static constexpr Kind Kind = KindXdgActivationV1;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
+
+  static Colony<XdgActivationV1> colony;
+
+  // Do not use directly. Instead use `ColonyMake`
+  XdgActivationV1(U32 id, Client& client) : Common(Kind, id, client) {}
+
+  static XdgActivationV1& ColonyMake(U32 id, Client& client) { return *colony.emplace(id, client); }
+  void ColonyDestroy() { colony.erase(colony.get_iterator(this)); }
+
+  // Destroy the xdg_activation object
+  //
+  // Notify the compositor that the xdg_activation object will no longer be
+  // used.
+  // 
+  // The child objects created via this interface are unaffected and should
+  // be destroyed separately.
+  //
+  // [destructor] After this method returns, this object will be released
+  void OnDestroy();
+
+  // Requests a token
+  //
+  // Creates an xdg_activation_token_v1 object that will provide
+  // the initiating client with a unique token for this activation. This
+  // token should be offered to the clients to be activated.
+  void OnGetActivationToken(XdgActivationTokenV1& id);
+
+  // Notify new interaction being available
+  //
+  // Requests surface activation. It's up to the compositor to display
+  // this information as desired, for example by placing the surface above
+  // the rest.
+  // 
+  // The compositor may know who requested this by checking the activation
+  // token and might decide not to follow through with the activation if it's
+  // considered unwanted.
+  // 
+  // Compositors can ignore unknown activation tokens when an invalid
+  // token is passed.
+  void OnActivate(StrView token, Surface& surface);
+  // clang-format on: generated XdgActivationV1 from xdg-activation-v1.xml
+};
+
+// clang-format off: generated XdgActivationTokenV1 from xdg-activation-v1.xml
+
+// An exported activation handle
+//
+// An object for setting up a token and receiving a token handle that can
+// be passed as an activation token to another client.
+// 
+// The object is created using the xdg_activation_v1.get_activation_token
+// request. This object should then be populated with the app_id, surface
+// and serial information and committed. The compositor shall then issue a
+// done event with the token. In case the request's parameters are invalid,
+// the compositor will provide an invalid token.
+struct XdgActivationTokenV1 : Common {
+  static constexpr int Version = 1;
+  static constexpr Kind Kind = KindXdgActivationTokenV1;
+
+  static constexpr bool classof(const Common* c) { return c->kind == Kind; }
+
+  static Colony<XdgActivationTokenV1> colony;
+
+  // Do not use directly. Instead use `ColonyMake`
+  XdgActivationTokenV1(U32 id, Client& client) : Common(Kind, id, client) {}
+
+  static XdgActivationTokenV1& ColonyMake(U32 id, Client& client) { return *colony.emplace(id, client); }
+  void ColonyDestroy() { colony.erase(colony.get_iterator(this)); }
+
+  enum Error : U32 {
+    ErrorAlreadyUsed = 0, // The token has already been used previously
+  };
+
+  static StrView ErrorToStr(U32 value) {
+    switch (value) {
+    case 0: return "AlreadyUsed"sv;
+    default: return "UnknownError"sv;
+    }
+  }
+
+  // Specifies the seat and serial of the activating event
+  //
+  // Provides information about the seat and serial event that requested the
+  // token.
+  // 
+  // The serial can come from an input or focus event. For instance, if a
+  // click triggers the launch of a third-party client, the launcher client
+  // should send a set_serial request with the serial and seat from the
+  // wl_pointer.button event.
+  // 
+  // Some compositors might refuse to activate toplevels when the token
+  // doesn't have a valid and recent enough event serial.
+  // 
+  // Must be sent before commit. This information is optional.
+  void OnSetSerial(U32 serial, Seat& seat);
+
+  // Specifies the application being activated
+  //
+  // The requesting client can specify an app_id to associate the token
+  // being created with it.
+  // 
+  // Must be sent before commit. This information is optional.
+  void OnSetAppId(StrView app_id);
+
+  // Specifies the surface requesting activation
+  //
+  // This request sets the surface requesting the activation. Note, this is
+  // different from the surface that will be activated.
+  // 
+  // Some compositors might refuse to activate toplevels when the token
+  // doesn't have a requesting surface.
+  // 
+  // Must be sent before commit. This information is optional.
+  void OnSetSurface(Surface& surface);
+
+  // Issues the token request
+  //
+  // Requests an activation token based on the different parameters that
+  // have been offered through set_serial, set_surface and set_app_id.
+  void OnCommit();
+
+  // Destroy the xdg_activation_token_v1 object
+  //
+  // Notify the compositor that the xdg_activation_token_v1 object will no
+  // longer be used. The received token stays valid.
+  //
+  // [destructor] After this method returns, this object will be released
+  void OnDestroy();
+
+  // The exported activation token
+  //
+  // The 'done' event contains the unique token of this activation request
+  // and notifies that the provider is done.
+  void Done(StrView token);
+  // clang-format on: generated XdgActivationTokenV1 from xdg-activation-v1.xml
+
+  bool used = false;
+};
+
 // clang-format off: generated ZxdgDecorationManagerV1 from xdg-decoration-unstable-v1.xml
 
 // Window decoration manager
@@ -6217,6 +6368,7 @@ struct Surface : Common {
   Vec<sk_sp<SkData>> frame_pool;  // recycled shm-copy allocations
   Vec<Surface*> stack;            // back-to-front (this + subsurfaces)
   Vec<Surface*> pending_stack;    // accumulates until commit
+  Ptr<Launch> activation_launch;
   ~Surface();
 };
 

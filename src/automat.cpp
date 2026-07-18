@@ -21,6 +21,7 @@
 #include "embedded.hpp"
 #include "global_resources.hpp"
 #include "keymap.hpp"
+#include "launcher.hpp"
 #include "loading_animation.hpp"
 #include "mux.hpp"
 #include "persistence.hpp"
@@ -172,6 +173,8 @@ int Main() {
     ERROR << "Couldn't start the X11 server: " << status;
     status.Reset();
   }
+
+  LaunchRestoredWindows();  // after both display servers bound the sockets clients inherit
 
   if (root_widget->loading_animation) {
     root_widget->loading_animation->LoadingCompleted();

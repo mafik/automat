@@ -73,16 +73,16 @@ on the compositor thread (see GPU buffer passing below), which writes each
 object's texture and child list under that object's mutex.
 
 Board structure is only mutated on the UI thread, in
-`UIFrame()` — called once per frame from `RootWidget::Tick` — which inserts
+`wayland::Tick()` — called once per frame from `RootWidget::Tick` — which inserts
 newly mapped windows (placed next to the Command that spawned them, on that
 Command's board) and removes windows whose client went away from every board
 that owns them; the child surface objects below a window are created and
 dropped by the compositor, off the board.
 
 One renderer fact matters to anyone extending this: an idle Automat does not
-tick the root widget. Every path that needs `UIFrame` to run (window
+tick the root widget. Every path that needs `Tick` to run (window
 appeared, window disappeared, the compositor itself starting while restored
-windows wait to respawn) must call `vm.WakeToys()`, which `PackFrame`
+windows wait for their launches) must call `vm.WakeToys()`, which `PackFrame`
 watches.
 
 ## Protocol surface
@@ -92,8 +92,9 @@ into the window's surface tree, see below), `wl_shm`,
 `wl_output`, `wl_seat` (pointer + keyboard), `wl_data_device_manager` (clipboard
 selection, see below), `xdg_wm_base` with toplevels and popups (menus, see
 below), `zxdg_decoration_manager_v1` for per-window decoration negotiation, `zwp_linux_dmabuf_v1` for GPU buffer passing
-(see below), `wp_viewporter` for surface cropping and scaling (see below), and
-`wp_cursor_shape_v1` for named cursors.
+(see below), `wp_viewporter` for surface cropping and scaling (see below),
+`wp_cursor_shape_v1` for named cursors, and `xdg_activation_v1` for matching
+new windows to launches (see below).
 foot requires the subcompositor and data device manager to even start; kitty
 requires the decoration ordering rule below; Firefox additionally needs popups,
 input regions, scroll and clipboard (see below).
@@ -175,7 +176,7 @@ around the window the user sees, and the content buffer is shifted by the
 geometry's top-left so those margins hang outside the frame. The source
 rectangle travels with the frame to the toy, which samples it into the content
 area. Because both the window's board size and its surface-local input mapping
-derive from these sizes, a cropped, scaled or shadowed window drags, seats and
+derive from these sizes, a cropped, scaled or shadowed window drags, lands and
 routes pointer events correctly with no further change. Resolution and the
 protocol are in `src/wayland.cpp` (`ResolveGeometry`, the
 `Viewport`/`Viewporter` handlers); the sampling is in `src/wayland.cpp`.
@@ -307,7 +308,7 @@ the frame tick, where the set of dirtied clients is unbounded.
 
 A window that draws its own titlebar cannot be moved by the frame, so its titlebar
 drag reaches Automat as `xdg_toplevel.move`. The handler queues the window and wakes
-the root widget; the next `UIFrame` calls `StartClientMove` (src/window_frame.hpp).
+the root widget; the next `Tick` calls `StartClientMove` (src/window_frame.hpp).
 The window object records the action currently routing a pressed button into it
 (`DecoratedWindow::input_action`, set by the action's constructor and cleared by its
 destructor, both on the UI thread), so `StartClientMove` follows that link and
@@ -374,8 +375,45 @@ SIGTERM two seconds later if the client ignores it. The client pid for the
 escalation comes from the socket's `SO_PEERCRED`.
 
 In the other direction, a client unmapping or disconnecting queues the
-window for removal; `UIFrame` erases its Location from every board that owns
+window for removal; `Tick` erases its Location from every board that owns
 one.
 
-Persistence (recipes, respawn, adoption of the respawned client into the
-existing object) is documented in `Wayland Client Persistence.md`.
+Persistence (recipes, launches, filling the restored window object back in)
+is documented in `Wayland Client Persistence.md` and `Launches.md`. The
+compositor-side matching is below.
+
+## Launches and window matching
+
+New client windows are matched to the launches that produced them; the
+launches system itself — the Launch object, the token and pid matching
+rules, the environment variables, restore and copy — is documented in
+`Launches.md`. The compositor-side mechanics:
+
+When a toplevel maps (`ApplyAndPublish`, `src/wayland.cpp`), the compositor
+takes the launch stashed on the surface by an earlier `activate`, or calls
+`Launch::Find` with the connection's `SO_PEERCRED` pid. A launch aimed at an
+existing window (`Launch::restoring`) fills that object in place — its
+Location already exists, so the window is not queued for Board insertion.
+Any other
+launch attaches to the fresh window object (recipe, `launched_by`) and is
+carried with it through the `ui_appeared` queue, so `Tick` inserts the window
+into the source's Board with a `Location::PlaceBeside` request and connects the
+Launcher cable. The server computes no coordinates; the placement request is
+resolved on the UI side from the actual widget shapes when the window first
+lays out.
+
+`xdg_activation_v1.activate` may arrive before or after the toplevel maps,
+and both orders occur in practice (GTK 3 presents new windows before their
+first buffer commit). Before the map, the launch is stashed on the surface
+(`Surface::activation_launch`) and consumed at map time, taking precedence
+over the pid. After the map, a fresh object already exists; it is rebound to
+the launch's restoring window only while it still waits in `ui_appeared`. An
+object that already reached a board is an established window that a
+single-window application re-presented (mousepad presents its existing
+window on a forwarded launch), and rebinding it would remove an object from
+a Board the user did not touch.
+
+Tokens minted for clients through `xdg_activation_token_v1` satisfy the
+protocol (`done` carries a fresh token) but activation with them is ignored:
+Automat does not transfer focus on activation, so unknown tokens have no
+effect, which the protocol permits.

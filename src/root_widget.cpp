@@ -255,9 +255,9 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
   Tock tock;
 
 #if defined(__linux__)
-  wayland::UIFrame();
+  wayland::Tick();
 #endif
-  x11::UIFrame();
+  x11::Tick();
 
   if (loading_animation) {
     tock |= loading_animation->Tick(timer);

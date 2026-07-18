@@ -18,6 +18,7 @@
 #include "animation.hpp"
 #include "base.hpp"
 #include "int.hpp"
+#include "launcher.hpp"
 #include "mortal.hpp"
 #include "ptr.hpp"
 #include "status.hpp"
@@ -94,57 +95,22 @@ struct WaylandSurface : Object {
 // Lifetime controlled by the client:
 // - unmapping/exiting removes the object,
 // - deleting the object asks the client to close.
-struct WaylandWindow : Object, DecoratedWindow {
-  mutable std::mutex mutex;  // guards non-atomics below
-
+struct WaylandWindow : ClientWindow {
   Ptr<WaylandSurface> surface;  // Root content surface
-
-  Str title;
-  Str app_id;
-  bool client_gone = false;
-
-  // Recipe-level persistence: the argv whose child mapped this window.
-  // Serialized; deserializing (or cloning) re-runs it and the new client is
-  // adopted into this object.
-  Vec<Str> recipe;
-  I64 client_pid = 0;
-  bool pending_respawn = false;
 
   // Compositor-side identity; only the wayland thread dereferences it.
   std::atomic<void*> toplevel_handle{nullptr};
 
   std::atomic<bool> server_side_decorated{false};
 
-  // The Command whose child mapped this window. Connected at adoption, drawn
-  // as a cable, serialized as a link; restore-time respawn goes through it so
-  // the Command keeps STOP control over the new child.
-  DEF_INTERFACE(WaylandWindow, ObjectArgument<Object>, launcher, "Launcher")
-  static constexpr auto kStyle = Argument::Style::Cable;
-  static constexpr float kAutoconnectRadius = 0.f;
-  DEF_END(launcher);
-
-  INTERFACES(launcher);
-
   WaylandWindow() = default;
-  WaylandWindow(const WaylandWindow& o) : launcher(o.launcher) {
-    auto lock = std::lock_guard(o.mutex);
-    recipe = o.recipe;
-    title = o.title;
-    app_id = o.app_id;
-    client_gone = true;
-    pending_respawn = !recipe.empty();
-    decoration_preference.store(o.decoration_preference.load(std::memory_order_relaxed),
-                                std::memory_order_relaxed);
-  }
+  WaylandWindow(const WaylandWindow& o) : ClientWindow(o) {}
   ~WaylandWindow() override;
 
   void DecorationPreferenceChanged() override;
 
-  void SerializeState(ObjectSerializer&) const override;
-  bool DeserializeKey(ObjectDeserializer&, StrView key) override;
-
   StrView Name() const override { return "Wayland Window"; }
-  Ptr<Object> Clone() const override { return MAKE_PTR(WaylandWindow, *this); }
+  Ptr<Object> Clone() const override;
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 };
 
@@ -155,6 +121,6 @@ namespace automat::wayland {
 void Start(mux::Epoll&, Status&);  // pick a free WAYLAND_DISPLAY, flock its lock, serve on epoll
 void Stop();       // controlled teardown (frame timer unregisters before mux::epoll dies)
 Str SocketName();  // bound display name, empty if not started
-void UIFrame();    // per-frame board reconcile, no-op if not started
+void Tick();       // per-frame board reconcile, no-op if not started
 
 }  // namespace automat::wayland

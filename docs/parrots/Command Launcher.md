@@ -66,10 +66,17 @@ Every state change is shown on two channels (the Beta rule):
 - The program tile is marked with a red outline and squiggle while its text
   does not resolve to an executable (`$PATH` search, same rules as
   `execvp`), and RUN is gray and hatched. When it resolves, RUN turns green.
-- While the child runs, the button becomes a red STOP, the lower-left corner
-  shows the spinner and the live `pid` readout.
-- After exit, a chip reports the result: green `exit 0`, red `exit N`, or
-  the signal name if the child died by signal. STOP means SIGTERM.
+- The run itself is a Launch object (`Launches.md`), shown on the plate's
+  lower right as an icon: a gear with the pid under it, rotating and
+  saturated while the process runs, still and desaturated after it exits.
+  While the child runs the button is a red STOP; STOP means SIGTERM.
+- After exit, a chip in the lower-left corner reports the result: green
+  `exit 0`, red `exit N`, or the signal name if the child died by signal.
+- Dragging the icon off the plate extracts the launch onto the board
+  (`Command::ExtractLaunch`): the Command is free to run again while the
+  extracted instance keeps running as its own object — this is how one
+  Command runs several instances at once. The Command's chip and icon
+  follow the launch, so both leave with it.
 
 Pressing Enter inside the tiles is equivalent to pressing RUN.
 
@@ -81,13 +88,14 @@ Timers, Gears, chains and the bubble menu drive it without special cases.
 The child is watched through a pidfd registered on the shared epoll thread
 (`mux::WatchProcess`), which reaps it and reports the exit status.
 
-Children are launched with `WAYLAND_DISPLAY` pointing at Automat's own
-compositor and `DISPLAY` pointing at Automat's own X11 server; `GDK_BACKEND`
-is removed so a toolkit picks its preferred backend (`library::SpawnArgv`,
-errors through `Status`). A window mapped by the child is placed next to the
-Command's plate, on the Command's board, and keeps a `Launcher` connection
-back to it — the visible cable that also makes the relationship survive saves
-(see `Wayland Compositor.md` and `Wayland Client Persistence.md`).
+Spawning goes through `Launch::Spawn` (`Launches.md`), which injects the
+environment — `WAYLAND_DISPLAY` pointing at Automat's own compositor,
+`DISPLAY` at Automat's own X11 server, `GDK_BACKEND` removed so a toolkit
+picks its preferred backend — and records the Launch that display servers
+match new windows against. A window mapped by the child is placed next to
+the Command's plate, on the Command's board, and keeps a `Launcher`
+connection back to it — the visible cable that also makes the relationship
+survive saves (see `Wayland Client Persistence.md`).
 
 ## stdio streams
 
@@ -119,6 +127,12 @@ rule: a chain start stops at a file, because unlike a pipe a file needs no
 second process, and `a > f` followed by `b < f` are separate runs in a shell
 too.
 
+An unconnected stdout, and stderr always, are captured instead of routed:
+the launch drains them into bounded ring buffers (`Launches.md`), and the
+plate shows their tail on a paper strip under the border — stdout in ink,
+stderr in red. The strip holds the last run's output until the next run
+overwrites it, so a finished `ls` stays readable where it ran.
+
 The stream connection renders as a pipe and prints its meters on a chip
 beside its middle. The chip carries only what the kernel attributes to the
 pipe itself: the format ("bytes" — byte streams have no formats to
@@ -129,8 +143,9 @@ a transient pidfd_getfd dup of the child's own write end, closed
 immediately because a held end would distort the pipeline's EOF and
 SIGPIPE semantics; the blocked side comes from /proc/pid/syscall of the
 two children (write on fd 1, read on fd 0 — the fd argument ties the
-blocked state to this pipe), smoothed with hysteresis because a producer
-under flow is momentarily blocked on many samples.
+blocked state to this pipe). The sampling lives on the Launch
+(`Launch::StdoutStats`), with the pipe's two launches tied together by a
+shared `Pipe` record, because these are per-instance readings.
 
 Throughput is deliberately NOT on the pipe. The kernel keeps no
 per-descriptor byte counters; /proc/pid/io wchar counts the whole
@@ -142,6 +157,7 @@ UI tick, so the meters move at the same rate as the rest of the
 interface.
 
 Deliberately absent: environment editing, working-directory control,
-stderr and extra-descriptor ports, terminal (pty) bindings for unconnected
-stdio, and starting stages upstream of the started one. The stdio design
-these grow into is recorded in `Pipeline Language.md`.
+stderr and extra-descriptor ports (stderr is captured, not connectable),
+terminal (pty) bindings for unconnected stdio, and starting stages upstream
+of the started one. The stdio design these grow into is recorded in
+`Pipeline Language.md`.

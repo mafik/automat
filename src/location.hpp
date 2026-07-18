@@ -55,7 +55,10 @@ struct Location : Object {
   struct PlaceBetween {
     WeakPtr<Location> a, b;
   };
-  std::variant<Direct, PlaceAhead, PlaceBetween> placement = Direct{};
+  struct PlaceBeside {
+    WeakPtr<Location> origin;
+  };
+  std::variant<Direct, PlaceAhead, PlaceBetween, PlaceBeside> placement = Direct{};
 
   void FillPosition(LocationWidget& w);  // private
 
@@ -296,6 +299,12 @@ void AppendObscurers(Location* loc, Location* other_end, Vec<ui::Widget*>& wante
 //
 // This is a UI function.
 Vec2 PositionAhead(Location& origin, const Argument::Table& arg, const ObjectToy& target_widget);
+
+// Return position for the given `target_widget` beside the `origin` (to its right, tops
+// aligned), stepping down past locations already sitting there.
+//
+// This is a UI function.
+Vec2 PositionBeside(Location& origin, Location& target, const ObjectToy& target_widget);
 
 // VM function for animating location appearance.
 //

@@ -16,6 +16,7 @@
 
 #include "base.hpp"
 #include "int.hpp"
+#include "launcher.hpp"
 #include "mortal.hpp"
 #include "ptr.hpp"
 #include "status.hpp"
@@ -38,12 +39,7 @@ namespace automat::library {
 // Lifetime controlled by the client:
 // - unmapping/destroying removes the object,
 // - deleting the object asks the client to close (WM_DELETE_WINDOW, then a kill).
-struct X11Window : Object, DecoratedWindow {
-  mutable std::mutex mutex;  // guards the non-atomic fields below
-
-  Str title;
-  Str app_id;  // WM_CLASS instance/class
-  bool client_gone = false;
+struct X11Window : ClientWindow {
   bool override_redirect = false;  // menus/tooltips: drawn without chrome
   bool client_decorated = false;   // the client draws its own frame (Motif hints / GTK CSD)
 
@@ -52,42 +48,17 @@ struct X11Window : Object, DecoratedWindow {
   SkISize content_size = {};
   SkPath input_region;  // client pixels (the whole window; shaped windows narrow it)
 
-  // Recipe-level persistence: the argv whose child mapped this window. Serialized;
-  // deserializing (or cloning) re-runs it and the new client is adopted.
-  Vec<Str> recipe;
-  I64 client_pid = 0;
-  bool pending_respawn = false;
-
   // Server-side identity; only the x11 thread dereferences it.
   std::atomic<void*> window_handle{nullptr};
 
-  DEF_INTERFACE(X11Window, ObjectArgument<Object>, launcher, "Launcher")
-  static constexpr auto kStyle = Argument::Style::Cable;
-  static constexpr float kAutoconnectRadius = 0.f;
-  DEF_END(launcher);
-
-  INTERFACES(launcher);
-
   X11Window() = default;
-  X11Window(const X11Window& o) : launcher(o.launcher) {
-    auto lock = std::lock_guard(o.mutex);
-    recipe = o.recipe;
-    title = o.title;
-    app_id = o.app_id;
-    client_gone = true;
-    pending_respawn = !recipe.empty();
-    decoration_preference.store(o.decoration_preference.load(std::memory_order_relaxed),
-                                std::memory_order_relaxed);
-  }
+  X11Window(const X11Window& o) : ClientWindow(o) {}
   ~X11Window() override;
 
   void DecorationPreferenceChanged() override;
 
-  void SerializeState(ObjectSerializer&) const override;
-  bool DeserializeKey(ObjectDeserializer&, StrView key) override;
-
   StrView Name() const override { return "X11 Window"; }
-  Ptr<Object> Clone() const override { return MAKE_PTR(X11Window, *this); }
+  Ptr<Object> Clone() const override;
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 };
 
@@ -98,6 +69,6 @@ namespace automat::x11 {
 void Start(mux::Epoll&, Status&);  // pick a free DISPLAY, listen on epoll
 void Stop();                       // controlled teardown
 Str SocketName();                  // bound display name (e.g. ":3"), empty if not started
-void UIFrame();                    // per-frame board reconcile, no-op if not started
+void Tick();                       // per-frame board reconcile, no-op if not started
 
 }  // namespace automat::x11

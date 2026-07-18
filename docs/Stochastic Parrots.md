@@ -104,7 +104,8 @@ Objects (multi-threaded) notify Toys (UI-thread) via `wake_counter`:
 Documentation maintained using stochastic parrots should be placed in `docs/parrots/` and indexed below. They record numerous small decisions made during development which are necessary for maintaining parrot consistency.
 
 - `docs/parrots/Clone Pile.md` - describes how elements that create a new object when touched present themselves
-- `docs/parrots/Command Launcher.md` - the Command object: argv tiles, no shell, run states, composition points
+- `docs/parrots/Command Launcher.md` - the Command object: argv tiles, no shell, run states, the launch icon and its extraction, stdio captures, composition points
+- `docs/parrots/Launches.md` - the launches system: the Command/Launch/window object model, one spawn path with activation tokens, token-and-pid window matching across both display servers, restore and copy flows, stream captures, pipe records, extraction
 - `docs/parrots/Leptonica Language.md` - documents the visual language of Leptonica objects
 - `docs/parrots/Pipeline Language.md` - the design for pipeline libraries (GStreamer, PipeWire, FFmpeg, GEGL, TensorFlow, UNIX pipes): blocks that work the moment they are dropped, previews and meters fed by real API counters, native format labels, visible adapters, and how self-running and Automat-driven blocks mix
 - `docs/parrots/Beta Brand.md` - describes the visual identification for Toys made with stochastic parrots
@@ -113,7 +114,7 @@ Documentation maintained using stochastic parrots should be placed in `docs/parr
 - `docs/parrots/Split Widgets.md` - drawing one widget at several depths (connections drawn under covers at their endpoints): the `splits_under`/`splits_over` lists, the per-region drawing order, the pixel-exact rectangle partition, and why one global z-order is impossible
 - `docs/parrots/Executable Shape.md` - the linking model: locally built static archives named explicitly, the five deliberate shared library dependencies, the fixed load address and its copy-relocation cost, the empty dynamic symbol table, zstd-compressed debug info in fast and debug, fully stripped release
 - `docs/parrots/Wayland Client Persistence.md` - options for saving/cloning windows backed by live processes; why recipes won
-- `docs/parrots/Wayland Compositor.md` - Automat as a Wayland compositor: the bespoke protocol stack, the epoll event loop, protocol surface, GPU buffer passing (dmabuf), surface cropping and scaling (viewporter), subsurface compositing, popups, clipboard, input pass-through, client-initiated window moves, window lifetime
+- `docs/parrots/Wayland Compositor.md` - Automat as a Wayland compositor: the bespoke protocol stack, the epoll event loop, protocol surface, GPU buffer passing (dmabuf), surface cropping and scaling (viewporter), subsurface compositing, popups, clipboard, input pass-through, client-initiated window moves, window lifetime, launch matching (xdg-activation)
 - `docs/parrots/X11 Server.md` - Automat as an X11 display server (the analog of the Wayland compositor): the generated protocol stack, the resource tree, acting as a minimal window manager, client-initiated window moves, SHM and DRI3 display, RENDER on Skia, the SendEvent sequence and keymap rules, window lifetime
 - `docs/parrots/Fable Mode.md` - (`/fable-mode` skill) enforces staged execution discipline on large tasks
 

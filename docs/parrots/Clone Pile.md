@@ -32,7 +32,7 @@ instance moves it.
   the static state already shows.
 - **Take.** The top copy departs with the pointer. The new top then squares up from its fanned
   pose over roughly a quarter of a second with a slight overshoot, uncovering a fresh copy
-  already seated in the pose it vacated, while a brief specular glint sweeps across it.
+  already sitting in the pose it vacated, while a brief specular glint sweeps across it.
   Insertion at the bottom of the pile is fully hidden from a top-down viewer, so the supply is
   infinite without any replenishment animation.
 

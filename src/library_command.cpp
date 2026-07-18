@@ -10,8 +10,10 @@
 #include <cmath>
 
 #include "animation.hpp"
+#include "board.hpp"
 #include "fd_provider.hpp"
 #include "format.hpp"
+#include "location.hpp"
 #include "text_field.hpp"
 #include "ui_beta.hpp"
 #include "ui_button.hpp"
@@ -19,10 +21,7 @@
 
 #if !defined(_WIN32)
 #include <fcntl.h>
-#include <spawn.h>
-#include <sys/ioctl.h>
 #include <sys/stat.h>
-#include <sys/syscall.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -31,10 +30,6 @@
 #include <cstring>
 
 #include "mux_epoll.hpp"
-#include "wayland.hpp"
-#include "x11.hpp"
-
-extern "C" char** environ;
 #endif
 
 namespace automat::library {
@@ -61,12 +56,7 @@ Vec<Str> SplitWords(StrView line) {
   return words;
 }
 
-Command::~Command() {
-#if !defined(_WIN32)
-  auto lock = std::lock_guard(mutex);
-  if (child_pidfd >= 0) close(child_pidfd);
-#endif
-}
+Command::~Command() {}
 
 std::string Command::GetText() const {
   auto lock = std::lock_guard(mutex);
@@ -123,92 +113,40 @@ bool Command::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 #if defined(_WIN32)
 
-I64 SpawnArgv(const Vec<Str>&, Status& status, const StdioFds&) {
-  AppendErrorMessage(status) += "Command is not implemented on Windows yet.";
-  return 0;
-}
-void Command::Launch(std::unique_ptr<RunTask>&) {
+void Command::Run(std::unique_ptr<RunTask>&) {
   ReportError("Command is not implemented on Windows yet.");
 }
-I64 Command::AdoptiveLaunch(Status& status) {
+Ptr<Launch> Command::RunFor(ClientWindow&, Status& status) {
   AppendErrorMessage(status) += "Command is not implemented on Windows yet.";
-  return 0;
+  return nullptr;
 }
-bool Command::SpawnStage(const StdioFds&, std::unique_ptr<RunTask>&, Status& status) {
+bool Command::SpawnStage(const SpawnFds&, ClientWindow*, std::unique_ptr<RunTask>&,
+                         Status& status) {
   AppendErrorMessage(status) += "Command is not implemented on Windows yet.";
   return false;
 }
+bool Command::Busy() { return false; }
 void Command::Terminate() {}
+Ptr<Launch> Command::ExtractLaunch() { return nullptr; }
 StreamStats Command::StdoutStats() { return {}; }
 
 #else
 
-I64 SpawnArgv(const Vec<Str>& argv_in, Status& status, const StdioFds& stdio) {
-  Vec<Str> words;
-  for (auto& w : argv_in) {
-    if (!w.empty()) words.push_back(w);
-  }
-  if (words.empty()) {
-    AppendErrorMessage(status) += "Nothing to run.";
-    return 0;
-  }
-  std::vector<char*> argv;
-  argv.reserve(words.size() + 1);
-  for (auto& w : words) argv.push_back(w.data());
-  argv.push_back(nullptr);
-
-  // Children talk to Automat's own display servers: WAYLAND_DISPLAY and DISPLAY both
-  // point at our sockets. GDK is left unset so a toolkit picks its own backend (GTK
-  // prefers Wayland when both are offered); a client that only speaks X11 uses DISPLAY.
-  Str wayland_socket = wayland::SocketName();
-  Str x11_socket = x11::SocketName();
-  Str wayland_entry = "WAYLAND_DISPLAY=" + wayland_socket;
-  Str display_entry = "DISPLAY=" + x11_socket;
-  std::vector<char*> envp;
-  for (char** e = environ; *e; ++e) {
-    StrView entry(*e);
-    if (!wayland_socket.empty() && entry.starts_with("WAYLAND_DISPLAY=")) continue;
-    if (!x11_socket.empty() && entry.starts_with("DISPLAY=")) continue;
-    if (entry.starts_with("GDK_BACKEND=")) continue;
-    envp.push_back(*e);
-  }
-  if (!wayland_socket.empty()) envp.push_back(wayland_entry.data());
-  if (!x11_socket.empty()) envp.push_back(display_entry.data());
-  envp.push_back(nullptr);
-
-  posix_spawn_file_actions_t actions;
-  posix_spawn_file_actions_init(&actions);
-  if (stdio.in >= 0) posix_spawn_file_actions_adddup2(&actions, stdio.in, 0);
-  if (stdio.out >= 0) posix_spawn_file_actions_adddup2(&actions, stdio.out, 1);
-
-  pid_t pid = 0;
-  int err = posix_spawnp(&pid, argv[0], &actions, nullptr, argv.data(), envp.data());
-  posix_spawn_file_actions_destroy(&actions);
-  if (err) {
-    AppendErrorMessage(status) += f("{}: {}", words[0], strerror(err));
-    return 0;
-  }
-  return pid;
+static bool LaunchAlive(const Ptr<Launch>& launch) {
+  auto lock = std::lock_guard(launch->mutex);
+  return !launch->exited;
 }
 
-static void WatchChild(Command& cmd, I64 pid) {
+static void WatchRun(Command& cmd, const Ptr<Launch>& launch) {
   Status status;
-  mux::WatchProcess((pid_t)pid,
-                    [weak = cmd.AcquireWeakPtr(), pid](int wait_status) {
+  mux::WatchProcess((pid_t)launch->pid,
+                    [weak = cmd.AcquireWeakPtr(), launch_weak = launch->AcquireWeakPtr()](int) {
                       if (auto obj = weak.Lock()) {
                         auto& cmd = static_cast<Command&>(*obj);
                         auto lock = std::lock_guard(cmd.mutex);
-                        if (cmd.child_pid == pid) {
-                          cmd.child_pid = 0;
-                          if (cmd.child_pidfd >= 0) {
-                            close(cmd.child_pidfd);
-                            cmd.child_pidfd = -1;
-                          }
-                        }
-                        cmd.wait_status = wait_status;
-                        // Cancel() may have already consumed the task; Done()
-                        // requires one.
-                        if (cmd.running->IsRunning()) cmd.running->Done();
+                        bool current = cmd.launch.Get() == launch_weak.GetUnsafe();
+                        // Cancel() may have already consumed the task; Done() requires one.
+                        if (current && cmd.running->IsRunning()) cmd.running->Done();
                         cmd.WakeToys();
                       }
                     },
@@ -216,40 +154,39 @@ static void WatchChild(Command& cmd, I64 pid) {
   if (!OK(status)) cmd.ReportError(status.ToStr());
 }
 
-bool Command::SpawnStage(const StdioFds& stdio, std::unique_ptr<RunTask>& task, Status& status) {
+bool Command::Busy() {
+  auto lock = std::lock_guard(mutex);
+  return launch && LaunchAlive(launch);
+}
+
+bool Command::SpawnStage(const SpawnFds& fds, ClientWindow* restoring,
+                         std::unique_ptr<RunTask>& task, Status& status) {
   Vec<Str> argv_copy;
   {
     auto lock = std::lock_guard(mutex);
-    if (child_pid) {
+    if (launch && LaunchAlive(launch)) {
       AppendErrorMessage(status) += "Already running.";
       return false;
     }
     argv_copy = argv;
   }
-  I64 pid = SpawnArgv(argv_copy, status, stdio);
-  if (!pid) return false;
+  auto new_launch = Launch::Spawn(argv_copy, this, restoring, status, fds);
+  if (!new_launch) return false;
   {
     auto lock = std::lock_guard(mutex);
-    child_pid = pid;
+    launch = new_launch;
     ever_ran = true;
-    io_wchar = 0;
-    stdout_piped = stdio.out_pipe;
-    if (child_pidfd >= 0) close(child_pidfd);
-    child_pidfd = (int)syscall(SYS_pidfd_open, (pid_t)pid, 0);
     if (!task) task = std::make_unique<RunTask>(AcquireWeakPtr(), &Command::run_tbl);
     running->BeginLongRunning(std::move(task));
   }
   ClearOwnError();
   WakeToys();
-  WatchChild(*this, pid);
+  WatchRun(*this, new_launch);
   return true;
 }
 
-void Command::Launch(std::unique_ptr<RunTask>& task) {
-  {
-    auto lock = std::lock_guard(mutex);
-    if (child_pid) return;  // already running; STOP is the way to a restart
-  }
+void Command::Run(std::unique_ptr<RunTask>& task) {
+  if (Busy()) return;  // already running; STOP is the way to a restart
 
   // The downstream chain connected through stdout -> stdin. An anonymous pipe
   // needs both ends at spawn, so the chain starts together, the way a shell
@@ -265,17 +202,14 @@ void Command::Launch(std::unique_ptr<RunTask>& task) {
     bool seen = false;
     for (auto* c : chain) seen |= (c == next);
     if (seen) break;  // a cycle; stop where the pipe would bite its own tail
-    {
-      auto lock = std::lock_guard(next->mutex);
-      if (next->child_pid) break;
-    }
+    if (next->Busy()) break;
     keep_alive.push_back(std::move(target));
     chain.push_back(next);
     cur = next;
   }
 
   int n = (int)chain.size();
-  Vec<StdioFds> stdio(n);
+  Vec<SpawnFds> stdio(n);
   Vec<int> to_close;
 
   // A file at either end of the chain resolves to a descriptor instead of a
@@ -320,9 +254,11 @@ void Command::Launch(std::unique_ptr<RunTask>& task) {
       for (int fd : to_close) close(fd);
       return;
     }
+    auto pipe = MAKE_PTR(Pipe);
     stdio[i].out = fds[1];
-    stdio[i].out_pipe = true;
+    stdio[i].out_pipe = pipe;
     stdio[i + 1].in = fds[0];
+    stdio[i + 1].in_pipe = std::move(pipe);
     to_close.push_back(fds[0]);
     to_close.push_back(fds[1]);
   }
@@ -330,9 +266,9 @@ void Command::Launch(std::unique_ptr<RunTask>& task) {
   for (int i = 0; i < n; ++i) {
     Status status;
     // The head consumes the caller's task; downstream stages synthesize their
-    // own, the way AdoptiveLaunch does.
+    // own, the way RunFor does.
     std::unique_ptr<RunTask> stage_task;
-    if (!chain[i]->SpawnStage(stdio[i], i == 0 ? task : stage_task, status)) {
+    if (!chain[i]->SpawnStage(stdio[i], nullptr, i == 0 ? task : stage_task, status)) {
       // A failed stage reports its own error; the rest of the chain still
       // runs and the kernel propagates EOF / SIGPIPE past the gap.
       chain[i]->ReportError(status.ToStr());
@@ -343,96 +279,42 @@ void Command::Launch(std::unique_ptr<RunTask>& task) {
   for (int fd : to_close) close(fd);
 }
 
-I64 Command::AdoptiveLaunch(Status& status) {
+Ptr<Launch> Command::RunFor(ClientWindow& window, Status& status) {
   std::unique_ptr<RunTask> task;
-  if (!SpawnStage({}, task, status)) return 0;
+  if (!SpawnStage({}, &window, task, status)) return nullptr;
   auto lock = std::lock_guard(mutex);
-  return child_pid;
+  return launch;
 }
 
 void Command::Terminate() {
-  auto lock = std::lock_guard(mutex);
-  if (child_pid) kill((pid_t)child_pid, SIGTERM);
+  Ptr<Launch> live;
+  {
+    auto lock = std::lock_guard(mutex);
+    if (launch && LaunchAlive(launch)) live = launch;
+  }
+  if (live) kill((pid_t)live->pid, SIGTERM);
 }
 
-static bool ReadProcFile(const char* path, char* buf, size_t size) {
-  int fd = open(path, O_RDONLY);
-  if (fd < 0) return false;
-  ssize_t len = read(fd, buf, size - 1);
-  close(fd);
-  if (len <= 0) return false;
-  buf[len] = 0;
-  return true;
-}
-
-// True when /proc/<pid>/syscall says the process is blocked in the given
-// syscall on the given fd (x86_64 numbering; read = 0, write = 1).
-static bool BlockedInSyscall(I64 pid, long syscall_nr, long fd_arg) {
-  char path[64];
-  snprintf(path, sizeof(path), "/proc/%lld/syscall", (long long)pid);
-  char buf[256];
-  if (!ReadProcFile(path, buf, sizeof(buf))) return false;
-  char* end = nullptr;
-  long nr = strtol(buf, &end, 10);
-  if (end == buf || nr != syscall_nr) return false;
-  long arg0 = strtol(end, nullptr, 0);
-  return arg0 == fd_arg;
+Ptr<Launch> Command::ExtractLaunch() {
+  Ptr<Launch> extracted;
+  {
+    auto lock = std::lock_guard(mutex);
+    extracted = std::move(launch);
+    launch = nullptr;
+    if (running->IsRunning()) running.task.reset();
+  }
+  WakeToys();
+  return extracted;
 }
 
 StreamStats Command::StdoutStats() {
-  StreamStats stats;
-  I64 pid = 0;
-  int pidfd = -1;
-  bool piped = false;
+  Ptr<Launch> current;
   {
     auto lock = std::lock_guard(mutex);
-    if (child_pid) {
-      char path[64];
-      snprintf(path, sizeof(path), "/proc/%lld/io", (long long)child_pid);
-      char buf[512];
-      if (ReadProcFile(path, buf, sizeof(buf))) {
-        if (const char* p = strstr(buf, "wchar: ")) io_wchar = strtoull(p + 7, nullptr, 10);
-      }
-      pid = child_pid;
-      pidfd = child_pidfd;
-      piped = stdout_piped;
-    }
-    stats.bytes = io_wchar;
+    current = launch;
   }
-  if (!pid || !piped) return stats;
-
-  // Pipe fill and capacity, read through a transient dup of the child's own
-  // write end. The dup lives only for these two calls: a held write end
-  // would suppress the reader's EOF.
-  if (pidfd >= 0) {
-    int fd1 = (int)syscall(SYS_pidfd_getfd, pidfd, 1, 0);
-    if (fd1 >= 0) {
-      int fill = 0;
-      if (ioctl(fd1, FIONREAD, &fill) == 0) stats.fill = (uint64_t)std::max(0, fill);
-      int capacity = fcntl(fd1, F_GETPIPE_SZ);
-      if (capacity > 0) stats.capacity = (uint64_t)capacity;
-      close(fd1);
-    }
-  }
-
-  // The blocked side: this child stuck writing its stdout, or the
-  // downstream peer's child stuck reading its stdin.
-  if (BlockedInSyscall(pid, /*write*/ 1, 1)) {
-    stats.blocked = StreamBlocked::Producer;
-  } else {
-    auto target = out_stream->FindInterface();
-    if (auto* peer = dynamic_cast<Command*>(target.Owner<Object>())) {
-      I64 peer_pid = 0;
-      {
-        auto lock = std::lock_guard(peer->mutex);
-        peer_pid = peer->child_pid;
-      }
-      if (peer_pid && BlockedInSyscall(peer_pid, /*read*/ 0, 0)) {
-        stats.blocked = StreamBlocked::Consumer;
-      }
-    }
-  }
-  return stats;
+  if (!current) return {};
+  return current->StdoutStats();
 }
 
 static bool IsExecutableFile(const char* path) {
@@ -461,6 +343,24 @@ static bool ResolvesOnPath(const Str& prog) {
 }
 
 #endif  // !_WIN32
+
+Ptr<Location> Command::Extract(Object& descendant) {
+  {
+    auto lock = std::lock_guard(mutex);
+    if (launch.Get() != &descendant) return nullptr;
+  }
+  auto extracted = ExtractLaunch();
+  if (!extracted) return nullptr;
+  Vec2 position = {};
+  if (Location* my_location = MyLocation()) {
+    position = my_location->PeekPosition();
+    if (auto board = my_location->LockBoard()) position += board->position;
+  }
+  auto loc = MAKE_PTR(Location);
+  loc->InsertHere(std::move(extracted));
+  loc->placement = Location::Direct{position};
+  return loc;
+}
 
 // ============================================================================
 // Toy
@@ -600,7 +500,12 @@ ArgvLayout LayoutArgv(const Vec<Str>& argv) {
 
 }  // namespace
 
-Vec2 CommandPlateSize() { return Vec2(kPlateW, kPlateH); }
+constexpr float kLaunchIconRadius = 2.2_mm;
+constexpr int kTailLinesOut = 4;
+constexpr int kTailLinesErr = 3;
+constexpr int kTailColumns = 60;
+constexpr float kTailLineH = 2.2_mm;
+constexpr float kTailPad = 1.0_mm;
 
 struct CommandToy;
 
@@ -624,6 +529,8 @@ struct ArgvField : ui::TextFieldBase {
 struct CommandToy : ui::beta::ObjectToy {
   std::unique_ptr<ArgvField> field;
   std::unique_ptr<ui::beta::RunButton> button;
+  std::unique_ptr<LaunchWidget> launch_widget;
+  WeakPtr<Launch> shown_launch_;
 
   // Tick-cached object state (UI thread only):
   Vec<Str> argv_;
@@ -631,9 +538,11 @@ struct CommandToy : ui::beta::ObjectToy {
   bool program_resolves_ = false;
   bool running_ = false;
   bool ever_ran_ = false;
-  I64 pid_ = 0;
+  bool has_launch_ = false;
   int wait_status_ = 0;
-  float spinner_phase_ = 0;
+  Vec<Str> tail_out_;
+  Vec<Str> tail_err_;
+  uint64_t tail_key_ = 0;
   float field_scale_ = 1;
   float first_tile_x1_ = kEmptyTile;
   bool has_args_ = false;
@@ -643,7 +552,6 @@ struct CommandToy : ui::beta::ObjectToy {
   CommandToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     field = std::make_unique<ArgvField>(this, *this);
     button = std::make_unique<ui::beta::RunButton>(this, [this] { OnButton(); }, Seed(0x12B));
-    UpdateFromObject();
   }
 
   Ptr<Command> LockCommand() const { return LockObject<Command>(); }
@@ -652,7 +560,11 @@ struct CommandToy : ui::beta::ObjectToy {
   SkPath Shape() const override {
     return SkPath::RRect(RRect::MakeSimple(Rect::MakeCenterZero(kPlateW, kPlateH), 3_mm).sk);
   }
-  Optional<Rect> DrawBounds() const override { return Shape().getBounds().makeOutset(4_mm, 4_mm); }
+  Optional<Rect> DrawBounds() const override {
+    Rect bounds = Shape().getBounds().makeOutset(4_mm, 4_mm);
+    bounds.bottom -= TailStripHeight();
+    return bounds;
+  }
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     if (&arg == static_cast<const Interface::Table*>(&decltype(Command::out_stream)::tbl)) {
       // The stdout port exits at the lower left, clear of the run disc.
@@ -661,16 +573,43 @@ struct CommandToy : ui::beta::ObjectToy {
     return ui::beta::RunButton::AdjustArgStart(ObjectToy::ArgStart(arg));
   }
 
-  void UpdateFromObject() {
+  Tock Tick(time::Timer& t) override {
     Vec<Str> old_argv = argv_;
+    Ptr<Launch> launch;
     if (auto cmd = LockCommand()) {
       auto lock = std::lock_guard(cmd->mutex);
       argv_ = cmd->argv;
-      running_ = cmd->child_pid != 0;
-      pid_ = cmd->child_pid;
       ever_ran_ = cmd->ever_ran;
-      wait_status_ = cmd->wait_status;
+      launch = cmd->launch;
     }
+    has_launch_ = launch != nullptr;
+    running_ = false;
+    wait_status_ = 0;
+    uint64_t tail_key = 0;
+    if (launch) {
+      auto lock = std::lock_guard(launch->mutex);
+      running_ = !launch->exited;
+      wait_status_ = launch->wait_status;
+      tail_key = launch->out_capture.total + launch->err_capture.total + (running_ ? 0 : 1);
+    }
+    if (tail_key != tail_key_) {
+      tail_key_ = tail_key;
+      tail_out_ = launch ? launch->TailLines(false, kTailLinesOut, kTailColumns) : Vec<Str>{};
+      tail_err_ = launch ? launch->TailLines(true, kTailLinesErr, kTailColumns) : Vec<Str>{};
+    }
+    if (launch.Get() != shown_launch_.GetUnsafe()) {
+      shown_launch_ = launch ? launch->AcquireWeakPtr() : WeakPtr<Launch>{};
+      if (launch) {
+        launch_widget = std::make_unique<LaunchWidget>(this, *launch);
+        launch_widget->radius = kLaunchIconRadius;
+        launch_widget->local_to_parent =
+            SkM44::Translate(kPlateW / 2 - kSide - kLaunchIconRadius - 0.6_mm,
+                             -kPlateH / 2 + kBottomPad + kStatusRow * 0.5f + 0.5_mm);
+      } else {
+        launch_widget.reset();
+      }
+    }
+    if (launch_widget) launch_widget->WakeAnimation();
     if (argv_ != old_argv) field->WakeAnimation();
     program_ = argv_.empty() ? Str{} : argv_[0];
     if (program_ != resolve_query_) {
@@ -700,14 +639,6 @@ struct CommandToy : ui::beta::ObjectToy {
       button->running = running_;
       button->enabled = enabled;
       button->WakeAnimation();
-    }
-  }
-
-  Tock Tick(time::Timer& t) override {
-    UpdateFromObject();
-    if (running_) {
-      spinner_phase_ = fmodf(spinner_phase_ + (float)t.d * 0.7f, 1.f);
-      return Tock::Drawing;
     }
     return Tock::Draw;
   }
@@ -761,17 +692,10 @@ struct CommandToy : ui::beta::ObjectToy {
                          ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
     }
 
-    // Status corner, lower-left: pid while alive, exit chip afterwards.
-    // (The run disc sits at the lower center, so the row splits naturally:
-    // readouts left of it, the right side free for future affordances.)
+    // Status corner, lower-left: the exit chip after a run; the launch icon
+    // sits lower-right (LaunchIcon child).
     float row_mid = -kPlateH / 2 + kBottomPad + kStatusRow * 0.5f;
-    if (running_) {
-      ui::beta::Spinner(canvas, {-kPlateW / 2 + kSide + 1.75_mm, row_mid}, 1.6_mm, spinner_phase_,
-                        Seed(Hash2(kSeed, 0x59)));
-      ui::beta::DrawText(canvas, f("pid {}", pid_),
-                         {-kPlateW / 2 + kSide + 4.7_mm, row_mid - 0.7_mm},
-                         ui::beta::kMicroSize + 0.3_mm, ui::beta::kInk, false, Seed(kSeed));
-    } else if (ever_ran_) {
+    if (!running_ && ever_ran_ && has_launch_) {
       Str label;
       SkColor color;
 #if !defined(_WIN32)
@@ -802,7 +726,38 @@ struct CommandToy : ui::beta::ObjectToy {
       ui::beta::DrawTextIn(canvas, label, chip, ui::beta::kMicroSize + 0.3_mm,
                            ui::beta::TextOn(color), ui::beta::TextAlign::Center, false, cs);
     }
+
+    DrawTailStrip(canvas);
     BakeChildren(canvas);
+  }
+
+  float TailStripHeight() const {
+    int rows = (int)(tail_out_.size() + tail_err_.size());
+    if (rows == 0) return 0;
+    return rows * kTailLineH + 2 * kTailPad;
+  }
+
+  void DrawTailStrip(SkCanvas& canvas) const {
+    float height = TailStripHeight();
+    if (height == 0) return;
+    Rect strip{-kPlateW / 2 + kSide, -kPlateH / 2 + 1_mm - height, kPlateW / 2 - kSide,
+               -kPlateH / 2 + 1_mm};
+    uint32_t s = Seed(Hash2(kSeed, 0x7E));
+    SkPath outline = ui::beta::WonkyRoundRect(strip, 0.8_mm, ui::beta::kWonk * 0.6f, s);
+    ui::beta::HandShadow(canvas, outline, {0.3_mm, -0.3_mm}, ui::beta::kShadow, s);
+    ui::beta::MisregFill(canvas, outline, ui::beta::kPaper, s);
+    ui::beta::SketchyStroke(canvas, outline, ui::beta::kInkSoft, ui::beta::kStroke * 0.7f, s, 1);
+    float y = strip.top - kTailPad - kTailLineH * 0.75f;
+    for (auto& line : tail_out_) {
+      ui::beta::DrawText(canvas, line, {strip.left + kTailPad, y}, ui::beta::kMicroSize,
+                         ui::beta::kInk, false, s);
+      y -= kTailLineH;
+    }
+    for (auto& line : tail_err_) {
+      ui::beta::DrawText(canvas, line, {strip.left + kTailPad, y}, ui::beta::kMicroSize,
+                         ui::beta::kRed, false, s);
+      y -= kTailLineH;
+    }
   }
 };
 

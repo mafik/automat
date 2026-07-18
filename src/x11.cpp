@@ -53,11 +53,9 @@
 #endif
 
 #include "color.hpp"
-#include "drawing.hpp"
 #include "format.hpp"
 #include "keyboard.hpp"
 #include "keymap.hpp"
-#include "library_command.hpp"
 #include "location.hpp"
 #include "log.hpp"
 #include "math.hpp"
@@ -876,21 +874,13 @@ void MapWindow::Handle(Client& client) {
 #endif
     w->client_pid = pid;
 
-    // A respawned window is adopted into its existing board object (its Location already
-    // exists); a fresh one is queued for UIFrame to seat.
-    Ptr<X11Window> obj;
-    {
-      auto lock = std::lock_guard(server->adoption_mutex);
-      for (auto it = server->adoptions.begin(); it != server->adoptions.end(); ++it)
-        if (it->first == pid) {
-          obj = it->second.Lock();
-          server->adoptions.erase(it);
-          break;
-        }
-    }
-    bool adopted = (bool)obj;
+    // A restored window's launch aims at its existing board object (its Location already
+    // exists); a fresh one is queued for Tick to insert into a Board.
+    Ptr<Launch> launch = Launch::Find(pid);
+    Ptr<X11Window> obj = launch ? launch->LockRestoring<X11Window>() : nullptr;
+    bool restored = (bool)obj;
     if (!obj) obj = MAKE_PTR(X11Window);
-    w->object = obj->AcquireWeakPtr();  // weak; the Location (below, or the adopted one) owns it
+    w->object = obj->AcquireWeakPtr();  // weak; the Location (below, or the restored one) owns it
     obj->window_handle.store(w);
     {
       auto lock = std::lock_guard(obj->mutex);
@@ -913,10 +903,16 @@ void MapWindow::Handle(Client& client) {
       if (auto nul = wm_class.find('\0'); nul != StrView::npos)
         obj->app_id = Str(wm_class.substr(nul + 1));
       obj->client_decorated = WantsClientDecorations(*w);
+      if (!restored && launch) {
+        obj->recipe = launch->argv;
+        obj->launched_by = launch;
+      }
     }
-    if (!adopted) {
+    if (restored) {
+      launch->RestoredInto(*obj);
+    } else {
       auto lock = std::lock_guard(server->ui_mutex);
-      server->ui_appeared.push_back(obj);
+      server->ui_appeared.emplace_back(obj, launch);
     }
   }
   MarkDirty(w);
@@ -2795,12 +2791,6 @@ constexpr float kTitleH = ui::WindowFrame::kTitleH;
 constexpr float kFrame = ui::WindowFrame::kFrame;
 constexpr float kMinContent = x11::kMinContent;
 
-Vec2 WindowBoardSize(int w, int h) {
-  float cw = w > 0 ? w * kPx : kMinContent;
-  float ch = h > 0 ? h * kPx : kMinContent;
-  return Vec2(cw + 2 * kFrame, ch + 2 * kFrame + kTitleH);
-}
-
 U32 ModifierState(const ui::Key& key) {
   // The effective modifier mask (low 8 bits, same order as the X core state) plus the active
   // group in bits 13-14, which is what a client reads with XkbGroupForCoreState.
@@ -3014,41 +3004,10 @@ X11Window::~X11Window() {
 #endif
 }
 
-void X11Window::SerializeState(ObjectSerializer& writer) const {
-  auto lock = std::lock_guard(mutex);
-  if (!recipe.empty()) {
-    writer.Key("recipe");
-    writer.StartArray();
-    for (auto& w : recipe)
-      if (!w.empty()) writer.String(w.data(), w.size());
-    writer.EndArray();
-  }
-  if (!title.empty()) {
-    writer.Key("title");
-    writer.String(title.data(), title.size());
-  }
-  SerializeDecoration(writer);
-}
-bool X11Window::DeserializeKey(ObjectDeserializer& d, StrView key) {
-  Status status;
-  auto lock = std::lock_guard(mutex);
-  if (key == "recipe") {
-    recipe.clear();
-    for (auto i : ArrayView(d, status)) {
-      (void)i;
-      Str word;
-      d.Get(word, status);
-      if (OK(status)) recipe.push_back(std::move(word));
-    }
-    client_gone = true;
-    pending_respawn = !recipe.empty();
-    return true;
-  }
-  if (key == "title") {
-    d.Get(title, status);
-    return true;
-  }
-  return DeserializeDecoration(d, key);
+Ptr<Object> X11Window::Clone() const {
+  auto win = MAKE_PTR(X11Window, *this);
+  LaunchClone(*this, *win);
+  return win;
 }
 
 void X11Window::DecorationPreferenceChanged() { WakeToys(); }
@@ -3301,10 +3260,11 @@ Str SocketName() {
   return f(":{}", server->display_number);
 #endif
 }
-void UIFrame() {
+void Tick() {
   if (!server) return;
   Server& s = *server;
-  Vec<Ptr<X11Window>> appeared, disappeared;
+  Vec<std::pair<Ptr<X11Window>, Ptr<Launch>>> appeared;
+  Vec<Ptr<X11Window>> disappeared;
   Vec<WeakPtr<X11Window>> move_requests;
   {
     auto lock = std::lock_guard(s.ui_mutex);
@@ -3316,89 +3276,25 @@ void UIFrame() {
     if (auto win = weak.Lock()) StartClientMove(*win);
   }
   static int spawn_count = 0;
-  for (auto& w : appeared) {
+  for (auto& [w, launch] : appeared) {
     auto& win = *w;
-    Location* command_location = nullptr;
-    library::Command* command = nullptr;
-    SkISize win_size = {};
-    I64 cpid;
-    {
-      auto lock = std::lock_guard(win.mutex);
-      cpid = win.client_pid;
-      win_size = win.content_size;
+    Ptr<Object> source = launch ? launch->source.Lock() : nullptr;
+    Location* source_location = source ? source->MyLocation() : nullptr;
+    if (source && !win.launcher->IsConnected()) {
+      win.launcher->Connect(Interface(source.get(), nullptr));
     }
-    if (cpid) {
-      auto vm_lock = std::lock_guard(vm.mutex);
-      for (auto& board : vm.boards) {
-        for (auto& loc : board->locations) {
-          auto* cmd = dynamic_cast<library::Command*>(loc->object.get());
-          if (!cmd) continue;
-          auto cmd_lock = std::lock_guard(cmd->mutex);
-          if (cmd->child_pid == cpid) {
-            auto lock = std::lock_guard(win.mutex);
-            win.recipe = cmd->argv;
-            command_location = loc.get();
-            command = cmd;
-            break;
-          }
-        }
-        if (command) break;
-      }
-    }
-    if (command && !win.launcher->IsConnected()) win.launcher->Connect(Interface(command, nullptr));
-    Board* board = command_location ? command_location->LockBoard().get() : nullptr;
+    Board* board = source_location ? source_location->LockBoard().get() : nullptr;
     if (!board) board = &DefaultBoard();
     auto& loc = board->CreateEmpty();
-    int n = spawn_count++;
-    if (command_location) {
-      Vec2 plate = library::CommandPlateSize();
-      Vec2 size = library::WindowBoardSize(win_size.width(), win_size.height());
-      loc.placement = Location::Direct{command_location->PeekPosition() +
-                                       Vec2(plate.x / 2 + 0.008f + size.x / 2 + 0.006f * (n % 3),
-                                            plate.y / 2 - size.y / 2 - 0.012f * (n % 3))};
+    if (source_location) {
+      loc.placement = Location::PlaceBeside{source_location->AcquireWeakPtr()};
     } else {
+      int n = spawn_count++;
       loc.placement = Location::Direct{Vec2(0.01f * (n % 3), -0.02f * (n % 5))};
     }
     loc.InsertHere(std::move(w));
     board->WakeToys();
     vm.WakeToys();
-  }
-  {
-    auto vm_lock = std::lock_guard(vm.mutex);
-    for (auto& board : vm.boards) {
-      for (auto& loc : board->locations) {
-        auto* win = dynamic_cast<X11Window*>(loc->object.get());
-        if (!win) continue;
-        Vec<Str> recipe;
-        {
-          auto lock = std::lock_guard(win->mutex);
-          if (!win->pending_respawn) continue;
-          win->pending_respawn = false;
-          recipe = win->recipe;
-        }
-        if (recipe.empty()) continue;
-        I64 pid = 0;
-        Status status;
-        auto found = win->launcher->Find();
-        if (auto* cmd = dynamic_cast<library::Command*>(found.Owner<Object>())) {
-          pid = cmd->AdoptiveLaunch(status);
-          if (!pid) status.Reset();
-        }
-        if (!pid) pid = library::SpawnArgv(recipe, status);
-        if (!pid) {
-          win->ReportError(status.ToStr());
-          continue;
-        }
-        {
-          auto lock = std::lock_guard(win->mutex);
-          win->client_pid = pid;
-        }
-        {
-          auto lock = std::lock_guard(s.adoption_mutex);
-          s.adoptions.emplace_back(pid, win->AcquireWeakPtr());
-        }
-      }
-    }
   }
   for (auto& w : disappeared) {
     auto vm_lock = std::lock_guard(vm.mutex);

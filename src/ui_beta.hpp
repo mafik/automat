@@ -255,7 +255,7 @@ struct ObjectToy : automat::ObjectToy {
 };
 
 // The run button of beta-styled objects: a hand-drawn disc with a play
-// triangle. It seats ITSELF at its parent's lower center with a slight
+// triangle. It places ITSELF at its parent's lower center with a slight
 // overhang past the border - the spot that matches the "next" connector -
 // so objects never position it manually. While `running` it shows a stop
 // square on red; while not `enabled` it grays out and ignores clicks.

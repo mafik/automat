@@ -292,14 +292,17 @@ struct Widget : OptionsProvider {
 
   // Each Widget has a shape that defines its region of reactivity, in local coordinates.
   virtual SkPath Shape() const = 0;
+  // Computes the union of all the childrens' shapes.
+  virtual SkPath SubtreeShape() const;
+  // If the object should be cached into a texture, return its bounds in local coordinates.
+  virtual Optional<Rect> DrawBounds() const { return shape.getBounds(); }
+  // Computes the region containing all of the textures of this widgets' children.
+  virtual Optional<Rect> SubtreeDrawBounds() const;
 
-  SkPath shape;          // Cached result of the last `Shape()` call.
-  SkPath subtree_shape;  // Union of `shape` and every child's `subtree_shape`
-
-  Optional<Rect> draw_bounds;
-  Rect subtree_draw_bounds;
-
-  void RecomputeSubtreeShape();
+  SkPath shape;                        // Cached & auto-updated result of `Shape()`.
+  SkPath subtree_shape;                // Cached & auto-updated result of `SubtreeShape()`.
+  Optional<Rect> draw_bounds;          // Cached & auto-updated result of `DrawBounds()`.
+  Optional<Rect> subtree_draw_bounds;  // Cached & auto-updated result of `SubtreeDrawBounds()`.
 
   // Can be overridden to provide a more efficient alternative to `shape.getBounds()`.
   // Local (metric) coordinates.
@@ -357,9 +360,6 @@ struct Widget : OptionsProvider {
   void Reparent(Widget& new_parent);
 
   virtual DropTarget* AsDropTarget() { return nullptr; }
-
-  // If the object should be cached into a texture, return its bounds in local coordinates.
-  virtual Optional<Rect> DrawBounds() const { return shape.getBounds(); }
 
   virtual Rect CoverBounds() const {
     return draw_bounds.has_value() ? *draw_bounds : CoarseBounds().rect;
@@ -524,10 +524,6 @@ struct Widget : OptionsProvider {
   };
 
   ParentsView Parents() const { return ParentsView{const_cast<Widget*>(this)}; }
-
-  // Checks if the two widgets intersect (their shapes). This is accurate but also very slow so
-  // avoid it if possible.
-  static bool Intersects(const Widget& a, const Widget& b);
 };
 
 using Tock = Widget::Tock;

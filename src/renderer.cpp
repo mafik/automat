@@ -959,10 +959,13 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       node.pack_frame_texture_anchors = node.widget->TextureAnchors();
     }
 
-    // Update `subtree_shape`.
+    // Update `subtree_shape` and `subtree_draw_bounds`.
     for (int i = (int)tree.size() - 1; i >= 0; --i) {
-      if (tree[i].widget->subtree_shape_invalid) {
-        tree[i].widget->RecomputeSubtreeShape();
+      Widget* widget = tree[i].widget;
+      if (widget->subtree_shape_invalid) {
+        widget->subtree_shape = widget->SubtreeShape();
+        widget->subtree_draw_bounds = widget->SubtreeDrawBounds();
+        widget->subtree_shape_invalid = false;
         tree[tree[i].parent].widget->subtree_shape_invalid = true;
       }
     }

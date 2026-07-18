@@ -455,8 +455,7 @@ float ObjectToy::GetBaseScale() const {
 
 void ObjectToy::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
   // By default just one position on the top of the bounding box.
-  auto shape = Shape();
-  Rect bounds = shape.getBounds();
+  Rect bounds = CoarseBounds().rect;
   out_positions.push_back(Vec2AndDir{
       .pos = bounds.TopCenter(),
       .dir = -90_deg,
@@ -472,8 +471,7 @@ void ObjectToy::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
 }
 
 Vec2AndDir ObjectToy::ArgStart(const Interface::Table& arg) {
-  SkPath shape = Shape();
-  Rect bounds = shape.getBounds();
+  Rect bounds = CoarseBounds().rect;
   Vec2AndDir pos_dir{
       .pos = bounds.BottomCenter(),
       .dir = -90_deg,

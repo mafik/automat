@@ -88,6 +88,7 @@ struct BoardWidget : ObjectToy, ui::DropTarget {
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
+  SkPath SubtreeShape() const override;
   Compositor GetCompositor() const override { return Compositor::QUANTUM_REALM; }
   void VisitOptions(const OptionsVisitor&) const override;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;

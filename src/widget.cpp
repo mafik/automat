@@ -362,41 +362,53 @@ void Widget::ValidateHierarchy(std::source_location location) {
   }
 }
 
-void Widget::RecomputeSubtreeShape() {
+SkPath Widget::SubtreeShape() const {
+  Widget* only_child = nullptr;
+  int child_count = 0;
+  for (int i = 0; i < layers.size();) {
+    only_child = layers[i];
+    ++child_count;
+    if (++i == layers.bake_begin) i = layers.bake_end;  // advance skipping baked children
+  }
+  if (child_count == 0) return shape;
+  if (child_count == 1 && shape.isEmpty()) {
+    if (only_child->local_to_parent == SkM44()) return only_child->subtree_shape;
+    SkPath transformed =
+        only_child->subtree_shape.makeTransform(only_child->local_to_parent.asM33());
+    transformed.setIsVolatile(true);
+    return transformed;
+  }
   SkOpBuilder builder;
   builder.add(shape, kUnion_SkPathOp);
+  for (int i = 0; i < layers.size();) {
+    auto* child = layers[i];
+    builder.add(child->subtree_shape.makeTransform(child->local_to_parent.asM33()),
+                kUnion_SkPathOp);
+    if (++i == layers.bake_begin) i = layers.bake_end;
+  }
+  if (auto resolved = builder.resolve()) {
+    resolved->setIsVolatile(true);
+    return std::move(*resolved);
+  }
+  return shape;
+}
+
+Optional<Rect> Widget::SubtreeDrawBounds() const {
   Optional<Rect> bounds = draw_bounds;
   for (int i = 0; i < layers.size();) {
     auto* child = layers[i];
-    SkPath child_shape = child->subtree_shape.makeTransform(child->local_to_parent.asM33());
-    builder.add(child_shape, kUnion_SkPathOp);
-    if (!child->subtree_draw_bounds.sk.isEmpty()) {
+    if (child->subtree_draw_bounds && !child->subtree_draw_bounds->sk.isEmpty()) {
       Rect child_bounds;
-      child->local_to_parent.asM33().mapRect(&child_bounds.sk, child->subtree_draw_bounds.sk);
+      child->local_to_parent.asM33().mapRect(&child_bounds.sk, child->subtree_draw_bounds->sk);
       if (bounds.has_value()) {
         bounds->ExpandToInclude(child_bounds);
       } else {
         bounds = child_bounds;
       }
     }
-    if (++i == layers.bake_begin) i = layers.bake_end;  // advance skipping baked children
+    if (++i == layers.bake_begin) i = layers.bake_end;
   }
-  subtree_draw_bounds = bounds.value_or(Rect{});
-  if (auto new_subtree_shape = builder.resolve()) {
-    subtree_shape = std::move(*new_subtree_shape);
-    subtree_shape.setIsVolatile(true);
-  } else {
-    subtree_shape = shape;
-  }
-  subtree_shape_invalid = false;
-}
-
-bool Widget::Intersects(const Widget& a, const Widget& b) {
-  SkPath a_shape = a.subtree_shape.makeTransform(TransformBetween(a, b));
-  SkPath b_shape = b.subtree_shape;
-  SkPath intersection;
-  bool result = Op(a_shape, b_shape, kIntersect_SkPathOp, &intersection);
-  return result && intersection.countVerbs() > 0;
+  return bounds;
 }
 
 RootWidget& Widget::FindRootWidget() const {

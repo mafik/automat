@@ -162,6 +162,8 @@ BoardWidget* BoardOrNull(const ui::Widget& widget) {
 
 SkPath BoardWidget::Shape() const { return SkPath::Rect(Rect::MakeCenterZero(100_cm, 100_cm)); }
 
+SkPath BoardWidget::SubtreeShape() const { return shape; }
+
 // Turns the background green - to make it easier to isolate elements of Automat in screenshots.
 constexpr bool kGreenScreen = false;
 
@@ -298,8 +300,8 @@ void BoardWidget::RebuildOverlaps(Board& board) {
   }
   for (int i = 0; i < n; ++i) {
     Optional<Rect> bounds;
-    if (!lws[i]->subtree_draw_bounds.sk.isEmpty()) {
-      bounds = lws[i]->subtree_draw_bounds;
+    if (lws[i]->subtree_draw_bounds && !lws[i]->subtree_draw_bounds->sk.isEmpty()) {
+      bounds = *lws[i]->subtree_draw_bounds;
     }
     for (LocationWidget& above : lws[i]->overlapping_above) {
       if (above.stack_draw_bounds.sk.isEmpty()) continue;

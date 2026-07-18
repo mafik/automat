@@ -75,7 +75,7 @@ struct Pointer {
   void ButtonDown(PointerButton);
   void ButtonUp(PointerButton);
 
-  Widget* GetWidget();
+  PointerWidget* GetWidget();
 
   enum IconType {
     kIconArrow,
@@ -180,6 +180,15 @@ struct PointerWidget : Widget {
   Pointer& pointer;
   PointerWidget(Widget* parent, Pointer& pointer) : Widget(parent), pointer(pointer) {}
   SkPath Shape() const override { return SkPath(); }
+
+  // Holds Widgets while they disappear.
+  Vec<std::unique_ptr<Toy>> zombie_toys;
+  void AdoptZombie(std::unique_ptr<Toy>&& toy) {
+    if (toy) {
+      toy->WakeAnimation();
+      zombie_toys.push_back(std::move(toy));
+    }
+  }
 
   struct HighlightState {
     ObjectToy* widget;

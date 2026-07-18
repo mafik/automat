@@ -70,13 +70,6 @@ struct RootWidget final : Widget {
   struct ToyStore toys;
   MortalList<Action> active_actions;
 
-  // Widgets that outlived their owners (deleted drags) finishing their disappearance
-  // animations. Swept in Tick once they mark themselves dead.
-  Vec<std::unique_ptr<Toy>> zombie_toys;
-  void AdoptZombie(std::unique_ptr<Toy>&& toy) {
-    if (toy) zombie_toys.push_back(std::move(toy));
-  }
-
   std::string_view Name() const override { return "RootWidget"; }
 
   // Wake-counter polling: wakes every toy whose object has updated state. Runs once per frame

@@ -411,7 +411,7 @@ DragLocationAction::~DragLocationAction() {
         auto& location = locations[i];
         SettleAnchor(*location);
         if (i < held_widgets.size() && held_widgets[i]) {
-          root.AdoptZombie(std::move(held_widgets[i]));
+          if (auto* pw = pointer.GetWidget()) pw->AdoptZombie(std::move(held_widgets[i]));
         }
         drop_target->DropLocation(std::move(location));
       }

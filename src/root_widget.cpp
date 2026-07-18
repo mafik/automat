@@ -98,7 +98,9 @@ void RenderThread(RootWidget& rw, std::stop_token stop_token) {
     if (rw.minimized.Get()) {
       {
         ZoneScopedN("ReleaseGpuResources");
-        rw.zombie_toys.clear();
+        for (Pointer& p : rw.pointers) {
+          if (auto* pw = p.GetWidget()) pw->zombie_toys.clear();
+        }
         rw.toys.container.clear();
         rw.toolbar.reset();
         rw.sk_drawable.reset();
@@ -440,8 +442,6 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
       below = &board_widget;
     }
   }
-
-  std::erase_if(zombie_toys, [](const std::unique_ptr<Toy>& toy) { return toy->dead; });
 
   return tock;
 }

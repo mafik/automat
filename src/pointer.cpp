@@ -299,7 +299,7 @@ PointerGrab& Pointer::RequestGlobalGrab(PointerGrabber& grabber) {
   return *grab;
 }
 
-Widget* Pointer::GetWidget() { return pointer_widget.get(); }
+PointerWidget* Pointer::GetWidget() { return pointer_widget.get(); }
 
 void Pointer::Logging::Release() {
   auto& window = *pointer.root_widget.window;
@@ -308,6 +308,8 @@ void Pointer::Logging::Release() {
 }
 
 ui::Tock PointerWidget::Tick(time::Timer& timer) {
+  std::erase_if(zombie_toys, [](const std::unique_ptr<Toy>& toy) { return toy->dead; });
+
   for (auto& action : pointer.actions) {
     if (action == nullptr) continue;
     if (auto widget = action->Widget()) {

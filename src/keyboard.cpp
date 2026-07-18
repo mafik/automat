@@ -86,9 +86,7 @@ void Caret::Release() {
 
 SkPath Caret::MakeRootShape() const {
   if (!owner) return shape;
-  SkMatrix text_to_canvas =
-      SkMatrix::Concat(owner->FindRootWidget().WindowToCanvas(), TransformUp(*owner));
-  return shape.makeTransform(text_to_canvas);
+  return shape.makeTransform(TransformBetween(*owner, keyboard));
 }
 
 // Called by objects that want to grab all keyboard events in the system.

@@ -18,7 +18,8 @@
 #include "library_mouse.hpp"
 #include "library_number.hpp"
 #include "library_sources.hpp"
-#include "library_tensorflow.hpp"
+// TODO: re-enable TensorFlow once the embedded library stops costing ~400 MB
+// #include "library_tensorflow.hpp"
 #include "library_tesseract_ocr.hpp"
 #include "library_timeline.hpp"
 #include "library_timer.hpp"
@@ -108,8 +109,8 @@ PrototypeLibrary::PrototypeLibrary() {
     index.Register<GeglOperation, HideInToolbar>(op.name);
   }
   index.Register<GeglShelf, HideInToolbar>();
-  index.Register<TfTensor, HideInToolbar>();
-  index.Register<TfOp, HideInToolbar>("Square");
+  // index.Register<TfTensor, HideInToolbar>();
+  // index.Register<TfOp, HideInToolbar>("Square");
 #if defined(__linux__)
   index.Register<WaylandWindow, HideInToolbar>();
   index.Register<PipeWireNode, HideInToolbar>();

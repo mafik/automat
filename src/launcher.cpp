@@ -34,8 +34,11 @@
 #include "sincos.hpp"
 #include "ui_beta.hpp"
 #include "vm.hpp"
-#include "wayland.hpp"
 #include "x11.hpp"
+
+#if !defined(_WIN32)
+#include "wayland.hpp"
+#endif
 
 extern char** environ;
 

@@ -23,6 +23,10 @@ PYTHON3_BIN_RELDIR = ROOT / 'python3_bin_reldir.txt'
 
 build.ExpandEnv('PATH', str(ROOT), prepend=True)
 
+# cipd and vpython default their caches to the home directory.
+os.environ.setdefault('CIPD_CACHE_DIR', str(fs_utils.build_dir / 'cipd_cache'))
+os.environ.setdefault('VPYTHON_VIRTUALENV_ROOT', str(fs_utils.build_dir / 'vpython_root'))
+
 def hook_recipe(recipe):
   recipe.add_step(
     git.clone('https://chromium.googlesource.com/chromium/tools/depot_tools.git', ROOT, 'main'),

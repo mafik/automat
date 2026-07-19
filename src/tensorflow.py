@@ -11,9 +11,11 @@
 # its registrars when both halves load), and keeps TF's bundled LLVM and MLIR
 # inside it, where they cannot collide with Automat's own LLVM.
 #
-# The library installs under PREFIX/share; src/tensorflow_runtime.cpp #embeds
-# it and loads it on first use - memfd + dlopen on Linux, an extract-once
-# cache file + LoadLibrary on Windows. Automat calls the TensorFlow C++ API
+# The library installs under build/tensorflow, shared by all variants: it is
+# always built -c opt and loaded dynamically, so the variant's flags do not
+# apply to it. src/tensorflow_runtime.cpp #embeds it and loads it on first
+# use - memfd + dlopen on Linux, an extract-once cache file + LoadLibrary on
+# Windows. Automat calls the TensorFlow C++ API
 # directly, and the calls reach the loaded copy late-bound: on Linux through
 # the dlsym trampolines in tensorflow_trampolines.cpp (automat does not link
 # the library at all), on Windows through /DELAYLOAD thunks resolved by the
@@ -39,9 +41,13 @@ import src
 llvm = src.load_extension('llvm')
 
 CHECKOUT = fs_utils.third_party_dir / 'TensorFlow'
-# Kept in the home directory: warm across variants, and bazel fsyncs while
-# extracting repositories, which network filesystems may reject.
-BAZEL_ROOT = Path.home() / 'bazel_root'
+# Shared between variants. bazel fsyncs while extracting repositories, so a
+# checkout on a network filesystem would need this pointed at a local disk.
+BAZEL_ROOT = fs_utils.build_dir / 'bazel_root'
+BAZELISK_DIR = fs_utils.third_party_dir / 'bazelisk'
+REPOSITORY_CACHE = fs_utils.third_party_dir / 'bazel_repository_cache'
+INSTALL_DIR = fs_utils.build_dir / 'tensorflow'
+BAZELISK_VERSION = '1.27.0'
 VERSION = '2.20.0'
 
 # TensorFlow's .bazelrc turns on the pywrap (python wheel) packaging mode,
@@ -55,10 +61,8 @@ if platform == 'win32':
   import sys
   from glob import glob
 
-  BAZELISK_URL = 'https://github.com/bazelbuild/bazelisk/releases/download/v1.27.0/bazelisk-windows-amd64.exe'
-  BAZELISK = BAZEL_ROOT / 'bazelisk.exe'
-  # A short output root keeps generated paths under the 260-char MAX_PATH.
-  OUTPUT_USER_ROOT = Path('C:/b')
+  BAZELISK_URL = f'https://github.com/bazelbuild/bazelisk/releases/download/v{BAZELISK_VERSION}/bazelisk-windows-amd64.exe'
+  BAZELISK = BAZELISK_DIR / f'bazelisk-{BAZELISK_VERSION}.exe'
 
   def BazelJobs():
     # The biggest kernel TUs peak around 2 GiB each under clang-cl, so the
@@ -125,8 +129,8 @@ if platform == 'win32':
   BAZEL_TARGETS = ['//tensorflow:tensorflow.dll', '//tensorflow:tensorflow_dll_import_lib']
   BUILT = [CHECKOUT / 'bazel-bin' / 'tensorflow' / 'tensorflow.dll',
            CHECKOUT / 'bazel-bin' / 'tensorflow' / 'tensorflow.lib']
-  INSTALLED_LIB = build.PREFIX / 'share' / 'tensorflow.dll'
-  INSTALLED_IMPLIB = build.PREFIX / 'lib64' / 'tensorflow.lib'
+  INSTALLED_LIB = INSTALL_DIR / 'tensorflow.dll'
+  INSTALLED_IMPLIB = INSTALL_DIR / 'tensorflow.lib'
   INSTALLED = [INSTALLED_LIB, INSTALLED_IMPLIB]
   BAZEL_EXTRA_INPUTS = []
 
@@ -160,12 +164,13 @@ if platform == 'win32':
   def Install():
     for built, installed in zip(BUILT, INSTALLED):
       installed.parent.mkdir(parents=True, exist_ok=True)
-      shutil.copyfile(built, installed)
+      tmp = installed.parent / (installed.name + '.tmp')
+      shutil.copyfile(built, tmp)
+      tmp.replace(installed)
 
 else:
-  BAZELISK_URL = 'https://github.com/bazelbuild/bazelisk/releases/download/v1.27.0/bazelisk-linux-amd64'
-  BAZELISK = BAZEL_ROOT / 'bazelisk'
-  OUTPUT_USER_ROOT = BAZEL_ROOT
+  BAZELISK_URL = f'https://github.com/bazelbuild/bazelisk/releases/download/v{BAZELISK_VERSION}/bazelisk-linux-amd64'
+  BAZELISK = BAZELISK_DIR / f'bazelisk-{BAZELISK_VERSION}'
 
   def BazelJobs():
     # The biggest MLIR TUs peak around 3 GiB each, so the bazel default of one
@@ -192,7 +197,7 @@ else:
 
   BAZEL_TARGETS = [f'//tensorflow:libtensorflow.so.{VERSION}']
   BUILT = [CHECKOUT / 'bazel-bin' / 'tensorflow' / f'libtensorflow.so.{VERSION}']
-  INSTALLED_LIB = build.PREFIX / 'share' / 'libtensorflow.so'
+  INSTALLED_LIB = INSTALL_DIR / 'libtensorflow.so'
   INSTALLED = [INSTALLED_LIB]
   BAZEL_EXTRA_INPUTS = [EXPORTS_LDS]
 
@@ -205,13 +210,15 @@ else:
   def Install():
     # Strip the symbol table; the dynamic section, including the C++ exports
     # EXPORTS_LDS added, survives. It more than halves what #embed carries.
+    # Write-and-rename: the shared destination must never hold a torn file.
     INSTALLED_LIB.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run([build.PREFIX / 'bin' / 'llvm-strip', '--strip-all', '-o', INSTALLED_LIB,
+    tmp = INSTALLED_LIB.parent / (INSTALLED_LIB.name + '.tmp')
+    subprocess.run([build.PREFIX / 'bin' / 'llvm-strip', '--strip-all', '-o', tmp,
                     BUILT[0]], check=True)
+    tmp.replace(INSTALLED_LIB)
 
 
 def FetchBazelisk():
-  BAZEL_ROOT.mkdir(parents=True, exist_ok=True)
   extension_helper.download_from_url(BAZELISK_URL, BAZELISK)
   if platform != 'win32':
     BAZELISK.chmod(0o755)
@@ -219,10 +226,13 @@ def FetchBazelisk():
 
 def BazelBuild():
   env = BazelEnv()
+  env['BAZELISK_HOME'] = str(BAZELISK_DIR)
+  env['PIP_CACHE_DIR'] = str(BAZEL_ROOT / 'pip_cache')
   if platform == 'win32':
     WriteDefFileFilterRepo()
   return make.Popen(
-    [BAZELISK, f'--output_user_root={OUTPUT_USER_ROOT}', 'build'] + BAZEL_FLAGS + BAZEL_TARGETS,
+    [BAZELISK, f'--output_user_root={BAZEL_ROOT}', 'build',
+     f'--repository_cache={REPOSITORY_CACHE}'] + BAZEL_FLAGS + BAZEL_TARGETS,
     env=env, cwd=CHECKOUT)
 
 

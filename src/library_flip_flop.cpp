@@ -7,6 +7,8 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkPaint.h>
+#include <include/core/SkPathBuilder.h>
+#include <include/core/SkPathTypes.h>
 #include <include/core/SkShader.h>
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkGradient.h>
@@ -92,29 +94,36 @@ struct FlipFlopWidget : ObjectToy {
     return tock;
   }
 
-  void Draw(SkCanvas& canvas) const override {
-    SkPaint border_paint;
-    SetRRectShader(border_paint, kBounds, kBorderLight, kBorderSide, kBorderDark);
-    canvas.drawRRect(kBounds, border_paint);
+  static inline RasterPatch bg_patch;
+  static inline RasterPatch light_off_patch;
+  static inline RasterPatch light_on_patch;
+  static inline RasterPatch light_glow_patch;
 
+  void Draw(SkCanvas& canvas) const override {
     auto& flat = kFlatRRect.rect;
+    SkPoint light_center = {0, (flat.top + kSocketRRect.rect.top) / 2};
+    float light_radius = 2_mm;
+
     SkPaint flat_paint;
     SkPoint flat_pts[] = {flat.TopCenter(), flat.BottomCenter()};
     SkColor4f flat_colors[] = {kBgLight, kBgDark};
     flat_paint.setShader(SkShaders::LinearGradient(
         flat_pts, SkGradient{SkGradient::Colors{flat_colors, SkTileMode::kClamp}, {}}));
+    canvas.drawRect(kSocketRRect.rect, flat_paint);
 
-    flat_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 1_mm));
-    canvas.drawRRect(kFlatRRect, flat_paint);
+    bg_patch.DrawCached(canvas, kBounds.rect, SkISize(18, 30), [&](SkCanvas& canvas) {
+      SkPaint border_paint;
+      SetRRectShader(border_paint, kBounds, kBorderLight, kBorderSide, kBorderDark);
+      canvas.drawPaint(border_paint);
 
-    SkPaint socket_paint;
-    SetRRectShader(socket_paint, kSocketRRect, kBorderLight, kBorderSide, kBorderDark);
-    socket_paint.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, 2_mm));
-    canvas.drawRRect(kSocketRRect, socket_paint);
+      SkPaint blurry_flat_paint = flat_paint;
+      blurry_flat_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 1_mm));
+      canvas.drawRRect(kFlatRRect, blurry_flat_paint);
 
-    {  // Red indicator light
-      SkPoint center = {0, (flat.top + kSocketRRect.rect.top) / 2};
-      float radius = 2_mm;
+      SkPaint socket_paint;
+      SetRRectShader(socket_paint, kSocketRRect, kBorderLight, kBorderSide, kBorderDark);
+      socket_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 2_mm));
+      canvas.drawRRect(kSocketRRect, socket_paint);
 
       SkPaint inset_paint;
       SkColor4f inset_colors[] = {
@@ -122,38 +131,70 @@ struct FlipFlopWidget : ObjectToy {
           kBorderLight, kBorderLight, kBorderSide,
       };
       inset_paint.setShader(SkShaders::SweepGradient(
-          center, SkGradient{SkGradient::Colors{inset_colors, SkTileMode::kClamp}, {}}));
-      inset_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, radius));
-      canvas.drawCircle(center, radius * 1.5, inset_paint);
+          light_center, SkGradient{SkGradient::Colors{inset_colors, SkTileMode::kClamp}, {}}));
+      inset_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, light_radius));
+      canvas.drawCircle(light_center, light_radius * 1.5, inset_paint);
 
-      float a = light;
+      SkPathBuilder clip_builder(shape);
+      clip_builder.addRRect(kSocketRRect);
+      clip_builder.setFillType(SkPathFillType::kEvenOdd);
+
+      return clip_builder.detach();
+    });
+
+    auto FillLight = [&](SkCanvas& canvas, float a) {
       SkColor4f gradient_colors[] = {color::MixColors("#725016"_color4f, "#ff8786"_color4f, a),
                                      color::MixColors("#2b1e07"_color4f, "#ff3e3e"_color4f, a)};
       SkPaint gradient;
       gradient.setShader(SkShaders::RadialGradient(
-          center + SkPoint(0, radius * 0.25), radius,
+          light_center + SkPoint(0, light_radius * 0.25), light_radius,
           SkGradient{SkGradient::Colors{gradient_colors, SkTileMode::kClamp}, {}}));
-      canvas.drawCircle(center, radius, gradient);
+      canvas.drawPaint(gradient);
 
       SkPaint shine;
       SkColor4f shine_colors[] = {color::MixColors("#d2b788ff"_color4f, "#ffe8e8ff"_color4f, a),
                                   color::MixColors("#d2b78800"_color4f, "#ffe8e800"_color4f, a),
                                   color::MixColors("#d2b788ff"_color4f, "#ffe8e8ff"_color4f, a)};
-      SkPoint shine_pts[] = {center + SkPoint{0, radius}, center - SkPoint{0, radius}};
+      SkPoint shine_pts[] = {light_center + SkPoint{0, light_radius},
+                             light_center - SkPoint{0, light_radius}};
       shine.setShader(SkShaders::LinearGradient(
           shine_pts, SkGradient{SkGradient::Colors{shine_colors, SkTileMode::kClamp}, {}}));
       shine.setStyle(SkPaint::kStroke_Style);
-      shine.setStrokeWidth(radius / 9);
-      shine.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, radius / 10));
-      canvas.drawCircle(center, radius * 0.8, shine);
+      shine.setStrokeWidth(light_radius / 9);
+      shine.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, light_radius / 10));
+      canvas.drawCircle(light_center, light_radius * 0.8, shine);
+    };
 
-      SkPaint red_glow;
-      red_glow.setColor("#ff3e3e"_color);
-      red_glow.setAlphaf(a);
-      red_glow.setBlendMode(SkBlendMode::kHardLight);
-      red_glow.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, radius));
-      canvas.drawCircle(center, radius, red_glow);
-    }
+    light_off_patch.DrawCached(
+        canvas, Rect::MakeCenter(light_center, light_radius * 2, light_radius * 2), SkISize(32, 32),
+        [&](SkCanvas& canvas) {
+          FillLight(canvas, 0);
+          return SkPath::Circle(light_center.x(), light_center.y(), light_radius);
+        });
+
+    SkPaint light_on_paint;
+    light_on_paint.setAlphaf(light);
+    light_on_patch.DrawCached(
+        canvas, Rect::MakeCenter(light_center, light_radius * 2, light_radius * 2), SkISize(24, 24),
+        [&](SkCanvas& canvas) {
+          FillLight(canvas, 1);
+          return SkPath::Circle(light_center.x(), light_center.y(), light_radius);
+        },
+        &light_on_paint);
+
+    SkPaint light_glow_paint = light_on_paint;
+    light_glow_paint.setBlendMode(SkBlendMode::kHardLight);
+    light_glow_patch.DrawCached(
+        canvas, Rect::MakeCenter(light_center, light_radius * 6, light_radius * 6), SkISize(15, 15),
+        [&](SkCanvas& canvas) {
+          SkPaint red_glow;
+          red_glow.setColor("#ff3e3e"_color);
+          red_glow.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, light_radius));
+          canvas.drawCircle(light_center, light_radius * 1.5, red_glow);
+          return SkPath();
+        },
+        &light_on_paint);
+
     static auto font = ui::Font::MakeV2(ui::Font::GetHelsinki(), 4_mm);
     SkPaint label_paint;
     label_paint.setColor(SK_ColorWHITE);

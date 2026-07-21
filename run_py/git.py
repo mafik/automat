@@ -17,11 +17,13 @@ if __name__ == '__main__':
   out_directory = Path(out_directory)
 
   if out_directory.exists():
-    subprocess.run(['git',
+    # --git-dir pins git to the checkout itself. Without it, a checkout with a broken .git
+    # (left by an interrupted clone) makes git walk up and fetch+reset the enclosing Automat repo.
+    subprocess.run(['git', '--git-dir=.git',
       '-c', 'advice.detachedHead=false',
       '-c', 'core.autocrlf=false',
       'fetch', '--depth', '1', url, tag], cwd=out_directory, check=True)
-    subprocess.run(['git', 'reset', '--hard', 'FETCH_HEAD'], cwd=out_directory, check=True)
+    subprocess.run(['git', '--git-dir=.git', 'reset', '--hard', 'FETCH_HEAD'], cwd=out_directory, check=True)
     for marker in glob.glob('*.marker', root_dir = out_directory):
       os.unlink(out_directory / marker)
     os.utime(out_directory, None)  # bump mtime so make.py sees the update

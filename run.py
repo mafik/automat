@@ -10,6 +10,7 @@ from pathlib import Path
 
 base_dir = Path(__file__).parent
 os.environ.setdefault('PYTHONHASHSEED', '0')
+os.environ.setdefault('PYTHONUTF8', '1') # may be removed once we all migrate to 3.15+
 exit_code = 0
 try:
   completed_process = run([sys.executable, str(base_dir / 'run_py')] + sys.argv[1:], cwd=base_dir)

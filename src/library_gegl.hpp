@@ -30,7 +30,7 @@ struct GeglOpInfo {
 };
 
 // Every operation compiled into the static bundle, minus the ones the
-// library itself marks "hidden". Initializes GEGL.
+// library marks "hidden". Initializes GEGL.
 Vec<GeglOpInfo> ListGeglOperations();
 
 // A GEGL operation as a board block, living in Automat's one hidden GEGL
@@ -39,7 +39,7 @@ Vec<GeglOpInfo> ListGeglOperations();
 // lazy: connections and property changes are legal at any time and only
 // invalidate regions; a per-block GeglProcessor then recomputes the preview
 // in chunks on a worker thread, each finished region repainting its part of
-// the face as it lands - the repaint is the computation becoming visible.
+// the face as it lands.
 // GEGL's caches make the shared upstream work cheap for every downstream
 // preview.
 //
@@ -131,14 +131,14 @@ struct GeglOperation : Object {
   // and from connection changes.
   void SyncSources();
 
-  // The link oracle: GEGL edges stay between GEGL blocks (the Image/Result
+  // Link validity: GEGL edges stay between GEGL blocks (the Image/Result
   // bridges cross libraries), and a cycle would never converge.
   void CanFeedGegl(StreamArgument self, Interface end, Status& status);
   void OnOutConnect(StreamArgument self, Interface end);
 };
 
 // The GEGL shelf: every compiled-in operation as a clone pile, grouped by
-// the library's own categories key.
+// the library's categories key.
 struct GeglShelf : Object {
   StrView Name() const override { return "GEGL"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(GeglShelf); }

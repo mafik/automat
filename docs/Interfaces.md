@@ -1,6 +1,6 @@
 # Interfaces
 
-Most objects in Automat are snowflakes that hold bespoke data and behave according to their own rules. In order for them to interact with each other, Automat relies on its own kind of interfaces. Unlike language-level interfaces, Automat's interfaces are dynamic & introspectable. They store the vtable pointer as part of the "pointer-to-interface", rather than as part of the object itself.
+Most objects in Automat hold bespoke data and behave according to their own rules. In order for them to interact with each other, Automat relies on its own kind of interfaces. Unlike language-level interfaces, Automat's interfaces are dynamic & introspectable. They store the vtable pointer as part of the "pointer-to-interface", rather than as part of the object itself.
 
 This means that even if some object implements hundreds of interfaces, its size will stay constant (downside is that each pointer to such interface occupies 16, rather than 8 bytes).
 
@@ -20,13 +20,13 @@ Interfaces form a simple hierarchy which allows for very cheap dynamic casts, wh
 
 ## Interface Binding (the main Interface type)
 
-The primary way of using the interface is through its bound type (binding for short). Binding is the top-level type of the interface. Binding is extremely lightweight. It's just a pair of pointers - always 16 bytes in total. The first pointer points to the object, and the second pointer points to the interface table. This is pointer-to-interface, bound to some object.
+The primary way of using the interface is through its bound type (binding for short). Binding is the top-level type of the interface. Binding is lightweight. It's just a pair of pointers - always 16 bytes in total. The first pointer points to the object, and the second pointer points to the interface table. This is pointer-to-interface, bound to some object.
 
 Each Binding must derive from `Interface` which provides the pair of pointers and the common logic for generic interfaces. Bindings may not introduce any data on their own - they may only use what's provided in their base type (which is two pointers). Bindings of interfaces should form a type hierarchy that mirrors the interface table hierarchy.
 
 Binding contains all the methods for interacting with the interface. It IS the interface.
 
-Under the hood, all of the Binding's methods use the included interface table to dynamically dispatch calls to the correct implementation. 
+Internally, all of the Binding's methods use the included interface table to dynamically dispatch calls to the correct implementation. 
 
 ## Null States
 
@@ -55,6 +55,6 @@ Stateless interfaces still get a state offset, but they're free to use it howeve
 Defining interface tables & constructing bound types is quite a bit of boilerplate. It can be avoided using a `DEF_INTERFACE` & `DEF_END` macros. Every object that "defines" some interface using these macros gets two benefits:
 
 1. Automatically constructed interface table, which is initialized based on functions defined between `DEF_INTERFACE` and `DEF_END` macros.
-2. A zero-cost member with a fancy `->` operator that can be used as if it were the main interface itself (it acts on whatever object it was invoked from).
+2. A zero-cost member with a `->` operator that can be used as if it were the main interface itself (it acts on whatever object it was invoked from).
 
 The implementation of the interface (called Impl) should be located between the macros. All of the methods on Impl should follow the `On*` naming convention - to distinguish them from the main interface methods, which may go through dynamic dispatch. All of the Impl methods may access the interface's state (through `state`), parent object (through `obj`) and table (through `table`).

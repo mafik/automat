@@ -72,9 +72,6 @@ struct RootWidget final : Widget {
 
   std::string_view Name() const override { return "RootWidget"; }
 
-  // Wake-counter polling: wakes every toy whose object has updated state. Runs once per frame
-  // (from PackFrame), even while widgets sleep. Covers the root store, every board's store
-  // (BoardWidget::Poll) and in-progress actions that hold toys (Action::Poll).
   void Poll();
 
   float PxPerMeter() const { return display_pixels_per_meter * zoom; }

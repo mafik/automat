@@ -280,7 +280,7 @@ struct GeglHost {
 
   // The extent every preview of the chain presents: the head's source
   // rectangle (the bridged image's size, or the demonstration's crop).
-  // Operations like blur grow their bounding box past it; the abyss beyond
+  // Operations like blur grow their bounding box past it; the region beyond
   // the source is not shown.
   GeglRectangle PresentationRectLocked(GeglOperation& op) {
     GeglOperation* head = &op;
@@ -298,8 +298,8 @@ struct GeglHost {
   }
 
   // The preview is bounded: past this edge length it is sampled at reduced
-  // scale, so a huge source neither bloats the preview buffer nor makes the
-  // renderer push megapixels through a face a few centimetres wide.
+  // scale, so a huge source neither bloats the preview buffer nor renders
+  // more pixels than the small on-screen face can show.
   static constexpr int kMaxPreviewPx = 1024;
 
   static double PreviewScale(const GeglRectangle& present) {
@@ -421,7 +421,7 @@ Vec<GeglOpInfo> ListGeglOperations() {
   gchar** names = gegl_list_operations(&n);
   for (guint i = 0; i < n; ++i) {
     StrView name = names[i];
-    // "hidden" is the library's own word for operations not meant for users.
+    // "hidden" is GEGL's category for operations not meant for users.
     const char* categories = gegl_operation_get_key(names[i], "categories");
     Str cats = categories ? categories : "";
     if (cats.contains("hidden")) continue;

@@ -81,11 +81,11 @@ surface uses, so the renderer treats an X11 window and a Wayland window identica
 ## Acting as a window manager
 
 An X11 toolkit behaves differently depending on whether a window manager is present, and
-it will not paint its first frame until it believes it is managed. Automat therefore
+it will not paint its first frame until it detects that it is managed. Automat therefore
 presents a minimal window-manager identity: it owns a `_NET_SUPPORTING_WM_CHECK` window
 and advertises `_NET_SUPPORTED`, and when a top-level maps it sets `WM_STATE` to Normal,
 reports zero `_NET_FRAME_EXTENTS`, and synthesises the post-map `ConfigureNotify` that a
-real manager would send. Without these a GTK client maps its window and then sits idle,
+real manager would send. Without these a GTK client maps its window and then remains idle,
 never running its draw cycle.
 
 On the board, a mapped top-level is drawn with the shared window chrome
@@ -189,12 +189,12 @@ allocate their own buffers or a host with a real GPU.
 Core drawing requests map onto Skia: rectangles, lines, arcs and polygons become Skia
 draws with the graphics context's colour and line width, `PutImage` blits client pixels
 into the target's backing store, and `CopyArea` copies between drawables. The RENDER
-extension, which is how a cairo-based toolkit actually draws, maps the same way: a picture
+extension, which is how a cairo-based toolkit draws, maps the same way: a picture
 wraps a drawable or a solid or gradient source, `Composite` and `FillRectangles` become
 Skia draws under the requested Porter-Duff blend mode, trapezoids become filled paths, and
 glyph sets become cached images a glyph run draws with the source colour. This is enough
-for GTK and cairo; the long tail of RENDER (transforms beyond the common cases, filters)
-is present only where a client needs it.
+for GTK and cairo; the rarely-used parts of RENDER (transforms beyond the common cases, filters)
+are present only where a client needs it.
 
 ## Window objects and lifetime
 

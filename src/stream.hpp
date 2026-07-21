@@ -51,9 +51,6 @@ struct StreamStats {
 
 struct StreamInput : Interface {
   struct State {
-    // The object whose StreamArgument currently targets this input,
-    // maintained by StreamArgument's connect handler. Automat-driven
-    // consumers pull their data from it; component starts walk it upward.
     mutable std::mutex mutex;
     WeakPtr<Object> producer;
     State() = default;
@@ -63,7 +60,6 @@ struct StreamInput : Interface {
   struct Table : Interface::Table {
     static bool classof(const Interface::Table* i) { return i->kind == Interface::kStreamInput; }
 
-    // Format this input accepts, in the owning library's own notation.
     // Called on the UI thread; must be cheap and thread-safe.
     Str (*format)(StreamInput) = [](StreamInput) { return Str(); };
 
@@ -137,13 +133,10 @@ struct StreamArgument : InterfaceArgument<StreamInput, Interface::kStreamArg> {
       }
     }
 
-    // Format of the flowing data in the library's own notation. Empty until
+    // Format of the flowing data in the library's notation. Empty until
     // negotiated. Called on the UI thread; must be cheap and thread-safe.
     Str (*format)(StreamArgument) = [](StreamArgument) { return Str(); };
 
-    // Cumulative transfer totals for the connection's meters. The default
-    // reads the State counters; objects that meter through the kernel
-    // (/proc/pid/io) override this with OnStats instead of counting.
     StreamStats (*stats)(StreamArgument) = [](StreamArgument self) {
       return StreamStats{
           .bytes = self.state->bytes.load(std::memory_order_relaxed),
@@ -154,8 +147,6 @@ struct StreamArgument : InterfaceArgument<StreamInput, Interface::kStreamArg> {
     constexpr Table(StrView name) : BaseArg::Table(name) {
       style = Style::Stream;
       on_connect = &StreamOnConnect;
-      // Streams take part in the radar: dragging a block near a compatible
-      // port offers the link, like every other auto-connecting argument.
       autoconnect_radius = 6_cm;
     }
 
@@ -204,11 +195,6 @@ struct StreamArgument : InterfaceArgument<StreamInput, Interface::kStreamArg> {
   };
 };
 
-// A dynamically-named stream port slot. Owner objects embed fixed arrays of
-// these and call Init at construction: the Table is per-instance, its name
-// views the slot's own storage, and its state offset points at the slot's
-// state. Interfaces are identified by Table address, so slots live exactly
-// as long as the object; only the active count varies.
 struct StreamOutSlot {
   StreamArgument::Table table{""};
   StreamArgument::State state;
@@ -233,10 +219,6 @@ struct StreamInSlot {
   }
 };
 
-// Windowed rate estimator: feed cumulative totals, read a per-second rate.
-// UI-thread only. Keeps a short ring of samples and reports the rate over
-// the span of the ring, so brief stalls read as a falling rate instead of
-// oscillating between zero and a spike.
 struct RateEstimator {
   constexpr static int kSamples = 8;
   constexpr static double kMinSampleInterval = 0.125;  // seconds

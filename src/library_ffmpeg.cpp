@@ -113,8 +113,7 @@ void MediaFile::CloseLocked() {
   }
 }
 
-// One printed row per stream, in FFmpeg's own words: codec, resolution or
-// sample rate, bit rate.
+// One printed row per stream: codec, resolution or sample rate, bit rate.
 static Str StreamRow(AVFormatContext* fmt, int i) {
   AVStream* stream = fmt->streams[i];
   AVCodecParameters* par = stream->codecpar;
@@ -273,8 +272,7 @@ Str MediaFile::PacketFormat(int index) {
   if (index >= (int)ctx->nb_streams) return "";
   AVStream* stream = ctx->streams[index];
   AVCodecParameters* par = stream->codecpar;
-  // The packet stream in FFmpeg's words: codec, size or rate, and the time
-  // base the timestamps live in.
+  // Packet stream format: codec, size or rate, and the timestamps' time base.
   Str format = avcodec_get_name(par->codec_id);
   if (par->codec_type == AVMEDIA_TYPE_VIDEO) {
     format += f(" {}x{}", par->width, par->height);
@@ -408,8 +406,8 @@ void FfmpegDecoder::Step() {
       }
     }
     if (error.empty()) {
-      // One receive; when the codec wants data, one packet and one more
-      // receive. The word on the face is exactly what the library returned.
+      // One receive; when the codec wants data, feed one packet and receive
+      // once more. The face shows the literal libav return word.
       auto* c = (AVCodecContext*)ctx;
       auto* fr = (AVFrame*)frame;
       auto* pkt = (AVPacket*)packet;
@@ -709,7 +707,7 @@ struct FfmpegDecoderToy : ui::beta::ObjectToy {
     ui::beta::Panel(canvas, Rect::MakeCenterZero(kPlateW, kDecoderPlateH), "avcodec",
                     ui::beta::kOrange, ui::beta::State::Default, Seed(kDecoderSeed), true);
 
-    {  // credit; the resolved codec joins it in the library's own word
+    {  // credit; the resolved codec name is appended when known
       Str credit = "FFmpeg · libavcodec";
       if (!codec_name_.empty()) credit = f("FFmpeg · libavcodec · {}", codec_name_);
       float w = ui::beta::TextWidth(credit, ui::beta::kMicroSize);
@@ -718,7 +716,7 @@ struct FfmpegDecoderToy : ui::beta::ObjectToy {
                          ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kDecoderSeed));
     }
 
-    // The held frame: the decoder's current data.
+    // The held frame.
     Rect frame_rect =
         Rect::MakeCornerZero(kFrameW, kFrameH)
             .MoveBy({-kFrameW / 2, kDecoderPlateH / 2 - kBand - kCreditRow - kFrameH});
@@ -737,8 +735,7 @@ struct FfmpegDecoderToy : ui::beta::ObjectToy {
         canvas.drawImage(held_, 0, 0, SkSamplingOptions(SkFilterMode::kLinear), nullptr);
         canvas.restore();
       } else if (!format_.empty()) {
-        // An audio decoder holds no image; its data face is the decoded
-        // format in FFmpeg's own words.
+        // An audio decoder holds no image; show the decoded format instead.
         float w = ui::beta::TextWidth(format_, ui::beta::kMicroSize);
         ui::beta::DrawText(canvas, format_, {-w / 2, frame_rect.CenterY()}, ui::beta::kMicroSize,
                            ui::beta::kPaper, false, Seed(kDecoderSeed));

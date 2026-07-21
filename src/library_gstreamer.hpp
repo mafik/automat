@@ -32,7 +32,7 @@ struct GstFactoryInfo {
 Vec<GstFactoryInfo> ListGstFactories();
 
 // The GStreamer shelf: every compiled-in factory as a clone pile, grouped by
-// the library's own klass taxonomy.
+// klass taxonomy.
 struct GStreamerShelf : Object {
   StrView Name() const override { return "GStreamer"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(GStreamerShelf); }
@@ -84,7 +84,7 @@ struct GStreamerElement : Object {
   void* element = nullptr;
   int chain_index = -1;       // this element's member index within the chain
   bool preview_tail = false;  // this element's face shows a preview branch
-  Str state_word = "NULL";    // pipeline state, in GStreamer's own words
+  Str state_word = "NULL";    // GStreamer pipeline state name
 
   // Frozen copies of this element's chain counters, kept after Stop so the
   // connection meters hold their totals instead of dropping to zero.
@@ -148,8 +148,8 @@ struct GStreamerElement : Object {
   void SetProp(StrView name, StrView value);
   Str GetProp(StrView name) const;
 
-  // The negotiated caps of the port's pad while running, in GStreamer's own
-  // notation; empty until known. Port 0 is the base "src" port.
+  // The negotiated caps of the port's pad while running, as a GStreamer caps
+  // string; empty until known. Port 0 is the base "src" port.
   virtual Str OutFormat();
   Str PortFormat(int port);
   // Byte and buffer totals through the port's pad, from its pad probe.
@@ -174,7 +174,7 @@ struct GStreamerElement : Object {
   // touches.
   void OnOutStreamConnect(StreamArgument self, Interface end);
 
-  // The link oracle: refuses ends whose pad template caps can never
+  // Link compatibility check: refuses ends whose pad template caps can never
   // intersect this element's source caps, naming both formats and any
   // converter factories that would bridge them.
   void CanFeedStream(Interface end, Status& status);

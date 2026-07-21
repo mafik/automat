@@ -12,7 +12,7 @@ hook.FetchFromGit('https://gitlab.gnome.org/GNOME/babl.git', 'BABL_0_1_118')
 
 # Babl is linked statically, and its extensions are compiled into the library
 # instead of being dlopened: the extensions are not only SIMD fast paths -
-# CIE.c, HSV.c and friends REGISTER the format families GEGL operations look
+# CIE.c, HSV.c, and related files REGISTER the format families GEGL operations look
 # up by name (babl_format("CIE LCH(ab) alpha float") aborts without them).
 # Each chosen extension is wrapped in a generated TU that renames its
 # entry points, and a generated registrar loads them from

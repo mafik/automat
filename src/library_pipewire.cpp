@@ -25,7 +25,7 @@ namespace automat::library {
 
 using ui::beta::Hash2;
 
-// The negotiated format in PipeWire's own notation ("F32LE 2ch 48000Hz").
+// The negotiated format in PipeWire's notation ("F32LE 2ch 48000Hz").
 static Str FormatLabelFromPod(const spa_pod* param) {
   uint32_t media_type, media_subtype;
   if (!param || spa_format_parse(param, &media_type, &media_subtype) < 0) return {};
@@ -501,7 +501,7 @@ struct PwHost {
   }
 
   // True when both nodes are in the graph yet no daemon link connects them -
-  // the state where a realized board connection is a lie and must disconnect.
+  // a realized board connection is now stale and must disconnect.
   bool BothPresentNoLinks(StrView out_name, StrView in_name) {
     auto lock = std::lock_guard(mirror_mutex);
     MirrorNode* a = FindNodeLocked(out_name);
@@ -698,8 +698,8 @@ void PipeWireNode::RefreshFromMirror() {
   auto& host = PwHost::Get();
   host.Register(AcquireWeakPtr());
   Str name = NodeName();
-  // The capture stream follows board membership: only a proxy standing on a
-  // board listens to its node.
+  // The capture stream follows board membership: only a proxy on a board
+  // opens a stream targeting its node.
   bool want_stream = host.connected && MyLocation() != nullptr && !name.empty();
   if (want_stream != (stream != nullptr)) {
     pw_thread_loop_lock(host.loop);
@@ -834,7 +834,7 @@ void PipeWireNode::SyncBoardLinks() {
     }
   } else {
     // Board says disconnected: a daemon link whose peer has a proxy on the
-    // same board appears as a connection (WirePlumber links simply appear).
+    // same board appears as a connection (WirePlumber links appear).
     Vec<Str> peers = host.LinkedPeersOf(my);
     if (peers.empty()) return;
     for (auto& obj : host.LiveProxies()) {
@@ -1014,7 +1014,7 @@ struct PipeWireNodeToy : ui::beta::ObjectToy {
                          ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
     }
 
-    {  // stream ports, on the edges the streams flow through
+    {  // stream ports
       if (has_in_) {
         float w = ui::beta::TextWidth("input", ui::beta::kMicroSize);
         ui::beta::DrawText(canvas, "input", {-w / 2, kPlateH / 2 - kBand - 1.6_mm},
@@ -1032,7 +1032,7 @@ struct PipeWireNodeToy : ui::beta::ObjectToy {
                          ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
     }
 
-    if (!format_.empty()) {  // the negotiated format, in PipeWire's own notation
+    if (!format_.empty()) {  // the negotiated format, in PipeWire's notation
       float w = ui::beta::TextWidth(format_, ui::beta::kMicroSize);
       ui::beta::DrawText(canvas, format_, {-w / 2, kFormatTop - 2.6_mm}, ui::beta::kMicroSize,
                          ui::beta::kInkSoft, false, Seed(kSeed));
@@ -1082,7 +1082,7 @@ struct PipeWireNodeToy : ui::beta::ObjectToy {
       canvas.drawRect(bar.sk, bar_stroke);
     }
 
-    {  // Status row: the node state in PipeWire's own words.
+    {  // Status row: the node state.
       float row_mid = -kPlateH / 2 + kBottomPad + kStatusRow * 0.5f;
       Str label = daemon_ ? state_word_ : Str("no daemon");
       SkColor color = !daemon_                   ? ui::beta::kRed

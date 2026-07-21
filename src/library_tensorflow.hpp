@@ -91,7 +91,7 @@ struct TfOp : Object {
   std::shared_ptr<tf::Value> tensor;  // the result value; null = none
   TensorFacts facts;
   uint64_t version = 0;
-  uint64_t computed_version = 0;  // the input version `handle` came from
+  uint64_t computed_version = 0;  // the input version the result came from
   Object* computed_producer = nullptr;
   bool computing = false;
   sk_sp<SkImage> result_image;

@@ -27,7 +27,7 @@ Three kinds of objects divide the work:
 - **Launch** (`src/launcher.hpp`) is one running instance: the POSIX child
   (pid, exit status, stream captures) combined with one XDG activation
   sequence (the token). A Launch is created only by actually spawning; an
-  unlaunched Launch does not exist. It is a first-class `Object`, so it is
+  unlaunched Launch does not exist. It is an `Object`, so it is
   reference-counted, thread-safe to point at, and has a widget.
 - **WaylandWindow and X11Window** hold what the display servers report.
   Their shared launch-related part — title, app_id, recipe, client pid, the
@@ -59,7 +59,7 @@ one question the display servers ask when a new client window appears: which
 launch does it belong to? A token match wins over a pid match, because the
 token survives the single-instance handoff and pid does not; the pid is a
 hint that works for directly spawned clients. A launch with no matching
-window simply stays in the index; being a WeakPtr, its entry dies with the
+window stays in the index; being a WeakPtr, its entry dies with the
 object and is swept during later spawns.
 
 A launch either targets an existing window or produces new ones:

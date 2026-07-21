@@ -101,7 +101,7 @@ primitives is good; the engineering cost is the reason it is not built.
 
 Run clients inside a lightweight VM (Firecracker, QEMU microVM, or a
 gVisor-style sandbox) whose display is forwarded to Automat. Snapshotting and
-cloning become first-class: the hypervisor serializes the whole guest, and a
+cloning become well-defined: the hypervisor serializes the whole guest, and a
 restored or cloned guest reconnects its display channel the way any VM
 console does.
 
@@ -134,7 +134,7 @@ the naive version illegal — a forked client would share one socket with its
 parent and corrupt the protocol stream — so the zygote must pause before
 connecting, which limits how much initialization it can share. Browsers use
 this internally; a compositor doing it generically would need client
-cooperation. The idea only pays off for slow-starting applications.
+cooperation. The idea is only worthwhile for slow-starting applications.
 
 ## Where this leaves Automat
 

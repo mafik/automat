@@ -3,8 +3,8 @@
 This document is the design for representing pipeline libraries inside
 Automat: GStreamer, PipeWire, FFmpeg (libav), GEGL, TensorFlow, and UNIX
 pipes. The design has three primary use cases, in priority order: a user drops a single block on the
-board and learns what it does by playing with it; a user browses the
-available blocks and can tell at a glance what each one is for; a user
+board and learns what it does by experimenting with it; a user browses the
+available blocks and can tell quickly what each one is for; a user
 builds a working pipeline one step at a time. Secondary goals: blocks from
 different libraries combine without hidden performance loss; running
 pipelines show their data and their throughput; the three drive models
@@ -139,7 +139,7 @@ those copies are the main avoidable cost when mixing libraries.
 ## Dropping a single block
 
 The first use case: the user takes one block from a shelf, drops it, and
-learns it by playing with it. What "it works immediately" means depends
+learns it by experimenting with it. What "it works immediately" means depends
 on the library; each library has a real mechanism for it.
 
 - **A GStreamer source** (videotestsrc, a camera, a microphone) starts
@@ -148,7 +148,7 @@ on the library; each library has a real mechanism for it.
   sink (a real appsink; video negotiates to a small RGBA frame, audio to
   a peak meter). The face shows the live picture or level immediately.
   Turning an instrument (pattern, brightness, freq) changes the output
-  on the spot, subject to the property's mutability flag
+  immediately, subject to the property's mutability flag
   (GST_PARAM_MUTABLE_PLAYING allows live changes; others require a
   brief state drop, which the block shows as its state word changing).
 - **A GStreamer filter or decoder** alone has nothing to process. Its
@@ -200,8 +200,8 @@ on the library; each library has a real mechanism for it.
   ports: stdin on top, stdout at the bottom, stderr as a smaller
   separate output. While stdin is unconnected, the face offers a text
   input line; while stdout is unconnected, the face shows the scrolling
-  output tail. So dropping `grep --line-buffered error` alone gives a
-  working playground: type a line, see whether it passes. This is the
+  output tail. So dropping `grep --line-buffered error` alone is
+  immediately usable: type a line, see whether it passes. This is the
   discovery mechanism for a library that has no machine-readable
   introspection at all.
 
@@ -314,7 +314,7 @@ prefetch, the kernel buffer of a UNIX pipe) all show the same three
 facts: fill level against capacity, input rate, output rate. A full
 queue with a stalled consumer and a starved queue with a slow producer
 are the two failure shapes of every streaming system, and they are
-readable at a glance on any queue block regardless of library. A kernel
+readable quickly on any queue block regardless of library. A kernel
 pipe even names the blocked side directly: /proc/pid/syscall shows
 which fd a process is blocked on.
 
@@ -377,7 +377,7 @@ instead of hiding it:
   (gst_event_new_step), exposed as a step signal on the sink while
   paused. Automat-driven blocks step by definition. Live PipeWire
   devices cannot be stepped, so no step control appears on them.
-  Automat's control flow pokes blocks through Signal interfaces
+  Automat's control flow drives blocks through Signal interfaces
   (src/base.hpp). Each signal declares what happens when it arrives
   while the block's LongRunning is active: the starting signal
   (Runnable) is inhibited, because a running thing is not started
@@ -437,7 +437,7 @@ named nodes is missing from the graph, the connection keeps trying, so a
 saved board recreates its links when its nodes return. Once realized,
 the connection follows reality in both directions — when another tool
 destroys the links, the board connection disconnects, and links created
-behind the scenes (WirePlumber policy) appear as connections wherever
+by WirePlumber policy appear as connections wherever
 both ends have proxies on the same board. Deleting a node proxy only
 removes it from the board, because the node belongs to the daemon.
 

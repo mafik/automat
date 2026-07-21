@@ -175,7 +175,7 @@ struct Threshold : PhotoTool {
                          : "pixThresholdToBinary"sv;
   }
   StrView Explanation() const override {
-    return "Snaps the photo to pure black and white at a brightness you pick.";
+    return "Converts the photo to pure black and white at a brightness you pick.";
   }
   Pix* ApplyOp(Pix* in, const float* p) const override;
   void DrawSymbol(SkCanvas&) const override;
@@ -192,7 +192,7 @@ struct Morphology : PhotoTool {
   uint8_t cells[kMaxN * kMaxN] = {};  // row-major by sel_w; 0 don't-care, 1 SEL_HIT, 2 SEL_MISS
   int op_mode = 0;       // 0 dilate, 1 erode, 2 open, 3 close, 4 tophat, 5 dome, 6 hmt, 7 thin
   int height = 64;       // DOME only: minimum peak height [1..255]
-  bool peaks = true;     // polarity: subject = bright stuff (true) or dark stuff (false)
+  bool peaks = true;     // polarity: subject = bright pixels (true) or dark pixels (false)
   int connectivity = 8;  // THIN only: 4- or 8-connected
   bool color = false;    // binary quartet only: morph the COLORS themselves (solid brick)
 
@@ -512,7 +512,7 @@ struct Posterize : PhotoTool {
   StrView Label() const override { return "POSTERIZE"; }
   StrView LeptonicaFn() const override { return "pixTRCMap"; }
   StrView Explanation() const override {
-    return "Reduces the photo to just a few flat colours, like a poster print.";
+    return "Reduces the photo to just a few flat colours.";
   }
   Pix* ApplyOp(Pix* in, const float* p) const override;
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
@@ -534,7 +534,7 @@ struct Dither : PhotoTool {
   StrView Label() const override { return "DITHER"; }
   StrView LeptonicaFn() const override { return "pixDitherToBinarySpec"; }
   StrView Explanation() const override {
-    return "Turns the photo into black-and-white dots that carry the tone, like newsprint.";
+    return "Turns the photo into black-and-white halftone dots that carry the tone.";
   }
   Pix* ApplyOp(Pix* in, const float* p) const override;
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
@@ -608,7 +608,7 @@ struct Color : PhotoTool {
     return "pixModifyHue";
   }
   StrView Explanation() const override {
-    return "Spins the colours around the wheel, boosts or drains them, trims each channel.";
+    return "Rotates hue, raises or lowers saturation, and trims each channel.";
   }
   Pix* ApplyOp(Pix* in, const float* p) const override;
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
@@ -632,7 +632,7 @@ struct Warp : PhotoTool {
                        : "pixRandomHarmonicWarp";
   }
   StrView Explanation() const override {
-    return "Bends the page - stretches an edge, leans it over, or ripples it like water.";
+    return "Warps the page - stretches an edge, shears it, or applies a ripple.";
   }
   Pix* ApplyOp(Pix* in, const float* p) const override;
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
@@ -707,7 +707,7 @@ struct Select : PhotoTool {
     }
   }
   StrView Explanation() const override {
-    return "Picks out the pixels inside the band you bracket - by brightness, or a 2-D HSV band.";
+    return "Selects the pixels inside a range you set - by brightness, or a 2-D HSV band.";
   }
   Pix* ApplyOp(Pix* in, const float* p) const override;
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
@@ -730,7 +730,7 @@ struct Fade : PhotoTool {
   StrView Label() const override { return "FADE"; }
   StrView LeptonicaFn() const override { return "pixLinearEdgeFade"; }
   StrView Explanation() const override {
-    return "Dissolves one edge of the photo toward white or black.";
+    return "Fades one edge of the photo toward white or black.";
   }
   Pix* ApplyOp(Pix* in, const float* p) const override;
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
@@ -763,7 +763,7 @@ struct Reduce : PhotoTool {
     }
   }
   StrView Explanation() const override {
-    return "Shrinks by an integer factor; the rule picks which local detail survives.";
+    return "Shrinks by an integer factor; the rule chooses which local detail is kept.";
   }
   Pix* ApplyOp(Pix* in, const float* p) const override;
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
@@ -833,7 +833,7 @@ struct Seedfill : PhotoTool {
   StrView Label() const override { return "SEEDFILL"; }
   StrView LeptonicaFn() const override { return "pixSeedfillBinary"; }
   StrView Explanation() const override {
-    return "Drops a pin on the page and floods the connected shape under it.";
+    return "Flood-fills the connected shape under a seed point you place.";
   }
   Pix* ApplyOp(Pix* in, const float* p) const override;
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
@@ -886,7 +886,7 @@ struct Deskew : PhotoTool {
     return mode == 1 ? "pixFindSkewOrthogonalRange" : "pixFindSkewAndDeskew";
   }
   StrView Explanation() const override {
-    return "Measures how crooked the page is and rotates it straight.";
+    return "Measures the page's skew and rotates it upright.";
   }
   Pix* ApplyOp(Pix* in, const float* p) const override;
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;

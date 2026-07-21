@@ -376,7 +376,7 @@ bool GStreamerElement::PortPadLive(int port) {
 }
 
 // ============================================================================
-// The link oracle: pad template caps decide whether two elements can ever
+// Link compatibility: pad template caps decide whether two elements can ever
 // negotiate, before any pipeline exists.
 // ============================================================================
 
@@ -399,8 +399,7 @@ static GstCaps* FactoryCaps(const Str& factory_name, GstPadDirection dir) {
   return caps;
 }
 
-// The unique top-level media types of `caps` - GStreamer's own words for
-// what kind of data flows ("video/x-raw", "audio/x-raw").
+// The unique top-level media types of `caps` ("video/x-raw", "audio/x-raw").
 static Str MediaTypes(GstCaps* caps) {
   Str out;
   guint n = gst_caps_get_size(caps);
@@ -414,8 +413,8 @@ static Str MediaTypes(GstCaps* caps) {
   return out;
 }
 
-// Converter factories able to bridge `src` to `sink`, best rank first, the
-// way GStreamer itself would pick them.
+// Converter factories able to bridge `src` to `sink`, highest GStreamer rank
+// first.
 static Str ConverterProposals(GstCaps* src, GstCaps* sink) {
   struct Candidate {
     guint rank;
@@ -748,7 +747,7 @@ void GStreamerElement::Start(std::unique_ptr<RunTask>& task) {
   auto start_lock = std::lock_guard(start_mutex);
   {
     auto lock = std::lock_guard(mutex);
-    if (chain) return;  // already running; STOP is the way to a restart
+    if (chain) return;  // already running; Stop before restarting
   }
 
   // Collect the linked component over every stream port, in both directions.
@@ -999,7 +998,7 @@ void GStreamerElement::Stop() {
 // ============================================================================
 
 // The appsink's new-sample callback only counts; pulling happens on Run. The
-// box holds a weak reference so a dying object simply stops counting.
+// box holds a weak reference so a dying object stops counting.
 struct SinkSampleBox {
   WeakPtr<AppSinkBoundary> weak;
 };
@@ -1016,9 +1015,8 @@ static GstFlowReturn OnBoundarySample(GstAppSink*, gpointer user_data) {
 void AppSinkBoundary::ConfigureGstElement(void* gst_element) {
   auto* sink = (GstElement*)gst_element;
   GstCaps* caps = gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, "RGBA", nullptr);
-  // drop=FALSE makes a full queue backpressure the chain - that is the
-  // boundary's honest behavior; sync=FALSE because the pull side has no
-  // clock.
+  // drop=FALSE makes a full queue backpressure the chain; sync=FALSE because
+  // the pull side has no clock.
   g_object_set(sink, "caps", caps, "max-buffers", kMaxBuffers, "drop", FALSE, "sync", FALSE,
                nullptr);
   gst_caps_unref(caps);
@@ -1131,7 +1129,7 @@ void AppSrcBoundary::PushOne() {
     if (ip) img = ip.GetImage();
   }
   // An empty upstream is a normal transient in a step cycle (the producer
-  // has not decoded anything yet); there is just nothing to push.
+  // has not decoded anything yet).
   if (!img) return;
   int width = img->width();
   int height = img->height();
@@ -1556,7 +1554,7 @@ struct GStreamerToy : ui::beta::ObjectToy {
     ui::beta::Panel(canvas, Rect::MakeCenterZero(kPlateW, plate_h_), factory_, ui::beta::kPurple,
                     ui::beta::State::Default, Seed(kSeed), true);
 
-    {  // credit: the library and the factory's klass, in its own words
+    {  // credit: the library and the factory's klass
       float w = ui::beta::TextWidth(credit_, ui::beta::kMicroSize);
       ui::beta::DrawText(canvas, credit_, {kPlateW / 2 - kSide - w, plate_h_ / 2 - kBand - 1.6_mm},
                          ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
@@ -1564,7 +1562,7 @@ struct GStreamerToy : ui::beta::ObjectToy {
 
     // Preview: a member with a preview branch shows the flowing frames; a
     // running member without one prints its negotiated output caps; an idle
-    // element keeps its last frame, or teaches with the factory description.
+    // element keeps its last frame, or shows the factory description.
     Rect preview_rect =
         Rect::MakeCornerZero(kPreviewW, kPreviewH)
             .MoveBy({-kPreviewW / 2, plate_h_ / 2 - kBand - kCreditRow - kPreviewH});
@@ -1707,7 +1705,7 @@ struct GStreamerToy : ui::beta::ObjectToy {
       row_top -= kPropRow;
     }
 
-    {  // Status row: the pipeline state in GStreamer's own words, plus fps.
+    {  // Status row: the pipeline state, plus fps.
       float row_mid = -plate_h_ / 2 + kBottomPad + kStatusRow * 0.5f;
       Str state_label = state_word_;
       SkColor color = running_ ? ui::beta::kLime : ui::beta::kGray;
@@ -1998,8 +1996,8 @@ std::unique_ptr<ObjectToy> AppSrcBoundary::MakeToy(ui::Widget* parent) {
 
 // ============================================================================
 // The GStreamer shelf: every compiled-in factory as a clone pile, grouped by
-// the first segment of its klass string - the library's own taxonomy. Groups
-// read in flow order: sources feed filters feed sinks.
+// the first segment of its klass string. Groups read in flow order: sources
+// feed filters feed sinks.
 // ============================================================================
 
 namespace {

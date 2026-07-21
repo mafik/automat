@@ -49,7 +49,7 @@ struct MediaFile : Object {
   // of this header.
   void* fmt = nullptr;
   int video_stream = -1;  // index of the stream behind the "video" port
-  Str container;          // demuxer long name, FFmpeg's own words
+  Str container;          // demuxer long name
   double duration_s = 0;
   Vec<Str> rows;          // one printed row per stream
   double position_s = 0;  // pts of the last packet handed out
@@ -115,9 +115,9 @@ struct MediaFile : Object {
 
 // libavcodec decoder. Each Run performs one receive, feeding the codec one
 // packet from the connected media file when it asks (EAGAIN); the face
-// prints the literal return word (OK, EAGAIN, EOF) because EAGAIN is the
-// library's own word for "feed me first". The decoded frame is held as an
-// image for the rest of Automat (ImageProvider).
+// prints the literal return word (OK, EAGAIN, EOF). EAGAIN means the codec
+// needs a packet first, not an error. The decoded frame is held as an image
+// for the rest of Automat (ImageProvider).
 struct FfmpegDecoder : Object {
   mutable std::mutex mutex;  // guards the runtime state below
 

@@ -23,7 +23,7 @@ static TensorFacts ToFacts(const tf::Facts& raw) {
       .format = raw.format, .device = raw.device, .min = raw.min, .mean = raw.mean, .max = raw.max};
 }
 
-// Renders a value back into the image world, or null if it is not a [1,h,w,3]
+// Converts a value to an SkImage, or null if it is not a [1,h,w,3]
 // float value.
 static sk_sp<SkImage> ToImage(const tf::Value& v) {
   std::vector<uint8_t> rgba;
@@ -267,8 +267,8 @@ struct TfToy : ui::beta::ObjectToy {
                          ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
     }
 
-    // Image area: an op shows its result back in the image world; the
-    // tensor block is a noun, so its area stays a labelled slab.
+    // Image area: an op draws its result image here; the tensor block has
+    // no result image, so its area stays a labelled placeholder.
     Rect image_rect =
         Rect::MakeCornerZero(kPlateW - 2 * kSide, kImageH)
             .MoveBy({-(kPlateW - 2 * kSide) / 2, kPlateH / 2 - kBand - kCreditRow - kImageH});

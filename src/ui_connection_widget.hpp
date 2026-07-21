@@ -67,8 +67,7 @@ struct ConnectionWidget : ArgumentToy {
   Optional<ArcLine> arcline;        // routed cable for non-physical connections
   Optional<Vec2> end_anchor_local;  // cable end in the end widget's local frame
 
-  // Stream style only: the dash pattern inside the bore advances with the
-  // measured byte rate; the format and rate are printed beside the midpoint.
+  // Used by Streams:
   RateEstimator stream_byte_rate;
   RateEstimator stream_unit_rate;
   float stream_dash_phase = 0;
@@ -79,15 +78,10 @@ struct ConnectionWidget : ArgumentToy {
   uint64_t stream_capacity = 0;
   StrView stream_fill_unit = {};
   float stream_fill_drawn = 0;
-  // The blocked side flickers under flow (a fast producer is momentarily
-  // blocked on many samples and free on others), so each side accumulates a
-  // score and is shown only while its score stays high.
   StreamBlocked stream_blocked = StreamBlocked::None;
   float stream_blocked_score = 0;
   bool stream_blocked_shown = false;
   Str stream_format;
-  // A refused manual link: the oracle's reason (the two irreconcilable
-  // formats, proposed adapters), printed below the port until the deadline.
   Str refusal_text;
   time::SteadyPoint refusal_until = {};
   std::unique_ptr<ui::Widget> icon;

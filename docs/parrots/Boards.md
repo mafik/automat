@@ -108,7 +108,7 @@ The drop merges: the dragged widget and its Location are destroyed at the drop, 
 resident widget animates a fading ghost of its own toy flying in from the drop point
 (`LocationWidget::AddIncomingFlight`, src/location.cpp). The flight tweens towards the
 resident widget's live transform, so it keeps converging even when the resident moves
-mid-animation, and several quick drops simply run several flights. The pointer releases its
+mid-animation, and several quick drops run several flights. The pointer releases its
 owning reference and no widget changes position.
 
 Two alternatives were rejected. Moving the resident widget to the drop point would move a

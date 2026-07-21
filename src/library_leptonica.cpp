@@ -4815,7 +4815,7 @@ Pix* Quantize::ResolveBPix() const {
   return SkImageToPix(img);
 }
 
-// Render a colormap as a swatch strip (8 cells per row, 24 px cells) - the palette made visible.
+// Render a colormap as a swatch strip (8 cells per row, 24 px cells).
 static Pix* PaletteStripPix(PIXCMAP* cmap) {
   int nc = cmap ? pixcmapGetCount(cmap) : 0;
   if (nc <= 0) return nullptr;
@@ -5416,7 +5416,7 @@ Pix* Flatten::ApplyOp(Pix* in, const float*) const {
   int tile = std::clamp(sc, 6, 40);
   int mincount = std::max(1, tile * tile / 3);
   if (map) {
-    // the exposed internal product: measure the map, repair its holes, blow it back up.
+    // the exposed internal product: measure the map, repair its holes, upscale it.
     Pix* g = pixConvertTo8(in, 0);
     if (!g) return nullptr;
     Pix* mp = nullptr;
@@ -6637,7 +6637,7 @@ struct DeskewToy : beta::ObjectToy {
       // only after the first measurement.
       if (has_measure) {
         // The port carries the fix Deskew would APPLY: below the trust floor leptonica refuses
-        // (the gauge says UNCHANGED), so the honest fix is zero - same condition as the banner.
+        // (the gauge says UNCHANGED), so the fix is zero - same condition as the banner.
         bool trust = (mode == 1) ? found_conf > 0.f : found_conf >= 3.f;
         float fix = trust ? found_angle : 0.f;
         uintptr_t tgt = 0;

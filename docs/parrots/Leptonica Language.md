@@ -36,7 +36,7 @@ off the shelf drops a working copy on the board.
 Leptonica looks like hundreds of unrelated functions. Wrapping each one in its
 own object produces hundreds of single-purpose interfaces that nobody can
 learn, and classifying controls by C type — every float becomes a knob — makes
-unrelated meanings look identical while hiding what the parameter actually
+unrelated meanings look identical while hiding what the parameter
 does. The library's API in fact reuses a small set of parameter primitives: a
 rectangle to operate in, a value on the intensity axis, a fraction, a
 neighborhood pattern, a connectivity choice, scale factors, and a selector for
@@ -95,7 +95,7 @@ is present and a Dial otherwise.
 
 Any parameter may be driven by data instead of its hand control. Connecting a
 number-bearing object to a parameter's port grays the control into a readout
-of the driven value. This is the modular core of the language: measuring
+of the driven value. This is what makes the language modular: measuring
 tools emit their findings through ports, so find-then-apply pipelines need no
 special objects. Find Level feeding a Number feeding Threshold's Level port
 is an adaptive threshold; Deskew's Fix output feeding Geometry's Angle port

@@ -82,7 +82,6 @@ SkPath ConnectionWidget::Shape() const {
     return state->Shape();
   }
   if (style == Argument::Style::Stream && transparency < 0.99f) {
-    // The pipe itself is grabbable: a stub around the start plus the routed bore.
     SkPathBuilder builder;
     builder.addRect(Rect::MakeCenter(pos_dir.pos, kStreamBore * 2, kStreamBore * 2).sk);
     if (arcline) {
@@ -302,8 +301,7 @@ struct PrototypeGhost : Widget {
   }
 };
 
-// Helper for methods of ConnectionWidget that need to access the start/end of the connection.
-// It performs the locking of weak pointers and locates the widgets of connected objects.
+// Locks the connection's weak pointers and finds the connected objects' widgets.
 struct ConnectionWidgetLocker {
   ToyStore& toy_store;
   BoardWidget* board_widget;
@@ -332,9 +330,7 @@ struct ConnectionWidgetLocker {
   Object* EndObj() const { return end_iface.Owner<Object>(); }
 };
 
-// Updates ConnectionWidget.pos_dir & ConnectionWidget.to_points. This is shared among Tick &
-// TextureAnchors. Tick uses it for connection animation and TextureAnchors uses it to stretch
-// the texture into most up-to-date position.
+// Recomputes pos_dir & to_points. Shared by Tick (animation) and TextureAnchors (texture stretch).
 static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
   if (a.start_widget && a.start_arg) {
     w.pos_dir = a.start_widget->ArgStart(*a.start_arg.table, a.board_widget);
@@ -373,8 +369,6 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
   ConnectionWidgetLocker a(*this);
 
   if (!a.start_arg) {
-    // The owning object is gone; its widgets (including the cable's cached start_widget)
-    // may already be freed, so drop the physical simulation before Draw dereferences it.
     state.reset();
     Tock tock;
     tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.1, alpha);
@@ -427,7 +421,6 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
     icon->local_to_parent = SkM44(m);
   }
 
-  // Lazy initialization of cable physics state
   if (!state.has_value() && style == Argument::Style::Cable) {
     state.emplace(arg, *a.start_widget, pos_dir);
   }
@@ -459,13 +452,11 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
   }
 
   bool start_iconified = IsIconified(a.StartObj());
-  // Hide the disconnected connectors if the object is iconified
   if (start_iconified && !a.end_iface) {
     should_be_hidden = true;
   }
 
   if (manual_position.has_value()) {
-    // cable is held by the pointer - keep it visible
     should_be_hidden = false;
   }
 
@@ -474,7 +465,6 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
   }
 
   Tock tock;
-  // `transparency` gates Shape() (empty once >= 0.99)
   tock.shaping |= animation::LinearApproach(should_be_hidden ? 1 : 0, timer.d, 5, transparency);
 
   float loc_transparency = 0.f;
@@ -488,7 +478,6 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
   if (state) {
     arcline.reset();
   } else if (style == Argument::Style::Stream && to_points.empty()) {
-    // Unconnected stream port: a short downward stub that can still be grabbed.
     Vec<Vec2AndDir> stub;
     stub.push_back(Vec2AndDir{.pos = pos_dir.pos + Vec2(0, -8_mm), .dir = -90_deg});
     arcline = RouteCable(pos_dir, stub, nullptr);
@@ -514,14 +503,10 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
       } else {
         stream_blocked_score = std::max(0.f, stream_blocked_score - 1.5f * (float)timer.d);
       }
-      // Hysteresis: appears after roughly a third of a second of mostly
-      // blocked samples, disappears after sustained free running.
       bool blocked_shown =
           stream_blocked_shown ? stream_blocked_score > 0.1f : stream_blocked_score > 0.85f;
       bool moving = a.end_iface && stream_bytes_per_s > 1;
       if (moving) {
-        // Dash speed grows with the logarithm of the byte rate so slow and
-        // fast streams both read as motion without becoming a blur.
         float speed = std::min<float>(30_mm, 2_mm * log2f(1 + stream_bytes_per_s / 1024));
         stream_dash_phase -= speed * timer.d;
       }
@@ -534,8 +519,7 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
         stream_fill_drawn = fill_fraction;
         stream_blocked_shown = blocked_shown;
       }
-      // A connected stream keeps observing its counters; the meters are the
-      // only way the widget learns that flow started or stopped.
+      // Keep ticking while connected so the meters keep polling the stream counters.
       if (a.end_iface) tock |= Tock::Ing;
     }
   }
@@ -584,8 +568,6 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
 
     tock.shaping |= SimulateCablePhysics(timer, *state, pos_dir, to_points);
   } else if (style == Argument::Style::Stream) {
-    // The bore stays visible as a stub even while unconnected, so the port
-    // can be grabbed and dragged to a StreamInput.
     cable_width.target = a.end_iface ? kStreamBore : 1.2_mm;
     cable_width.speed = 5;
     tock.shaping |= cable_width.Tick(timer);
@@ -715,7 +697,6 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
       SkPath p = p_builder.detach();
       p.setIsVolatile(true);
 
-      // Draw the cable
       auto color_filter = color::MakeTintFilter(state->argument.table->tint.toSkColor(), NAN);
       DrawCable(canvas, p, color_filter, CableTexture::Braided,
                 state->cable_width * state->connector_scale, state->cable_width * dispenser_scale,
@@ -1014,7 +995,7 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
         canvas.drawPath(path, interior_paint);
 
         bool connected = !to_shape.isEmpty();
-        if (connected) {  // the dash pattern advances with the measured byte rate
+        if (connected) {
           SkPaint dash_paint;
           dash_paint.setStyle(SkPaint::kStroke_Style);
           dash_paint.setStrokeWidth(bore * 0.45f);
@@ -1030,10 +1011,6 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
         bool chip_wanted = !stream_format.empty() || stream_bytes_per_s > 1 ||
                            stream_capacity > 0 || stream_blocked_shown;
         if (connected && chip_wanted) {
-          // The stream's meters beside the middle of the run, on a small
-          // paper chip so they stay readable on any board: format and rate
-          // in the library's own words, the buffer's fill against its
-          // capacity, and the blocked side once it persists.
           SkPathMeasure measure(path, false);
           SkPoint mid_pos;
           if (measure.getPosTan(measure.getLength() / 2, &mid_pos, nullptr)) {
@@ -1047,8 +1024,6 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
             Vec<ChipLine> lines;
             if (!stream_format.empty()) lines.push_back({stream_format, kInk});
             if (stream_bytes_per_s > 1) {
-              // Buffers are the library's own transfer unit; byte streams
-              // (units = 0) print the byte rate alone.
               Str rate = stream_units_per_s > 0.1f ? f("{:.1f} buf/s · {}", stream_units_per_s,
                                                        FormatBytesPerSecond(stream_bytes_per_s))
                                                    : FormatBytesPerSecond(stream_bytes_per_s);
@@ -1058,8 +1033,6 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
             constexpr float kBarW = 12_mm;
             if (stream_capacity > 0) {
               fill_line = (int)lines.size();
-              // Fill and capacity are bytes unless the library counts them
-              // in its own quantum (packets, buffers).
               Str fill_text =
                   stream_fill_unit.empty()
                       ? f("{} / {}", FormatBytes(stream_fill), FormatBytes(stream_capacity))
@@ -1098,7 +1071,6 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
               float baseline = mid_pos.fY - i * line_step;
               float text_x = x0;
               if (i == fill_line) {
-                // The fill bar, then the numbers after it.
                 Rect bar(x0, baseline, x0 + kBarW, baseline + line_height);
                 float fraction =
                     std::min(1.f, (float)stream_fill / std::max<uint64_t>(1, stream_capacity));
@@ -1128,8 +1100,6 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
         }
 
         if (!connected && !refusal_text.empty()) {
-          // A refused link: the oracle's reason on the same paper chip,
-          // beside the port, fading out toward the deadline.
           float remaining = time::ToSeconds(refusal_until - time::SteadyNow());
           float fade = std::clamp(remaining, 0.f, 1.f);
           if (fade > 0) {
@@ -1147,8 +1117,6 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
             float pad = 0.8_mm;
             float text_w = 0;
             for (auto& line : lines) text_w = std::max(text_w, font.MeasureText(line));
-            // Below the port's stub: open board in typical layouts, and the
-            // spot the rejected connector snaps back to.
             float x0 = pos_dir.pos.x + 2_mm;
             float y0 = pos_dir.pos.y - 12_mm;
             Rect back(x0 - pad, y0 - ((int)lines.size() - 1) * line_step - pad, x0 + text_w + pad,
@@ -1208,12 +1176,11 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& c
                                            embedded::assets_SFX_cable_loop_wav,
                                            embedded::assets_SFX_cable_end_wav)) {
   if (auto arg = widget->LockBind<Argument>()) {
-    arg.Disconnect();  // Disconnect existing connection
+    arg.Disconnect();
   }
 
   grab_offset = Vec2(0, 0);
   if (widget->state) {
-    // Position within parent board
     auto* mw = BoardOrNull(*widget);
     auto pointer_pos = mw ? pointer.PositionWithin(*mw) : pointer.PositionOnCanvas();
     auto mat = widget->state->ConnectorMatrix();
@@ -1283,7 +1250,6 @@ Optional<Rect> ConnectionWidget::DrawBounds() const {
     return bounds;
   } else if (arcline) {
     if (style == Argument::Style::Stream) {
-      // Room for the bore walls plus the format/rate labels beside the middle.
       Rect bounds = arcline->Bounds().Outset(cable_width / 2 + kStreamWall + 40_mm);
       if (!refusal_text.empty()) {
         bounds.ExpandToInclude(Rect::MakeCenter(pos_dir.pos - Vec2(0, 2_cm), 24_cm, 6_cm));

@@ -382,7 +382,7 @@ void BoardWidget::ConnectAtPoint(Argument arg, Vec2 point) {
   if (!board) return;
   auto lock = std::lock_guard(vm.mutex);
   bool connected = false;
-  Str refusal;  // the oracle's reason for the first end that matched in kind but refused
+  Str refusal;  // the refusal reason for the first end that matched in kind but refused
   auto TryConnect = [&](Interface end) {
     if (connected) return;
     Status status;

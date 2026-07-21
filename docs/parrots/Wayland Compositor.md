@@ -54,7 +54,7 @@ This avoids the resource-to-object maps and linear scans a libwayland compositor
 
 The compositor runs on Automat's `mux::Epoll` thread and every protocol object is stored in a
 per-type colony owned on that thread. One epoll loop multiplexes every descriptor the
-subsystem cares about, each wrapped as a `mux::Epoll::Listener`:
+subsystem handles, each wrapped as a `mux::Epoll::Listener`:
 
 - the listening socket, and one socket per connected client
 - cross-thread work posted onto the thread (`Epoll::Post`)
@@ -242,7 +242,7 @@ the client's flip and slide permissions — and the popup's toy resolves the
 placement against the on-screen viewport, keeping the popup visible while letting it
 extend past the window edge. That decision belongs to the UI layer because the
 window is a movable, zoomable board object whose on-screen position only the UI
-layer knows. Hit-testing checks popups before the toplevel tree because they draw on
+layer has. Hit-testing checks popups before the toplevel tree because they draw on
 top.
 
 Dismissal does not rely on the popup grab. Firefox shows context menus on button

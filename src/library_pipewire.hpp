@@ -16,7 +16,7 @@ namespace automat::library {
 // A proxy for one node in the PipeWire daemon's graph, as designed in
 // docs/parrots/Pipeline Language.md: the node belongs to the daemon and is
 // already live; the board object mirrors it. The face shows the node's name,
-// media.class, state (in PipeWire's own words), the negotiated format, a peak
+// media.class, state, the negotiated format, a peak
 // meter fed by a small capture stream, and volume/mute instruments backed by
 // SPA Props. Stream ports mirror the node's port directions; connecting two
 // proxies creates daemon links (object.linger, so they outlive Automat) and
@@ -29,7 +29,7 @@ struct PipeWireNode : Object {
   // Mirrored from the daemon, guarded by `mutex`:
   Str media_class;
   Str state_word = "absent";  // suspended / idle / running; absent = not in the graph
-  Str format;                 // negotiated format, in PipeWire's own notation
+  Str format;                 // negotiated format, in PipeWire's notation
   bool daemon = false;        // whether a daemon connection exists at all
   bool has_in_ports = false;
   bool has_out_ports = false;
@@ -93,7 +93,7 @@ struct PipeWireNode : Object {
 
   Str FormatLabel() const;
 
-  // The out port's link oracle: only PipeWire nodes can be linked, and both
+  // The out port's link check: only PipeWire nodes can be linked, and both
   // nodes must be in the daemon's graph with ports in the right directions.
   void CanFeed(StreamArgument self, Interface end, Status& status);
   // The out port's connect handler: stores the target, then makes the board

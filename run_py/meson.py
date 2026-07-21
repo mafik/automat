@@ -27,5 +27,6 @@ else:
         git.clone('https://github.com/mesonbuild/meson.git', DIR, '1.8.2'),
         outputs=[BIN],
         inputs=[],
+        state=[DIR],
         desc='Downloading Meson',
         shortcut='download meson')

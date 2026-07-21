@@ -14,18 +14,22 @@ import shutil
 import tempfile
 import hashlib
 import fs_utils
+import build_variant
 import args as cmdline_args
 
 if platform == 'win32':
     import windows
 
 # Hash directory for the current build variant
-import build_variant
-if build_variant.current:
-    HASH_DIR = build_variant.current.BASE / 'hashes'
-else:
-    HASH_DIR = fs_utils.build_dir / 'hashes'
+HASH_DIR = build_variant.current.BASE / 'hashes'
 HASH_DIR.mkdir(parents=True, exist_ok=True)
+
+# Tombstones are used to detect failing steps.
+# 'state' of a failing step is then wiped before it's re-executed.
+SHARED_TOMBSTONE_DIR = fs_utils.build_dir / 'tombstones'
+TOMBSTONE_DIR = build_variant.current.BASE / 'tombstones'
+SHARED_TOMBSTONE_DIR.mkdir(parents=True, exist_ok=True)
+TOMBSTONE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def path_exists(p):
@@ -112,9 +116,11 @@ class Step:
                  shortcut=None,
                  cleanup=None,
                  post_success=None,
+                 state=None,
                  stderr_prettifier=lambda x: x):
         '''
         post_success - lambda to execute (synchronously, on the main thread) after job finishes successfully
+        state - paths this step mutates incrementally; wiped before running when the previous attempt did not complete
         '''
         if not desc:
             if hasattr(build_func, '__name__'):
@@ -132,6 +138,11 @@ class Step:
         self.shortcut = shortcut
         self.outputs = set(str(x) for x in outputs)
         self.inputs = set(str(x) for x in inputs)
+        self.state = [str(x) for x in state] if state else []
+        if all(Path(out).is_relative_to(build_variant.current.BASE) for out in self.outputs):
+            self.tombstone = TOMBSTONE_DIR / self.shortcut
+        else:
+            self.tombstone = SHARED_TOMBSTONE_DIR / self.shortcut
         self.build = build_func  # function that executes this step
         self.builder = None  # Popen instance while this step is being built
         self.id = id
@@ -145,6 +156,12 @@ class Step:
 
     def build_and_log(self, reasons):
         print(f'{self.desc}...')  # , '(because', *reasons, 'changed)')
+        if self.tombstone.exists():
+            for path in self.state:
+                if path_exists(path):
+                    print(f'  Wiping {path} (previous attempt did not complete)')
+                    fs_utils.wipe(path)
+        self.tombstone.touch()
         for out in self.outputs:
             hexdigest_cache.pop(out, None) # like del, but without KeyError
         return self.build()
@@ -195,6 +212,11 @@ class Step:
         return changed_inputs
 
     def build_if_needed(self):
+        if self.tombstone.exists():
+            if cmdline_args.args.verbose:
+                print(f'Running "{self.shortcut}" because its previous run did not complete')
+            self.ran = True
+            return self.build_and_log([])
         if len(self.inputs) == 0 and any(not path_exists(out)
                                          for out in self.outputs):
             if cmdline_args.args.verbose:
@@ -317,6 +339,7 @@ class Recipe:
                 ready_steps.append(a)
 
         def on_step_finished(a):
+            a.tombstone.unlink(missing_ok=True)
             if a.ran:
                 a.record_input_hashes()
             for b in self.steps:

@@ -32,6 +32,7 @@ def hook_recipe(recipe):
     git.clone('https://chromium.googlesource.com/chromium/tools/depot_tools.git', ROOT, 'main'),
     outputs=[UPDATE_DEPOT_TOOLS],
     inputs=[],
+    state=[ROOT],
     desc='Downloading depot_tools',
     shortcut='get depot_tools')
   

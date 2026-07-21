@@ -130,12 +130,11 @@ class ExtensionHelper:
 
   def _standard_recipe(self, recipe):
     if self.git_url:
-      # The stamp only exists after a completed clone, so an interrupted download
-      # (partial checkout without a stamp) re-runs and repairs itself.
       recipe.add_step(
           git.clone(self.git_url, self.checkout_dir, self.git_tag),
-          outputs=[self.checkout_dir, git.clone_stamp(self.checkout_dir)],
+          outputs=[self.checkout_dir],
           inputs=[self.module_globals['__file__'], __file__, git.__file__],
+          state=[self.checkout_dir],
           desc = f'Downloading {self.name}',
           shortcut=f'get {self.name}')
       self.beam = [self.checkout_dir]
@@ -146,6 +145,7 @@ class ExtensionHelper:
           partial(download_from_url, self.fetch_url, archive),
           outputs=[archive],
           inputs=[self.module_globals['__file__'], __file__],
+          state=[archive],
           desc = f'Downloading {self.name}',
           shortcut=f'get {self.name}')
 
@@ -193,6 +193,7 @@ class ExtensionHelper:
                             ['-S', str(self.src_dir).replace('\\', '/'), '-B', str(build_dir).replace('\\', '/')], env=env),
           outputs=[makefile],
           inputs=configure_inputs,
+          state=[build_dir],
           desc=f'Configuring {self.name}',
           shortcut=f'configure {self.name}')
 
@@ -225,6 +226,7 @@ class ExtensionHelper:
         partial(Popen, meson_args, env=env),
         outputs=[makefile],
         inputs=configure_inputs + [meson.BIN],
+        state=[build_dir],
         desc=f'Configuring {self.name}',
         shortcut=f'configure {self.name}')
 
@@ -259,12 +261,14 @@ class ExtensionHelper:
             str(arg).replace('\\', '/') for arg in configure_args]
 
       def run_configure():
+        build_dir.mkdir(parents=True, exist_ok=True)
         return Popen(configure_args, env=env, cwd=build_dir)
 
       recipe.add_step(
           run_configure,
           outputs=[makefile],
           inputs=configure_inputs + [build_dir],
+          state=[] if self.configure_in_tree else [build_dir],
           desc=f'Configuring {self.name}',
           shortcut=f'configure {self.name}')
 
@@ -277,6 +281,7 @@ class ExtensionHelper:
           partial(Popen, [depot_tools.GN, 'gen', build_dir, '--script-executable=' + sys.executable, '--args=' + gn_args], cwd=self.src_dir, env=env),
           outputs=[makefile],
           inputs=configure_inputs + [depot_tools.GN],
+          state=[build_dir],
           desc=f'Configuring {self.name}',
           shortcut=f'configure {self.name}')
 

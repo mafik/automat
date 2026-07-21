@@ -3,47 +3,18 @@
 # SPDX-License-Identifier: MIT
 
 import os
-import shutil
-import stat
 import glob
 import sys
 from pathlib import Path
 from functools import partial
 
 
-# Marks a completed clone; written by the __main__ script below, listed as a build
-# step output by extension_helper.
-def clone_stamp(out_directory):
-  return Path(out_directory).with_suffix('.clone_stamp')
-
-
 # Safe (& idempotent) wrapper around git clone.
-# Creates a tombstone before running the command.
-# If a tombstone already exists, removes the git dir before cloning.
 if __name__ == '__main__':
-  import sys
   import subprocess
 
   tag, url, out_directory = sys.argv[1:] # layout defined by clone() below
   out_directory = Path(out_directory)
-
-  # The stamp is written only on success and is one of the build step's outputs, so an
-  # interrupted clone (partial checkout, no stamp) makes the step re-run and repair itself.
-  stamp = clone_stamp(out_directory)
-  stamp.unlink(missing_ok=True)
-
-  # Tombstone indicates that something went wrong during last clone attempt.
-  sentinel = out_directory.with_suffix('.cloning_sentinel')
-  if sentinel.exists():
-    # Something went wrong during last attempt!
-    # Nuke the old checkout - will force a fresh clone.
-    if out_directory.exists():
-      print(f'Tombstone found at {sentinel}, removing {out_directory} before cloning.')
-      # Note: git marks some files as read-only, so we need to make them writable before we can delete them.
-      shutil.rmtree(out_directory, onexc=lambda f, p, _: (os.chmod(p, stat.S_IWRITE), f(p)))
-  else:
-    # Create the tombstone before attempting any risky operations.
-    sentinel.touch()
 
   if out_directory.exists():
     subprocess.run(['git',
@@ -60,9 +31,6 @@ if __name__ == '__main__':
       '-c', 'core.autocrlf=false',
       'clone',
       '--depth', '1', '--branch', tag, url, str(out_directory)], check=True)
-  
-  sentinel.unlink()
-  stamp.touch()
 
 else: # for importing as a module
   import make

@@ -45,7 +45,10 @@ struct Toolbar : ui::Widget, ui::PointerMoveCallback {
 
   mutable int hovered_button = -1;
 
-  Toolbar(ui::Widget* parent) : ui::Widget(parent) { parent->layers.OrderInside(this); }
+  Toolbar(ui::Widget* parent) : ui::Widget(parent) {
+    parent->layers.OrderInside(this);
+    shadow_elevation = 2_mm;
+  }
 
   // This will clone the provided object and add it to the toolbar.
   void AddObjectPrototype(const Ptr<Object>&);

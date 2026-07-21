@@ -1,0 +1,45 @@
+// kind=shader
+
+uniform shader caster;      // caster texture, window-oriented
+uniform shader height_map;  // R channel = receiver height / kMaxHeight
+uniform mat3 local_to_tex;     // caster local -> caster texture px
+uniform mat3 local_to_height;  // caster local -> height map px
+uniform float elevation;       // caster height, metres
+uniform half4 tint;            // premultiplied shadow color at full strength
+
+const float kMaxHeight = 0.016;
+
+const vec2 kTaps[12] = vec2[12](
+    vec2(-0.326, -0.406), vec2(-0.840, -0.074), vec2(-0.696, 0.457), vec2(-0.203, 0.621),
+    vec2(0.962, -0.195), vec2(0.473, -0.480), vec2(0.519, 0.767), vec2(0.185, -0.893),
+    vec2(0.507, 0.064), vec2(0.896, 0.412), vec2(-0.322, -0.933), vec2(-0.792, -0.598));
+
+vec4 main(vec2 local) {
+  vec2 height_px = (local_to_height * vec3(local, 1)).xy;
+  float receiver = height_map.eval(height_px).r * kMaxHeight;
+  float drop = elevation - receiver;
+  if (drop <= 0) {
+    return vec4(0);
+  }
+  // The light leans slightly down the screen; local Y points up, so the occluder that shades
+  // this pixel sits up and away by `drop`-dependent amounts.
+  vec2 towards_caster = vec2(0, drop * 0.35);
+  float radius = drop;
+  // Dithering by rotating the dir by an angle dependent on the screen position.
+  vec2 q = floor(height_px);
+  // This specific formula seems to generate nice diagonal lines in the dithered pattern.
+  float angle = 6.2831853 * fract(52.9829189 * fract(0.06711056 * q.x + 0.00583715 * q.y));
+  float s = sin(angle);
+  float c = cos(angle);
+  float coverage = 0;
+  float total = 0;
+  for (int i = 0; i < 12; i++) {
+    vec2 t = kTaps[i];
+    float w = exp(-2.0 * dot(t, t));
+    vec2 p = local + towards_caster + vec2(t.x * c - t.y * s, t.x * s + t.y * c) * radius;
+    coverage += w * caster.eval((local_to_tex * vec3(p, 1)).xy).a;
+    total += w;
+  }
+  coverage /= total;
+  return tint * coverage * min(drop / 0.0005, 1.0);
+}

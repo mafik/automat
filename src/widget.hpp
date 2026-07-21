@@ -290,6 +290,10 @@ struct Widget : OptionsProvider {
 
   virtual Compositor GetCompositor() const { return Compositor::GLITCH; }
 
+  // Metres above the board; > 0 makes this widget's texture cast a drop shadow onto layers
+  // composited beneath it.
+  float shadow_elevation = 0;
+
   // Each Widget has a shape that defines its region of reactivity, in local coordinates.
   virtual SkPath Shape() const = 0;
   // Computes the union of all the childrens' shapes.

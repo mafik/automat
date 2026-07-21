@@ -38,6 +38,7 @@
 #include "global_resources.hpp"
 #include "log.hpp"
 #include "render_cost_model.hpp"
+#include "render_shadows.hpp"
 #include "root_widget.hpp"
 #include "textures.hpp"
 #include "thread_name.hpp"
@@ -134,6 +135,8 @@ struct WidgetDrawable : SkDrawableRTTI {
   time::SteadyPoint last_tick;
 
   Widget::Compositor compositor;
+  float shadow_elevation = 0;
+  vector<ShadowCaster> shadow_casters;  // shadow-casting children composited by this widget
 
   // RenderToSurface results
   struct Rendered {
@@ -321,6 +324,10 @@ void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> 
 
     auto cpu_started = time::SteadyNow();
     auto& frame = w->in_progress();
+    if (!w->shadow_casters.empty()) {
+      RenderShadowHeightMap(*recorder, w->shadow_casters, frame.image_info.dimensions(),
+                            {frame.surface_bounds_root.left(), frame.surface_bounds_root.top()});
+    }
     auto graphite_canvas = recorder->makeDeferredCanvas(frame.image_info, kTextureInfo);
     graphite_canvas->clear(SK_ColorTRANSPARENT);
     graphite_canvas->translate(-frame.surface_bounds_root.left(), -frame.surface_bounds_root.top());
@@ -395,6 +402,7 @@ void RendererShutdown() {
     image_provider->cache.clear();
   }
 
+  ShutdownShadows(*global_foreground_recorder);
   global_foreground_recorder.reset();
   vk::graphite_context->submit({skgpu::graphite::SyncToCpu::kYes});
   vk::background_context->submit({skgpu::graphite::SyncToCpu::kYes});
@@ -460,6 +468,10 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
   if (frame.surface == nullptr) {
     // This widget wasn't included by frame packing - there is no need to draw anything.
     return;
+  }
+  if (shadow_elevation > 0) {
+    DrawShadow(*canvas, {SkSurfaces::AsImage(frame.surface), frame.surface_bounds_root,
+                         frame.matrix, frame.surface_bounds_local, shadow_elevation});
   }
   if constexpr (kDebugVisual) {
     SkPaint texture_bounds_paint;  // translucent black
@@ -679,6 +691,11 @@ struct PackedFrame {
   vector<WidgetDrawable::Update> frame;
   map<uint32_t, Vec<Vec2>> fresh_texture_anchors;
   map<uint32_t, SkMatrix> fresh_matrices;
+  struct ShadowCasterRef {
+    uint32_t id, baker_id;
+    float elevation;
+  };
+  vector<ShadowCasterRef> shadow_casters;
 };
 
 void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pack) {
@@ -1286,6 +1303,15 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     }
   }
 
+  for (auto& node : tree) {
+    if (node.widget->shadow_elevation <= 0 || node.verdict == Verdict::Skip_Clipped ||
+        node.verdict == Verdict::Skip_NoTexture) {
+      continue;
+    }
+    pack.shadow_casters.push_back(
+        {node.widget->ID(), tree[node.baker].widget->ID(), node.widget->shadow_elevation});
+  }
+
   if constexpr (kDebugRendering && kDebugRenderEvents) {
     LOG << "Frame packing:";
     LOG_Indent();
@@ -1428,6 +1454,24 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
       frame.surface = SkSurfaces::WrapBackendTexture(recorder, frame.texture,
                                                      kBGRA_8888_SkColorType, nullptr, &props);
     }
+  }
+
+  for (auto& ref : pack.shadow_casters) {
+    if (auto* baker = WidgetDrawable::FindOrNull(ref.baker_id)) {
+      baker->shadow_casters.clear();
+    }
+  }
+  for (auto& ref : pack.shadow_casters) {
+    auto* w = WidgetDrawable::FindOrNull(ref.id);
+    auto* baker = WidgetDrawable::FindOrNull(ref.baker_id);
+    if (!w || !baker || !w->rendered().surface) {
+      continue;
+    }
+    w->shadow_elevation = ref.elevation;
+    auto& rendered = w->rendered();
+    baker->shadow_casters.push_back({SkSurfaces::AsImage(rendered.surface),
+                                     rendered.surface_bounds_root, rendered.matrix,
+                                     rendered.surface_bounds_local, ref.elevation});
   }
 
   int pending_recordings = 0;

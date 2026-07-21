@@ -10,13 +10,11 @@
 #include <include/core/SkPathMeasure.h>
 #include <include/core/SkPathUtils.h>
 #include <include/core/SkPictureRecorder.h>
-#include <include/core/SkPoint3.h>
 #include <include/core/SkShader.h>
 #include <include/core/SkSurface.h>
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkGradient.h>
 #include <include/effects/SkImageFilters.h>
-#include <include/utils/SkShadowUtils.h>
 
 #include <algorithm>
 #include <cmath>
@@ -40,7 +38,6 @@
 #include "timer_thread.hpp"
 #include "ui_connection_widget.hpp"
 #include "ui_constants.hpp"
-#include "ui_shadow.hpp"
 #include "widget.hpp"
 
 using namespace automat::ui;
@@ -280,6 +277,7 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
   }
 
   if (toy) {
+    toy->shadow_elevation = 1_mm + elevation * 8_mm;
     Vec2 local_pivot = LocalAnchor();
     Vec2 position_curr;
     float scale_curr;
@@ -369,18 +367,24 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
   for (auto& flight : incoming_flights) {
     int save = canvas.save();
     canvas.concat(Location::ToMatrix(flight.position, flight.scale, LocalAnchor()));
-    auto flight_paint = ui::ShadowPaint(canvas, 1_mm);
+    SkPaint flight_paint;
     flight_paint.setAlphaf(1.f - flight.transparency);
-    canvas.saveLayer(nullptr, &flight_paint);
+    Optional<Rect> flight_bounds = toy->subtree_draw_bounds;
+    if (flight_bounds) *flight_bounds = flight_bounds->Outset(toy->shadow_elevation);
+    canvas.saveLayer(flight_bounds ? &flight_bounds->sk : nullptr, &flight_paint);
     toy->DrawStack(canvas);
     canvas.restoreToCount(save);
   }
 
   int saveCount = canvas.save();
   canvas.concat(toy->local_to_parent);
-  auto paint = ui::ShadowPaint(canvas, 1_mm + elevation * 8_mm);
-  paint.setAlphaf(1.f - transparency);
-  canvas.saveLayer(nullptr, &paint);
+  if (transparency > 0) {
+    SkPaint alpha_paint;
+    alpha_paint.setAlphaf(1.f - transparency);
+    Optional<Rect> layer_bounds = toy->subtree_draw_bounds;
+    if (layer_bounds) *layer_bounds = layer_bounds->Outset(toy->shadow_elevation);
+    canvas.saveLayer(layer_bounds ? &layer_bounds->sk : nullptr, &alpha_paint);
+  }
 
   toy->DrawStack(canvas);
 

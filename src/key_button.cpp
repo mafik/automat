@@ -24,7 +24,8 @@ struct KeyLabelWidget : Widget, LabelMixin {
     return SkPath::Rect(SkRect::MakeXYWH(-width / 2, -kKeyLetterSize / 2, width, kKeyLetterSize));
   }
   Optional<Rect> DrawBounds() const override {
-    return SkRect::MakeLTRB(-width / 2, 1.5 * kLetterSize, width / 2, -0.5 * kLetterSize);
+    if (width <= 0) return std::nullopt;
+    return Rect(-width / 2, -0.5 * kLetterSize, width / 2, 1.5 * kLetterSize);
   }
   Tock Tick(time::Timer&) override { return Tock::Draw; }
   void Draw(SkCanvas& canvas) const override {

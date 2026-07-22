@@ -299,7 +299,11 @@ struct Widget : OptionsProvider {
   // Computes the union of all the childrens' shapes.
   virtual SkPath SubtreeShape() const;
   // If the object should be cached into a texture, return its bounds in local coordinates.
-  virtual Optional<Rect> DrawBounds() const { return shape.getBounds(); }
+  virtual Optional<Rect> DrawBounds() const {
+    const SkRect& bounds = shape.getBounds();
+    if (bounds.isEmpty()) return std::nullopt;
+    return bounds;
+  }
   // Computes the region containing all of the textures of this widgets' children.
   virtual Optional<Rect> SubtreeDrawBounds() const;
 

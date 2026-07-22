@@ -898,6 +898,12 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       }
 
       widget->draw_bounds = widget->DrawBounds();
+      if constexpr (build_variant::NotRelease) {
+        if (widget->draw_bounds && widget->draw_bounds->sk.isEmpty()) {
+          FATAL << widget->Name()
+                << " returned an empty rect from DrawBounds - it must return nullopt instead";
+        }
+      }
       widget->pack_frame_draw_bounds = widget->draw_bounds;
       bool visible = true;
       if (widget->pack_frame_draw_bounds.has_value()) {

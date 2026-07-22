@@ -291,7 +291,11 @@ struct PrototypeGhost : Widget {
   }
   StrView Name() const override { return "PrototypeGhost"; }
   SkPath Shape() const override { return SkPath(); }
-  Optional<Rect> DrawBounds() const override { return prototype_widget->Shape().getBounds(); }
+  Optional<Rect> DrawBounds() const override {
+    const SkRect& bounds = prototype_widget->Shape().getBounds();
+    if (bounds.isEmpty()) return std::nullopt;
+    return bounds;
+  }
 
   Tock Tick(time::Timer& timer) override {
     auto arg = connection.LockBind<Argument>();
@@ -1302,7 +1306,9 @@ Optional<Rect> ConnectionWidget::DrawBounds() const {
     return std::nullopt;
   }
   if (arcline) {
-    return arcline->Bounds().Outset(cable_width / 2);
+    Rect bounds = arcline->Bounds().Outset(cable_width / 2);
+    if (bounds.sk.isEmpty()) return std::nullopt;
+    return bounds;
   }
   return std::nullopt;
 }
@@ -1399,7 +1405,7 @@ void ArgumentToy::TickSplits(const Vec<ui::Widget*>& wanted) {
   }
 }
 
-void ArgumentToy::TickAutoconnectUI(time::Timer&) {
+void ArgumentToy::TickAutoconnectUI(time::Timer& timer) {
   if (radar && radar->dead) radar.reset();
   if (prototype_ghost && prototype_ghost->dead) prototype_ghost.reset();
   auto arg = LockBind<Argument>();
@@ -1414,8 +1420,8 @@ void ArgumentToy::TickAutoconnectUI(time::Timer&) {
     prototype_ghost = std::make_unique<ui::PrototypeGhost>(this, *arg.table);
     layers.OrderBelow(prototype_ghost.get());
   }
-  if (radar) radar->WakeAnimation();
-  if (prototype_ghost) prototype_ghost->WakeAnimation();
+  if (radar) radar->WakeAnimation(&timer);
+  if (prototype_ghost) prototype_ghost->WakeAnimation(&timer);
 }
 
 }  // namespace automat

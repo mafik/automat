@@ -208,7 +208,7 @@ void DragLocationAction::Enter(BoardWidget& bw) {
 
 void DragLocationAction::SetRadar(BoardWidget& bw, float target) {
   for (auto& [key, toy] : bw.toys.container) {
-    auto* connection_widget = dynamic_cast<ui::ConnectionWidget*>(toy.get());
+    auto* connection_widget = dynamic_cast<ArgumentToy*>(toy.get());
     if (!connection_widget) continue;
     float value = 0;
     if (target > 0) {
@@ -225,8 +225,8 @@ void DragLocationAction::SetRadar(BoardWidget& bw, float target) {
         }
       }
     }
-    if (connection_widget->animation_state.radar_alpha_target != value) {
-      connection_widget->animation_state.radar_alpha_target = value;
+    if (connection_widget->radar_alpha_target != value) {
+      connection_widget->radar_alpha_target = value;
       connection_widget->WakeAnimation();
     }
   }

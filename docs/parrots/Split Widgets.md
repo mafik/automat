@@ -90,9 +90,9 @@ on top of a connection.
   and is visible only outside of it. A toy can map an interface to a child widget instead: the
   FlipFlop maps its State interface to the rocker, so belts are visible between the rocker and
   the panel's edge.
-- `SyncBelt::Tick` and `ConnectionWidget::Tick` compare their `splits_over` list with the
-  wanted cover set and rebuild it when they differ. After a change they call `WakeAnimation`
-  on the board so that the ordering pass runs again.
+- `ArgumentToy::TickSplits` (src/argument.hpp) compares the widget's `splits_over` list
+  with the wanted cover set and rebuilds it when they differ. After a change it calls
+  `WakeAnimation` on the board so that the ordering pass runs again.
 
 ## Covers from stacking
 

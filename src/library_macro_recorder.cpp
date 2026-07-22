@@ -385,7 +385,7 @@ struct GlassRunButton : ui::PowerButton {
       auto& mr = static_cast<MacroRecorder&>(*locked.Owner<Object>());
       auto& toys = parent->ToyStore();
       if (auto connection_widget = toys.FindOrNull(mr.timeline.Bind())) {
-        connection_widget->animation_state.prototype_alpha_target = 1;
+        connection_widget->prototype_alpha_target = 1;
         connection_widget->WakeAnimation();
       }
     }
@@ -394,9 +394,9 @@ struct GlassRunButton : ui::PowerButton {
     ToggleButton::PointerLeave(p);
     if (auto locked = target.Lock()) {
       auto& mr = static_cast<MacroRecorder&>(*locked.Owner<Object>());
-      auto& toys = p.root_widget.toys;
+      auto& toys = parent->ToyStore();
       if (auto connection_widget = toys.FindOrNull(mr.timeline.Bind())) {
-        connection_widget->animation_state.prototype_alpha_target = 0;
+        connection_widget->prototype_alpha_target = 0;
         connection_widget->WakeAnimation();
       }
     }

@@ -46,7 +46,7 @@ using namespace automat;
 
 namespace automat::ui {
 
-static Location* FindOnSameBoard(const ConnectionWidget& w, Object& obj) {
+static Location* FindOnSameBoard(const automat::ArgumentToy& w, Object& obj) {
   if (auto* bw = BoardOrNull(w)) {
     if (auto board = bw->LockBoard()) {
       return board->LocationOrNull(obj);
@@ -55,33 +55,29 @@ static Location* FindOnSameBoard(const ConnectionWidget& w, Object& obj) {
   return nullptr;
 }
 
-Location* ConnectionWidget::StartLocation() const {
-  if (auto obj = LockOwner<Object>()) {
-    return FindOnSameBoard(*this, *obj);
-  }
-  return nullptr;
-}
-
-Location* ConnectionWidget::EndLocation() const {
-  if (auto arg = LockBind<Argument>()) {
-    if (auto* end_obj = arg.Find().Owner<Object>()) {
-      return FindOnSameBoard(*this, *end_obj);
-    }
-  }
-  return nullptr;
-}
-
 ConnectionWidget::ConnectionWidget(Widget* parent, Object& start, Argument::Table& arg)
+    : ArgumentToy(parent, start, &arg), tint(arg.tint.toSkColor()) {}
+
+SpotlightWidget::SpotlightWidget(Widget* parent, Object& start, Argument::Table& arg)
+    : ArgumentToy(parent, start, &arg) {}
+
+InvisibleWidget::InvisibleWidget(Widget* parent, Object& start, Argument::Table& arg)
     : ArgumentToy(parent, start, &arg) {}
 
 constexpr float kStreamBore = 4_mm;
 constexpr float kStreamWall = 0.5_mm;
 
-SkPath ConnectionWidget::Shape() const {
+SkPath ConnectionWidget::Shape() const { return SkPath(); }
+
+SkPath CableWidget::Shape() const {
   if (state && transparency < 0.99f) {
     return state->Shape();
   }
-  if (style == Argument::Style::Stream && transparency < 0.99f) {
+  return SkPath();
+}
+
+SkPath StreamPipeWidget::Shape() const {
+  if (transparency < 0.99f) {
     SkPathBuilder builder;
     builder.addRect(Rect::MakeCenter(pos_dir.pos, kStreamBore * 2, kStreamBore * 2).sk);
     if (arcline) {
@@ -96,77 +92,71 @@ SkPath ConnectionWidget::Shape() const {
   return SkPath();
 }
 
-struct ConnectionSpotlight : Widget {
-  ConnectionWidget& connection;
-  ConnectionSpotlight(ConnectionWidget* parent) : Widget(parent), connection(*parent) {}
-  StrView Name() const override { return "ConnectionSpotlight"; }
-  SkPath Shape() const override { return SkPath(); }
-
-  Optional<Rect> DrawBounds() const override {
-    auto arg = connection.LockBind<Argument>();
-    if (!arg) return std::nullopt;
-    auto* from = FindOnSameBoard(connection, *arg.object_ptr);
-    if (!from || !from->widget || !from->widget->toy) return std::nullopt;
-    float radius = from->widget->toy->CoarseBounds().rect.Hypotenuse() / 2;
-    Rect bounds = Rect::MakeCenter(from->Position(*from->widget), radius * 2, radius * 2);
-    if (auto* source = arg.ObjectOrNull()) {
-      if (auto* source_loc = FindOnSameBoard(connection, *source)) {
-        bounds.ExpandToInclude(source_loc->PeekPosition());
-      }
-    }
-    return bounds;
-  }
-
-  void Draw(SkCanvas& canvas) const override {
-    auto arg = connection.LockBind<Argument>();
-    if (!arg) return;
-    auto* from_ptr = FindOnSameBoard(connection, *arg.object_ptr);
-    if (!from_ptr || !from_ptr->widget || !from_ptr->widget->toy) return;
-    Location& from = *from_ptr;
-
-    auto target_bounds = from.widget->toy->CoarseBounds();
-    Vec2 target = from.Position(*from.widget);
-    float radius = target_bounds.rect.Hypotenuse() / 2;
-
-    {  // Disc around the target
-      SkPaint circle_paint;
-      SkColor4f colors[] = {
-          "#ffffff"_color4f,
-          "#ffffbe00"_color4f,
-      };
-      float pos[] = {0.5, 1};
-      circle_paint.setShader(SkShaders::RadialGradient(
-          target, radius, SkGradient{SkGradient::Colors{colors, pos, SkTileMode::kClamp}, {}}));
-      canvas.drawCircle(target, radius, circle_paint);
-    }
-
-    if (auto* source_loc =
-            arg.ObjectOrNull() ? FindOnSameBoard(connection, *arg.ObjectOrNull()) : nullptr) {
-      // Ray from the source to the target
-      Vec2 source = source_loc->PeekPosition();
-      Vec2 diff = target - source;
-      float dist = Length(diff);
-      auto angle = SinCos::FromVec2(diff, dist);
-      SkPath path = SkPathBuilder()
-                        .moveTo(source)
-                        .lineTo(target + Vec2::Polar((angle + 90_deg), radius))
-                        .lineTo(target + Vec2::Polar((angle - 90_deg), radius))
-                        .detach();
-      SkColor4f ray_colors[] = {"#ffffbe"_color4f, "#ffffbe00"_color4f};
-      Vec2 ray_positions[] = {source, target};
-      SkPaint ray_paint;
-      ray_paint.setShader(SkShaders::LinearGradient(
-          &ray_positions[0].sk,
-          SkGradient{SkGradient::Colors{ray_colors, SkTileMode::kClamp}, {}}));
-      ray_paint.setMaskFilter(SkMaskFilter::MakeBlur(SkBlurStyle::kNormal_SkBlurStyle, 1_mm));
-      canvas.drawPath(path, ray_paint);
+Optional<Rect> SpotlightWidget::DrawBounds() const {
+  auto arg = LockBind<Argument>();
+  if (!arg) return std::nullopt;
+  auto* from = FindOnSameBoard(*this, *arg.object_ptr);
+  if (!from || !from->widget || !from->widget->toy) return std::nullopt;
+  float radius = from->widget->toy->CoarseBounds().rect.Hypotenuse() / 2;
+  Rect bounds = Rect::MakeCenter(from->Position(*from->widget), radius * 2, radius * 2);
+  if (auto* source = arg.ObjectOrNull()) {
+    if (auto* source_loc = FindOnSameBoard(*this, *source)) {
+      bounds.ExpandToInclude(source_loc->PeekPosition());
     }
   }
-};
+  return bounds;
+}
+
+void SpotlightWidget::Draw(SkCanvas& canvas) const {
+  auto arg = LockBind<Argument>();
+  if (!arg) return;
+  auto* from_ptr = FindOnSameBoard(*this, *arg.object_ptr);
+  if (!from_ptr || !from_ptr->widget || !from_ptr->widget->toy) return;
+  Location& from = *from_ptr;
+
+  auto target_bounds = from.widget->toy->CoarseBounds();
+  Vec2 target = from.Position(*from.widget);
+  float radius = target_bounds.rect.Hypotenuse() / 2;
+
+  {  // Disc around the target
+    SkPaint circle_paint;
+    SkColor4f colors[] = {
+        "#ffffff"_color4f,
+        "#ffffbe00"_color4f,
+    };
+    float pos[] = {0.5, 1};
+    circle_paint.setShader(SkShaders::RadialGradient(
+        target, radius, SkGradient{SkGradient::Colors{colors, pos, SkTileMode::kClamp}, {}}));
+    canvas.drawCircle(target, radius, circle_paint);
+  }
+
+  if (auto* source_loc =
+          arg.ObjectOrNull() ? FindOnSameBoard(*this, *arg.ObjectOrNull()) : nullptr) {
+    // Ray from the source to the target
+    Vec2 source = source_loc->PeekPosition();
+    Vec2 diff = target - source;
+    float dist = Length(diff);
+    auto angle = SinCos::FromVec2(diff, dist);
+    SkPath path = SkPathBuilder()
+                      .moveTo(source)
+                      .lineTo(target + Vec2::Polar((angle + 90_deg), radius))
+                      .lineTo(target + Vec2::Polar((angle - 90_deg), radius))
+                      .detach();
+    SkColor4f ray_colors[] = {"#ffffbe"_color4f, "#ffffbe00"_color4f};
+    Vec2 ray_positions[] = {source, target};
+    SkPaint ray_paint;
+    ray_paint.setShader(SkShaders::LinearGradient(
+        &ray_positions[0].sk, SkGradient{SkGradient::Colors{ray_colors, SkTileMode::kClamp}, {}}));
+    ray_paint.setMaskFilter(SkMaskFilter::MakeBlur(SkBlurStyle::kNormal_SkBlurStyle, 1_mm));
+    canvas.drawPath(path, ray_paint);
+  }
+}
 
 struct AutoconnectRadar : Widget {
-  ConnectionWidget& connection;
-  AutoconnectRadar(ConnectionWidget* parent) : Widget(parent), connection(*parent) {}
+  ArgumentToy& connection;
+  float alpha = 0;
+  double time_seconds = 0;
+  AutoconnectRadar(ArgumentToy* parent) : Widget(parent), connection(*parent) {}
   StrView Name() const override { return "AutoconnectRadar"; }
   SkPath Shape() const override { return SkPath(); }
 
@@ -177,24 +167,35 @@ struct AutoconnectRadar : Widget {
     return Rect::MakeCenter(connection.pos_dir.pos, reach * 2, reach * 2);
   }
 
+  Tock Tick(time::Timer& timer) override {
+    auto arg = connection.LockBind<Argument>();
+    auto progress =
+        animation::LinearApproach(arg ? connection.radar_alpha_target : 0, timer.d, 2.f, alpha);
+    if (progress.settled && alpha < 0.01f) {
+      MarkDead(timer.now);
+      return {};
+    }
+    time_seconds = timer.NowSeconds();
+    return Tock::Drawing;
+  }
+
   void Draw(SkCanvas& canvas) const override {
     auto arg = connection.LockBind<Argument>();
     if (!arg) return;
     auto* from_ptr = FindOnSameBoard(connection, *arg.object_ptr);
     if (!from_ptr) return;
     Location& from = *from_ptr;
-    auto* anim = &connection.animation_state;
-    if (anim->radar_alpha < 0.01f) return;
+    if (alpha < 0.01f) return;
     auto& pos_dir = connection.pos_dir;
 
     SkPaint radius_paint;
     SkColor4f tint = arg.table->tint;
     SkColor4f colors[] = {{tint.fR, tint.fG, tint.fB, 0},
-                          {tint.fR, tint.fG, tint.fB, anim->radar_alpha * 96 / 255.f},
+                          {tint.fR, tint.fG, tint.fB, alpha * 96 / 255.f},
                           SkColors::kTransparent};
     float pos[] = {0, 1, 1};
     constexpr float kPeriod = 2.f;
-    double t = anim->time_seconds;
+    double t = time_seconds;
     auto local_matrix = SkMatrix::RotateRad(fmod(t * 2 * M_PI / kPeriod, 2 * M_PI))
                             .postTranslate(pos_dir.pos.x, pos_dir.pos.y);
     radius_paint.setShader(SkShaders::SweepGradient(
@@ -203,18 +204,16 @@ struct AutoconnectRadar : Widget {
     // TODO: switch to drawArc instead
     float autoconnect_radius = arg.table->autoconnect_radius;
 
-    float crt_width =
-        animation::SinInterp(anim->radar_alpha, 0.2f, 0.1f, 0.5f, 1.f) * autoconnect_radius * 2;
-    float crt_height =
-        animation::SinInterp(anim->radar_alpha, 0.4f, 0.1f, 0.8f, 1.f) * autoconnect_radius * 2;
+    float crt_width = animation::SinInterp(alpha, 0.2f, 0.1f, 0.5f, 1.f) * autoconnect_radius * 2;
+    float crt_height = animation::SinInterp(alpha, 0.4f, 0.1f, 0.8f, 1.f) * autoconnect_radius * 2;
     SkRect crt_oval = Rect::MakeCenter(pos_dir.pos, crt_width, crt_height);
     canvas.drawArc(crt_oval, 0, 360, true, radius_paint);
 
     SkPaint stroke_paint;
-    stroke_paint.setColor(SkColor4f{tint.fR, tint.fG, tint.fB, anim->radar_alpha * 128 / 255.f});
+    stroke_paint.setColor(SkColor4f{tint.fR, tint.fG, tint.fB, alpha * 128 / 255.f});
     stroke_paint.setStyle(SkPaint::kStroke_Style);
 
-    float radar_alpha_sin = sin((anim->radar_alpha - 0.5f) * M_PI) * 0.5f + 0.5f;
+    float radar_alpha_sin = sin((alpha - 0.5f) * M_PI) * 0.5f + 0.5f;
     radar_alpha_sin *= radar_alpha_sin;
     constexpr float kQuadrantSweep = 80;
     float quadrant_offset = -fmod(t, 360) * 15;
@@ -245,7 +244,7 @@ struct AutoconnectRadar : Widget {
     auto text_blob =
         SkTextBlob::MakeFromRSXform(name.data(), name.size(), transforms_span, font.sk_font);
     SkPaint text_paint;
-    float text_alpha = animation::SinInterp(anim->radar_alpha, 0.5f, 0.0f, 1.f, 1.f);
+    float text_alpha = animation::SinInterp(alpha, 0.5f, 0.0f, 1.f, 1.f);
     text_paint.setColor(SkColor4f{tint.fR, tint.fG, tint.fB, text_alpha});
 
     canvas.save();
@@ -270,7 +269,7 @@ struct AutoconnectRadar : Widget {
             }
             auto arcline = RouteCable(pos_dir, to_points, &canvas);
             auto it = ArcLine::Iterator(arcline);
-            float total_length = it.AdvanceToEnd() * anim->radar_alpha;
+            float total_length = it.AdvanceToEnd() * alpha;
             Vec2 end_point = it.Position();
             float relative_dist = Length(pos_dir.pos - to_points[0].pos) / autoconnect_radius;
             auto path = arcline.ToPath(false, std::lerp(total_length, 0, relative_dist - 1));
@@ -282,10 +281,11 @@ struct AutoconnectRadar : Widget {
 };
 
 struct PrototypeGhost : Widget {
-  ConnectionWidget& connection;
+  ArgumentToy& connection;
+  float alpha = 0;
   std::unique_ptr<ObjectToy> prototype_widget;
 
-  PrototypeGhost(ConnectionWidget* parent, Argument::Table& table)
+  PrototypeGhost(ArgumentToy* parent, Argument::Table& table)
       : Widget(parent), connection(*parent), prototype_widget(table.prototype()->MakeToy(this)) {
     layers.OrderInside(prototype_widget.get());
   }
@@ -293,9 +293,30 @@ struct PrototypeGhost : Widget {
   SkPath Shape() const override { return SkPath(); }
   Optional<Rect> DrawBounds() const override { return prototype_widget->Shape().getBounds(); }
 
+  Tock Tick(time::Timer& timer) override {
+    auto arg = connection.LockBind<Argument>();
+    if (!arg) {
+      MarkDead(timer.now);
+      return {};
+    }
+    float target = arg.IsConnected() ? 0 : connection.prototype_alpha_target;
+    auto progress = animation::LinearApproach(target, timer.d, 2.f, alpha);
+    if (progress.settled && alpha < 0.01f) {
+      MarkDead(timer.now);
+      return {};
+    }
+    if (auto* from = FindOnSameBoard(connection, *arg.object_ptr)) {
+      Vec2 pos = PositionAhead(*from, *arg.table, *prototype_widget);
+      local_to_parent = SkM44(SkMatrix::Translate(pos.x, pos.y));
+    }
+    Tock tock;
+    tock.drawing |= progress;
+    return tock;
+  }
+
   void Draw(SkCanvas& canvas) const override {
     Rect bounds = prototype_widget->Shape().getBounds();
-    canvas.saveLayerAlphaf(&bounds.sk, connection.animation_state.prototype_alpha * 0.4f);
+    canvas.saveLayerAlphaf(&bounds.sk, alpha * 0.4f);
     BakeChildren(canvas);
     canvas.restore();
   }
@@ -315,7 +336,7 @@ struct ConnectionWidgetLocker {
   SkMatrix end_transform;
 
   // Computing everything in initializer avoids zero-initialization
-  ConnectionWidgetLocker(ConnectionWidget& w)
+  ConnectionWidgetLocker(ArgumentToy& w)
       : toy_store(w.ToyStore()),
         board_widget(BoardOrNull(w)),
         start_obj(w.LockOwner<Object>()),
@@ -365,52 +386,143 @@ static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
   }
 }
 
-ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
-  ConnectionWidgetLocker a(*this);
-
+static Optional<Tock> TickLifecycle(ConnectionWidget& w, ConnectionWidgetLocker& a,
+                                    time::Timer& timer) {
   if (!a.start_arg) {
-    state.reset();
     Tock tock;
-    tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.1, alpha);
+    tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.1, w.alpha);
     if (!tock.ing) {
-      MarkDead(timer.now);
+      w.MarkDead(timer.now);
     }
     return tock;
   }
-  Argument arg = a.start_arg;
-
-  style = arg.table->style;
-  tint = arg.table->tint.toSkColor();
-  if (style == Argument::Style::Spotlight) {
-    if (!spotlight) {
-      spotlight = std::make_unique<ConnectionSpotlight>(this);
-      layers.OrderBelow(spotlight.get());
-    }
-    spotlight->RedrawThisFrame();
-    return Tock::Draw;
-  }
-  if (style == Argument::Style::Invisible) {
-    return Tock::Draw;
-  }
-
   if (a.start_widget == nullptr) {
-    state.reset();
     Tock tock;
-    tock.shaping |= animation::LinearApproach(1, timer.d, 5, transparency);
-    tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.1, alpha);
+    tock.shaping |= animation::LinearApproach(1, timer.d, 5, w.transparency);
+    tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.1, w.alpha);
     return tock;
   }
+  return std::nullopt;
+}
 
+static void UpdateShapes(ConnectionWidget& w, ConnectionWidgetLocker& a) {
   auto* start_base_widget = a.start_widget->BaseToy();
-  from_shape = start_base_widget->Shape();
+  w.from_shape = start_base_widget->Shape();
   if (a.board_widget) {
     auto transform_from_to_board = TransformBetween(*start_base_widget, *a.board_widget);
-    from_shape = from_shape.makeTransform(transform_from_to_board);
+    w.from_shape = w.from_shape.makeTransform(transform_from_to_board);
   }
 
-  UpdateEndpoints(*this, a);
+  UpdateEndpoints(w, a);
 
-  if (icon == nullptr && a.start_arg && style == Argument::Style::Cable) {
+  if (a.end_iface && a.end_widget) {
+    w.to_shape = a.end_widget->Shape().makeTransform(a.end_transform);
+  } else {
+    w.to_shape.reset();
+  }
+}
+
+static Tock TickVisibility(ConnectionWidget& w, ConnectionWidgetLocker& a, time::Timer& timer) {
+  // Don't draw the cable if one of the to_points is over from_shape
+  bool overlapping = false;
+  if (a.EndObj() != a.StartObj()) {
+    overlapping = w.to_shape.contains(w.pos_dir.pos.x, w.pos_dir.pos.y);
+    if (!overlapping && !w.from_shape.isEmpty()) {
+      for (auto& to_point : w.to_points) {
+        if (w.from_shape.contains(to_point.pos.x, to_point.pos.y)) {
+          overlapping = true;
+          break;
+        }
+      }
+    }
+  }
+
+  w.hidden = overlapping;
+
+  if (a.end_iface && a.end_widget == nullptr) {
+    w.hidden = true;
+  }
+
+  if (IsIconified(a.StartObj()) && !a.end_iface) {
+    w.hidden = true;
+  }
+
+  if (w.manual_position.has_value()) {
+    w.hidden = false;
+  }
+
+  Tock tock;
+  tock.shaping |= animation::LinearApproach(w.hidden ? 1 : 0, timer.d, 5, w.transparency);
+
+  float loc_transparency = 0.f;
+  if (auto* start_loc = FindOnSameBoard(w, *a.StartObj())) {
+    if (start_loc->widget) {
+      loc_transparency = start_loc->widget->transparency;
+    }
+  }
+  w.alpha = (1.f - loc_transparency) * (1.f - w.transparency);
+  return tock;
+}
+
+static void RouteArcline(ConnectionWidget& w, bool stub_when_empty) {
+  if (stub_when_empty && w.to_points.empty()) {
+    Vec<Vec2AndDir> stub;
+    stub.push_back(Vec2AndDir{.pos = w.pos_dir.pos + Vec2(0, -8_mm), .dir = -90_deg});
+    w.arcline = RouteCable(w.pos_dir, stub, nullptr);
+  } else {
+    w.arcline = RouteCable(w.pos_dir, w.to_points, nullptr);
+  }
+}
+
+static Tock TickRefusal(ConnectionWidget& w, time::Timer& timer) {
+  Tock tock;
+  if (!w.refusal_text.empty()) {
+    if (timer.now >= w.refusal_until) {
+      w.refusal_text.clear();
+    }
+    tock |= Tock::Drawing;
+  }
+  return tock;
+}
+
+static void ComputeEndAnchor(ConnectionWidget& w, ConnectionWidgetLocker& a,
+                             const Optional<ArcLine>& route) {
+  w.end_anchor_local.reset();
+  if (a.end_widget && route) {
+    ArcLine::Iterator it = *route;
+    it.AdvanceToEnd();
+    SkMatrix inv;
+    if (a.end_transform.invert(&inv)) {
+      w.end_anchor_local = inv.mapPoint(it.Position());
+    }
+  }
+}
+
+ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
+  ConnectionWidgetLocker a(*this);
+  if (auto early = TickLifecycle(*this, a, timer)) {
+    return *early;
+  }
+  UpdateShapes(*this, a);
+  Tock tock = TickVisibility(*this, a, timer);
+  RouteArcline(*this, false);
+  tock |= TickRefusal(*this, timer);
+  ComputeEndAnchor(*this, a, arcline);
+  TickAutoconnectUI(timer);
+  TickSplits();
+  return tock;
+}
+
+ui::Tock CableWidget::Tick(time::Timer& timer) {
+  ConnectionWidgetLocker a(*this);
+  if (auto early = TickLifecycle(*this, a, timer)) {
+    state.reset();
+    return *early;
+  }
+  Argument arg = a.start_arg;
+  UpdateShapes(*this, a);
+
+  if (icon == nullptr) {
     icon = arg.MakeIcon(this);
     layers.OrderInside(icon.get());
     auto m = SkMatrix::RectToRect(icon->Shape().getBounds(), Rect(-4_mm, -4_mm, 4_mm, 4_mm),
@@ -421,119 +533,56 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
     icon->local_to_parent = SkM44(m);
   }
 
-  if (!state.has_value() && style == Argument::Style::Cable) {
+  if (!state.has_value()) {
     state.emplace(arg, *a.start_widget, pos_dir);
   }
 
-  if (a.end_iface && a.end_widget) {
-    to_shape = a.end_widget->Shape().makeTransform(a.end_transform);
+  Tock tock = TickVisibility(*this, a, timer);
+  state->hidden = hidden;
+  arcline.reset();
+  tock |= TickRefusal(*this, timer);
+
+  if (state->stabilized && !state->stabilized_end.has_value()) {
+    if (state->sections.front().pos != pos_dir.pos) tock |= Tock::Shape;
+    state->stabilized_start = pos_dir.pos;
+    state->sections.front().pos = pos_dir.pos;
+    state->sections.back().pos = pos_dir.pos;
   } else {
-    to_shape.reset();
+    state->stabilized = false;
   }
 
-  // Don't draw the cable if one of the to_points is over from_shape
-  bool overlapping = false;
-  if (a.EndObj() != a.StartObj()) {
-    overlapping = to_shape.contains(pos_dir.pos.x, pos_dir.pos.y);
-    if (!overlapping && !from_shape.isEmpty()) {
-      for (auto& to_point : to_points) {
-        if (from_shape.contains(to_point.pos.x, to_point.pos.y)) {
-          overlapping = true;
-          break;
-        }
-      }
-    }
-  }
-
-  bool should_be_hidden = overlapping;
-
-  if (a.end_iface && a.end_widget == nullptr) {
-    should_be_hidden = true;
-  }
-
-  bool start_iconified = IsIconified(a.StartObj());
-  if (start_iconified && !a.end_iface) {
-    should_be_hidden = true;
-  }
-
-  if (manual_position.has_value()) {
-    should_be_hidden = false;
-  }
-
-  if (state) {
-    state->hidden = should_be_hidden;
-  }
-
-  Tock tock;
-  tock.shaping |= animation::LinearApproach(should_be_hidden ? 1 : 0, timer.d, 5, transparency);
-
-  float loc_transparency = 0.f;
-  if (auto* start_loc = FindOnSameBoard(*this, *a.StartObj())) {
-    if (start_loc->widget) {
-      loc_transparency = start_loc->widget->transparency;
-    }
-  }
-  alpha = (1.f - loc_transparency) * (1.f - transparency);
-
-  if (state) {
-    arcline.reset();
-  } else if (style == Argument::Style::Stream && to_points.empty()) {
-    Vec<Vec2AndDir> stub;
-    stub.push_back(Vec2AndDir{.pos = pos_dir.pos + Vec2(0, -8_mm), .dir = -90_deg});
-    arcline = RouteCable(pos_dir, stub, nullptr);
+  if (a.end_widget) {
+    state->steel_insert_hidden.target = 1;
   } else {
-    arcline = RouteCable(pos_dir, to_points, nullptr);
+    state->steel_insert_hidden.target = 0;
+  }
+  tock.shaping |= state->steel_insert_hidden.Tick(timer);
+
+  uint32_t last_activity = arg.state->last_activity.load(std::memory_order_relaxed);
+  if (state->last_activity != last_activity) {
+    state->lightness_pct = 100;
+    state->last_activity = last_activity;
   }
 
-  if (style == Argument::Style::Stream) {
-    if (auto stream_arg = dyn_cast<StreamArgument>(arg)) {
-      stream_format = stream_arg.Format();
-      auto stats = stream_arg.Stats();
-      stream_bytes_per_s = (float)stream_byte_rate.Update(timer.NowSeconds(), stats.bytes);
-      stream_units_per_s = (float)stream_unit_rate.Update(timer.NowSeconds(), stats.units);
-      stream_fill = stats.fill;
-      stream_capacity = stats.capacity;
-      stream_fill_unit = stats.fill_unit;
-      if (stats.blocked != StreamBlocked::None) {
-        if (stats.blocked != stream_blocked) {
-          stream_blocked = stats.blocked;
-          stream_blocked_score = 0;
-        }
-        stream_blocked_score = std::min(1.f, stream_blocked_score + 3.f * (float)timer.d);
-      } else {
-        stream_blocked_score = std::max(0.f, stream_blocked_score - 1.5f * (float)timer.d);
-      }
-      bool blocked_shown =
-          stream_blocked_shown ? stream_blocked_score > 0.1f : stream_blocked_score > 0.85f;
-      bool moving = a.end_iface && stream_bytes_per_s > 1;
-      if (moving) {
-        float speed = std::min<float>(30_mm, 2_mm * log2f(1 + stream_bytes_per_s / 1024));
-        stream_dash_phase -= speed * timer.d;
-      }
-      float fill_fraction = stream_capacity ? (float)stream_fill / stream_capacity : 0;
-      if (moving || fabsf(stream_bytes_per_s - stream_rate_drawn) > 0.5f ||
-          fabsf(fill_fraction - stream_fill_drawn) > 0.02f ||
-          blocked_shown != stream_blocked_shown) {
-        tock |= Tock::Drawing;
-        stream_rate_drawn = stream_bytes_per_s;
-        stream_fill_drawn = fill_fraction;
-        stream_blocked_shown = blocked_shown;
-      }
-      // Keep ticking while connected so the meters keep polling the stream counters.
-      if (a.end_iface) tock |= Tock::Ing;
-    }
-  }
+  tock.shaping |= SimulateCablePhysics(timer, *state, pos_dir, to_points);
 
-  if (!refusal_text.empty()) {
-    if (timer.now < refusal_until) {
-      tock |= Tock::Drawing;
-    } else {
-      refusal_text.clear();
-      tock |= Tock::Drawing;
-    }
-  }
+  ComputeEndAnchor(*this, a, state->arcline);
+  TickAutoconnectUI(timer);
+  TickSplits();
+  return tock;
+}
 
-  if (!state.has_value() && style != Argument::Style::Arrow && alpha > 0.01f) {
+ui::Tock RoutedCableWidget::Tick(time::Timer& timer) {
+  ConnectionWidgetLocker a(*this);
+  if (auto early = TickLifecycle(*this, a, timer)) {
+    return *early;
+  }
+  UpdateShapes(*this, a);
+  Tock tock = TickVisibility(*this, a, timer);
+  RouteArcline(*this, false);
+  tock |= TickRefusal(*this, timer);
+
+  if (alpha > 0.01f) {
     auto new_length = ArcLine::Iterator(*arcline).AdvanceToEnd();
     if (new_length > length + 2_cm) {
       alpha = 0;
@@ -543,127 +592,145 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
     length = new_length;
   }
 
-  if (state) {
-    if (state->stabilized && !state->stabilized_end.has_value()) {
-      if (state->sections.front().pos != pos_dir.pos) tock |= Tock::Shape;
-      state->stabilized_start = pos_dir.pos;
-      state->sections.front().pos = pos_dir.pos;
-      state->sections.back().pos = pos_dir.pos;
-    } else {
-      state->stabilized = false;
-    }
+  cable_width.target = a.EndObj() ? 2_mm : 0;
+  cable_width.speed = 5;
+  tock.drawing |= cable_width.Tick(timer);
 
-    if (a.end_widget) {
-      state->steel_insert_hidden.target = 1;
-    } else {
-      state->steel_insert_hidden.target = 0;
-    }
-    tock.shaping |= state->steel_insert_hidden.Tick(timer);
-
-    uint32_t last_activity = arg.state->last_activity.load(std::memory_order_relaxed);
-    if (state->last_activity != last_activity) {
-      state->lightness_pct = 100;
-      state->last_activity = last_activity;
-    }
-
-    tock.shaping |= SimulateCablePhysics(timer, *state, pos_dir, to_points);
-  } else if (style == Argument::Style::Stream) {
-    cable_width.target = a.end_iface ? kStreamBore : 1.2_mm;
-    cable_width.speed = 5;
-    tock.shaping |= cable_width.Tick(timer);
-  } else if (style != Argument::Style::Arrow) {
-    cable_width.target = a.end_iface ? 2_mm : 0;
-    cable_width.speed = 5;
-    tock.drawing |= cable_width.Tick(timer);
-  }
-
-  end_anchor_local.reset();
-  if (a.end_widget) {
-    const Optional<ArcLine>& route = state ? state->arcline : arcline;
-    if (route) {
-      ArcLine::Iterator it = *route;
-      it.AdvanceToEnd();
-      SkMatrix inv;
-      if (a.end_transform.invert(&inv)) {
-        end_anchor_local = inv.mapPoint(it.Position());
-      }
-    }
-  }
-
-  if (arg.table->autoconnect_radius > 0) {
-    auto& anim = animation_state;
-    auto radar_progress =
-        animation::LinearApproach(anim.radar_alpha_target, timer.d, 2.f, anim.radar_alpha);
-    if (anim.radar_alpha >= 0.01f) {
-      if (!radar) {
-        radar = std::make_unique<AutoconnectRadar>(this);
-        layers.OrderBelow(radar.get());
-      }
-      anim.time_seconds = timer.NowSeconds();
-      radar->RedrawThisFrame();
-      tock |= Tock::Ing;
-    } else {
-      radar.reset();
-      if (!radar_progress.settled) tock |= Tock::Ing;
-    }
-
-    float prototype_alpha_target = a.end_iface ? 0 : anim.prototype_alpha_target;
-    auto prototype_progress =
-        animation::LinearApproach(prototype_alpha_target, timer.d, 2.f, anim.prototype_alpha);
-    if (anim.prototype_alpha > 0) {
-      auto* ghost = static_cast<PrototypeGhost*>(prototype_ghost.get());
-      if (!ghost) {
-        prototype_ghost = std::make_unique<PrototypeGhost>(this, *arg.table);
-        ghost = static_cast<PrototypeGhost*>(prototype_ghost.get());
-        layers.OrderBelow(prototype_ghost.get());
-      }
-      if (auto* from = FindOnSameBoard(*this, *arg.object_ptr)) {
-        Vec2 pos = PositionAhead(*from, *arg.table, *ghost->prototype_widget);
-        ghost->local_to_parent = SkM44(SkMatrix::Translate(pos.x, pos.y));
-      }
-      if (!prototype_progress.settled) {
-        prototype_ghost->RedrawThisFrame();
-        tock |= Tock::Ing;
-      }
-    } else {
-      prototype_ghost.reset();
-      if (!prototype_progress.settled) tock |= Tock::Ing;
-    }
-  }
-
-  {
-    Location* start_loc = StartLocation();
-    Location* end_loc = EndLocation();
-    Vec<ui::Widget*> wanted;
-    AppendObscurers(start_loc, end_loc, wanted);
-    AppendObscurers(end_loc, start_loc, wanted);
-    int matching = 0;
-    bool foreign = false;
-    for (ui::Widget& over : splits_over) {
-      if (std::find(wanted.begin(), wanted.end(), &over) != wanted.end()) {
-        ++matching;
-      } else {
-        foreign = true;
-      }
-    }
-    if (foreign || matching != (int)wanted.size()) {
-      while (!splits_over.empty()) {
-        UnsplitUnder(*splits_over.begin());
-      }
-      for (auto* cover : wanted) {
-        SplitUnder(*cover);
-      }
-      if (parent) parent->WakeAnimation();
-    }
-  }
+  ComputeEndAnchor(*this, a, arcline);
+  TickAutoconnectUI(timer);
+  TickSplits();
   return tock;
 }
 
-void ConnectionWidget::Draw(SkCanvas& canvas) const {
-  if (style == Argument::Style::Invisible || style == Argument::Style::Spotlight) {
-    return;
+void RoutedCableWidget::Draw(SkCanvas& canvas) const {
+  bool using_layer = false;
+
+  if (alpha < 1.0f) {
+    using_layer = true;
+    canvas.saveLayerAlphaf(nullptr, alpha);
   }
 
+  if (cable_width > 0.01_mm && alpha > 0.01f && arcline) {
+    auto color = SkColorSetA(tint, 255 * cable_width.value / 2_mm);
+    auto color_filter = color::MakeTintFilter(color, 30);
+    auto path = arcline->ToPath(false);
+    DrawCable(canvas, path, color_filter, CableTexture::Smooth, cable_width, cable_width);
+  }
+
+  if (using_layer) {
+    canvas.restore();
+  }
+}
+
+ui::Tock StreamPipeWidget::Tick(time::Timer& timer) {
+  ConnectionWidgetLocker a(*this);
+  if (auto early = TickLifecycle(*this, a, timer)) {
+    return *early;
+  }
+  UpdateShapes(*this, a);
+  Tock tock = TickVisibility(*this, a, timer);
+  RouteArcline(*this, true);
+
+  if (auto stream_arg = dyn_cast<StreamArgument>(a.start_arg)) {
+    format = stream_arg.Format();
+    auto stats = stream_arg.Stats();
+    bytes_per_s = (float)byte_rate.Update(timer.NowSeconds(), stats.bytes);
+    units_per_s = (float)unit_rate.Update(timer.NowSeconds(), stats.units);
+    fill = stats.fill;
+    capacity = stats.capacity;
+    fill_unit = stats.fill_unit;
+    if (stats.blocked != StreamBlocked::None) {
+      if (stats.blocked != blocked) {
+        blocked = stats.blocked;
+        blocked_score = 0;
+      }
+      blocked_score = std::min(1.f, blocked_score + 3.f * (float)timer.d);
+    } else {
+      blocked_score = std::max(0.f, blocked_score - 1.5f * (float)timer.d);
+    }
+    bool now_shown = blocked_shown ? blocked_score > 0.1f : blocked_score > 0.85f;
+    bool moving = a.end_iface && bytes_per_s > 1;
+    if (moving) {
+      float speed = std::min<float>(30_mm, 2_mm * log2f(1 + bytes_per_s / 1024));
+      dash_phase -= speed * timer.d;
+    }
+    float fill_fraction = capacity ? (float)fill / capacity : 0;
+    if (moving || fabsf(bytes_per_s - rate_drawn) > 0.5f ||
+        fabsf(fill_fraction - fill_drawn) > 0.02f || now_shown != blocked_shown) {
+      tock |= Tock::Drawing;
+      rate_drawn = bytes_per_s;
+      fill_drawn = fill_fraction;
+      blocked_shown = now_shown;
+    }
+    // Keep ticking while connected so the meters keep polling the stream counters.
+    if (a.end_iface) tock |= Tock::Ing;
+  }
+
+  tock |= TickRefusal(*this, timer);
+
+  if (alpha > 0.01f) {
+    auto new_length = ArcLine::Iterator(*arcline).AdvanceToEnd();
+    if (new_length > length + 2_cm) {
+      alpha = 0;
+      transparency = 1;
+      tock |= Tock::Drawing;
+    }
+    length = new_length;
+  }
+
+  cable_width.target = a.end_iface ? kStreamBore : 1.2_mm;
+  cable_width.speed = 5;
+  tock.shaping |= cable_width.Tick(timer);
+
+  ComputeEndAnchor(*this, a, arcline);
+  TickAutoconnectUI(timer);
+  TickSplits();
+  return tock;
+}
+
+ui::Tock SpotlightWidget::Tick(time::Timer& timer) {
+  ConnectionWidgetLocker a(*this);
+  if (!a.start_arg) {
+    MarkDead(timer.now);
+    return {};
+  }
+  if (a.start_widget) {
+    pos_dir = a.start_widget->ArgStart(*a.start_arg.table, a.board_widget);
+  }
+  TickAutoconnectUI(timer);
+  TickSplits();
+  return Tock::Draw;
+}
+
+ui::Tock InvisibleWidget::Tick(time::Timer& timer) {
+  if (!LockBind<Argument>()) {
+    MarkDead(timer.now);
+  }
+  return {};
+}
+
+void ConnectionWidget::Draw(SkCanvas& canvas) const {
+  bool using_layer = false;
+
+  if (alpha < 1.0f) {
+    using_layer = true;
+    canvas.saveLayerAlphaf(nullptr, alpha);
+  }
+
+  if (to_shape.isEmpty() && !to_points.empty()) {
+    SkPath dummy_to_shape = SkPathBuilder().moveTo(to_points[0].pos).detach();
+    DrawArrow(canvas, from_shape, dummy_to_shape);
+  }
+  if (!to_shape.isEmpty()) {
+    DrawArrow(canvas, from_shape, to_shape);
+  }
+
+  if (using_layer) {
+    canvas.restore();
+  }
+}
+
+void CableWidget::Draw(SkCanvas& canvas) const {
   bool using_layer = false;
 
   if (alpha < 1.0f) {
@@ -963,192 +1030,182 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
                          paint);
       }
     }
-  } else {
-    if (style == Argument::Style::Arrow) {
-      if (to_shape.isEmpty()) {
-        if (!to_points.empty()) {
-          SkPath dummy_to_shape = SkPathBuilder().moveTo(to_points[0].pos).detach();
-          DrawArrow(canvas, from_shape, dummy_to_shape);
+  }
+  if (using_layer) {
+    canvas.restore();
+  }
+}
+
+void StreamPipeWidget::Draw(SkCanvas& canvas) const {
+  bool using_layer = false;
+
+  if (alpha < 1.0f) {
+    using_layer = true;
+    canvas.saveLayerAlphaf(nullptr, alpha);
+  }
+
+  if (cable_width > 0.2_mm && alpha > 0.01f && arcline) {
+    SkPath path = arcline->ToPath(false);
+    float bore = cable_width;
+    SkPaint wall_paint;
+    wall_paint.setStyle(SkPaint::kStroke_Style);
+    wall_paint.setStrokeWidth(bore + 2 * kStreamWall);
+    wall_paint.setColor(tint);
+    wall_paint.setStrokeCap(SkPaint::kRound_Cap);
+    wall_paint.setAntiAlias(true);
+    canvas.drawPath(path, wall_paint);
+
+    SkPaint interior_paint;
+    interior_paint.setStyle(SkPaint::kStroke_Style);
+    interior_paint.setStrokeWidth(bore);
+    interior_paint.setColor(SkColorSetRGB(0xff, 0xfd, 0xf0));
+    interior_paint.setStrokeCap(SkPaint::kRound_Cap);
+    interior_paint.setAntiAlias(true);
+    canvas.drawPath(path, interior_paint);
+
+    bool connected = !to_shape.isEmpty();
+    if (connected) {
+      SkPaint dash_paint;
+      dash_paint.setStyle(SkPaint::kStroke_Style);
+      dash_paint.setStrokeWidth(bore * 0.45f);
+      dash_paint.setColor(SkColorSetRGB(0x4a, 0x4a, 0x4a));
+      dash_paint.setAlphaf(bytes_per_s > 1 ? 0.55f : 0.15f);
+      dash_paint.setStrokeCap(SkPaint::kRound_Cap);
+      dash_paint.setAntiAlias(true);
+      float intervals[2] = {4_mm, 6_mm};
+      dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, dash_phase));
+      canvas.drawPath(path, dash_paint);
+    }
+
+    bool chip_wanted = !format.empty() || bytes_per_s > 1 || capacity > 0 || blocked_shown;
+    if (connected && chip_wanted) {
+      SkPathMeasure measure(path, false);
+      SkPoint mid_pos;
+      if (measure.getPosTan(measure.getLength() / 2, &mid_pos, nullptr)) {
+        auto& font = GetFont();
+        const SkColor kInk = SkColorSetRGB(0x1a, 0x1a, 0x1a);
+        const SkColor kInkSoft = SkColorSetRGB(0x4a, 0x4a, 0x4a);
+        struct ChipLine {
+          Str text;
+          SkColor color;
+        };
+        Vec<ChipLine> lines;
+        if (!format.empty()) lines.push_back({format, kInk});
+        if (bytes_per_s > 1) {
+          Str rate = units_per_s > 0.1f
+                         ? f("{:.1f} buf/s · {}", units_per_s, FormatBytesPerSecond(bytes_per_s))
+                         : FormatBytesPerSecond(bytes_per_s);
+          lines.push_back({rate, kInkSoft});
         }
-      }
-      if (!to_shape.isEmpty()) {
-        DrawArrow(canvas, from_shape, to_shape);
-      }
-    } else if (style == Argument::Style::Stream) {
-      if (cable_width > 0.2_mm && alpha > 0.01f && arcline) {
-        SkPath path = arcline->ToPath(false);
-        float bore = cable_width;
-        SkPaint wall_paint;
-        wall_paint.setStyle(SkPaint::kStroke_Style);
-        wall_paint.setStrokeWidth(bore + 2 * kStreamWall);
-        wall_paint.setColor(tint);
-        wall_paint.setStrokeCap(SkPaint::kRound_Cap);
-        wall_paint.setAntiAlias(true);
-        canvas.drawPath(path, wall_paint);
-
-        SkPaint interior_paint;
-        interior_paint.setStyle(SkPaint::kStroke_Style);
-        interior_paint.setStrokeWidth(bore);
-        interior_paint.setColor(SkColorSetRGB(0xff, 0xfd, 0xf0));
-        interior_paint.setStrokeCap(SkPaint::kRound_Cap);
-        interior_paint.setAntiAlias(true);
-        canvas.drawPath(path, interior_paint);
-
-        bool connected = !to_shape.isEmpty();
-        if (connected) {
-          SkPaint dash_paint;
-          dash_paint.setStyle(SkPaint::kStroke_Style);
-          dash_paint.setStrokeWidth(bore * 0.45f);
-          dash_paint.setColor(SkColorSetRGB(0x4a, 0x4a, 0x4a));
-          dash_paint.setAlphaf(stream_bytes_per_s > 1 ? 0.55f : 0.15f);
-          dash_paint.setStrokeCap(SkPaint::kRound_Cap);
-          dash_paint.setAntiAlias(true);
-          float intervals[2] = {4_mm, 6_mm};
-          dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, stream_dash_phase));
-          canvas.drawPath(path, dash_paint);
+        int fill_line = -1;
+        constexpr float kBarW = 12_mm;
+        if (capacity > 0) {
+          fill_line = (int)lines.size();
+          Str fill_text = fill_unit.empty() ? f("{} / {}", FormatBytes(fill), FormatBytes(capacity))
+                                            : f("{} / {} {}", fill, capacity, fill_unit);
+          lines.push_back({fill_text, kInkSoft});
         }
-
-        bool chip_wanted = !stream_format.empty() || stream_bytes_per_s > 1 ||
-                           stream_capacity > 0 || stream_blocked_shown;
-        if (connected && chip_wanted) {
-          SkPathMeasure measure(path, false);
-          SkPoint mid_pos;
-          if (measure.getPosTan(measure.getLength() / 2, &mid_pos, nullptr)) {
-            auto& font = GetFont();
-            const SkColor kInk = SkColorSetRGB(0x1a, 0x1a, 0x1a);
-            const SkColor kInkSoft = SkColorSetRGB(0x4a, 0x4a, 0x4a);
-            struct ChipLine {
-              Str text;
-              SkColor color;
-            };
-            Vec<ChipLine> lines;
-            if (!stream_format.empty()) lines.push_back({stream_format, kInk});
-            if (stream_bytes_per_s > 1) {
-              Str rate = stream_units_per_s > 0.1f ? f("{:.1f} buf/s · {}", stream_units_per_s,
-                                                       FormatBytesPerSecond(stream_bytes_per_s))
-                                                   : FormatBytesPerSecond(stream_bytes_per_s);
-              lines.push_back({rate, kInkSoft});
-            }
-            int fill_line = -1;
-            constexpr float kBarW = 12_mm;
-            if (stream_capacity > 0) {
-              fill_line = (int)lines.size();
-              Str fill_text =
-                  stream_fill_unit.empty()
-                      ? f("{} / {}", FormatBytes(stream_fill), FormatBytes(stream_capacity))
-                      : f("{} / {} {}", stream_fill, stream_capacity, stream_fill_unit);
-              lines.push_back({fill_text, kInkSoft});
-            }
-            if (stream_blocked_shown) {
-              lines.push_back({stream_blocked == StreamBlocked::Producer
-                                   ? Str("backpressured producer")
-                                   : Str("starved consumer"),
-                               kInk});
-            }
-            float line_height = kLetterSizeMM / 1000;
-            float line_step = line_height * 1.5f;
-            float pad = 0.8_mm;
-            float text_w = 0;
-            for (int i = 0; i < (int)lines.size(); ++i) {
-              float w = font.MeasureText(lines[i].text);
-              if (i == fill_line) w += kBarW + 1_mm;
-              text_w = std::max(text_w, w);
-            }
-            float x0 = mid_pos.fX + bore / 2 + kStreamWall + 1.2_mm;
-            Rect back(x0 - pad, mid_pos.fY - ((int)lines.size() - 1) * line_step - pad,
-                      x0 + text_w + pad, mid_pos.fY + line_height + pad);
-            SkPaint back_paint;
-            back_paint.setColor(SkColorSetARGB(0xe6, 0xff, 0xfd, 0xf0));
-            back_paint.setAntiAlias(true);
-            canvas.drawRRect(RRect::MakeSimple(back, 0.8_mm).sk, back_paint);
-            SkPaint back_stroke;
-            back_stroke.setStyle(SkPaint::kStroke_Style);
-            back_stroke.setStrokeWidth(0.15_mm);
-            back_stroke.setColor(SkColorSetRGB(0x7f, 0x7f, 0x7f));
-            back_stroke.setAntiAlias(true);
-            canvas.drawRRect(RRect::MakeSimple(back, 0.8_mm).sk, back_stroke);
-            for (int i = 0; i < (int)lines.size(); ++i) {
-              float baseline = mid_pos.fY - i * line_step;
-              float text_x = x0;
-              if (i == fill_line) {
-                Rect bar(x0, baseline, x0 + kBarW, baseline + line_height);
-                float fraction =
-                    std::min(1.f, (float)stream_fill / std::max<uint64_t>(1, stream_capacity));
-                SkPaint bar_fill;
-                bar_fill.setColor(SkColorSetRGB(0x99, 0xd9, 0xea));
-                bar_fill.setAntiAlias(true);
-                canvas.drawRect(
-                    SkRect::MakeLTRB(bar.left, bar.bottom, bar.left + kBarW * fraction, bar.top),
-                    bar_fill);
-                SkPaint bar_stroke;
-                bar_stroke.setStyle(SkPaint::kStroke_Style);
-                bar_stroke.setStrokeWidth(0.15_mm);
-                bar_stroke.setColor(kInkSoft);
-                bar_stroke.setAntiAlias(true);
-                canvas.drawRect(bar.sk, bar_stroke);
-                text_x += kBarW + 1_mm;
-              }
-              SkPaint text_paint;
-              text_paint.setColor(lines[i].color);
-              text_paint.setAntiAlias(true);
-              canvas.save();
-              canvas.translate(text_x, baseline);
-              font.DrawText(canvas, lines[i].text, text_paint);
-              canvas.restore();
-            }
+        if (blocked_shown) {
+          lines.push_back({blocked == StreamBlocked::Producer ? Str("backpressured producer")
+                                                              : Str("starved consumer"),
+                           kInk});
+        }
+        float line_height = kLetterSizeMM / 1000;
+        float line_step = line_height * 1.5f;
+        float pad = 0.8_mm;
+        float text_w = 0;
+        for (int i = 0; i < (int)lines.size(); ++i) {
+          float w = font.MeasureText(lines[i].text);
+          if (i == fill_line) w += kBarW + 1_mm;
+          text_w = std::max(text_w, w);
+        }
+        float x0 = mid_pos.fX + bore / 2 + kStreamWall + 1.2_mm;
+        Rect back(x0 - pad, mid_pos.fY - ((int)lines.size() - 1) * line_step - pad,
+                  x0 + text_w + pad, mid_pos.fY + line_height + pad);
+        SkPaint back_paint;
+        back_paint.setColor(SkColorSetARGB(0xe6, 0xff, 0xfd, 0xf0));
+        back_paint.setAntiAlias(true);
+        canvas.drawRRect(RRect::MakeSimple(back, 0.8_mm).sk, back_paint);
+        SkPaint back_stroke;
+        back_stroke.setStyle(SkPaint::kStroke_Style);
+        back_stroke.setStrokeWidth(0.15_mm);
+        back_stroke.setColor(SkColorSetRGB(0x7f, 0x7f, 0x7f));
+        back_stroke.setAntiAlias(true);
+        canvas.drawRRect(RRect::MakeSimple(back, 0.8_mm).sk, back_stroke);
+        for (int i = 0; i < (int)lines.size(); ++i) {
+          float baseline = mid_pos.fY - i * line_step;
+          float text_x = x0;
+          if (i == fill_line) {
+            Rect bar(x0, baseline, x0 + kBarW, baseline + line_height);
+            float fraction = std::min(1.f, (float)fill / std::max<uint64_t>(1, capacity));
+            SkPaint bar_fill;
+            bar_fill.setColor(SkColorSetRGB(0x99, 0xd9, 0xea));
+            bar_fill.setAntiAlias(true);
+            canvas.drawRect(
+                SkRect::MakeLTRB(bar.left, bar.bottom, bar.left + kBarW * fraction, bar.top),
+                bar_fill);
+            SkPaint bar_stroke;
+            bar_stroke.setStyle(SkPaint::kStroke_Style);
+            bar_stroke.setStrokeWidth(0.15_mm);
+            bar_stroke.setColor(kInkSoft);
+            bar_stroke.setAntiAlias(true);
+            canvas.drawRect(bar.sk, bar_stroke);
+            text_x += kBarW + 1_mm;
           }
-        }
-
-        if (!connected && !refusal_text.empty()) {
-          float remaining = time::ToSeconds(refusal_until - time::SteadyNow());
-          float fade = std::clamp(remaining, 0.f, 1.f);
-          if (fade > 0) {
-            auto& font = GetFont();
-            const SkColor kRefusalInk = SkColorSetRGB(0xa0, 0x10, 0x10);
-            Vec<Str> lines;
-            for (size_t start = 0; start < refusal_text.size();) {
-              size_t end = refusal_text.find('\n', start);
-              if (end == Str::npos) end = refusal_text.size();
-              lines.push_back(refusal_text.substr(start, end - start));
-              start = end + 1;
-            }
-            float line_height = kLetterSizeMM / 1000;
-            float line_step = line_height * 1.5f;
-            float pad = 0.8_mm;
-            float text_w = 0;
-            for (auto& line : lines) text_w = std::max(text_w, font.MeasureText(line));
-            float x0 = pos_dir.pos.x + 2_mm;
-            float y0 = pos_dir.pos.y - 12_mm;
-            Rect back(x0 - pad, y0 - ((int)lines.size() - 1) * line_step - pad, x0 + text_w + pad,
-                      y0 + line_height + pad);
-            SkPaint back_paint;
-            back_paint.setColor(SkColorSetARGB((uint8_t)(0xe6 * fade), 0xff, 0xfd, 0xf0));
-            back_paint.setAntiAlias(true);
-            canvas.drawRRect(RRect::MakeSimple(back, 0.8_mm).sk, back_paint);
-            SkPaint back_stroke;
-            back_stroke.setStyle(SkPaint::kStroke_Style);
-            back_stroke.setStrokeWidth(0.15_mm);
-            back_stroke.setColor(SkColorSetARGB((uint8_t)(0xff * fade), 0xa0, 0x10, 0x10));
-            back_stroke.setAntiAlias(true);
-            canvas.drawRRect(RRect::MakeSimple(back, 0.8_mm).sk, back_stroke);
-            SkPaint text_paint;
-            text_paint.setColor(kRefusalInk);
-            text_paint.setAlphaf(fade);
-            text_paint.setAntiAlias(true);
-            for (int i = 0; i < (int)lines.size(); ++i) {
-              canvas.save();
-              canvas.translate(x0, y0 - i * line_step);
-              font.DrawText(canvas, lines[i], text_paint);
-              canvas.restore();
-            }
-          }
+          SkPaint text_paint;
+          text_paint.setColor(lines[i].color);
+          text_paint.setAntiAlias(true);
+          canvas.save();
+          canvas.translate(text_x, baseline);
+          font.DrawText(canvas, lines[i].text, text_paint);
+          canvas.restore();
         }
       }
-    } else if (cable_width > 0.01_mm && alpha > 0.01f && arcline) {
-      auto color = SkColorSetA(tint, 255 * cable_width.value / 2_mm);
-      auto color_filter = color::MakeTintFilter(color, 30);
-      auto path = arcline->ToPath(false);
-      DrawCable(canvas, path, color_filter, CableTexture::Smooth, cable_width, cable_width);
+    }
+
+    if (!connected && !refusal_text.empty()) {
+      float remaining = time::ToSeconds(refusal_until - time::SteadyNow());
+      float fade = std::clamp(remaining, 0.f, 1.f);
+      if (fade > 0) {
+        auto& font = GetFont();
+        const SkColor kRefusalInk = SkColorSetRGB(0xa0, 0x10, 0x10);
+        Vec<Str> lines;
+        for (size_t start = 0; start < refusal_text.size();) {
+          size_t end = refusal_text.find('\n', start);
+          if (end == Str::npos) end = refusal_text.size();
+          lines.push_back(refusal_text.substr(start, end - start));
+          start = end + 1;
+        }
+        float line_height = kLetterSizeMM / 1000;
+        float line_step = line_height * 1.5f;
+        float pad = 0.8_mm;
+        float text_w = 0;
+        for (auto& line : lines) text_w = std::max(text_w, font.MeasureText(line));
+        float x0 = pos_dir.pos.x + 2_mm;
+        float y0 = pos_dir.pos.y - 12_mm;
+        Rect back(x0 - pad, y0 - ((int)lines.size() - 1) * line_step - pad, x0 + text_w + pad,
+                  y0 + line_height + pad);
+        SkPaint back_paint;
+        back_paint.setColor(SkColorSetARGB((uint8_t)(0xe6 * fade), 0xff, 0xfd, 0xf0));
+        back_paint.setAntiAlias(true);
+        canvas.drawRRect(RRect::MakeSimple(back, 0.8_mm).sk, back_paint);
+        SkPaint back_stroke;
+        back_stroke.setStyle(SkPaint::kStroke_Style);
+        back_stroke.setStrokeWidth(0.15_mm);
+        back_stroke.setColor(SkColorSetARGB((uint8_t)(0xff * fade), 0xa0, 0x10, 0x10));
+        back_stroke.setAntiAlias(true);
+        canvas.drawRRect(RRect::MakeSimple(back, 0.8_mm).sk, back_stroke);
+        SkPaint text_paint;
+        text_paint.setColor(kRefusalInk);
+        text_paint.setAlphaf(fade);
+        text_paint.setAntiAlias(true);
+        for (int i = 0; i < (int)lines.size(); ++i) {
+          canvas.save();
+          canvas.translate(x0, y0 - i * line_step);
+          font.DrawText(canvas, lines[i], text_paint);
+          canvas.restore();
+        }
+      }
     }
   }
   if (using_layer) {
@@ -1180,15 +1237,15 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& c
   }
 
   grab_offset = Vec2(0, 0);
-  if (widget->state) {
+  if (auto* cable = dynamic_cast<CableWidget*>(widget.Get()); cable && cable->state) {
     auto* mw = BoardOrNull(*widget);
     auto pointer_pos = mw ? pointer.PositionWithin(*mw) : pointer.PositionOnCanvas();
-    auto mat = widget->state->ConnectorMatrix();
+    auto mat = cable->state->ConnectorMatrix();
     SkMatrix mat_inv;
     if (mat.invert(&mat_inv)) {
       grab_offset = mat_inv.mapPoint(pointer_pos);
     }
-    widget->manual_position = pointer_pos - grab_offset * widget->state->connector_scale;
+    widget->manual_position = pointer_pos - grab_offset * cable->state->connector_scale;
   }
 
   widget->WakeAnimation();
@@ -1200,8 +1257,9 @@ DragConnectionAction::~DragConnectionAction() {
   if (!arg) return;
 
   Vec2 pos;
-  if (widget->state) {
-    pos = widget->state->ConnectorMatrix().mapPoint({});
+  auto* cable = dynamic_cast<CableWidget*>(widget.Get());
+  if (cable && cable->state) {
+    pos = cable->state->ConnectorMatrix().mapPoint({});
   } else if (widget->manual_position) {
     pos = *widget->manual_position;
   } else {
@@ -1222,7 +1280,8 @@ void DragConnectionAction::Update() {
   }
   auto* mw = BoardOrNull(*widget);
   Vec2 new_position = mw ? pointer.PositionWithin(*mw) : pointer.PositionOnCanvas();
-  float connector_scale = widget->state ? (float)widget->state->connector_scale : 1.f;
+  auto* cable = dynamic_cast<CableWidget*>(widget.Get());
+  float connector_scale = cable && cable->state ? (float)cable->state->connector_scale : 1.f;
   widget->manual_position = new_position - grab_offset * connector_scale;
   widget->WakeAnimation();
 }
@@ -1239,26 +1298,38 @@ Optional<Rect> ConnectionWidget::DrawBounds() const {
   if (transparency >= 0.99f) {
     return std::nullopt;
   }
-  if (state) {
-    Rect bounds = Shape().getBounds();
-    float w = state->cable_width / 2 +
-              0.5_mm;  // add 0.5mm to account for cable stiffener width (1mm wider than cable)
-    for (auto& section : state->sections) {
-      bounds.ExpandToInclude(section.pos + Vec2{w, w});
-      bounds.ExpandToInclude(section.pos - Vec2{w, w});
-    }
-    return bounds;
-  } else if (arcline) {
-    if (style == Argument::Style::Stream) {
-      Rect bounds = arcline->Bounds().Outset(cable_width / 2 + kStreamWall + 40_mm);
-      if (!refusal_text.empty()) {
-        bounds.ExpandToInclude(Rect::MakeCenter(pos_dir.pos - Vec2(0, 2_cm), 24_cm, 6_cm));
-      }
-      return bounds;
-    }
+  if (to_points.empty() && !manual_position) {
+    return std::nullopt;
+  }
+  if (arcline) {
     return arcline->Bounds().Outset(cable_width / 2);
   }
   return std::nullopt;
+}
+
+Optional<Rect> CableWidget::DrawBounds() const {
+  if (transparency >= 0.99f || !state) {
+    return std::nullopt;
+  }
+  Rect bounds = Shape().getBounds();
+  float w = state->cable_width / 2 +
+            0.5_mm;  // add 0.5mm to account for cable stiffener width (1mm wider than cable)
+  for (auto& section : state->sections) {
+    bounds.ExpandToInclude(section.pos + Vec2{w, w});
+    bounds.ExpandToInclude(section.pos - Vec2{w, w});
+  }
+  return bounds;
+}
+
+Optional<Rect> StreamPipeWidget::DrawBounds() const {
+  if (transparency >= 0.99f || !arcline) {
+    return std::nullopt;
+  }
+  Rect bounds = arcline->Bounds().Outset(cable_width / 2 + kStreamWall + 40_mm);
+  if (!refusal_text.empty()) {
+    bounds.ExpandToInclude(Rect::MakeCenter(pos_dir.pos - Vec2(0, 2_cm), 24_cm, 6_cm));
+  }
+  return bounds;
 }
 
 Vec<Vec2> ConnectionWidget::TextureAnchors() {
@@ -1279,3 +1350,72 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() {
 }
 
 }  // namespace automat::ui
+
+namespace automat {
+
+Location* ArgumentToy::StartLocation() const {
+  if (auto obj = LockOwner<Object>()) {
+    return ui::FindOnSameBoard(*this, *obj);
+  }
+  return nullptr;
+}
+
+Location* ArgumentToy::EndLocation() const {
+  if (auto arg = LockBind<Argument>()) {
+    if (auto* end_obj = arg.Find().Owner<Object>()) {
+      return ui::FindOnSameBoard(*this, *end_obj);
+    }
+  }
+  return nullptr;
+}
+
+void ArgumentToy::TickSplits() {
+  Location* start_loc = StartLocation();
+  Location* end_loc = EndLocation();
+  Vec<ui::Widget*> wanted;
+  AppendObscurers(start_loc, end_loc, wanted);
+  AppendObscurers(end_loc, start_loc, wanted);
+  TickSplits(wanted);
+}
+
+void ArgumentToy::TickSplits(const Vec<ui::Widget*>& wanted) {
+  int matching = 0;
+  bool foreign = false;
+  for (ui::Widget& over : splits_over) {
+    if (std::find(wanted.begin(), wanted.end(), &over) != wanted.end()) {
+      ++matching;
+    } else {
+      foreign = true;
+    }
+  }
+  if (foreign || matching != (int)wanted.size()) {
+    while (!splits_over.empty()) {
+      UnsplitUnder(*splits_over.begin());
+    }
+    for (auto* cover : wanted) {
+      SplitUnder(*cover);
+    }
+    if (parent) parent->WakeAnimation();
+  }
+}
+
+void ArgumentToy::TickAutoconnectUI(time::Timer&) {
+  if (radar && radar->dead) radar.reset();
+  if (prototype_ghost && prototype_ghost->dead) prototype_ghost.reset();
+  auto arg = LockBind<Argument>();
+  if (!arg || arg.table->autoconnect_radius <= 0) {
+    return;
+  }
+  if (!radar && radar_alpha_target > 0) {
+    radar = std::make_unique<ui::AutoconnectRadar>(this);
+    layers.OrderBelow(radar.get());
+  }
+  if (!prototype_ghost && prototype_alpha_target > 0 && !arg.IsConnected()) {
+    prototype_ghost = std::make_unique<ui::PrototypeGhost>(this, *arg.table);
+    layers.OrderBelow(prototype_ghost.get());
+  }
+  if (radar) radar->WakeAnimation();
+  if (prototype_ghost) prototype_ghost->WakeAnimation();
+}
+
+}  // namespace automat

@@ -7,6 +7,7 @@
 #include "base.hpp"
 #include "drag_action.hpp"
 #include "svg.hpp"
+#include "sync.hpp"
 #include "ui_connection_widget.hpp"
 #include "ui_shape_widget.hpp"
 #include "widget.hpp"
@@ -46,7 +47,23 @@ Object& Argument::ObjectOrMake() const {
 }
 
 std::unique_ptr<Argument::Toy> Argument::MakeToy(ui::Widget* parent) {
-  return std::make_unique<ui::ConnectionWidget>(parent, *object_ptr, *table);
+  switch (table->style) {
+    case Style::Arrow:
+      return std::make_unique<ui::ConnectionWidget>(parent, *object_ptr, *table);
+    case Style::Cable:
+      return std::make_unique<ui::CableWidget>(parent, *object_ptr, *table);
+    case Style::RoutedCable:
+      return std::make_unique<ui::RoutedCableWidget>(parent, *object_ptr, *table);
+    case Style::Spotlight:
+      return std::make_unique<ui::SpotlightWidget>(parent, *object_ptr, *table);
+    case Style::Invisible:
+      return std::make_unique<ui::InvisibleWidget>(parent, *object_ptr, *table);
+    case Style::Stream:
+      return std::make_unique<ui::StreamPipeWidget>(parent, *object_ptr, *table);
+    case Style::Belt:
+      return std::make_unique<SyncBelt>(parent, *object_ptr, *cast<Syncable::Table>(table_ptr));
+  }
+  return nullptr;
 }
 
 std::unique_ptr<ui::Widget> Argument::Table::DefaultMakeIcon(Argument, ui::Widget* parent) {

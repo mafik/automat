@@ -31,68 +31,24 @@ struct DragConnectionAction : Action {
   bool Highlight(Interface) const override;
 };
 
-// ConnectionWidget can function in three different modes, depending on how the argument is set to
-// draw:
-// - Arrow: a simple arrow pointing to the target location
-// - Physical Cable: a cable with a plug at the end that wiggles when moved
-// - Analytically-routed Cable: a cable that always follows the nicest path
-//
-// TODO: separate the state of these three modes better
 struct ConnectionWidget : ArgumentToy {
-  struct AnimationState {
-    float radar_alpha = 0;
-    float radar_alpha_target = 0;
-    float prototype_alpha = 0;
-    float prototype_alpha_target = 0;
-    double time_seconds = 0;
-  };
-
-  mutable AnimationState animation_state;
-
-  Optional<CablePhysicsSimulation>
-      state;  // if the state is non-empty then the cable is physically simulated
   Optional<Vec2> manual_position;  // position of the plug (bottom center)
 
   // Updated in `Tick()`
-  Argument::Table::Style style;
   SkColor tint;
-  Vec2AndDir pos_dir;  // position of connection start
-  SkPath from_shape;   // board coords
-  SkPath to_shape;     // board coords
+  SkPath from_shape;  // board coords
+  SkPath to_shape;    // board coords
   animation::Approach<> cable_width;
   Vec<Vec2AndDir> to_points;
   float transparency = 1;
   float alpha = 0;
-  float length = 0;
+  bool hidden = false;
   Optional<ArcLine> arcline;        // routed cable for non-physical connections
   Optional<Vec2> end_anchor_local;  // cable end in the end widget's local frame
-
-  // Used by Streams:
-  RateEstimator stream_byte_rate;
-  RateEstimator stream_unit_rate;
-  float stream_dash_phase = 0;
-  float stream_bytes_per_s = 0;
-  float stream_units_per_s = 0;
-  float stream_rate_drawn = 0;
-  uint64_t stream_fill = 0;
-  uint64_t stream_capacity = 0;
-  StrView stream_fill_unit = {};
-  float stream_fill_drawn = 0;
-  StreamBlocked stream_blocked = StreamBlocked::None;
-  float stream_blocked_score = 0;
-  bool stream_blocked_shown = false;
-  Str stream_format;
   Str refusal_text;
   time::SteadyPoint refusal_until = {};
-  std::unique_ptr<ui::Widget> icon;
-  std::unique_ptr<ui::Widget> spotlight;
-  std::unique_ptr<ui::Widget> radar;
-  std::unique_ptr<ui::Widget> prototype_ghost;
 
   ConnectionWidget(Widget* parent, Object&, Argument::Table&);
-
-  Location* StartLocation() const;  // TODO: remove
-  Location* EndLocation() const;    // TODO: remove
 
   StrView Name() const override { return "ConnectionWidget"; }
   void ShowRefusal(Str text);
@@ -103,6 +59,74 @@ struct ConnectionWidget : ArgumentToy {
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
   Optional<Rect> DrawBounds() const override;
   Vec<Vec2> TextureAnchors() override;
+};
+
+struct CableWidget : ConnectionWidget {
+  Optional<CablePhysicsSimulation>
+      state;  // if the state is non-empty then the cable is physically simulated
+  std::unique_ptr<ui::Widget> icon;
+
+  using ConnectionWidget::ConnectionWidget;
+
+  StrView Name() const override { return "CableWidget"; }
+  SkPath Shape() const override;
+  Tock Tick(time::Timer&) override;
+  void Draw(SkCanvas&) const override;
+  Optional<Rect> DrawBounds() const override;
+};
+
+struct RoutedCableWidget : ConnectionWidget {
+  float length = 0;
+
+  using ConnectionWidget::ConnectionWidget;
+
+  StrView Name() const override { return "RoutedCableWidget"; }
+  Tock Tick(time::Timer&) override;
+  void Draw(SkCanvas&) const override;
+};
+
+struct StreamPipeWidget : ConnectionWidget {
+  RateEstimator byte_rate;
+  RateEstimator unit_rate;
+  float dash_phase = 0;
+  float bytes_per_s = 0;
+  float units_per_s = 0;
+  float rate_drawn = 0;
+  uint64_t fill = 0;
+  uint64_t capacity = 0;
+  StrView fill_unit = {};
+  float fill_drawn = 0;
+  StreamBlocked blocked = StreamBlocked::None;
+  float blocked_score = 0;
+  bool blocked_shown = false;
+  Str format;
+  float length = 0;
+
+  using ConnectionWidget::ConnectionWidget;
+
+  StrView Name() const override { return "StreamPipeWidget"; }
+  SkPath Shape() const override;
+  Tock Tick(time::Timer&) override;
+  void Draw(SkCanvas&) const override;
+  Optional<Rect> DrawBounds() const override;
+};
+
+struct SpotlightWidget : ArgumentToy {
+  SpotlightWidget(Widget* parent, Object&, Argument::Table&);
+
+  StrView Name() const override { return "SpotlightWidget"; }
+  SkPath Shape() const override { return SkPath(); }
+  Tock Tick(time::Timer&) override;
+  void Draw(SkCanvas&) const override;
+  Optional<Rect> DrawBounds() const override;
+};
+
+struct InvisibleWidget : ArgumentToy {
+  InvisibleWidget(Widget* parent, Object&, Argument::Table&);
+
+  StrView Name() const override { return "InvisibleWidget"; }
+  SkPath Shape() const override { return SkPath(); }
+  Tock Tick(time::Timer&) override;
 };
 
 // Now that ConnectionWidget is defined, we can check whether Argument can make toys

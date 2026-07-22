@@ -11,9 +11,10 @@
 
 namespace automat {
 
+struct Location;
+
 namespace ui {
 struct Widget;
-struct ConnectionWidget;
 }  // namespace ui
 
 enum class CableTexture {
@@ -22,7 +23,20 @@ enum class CableTexture {
 };
 
 struct ArgumentToy : Toy {
+  Vec2AndDir pos_dir;
+  float radar_alpha_target = 0;
+  float prototype_alpha_target = 0;
+  std::unique_ptr<ui::Widget> radar;
+  std::unique_ptr<ui::Widget> prototype_ghost;
+
   using Toy::Toy;
+
+  Location* StartLocation() const;
+  Location* EndLocation() const;
+
+  void TickSplits();
+  void TickSplits(const Vec<ui::Widget*>& wanted);
+  void TickAutoconnectUI(time::Timer&);
 };
 
 // Arguments are responsible for finding dependencies (input & output) of objects.
@@ -50,7 +64,7 @@ struct Argument : Interface {
       return i->kind >= Interface::kArgument && i->kind <= Interface::kLastArgument;
     }
 
-    enum class Style { Arrow, Cable, Spotlight, Invisible, Stream };
+    enum class Style { Arrow, Cable, RoutedCable, Spotlight, Invisible, Stream, Belt };
 
     // The primary color of this connection.
     SkColor4f tint = "#404040"_color4f;
@@ -63,6 +77,8 @@ struct Argument : Interface {
 
     // How the connection should be rendered.
     Style style = Style::Arrow;
+
+    bool visible_when_disconnected = true;
 
     // Checks whether it's possible to connect this argument to the given end.
     // end.table may be nullptr if the connection targets the object itself (not a specific
@@ -105,6 +121,8 @@ struct Argument : Interface {
     constexpr void FillFrom() {
       Interface::Table::FillFrom<ImplT>();
       if constexpr (requires { ImplT::kStyle; }) style = ImplT::kStyle;
+      if constexpr (requires { ImplT::kVisibleWhenDisconnected; })
+        visible_when_disconnected = ImplT::kVisibleWhenDisconnected;
       if constexpr (requires { ImplT::kAutoconnectRadius; })
         autoconnect_radius = ImplT::kAutoconnectRadius;
       if constexpr (requires { ImplT::kTint; }) tint = ImplT::kTint;
@@ -293,8 +311,6 @@ struct ObjectArgument : Argument {
   }
 
   WeakPtr<T> FindObjectWeak() const { return state->target; }
-
-  using Toy = ui::ConnectionWidget;
 };
 
 // InterfaceArgument<T, kKind> — connects to a specific interface of type T.

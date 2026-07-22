@@ -30,7 +30,8 @@ struct Syncable : Argument {
     static NestedPtr<Interface::Table> DefaultFind(Argument self);
 
     constexpr Table(StrView name, Kind kind = Interface::kSyncable) : Argument::Table(name, kind) {
-      style = Style::Invisible;
+      style = Style::Belt;
+      visible_when_disconnected = false;
       can_connect = &DefaultCanConnect;
       on_connect = &DefaultOnConnect;
       find = &DefaultFind;

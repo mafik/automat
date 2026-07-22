@@ -484,24 +484,7 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
       AppendObscurers(gear_loc, owner_loc, wanted);
     }
   }
-  int matching = 0;
-  bool foreign = false;
-  for (ui::Widget& over : splits_over) {
-    if (std::find(wanted.begin(), wanted.end(), &over) != wanted.end()) {
-      ++matching;
-    } else {
-      foreign = true;
-    }
-  }
-  if (foreign || matching != (int)wanted.size()) {
-    while (!splits_over.empty()) {
-      UnsplitUnder(*splits_over.begin());
-    }
-    for (auto* cover : wanted) {
-      SplitUnder(*cover);
-    }
-    if (parent) parent->WakeAnimation();
-  }
+  TickSplits(wanted);
 
   tock.drawing |= animation::LowLevelSineTowards(pinion.x <= origin.x ? 0 : 1, t.d, 0.5,
                                                  label_rotation_ratio, label_rotation_velocity);

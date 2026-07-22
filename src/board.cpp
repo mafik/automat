@@ -23,7 +23,6 @@
 #include "location.hpp"
 #include "math.hpp"
 #include "root_widget.hpp"
-#include "sync.hpp"
 #include "textures.hpp"
 #include "ui_connection_widget.hpp"
 #include "vm.hpp"
@@ -209,22 +208,13 @@ ui::Tock BoardWidget::Tick(time::Timer& timer) {
     lw.local_to_parent = SkM44();
     lw.ToyForObject();
     loc->object->Each<Argument>([&](Argument arg) {
-      if (auto syncable = dyn_cast<Syncable>(arg)) {
-        if (arg.IsConnected()) {
-          auto* gear_obj = arg.Find().Owner<Object>();
-          if (gear_obj && board->LocationOrNull(*gear_obj)) {
-            toys.FindOrMake(syncable, this).local_to_parent = SkM44();
-          }
-        }
-      } else {
-        bool visible = true;
-        if (arg.IsConnected()) {
-          auto* end_obj = arg.Find().Owner<Object>();
-          visible = end_obj && (end_obj == loc->object.get() || board->LocationOrNull(*end_obj));
-        }
-        if (visible) {
-          toys.FindOrMake(arg, this).local_to_parent = SkM44();
-        }
+      bool visible = arg.table->visible_when_disconnected;
+      if (arg.IsConnected()) {
+        auto* end_obj = arg.Find().Owner<Object>();
+        visible = end_obj && (end_obj == loc->object.get() || board->LocationOrNull(*end_obj));
+      }
+      if (visible) {
+        toys.FindOrMake(arg, this).local_to_parent = SkM44();
       }
       return LoopControl::Continue;
     });

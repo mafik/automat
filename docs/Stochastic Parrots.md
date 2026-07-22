@@ -61,8 +61,9 @@ Automat is a C++ application for semi-autonomous automation with a layered archi
    - **`ToyStore`** (`src/toy.hpp`) — manages Toy lifetimes, keyed by `(WeakPtr<owner>, Atom*)`
    - **`ToyMaker`** concept — any `Part` with a `Toy` type and `MakeToy(Widget*)` method
    - Widget struct definitions typically live in .cpp files; headers only declare `MakeToy`
-   - `ConnectionWidget` (`src/ui_connection_widget.hpp/cpp`) — displays argument connections
-   - `SyncConnectionWidget` (`src/sync.hpp/cpp`) — displays sync belts between Gear and members
+   - `ArgumentToy` (`src/argument.hpp`) — base for widgets displaying argument connections; holds opt-in utilities (endpoint locations, split maintenance, autoconnect radar & prototype ghost). `Argument::MakeToy` picks the subclass from the argument's `Style`
+   - `ConnectionWidget` + `CableWidget`, `StreamPipeWidget`, `SpotlightWidget`, `InvisibleWidget` (`src/ui_connection_widget.hpp/cpp`) — the Arrow/Cable/Stream/Spotlight/Invisible connection styles
+   - `SyncBelt` (`src/sync.hpp/cpp`) — the Belt style, used by Syncable arguments; displays sync belts between Gear and members
    - `LocationWidget` (`src/location.cpp`) — manages position/scale animation for a Location
 
 3. **Platform Frontends** - OS-specific window management
@@ -227,6 +228,7 @@ GOOD example: "The output is cached so after each include-graph changes, you mus
 - **Renderer tree build and Tick are interleaved**: The renderer builds the widget tree and ticks each widget in the same loop (renderer.cpp step 2). RootWidget is ticked first, which rebuilds `children`. Then `Children()` returns the fresh list for tree expansion. Widgets are NOT ticked from `RootWidget::Tick` — only from the renderer's tree traversal.
 - **`Syncable::Table::DefaultFind` returns a `NestedPtr` with null `Interface::Table*`**: Because Gears are top-level Objects, not interfaces. `NestedPtr::operator bool()` checks the nested pointer (null), not the owner. So `(bool)arg.Find()` returns false even when connected to a Gear. Use `Argument::IsConnected()` instead.
 - **ToyStore is UI-thread only**: Not synchronized. VM threads must not call `FindOrMake` or modify ToyStore. Signal via `wake_counter` instead.
+- **Children of a clipped widget are not ticked**: the renderer skips the subtree of any widget whose `DrawBounds` land off-screen or are degenerate (renderer.cpp step 2). A widget whose `DrawBounds` return `nullopt` has no texture of its own, but its children are still visited and ticked. A widget that currently draws nothing must therefore return `nullopt` rather than a degenerate rectangle, or its self-animating children (such as the autoconnect radar and the prototype ghost) will never tick.
 - **`RootWidget::Poll` runs before widget tree is built**: It polls the root store, which dispatches into every board's store via the virtual `BoardWidget::Poll`, and in-progress actions (boards sleep when idle, so their stores can't be polled from `BoardWidget::Tick`). Dead entries are cleaned here, but widgets that call `MarkDead` during the tree traversal (after `RootWidget::Poll`) won't be cleaned until the next frame.
 - **Board widgets must stay at the bottom of RootWidget's Baked band**: The toolbar and the black hole are also Baked children of RootWidget; a board reordered above them covers them (they are only visible over the starfield). `RootWidget::Tick` orders boards relative to each other only, keeping the position that `OrderInside` assigned at creation.
 - **Animating below frame rate**: return `animation::Finished` from `Tick` and call `WakeAnimationAt(when)` from the draw path to request the next step (see RunButton's hover shimmer). Returning `Animating` while parking `next_tick` in the future makes the renderer treat the texture as perpetually stale and present it with glitch artifacts.

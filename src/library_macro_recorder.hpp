@@ -21,6 +21,7 @@ struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
   MortalPtr<ui::Pointer::Logging> pointer_logging;
 
   DEF_INTERFACE(MacroRecorder, ObjectArgument<Timeline>, timeline, "Timeline")
+  static constexpr auto kStyle = Argument::Style::RoutedCable;
   static constexpr float kAutoconnectRadius = 10_cm;
   static constexpr SkColor4f kTint = color::kParrotRed;
   static Ptr<Object> MakePrototype();

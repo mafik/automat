@@ -26,6 +26,7 @@ struct KeyLabelWidget : Widget, LabelMixin {
   Optional<Rect> DrawBounds() const override {
     return SkRect::MakeLTRB(-width / 2, 1.5 * kLetterSize, width / 2, -0.5 * kLetterSize);
   }
+  Tock Tick(time::Timer&) override { return Tock::Draw; }
   void Draw(SkCanvas& canvas) const override {
     SkPaint paint;
     paint.setAntiAlias(true);
@@ -34,10 +35,10 @@ struct KeyLabelWidget : Widget, LabelMixin {
     KeyFont().DrawText(canvas, label, paint);
     canvas.translate(width / 2, kKeyLetterSize / 2);
   }
-  void SetLabel(StrView label) override {
+  void SetLabel(StrView label, time::Timer* timer = nullptr) override {
     this->label = label;
     width = KeyFont().MeasureText(label);
-    WakeAnimation();
+    WakeAnimation(timer);
   }
 };
 
@@ -146,9 +147,9 @@ Font& KeyFont() {
   return *font.get();
 }
 
-void KeyButton::SetLabel(StrView new_label) {
+void KeyButton::SetLabel(StrView new_label, time::Timer* timer) {
   KeyLabelWidget* label_widget = static_cast<KeyLabelWidget*>(child.get());
-  label_widget->SetLabel(new_label);
+  label_widget->SetLabel(new_label, timer);
   SkRect child_bounds = ChildBounds();
   SkRRect key_base = RRect();
   SkRect key_face =

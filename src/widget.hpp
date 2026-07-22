@@ -225,7 +225,7 @@ struct Widget : OptionsProvider {
   void DrawCached(SkCanvas&) const;
   void DrawWithSplits(SkCanvas&) const;
   void DrawStack(SkCanvas&) const;
-  void WakeAnimation() const;
+  void WakeAnimation(time::Timer* timer = nullptr) const;
   void WakeAnimationAt(time::SteadyPoint) const;
 
   // Encodes decisions whether to (1) draw and/or (2) to keep ticking.
@@ -592,7 +592,7 @@ T* Closest(Widget& widget) {
 }
 
 struct LabelMixin {
-  virtual void SetLabel(StrView label) = 0;
+  virtual void SetLabel(StrView label, time::Timer* timer = nullptr) = 0;
 };
 
 struct PaintMixin {

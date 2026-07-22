@@ -156,6 +156,7 @@ struct KeyPresserWidget : ObjectToy {
     shortcut_button->fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
     if (auto key_presser = LockObject<KeyPresser>()) {
       shortcut_button->is_pressed = key_presser->key_pressed;
+      shortcut_button->SetLabel(ToStr(key_presser->key), &timer);
     }
     shortcut_button->WakeAnimationAt(timer.last);
     return Tock::Draw;
@@ -236,9 +237,7 @@ std::unique_ptr<ObjectToy> KeyPresser::MakeToy(ui::Widget* parent) {
 
 void KeyPresser::SetKey(ui::AnsiKey k) {
   key = k;
-  ForEachToy([k](ui::RootWidget&, ui::Widget& widget) {
-    static_cast<KeyPresserWidget&>(widget).shortcut_button->SetLabel(ToStr(k));
-  });
+  WakeToys();
 }
 
 void KeyPresser::SerializeState(ObjectSerializer& writer) const {

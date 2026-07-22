@@ -38,7 +38,7 @@ struct KeyButton : ui::Button {
   SkColor4f ForegroundColor() const override { return fg; }
   void DrawButtonFace(SkCanvas&, SkColor4f bg, SkColor4f fg) const override;
   StrView Name() const override { return "KeyButton"; }
-  void SetLabel(StrView new_label);
+  void SetLabel(StrView new_label, time::Timer* timer = nullptr);
 };
 
 static constexpr SkColor4f kKeyEnabledColor = "#f3a75b"_color4f;

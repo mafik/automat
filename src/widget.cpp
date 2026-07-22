@@ -87,8 +87,8 @@ void Widget::DrawCached(SkCanvas& canvas) const {
   }
 }
 
-void Widget::WakeAnimation() const {
-  auto now = time::SteadyNow();
+void Widget::WakeAnimation(time::Timer* timer) const {
+  time::SteadyPoint now = timer ? timer->now : time::SteadyNow();
   WakeAnimationAt(now);
 }
 

@@ -1376,15 +1376,23 @@ Location* ArgumentToy::EndLocation() const {
 }
 
 void ArgumentToy::TickSplits() {
+  Vec<ui::Widget*> wanted;
+  if (DrawnUnderEndpoints()) {
+    ui::ConnectionWidgetLocker a(*this);
+    if (a.start_widget) {
+      wanted.push_back(a.start_widget->FindWidget(iface));
+    }
+    if (a.end_widget) {
+      ui::Widget* end_cover = a.end_widget->FindWidget(a.end_iface.Get());
+      if (std::find(wanted.begin(), wanted.end(), end_cover) == wanted.end()) {
+        wanted.push_back(end_cover);
+      }
+    }
+  }
   Location* start_loc = StartLocation();
   Location* end_loc = EndLocation();
-  Vec<ui::Widget*> wanted;
   AppendObscurers(start_loc, end_loc, wanted);
   AppendObscurers(end_loc, start_loc, wanted);
-  TickSplits(wanted);
-}
-
-void ArgumentToy::TickSplits(const Vec<ui::Widget*>& wanted) {
   int matching = 0;
   bool foreign = false;
   for (ui::Widget& over : splits_over) {

@@ -21,6 +21,10 @@ struct ShadowCaster {
   float elevation;  // metres
 };
 
+inline Rect ShadowBounds(const Rect& caster_bounds, float elevation) {
+  return caster_bounds.Outset(1.35f * elevation);
+}
+
 // Call on the recorder about to record the baker's replay; DrawShadow quads emitted during that
 // replay shade each pixel by the height difference between the caster and this map.
 void RenderShadowHeightMap(skgpu::graphite::Recorder&, SkSpan<const ShadowCaster>,

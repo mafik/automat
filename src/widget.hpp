@@ -373,6 +373,8 @@ struct Widget : OptionsProvider {
     return draw_bounds.has_value() ? *draw_bounds : CoarseBounds().rect;
   }
 
+  SkIRect CoverBoundsInWindowPx() const;
+
   virtual Vec<Vec2> TextureAnchors() { return {}; }
 
   // This will draw the given child widget using it's precomputed texture (if available).

@@ -260,6 +260,7 @@ struct SyncBelt : ArgumentToy {
 
   SyncBelt(ui::Widget* parent, Object& object, Syncable::Table& syncable);
 
+  bool DrawnUnderEndpoints() const override { return true; }
   SkPath Shape() const override;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   Tock Tick(time::Timer& t) override;

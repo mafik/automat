@@ -115,6 +115,7 @@ struct SpotlightWidget : ArgumentToy {
   SpotlightWidget(Widget* parent, Object&, Argument::Table&);
 
   StrView Name() const override { return "SpotlightWidget"; }
+  bool DrawnUnderEndpoints() const override { return true; }
   SkPath Shape() const override { return SkPath(); }
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;

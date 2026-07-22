@@ -34,8 +34,9 @@ struct ArgumentToy : Toy {
   Location* StartLocation() const;
   Location* EndLocation() const;
 
+  virtual bool DrawnUnderEndpoints() const { return false; }
+
   void TickSplits();
-  void TickSplits(const Vec<ui::Widget*>& wanted);
   void TickAutoconnectUI(time::Timer&);
 };
 

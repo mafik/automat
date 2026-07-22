@@ -51,14 +51,26 @@ split widgets:
 2. A widget with a non-empty `splits_over` list has each cover's rectangle subtracted from the
    clip before its own texture is drawn. The remaining part is the body.
 
-The rectangle of a cover is its `Widget::CoverBounds()` transformed to window coordinates and
-rounded to whole pixels (`CoverBoundsInWindowPx`, src/widget.cpp). The default `CoverBounds`
+The rectangle of a cover is its `Widget::CoverBounds()`, extended to the reach of its drop
+shadow (`ShadowBounds`, src/render_shadows.hpp), transformed to window coordinates and
+rounded to whole pixels (`CoverBoundsInWindowPx`, src/widget.cpp). The shadow is emitted
+together with the cover's texture and extends past its bounds, so without the extension the
+split widget's body would paint over the part of the shadow outside the claimed rectangle.
+The default `CoverBounds`
 is the widget's own drawn extent: `DrawBounds()`, queried by PackFrame every frame and cached
 in `Widget::draw_bounds` (widgets whose extent follows the window size, such as the root,
 change it without any shape update). `Widget::subtree_draw_bounds` unions the cache over the
-child tree in the pass that maintains `subtree_shape`. The window-space rectangle is computed
-again on every frame, because the whole scene is re-recorded every frame and panning or
-zooming changes it continuously.
+child tree in the pass that maintains `subtree_shape`.
+
+The rectangle values are evaluated when a baker's drawing is recorded, and recordings are
+re-recorded only when the baker re-renders its texture. A cover's rectangle can change while
+every recording embedding it stays valid by the renderer's own rules — the rectangle depends
+on another subtree's state (the cover's bounds and elevation), which the invalidation
+tracking does not see. This is a known, accepted limitation: while a cover animates and one
+of the recordings embedding its rectangle is not re-recorded in the same frame, the clip
+boundaries can disagree for a few frames, showing a transient seam at the rectangle's edge.
+In practice the bakers involved re-record during such animations anyway, because the
+animating widgets draw into them.
 
 The rectangles and the body partition the screen: every pixel of the split widget is drawn
 exactly once, from the same cached texture, with the same transform and the same per-frame
@@ -90,9 +102,9 @@ on top of a connection.
   and is visible only outside of it. A toy can map an interface to a child widget instead: the
   FlipFlop maps its State interface to the rocker, so belts are visible between the rocker and
   the panel's edge.
-- `ArgumentToy::TickSplits` (src/argument.hpp) compares the widget's `splits_over` list
-  with the wanted cover set and rebuilds it when they differ. After a change it calls
-  `WakeAnimation` on the board so that the ordering pass runs again.
+- `ArgumentToy::TickSplits` (src/argument.hpp) computes the wanted cover set and reconciles
+  the widget's `splits_over` list with it, rebuilding the list when they differ. After a
+  change it calls `WakeAnimation` on the board so that the ordering pass runs again.
 
 ## Covers from stacking
 

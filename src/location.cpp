@@ -33,6 +33,7 @@
 #include "math.hpp"
 #include "object_iconified.hpp"
 #include "raycast.hpp"
+#include "render_shadows.hpp"
 #include "root_widget.hpp"
 #include "time.hpp"
 #include "timer_thread.hpp"
@@ -370,7 +371,7 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
     SkPaint flight_paint;
     flight_paint.setAlphaf(1.f - flight.transparency);
     Optional<Rect> flight_bounds = toy->subtree_draw_bounds;
-    if (flight_bounds) *flight_bounds = flight_bounds->Outset(toy->shadow_elevation);
+    if (flight_bounds) *flight_bounds = ShadowBounds(*flight_bounds, toy->shadow_elevation);
     canvas.saveLayer(flight_bounds ? &flight_bounds->sk : nullptr, &flight_paint);
     toy->DrawStack(canvas);
     canvas.restoreToCount(save);
@@ -382,7 +383,7 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
     SkPaint alpha_paint;
     alpha_paint.setAlphaf(1.f - transparency);
     Optional<Rect> layer_bounds = toy->subtree_draw_bounds;
-    if (layer_bounds) *layer_bounds = layer_bounds->Outset(toy->shadow_elevation);
+    if (layer_bounds) *layer_bounds = ShadowBounds(*layer_bounds, toy->shadow_elevation);
     canvas.saveLayer(layer_bounds ? &layer_bounds->sk : nullptr, &alpha_paint);
   }
 

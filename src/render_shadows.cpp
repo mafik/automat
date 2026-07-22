@@ -102,7 +102,7 @@ void DrawShadow(SkCanvas& canvas, const ShadowCaster& caster) {
   SkPaint paint;
   paint.setAntiAlias(false);
   paint.setShader(builder.makeShader());
-  canvas.drawRect(caster.surface_bounds_local.Outset(1.35f * caster.elevation).sk, paint);
+  canvas.drawRect(ShadowBounds(caster.surface_bounds_local, caster.elevation).sk, paint);
 }
 
 void ShutdownShadows(skgpu::graphite::Recorder& recorder) {

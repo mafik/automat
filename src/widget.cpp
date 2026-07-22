@@ -26,6 +26,7 @@
 
 #include "board.hpp"
 #include "build_variant.hpp"
+#include "render_shadows.hpp"
 #include "renderer.hpp"
 #include "root_widget.hpp"
 #include "time.hpp"
@@ -101,10 +102,10 @@ void Widget::WakeAnimationAt(time::SteadyPoint when) const {
   next_tick = min(next_tick, when);
 }
 
-static SkIRect CoverBoundsInWindowPx(const Widget& widget) {
-  Rect local = widget.CoverBounds();
+SkIRect Widget::CoverBoundsInWindowPx() const {
+  Rect local = ShadowBounds(CoverBounds(), shadow_elevation);
   SkRect device;
-  widget.local_to_window.mapRect(&device, local.sk);
+  local_to_window.mapRect(&device, local.sk);
   SkIRect out;
   device.roundOut(&out);
   return out;
@@ -115,10 +116,10 @@ void Widget::DrawWithSplits(SkCanvas& canvas) const {
     for (Widget& split : splits_under) {
       canvas.save();
       canvas.resetMatrix();
-      canvas.clipIRect(CoverBoundsInWindowPx(*this));
+      canvas.clipIRect(CoverBoundsInWindowPx());
       for (Widget& cover : split.splits_over) {
         if (&cover != this && IsAbove(cover)) {
-          canvas.clipIRect(CoverBoundsInWindowPx(cover), SkClipOp::kDifference);
+          canvas.clipIRect(cover.CoverBoundsInWindowPx(), SkClipOp::kDifference);
         }
       }
       canvas.setMatrix(SkM44(split.local_to_window));
@@ -132,7 +133,7 @@ void Widget::DrawWithSplits(SkCanvas& canvas) const {
     canvas.save();
     canvas.resetMatrix();
     for (Widget& cover : splits_over) {
-      canvas.clipIRect(CoverBoundsInWindowPx(cover), SkClipOp::kDifference);
+      canvas.clipIRect(cover.CoverBoundsInWindowPx(), SkClipOp::kDifference);
     }
     canvas.setMatrix(SkM44(local_to_window));
     DrawCached(canvas);

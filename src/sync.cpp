@@ -470,21 +470,7 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
     pinion_deflection.SmoothTargetUpdate(pinion, origin);
   }
 
-  ui::Widget* owner_over = owner_widget->FindWidget(iface);
-  ui::Widget* gear_over = gear_widget ? gear_widget->FindWidget(nullptr) : nullptr;
-  if (gear_over == owner_over) gear_over = nullptr;
-  Vec<ui::Widget*> wanted;
-  if (owner_over) wanted.push_back(owner_over);
-  if (gear_over) wanted.push_back(gear_over);
-  if (auto* bw = BoardOrNull(*this)) {
-    if (auto board = bw->LockBoard()) {
-      Location* owner_loc = board->LocationOrNull(*syncable.object_ptr);
-      Location* gear_loc = gear ? board->LocationOrNull(*gear) : nullptr;
-      AppendObscurers(owner_loc, gear_loc, wanted);
-      AppendObscurers(gear_loc, owner_loc, wanted);
-    }
-  }
-  TickSplits(wanted);
+  TickSplits();
 
   tock.drawing |= animation::LowLevelSineTowards(pinion.x <= origin.x ? 0 : 1, t.d, 0.5,
                                                  label_rotation_ratio, label_rotation_velocity);

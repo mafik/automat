@@ -33,6 +33,7 @@ struct KeyButton : ui::Button {
   SkColor4f fg;
   KeyButton(Widget* parent, StrView label, SkColor4f color, float width);
   void Activate(ui::Pointer&) override;
+  Tock Tick(time::Timer&) override;
   SkRRect RRect() const override;
   SkColor4f ForegroundColor() const override { return fg; }
   void DrawButtonFace(SkCanvas&, SkColor4f bg, SkColor4f fg) const override;

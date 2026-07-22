@@ -54,6 +54,11 @@ void KeyButton::Activate(ui::Pointer& pointer) {
   }
 }
 
+Tock KeyButton::Tick(time::Timer& t) {
+  auto tock = ui::Button::Tick(t);
+  return tock | Tock::Draw;
+}
+
 SkRRect KeyButton::RRect() const {
   return SkRRect::MakeRectXY(SkRect::MakeWH(width, kKeyHeight), kKeyBaseRadius, kKeyBaseRadius);
 }

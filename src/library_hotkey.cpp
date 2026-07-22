@@ -227,6 +227,7 @@ struct HotKeyWidget : ObjectToy {
         }
         ctrl_button->fg = KeyColor(hk->ctrl);
       }
+      ctrl_button->WakeAnimation();
     };
     alt_button->activate = [this](ui::Pointer&) {
       if (auto hk = LockHotKey()) {
@@ -240,6 +241,7 @@ struct HotKeyWidget : ObjectToy {
         }
         alt_button->fg = KeyColor(hk->alt);
       }
+      alt_button->WakeAnimation();
     };
     shift_button->activate = [this](ui::Pointer&) {
       if (auto hk = LockHotKey()) {
@@ -253,6 +255,7 @@ struct HotKeyWidget : ObjectToy {
         }
         shift_button->fg = KeyColor(hk->shift);
       }
+      shift_button->WakeAnimation();
     };
     windows_button->activate = [this](ui::Pointer&) {
       if (auto hk = LockHotKey()) {
@@ -266,6 +269,7 @@ struct HotKeyWidget : ObjectToy {
         }
         windows_button->fg = KeyColor(hk->windows);
       }
+      windows_button->WakeAnimation();
     };
     shortcut_button->activate = [this](ui::Pointer& pointer) {
       if (hotkey_selector) {
@@ -297,7 +301,7 @@ struct HotKeyWidget : ObjectToy {
       shortcut_button->SetLabel(ToStr(hk->key));
     }
     power_button->WakeAnimationAt(t.last);
-    return Tock::Draw;
+    return {};
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -386,8 +390,6 @@ struct HotKeyWidget : ObjectToy {
     canvas.clipPath(border_path, true);
     canvas.drawPath(inner_contour, shadow_paint);
     canvas.restore();
-
-    BakeChildren(canvas);
   }
 
   SkPath Shape() const override { return SkPath::RRect(kShapeRRect); }

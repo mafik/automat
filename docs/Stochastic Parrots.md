@@ -84,7 +84,7 @@ Automat is a C++ application for semi-autonomous automation with a layered archi
 
 Objects (multi-threaded) notify Toys (UI-thread) via `wake_counter`:
 - Object bumps `wake_counter.fetch_add(1, relaxed)` on state change
-- `RootWidget::Poll()` runs each frame, comparing counters and calling `WakeAnimation()`; it covers the root store, every board's store (`BoardWidget::Poll`) and in-progress actions holding toys (`Action::Poll`)
+- `{Toy,Action}::{On,}Poll` compares toy's counter with `observed_wake_counter` and calls `WakeAnimationAt()`
 - Toy pulls latest state in `Tick()` by locking the Object
 
 ## Project Structure
@@ -227,7 +227,7 @@ GOOD example: "The output is cached so after each include-graph changes, you mus
 - **Renderer tree build and Tick are interleaved**: The renderer builds the widget tree and ticks each widget in the same loop (renderer.cpp step 2). RootWidget is ticked first, which rebuilds `children`. Then `Children()` returns the fresh list for tree expansion. Widgets are NOT ticked from `RootWidget::Tick` — only from the renderer's tree traversal.
 - **`Syncable::Table::DefaultFind` returns a `NestedPtr` with null `Interface::Table*`**: Because Gears are top-level Objects, not interfaces. `NestedPtr::operator bool()` checks the nested pointer (null), not the owner. So `(bool)arg.Find()` returns false even when connected to a Gear. Use `Argument::IsConnected()` instead.
 - **ToyStore is UI-thread only**: Not synchronized. VM threads must not call `FindOrMake` or modify ToyStore. Signal via `wake_counter` instead.
-- **`RootWidget::Poll` runs before widget tree is built**: It polls the root store, every board's store and in-progress actions (boards sleep when idle, so their stores can't be polled from `BoardWidget::Tick`). Dead entries are cleaned here, but widgets that call `MarkDead` during the tree traversal (after `RootWidget::Poll`) won't be cleaned until the next frame.
+- **`RootWidget::Poll` runs before widget tree is built**: It polls the root store, which dispatches into every board's store via the virtual `BoardWidget::Poll`, and in-progress actions (boards sleep when idle, so their stores can't be polled from `BoardWidget::Tick`). Dead entries are cleaned here, but widgets that call `MarkDead` during the tree traversal (after `RootWidget::Poll`) won't be cleaned until the next frame.
 - **Board widgets must stay at the bottom of RootWidget's Baked band**: The toolbar and the black hole are also Baked children of RootWidget; a board reordered above them covers them (they are only visible over the starfield). `RootWidget::Tick` orders boards relative to each other only, keeping the position that `OrderInside` assigned at creation.
 - **Animating below frame rate**: return `animation::Finished` from `Tick` and call `WakeAnimationAt(when)` from the draw path to request the next step (see RunButton's hover shimmer). Returning `Animating` while parking `next_tick` in the future makes the renderer treat the texture as perpetually stale and present it with glitch artifacts.
 - **`RootWidget::OnChildDead` removes from `children`**: Dead children are removed immediately when `MarkDead` fires (during the child's Tick). The old `std::erase_if(children, dead)` sweep was removed because `ToyStore::Tick` may destroy widgets before the sweep runs, creating dangling pointers in `children`.

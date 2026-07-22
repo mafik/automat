@@ -241,15 +241,8 @@ void DragLocationAction::VisitObjects(std::function<void(Object&)> visitor) {
 SkPath DragLocationWidget::Shape() const { return SkPath(); }
 
 void DragLocationAction::Poll(time::Timer& timer) {
-  if (held_widgets.empty()) return;
-  for (auto& location : locations) {
-    if (!location->widget || !location->widget->toy || !location->object) continue;
-    Toy& toy = *location->widget->toy;
-    uint32_t current = location->object->wake_counter.load(std::memory_order_relaxed);
-    if (current != toy.observed_wake_counter) {
-      toy.observed_wake_counter = current;
-      toy.WakeAnimationAt(timer.last);
-    }
+  for (auto& held : held_widgets) {
+    if (held) held->Poll(timer);
   }
 }
 

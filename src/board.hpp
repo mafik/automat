@@ -82,7 +82,7 @@ struct BoardWidget : ObjectToy, ui::DropTarget {
 
   std::string_view Name() const override { return "BoardWidget"; }
 
-  void Poll(time::Timer& timer) { toys.Poll(timer); }
+  void OnPoll(time::Timer& timer) override { toys.Poll(timer); }
 
   // Widget overrides
   Tock Tick(time::Timer&) override;

@@ -62,6 +62,12 @@ struct Toy : ui::Widget {
   // Walk the parent chain up to LocationWidget, then return the last Toy before that.
   Toy* BaseToy() const;
 
+  // Called on the UI thread; wakes this toy when its owner's state has changed.
+  void Poll(time::Timer&);
+
+  // Used to forward Poll to any nested toys.
+  virtual void OnPoll(time::Timer&) {}
+
   // Find a widget that represents the given interface.
   virtual ui::Widget* FindWidget(Interface::Table*) { return this; }
 };

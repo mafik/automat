@@ -39,33 +39,36 @@ void ToyMakerMixin::ForEachToyImpl(Object& owner, Interface::Table* iface,
   }
 }
 
+void Toy::Poll(time::Timer& timer) {
+  uint32_t current;
+  if (iface == nullptr) {  // Object toys
+    // Safe to read without locking: memory survives until weak_refs hits 0.
+    // Counter at `wake_counter` is valid even after ~Object.
+    current = owner.GetUnsafe()->wake_counter.load(std::memory_order_relaxed);
+  } else if (auto obj = LockOwner()) {  // True interface toys
+    Interface interface(*obj, *iface);
+    if (auto arg = dyn_cast<Argument>(interface)) {
+      current = arg.state->wake_counter.load(std::memory_order_relaxed);
+    } else {
+      return;  // Not an Argument toy, no wake_counter to check
+    }
+  } else {
+    // Interface owner has been destroyed
+    current = ~observed_wake_counter;
+  }
+  if (current != observed_wake_counter) {
+    observed_wake_counter = current;
+    WakeAnimationAt(timer.last);
+  }
+  OnPoll(timer);
+}
+
 void ToyStore::Poll(time::Timer& timer) {
   // Remove dead toys
   std::erase_if(container, [](auto& entry) { return entry.second->dead; });
 
-  // Wake toys whose owners have updated state
   for (auto& [key, toy] : container) {
-    auto [rc, iface] = key;
-    uint32_t current;
-    if (iface == nullptr) {  // Object toys
-      // Safe to read through `rc`: WeakPtr in the Toy keeps memory alive.
-      // Counter at `wake_counter` is valid even after ~Object.
-      current = rc->wake_counter.load(std::memory_order_relaxed);
-    } else if (auto ptr = toy->LockOwner()) {  // True interface toys
-      Interface interface(static_cast<Object&>(*ptr), *iface);
-      if (auto arg = dyn_cast<Argument>(interface)) {
-        current = arg.state->wake_counter.load(std::memory_order_relaxed);
-      } else {
-        continue;  // Not an Argument toy, no wake_counter to check
-      }
-    } else {
-      // Interface owner has been destroyed
-      current = ~toy->observed_wake_counter;
-    }
-    if (current != toy->observed_wake_counter) {
-      toy->observed_wake_counter = current;
-      toy->WakeAnimationAt(timer.last);
-    }
+    toy->Poll(timer);
   }
 }
 }  // namespace automat

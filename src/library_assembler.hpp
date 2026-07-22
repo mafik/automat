@@ -77,6 +77,7 @@ struct AssemblerWidget : ObjectToy {
   AssemblerWidget(Widget* parent, Assembler&);
   std::string_view Name() const override;
   SkPath Shape() const override;
+  void OnPoll(time::Timer&) override;
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   void VisitOptions(const OptionsVisitor&) const override;

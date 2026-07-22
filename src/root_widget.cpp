@@ -448,11 +448,6 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
 
 void RootWidget::Poll() {
   toys.Poll(timer);
-  for (auto& [key, toy] : toys.container) {
-    if (auto* board_widget = dynamic_cast<BoardWidget*>(toy.get())) {
-      board_widget->Poll(timer);
-    }
-  }
   for (Action& action : active_actions) {
     action.Poll(timer);
   }

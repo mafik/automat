@@ -277,6 +277,10 @@ struct LocationWidget : ObjectToy {
   Optional<Rect> DrawBounds() const override;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
 
+  void OnPoll(time::Timer& timer) override {
+    if (owned_toy) owned_toy->Poll(timer);
+  }
+
   // Call this when the position of this location changes to update the autoconnect arguments.
   void UpdateAutoconnectArgs();
 

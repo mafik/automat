@@ -317,6 +317,12 @@ SkPath AssemblerWidget::Shape() const {
   return shape;
 }
 
+void AssemblerWidget::OnPoll(time::Timer& timer) {
+  for (auto& reg_widget : reg_widgets) {
+    reg_widget->Poll(timer);
+  }
+}
+
 ui::Tock AssemblerWidget::Tick(time::Timer& timer) {
   auto assembler = LockObject<Assembler>();
   if (!assembler || assembler->mc_controller == nullptr) {

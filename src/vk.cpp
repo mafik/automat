@@ -78,6 +78,12 @@ PFN_vkGetDeviceProcAddr GetDeviceProcAddr;
   X(GetPhysicalDeviceMemoryProperties2)      \
   X(GetPhysicalDeviceProperties2)
 
+#if defined(_WIN32)
+#define EACH_MEMORY_IMPORT_PROC(X) X(GetMemoryWin32HandlePropertiesKHR)
+#else
+#define EACH_MEMORY_IMPORT_PROC(X) X(GetMemoryFdPropertiesKHR)
+#endif
+
 #define EACH_DEVICE_PROC(X)      \
   X(GetDeviceQueue)              \
   X(CreateSwapchainKHR)          \
@@ -104,8 +110,7 @@ PFN_vkGetDeviceProcAddr GetDeviceProcAddr;
   X(AllocateMemory)              \
   X(FreeMemory)                  \
   X(GetImageMemoryRequirements2) \
-  X(GetMemoryFdPropertiesKHR)    \
-  X(GetMemoryWin32HandlePropertiesKHR)
+  EACH_MEMORY_IMPORT_PROC(X)
 
 #define VULKAN_DECLARE(F) PFN_vk##F vk##F;
 EACH_INSTANCE_PROC(VULKAN_DECLARE)

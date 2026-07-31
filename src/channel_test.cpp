@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 #include "channel.hpp"
 
-#include <gtest/gtest.h>
-
 #include <algorithm>
 #include <thread>
+
+#include "gtest.hpp"
 
 using namespace automat;
 

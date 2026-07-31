@@ -9,6 +9,7 @@
 
 #include "format.hpp"
 #include "log.hpp"
+#include "unique_ptr.hpp"
 
 #pragma comment(lib, "winmm.lib")  // needed for timeBeginPeriod
 #pragma comment(lib, "user32.lib")
@@ -41,12 +42,12 @@ HINSTANCE GetInstance() {
 
 Str ErrorStr(DWORD error) {
   if (error == 0) return "No error";
-  LPSTR messageBuffer = nullptr;
+  LPSTR message_buffer = nullptr;
   size_t size = FormatMessageA(
       FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-      nullptr, error, 0, (LPSTR)&messageBuffer, 0, nullptr);
-  Str message(messageBuffer, size);
-  LocalFree(messageBuffer);
+      nullptr, error, 0, (LPSTR)&message_buffer, 0, nullptr);
+  std::unique_ptr<char, DeleteWith<LocalFree>> owned_buffer(message_buffer);
+  Str message(message_buffer, size);
   while (!message.empty() && (message.back() == '\n' || message.back() == '\r')) message.pop_back();
   return message;
 }

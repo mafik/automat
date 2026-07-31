@@ -390,9 +390,9 @@ struct XCBPointerGrab : automat::ui::PointerGrab {
         connection, screen->root, XCB_CURRENT_TIME, cursor, xcb_window.master_pointer_device_id,
         XCB_INPUT_GRAB_MODE_22_ASYNC, XCB_INPUT_GRAB_MODE_22_ASYNC, false, 1, &mask);
 
-    std::unique_ptr<xcb_generic_error_t, FreeDeleter> error;
+    std::unique_ptr<xcb_generic_error_t, automat::DeleteWithFree> error;
 
-    std::unique_ptr<xcb_input_xi_grab_device_reply_t, FreeDeleter> reply(
+    std::unique_ptr<xcb_input_xi_grab_device_reply_t, automat::DeleteWithFree> reply(
         xcb_input_xi_grab_device_reply(connection, cookie, std::out_ptr(error)));
     if (reply) {
       if (reply->status != XCB_GRAB_STATUS_SUCCESS) {
@@ -411,7 +411,7 @@ struct XCBPointerGrab : automat::ui::PointerGrab {
   ~XCBPointerGrab() {
     xcb_void_cookie_t cookie = xcb_input_xi_ungrab_device(connection, XCB_CURRENT_TIME,
                                                           xcb_window.master_pointer_device_id);
-    if (std::unique_ptr<xcb_generic_error_t, FreeDeleter> error{
+    if (std::unique_ptr<xcb_generic_error_t, automat::DeleteWithFree> error{
             xcb_request_check(connection, cookie)}) {
       ERROR << "Failed to ungrab the pointer";
     }

@@ -43,6 +43,7 @@
 #include "root_widget.hpp"
 #include "toy.hpp"
 #include "ui_beta.hpp"
+#include "unique_ptr.hpp"
 #include "units.hpp"
 #include "vk.hpp"
 #include "vm.hpp"
@@ -1433,11 +1434,12 @@ void Seat::OnGetKeyboard(Keyboard& id) {
   if (s.keymap_fd < 0) {
     auto lock = std::lock_guard(keymap.mutex);
     if (keymap.xkb) {
-      if (char* text = xkb_keymap_get_as_string(keymap.xkb.get(), XKB_KEYMAP_FORMAT_TEXT_V1)) {
-        s.keymap_size = strlen(text) + 1;  // the client mmaps a NUL-terminated string
+      std::unique_ptr<char, DeleteWithFree> text{
+          xkb_keymap_get_as_string(keymap.xkb.get(), XKB_KEYMAP_FORMAT_TEXT_V1)};
+      if (text) {
+        s.keymap_size = strlen(text.get()) + 1;  // the client mmaps a NUL-terminated string
         s.keymap_fd = memfd_create("automat-keymap", MFD_CLOEXEC);
-        if (s.keymap_fd >= 0) (void)!write(s.keymap_fd, text, s.keymap_size);
-        free(text);
+        if (s.keymap_fd >= 0) (void)!write(s.keymap_fd, text.get(), s.keymap_size);
       }
     }
   }

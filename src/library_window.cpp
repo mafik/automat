@@ -467,7 +467,7 @@ void Window::Capture() {
     auto cookie = xcb_shm_get_image(xcb::connection, tracked, x, y, width, height, ~0,
                                     XCB_IMAGE_FORMAT_Z_PIXMAP, impl->shmseg, 0);
 
-    std::unique_ptr<xcb_shm_get_image_reply_t, xcb::FreeDeleter> reply(
+    std::unique_ptr<xcb_shm_get_image_reply_t, DeleteWithFree> reply(
         xcb_shm_get_image_reply(xcb::connection, cookie, nullptr));
 
     bool center_pixel_transparent = impl->data[(height / 2 * width + width / 2) * 4 + 3] == 0;

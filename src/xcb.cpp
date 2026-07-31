@@ -37,10 +37,10 @@ void Initialize(){
     ATOMS(REQUEST_ATOM)
 #undef REQUEST_ATOM
 
-#define ATOM_REPLY(name)                                                         \
-  auto name##_reply = std::unique_ptr<xcb_intern_atom_reply_t, void (*)(void*)>( \
-      xcb_intern_atom_reply(connection, name##_request, nullptr), free);         \
-  name = name##_reply->atom;                                                     \
+#define ATOM_REPLY(name)                                                    \
+  auto name##_reply = std::unique_ptr<xcb_intern_atom_reply_t, automat::DeleteWithFree>( \
+      xcb_intern_atom_reply(connection, name##_request, nullptr));           \
+  name = name##_reply->atom;                                                 \
   atom_names[name] = #name;
         ATOMS(ATOM_REPLY)
 #undef ATOM_REPLY
@@ -50,11 +50,10 @@ Str ToStr(xcb_atom_t atom) {
   if (auto it = atom_names.find(atom); it != atom_names.end()) {
     return it->second;
   }
-  xcb_get_atom_name_reply_t* reply =
-      xcb_get_atom_name_reply(connection, xcb_get_atom_name(connection, atom), NULL);
-  char* name = xcb_get_atom_name_name(reply);
-  Str name_str(name, xcb_get_atom_name_name_length(reply));
-  free(reply);
+  std::unique_ptr<xcb_get_atom_name_reply_t, automat::DeleteWithFree> reply(
+      xcb_get_atom_name_reply(connection, xcb_get_atom_name(connection, atom), NULL));
+  char* name = xcb_get_atom_name_name(reply.get());
+  Str name_str(name, xcb_get_atom_name_name_length(reply.get()));
   return atom_names[atom] = name_str;
 }
 

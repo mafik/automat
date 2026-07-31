@@ -104,8 +104,8 @@ KeyboardGrab& Keyboard::RequestGrab(KeyboardGrabber& grabber) {
                                          XCB_CURSOR_NONE, xcb_window.master_keyboard_device_id,
                                          XCB_INPUT_GRAB_MODE_22_ASYNC, XCB_INPUT_GRAB_MODE_22_ASYNC,
                                          false, 1, &mask);
-  std::unique_ptr<xcb_generic_error_t, xcb::FreeDeleter> error;
-  std::unique_ptr<xcb_input_xi_grab_device_reply_t, xcb::FreeDeleter> reply(
+  std::unique_ptr<xcb_generic_error_t, DeleteWithFree> error;
+  std::unique_ptr<xcb_input_xi_grab_device_reply_t, DeleteWithFree> reply(
       xcb_input_xi_grab_device_reply(xcb::connection, cookie, std::out_ptr(error)));
   if (reply) {
     if (reply->status != XCB_GRAB_STATUS_SUCCESS) {
@@ -697,7 +697,7 @@ void KeyboardGrab::Release() {
   auto& xcb_window = static_cast<xcb::XCBWindow&>(*keyboard.root_widget.window);
   xcb_void_cookie_t cookie = xcb_input_xi_ungrab_device(xcb::connection, XCB_CURRENT_TIME,
                                                         xcb_window.master_keyboard_device_id);
-  if (std::unique_ptr<xcb_generic_error_t, xcb::FreeDeleter> error{
+  if (std::unique_ptr<xcb_generic_error_t, DeleteWithFree> error{
           xcb_request_check(xcb::connection, cookie)}) {
     ERROR << "Failed to ungrab the keyboard";
   }

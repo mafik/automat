@@ -9,6 +9,7 @@
 
 #include "int.hpp"
 #include "str.hpp"
+#include "unique_ptr.hpp"
 #include "vec.hpp"
 
 struct HKL__;
@@ -17,19 +18,9 @@ namespace automat {
 
 // The process-wide keyboard layout (shared by all Keyboards).
 struct Keymap {
-  struct DeleteWith_xkb_context_unref {
-    void operator()(xkb_context* ctx) { xkb_context_unref(ctx); }
-  };
-  struct DeleteWith_xkb_keymap_unref {
-    void operator()(xkb_keymap* keymap) { xkb_keymap_unref(keymap); }
-  };
-  struct DeleteWith_xkb_state_unref {
-    void operator()(xkb_state* state) { xkb_state_unref(state); }
-  };
-
-  using xkb_context_ptr = std::unique_ptr<xkb_context, DeleteWith_xkb_context_unref>;
-  using xkb_keymap_ptr = std::unique_ptr<xkb_keymap, DeleteWith_xkb_keymap_unref>;
-  using xkb_state_ptr = std::unique_ptr<xkb_state, DeleteWith_xkb_state_unref>;
+  using xkb_context_ptr = std::unique_ptr<xkb_context, DeleteWith<xkb_context_unref>>;
+  using xkb_keymap_ptr = std::unique_ptr<xkb_keymap, DeleteWith<xkb_keymap_unref>>;
+  using xkb_state_ptr = std::unique_ptr<xkb_state, DeleteWith<xkb_state_unref>>;
 
   xkb_context_ptr ctx;
   xkb_keymap_ptr xkb;

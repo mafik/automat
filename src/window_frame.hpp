@@ -8,16 +8,21 @@
 // client speaks.
 
 #include <include/core/SkCanvas.h>
+#include <include/core/SkImage.h>
 #include <include/core/SkPath.h>
 
 #include <atomic>
 
 #include "action.hpp"
+#include "keyboard.hpp"
 #include "math.hpp"
 #include "menu.hpp"
+#include "pointer.hpp"
 #include "ptr.hpp"
 #include "str.hpp"
+#include "ui_beta.hpp"
 #include "units.hpp"
+#include "vec.hpp"
 
 namespace automat {
 
@@ -25,6 +30,15 @@ struct Object;
 struct ObjectSerializer;
 struct ObjectDeserializer;
 struct ClientInputActionBase;
+struct Launch;
+
+namespace library {
+struct ClientWindow;
+}  // namespace library
+
+namespace ui {
+struct WindowFrame;
+}  // namespace ui
 
 // A window object that can wear the frame: the user's decoration preference plus the hook
 // the decoration menu calls after changing it. Both the X11 and the Wayland window objects
@@ -61,6 +75,72 @@ struct ClientInputActionBase : Action {
 };
 
 bool StartClientMove(DecoratedWindow& window);
+
+// One window of a running program, drawn on the board inside the shared
+// chrome: caret-gated keyboard, pointer pass-through.
+struct ClientWindowToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
+  Str title_;
+  bool client_gone_ = false;
+  bool client_decorated_ = false;
+  DecoratedWindow::DecorationPreference pref_ = DecoratedWindow::DecorationPreference::Auto;
+  sk_sp<SkImage> image_;
+  SkISize content_size_ = {};
+  ui::Caret* caret_ = nullptr;
+
+  // One client pixel on the board, matching the Wayland compositor's scale.
+  static constexpr float kPx = 0.20_mm;
+  static constexpr float kMinContent = 3_cm;
+
+  using ui::beta::ObjectToy::ObjectToy;
+  ~ClientWindowToy() override;
+
+  Ptr<library::ClientWindow> LockClientWindow() const;
+
+  void PullState();
+  virtual void PullMore(library::ClientWindow&) {}
+  virtual bool TickMore(time::Timer&) { return false; }
+  virtual bool Decorated() const;
+
+  Vec2 ContentSize() const;
+  Rect ContentRect() const { return Rect::MakeAtZero(ContentSize()); }
+  ui::WindowFrame Chrome() const;
+  SkPath FocusCaretShape() const;
+  Vec2 ToSurfacePx(Vec2 local) const;
+
+  bool CenteredAtZero() const override { return true; }
+  SkPath Shape() const override;
+  Tock Tick(time::Timer&) override;
+  void Draw(SkCanvas&) const override;
+  void VisitOptions(const OptionsVisitor&) const override;
+
+  void FocusClient(ui::Pointer&);
+  void ReleaseCaret(ui::Caret&) override;
+
+  void PointerMove(ui::Pointer&, Vec2) override;
+  void PointerEnter(ui::Pointer&) override;
+  void PointerLeave(ui::Pointer&) override;
+  void KeyDown(ui::Caret&, ui::Key) override;
+  void KeyUp(ui::Caret&, ui::Key) override;
+
+  virtual void SendMotion(Vec2 px) = 0;
+  virtual void SendCrossing(bool enter, Vec2 px) {}
+  virtual void SendKey(ui::Key, bool pressed) = 0;
+  virtual void SendFocus(bool) {}
+
+  virtual bool AllowClientPress(ui::Pointer&) { return true; }
+  virtual std::unique_ptr<Action> BeginClientPress(ui::Pointer&) = 0;
+  std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
+};
+
+struct ClientArrivals {
+  Vec<std::pair<Ptr<library::ClientWindow>, Ptr<Launch>>> appeared;
+  Vec<Ptr<library::ClientWindow>> disappeared;
+  Vec<WeakPtr<library::ClientWindow>> move_requests;
+
+  ClientArrivals();
+  ~ClientArrivals();
+  void Process();
+};
 
 }  // namespace automat
 

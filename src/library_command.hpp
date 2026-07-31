@@ -34,7 +34,7 @@ struct Command : Object, Container {
   DEF_END(run);
 
   DEF_INTERFACE(Command, LongRunning, running, "Running")
-  void OnCancel() { obj->Terminate(); }
+  void OnCancel() { obj->Terminate(true); }
   DEF_END(running);
 
   DEF_INTERFACE(Command, NextArg, next, "Next")
@@ -75,8 +75,9 @@ struct Command : Object, Container {
   // synthesizing the RunTask the way Timer does when it resumes from a save.
   // Returns the launch, or null with `status` filled.
   Ptr<Launch> RunFor(ClientWindow& window, Status& status);
-  // Asks the live child to exit (SIGTERM).
-  void Terminate();
+  // Asks the live child to exit (SIGTERM). With `keep_connected`, windows in
+  // the connected mode survive; the stop button closes them too.
+  void Terminate(bool keep_connected = false);
   // Takes the launch out of this Command, leaving it free to run again. The
   // running state ends without cancelling the child or scheduling `next`.
   Ptr<Launch> ExtractLaunch();

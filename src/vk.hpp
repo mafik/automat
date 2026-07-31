@@ -45,6 +45,17 @@ void Present();
 sk_sp<SkImage> ImportDmabuf(DmabufImage desc);
 #endif
 
+#if defined(_WIN32)
+// The adapter Vulkan picked, so the Direct3D device that feeds it shared
+// textures can be created on the same one. False when the driver has no LUID.
+bool AdapterLuid(uint8_t out[8]);
+
+// Imports a shared Direct3D 11 texture as a GPU-backed image. The handle is
+// not consumed - the caller closes it once this returns. Runs on the capture
+// thread, which exclusively owns the import recorder. Returns null on failure.
+sk_sp<SkImage> ImportSharedTexture(void* shared_handle, int width, int height, Status&);
+#endif
+
 // Reports basic memory stats through Tracy plots.
 // Enable kDebugVulkanMemory for even more plots.
 void ReportMemoryStats();

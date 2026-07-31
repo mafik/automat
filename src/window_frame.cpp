@@ -3,6 +3,7 @@
 
 #include "window_frame.hpp"
 
+#include <include/core/SkColorFilter.h>
 #include <include/core/SkPathUtils.h>
 #include <include/effects/SkGradient.h>
 #include <include/pathops/SkPathOps.h>
@@ -13,10 +14,12 @@
 #include "drag_action.hpp"
 #include "drawing.hpp"
 #include "font.hpp"
+#include "launcher.hpp"
 #include "location.hpp"
 #include "object.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
+#include "vm.hpp"
 
 namespace automat {
 
@@ -122,6 +125,187 @@ bool StartClientMove(DecoratedWindow& window) {
   pointer.ReplaceAction(*input,
                         std::make_unique<DragLocationAction>(pointer, mw->DragStack(*loc), *mw));
   return true;
+}
+
+using library::ClientWindow;
+
+ClientWindowToy::~ClientWindowToy() {
+  if (caret_) caret_->Release();
+}
+
+Ptr<ClientWindow> ClientWindowToy::LockClientWindow() const { return LockObject<ClientWindow>(); }
+
+void ClientWindowToy::PullState() {
+  auto win = LockClientWindow();
+  if (!win) return;
+  auto lock = std::lock_guard(win->mutex);
+  title_ = win->title.empty() ? win->app_id : win->title;
+  client_gone_ = win->client_gone;
+  client_decorated_ = win->client_decorated;
+  pref_ = win->decoration_preference.load(std::memory_order_relaxed);
+  image_ = win->image;
+  content_size_ = win->content_size;
+  PullMore(*win);
+}
+
+bool ClientWindowToy::Decorated() const {
+  using P = DecoratedWindow::DecorationPreference;
+  if (client_gone_) return true;
+  if (pref_ != P::Auto) return pref_ == P::ServerSide;
+  return !client_decorated_;
+}
+
+Vec2 ClientWindowToy::ContentSize() const {
+  return {content_size_.width() > 0 ? content_size_.width() * kPx : kMinContent,
+          content_size_.height() > 0 ? content_size_.height() * kPx : kMinContent};
+}
+
+ui::WindowFrame ClientWindowToy::Chrome() const { return {ContentSize(), title_}; }
+
+SkPath ClientWindowToy::FocusCaretShape() const {
+  return Decorated() ? Chrome().FocusCaretShape() : SkPath();
+}
+
+// Board coordinates to a point on the client surface, in client pixels.
+Vec2 ClientWindowToy::ToSurfacePx(Vec2 local) const {
+  Vec2 sz = ContentSize();
+  local += Vec2(sz.x / 2, sz.y / 2);
+  local.y = sz.y - local.y;
+  return local / kPx;
+}
+
+SkPath ClientWindowToy::Shape() const {
+  if (!Decorated()) return SkPath::Rect(ContentRect());
+  return Chrome().Shape();
+}
+
+ui::Tock ClientWindowToy::Tick(time::Timer& timer) {
+  if (!LockClientWindow()) {
+    MarkDead(timer.now);
+    return {};
+  }
+  Str prev_title = title_;
+  SkISize prev_size = content_size_;
+  bool prev_decorated = Decorated();
+  PullState();
+  bool extra_shape = TickMore(timer);
+  if (caret_) caret_->shape = FocusCaretShape();
+  Tock tock = Tock::Draw;
+  if (title_ != prev_title || content_size_ != prev_size || Decorated() != prev_decorated ||
+      extra_shape)
+    tock |= Tock::Shape;
+  return tock;
+}
+
+void ClientWindowToy::Draw(SkCanvas& canvas) const {
+  Vec2 sz = ContentSize();
+  Rect content = ContentRect();
+  if (image_) {
+    SkPaint paint;
+    if (image_->isOpaque())
+      paint.setColorFilter(SkColorFilters::Blend(SK_ColorBLACK, SkBlendMode::kDstOver));
+    canvas.save();
+    canvas.translate(content.left, content.top);
+    canvas.scale(1, -1);
+    canvas.drawImageRect(image_, SkRect::MakeWH(sz.x, sz.y),
+                         SkSamplingOptions(SkFilterMode::kLinear), &paint);
+    canvas.restore();
+  } else {
+    SkPaint background;
+    background.setColor("#202020"_color);
+    canvas.drawRect(content, background);
+  }
+  if (Decorated()) Chrome().Draw(canvas);
+}
+
+void ClientWindowToy::VisitOptions(const OptionsVisitor& visitor) const {
+  ObjectToy::VisitOptions(visitor);
+  VisitDecorationOptions(owner, visitor);
+}
+
+void ClientWindowToy::FocusClient(ui::Pointer& p) {
+  if (caret_ || !p.keyboard) return;
+  auto [w, h] = ContentSize().xy;
+  caret_ = &p.keyboard->RequestCaret(*this, Vec2(-w / 2, h / 2));
+  caret_->shape = FocusCaretShape();
+  SendFocus(true);
+  WakeAnimation();
+}
+
+void ClientWindowToy::ReleaseCaret(ui::Caret&) {
+  caret_ = nullptr;
+  SendFocus(false);
+  WakeAnimation();
+}
+
+void ClientWindowToy::PointerMove(ui::Pointer& p, Vec2) {
+  SendMotion(ToSurfacePx(p.PositionWithin(*this)));
+}
+
+void ClientWindowToy::PointerEnter(ui::Pointer& p) {
+  SendCrossing(true, ToSurfacePx(p.PositionWithin(*this)));
+  StartWatching(p);
+}
+
+void ClientWindowToy::PointerLeave(ui::Pointer& p) {
+  SendCrossing(false, {});
+  StopWatching(p);
+}
+
+void ClientWindowToy::KeyDown(ui::Caret&, ui::Key key) { SendKey(key, true); }
+
+void ClientWindowToy::KeyUp(ui::Caret&, ui::Key key) { SendKey(key, false); }
+
+std::unique_ptr<Action> ClientWindowToy::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
+  if ((ui::PointerButton)btn == ui::PointerButton::Left &&
+      ContentRect().Contains(p.PositionWithin(*this)) && AllowClientPress(p)) {
+    return BeginClientPress(p);
+  }
+  return ObjectToy::FindAction(p, btn);
+}
+
+ClientArrivals::ClientArrivals() = default;
+
+ClientArrivals::~ClientArrivals() = default;
+
+void ClientArrivals::Process() {
+  for (auto& weak : move_requests) {
+    if (auto win = weak.Lock()) StartClientMove(*win);
+  }
+  static int spawn_count = 0;
+  for (auto& [w, launch] : appeared) {
+    auto& win = *w;
+    Ptr<Object> source = launch ? launch->source.Lock() : nullptr;
+    Location* source_location = source ? source->MyLocation() : nullptr;
+    if (source && !win.launcher->IsConnected()) {
+      win.launcher->Connect(Interface(source.get(), nullptr));
+    }
+    Board* board = source_location ? source_location->LockBoard().get() : nullptr;
+    if (!board) board = &DefaultBoard();
+    auto& loc = board->CreateEmpty();
+    if (source_location) {
+      loc.placement = Location::PlaceBeside{source_location->AcquireWeakPtr()};
+    } else {
+      int n = spawn_count++;
+      loc.placement = Location::Direct{Vec2(0.01f * (n % 3), -0.02f * (n % 5))};
+    }
+    loc.InsertHere(std::move(w));
+    board->WakeToys();
+    vm.WakeToys();
+  }
+  appeared.clear();
+  for (auto& w : disappeared) {
+    auto vm_lock = std::lock_guard(vm.mutex);
+    for (auto& board : vm.boards) {
+      if (auto* here = board->LocationOrNull(*w)) {
+        board->Extract(*here);
+        board->WakeToys();
+      }
+    }
+    vm.WakeToys();
+  }
+  disappeared.clear();
+  move_requests.clear();
 }
 
 }  // namespace automat

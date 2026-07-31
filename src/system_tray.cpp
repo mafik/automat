@@ -401,13 +401,7 @@ std::map<UINT, system_tray::Icon::Impl*>& IconsByUid() {
 
 HWND MainHwnd() { return static_cast<Win32Window*>(ui::root_widget->window.get())->hwnd; }
 
-std::wstring Utf8ToWide(StrView s) {
-  if (s.empty()) return {};
-  int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), nullptr, 0);
-  std::wstring w((size_t)n, L'\0');
-  MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), w.data(), n);
-  return w;
-}
+using win32::Utf8ToWide;
 
 HICON MakeHIconFromImage(const sk_sp<SkImage>& image, int size) {
   if (!image) return nullptr;

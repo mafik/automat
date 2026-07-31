@@ -107,6 +107,10 @@ void Stop();
 // raw process exit code rather than a waitpid-style bitfield.
 void WatchProcess(int pid, std::function<void(int wait_status)> on_exit, Status&);
 
+// Runs `on_signaled` on the loop thread once `handle` becomes signaled. The
+// caller keeps ownership of the handle and must keep it open until then.
+void WatchHandle(void* handle, std::function<void()> on_signaled, Status&);
+
 // Deadline-based twin of the Linux timerfd Timer, driven by the poll timeout.
 struct Timer {
   Epoll& epoll;

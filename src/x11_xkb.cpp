@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <mutex>
 
 #include "format.hpp"
 #include "key.hpp"
@@ -41,7 +42,7 @@ struct KeyType {
   Vec<LevelEntry> entries;  // one per non-base level reachable by a modifier combination
 };
 
-xkb_keymap* Km() { return keymap ? keymap->xkb : nullptr; }
+xkb_keymap* Km() { return keymap.xkb.get(); }
 
 // Core protocol keycodes are CARD8: clamp the keymap's range to 8..255 (the compiled
 // default keymap extends to 708; those keys are unreachable over X11).
@@ -520,6 +521,7 @@ U8 ModifierMask(const ui::Key& key) {
 }
 
 bool Dispatch(Client& c, U8 minor, const U8* raw, size_t raw_len) {
+  auto lock = std::lock_guard(keymap.mutex);
   switch (minor) {
     case 0:
       UseExtension(c);

@@ -41,11 +41,7 @@ namespace automat::library {
 // - deleting the object asks the client to close (WM_DELETE_WINDOW, then a kill).
 struct X11Window : ClientWindow {
   bool override_redirect = false;  // menus/tooltips: drawn without chrome
-  bool client_decorated = false;   // the client draws its own frame (Motif hints / GTK CSD)
 
-  // The composited snapshot of this window's tree and its size in client pixels.
-  sk_sp<SkImage> image;
-  SkISize content_size = {};
   SkPath input_region;  // client pixels (the whole window; shaped windows narrow it)
 
   // Server-side identity; only the x11 thread dereferences it.

@@ -28,6 +28,10 @@
 #include "sync.hpp"
 #include "x11.hpp"
 
+#if defined(_WIN32)
+#include "win32_window_manager.hpp"
+#endif
+
 // The libraries below are Linux-only. PipeWire has no Windows port and the
 // Wayland compositor needs SCM_RIGHTS fd passing, which Windows AF_UNIX
 // sockets lack.
@@ -115,6 +119,9 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<WaylandWindow, HideInToolbar>();
   index.Register<PipeWireNode, HideInToolbar>();
   index.Register<PipeWireShelf, HideInToolbar>();
+#endif
+#if defined(_WIN32)
+  index.Register<AppWindow, HideInToolbar>();
 #endif
   {  // The Leptonica tools are reached through the shelf, not the toolbar.
     index.Register<LeptonicaShelf, HideInToolbar>();

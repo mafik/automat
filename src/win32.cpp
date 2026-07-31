@@ -39,8 +39,7 @@ HINSTANCE GetInstance() {
   return instance;
 }
 
-Str GetLastErrorStr() {
-  DWORD error = GetLastError();
+Str ErrorStr(DWORD error) {
   if (error == 0) return "No error";
   LPSTR messageBuffer = nullptr;
   size_t size = FormatMessageA(
@@ -48,7 +47,26 @@ Str GetLastErrorStr() {
       nullptr, error, 0, (LPSTR)&messageBuffer, 0, nullptr);
   Str message(messageBuffer, size);
   LocalFree(messageBuffer);
+  while (!message.empty() && (message.back() == '\n' || message.back() == '\r')) message.pop_back();
   return message;
+}
+
+Str GetLastErrorStr() { return ErrorStr(GetLastError()); }
+
+std::wstring Utf8ToWide(StrView s) {
+  if (s.empty()) return {};
+  int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), nullptr, 0);
+  std::wstring w((size_t)n, L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), w.data(), n);
+  return w;
+}
+
+Str WideToUtf8(std::wstring_view w) {
+  if (w.empty()) return {};
+  int n = WideCharToMultiByte(CP_UTF8, 0, w.data(), (int)w.size(), nullptr, 0, nullptr, nullptr);
+  Str s((size_t)n, '\0');
+  WideCharToMultiByte(CP_UTF8, 0, w.data(), (int)w.size(), s.data(), n, nullptr, nullptr);
+  return s;
 }
 
 bool IsMaximized(HWND hWnd) {

@@ -243,24 +243,20 @@ namespace {
 std::thread loop_thread;
 std::stop_source stop_source;
 
-struct ProcessWatch {
-  HANDLE process = nullptr;
+struct HandleWatch {
   HANDLE wait = nullptr;
-  std::function<void(int)> on_exit;
+  std::function<void()> on_signaled;
 };
 
-void CALLBACK OnProcessSignaled(void* context, BOOLEAN) {
-  auto* w = (ProcessWatch*)context;
-  DWORD exit_code = 0;
-  GetExitCodeProcess(w->process, &exit_code);
+void CALLBACK OnHandleSignaled(void* context, BOOLEAN) {
+  auto* w = (HandleWatch*)context;
   // A blocking UnregisterWaitEx would deadlock on this thread pool thread, so
   // cleanup runs on the mux thread instead.
-  epoll.Post([w, exit_code] {
+  epoll.Post([w] {
     UnregisterWaitEx(w->wait, INVALID_HANDLE_VALUE);
-    CloseHandle(w->process);
-    auto cb = std::move(w->on_exit);
+    auto cb = std::move(w->on_signaled);
     delete w;
-    if (cb) cb((int)exit_code);
+    if (cb) cb();
   });
 }
 
@@ -282,19 +278,31 @@ void Stop() {
   if (loop_thread.joinable()) loop_thread.join();
 }
 
+void WatchHandle(void* handle, std::function<void()> on_signaled, Status& status) {
+  auto* w = new HandleWatch{.on_signaled = std::move(on_signaled)};
+  if (!RegisterWaitForSingleObject(&w->wait, (HANDLE)handle, OnHandleSignaled, w, INFINITE,
+                                   WT_EXECUTEONLYONCE)) {
+    status() += f("RegisterWaitForSingleObject error {}", GetLastError());
+    delete w;
+  }
+}
+
 void WatchProcess(int pid, std::function<void(int)> on_exit, Status& status) {
   HANDLE process = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, (DWORD)pid);
   if (process == nullptr) {
     status() += f("OpenProcess(pid={}) error {}", pid, GetLastError());
     return;
   }
-  auto* w = new ProcessWatch{.process = process, .on_exit = std::move(on_exit)};
-  if (!RegisterWaitForSingleObject(&w->wait, process, OnProcessSignaled, w, INFINITE,
-                                   WT_EXECUTEONLYONCE)) {
-    status() += f("RegisterWaitForSingleObject(pid={}) error {}", pid, GetLastError());
-    CloseHandle(process);
-    delete w;
-  }
+  WatchHandle(
+      process,
+      [process, on_exit = std::move(on_exit)] {
+        DWORD exit_code = 0;
+        GetExitCodeProcess(process, &exit_code);
+        CloseHandle(process);
+        if (on_exit) on_exit((int)exit_code);
+      },
+      status);
+  if (!status.Ok()) CloseHandle(process);
 }
 
 }  // namespace automat::mux

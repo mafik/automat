@@ -4,10 +4,14 @@
 
 #include <src/base/SkUTF.h>
 #include <winuser.h>
+#include <xkbcommon/xkbcommon.h>
+
+#include <bitset>
 
 #include "automat.hpp"
 #include "hid.hpp"
 #include "key.hpp"
+#include "keymap.hpp"
 #include "log.hpp"
 #include "optional.hpp"
 #include "root_widget.hpp"
@@ -18,6 +22,7 @@
 #include "widget.hpp"
 #include "win32.hpp"
 #include "win_key.hpp"
+#include "x11_keys.hpp"
 
 using namespace automat;
 using namespace automat::ui;
@@ -251,12 +256,13 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
   Win32Window& window = *window_it->second;
 
   // TODO: Move this into Win32Window
-  static unsigned char key_state[256] = {};
-  auto IsCtrlDown = [] {
-    return key_state[VK_LCONTROL] || key_state[VK_RCONTROL] || key_state[VK_CONTROL];
-  };
-  static char utf8_buffer[4] = {};
-  static int utf8_i = 0;
+  static std::bitset<(size_t)AnsiKey::Count> keys_down;
+  static wchar_t vk_packet_first_half = 0;
+  static bool caps_lock_on = GetKeyState(VK_CAPITAL) & 1;
+  static bool num_lock_on = GetKeyState(VK_NUMLOCK) & 1;
+  constexpr static AnsiKey kModifierKeys[] = {
+      AnsiKey::ShiftLeft, AnsiKey::ShiftRight, AnsiKey::ControlLeft, AnsiKey::ControlRight,
+      AnsiKey::AltLeft,   AnsiKey::AltRight,   AnsiKey::SuperLeft,   AnsiKey::SuperRight};
   if (std::optional<LRESULT> result = touchpad::ProcessEvent(hWnd, uMsg, wParam, lParam)) {
     return *result;
   }
@@ -333,6 +339,20 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     case WM_ACTIVATEAPP: {
       auto lock = window.Lock();
       window.window_active = wParam != WA_INACTIVE;
+      keys_down.reset();
+      if (window.window_active) {
+        for (AnsiKey modifier : kModifierKeys) {
+          if (GetAsyncKeyState(KeyToVirtualKey(modifier)) & 0x8000) {
+            keys_down[(size_t)modifier] = true;
+          }
+        }
+      }
+      return DefWindowProc(hWnd, uMsg, wParam, lParam);
+    }
+    case WM_INPUTLANGCHANGE: {
+      if (keymap.ActiveGroup() < 0) {
+        keymap.Reload();
+      }
       return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }
     case WM_INPUT: {
@@ -359,59 +379,85 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         // Also ignore the Message field and instead check for the RI_KEY_BREAK to detect if key is
         // down or up.
         RAWKEYBOARD& ev = raw_input->data.keyboard;
-        U32 scan_code = ev.MakeCode;
-        if (ev.Flags & RI_KEY_E0) {
-          scan_code |= 0xE000;
-        }
-        if (ev.Flags & RI_KEY_E1) {
-          scan_code |= 0xE11D00;
-        }
-        auto physical = ScanCodeToKey(scan_code);
-        auto virtual_key = KeyToVirtualKey(physical);  // layout-dependent key code
-
-        ui::Key key;
-        key.physical = physical;
-        key.logical = VirtualKeyToKey(virtual_key);
-
-        if (key.logical == AnsiKey::AltRight && ev.VKey == VK_CONTROL) {
-          // Right Alt sends key double events for VKey set to (first) Control & (second) Alt.
-          // We ignore the ones with VKey set to VK_CONTROL.
-          return DefWindowProc(hWnd, uMsg, wParam, lParam);
-        }
-
         bool down = !(ev.Flags & RI_KEY_BREAK);
-
-        if (down) {
-          // LOG << "Pressed " << ui::ToStr(key.logical);
-          if (key_state[virtual_key] == 0) {
-            key_state[virtual_key] = 0x80;
-            key.ctrl = IsCtrlDown();
-            std::array<wchar_t, 16> utf16_buffer;
-            int utf16_len = ToUnicode(virtual_key, scan_code, key_state, utf16_buffer.data(),
-                                      utf16_buffer.size(), 0);
-            if (utf16_len) {
-              std::array<char, 32> utf8_buffer = {};
-              int utf8_len = SkUTF::UTF16ToUTF8(utf8_buffer.data(), utf8_buffer.size(),
-                                                (uint16_t*)utf16_buffer.data(), utf16_len);
-              key.text = std::string(utf8_buffer.data(), utf8_len);
+        ui::Key key = {};
+        if (ev.VKey == VK_PACKET) {
+          if (down) {
+            wchar_t unit = ev.MakeCode;
+            if (unit >= 0xD800 && unit < 0xDC00) {
+              vk_packet_first_half = unit;
+              return DefWindowProc(hWnd, uMsg, wParam, lParam);
             }
-            auto lock = window.Lock();
-            if (window.keylogging_enabled) {
-              window.root.keyboard.LogKeyDown(key);
+            wchar_t units[2] = {unit, 0};
+            int units_len = 1;
+            if (unit >= 0xDC00 && unit < 0xE000 && vk_packet_first_half) {
+              units[0] = vk_packet_first_half;
+              units[1] = unit;
+              units_len = 2;
+              vk_packet_first_half = 0;
             }
-            if (window.window_active) {
-              window.root.keyboard.KeyDown(key);
+            std::array<char, 8> utf8_buffer;
+            int utf8_len = SkUTF::UTF16ToUTF8(utf8_buffer.data(), utf8_buffer.size(),
+                                              (uint16_t*)units, units_len);
+            if (utf8_len > 0) {
+              key.text.assign(utf8_buffer.data(), utf8_len);
             }
           }
         } else {
-          // LOG << "Released " << ui::ToStr(key.logical);
-          key_state[virtual_key] = 0;
-          key.ctrl = IsCtrlDown();
-          auto lock = window.Lock();
-          if (window.keylogging_enabled) {
+          U32 scan_code = ev.MakeCode;
+          if (ev.Flags & RI_KEY_E0) {
+            scan_code |= 0xE000;
+          }
+          if (ev.Flags & RI_KEY_E1) {
+            scan_code |= 0xE11D00;
+          }
+          key.physical = ScanCodeToKey(scan_code);
+
+          if (key.physical == AnsiKey::AltRight && ev.VKey == VK_CONTROL) {
+            // Right Alt sends key double events for VKey set to (first) Control & (second) Alt.
+            // We ignore the ones with VKey set to VK_CONTROL.
+            return DefWindowProc(hWnd, uMsg, wParam, lParam);
+          }
+
+          if (down && keys_down[(size_t)key.physical]) {
+            return DefWindowProc(hWnd, uMsg, wParam, lParam);
+          }
+          keys_down[(size_t)key.physical] = down;
+          if (down && key.physical == AnsiKey::CapsLock) caps_lock_on = !caps_lock_on;
+          if (down && key.physical == AnsiKey::NumLock) num_lock_on = !num_lock_on;
+
+          if (keymap.state) {
+            U32 depressed = 0;
+            for (AnsiKey modifier : kModifierKeys) {
+              if (keys_down[(size_t)modifier]) {
+                depressed |= keymap.key_mods[(U8)x11::KeyToX11KeyCode(modifier)];
+              }
+            }
+            U32 locked = 0;
+            if (caps_lock_on) {
+              locked |= keymap.key_mods[(size_t)x11::KeyCode::CapsLock];
+            }
+            if (num_lock_on) {
+              locked |= keymap.key_mods[(size_t)x11::KeyCode::NumLock];
+            }
+            int group = keymap.ActiveGroup();
+            xkb_state_update_mask(keymap.state.get(), depressed, 0, locked, 0, 0,
+                                  std::max(group, 0));
+          }
+          FillKeyFromKeymap(key, down);
+        }
+        auto lock = window.Lock();
+        if (window.keylogging_enabled) {
+          if (down) {
+            window.root.keyboard.LogKeyDown(key);
+          } else {
             window.root.keyboard.LogKeyUp(key);
           }
-          if (window.window_active) {
+        }
+        if (window.window_active) {
+          if (down) {
+            window.root.keyboard.KeyDown(key);
+          } else {
             window.root.keyboard.KeyUp(key);
           }
         }
@@ -451,14 +497,14 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         if (ev.usButtonFlags & RI_MOUSE_WHEEL) {
           for (auto& logging : mouse.loggings) {
             logging.logger.PointerLoggerScrollY(logging,
-                                                 (float)(int16_t)ev.usButtonData / WHEEL_DELTA);
+                                                (float)(int16_t)ev.usButtonData / WHEEL_DELTA);
           }
         }
 
         if (ev.usButtonFlags & RI_MOUSE_HWHEEL) {
           for (auto& logging : mouse.loggings) {
             logging.logger.PointerLoggerScrollX(logging,
-                                                 (float)(int16_t)ev.usButtonData / WHEEL_DELTA);
+                                                (float)(int16_t)ev.usButtonData / WHEEL_DELTA);
           }
         }
 

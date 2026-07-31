@@ -28,6 +28,7 @@
 #include <cstring>
 #include <ctime>
 #include <memory>
+#include <mutex>
 
 #include "animation.hpp"
 #include "dmabuf.hpp"
@@ -1429,14 +1430,19 @@ void Seat::OnGetKeyboard(Keyboard& id) {
   id.version = version;
   client.keyboards.push_back(&id);
   Server& s = client.server;
-  if (s.keymap_fd < 0 && keymap && !keymap->text.empty()) {
-    s.keymap_size = keymap->text.size() + 1;  // the client mmaps a NUL-terminated string
-    s.keymap_fd = memfd_create("automat-keymap", MFD_CLOEXEC);
-    if (s.keymap_fd >= 0) (void)!write(s.keymap_fd, keymap->text.c_str(), s.keymap_size);
+  if (s.keymap_fd < 0) {
+    auto lock = std::lock_guard(keymap.mutex);
+    if (keymap.xkb) {
+      if (char* text = xkb_keymap_get_as_string(keymap.xkb.get(), XKB_KEYMAP_FORMAT_TEXT_V1)) {
+        s.keymap_size = strlen(text) + 1;  // the client mmaps a NUL-terminated string
+        s.keymap_fd = memfd_create("automat-keymap", MFD_CLOEXEC);
+        if (s.keymap_fd >= 0) (void)!write(s.keymap_fd, text, s.keymap_size);
+        free(text);
+      }
+    }
   }
   if (s.keymap_fd >= 0) id.Keymap(Keyboard::KeymapFormatXkbV1, FD(dup(s.keymap_fd)), s.keymap_size);
-  // Automat forwards the host's key auto-repeat, so clients must not also repeat.
-  if (version >= 4) id.RepeatInfo(0, 0);
+  if (version >= 4) id.RepeatInfo(25, 660);
 }
 
 void DataDeviceManager::OnGetDataDevice(DataDevice& id, Seat&) {

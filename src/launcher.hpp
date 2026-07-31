@@ -4,6 +4,10 @@
 
 // Warning: coded with a stochastic parrot
 
+#include <include/core/SkImage.h>
+#include <include/core/SkSize.h>
+
+#include <functional>
 #include <mutex>
 
 #include "argument.hpp"
@@ -30,12 +34,24 @@ struct Pipe : ReferenceCounted {
   WeakPtr<Launch> reader;
 };
 
+#if defined(_WIN32)
+using StdioHandle = void*;
+inline constexpr StdioHandle kNoStdio = nullptr;
+#else
+using StdioHandle = int;
+inline constexpr StdioHandle kNoStdio = -1;
+#endif
+
 struct SpawnFds {
-  int in = -1;
-  int out = -1;
+  StdioHandle in = kNoStdio;
+  StdioHandle out = kNoStdio;
   Ptr<Pipe> in_pipe;
   Ptr<Pipe> out_pipe;
 };
+
+bool MakeStdioPipe(StdioHandle& read_end, StdioHandle& write_end, Status&);
+void CloseStdio(StdioHandle);
+StdioHandle AdoptFileDescriptor(int fd);
 
 struct StreamCapture {
   Vec<char> data;
@@ -51,7 +67,15 @@ struct Launch : Object {
   time::SteadyPoint when = {};
   Vec<Str> argv;
   int pidfd = -1;
+#if defined(_WIN32)
+  void* process = nullptr;
+  void* job = nullptr;
+  uintptr_t job_key = 0;
+  bool job_tracked = false;
+  StdioHandle child_stdin = kNoStdio;
+#endif
   WeakPtr<Object> source;
+  Vec<std::move_only_function<void()>> on_exit;
 
   WeakPtr<library::ClientWindow> restoring;
   Ptr<Pipe> stdout_pipe;
@@ -77,6 +101,9 @@ struct Launch : Object {
   }
   void RestoredInto(library::ClientWindow&);
   void WindowAppeared();
+  void Terminate(bool keep_connected = false);
+  bool OwnsProcess(I64 candidate_pid);
+  void NotifyOnExit(std::move_only_function<void()>);
 
   StreamStats StdoutStats();
   Vec<Str> TailLines(bool err, int max_lines, int max_columns);
@@ -119,9 +146,14 @@ struct ClientWindow : Object, DecoratedWindow {
   Str title;
   Str app_id;
   bool client_gone = false;
+  bool client_decorated = false;  // the client draws its own frame
   Vec<Str> recipe;
   I64 client_pid = 0;
   Ptr<Launch> launched_by;
+
+  // The composited snapshot of this window and its size in client pixels.
+  sk_sp<SkImage> image;
+  SkISize content_size = {};
 
   DEF_INTERFACE(ClientWindow, ObjectArgument<Object>, launcher, "Launcher")
   static constexpr auto kStyle = Argument::Style::Cable;

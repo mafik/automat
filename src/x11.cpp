@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2026 Automat Authors
 // SPDX-License-Identifier: MIT
 
+// Warning: coded with a stochastic parrot
+
 #include "x11.hpp"
 
 #include <include/core/SkCanvas.h>
@@ -22,6 +24,7 @@
 #include <cerrno>
 #include <cmath>
 #include <cstring>
+#include <utility>
 
 #if defined(_WIN32)
 // clang-format off
@@ -912,7 +915,7 @@ void MapWindow::Handle(Client& client) {
       launch->RestoredInto(*obj);
     } else {
       auto lock = std::lock_guard(server->ui_mutex);
-      server->ui_appeared.emplace_back(obj, launch);
+      server->ui_arrivals.appeared.emplace_back(obj, launch);
     }
   }
   MarkDirty(w);
@@ -1649,7 +1652,7 @@ void SendEvent::Handle(Client& client) {
       if (Window* tw = server->Get<Window>(target, ResType::Window)) {
         {
           auto lock = std::lock_guard(server->ui_mutex);
-          server->ui_move_requests.push_back(tw->object);
+          server->ui_arrivals.move_requests.push_back(tw->object);
         }
         vm.WakeToys();
       }
@@ -2772,7 +2775,7 @@ void UnmapAndForgetToplevel(x11::Window& w) {
   obj->WakeToys();
   {
     auto lock = std::lock_guard(server->ui_mutex);
-    server->ui_disappeared.push_back(obj);
+    server->ui_arrivals.disappeared.push_back(obj);
   }
   vm.WakeToys();
 }
@@ -2786,11 +2789,6 @@ void UnmapAndForgetToplevel(x11::Window& w) {
 namespace automat::library {
 
 namespace {
-constexpr float kPx = x11::kPx;
-constexpr float kTitleH = ui::WindowFrame::kTitleH;
-constexpr float kFrame = ui::WindowFrame::kFrame;
-constexpr float kMinContent = x11::kMinContent;
-
 U32 ModifierState(const ui::Key& key) {
   // The effective modifier mask (low 8 bits, same order as the X core state) plus the active
   // group in bits 13-14, which is what a client reads with XkbGroupForCoreState.
@@ -2801,153 +2799,48 @@ U32 ModifierState(const ui::Key& key) {
 // A mapped X11 top-level shown on the board: the shared window chrome (window_frame.hpp)
 // around the window's composited snapshot. Mirrors WaylandWindowToy: caret-gated keyboard,
 // pointer pass-through. Override-redirect windows (menus, tooltips) stay bare.
-struct X11WindowToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
-  Str title_;
-  bool client_gone_ = false;
+struct X11WindowToy : ClientWindowToy {
   bool override_redirect_ = false;
-  bool client_decorated_ = false;
-  DecoratedWindow::DecorationPreference pref_ = DecoratedWindow::DecorationPreference::Auto;
-  sk_sp<SkImage> image_;
-  SkISize content_size_ = {};
   SkPath input_shape_;
-  ui::Caret* caret_ = nullptr;
+  bool input_shape_changed_ = false;
 
-  X11WindowToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) { PullState(); }
-  ~X11WindowToy() override {
-    if (caret_) caret_->Release();
-  }
+  X11WindowToy(ui::Widget* parent, Object& obj) : ClientWindowToy(parent, obj) { PullState(); }
 
   Ptr<X11Window> LockWindow() const { return LockObject<X11Window>(); }
 
-  void PullState() {
-    auto win = LockWindow();
-    if (!win) return;
-    auto lock = std::lock_guard(win->mutex);
-    title_ = win->title.empty() ? win->app_id : win->title;
-    client_gone_ = win->client_gone;
-    override_redirect_ = win->override_redirect;
-    client_decorated_ = win->client_decorated;
-    pref_ = win->decoration_preference.load(std::memory_order_relaxed);
-    image_ = win->image;
-    content_size_ = win->content_size;
-    input_shape_ = win->input_region.makeTransform(SkMatrix::Scale(kPx, -kPx));
+  void PullMore(ClientWindow& window) override {
+    auto& win = static_cast<X11Window&>(window);
+    override_redirect_ = win.override_redirect;
+    SkPath input_shape = win.input_region.makeTransform(SkMatrix::Scale(kPx, -kPx));
+    input_shape_changed_ = input_shape != input_shape_;
+    input_shape_ = std::move(input_shape);
   }
 
-  bool Decorated() const {
-    using P = DecoratedWindow::DecorationPreference;
+  bool TickMore(time::Timer&) override { return std::exchange(input_shape_changed_, false); }
+
+  bool Decorated() const override {
     if (override_redirect_) return false;
-    if (client_gone_) return true;
-    if (pref_ != P::Auto) return pref_ == P::ServerSide;
-    return !client_decorated_;
+    return ClientWindowToy::Decorated();
   }
 
-  Vec2 ContentSize() const {
-    return {content_size_.width() > 0 ? content_size_.width() * kPx : kMinContent,
-            content_size_.height() > 0 ? content_size_.height() * kPx : kMinContent};
-  }
-  Rect ContentRect() const { return Rect::MakeAtZero(ContentSize()); }
-  Vec2 TopLeft() const { return ContentRect().TopLeftCorner(); }
-  ui::WindowFrame Chrome() const { return {ContentSize(), title_}; }
-
-  SkPath FocusCaretShape() const { return Decorated() ? Chrome().FocusCaretShape() : SkPath(); }
-
-  Tock Tick(time::Timer& timer) override {
-    if (!LockWindow()) {
-      MarkDead(timer.now);
-      return {};
-    }
-    Str prev_title = title_;
-    SkISize prev_size = content_size_;
-    SkPath prev_input = input_shape_;
-    bool prev_decorated = Decorated();
-    PullState();
-    if (caret_) caret_->shape = FocusCaretShape();
-    Tock tock = Tock::Draw;
-    if (title_ != prev_title || content_size_ != prev_size || input_shape_ != prev_input ||
-        Decorated() != prev_decorated)
-      tock |= Tock::Shape;
-    return tock;
-  }
-
-  bool CenteredAtZero() const override { return true; }
-
-  SkPath Shape() const override {
-    if (!Decorated()) return SkPath::Rect(ContentRect());
-    return Chrome().Shape();
-  }
-
-  // ---- pointer pass-through ----
-  Vec2 ToSurfacePx(Vec2 l) const {
-    Vec2 sz = ContentSize();
-    l += Vec2(sz.x / 2, sz.y / 2);  // from center to top-left origin
-    l.y = sz.y - l.y;               // flip to y-down
-    return l / kPx;
-  }
-
-  void PointerMove(ui::Pointer& p, Vec2) override {
-    Vec2 px = ToSurfacePx(p.PositionWithin(*this));
+  void SendMotion(Vec2 px) override {
     if (auto win = LockWindow()) x11::server->SendMotion(*win, (int)px.x, (int)px.y, 0);
   }
-  void PointerEnter(ui::Pointer& p) override {
-    Vec2 px = ToSurfacePx(p.PositionWithin(*this));
-    if (auto win = LockWindow()) x11::server->SendCrossing(*win, true, (int)px.x, (int)px.y);
-    StartWatching(p);
+  void SendCrossing(bool enter, Vec2 px) override {
+    if (auto win = LockWindow()) x11::server->SendCrossing(*win, enter, (int)px.x, (int)px.y);
   }
-  void PointerLeave(ui::Pointer& p) override {
-    if (auto win = LockWindow()) x11::server->SendCrossing(*win, false, 0, 0);
-    StopWatching(p);
+  void SendFocus(bool in) override {
+    if (auto win = LockWindow()) x11::server->SendFocus(*win, in);
   }
-
-  void FocusClient(ui::Pointer& p) {
-    if (caret_ || !p.keyboard) return;
-    auto [w, h] = ContentSize().xy;
-    caret_ = &p.keyboard->RequestCaret(*this, Vec2(-w / 2, h / 2));
-    caret_->shape = FocusCaretShape();
-    if (auto win = LockWindow()) x11::server->SendFocus(*win, true);
-    WakeAnimation();
-  }
-  void ReleaseCaret(ui::Caret&) override {
-    caret_ = nullptr;
-    if (auto win = LockWindow()) x11::server->SendFocus(*win, false);
-    WakeAnimation();
-  }
-  void ForwardKey(ui::Key key, bool pressed) {
+  void SendKey(ui::Key key, bool pressed) override {
 #if defined(__linux__)
     U32 keycode = (U32)automat::x11::KeyToX11KeyCode(key.physical);
     if (keycode <= 8) return;
     if (auto win = LockWindow()) x11::server->SendKey(*win, keycode, pressed, ModifierState(key));
 #endif
   }
-  void KeyDown(ui::Caret&, ui::Key key) override { ForwardKey(key, true); }
-  void KeyUp(ui::Caret&, ui::Key key) override { ForwardKey(key, false); }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
-
-  void VisitOptions(const OptionsVisitor& visitor) const override {
-    ObjectToy::VisitOptions(visitor);
-    VisitDecorationOptions(owner, visitor);
-  }
-
-  void Draw(SkCanvas& canvas) const override {
-    Vec2 sz = ContentSize();
-    Rect content = ContentRect();
-    if (image_) {
-      SkPaint paint;
-      if (image_->isOpaque())
-        paint.setColorFilter(SkColorFilters::Blend(SK_ColorBLACK, SkBlendMode::kDstOver));
-      canvas.save();
-      canvas.translate(content.left, content.top);
-      canvas.scale(1, -1);
-      canvas.drawImageRect(image_, SkRect::MakeWH(sz.x, sz.y),
-                           SkSamplingOptions(SkFilterMode::kLinear), &paint);
-      canvas.restore();
-    } else {
-      SkPaint bg;
-      bg.setColor("#202020"_color);
-      canvas.drawRect(content, bg);
-    }
-    if (Decorated()) Chrome().Draw(canvas);
-  }
+  std::unique_ptr<Action> BeginClientPress(ui::Pointer& p) override;
 };
 
 // Held while a button initiated over the window is down: routes the press/release to the
@@ -2973,25 +2866,8 @@ struct X11InputAction : ClientInputActionBase {
   }
 };
 
-static U32 X11ButtonCode(ui::ActionTrigger btn) {
-  using ui::PointerButton;
-  switch ((PointerButton)btn) {
-    case PointerButton::Left:
-      return 1;
-    case PointerButton::Middle:
-      return 2;
-    case PointerButton::Right:
-      return 3;
-    default:
-      return 0;
-  }
-}
-
-std::unique_ptr<Action> X11WindowToy::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
-  bool in_content = ContentRect().Contains(p.PositionWithin(*this));
-  if (in_content)
-    if (U32 code = X11ButtonCode(btn)) return std::make_unique<X11InputAction>(p, *this, code);
-  return ObjectToy::FindAction(p, btn);
+std::unique_ptr<Action> X11WindowToy::BeginClientPress(ui::Pointer& p) {
+  return std::make_unique<X11InputAction>(p, *this, 1);
 }
 
 std::unique_ptr<ObjectToy> X11Window::MakeToy(ui::Widget* parent) {
@@ -3024,7 +2900,7 @@ using library::X11Window;
 
 // Flatten Automat's shared keymap into the core protocol's view: two levels per group per
 // key for GetKeyboardMapping, and, for GetModifierMapping, the keys that activate each real
-// modifier (found by pressing each key on a scratch state and seeing which modifiers set).
+// modifier.
 void LoadKeymap(Server& s) {
   s.keymap_min = 8;
   s.keymap_max = 255;
@@ -3033,7 +2909,8 @@ void LoadKeymap(Server& s) {
   std::memset(s.mod_map, 0, sizeof(s.mod_map));
   std::memset(s.key_mods, 0, sizeof(s.key_mods));
 
-  xkb_keymap* km = keymap ? keymap->xkb : nullptr;
+  auto lock = std::lock_guard(keymap.mutex);
+  xkb_keymap* km = keymap.xkb.get();
   if (km) {
     // Core protocol keycodes are CARD8: keys past 255 (the compiled default keymap extends
     // to 708) are unreachable over X11 and are dropped.
@@ -3051,12 +2928,8 @@ void LoadKeymap(Server& s) {
         }
     }
     for (xkb_keycode_t kc = s.keymap_min; kc <= s.keymap_max; ++kc) {
-      xkb_state* st = xkb_state_new(km);
-      if (!st) break;
-      xkb_state_update_key(st, kc, XKB_KEY_DOWN);
-      xkb_mod_mask_t mods = xkb_state_serialize_mods(st, XKB_STATE_MODS_EFFECTIVE);
-      xkb_state_unref(st);
-      s.key_mods[kc] = (U8)(mods & 0xff);
+      U8 mods = keymap.key_mods[kc];
+      s.key_mods[kc] = mods;
       for (int m = 0; m < 8; ++m) {
         if (!(mods & (1u << m))) continue;
         for (int k = 0; k < 4; ++k)
@@ -3263,49 +3136,14 @@ Str SocketName() {
 void Tick() {
   if (!server) return;
   Server& s = *server;
-  Vec<std::pair<Ptr<X11Window>, Ptr<Launch>>> appeared;
-  Vec<Ptr<X11Window>> disappeared;
-  Vec<WeakPtr<X11Window>> move_requests;
+  ClientArrivals arrivals;
   {
     auto lock = std::lock_guard(s.ui_mutex);
-    appeared.swap(s.ui_appeared);
-    disappeared.swap(s.ui_disappeared);
-    move_requests.swap(s.ui_move_requests);
+    arrivals.appeared.swap(s.ui_arrivals.appeared);
+    arrivals.disappeared.swap(s.ui_arrivals.disappeared);
+    arrivals.move_requests.swap(s.ui_arrivals.move_requests);
   }
-  for (auto& weak : move_requests) {
-    if (auto win = weak.Lock()) StartClientMove(*win);
-  }
-  static int spawn_count = 0;
-  for (auto& [w, launch] : appeared) {
-    auto& win = *w;
-    Ptr<Object> source = launch ? launch->source.Lock() : nullptr;
-    Location* source_location = source ? source->MyLocation() : nullptr;
-    if (source && !win.launcher->IsConnected()) {
-      win.launcher->Connect(Interface(source.get(), nullptr));
-    }
-    Board* board = source_location ? source_location->LockBoard().get() : nullptr;
-    if (!board) board = &DefaultBoard();
-    auto& loc = board->CreateEmpty();
-    if (source_location) {
-      loc.placement = Location::PlaceBeside{source_location->AcquireWeakPtr()};
-    } else {
-      int n = spawn_count++;
-      loc.placement = Location::Direct{Vec2(0.01f * (n % 3), -0.02f * (n % 5))};
-    }
-    loc.InsertHere(std::move(w));
-    board->WakeToys();
-    vm.WakeToys();
-  }
-  for (auto& w : disappeared) {
-    auto vm_lock = std::lock_guard(vm.mutex);
-    for (auto& board : vm.boards) {
-      if (auto* here = board->LocationOrNull(*w)) {
-        board->Extract(*here);
-        board->WakeToys();
-      }
-    }
-    vm.WakeToys();
-  }
+  arrivals.Process();
 }
 
 }  // namespace automat::x11

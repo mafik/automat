@@ -75,7 +75,8 @@ PFN_vkGetDeviceProcAddr GetDeviceProcAddr;
   X(GetPhysicalDeviceSurfacePresentModesKHR) \
   X(EnumerateDeviceExtensionProperties)      \
   X(GetPhysicalDeviceFeatures2)              \
-  X(GetPhysicalDeviceMemoryProperties2)
+  X(GetPhysicalDeviceMemoryProperties2)      \
+  X(GetPhysicalDeviceProperties2)
 
 #define EACH_DEVICE_PROC(X)      \
   X(GetDeviceQueue)              \
@@ -103,7 +104,8 @@ PFN_vkGetDeviceProcAddr GetDeviceProcAddr;
   X(AllocateMemory)              \
   X(FreeMemory)                  \
   X(GetImageMemoryRequirements2) \
-  X(GetMemoryFdPropertiesKHR)
+  X(GetMemoryFdPropertiesKHR)    \
+  X(GetMemoryWin32HandlePropertiesKHR)
 
 #define VULKAN_DECLARE(F) PFN_vk##F vk##F;
 EACH_INSTANCE_PROC(VULKAN_DECLARE)
@@ -413,12 +415,20 @@ void Device::Init(Status& status) {
   vk::physical_device.enable_extensions_if_present(skia_extensions);
   memory_budget_available =
       vk::physical_device.enable_extension_if_present(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+  // All or nothing per call, so each platform's import extensions go separately.
+#if defined(_WIN32)
+  vk::physical_device.enable_extensions_if_present({
+      VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,
+      VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
+  });
+#else
   vk::physical_device.enable_extensions_if_present({
       VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
       VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME,
       VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME,
       VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME,
   });
+#endif
 
   // Workaround for a Skia bug: VulkanPreferredFeatures::addFeaturesToEnable unconditionally
   // chains uninitialized fSamplerYcbcrConversion (happens when fAPIVersion >= 1.2).
@@ -1339,8 +1349,6 @@ SkCanvas* AcquireCanvas() { return swapchain.AcquireCanvas(); }
 
 void Present() { swapchain.Present(); }
 
-#if defined(__linux__)
-
 namespace {
 // Keeps an imported VkImage + VkDeviceMemory alive for the wrapped SkImage's
 // lifetime; Skia's release proc frees them once the GPU is done sampling.
@@ -1355,6 +1363,134 @@ void ReleaseImportedTexture(void* context) {
   delete t;
 }
 }  // namespace
+
+#if defined(_WIN32)
+
+bool AdapterLuid(uint8_t out[8]) {
+  VkPhysicalDeviceIDProperties id = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES};
+  VkPhysicalDeviceProperties2 properties = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &id};
+  vkGetPhysicalDeviceProperties2(physical_device, &properties);
+  if (!id.deviceLUIDValid) return false;
+  memcpy(out, id.deviceLUID, VK_LUID_SIZE);
+  return true;
+}
+
+sk_sp<SkImage> ImportSharedTexture(void* shared_handle, int width, int height, Status& status) {
+  if (vkGetMemoryWin32HandlePropertiesKHR == nullptr) {
+    AppendErrorMessage(status) += "This graphics driver cannot import shared textures.";
+    return nullptr;
+  }
+  constexpr VkFormat kFormat = VK_FORMAT_B8G8R8A8_UNORM;
+  constexpr auto kHandleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT;
+  constexpr VkImageUsageFlags kUsage = VK_IMAGE_USAGE_SAMPLED_BIT |
+                                       VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                                       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+  VkExternalMemoryImageCreateInfo external_info = {
+      .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+      .handleTypes = kHandleType,
+  };
+  VkImageCreateInfo image_info = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .pNext = &external_info,
+      .imageType = VK_IMAGE_TYPE_2D,
+      .format = kFormat,
+      .extent = {(uint32_t)width, (uint32_t)height, 1},
+      .mipLevels = 1,
+      .arrayLayers = 1,
+      .samples = VK_SAMPLE_COUNT_1_BIT,
+      .tiling = VK_IMAGE_TILING_OPTIMAL,
+      .usage = kUsage,
+      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+  };
+  VkImage image = VK_NULL_HANDLE;
+  if (auto res = vkCreateImage(device, &image_info, nullptr, &image); res != VK_SUCCESS) {
+    AppendErrorMessage(status) += "vkCreateImage for a shared texture: " + ToStr(res);
+    return nullptr;
+  }
+
+  VkImageMemoryRequirementsInfo2 requirements_info = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2, .image = image};
+  VkMemoryRequirements2 requirements = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
+  vkGetImageMemoryRequirements2(device, &requirements_info, &requirements);
+
+  VkMemoryWin32HandlePropertiesKHR handle_properties = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_WIN32_HANDLE_PROPERTIES_KHR};
+  if (auto res = vkGetMemoryWin32HandlePropertiesKHR(device, kHandleType, shared_handle,
+                                                     &handle_properties);
+      res != VK_SUCCESS) {
+    vkDestroyImage(device, image, nullptr);
+    AppendErrorMessage(status) += "vkGetMemoryWin32HandleProperties: " + ToStr(res);
+    return nullptr;
+  }
+  uint32_t type_bits = requirements.memoryRequirements.memoryTypeBits &
+                       handle_properties.memoryTypeBits;
+  if (type_bits == 0) {
+    vkDestroyImage(device, image, nullptr);
+    AppendErrorMessage(status) += "No memory type can hold the shared texture.";
+    return nullptr;
+  }
+
+  VkImportMemoryWin32HandleInfoKHR import_info = {
+      .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR,
+      .handleType = kHandleType,
+      .handle = shared_handle,
+  };
+  VkMemoryDedicatedAllocateInfo dedicated_info = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
+      .pNext = &import_info,
+      .image = image,
+  };
+  VkMemoryAllocateInfo allocate_info = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+      .pNext = &dedicated_info,
+      .allocationSize = requirements.memoryRequirements.size,
+      .memoryTypeIndex = (uint32_t)__builtin_ctz(type_bits),
+  };
+  VkDeviceMemory memory = VK_NULL_HANDLE;
+  if (auto res = vkAllocateMemory(device, &allocate_info, nullptr, &memory); res != VK_SUCCESS) {
+    vkDestroyImage(device, image, nullptr);
+    AppendErrorMessage(status) += "vkAllocateMemory for a shared texture: " + ToStr(res);
+    return nullptr;
+  }
+  if (auto res = vkBindImageMemory(device, image, memory, 0); res != VK_SUCCESS) {
+    vkFreeMemory(device, memory, nullptr);
+    vkDestroyImage(device, image, nullptr);
+    AppendErrorMessage(status) += "vkBindImageMemory for a shared texture: " + ToStr(res);
+    return nullptr;
+  }
+
+  graphite::VulkanTextureInfo texture_info(VK_SAMPLE_COUNT_1_BIT, skgpu::Mipmapped::kNo, 0, kFormat,
+                                           VK_IMAGE_TILING_OPTIMAL, kUsage,
+                                           VK_SHARING_MODE_EXCLUSIVE, VK_IMAGE_ASPECT_COLOR_BIT,
+                                           skgpu::VulkanYcbcrConversionInfo());
+  auto backend_texture = graphite::BackendTextures::MakeVulkan(
+      {width, height}, texture_info, VK_IMAGE_LAYOUT_GENERAL, device.graphics_queue_index, image,
+      skgpu::VulkanAlloc());
+  if (!backend_texture.isValid()) {
+    vkFreeMemory(device, memory, nullptr);
+    vkDestroyImage(device, image, nullptr);
+    AppendErrorMessage(status) += "BackendTextures::MakeVulkan returned invalid.";
+    return nullptr;
+  }
+
+  auto* context = new ImportedTexture{image, memory};
+  sk_sp<SkImage> sk_image = SkImages::WrapTexture(
+      import_recorder.get(), backend_texture, kPremul_SkAlphaType, SkColorSpace::MakeSRGB(),
+      skgpu::Origin::kTopLeft, ReleaseImportedTexture, context);
+  if (!sk_image) {
+    ReleaseImportedTexture(context);
+    AppendErrorMessage(status) += "SkImages::WrapTexture failed for a shared texture.";
+    return nullptr;
+  }
+  return sk_image;
+}
+
+#endif
+
+#if defined(__linux__)
 
 // Zero-copy path: import the dmabuf straight into a VkImage via external memory.
 // Returns null (leaving desc's original fd open) when the driver can't import

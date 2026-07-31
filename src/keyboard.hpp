@@ -36,6 +36,8 @@ struct Keylogging;
 
 void SendKeyEvent(AnsiKey physical, bool down);
 
+void FillKeyFromKeymap(Key& key, bool down);
+
 struct Caret final {
   MortalCoil mortal_coil;
   Keyboard& keyboard;
@@ -212,10 +214,6 @@ struct Keyboard final : Widget {
   Optional<Rect> DrawBounds() const override { return std::nullopt; }
 
 #if defined(__linux__)
-  struct LinuxKeyboardState;
-
-  std::unique_ptr<LinuxKeyboardState> linux_state;
-  // TODO: refactor this
   void KeyDown(xcb_input_key_press_event_t&);
   void KeyDown(xcb_input_raw_key_press_event_t&);
   void KeyDown(xcb_key_press_event_t&);

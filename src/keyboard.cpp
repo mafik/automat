@@ -3,7 +3,9 @@
 #include "keyboard.hpp"
 
 #include <include/core/SkPathBuilder.h>
+#include <xkbcommon/xkbcommon.h>
 
+#include <algorithm>
 #include <map>
 #include <set>
 #include <utility>
@@ -11,7 +13,10 @@
 #include "animation.hpp"
 #include "automat.hpp"
 #include "font.hpp"
+#include "keymap.hpp"
 #include "root_widget.hpp"
+#include "x11_keys.hpp"
+#include "x11_xkb.hpp"
 
 #if defined(_WIN32)
 #include <Windows.h>
@@ -26,12 +31,8 @@
 #include <xcb/xinput.h>
 #include <xcb/xproto.h>
 #include <xcb/xtest.h>
-#include <xkbcommon/xkbcommon-x11.h>
-#include <xkbcommon/xkbcommon.h>
 
 #include "format.hpp"
-#include "x11_keys.hpp"
-#include "x11_xkb.hpp"
 #include "xcb.hpp"
 #include "xcb_window.hpp"
 
@@ -332,75 +333,150 @@ SkPath Keyboard::Shape() const {
   return builder.detach();
 }
 
+static AnsiKey KeysymToKey(uint32_t keysym) {
+  using enum AnsiKey;
+  if (keysym >= 'a' && keysym <= 'z') keysym += 'A' - 'a';
+  switch (keysym) {
+    case 'A':
+      return A;
+    case 'B':
+      return B;
+    case 'C':
+      return C;
+    case 'D':
+      return D;
+    case 'E':
+      return E;
+    case 'F':
+      return F;
+    case 'G':
+      return G;
+    case 'H':
+      return H;
+    case 'I':
+      return I;
+    case 'J':
+      return J;
+    case 'K':
+      return K;
+    case 'L':
+      return L;
+    case 'M':
+      return M;
+    case 'N':
+      return N;
+    case 'O':
+      return O;
+    case 'P':
+      return P;
+    case 'Q':
+      return Q;
+    case 'R':
+      return R;
+    case 'S':
+      return S;
+    case 'T':
+      return T;
+    case 'U':
+      return U;
+    case 'V':
+      return V;
+    case 'W':
+      return W;
+    case 'X':
+      return X;
+    case 'Y':
+      return Y;
+    case 'Z':
+      return Z;
+    case '0':
+      return Digit0;
+    case '1':
+      return Digit1;
+    case '2':
+      return Digit2;
+    case '3':
+      return Digit3;
+    case '4':
+      return Digit4;
+    case '5':
+      return Digit5;
+    case '6':
+      return Digit6;
+    case '7':
+      return Digit7;
+    case '8':
+      return Digit8;
+    case '9':
+      return Digit9;
+    case '`':
+      return Grave;
+    case '-':
+      return Minus;
+    case '=':
+      return Equals;
+    case '[':
+      return BracketLeft;
+    case ']':
+      return BracketRight;
+    case '\\':
+      return Backslash;
+    case ';':
+      return Semicolon;
+    case '\'':
+      return Apostrophe;
+    case ',':
+      return Comma;
+    case '.':
+      return Period;
+    case '/':
+      return Slash;
+    case ' ':
+      return Space;
+  }
+  return Unknown;
+}
+
+void FillKeyFromKeymap(Key& key, bool down) {
+  key.logical = key.physical;
+  if (!keymap.state) return;
+  xkb_state& state = *keymap.state;
+  x11::xkb::FillModifiers(key, xkb_state_serialize_mods(&state, XKB_STATE_MODS_EFFECTIVE));
+  key.layout = (uint8_t)xkb_state_serialize_layout(&state, XKB_STATE_LAYOUT_EFFECTIVE);
+  uint32_t keycode = (uint32_t)x11::KeyToX11KeyCode(key.physical);
+  if (keycode <= 8) return;
+  xkb_layout_index_t key_layout = xkb_state_key_get_layout(&state, keycode);
+  const xkb_keysym_t* syms = nullptr;
+  if (xkb_keymap_key_get_syms_by_level(keymap.xkb.get(), keycode, key_layout, 0, &syms) > 0) {
+    AnsiKey logical = KeysymToKey(syms[0]);
+    if (logical != AnsiKey::Unknown) key.logical = logical;
+  }
+  if (down) {
+    char buffer[32];
+    int size = xkb_state_key_get_utf8(&state, keycode, buffer, sizeof(buffer));
+    key.text.assign(buffer, std::clamp<int>(size, 0, sizeof(buffer) - 1));
+  }
+}
+
 #ifdef __linux__
 
-struct Keyboard::LinuxKeyboardState {
-  struct DeleteWith_xkb_context_unref {
-    void operator()(xkb_context* ctx) { xkb_context_unref(ctx); }
-  };
-
-  std::unique_ptr<xkb_context, DeleteWith_xkb_context_unref> ctx;
-
-  struct Device {
-    struct DeleteWith_xkb_keymap_unref {
-      void operator()(xkb_keymap* keymap) { xkb_keymap_unref(keymap); }
-    };
-
-    std::unique_ptr<xkb_keymap, DeleteWith_xkb_keymap_unref> keymap;
-
-    struct DeleteWith_xkb_state_unref {
-      void operator()(xkb_state* state) { xkb_state_unref(state); }
-    };
-
-    std::unique_ptr<xkb_state, DeleteWith_xkb_state_unref> state;
-
-    Device() {}
-
-    Device(xkb_context* ctx, xcb_input_device_id_t device_id) {
-      keymap.reset(xkb_x11_keymap_new_from_device(ctx, xcb::connection, device_id,
-                                                  XKB_KEYMAP_COMPILE_NO_FLAGS));
-      state.reset(xkb_x11_state_new_from_device(keymap.get(), xcb::connection, device_id));
-    }
-  };
-
-  std::map<xcb_input_device_id_t, Device> devices;
-
-  LinuxKeyboardState() { ctx.reset(xkb_context_new(XKB_CONTEXT_NO_FLAGS)); }
-
-  Device& GetDevice(xcb_input_device_id_t device_id) {
-    auto it = devices.find(device_id);
-    if (it == devices.end()) {
-      auto ret = devices.emplace(std::piecewise_construct, std::forward_as_tuple(device_id),
-                                 std::forward_as_tuple(ctx.get(), device_id));
-      it = ret.first;
-    }
-    return it->second;
-  }
-};
+static void UpdateKeymapState(xcb_input_modifier_info_t& mods, xcb_input_group_info_t& group) {
+  if (!keymap.state) return;
+  xkb_state_update_mask(keymap.state.get(), mods.base, mods.latched, mods.locked, group.base,
+                        group.latched, group.locked);
+}
 
 void Keyboard::KeyDown(xcb_input_key_press_event_t& ev) {
-  ui::Key key = {
-      .layout = ev.group.effective,
-      .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
-      .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
-  };
-  x11::xkb::FillModifiers(key, ev.mods.effective);
-
-  auto& device = linux_state->GetDevice(ev.deviceid);
-  xkb_state_update_key(device.state.get(), ev.detail, XKB_KEY_DOWN);
-
-  xkb_keycode_t keycode;
-  char buffer[32];
-  int size = xkb_state_key_get_utf8(device.state.get(), ev.detail, buffer, sizeof(buffer));
-  key.text.assign(buffer, size);
-
+  if (ev.flags & XCB_INPUT_KEY_EVENT_FLAGS_KEY_REPEAT) return;
+  ui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
+  UpdateKeymapState(ev.mods, ev.group);
+  FillKeyFromKeymap(key, true);
   KeyDown(key);
 }
 void Keyboard::KeyDown(xcb_input_raw_key_press_event_t& ev) {
-  ui::Key key = {
-      .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
-      .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
-  };
+  if (ev.flags & XCB_INPUT_KEY_EVENT_FLAGS_KEY_REPEAT) return;
+  ui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
+                 .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
   LogKeyDown(key);
 }
 void Keyboard::KeyDown(xcb_key_press_event_t& ev) {
@@ -412,14 +488,9 @@ void Keyboard::KeyDown(xcb_key_press_event_t& ev) {
 }
 
 void Keyboard::KeyUp(xcb_input_key_release_event_t& ev) {
-  ui::Key key = {.layout = ev.group.effective,
-                 .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
-                 .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
-  x11::xkb::FillModifiers(key, ev.mods.effective);
-
-  auto& device = linux_state->GetDevice(ev.deviceid);
-  xkb_state_update_key(device.state.get(), ev.detail, XKB_KEY_UP);
-
+  ui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
+  UpdateKeymapState(ev.mods, ev.group);
+  FillKeyFromKeymap(key, false);
   KeyUp(key);
 }
 void Keyboard::KeyUp(xcb_input_raw_key_release_event_t& ev) {
@@ -591,9 +662,6 @@ Caret& Keyboard::RequestCaret(Widget& caret_owner, Vec2 position) {
 }
 
 Keyboard::Keyboard(RootWidget& root_widget) : Widget(&root_widget), root_widget(root_widget) {
-#if defined(__linux__)
-  linux_state.reset(new LinuxKeyboardState());
-#endif
   root_widget.layers.OrderInside(this);
 }
 

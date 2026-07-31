@@ -9,6 +9,8 @@
 #include <windows.h>
 #pragma pop_macro("ERROR")
 
+#include <string>
+
 #include "math_constants.hpp"
 #include "str.hpp"
 
@@ -18,6 +20,10 @@ void ProcessSetup();
 
 HINSTANCE GetInstance();
 Str GetLastErrorStr();
+Str ErrorStr(DWORD error);
+
+std::wstring Utf8ToWide(StrView);
+Str WideToUtf8(std::wstring_view);
 
 bool IsMaximized(HWND hWnd);
 

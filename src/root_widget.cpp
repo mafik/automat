@@ -42,6 +42,7 @@
 #if defined(_WIN32)
 #include "win32.hpp"
 #include "win32_window.hpp"
+#include "win32_window_manager.hpp"
 #elif defined(__linux__)
 #include "wayland.hpp"
 #include "xcb_window.hpp"
@@ -256,6 +257,9 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
 
 #if defined(__linux__)
   wayland::Tick();
+#endif
+#if defined(_WIN32)
+  win32_wm::Tick();
 #endif
   x11::Tick();
 

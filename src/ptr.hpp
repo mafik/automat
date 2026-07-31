@@ -356,7 +356,7 @@ struct [[clang::trivial_abi]] WeakPtr : PtrBase<T> {
     return WeakPtr<U>(static_cast<U*>(this->Release()));
   }
 
-  template <typename U>
+  template <typename U = T>
   [[nodiscard]] WeakPtr<U> Copy() const {
     return WeakPtr<U>(static_cast<U*>(this->obj));
   }

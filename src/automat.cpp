@@ -36,6 +36,10 @@
 #include "vk.hpp"
 #include "x11.hpp"
 
+#if defined(_WIN32)
+#include "win32_window_manager.hpp"
+#endif
+
 #if defined(__linux__)
 #include "library_pipewire.hpp"
 #include "wayland.hpp"
@@ -140,7 +144,7 @@ int Main() {
   root_widget = make_unique<RootWidget>();
 
   root_widget->Init();
-  keymap.emplace();  // reads the layout of the host connection Init() opened
+  keymap.Reload();  // needs to go after X11 connection is established
   StartTimeThread(stop_source.get_token());
 
   RefreshTrayIcon();
@@ -173,6 +177,13 @@ int Main() {
     ERROR << "Couldn't start the X11 server: " << status;
     status.Reset();
   }
+#if defined(_WIN32)
+  win32_wm::Start(status);
+  if (!OK(status)) {
+    ERROR << "Couldn't start the window manager: " << status;
+    status.Reset();
+  }
+#endif
 
   LaunchRestoredWindows();  // after both display servers bound the sockets clients inherit
 
@@ -211,10 +222,12 @@ int Main() {
   root_widget.reset();
 
   x11::Stop();
+#if defined(_WIN32)
+  win32_wm::Stop();
+#endif
 #if defined(__linux__)
   wayland::Stop();
 #endif
-  keymap.reset();  // after the servers that read it have stopped
 
   {
     auto lock = std::lock_guard(vm.mutex);

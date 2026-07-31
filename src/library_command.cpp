@@ -19,7 +19,9 @@
 #include "ui_button.hpp"
 #include "units.hpp"
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+#include "win32.hpp"
+#else
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -28,8 +30,6 @@
 #include <cerrno>
 #include <csignal>
 #include <cstring>
-
-#include "mux_epoll.hpp"
 #endif
 
 namespace automat::library {
@@ -111,47 +111,22 @@ bool Command::DeserializeKey(ObjectDeserializer& d, StrView key) {
   return false;
 }
 
-#if defined(_WIN32)
-
-void Command::Run(std::unique_ptr<RunTask>&) {
-  ReportError("Command is not implemented on Windows yet.");
-}
-Ptr<Launch> Command::RunFor(ClientWindow&, Status& status) {
-  AppendErrorMessage(status) += "Command is not implemented on Windows yet.";
-  return nullptr;
-}
-bool Command::SpawnStage(const SpawnFds&, ClientWindow*, std::unique_ptr<RunTask>&,
-                         Status& status) {
-  AppendErrorMessage(status) += "Command is not implemented on Windows yet.";
-  return false;
-}
-bool Command::Busy() { return false; }
-void Command::Terminate() {}
-Ptr<Launch> Command::ExtractLaunch() { return nullptr; }
-StreamStats Command::StdoutStats() { return {}; }
-
-#else
-
 static bool LaunchAlive(const Ptr<Launch>& launch) {
   auto lock = std::lock_guard(launch->mutex);
   return !launch->exited;
 }
 
 static void WatchRun(Command& cmd, const Ptr<Launch>& launch) {
-  Status status;
-  mux::WatchProcess((pid_t)launch->pid,
-                    [weak = cmd.AcquireWeakPtr(), launch_weak = launch->AcquireWeakPtr()](int) {
-                      if (auto obj = weak.Lock()) {
-                        auto& cmd = static_cast<Command&>(*obj);
-                        auto lock = std::lock_guard(cmd.mutex);
-                        bool current = cmd.launch.Get() == launch_weak.GetUnsafe();
-                        // Cancel() may have already consumed the task; Done() requires one.
-                        if (current && cmd.running->IsRunning()) cmd.running->Done();
-                        cmd.WakeToys();
-                      }
-                    },
-                    status);
-  if (!OK(status)) cmd.ReportError(status.ToStr());
+  launch->NotifyOnExit([weak = cmd.AcquireWeakPtr(), launch_weak = launch->AcquireWeakPtr()] {
+    if (auto obj = weak.Lock()) {
+      auto& cmd = static_cast<Command&>(*obj);
+      auto lock = std::lock_guard(cmd.mutex);
+      bool current = cmd.launch.Get() == launch_weak.GetUnsafe();
+      // Cancel() may have already consumed the task; Done() requires one.
+      if (current && cmd.running->IsRunning()) cmd.running->Done();
+      cmd.WakeToys();
+    }
+  });
 }
 
 bool Command::Busy() {
@@ -210,7 +185,7 @@ void Command::Run(std::unique_ptr<RunTask>& task) {
 
   int n = (int)chain.size();
   Vec<SpawnFds> stdio(n);
-  Vec<int> to_close;
+  Vec<StdioHandle> to_close;
 
   // A file at either end of the chain resolves to a descriptor instead of a
   // pipe: the head's stdin reads it, the tail's stdout writes it - shell
@@ -224,8 +199,8 @@ void Command::Run(std::unique_ptr<RunTask>& task) {
         ReportError(f("stdin: {}", status.ToStr()));
         return;
       }
-      stdio[0].in = fd;
-      to_close.push_back(fd);
+      stdio[0].in = AdoptFileDescriptor(fd);
+      to_close.push_back(stdio[0].in);
     }
   }
   {
@@ -236,31 +211,32 @@ void Command::Run(std::unique_ptr<RunTask>& task) {
         int fd = fd_provider.Resolve(FdProvider::Dir::Write, status);
         if (fd < 0) {
           chain.back()->ReportError(f("stdout: {}", status.ToStr()));
-          for (int held : to_close) close(held);
+          for (StdioHandle held : to_close) CloseStdio(held);
           return;
         }
-        stdio[n - 1].out = fd;
-        to_close.push_back(fd);
+        stdio[n - 1].out = AdoptFileDescriptor(fd);
+        to_close.push_back(stdio[n - 1].out);
       }
     }
   }
 
-  // Pipes between consecutive stages. O_CLOEXEC keeps the parent's copies
-  // out of every child; posix_spawn's dup2 clears it on the installed ends.
+  // Pipes between consecutive stages. The parent's copies stay out of every
+  // child: each child receives only the ends installed as its own stdio.
   for (int i = 0; i + 1 < n; ++i) {
-    int fds[2];
-    if (pipe2(fds, O_CLOEXEC) != 0) {
-      ReportError(f("pipe2: {}", strerror(errno)));
-      for (int fd : to_close) close(fd);
+    StdioHandle read_end, write_end;
+    Status status;
+    if (!MakeStdioPipe(read_end, write_end, status)) {
+      ReportError(status.ToStr());
+      for (StdioHandle held : to_close) CloseStdio(held);
       return;
     }
     auto pipe = MAKE_PTR(Pipe);
-    stdio[i].out = fds[1];
+    stdio[i].out = write_end;
     stdio[i].out_pipe = pipe;
-    stdio[i + 1].in = fds[0];
+    stdio[i + 1].in = read_end;
     stdio[i + 1].in_pipe = std::move(pipe);
-    to_close.push_back(fds[0]);
-    to_close.push_back(fds[1]);
+    to_close.push_back(read_end);
+    to_close.push_back(write_end);
   }
 
   for (int i = 0; i < n; ++i) {
@@ -276,7 +252,7 @@ void Command::Run(std::unique_ptr<RunTask>& task) {
   }
   // The parent never keeps pipe ends: a held read end would suppress the
   // writer's SIGPIPE and a held write end would suppress the reader's EOF.
-  for (int fd : to_close) close(fd);
+  for (StdioHandle held : to_close) CloseStdio(held);
 }
 
 Ptr<Launch> Command::RunFor(ClientWindow& window, Status& status) {
@@ -286,13 +262,13 @@ Ptr<Launch> Command::RunFor(ClientWindow& window, Status& status) {
   return launch;
 }
 
-void Command::Terminate() {
+void Command::Terminate(bool keep_connected) {
   Ptr<Launch> live;
   {
     auto lock = std::lock_guard(mutex);
     if (launch && LaunchAlive(launch)) live = launch;
   }
-  if (live) kill((pid_t)live->pid, SIGTERM);
+  if (live) live->Terminate(keep_connected);
 }
 
 Ptr<Launch> Command::ExtractLaunch() {
@@ -316,6 +292,19 @@ StreamStats Command::StdoutStats() {
   if (!current) return {};
   return current->StdoutStats();
 }
+
+#if defined(_WIN32)
+
+// Used only for the toy's readiness display - the same search CreateProcessW
+// does is the authoritative one at spawn time.
+static bool ResolvesOnPath(const Str& prog) {
+  if (prog.empty()) return false;
+  auto wide = win32::Utf8ToWide(prog);
+  wchar_t found[MAX_PATH];
+  return SearchPathW(nullptr, wide.c_str(), L".exe", MAX_PATH, found, nullptr) > 0;
+}
+
+#else
 
 static bool IsExecutableFile(const char* path) {
   struct stat st;
@@ -614,11 +603,7 @@ struct CommandToy : ui::beta::ObjectToy {
     program_ = argv_.empty() ? Str{} : argv_[0];
     if (program_ != resolve_query_) {
       resolve_query_ = program_;
-#if defined(_WIN32)
-      resolve_answer_ = false;
-#else
       resolve_answer_ = ResolvesOnPath(program_);
-#endif
     }
     program_resolves_ = resolve_answer_;
 
@@ -653,6 +638,7 @@ struct CommandToy : ui::beta::ObjectToy {
   void OnButton() {
     if (auto cmd = LockCommand()) {
       if (cmd->running->IsRunning()) {
+        cmd->Terminate();
         cmd->running->Cancel();
       } else if (program_resolves_) {
         cmd->run->ScheduleRun();
@@ -666,7 +652,11 @@ struct CommandToy : ui::beta::ObjectToy {
                     ui::beta::State::Default, Seed(kSeed), true);
 
     {
+#if defined(_WIN32)
+      StrView credit = "CreateProcessW()";
+#else
       StrView credit = "posix_spawnp()";
+#endif
       float w = ui::beta::TextWidth(credit, ui::beta::kMicroSize);
       ui::beta::DrawText(canvas, credit, {kPlateW / 2 - kSide - w, kPlateH / 2 - kBand - 1.6_mm},
                          ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
@@ -698,7 +688,11 @@ struct CommandToy : ui::beta::ObjectToy {
     if (!running_ && ever_ran_ && has_launch_) {
       Str label;
       SkColor color;
-#if !defined(_WIN32)
+#if defined(_WIN32)
+      uint32_t code = (uint32_t)wait_status_;
+      label = code < 256 ? f("exit {}", code) : f("exit 0x{:X}", code);
+      color = code == 0 ? ui::beta::kGreen : ui::beta::kRed;
+#else
       if (WIFEXITED(wait_status_)) {
         int code = WEXITSTATUS(wait_status_);
         label = f("exit {}", code);
@@ -708,12 +702,11 @@ struct CommandToy : ui::beta::ObjectToy {
         const char* abbr = sigabbrev_np(sig);
         label = abbr ? f("SIG{}", abbr) : f("signal {}", sig);
         color = ui::beta::kRed;
-      } else
-#endif
-      {
+      } else {
         label = "done";
         color = ui::beta::kGreen;
       }
+#endif
       float w = ui::beta::TextWidth(label, ui::beta::kMicroSize + 0.3_mm) + 2.6_mm;
       float chip_left = -kPlateW / 2 + kSide;
       float chip_bottom = row_mid - 1.6_mm;

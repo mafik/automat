@@ -6,7 +6,6 @@
 #include <xkbcommon/xkbcommon.h>
 
 #include <algorithm>
-#include <cstring>
 
 #include "format.hpp"
 #include "log.hpp"
@@ -23,35 +22,42 @@
 
 namespace automat {
 
-Keymap keymap;
+Ptr<Keymap> keymap;
 
-void Keymap::Reload() {
-  if (!ctx) ctx.reset(xkb_context_new(XKB_CONTEXT_NO_FLAGS));
-  if (!ctx) return;
-  xkb_keymap_ptr next{BuildFromPlatform()};
-  if (!next) {
-    next.reset(xkb_keymap_new_from_names(ctx.get(), nullptr, XKB_KEYMAP_COMPILE_NO_FLAGS));
+static Keymap::xkb_context_ptr context;
+
+static Keymap::xkb_keymap_ptr BuildFromPlatform(Keymap& keymap);
+
+void ReloadKeymap() {
+  if (!context) context.reset(xkb_context_new(XKB_CONTEXT_NO_FLAGS));
+  if (!context) {
+    ERROR << "Keymap: couldn't create an xkb context; keyboard input will not work.";
+    return;
   }
-  if (!next) {
+  Ptr<Keymap> next{new Keymap()};
+  next->xkb = BuildFromPlatform(*next);
+  if (!next->xkb) {
+    next->xkb.reset(xkb_keymap_new_from_names(context.get(), nullptr, XKB_KEYMAP_COMPILE_NO_FLAGS));
+  }
+  if (!next->xkb) {
     ERROR << "Keymap: couldn't build an xkb keymap; keyboard input will not work.";
     return;
   }
-  auto lock = std::lock_guard(mutex);
-  xkb = std::move(next);
-  state.reset(xkb_state_new(xkb.get()));
-  std::memset(key_mods, 0, sizeof(key_mods));
-  xkb_keycode_t max_keycode = std::min<xkb_keycode_t>(xkb_keymap_max_keycode(xkb.get()), 255);
-  for (xkb_keycode_t kc = xkb_keymap_min_keycode(xkb.get()); kc <= max_keycode; ++kc) {
-    xkb_state_ptr scratch{xkb_state_new(xkb.get())};
+  xkb_keymap* xkb = next->xkb.get();
+  xkb_keycode_t max_keycode = std::min<xkb_keycode_t>(xkb_keymap_max_keycode(xkb), 255);
+  for (xkb_keycode_t kc = xkb_keymap_min_keycode(xkb); kc <= max_keycode; ++kc) {
+    Keymap::xkb_state_ptr scratch{xkb_state_new(xkb)};
     if (!scratch) break;
     xkb_state_update_key(scratch.get(), kc, XKB_KEY_DOWN);
-    key_mods[kc] = (U8)(xkb_state_serialize_mods(scratch.get(), XKB_STATE_MODS_EFFECTIVE) & 0xff);
+    next->key_mods[kc] =
+        (U8)(xkb_state_serialize_mods(scratch.get(), XKB_STATE_MODS_EFFECTIVE) & 0xff);
   }
+  keymap = std::move(next);
 }
 
 #if defined(__linux__)
 
-Keymap::xkb_keymap_ptr Keymap::BuildFromPlatform() {
+static Keymap::xkb_keymap_ptr BuildFromPlatform(Keymap& keymap) {
   // No usable host X connection (Wayland client, headless): fall back to the default.
   if (!xcb::connection || xcb_connection_has_error(xcb::connection)) return nullptr;
   if (!xkb_x11_setup_xkb_extension(
@@ -60,8 +66,8 @@ Keymap::xkb_keymap_ptr Keymap::BuildFromPlatform() {
     return nullptr;
   int32_t device = xkb_x11_get_core_keyboard_device_id(xcb::connection);
   if (device < 0) return nullptr;
-  return xkb_keymap_ptr{xkb_x11_keymap_new_from_device(ctx.get(), xcb::connection, device,
-                                                       XKB_KEYMAP_COMPILE_NO_FLAGS)};
+  return Keymap::xkb_keymap_ptr{xkb_x11_keymap_new_from_device(
+      context.get(), xcb::connection, device, XKB_KEYMAP_COMPILE_NO_FLAGS)};
 }
 
 #elif defined(_WIN32)
@@ -172,12 +178,12 @@ Str LayoutName(HKL layout) {
 
 }  // namespace
 
-Keymap::xkb_keymap_ptr Keymap::BuildFromPlatform() {
+static Keymap::xkb_keymap_ptr BuildFromPlatform(Keymap& keymap) {
   HKL installed[4];
   int group_count = GetKeyboardLayoutList(4, installed);
   if (group_count <= 0) return nullptr;
   group_count = std::min(group_count, 4);
-  layouts.assign(installed, installed + group_count);
+  keymap.layouts.assign(installed, installed + group_count);
 
   Str symbols;
   for (int group = 0; group < group_count; ++group) {
@@ -256,9 +262,8 @@ Keymap::xkb_keymap_ptr Keymap::BuildFromPlatform() {
         "}};\n"
         "}};\n",
         symbols);
-  return xkb_keymap_ptr{xkb_keymap_new_from_string(ctx.get(), text.c_str(),
-                                                   XKB_KEYMAP_FORMAT_TEXT_V1,
-                                                   XKB_KEYMAP_COMPILE_NO_FLAGS)};
+  return Keymap::xkb_keymap_ptr{xkb_keymap_new_from_string(
+      context.get(), text.c_str(), XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS)};
 }
 
 int Keymap::ActiveGroup() const {
@@ -271,7 +276,7 @@ int Keymap::ActiveGroup() const {
 
 #else
 
-Keymap::xkb_keymap_ptr Keymap::BuildFromPlatform() { return nullptr; }
+static Keymap::xkb_keymap_ptr BuildFromPlatform(Keymap&) { return nullptr; }
 
 #endif
 

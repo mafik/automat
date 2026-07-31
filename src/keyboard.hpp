@@ -16,8 +16,10 @@
 #include "colony.hpp"
 #include "fn.hpp"
 #include "key.hpp"
+#include "keymap.hpp"
 #include "math.hpp"
 #include "mortal.hpp"
+#include "ptr.hpp"
 #include "status.hpp"
 #include "time.hpp"
 #include "widget.hpp"
@@ -29,21 +31,18 @@
 namespace automat::ui {
 
 struct Keyboard;
+struct KeyboardWidget;
 struct RootWidget;
 struct Widget;
 struct Pointer;
 struct Keylogging;
 
-void SendKeyEvent(AnsiKey physical, bool down);
-
-void FillKeyFromKeymap(Key& key, bool down);
-
 struct Caret final {
   MortalCoil mortal_coil;
-  Keyboard& keyboard;
+  KeyboardWidget& keyboard;
   MortalPtr<Widget> owner;  // also the coordinate space `shape` is expressed in
   SkPath shape;
-  Caret(Keyboard& keyboard);
+  Caret(KeyboardWidget& keyboard);
   ~Caret() = default;
   void PlaceIBeam(Vec2 position);
   SkPath MakeRootShape() const;
@@ -87,10 +86,10 @@ void OnHotKeyDown(int id);
 
 // Represents a keyboard grab. Can be used to manipulate it.
 struct KeyboardGrab final {
-  Keyboard& keyboard;
+  WeakPtr<Keyboard> keyboard;
   KeyboardGrabber& grabber;
-  KeyboardGrab(Keyboard& keyboard, KeyboardGrabber& grabber)
-      : keyboard(keyboard), grabber(grabber) {}
+  KeyboardGrab(WeakPtr<Keyboard> keyboard, KeyboardGrabber& grabber)
+      : keyboard(std::move(keyboard)), grabber(grabber) {}
 
   // This will also call `ReleaseGrab` of its KeyboardGrabber.
   // This means that the pointers in the KeyboardGrabber will be invalid (nullptr) after this call!
@@ -112,7 +111,7 @@ struct KeyGrabber {
 
 struct KeyGrab {
   MortalCoil mortal_coil;
-  Keyboard& keyboard;
+  WeakPtr<Keyboard> keyboard;
   KeyGrabber& grabber;
   AnsiKey key;  // physical
   bool ctrl : 1;
@@ -134,9 +133,9 @@ struct KeyGrab {
 
   RegistrationCallback* cb = nullptr;  // only used on Automat thread
 #endif
-  KeyGrab(Keyboard& keyboard, KeyGrabber& grabber, AnsiKey key, bool ctrl, bool alt, bool shift,
-          bool windows)
-      : keyboard(keyboard),
+  KeyGrab(WeakPtr<Keyboard> keyboard, KeyGrabber& grabber, AnsiKey key, bool ctrl, bool alt,
+          bool shift, bool windows)
+      : keyboard(std::move(keyboard)),
         grabber(grabber),
         key(key),
         ctrl(ctrl),
@@ -151,27 +150,61 @@ struct KeyGrab {
 
 struct Keylogging {
   MortalCoil mortal_coil;
-  Keyboard& keyboard;
+  WeakPtr<Keyboard> keyboard;
   Keylogger& keylogger;
   bool released = false;
-  Keylogging(Keyboard& keyboard, Keylogger& keylogger) : keyboard(keyboard), keylogger(keylogger) {}
+  Keylogging(WeakPtr<Keyboard> keyboard, Keylogger& keylogger)
+      : keyboard(std::move(keyboard)), keylogger(keylogger) {}
   void Release();
 };
 
+struct Keyboard : ReferenceCounted {
+  std::bitset<static_cast<size_t>(AnsiKey::Count)> pressed_keys;
+  bool caps_lock_on = false;
+  bool num_lock_on = false;
+
+  static std::unique_ptr<KeyboardGrab> grab;
+  static Colony<KeyGrab> key_grabs;
+  static Colony<Keylogging> keyloggings;
+  static bool keyloggings_locked;
+
+  // Called by a KeyboardGrabber that wants to grab all keyboard events.
+  static KeyboardGrab& RequestGrab(KeyboardGrabber&, WeakPtr<Keyboard> keyboard = nullptr);
+
+  // Called by a KeyGrabber that wants to grab a key even when Automat is in the background.
+  //
+  // Callback is called with a Status object that contains the result of the grab request. It may be
+  // called later, (after this function returns) depending on the OS load.
+  static KeyGrab& RequestKeyGrab(KeyGrabber&, AnsiKey key, bool ctrl, bool alt, bool shift,
+                                 bool windows, Fn<void(Status&)> cb,
+                                 WeakPtr<Keyboard> keyboard = nullptr);
+
+  static void SendKeyEvent(AnsiKey physical, bool down);
+
+  // Fills in everything else based on `physical`.
+  void Translate(Key&, bool down, U32 mods, U32 group);
+
+  // Same as Translate but tracks modifiers & filters out auto-repeated keys.
+  //
+  // Needed on Windows.
+  bool TranslateRawKey(Key&, bool down, int group);
+};
+
 struct CaretAnimation {
-  const Keyboard& keyboard;
+  const KeyboardWidget& keyboard;
   SkPath shape;
   time::SteadyPoint last_blink;
   float alpha = 1;
-  CaretAnimation(const Keyboard&);
+  CaretAnimation(const KeyboardWidget&);
 };
 
 struct KeyboardAnimation {
   std::map<Caret*, CaretAnimation> carets = {};
 };
 
-struct Keyboard final : Widget {
+struct KeyboardWidget final : Widget {
   RootWidget& root_widget;
+  Ptr<Keyboard> keyboard;
 
   // Each keyboard may be associated with a pointer. This is the global OS pointer that may actually
   // aggregate multiple physical devices. If necessary, this should be switched to a collection of
@@ -180,33 +213,16 @@ struct Keyboard final : Widget {
 
   // A keyboard can write to multiple carets at the same time! (not finished!)
   std::set<std::unique_ptr<Caret>> carets;
-  std::bitset<static_cast<size_t>(AnsiKey::Count)> pressed_keys;
   mutable KeyboardAnimation anim;
-
-  std::unique_ptr<KeyboardGrab> grab;
-
-  Colony<KeyGrab> key_grabs;
-  Colony<Keylogging> keyloggings;
-  bool keyloggings_locked = false;
 
   std::unique_ptr<Action> actions[static_cast<size_t>(AnsiKey::Count)];
 
-  Keyboard(RootWidget&);
-  ~Keyboard();
+  KeyboardWidget(RootWidget&);
+  ~KeyboardWidget();
 
   // Called by a Widget that wants to start receiving keyboard input.
   // `position` is in `owner`'s local coordinates.
   Caret& RequestCaret(Widget& owner, Vec2 position);
-
-  // Called by a KeyboardGrabber that wants to grab all keyboard events.
-  KeyboardGrab& RequestGrab(KeyboardGrabber&);
-
-  // Called by a KeyGrabber that wants to grab a key even when Automat is in the background.
-  //
-  // Callback is called with a Status object that contains the result of the grab request. It may be
-  // called later, (after this function returns) depending on the OS load.
-  KeyGrab& RequestKeyGrab(KeyGrabber&, AnsiKey key, bool ctrl, bool alt, bool shift, bool windows,
-                          Fn<void(Status&)> cb);
 
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;

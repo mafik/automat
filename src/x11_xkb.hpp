@@ -25,7 +25,6 @@ constexpr U8 kFirstError = 150;  // XKB defines a single "Keyboard" error
 // Translate between ui::Key's modifier bools and the 8-bit X11/xkb real-modifier mask:
 // Shift, Lock, Control, Mod1..Mod5, with the Mods bound the way every evdev keymap binds
 // them (Mod1=alt, Mod2=num_lock, Mod3=level5, Mod4=windows, Mod5=alt_gr).
-void FillModifiers(ui::Key&, U32 mask);
 U8 ModifierMask(const ui::Key&);
 
 // Handle one XKB request (minor opcode `minor`); `raw`/`raw_len` are its bytes verbatim.

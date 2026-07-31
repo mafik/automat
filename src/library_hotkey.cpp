@@ -33,15 +33,14 @@ void HotKey::Enable() {
   if (hotkey) {
     hotkey->Release();
   }
-  hotkey = &root_widget->keyboard.RequestKeyGrab(*this, key, ctrl, alt, shift, windows,
-                                                 [&](Status& status) {
-                                                   if (!OK(status)) {
-                                                     if (hotkey) {
-                                                       hotkey->Release();
-                                                     }
-                                                     ERROR << status;
-                                                   }
-                                                 });
+  hotkey = &Keyboard::RequestKeyGrab(*this, key, ctrl, alt, shift, windows, [&](Status& status) {
+    if (!OK(status)) {
+      if (hotkey) {
+        hotkey->Release();
+      }
+      ERROR << status;
+    }
+  });
   WakeToys();
 }
 

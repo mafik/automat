@@ -28,7 +28,7 @@ void Window::BeginLogging(Keylogger* keylogger, MortalPtr<ui::Keylogging>* keylo
   assert((pointer_logger != nullptr) == (pointer_logging != nullptr));
   assert(keylogger != nullptr || pointer_logger != nullptr);
   if (keylogging != nullptr) {
-    *keylogging = &*root.keyboard.keyloggings.emplace(root.keyboard, *keylogger);
+    *keylogging = &*Keyboard::keyloggings.emplace(nullptr, *keylogger);
   }
   if (pointer_logging != nullptr) {
     Pointer* device = MouseOrNull();
@@ -42,7 +42,7 @@ void Window::BeginLogging(Keylogger* keylogger, MortalPtr<ui::Keylogging>* keylo
 
 void Window::RegisterInput() {
   Pointer* device = MouseOrNull();
-  OnRegisterInput(!root.keyboard.keyloggings.empty(), device && !device->loggings.empty());
+  OnRegisterInput(!Keyboard::keyloggings.empty(), device && !device->loggings.empty());
 }
 
 void Window::BeginWindowWatching(WindowWatcher* watcher, WindowWatching** watching) {

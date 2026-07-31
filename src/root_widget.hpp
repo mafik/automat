@@ -176,7 +176,7 @@ struct RootWidget final : Widget {
   std::deque<float> fps_history;
 
   MortalList<Pointer> pointers;
-  Keyboard keyboard;
+  KeyboardWidget keyboard;
 
   uint32_t observed_vm_wake_counter = 0;
 

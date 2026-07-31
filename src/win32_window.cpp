@@ -255,14 +255,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
   }
   Win32Window& window = *window_it->second;
 
-  // TODO: Move this into Win32Window
-  static std::bitset<(size_t)AnsiKey::Count> keys_down;
   static wchar_t vk_packet_first_half = 0;
-  static bool caps_lock_on = GetKeyState(VK_CAPITAL) & 1;
-  static bool num_lock_on = GetKeyState(VK_NUMLOCK) & 1;
-  constexpr static AnsiKey kModifierKeys[] = {
-      AnsiKey::ShiftLeft, AnsiKey::ShiftRight, AnsiKey::ControlLeft, AnsiKey::ControlRight,
-      AnsiKey::AltLeft,   AnsiKey::AltRight,   AnsiKey::SuperLeft,   AnsiKey::SuperRight};
   if (std::optional<LRESULT> result = touchpad::ProcessEvent(hWnd, uMsg, wParam, lParam)) {
     return *result;
   }
@@ -339,19 +332,25 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     case WM_ACTIVATEAPP: {
       auto lock = window.Lock();
       window.window_active = wParam != WA_INACTIVE;
-      keys_down.reset();
+      auto& keyboard = *window.root.keyboard.keyboard;
+      keyboard.pressed_keys.reset();
+      keyboard.caps_lock_on = GetKeyState(VK_CAPITAL) & 1;
+      keyboard.num_lock_on = GetKeyState(VK_NUMLOCK) & 1;
       if (window.window_active) {
-        for (AnsiKey modifier : kModifierKeys) {
+        for (AnsiKey modifier : {AnsiKey::ShiftLeft, AnsiKey::ShiftRight, AnsiKey::ControlLeft,
+                                 AnsiKey::ControlRight, AnsiKey::AltLeft, AnsiKey::AltRight,
+                                 AnsiKey::SuperLeft, AnsiKey::SuperRight}) {
           if (GetAsyncKeyState(KeyToVirtualKey(modifier)) & 0x8000) {
-            keys_down[(size_t)modifier] = true;
+            keyboard.pressed_keys.set((size_t)modifier);
           }
         }
       }
       return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }
     case WM_INPUTLANGCHANGE: {
-      if (keymap.ActiveGroup() < 0) {
-        keymap.Reload();
+      auto lock = window.Lock();
+      if (keymap == nullptr || keymap->ActiveGroup() < 0) {
+        ReloadKeymap();
       }
       return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }
@@ -381,6 +380,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         RAWKEYBOARD& ev = raw_input->data.keyboard;
         bool down = !(ev.Flags & RI_KEY_BREAK);
         ui::Key key = {};
+        auto lock = window.Lock();
+        auto& keyboard_widget = window.root.keyboard;
+        auto& keyboard = *keyboard_widget.keyboard;
         if (ev.VKey == VK_PACKET) {
           if (down) {
             wchar_t unit = ev.MakeCode;
@@ -419,46 +421,22 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             return DefWindowProc(hWnd, uMsg, wParam, lParam);
           }
 
-          if (down && keys_down[(size_t)key.physical]) {
+          if (!keyboard.TranslateRawKey(key, down, keymap ? keymap->ActiveGroup() : 0)) {
             return DefWindowProc(hWnd, uMsg, wParam, lParam);
           }
-          keys_down[(size_t)key.physical] = down;
-          if (down && key.physical == AnsiKey::CapsLock) caps_lock_on = !caps_lock_on;
-          if (down && key.physical == AnsiKey::NumLock) num_lock_on = !num_lock_on;
-
-          if (keymap.state) {
-            U32 depressed = 0;
-            for (AnsiKey modifier : kModifierKeys) {
-              if (keys_down[(size_t)modifier]) {
-                depressed |= keymap.key_mods[(U8)x11::KeyToX11KeyCode(modifier)];
-              }
-            }
-            U32 locked = 0;
-            if (caps_lock_on) {
-              locked |= keymap.key_mods[(size_t)x11::KeyCode::CapsLock];
-            }
-            if (num_lock_on) {
-              locked |= keymap.key_mods[(size_t)x11::KeyCode::NumLock];
-            }
-            int group = keymap.ActiveGroup();
-            xkb_state_update_mask(keymap.state.get(), depressed, 0, locked, 0, 0,
-                                  std::max(group, 0));
-          }
-          FillKeyFromKeymap(key, down);
         }
-        auto lock = window.Lock();
         if (window.keylogging_enabled) {
           if (down) {
-            window.root.keyboard.LogKeyDown(key);
+            keyboard_widget.LogKeyDown(key);
           } else {
-            window.root.keyboard.LogKeyUp(key);
+            keyboard_widget.LogKeyUp(key);
           }
         }
         if (window.window_active) {
           if (down) {
-            window.root.keyboard.KeyDown(key);
+            keyboard_widget.KeyDown(key);
           } else {
-            window.root.keyboard.KeyUp(key);
+            keyboard_widget.KeyUp(key);
           }
         }
       } else if (raw_input->header.dwType == RIM_TYPEMOUSE) {

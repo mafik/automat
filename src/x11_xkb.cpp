@@ -18,7 +18,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <mutex>
 
 #include "format.hpp"
 #include "key.hpp"
@@ -42,7 +41,7 @@ struct KeyType {
   Vec<LevelEntry> entries;  // one per non-base level reachable by a modifier combination
 };
 
-xkb_keymap* Km() { return keymap.xkb.get(); }
+xkb_keymap* Km() { return keymap ? keymap->xkb.get() : nullptr; }
 
 // Core protocol keycodes are CARD8: clamp the keymap's range to 8..255 (the compiled
 // default keymap extends to 708; those keys are unreachable over X11).
@@ -503,17 +502,6 @@ void GetDeviceInfo(Client& c) {
 
 }  // namespace
 
-void FillModifiers(ui::Key& key, U32 mask) {
-  key.shift = mask & 0x01;
-  key.caps_lock = mask & 0x02;
-  key.ctrl = mask & 0x04;
-  key.alt = mask & 0x08;
-  key.num_lock = mask & 0x10;
-  key.level5 = mask & 0x20;
-  key.windows = mask & 0x40;
-  key.alt_gr = mask & 0x80;
-}
-
 U8 ModifierMask(const ui::Key& key) {
   return (key.shift ? 0x01 : 0) | (key.caps_lock ? 0x02 : 0) | (key.ctrl ? 0x04 : 0) |
          (key.alt ? 0x08 : 0) | (key.num_lock ? 0x10 : 0) | (key.level5 ? 0x20 : 0) |
@@ -521,7 +509,6 @@ U8 ModifierMask(const ui::Key& key) {
 }
 
 bool Dispatch(Client& c, U8 minor, const U8* raw, size_t raw_len) {
-  auto lock = std::lock_guard(keymap.mutex);
   switch (minor) {
     case 0:
       UseExtension(c);

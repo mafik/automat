@@ -22,6 +22,7 @@ struct Display;
 namespace automat::ui {
 
 struct Keyboard;
+struct KeyboardWidget;
 struct PointerImpl;
 struct Widget;
 struct RootWidget;
@@ -127,7 +128,7 @@ struct Pointer {
 
   RootWidget& root_widget;
   // The main keyboard associated with this pointer device. May be null!
-  MortalPtr<Keyboard> keyboard;
+  MortalPtr<KeyboardWidget> keyboard;
 
   Vec2 pointer_position;
   std::list<Pointer::IconType> icons;

@@ -2909,8 +2909,7 @@ void LoadKeymap(Server& s) {
   std::memset(s.mod_map, 0, sizeof(s.mod_map));
   std::memset(s.key_mods, 0, sizeof(s.key_mods));
 
-  auto lock = std::lock_guard(keymap.mutex);
-  xkb_keymap* km = keymap.xkb.get();
+  xkb_keymap* km = keymap ? keymap->xkb.get() : nullptr;
   if (km) {
     // Core protocol keycodes are CARD8: keys past 255 (the compiled default keymap extends
     // to 708) are unreachable over X11 and are dropped.
@@ -2928,7 +2927,7 @@ void LoadKeymap(Server& s) {
         }
     }
     for (xkb_keycode_t kc = s.keymap_min; kc <= s.keymap_max; ++kc) {
-      U8 mods = keymap.key_mods[kc];
+      U8 mods = keymap->key_mods[kc];
       s.key_mods[kc] = mods;
       for (int m = 0; m < 8; ++m) {
         if (!(mods & (1u << m))) continue;

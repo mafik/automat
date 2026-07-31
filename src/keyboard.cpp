@@ -40,7 +40,26 @@
 
 namespace automat::ui {
 
-static SkPath PointerIBeam(const Keyboard& keyboard) {
+std::unique_ptr<KeyboardGrab> Keyboard::grab;
+Colony<KeyGrab> Keyboard::key_grabs;
+Colony<Keylogging> Keyboard::keyloggings;
+bool Keyboard::keyloggings_locked = false;
+
+constexpr static AnsiKey kModifierKeys[] = {
+    AnsiKey::ShiftLeft, AnsiKey::ShiftRight, AnsiKey::ControlLeft, AnsiKey::ControlRight,
+    AnsiKey::AltLeft,   AnsiKey::AltRight,   AnsiKey::SuperLeft,   AnsiKey::SuperRight};
+
+static Window* MainWindowOrNull() {
+  if (!root_widget) return nullptr;
+  return root_widget->window.get();
+}
+
+static bool Matches(const WeakPtr<Keyboard>& filter, const Keyboard& keyboard) {
+  if (!filter) return true;
+  return filter == &keyboard;
+}
+
+static SkPath PointerIBeam(const KeyboardWidget& keyboard) {
   if (keyboard.pointer) {
     float px = 1 / keyboard.root_widget.PxPerMeter();
     Vec2 pos = keyboard.pointer->PositionOnCanvas();
@@ -91,14 +110,14 @@ SkPath Caret::MakeRootShape() const {
 }
 
 // Called by objects that want to grab all keyboard events in the system.
-KeyboardGrab& Keyboard::RequestGrab(KeyboardGrabber& grabber) {
+KeyboardGrab& Keyboard::RequestGrab(KeyboardGrabber& grabber, WeakPtr<Keyboard> keyboard) {
   if (grab) {
     grab->Release();
   }
-  grab.reset(new KeyboardGrab(*this, grabber));
+  grab.reset(new KeyboardGrab(std::move(keyboard), grabber));
 #ifdef __linux__
   // TODO: test whether this works
-  auto& xcb_window = static_cast<xcb::XCBWindow&>(*root_widget.window);
+  auto& xcb_window = static_cast<xcb::XCBWindow&>(*root_widget->window);
   uint32_t mask = XCB_INPUT_XI_EVENT_MASK_KEY_PRESS | XCB_INPUT_XI_EVENT_MASK_KEY_RELEASE;
   auto cookie = xcb_input_xi_grab_device(xcb::connection, xcb::screen->root, XCB_CURRENT_TIME,
                                          XCB_CURSOR_NONE, xcb_window.master_keyboard_device_id,
@@ -121,8 +140,10 @@ KeyboardGrab& Keyboard::RequestGrab(KeyboardGrabber& grabber) {
 }
 
 KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctrl, bool alt,
-                                  bool shift, bool windows, Fn<void(Status&)> cb) {
-  KeyGrab& key_grab = *key_grabs.emplace(*this, key_grabber, key, ctrl, alt, shift, windows);
+                                  bool shift, bool windows, Fn<void(Status&)> cb,
+                                  WeakPtr<Keyboard> keyboard) {
+  KeyGrab& key_grab =
+      *key_grabs.emplace(std::move(keyboard), key_grabber, key, ctrl, alt, shift, windows);
 #if defined(_WIN32)
   // See https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey
   static int id_counter = 0;
@@ -144,7 +165,7 @@ KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctr
   U8 vk = KeyToVirtualKey(key);
   key_grab.cb = new KeyGrab::RegistrationCallback(&key_grab, std::move(cb));
 
-  auto& win32_window = dynamic_cast<Win32Window&>(*root_widget.window);
+  auto& win32_window = dynamic_cast<Win32Window&>(*root_widget->window);
   win32_window.PostToMainLoop(
       [id = key_grab.id, modifiers, vk, cb = key_grab.cb, hwnd = win32_window.hwnd]() {
         bool success = RegisterHotKey(hwnd, id, modifiers, vk);
@@ -258,10 +279,10 @@ static CaretAnimAction UpdateCaret(time::Timer& timer, CaretAnimation& anim, Car
   return CaretAnimAction::Keep;
 }
 
-CaretAnimation::CaretAnimation(const Keyboard& keyboard)
+CaretAnimation::CaretAnimation(const KeyboardWidget& keyboard)
     : keyboard(keyboard), shape(PointerIBeam(keyboard)), last_blink(time::SteadyNow()) {}
 
-ui::Tock Keyboard::Tick(time::Timer& timer) {
+ui::Tock KeyboardWidget::Tick(time::Timer& timer) {
   // Iterate through each Caret & CaretAnimation, and update their animations.
   // Animations may result in a Caret being removed.
   // After a Caret has been removed, its CaretAnimation is kept around for some
@@ -315,7 +336,7 @@ ui::Tock Keyboard::Tick(time::Timer& timer) {
   }
 }
 
-void Keyboard::Draw(SkCanvas& canvas) const {
+void KeyboardWidget::Draw(SkCanvas& canvas) const {
   SkPaint paint;
   paint.setColor(SK_ColorBLACK);
   paint.setAntiAlias(true);
@@ -325,7 +346,7 @@ void Keyboard::Draw(SkCanvas& canvas) const {
   }
 }
 
-SkPath Keyboard::Shape() const {
+SkPath KeyboardWidget::Shape() const {
   SkPathBuilder builder;
   for (auto& caret : carets) {
     builder.addPath(caret->MakeRootShape());
@@ -437,49 +458,75 @@ static AnsiKey KeysymToKey(uint32_t keysym) {
   return Unknown;
 }
 
-void FillKeyFromKeymap(Key& key, bool down) {
+void Keyboard::Translate(Key& key, bool down, U32 mods, U32 group) {
   key.logical = key.physical;
-  if (!keymap.state) return;
-  xkb_state& state = *keymap.state;
-  x11::xkb::FillModifiers(key, xkb_state_serialize_mods(&state, XKB_STATE_MODS_EFFECTIVE));
-  key.layout = (uint8_t)xkb_state_serialize_layout(&state, XKB_STATE_LAYOUT_EFFECTIVE);
-  uint32_t keycode = (uint32_t)x11::KeyToX11KeyCode(key.physical);
+  if (!keymap) return;
+  Keymap::xkb_state_ptr state{xkb_state_new(keymap->xkb.get())};
+  if (!state) return;
+  xkb_state_update_mask(state.get(), mods, 0, 0, group, 0, 0);
+
+  U32 effective = xkb_state_serialize_mods(state.get(), XKB_STATE_MODS_EFFECTIVE);
+  key.shift = effective & 0x01;
+  key.caps_lock = effective & 0x02;
+  key.ctrl = effective & 0x04;
+  key.alt = effective & 0x08;
+  key.num_lock = effective & 0x10;
+  key.level5 = effective & 0x20;
+  key.windows = effective & 0x40;
+  key.alt_gr = effective & 0x80;
+  key.layout = (U8)xkb_state_serialize_layout(state.get(), XKB_STATE_LAYOUT_EFFECTIVE);
+
+  U32 keycode = (U32)x11::KeyToX11KeyCode(key.physical);
   if (keycode <= 8) return;
-  xkb_layout_index_t key_layout = xkb_state_key_get_layout(&state, keycode);
+  xkb_layout_index_t key_layout = xkb_state_key_get_layout(state.get(), keycode);
   const xkb_keysym_t* syms = nullptr;
-  if (xkb_keymap_key_get_syms_by_level(keymap.xkb.get(), keycode, key_layout, 0, &syms) > 0) {
+  if (xkb_keymap_key_get_syms_by_level(keymap->xkb.get(), keycode, key_layout, 0, &syms) > 0) {
     AnsiKey logical = KeysymToKey(syms[0]);
     if (logical != AnsiKey::Unknown) key.logical = logical;
   }
   if (down) {
     char buffer[32];
-    int size = xkb_state_key_get_utf8(&state, keycode, buffer, sizeof(buffer));
+    int size = xkb_state_key_get_utf8(state.get(), keycode, buffer, sizeof(buffer));
     key.text.assign(buffer, std::clamp<int>(size, 0, sizeof(buffer) - 1));
   }
 }
 
+bool Keyboard::TranslateRawKey(Key& key, bool down, int group) {
+  if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
+    if (pressed_keys[(size_t)key.physical] == down) return false;
+    pressed_keys[(size_t)key.physical] = down;
+  }
+  if (down && key.physical == AnsiKey::CapsLock) caps_lock_on = !caps_lock_on;
+  if (down && key.physical == AnsiKey::NumLock) num_lock_on = !num_lock_on;
+  U32 mods = 0;
+  if (keymap) {
+    for (AnsiKey modifier : kModifierKeys) {
+      if (pressed_keys[(size_t)modifier]) {
+        mods |= keymap->key_mods[(U8)x11::KeyToX11KeyCode(modifier)];
+      }
+    }
+    if (caps_lock_on) mods |= keymap->key_mods[(size_t)x11::KeyCode::CapsLock];
+    if (num_lock_on) mods |= keymap->key_mods[(size_t)x11::KeyCode::NumLock];
+  }
+  Translate(key, down, mods, (U32)std::max(group, 0));
+  return true;
+}
+
 #ifdef __linux__
 
-static void UpdateKeymapState(xcb_input_modifier_info_t& mods, xcb_input_group_info_t& group) {
-  if (!keymap.state) return;
-  xkb_state_update_mask(keymap.state.get(), mods.base, mods.latched, mods.locked, group.base,
-                        group.latched, group.locked);
-}
-
-void Keyboard::KeyDown(xcb_input_key_press_event_t& ev) {
+void KeyboardWidget::KeyDown(xcb_input_key_press_event_t& ev) {
   if (ev.flags & XCB_INPUT_KEY_EVENT_FLAGS_KEY_REPEAT) return;
   ui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
-  UpdateKeymapState(ev.mods, ev.group);
-  FillKeyFromKeymap(key, true);
+  keyboard->Translate(key, true, ev.mods.effective, ev.group.effective);
   KeyDown(key);
 }
-void Keyboard::KeyDown(xcb_input_raw_key_press_event_t& ev) {
+void KeyboardWidget::KeyDown(xcb_input_raw_key_press_event_t& ev) {
   if (ev.flags & XCB_INPUT_KEY_EVENT_FLAGS_KEY_REPEAT) return;
   ui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
                  .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
   LogKeyDown(key);
 }
-void Keyboard::KeyDown(xcb_key_press_event_t& ev) {
+void KeyboardWidget::KeyDown(xcb_key_press_event_t& ev) {
   ui::Key key = {
       .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
       .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
@@ -487,18 +534,17 @@ void Keyboard::KeyDown(xcb_key_press_event_t& ev) {
   KeyDown(key);
 }
 
-void Keyboard::KeyUp(xcb_input_key_release_event_t& ev) {
+void KeyboardWidget::KeyUp(xcb_input_key_release_event_t& ev) {
   ui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
-  UpdateKeymapState(ev.mods, ev.group);
-  FillKeyFromKeymap(key, false);
+  keyboard->Translate(key, false, ev.mods.effective, ev.group.effective);
   KeyUp(key);
 }
-void Keyboard::KeyUp(xcb_input_raw_key_release_event_t& ev) {
+void KeyboardWidget::KeyUp(xcb_input_raw_key_release_event_t& ev) {
   ui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
                  .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
   LogKeyUp(key);
 }
-void Keyboard::KeyUp(xcb_key_release_event_t& ev) {
+void KeyboardWidget::KeyUp(xcb_key_release_event_t& ev) {
   ui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
                  .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
   KeyUp(key);
@@ -526,18 +572,15 @@ void DeleteSafeForEach(std::set<std::unique_ptr<Caret>>& carets, const T& cb) {
   }
 }
 
-void Keyboard::KeyDown(Key key) {
+void KeyboardWidget::KeyDown(Key key) {
   // Quit on Ctrl + Q
   if (key.ctrl && key.physical == AnsiKey::Q) {
     stop_source.request_stop();
     return;
   }
-  if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
-    pressed_keys.set((size_t)key.physical);
-  }
-  if (grab) {
+  if (Keyboard::grab && Matches(Keyboard::grab->keyboard, *keyboard)) {
     // KeyboardGrabber takes over all key events
-    grab->grabber.KeyboardGrabberKeyDown(*grab, key);
+    Keyboard::grab->grabber.KeyboardGrabberKeyDown(*Keyboard::grab, key);
   } else if (key.physical == AnsiKey::Escape) {
     // Release the carets when Escape is pressed
     DeleteSafeForEach(carets, [](Caret& caret) {
@@ -565,12 +608,9 @@ void Keyboard::KeyDown(Key key) {
   }
 }
 
-void Keyboard::KeyUp(Key key) {
-  if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
-    pressed_keys.reset((size_t)key.physical);
-  }
-  if (grab) {
-    grab->grabber.KeyboardGrabberKeyUp(*grab, key);
+void KeyboardWidget::KeyUp(Key key) {
+  if (Keyboard::grab && Matches(Keyboard::grab->keyboard, *keyboard)) {
+    Keyboard::grab->grabber.KeyboardGrabberKeyUp(*Keyboard::grab, key);
   } else if (!carets.empty()) {
     DeleteSafeForEach(carets, [key](Caret& caret) {
       if (caret.owner) caret.owner->KeyUp(caret, key);
@@ -584,42 +624,44 @@ void Keyboard::KeyUp(Key key) {
   }
 }
 
-static void KeyloggingsGC(Keyboard& keyboard) {
-  if (keyboard.keyloggings.empty()) {
+static void KeyloggingsGC() {
+  if (Keyboard::keyloggings.empty()) {
     return;
   }
   // Remove all released keyloggings.
-  for (auto it = keyboard.keyloggings.begin(); it != keyboard.keyloggings.end();) {
+  for (auto it = Keyboard::keyloggings.begin(); it != Keyboard::keyloggings.end();) {
     if (it->released) {
-      it = keyboard.keyloggings.erase(it);
+      it = Keyboard::keyloggings.erase(it);
     } else {
       ++it;
     }
   }
-  if (keyboard.keyloggings.empty()) {
-    keyboard.root_widget.window->RegisterInput();
+  if (Keyboard::keyloggings.empty()) {
+    if (Window* window = MainWindowOrNull()) window->RegisterInput();
   }
 }
 
-void Keyboard::LogKeyDown(Key key) {
-  keyloggings_locked = true;
-  for (auto& keylogging : keyloggings) {
+void KeyboardWidget::LogKeyDown(Key key) {
+  Keyboard::keyloggings_locked = true;
+  for (auto& keylogging : Keyboard::keyloggings) {
+    if (!Matches(keylogging.keyboard, *keyboard)) continue;
     keylogging.keylogger.KeyloggerKeyDown(key);
   }
-  keyloggings_locked = false;
-  KeyloggingsGC(*this);
+  Keyboard::keyloggings_locked = false;
+  KeyloggingsGC();
 }
 
-void Keyboard::LogKeyUp(Key key) {
-  keyloggings_locked = true;
-  for (auto& keylogging : keyloggings) {
+void KeyboardWidget::LogKeyUp(Key key) {
+  Keyboard::keyloggings_locked = true;
+  for (auto& keylogging : Keyboard::keyloggings) {
+    if (!Matches(keylogging.keyboard, *keyboard)) continue;
     keylogging.keylogger.KeyloggerKeyUp(key);
   }
-  keyloggings_locked = false;
-  KeyloggingsGC(*this);
+  Keyboard::keyloggings_locked = false;
+  KeyloggingsGC();
 }
 
-void SendKeyEvent(AnsiKey physical, bool down) {
+void Keyboard::SendKeyEvent(AnsiKey physical, bool down) {
 #if defined(_WIN32)
   INPUT input = {};
   input.type = INPUT_KEYBOARD;
@@ -642,9 +684,9 @@ void SendKeyEvent(AnsiKey physical, bool down) {
 #endif
 }
 
-Caret::Caret(Keyboard& keyboard) : keyboard(keyboard) {}
+Caret::Caret(KeyboardWidget& keyboard) : keyboard(keyboard) {}
 
-Caret& Keyboard::RequestCaret(Widget& caret_owner, Vec2 position) {
+Caret& KeyboardWidget::RequestCaret(Widget& caret_owner, Vec2 position) {
   std::set<std::unique_ptr<Caret>>::iterator it;
   if (carets.empty()) {
     it = carets.emplace(std::make_unique<Caret>(*this)).first;
@@ -661,11 +703,12 @@ Caret& Keyboard::RequestCaret(Widget& caret_owner, Vec2 position) {
   return caret;
 }
 
-Keyboard::Keyboard(RootWidget& root_widget) : Widget(&root_widget), root_widget(root_widget) {
+KeyboardWidget::KeyboardWidget(RootWidget& root_widget)
+    : Widget(&root_widget), root_widget(root_widget), keyboard(new Keyboard()) {
   root_widget.layers.OrderInside(this);
 }
 
-Keyboard::~Keyboard() {
+KeyboardWidget::~KeyboardWidget() {
   while (!carets.empty()) {
     (*carets.begin())->Release();
   }
@@ -674,19 +717,17 @@ Keyboard::~Keyboard() {
 #if defined(_WIN32)
 
 void OnHotKeyDown(int id) {
-  if (root_widget) {
-    bool handled = false;
-    for (auto& key_grab : root_widget->keyboard.key_grabs) {
-      if (key_grab.id == id) {
-        key_grab.grabber.KeyGrabberKeyDown(key_grab);
-        key_grab.grabber.KeyGrabberKeyUp(key_grab);
-        handled = true;
-        break;
-      }
+  bool handled = false;
+  for (auto& key_grab : Keyboard::key_grabs) {
+    if (key_grab.id == id) {
+      key_grab.grabber.KeyGrabberKeyDown(key_grab);
+      key_grab.grabber.KeyGrabberKeyUp(key_grab);
+      handled = true;
+      break;
     }
-    if (!handled) {
-      ERROR << "Hotkey " << id << " not found";
-    }
+  }
+  if (!handled) {
+    ERROR << "Hotkey " << id << " not found";
   }
 }
 
@@ -694,7 +735,7 @@ void OnHotKeyDown(int id) {
 
 void KeyboardGrab::Release() {
 #ifdef __linux__
-  auto& xcb_window = static_cast<xcb::XCBWindow&>(*keyboard.root_widget.window);
+  auto& xcb_window = static_cast<xcb::XCBWindow&>(*root_widget->window);
   xcb_void_cookie_t cookie = xcb_input_xi_ungrab_device(xcb::connection, XCB_CURRENT_TIME,
                                                         xcb_window.master_keyboard_device_id);
   if (std::unique_ptr<xcb_generic_error_t, DeleteWithFree> error{
@@ -703,7 +744,7 @@ void KeyboardGrab::Release() {
   }
 #endif
   grabber.ReleaseGrab(*this);
-  keyboard.grab.reset();  // KeyboardGrab deletes itself here!
+  Keyboard::grab.reset();  // KeyboardGrab deletes itself here!
 }
 
 void KeyGrab::Release() {
@@ -712,7 +753,7 @@ void KeyGrab::Release() {
     cb->grab = nullptr;
     cb = nullptr;
   }
-  auto& win32_window = dynamic_cast<Win32Window&>(*keyboard.root_widget.window);
+  auto& win32_window = dynamic_cast<Win32Window&>(*root_widget->window);
   win32_window.PostToMainLoop([id = id, hwnd = win32_window.hwnd]() {
     bool success = UnregisterHotKey(hwnd, id);
     if (!success) {
@@ -729,18 +770,17 @@ void KeyGrab::Release() {
   }
 #endif
   grabber.ReleaseKeyGrab(*this);
-  keyboard.key_grabs.erase(keyboard.key_grabs.get_iterator(this));  // KeyGrab deletes itself here!
+  Keyboard::key_grabs.erase(Keyboard::key_grabs.get_iterator(this));  // KeyGrab deletes itself here!
 }
 
 void Keylogging::Release() {
   released = true;
   keylogger.KeyloggerOnRelease(*this);
-  if (keyboard.keyloggings_locked) {
+  if (Keyboard::keyloggings_locked) {
     return;
   }
-  auto& window = *keyboard.root_widget.window;
-  keyboard.keyloggings.erase(keyboard.keyloggings.get_iterator(this));  // `this` is deleted here!
-  window.RegisterInput();
+  Keyboard::keyloggings.erase(Keyboard::keyloggings.get_iterator(this));  // `this` is deleted here!
+  if (Window* window = MainWindowOrNull()) window->RegisterInput();
 }
 
 }  // namespace automat::ui

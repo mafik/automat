@@ -144,7 +144,7 @@ int Main() {
   root_widget = make_unique<RootWidget>();
 
   root_widget->Init();
-  keymap.Reload();  // needs to go after X11 connection is established
+  ReloadKeymap();  // needs to go after X11 connection is established
   StartTimeThread(stop_source.get_token());
 
   RefreshTrayIcon();

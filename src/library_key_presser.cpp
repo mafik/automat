@@ -42,7 +42,7 @@ void KeyPresser::Press() {
   if (key_pressed) return;
   key_pressed = true;
   last_pressed_time = time::SteadyNow();
-  SendKeyEvent(key, true);
+  ui::Keyboard::SendKeyEvent(key, true);
   WakeToys();
 }
 void KeyPresser::Release() {
@@ -50,7 +50,7 @@ void KeyPresser::Release() {
   if (!key_pressed) return;
   key_pressed = false;
   last_released_time = time::SteadyNow();
-  SendKeyEvent(key, false);
+  ui::Keyboard::SendKeyEvent(key, false);
   WakeToys();
 }
 

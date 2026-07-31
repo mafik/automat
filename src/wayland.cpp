@@ -1432,10 +1432,9 @@ void Seat::OnGetKeyboard(Keyboard& id) {
   client.keyboards.push_back(&id);
   Server& s = client.server;
   if (s.keymap_fd < 0) {
-    auto lock = std::lock_guard(keymap.mutex);
-    if (keymap.xkb) {
+    if (keymap) {
       std::unique_ptr<char, DeleteWithFree> text{
-          xkb_keymap_get_as_string(keymap.xkb.get(), XKB_KEYMAP_FORMAT_TEXT_V1)};
+          xkb_keymap_get_as_string(keymap->xkb.get(), XKB_KEYMAP_FORMAT_TEXT_V1)};
       if (text) {
         s.keymap_size = strlen(text.get()) + 1;  // the client mmaps a NUL-terminated string
         s.keymap_fd = memfd_create("automat-keymap", MFD_CLOEXEC);

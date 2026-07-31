@@ -974,7 +974,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
               .logical = key,
           };
           bool handled = false;
-          for (auto& key_grab : root.keyboard.key_grabs) {
+          for (auto& key_grab : automat::ui::Keyboard::key_grabs) {
             if (key_grab.key == key) {
               if (opcode == XCB_KEY_PRESS) {
                 key_grab.grabber.KeyGrabberKeyDown(key_grab);

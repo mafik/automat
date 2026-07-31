@@ -201,15 +201,13 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
     pick_button->on_activate = [this](ui::Pointer& p) {
       p.EndAllActions();
       pointer_grab = &p.RequestGlobalGrab(*this);
-      if (p.keyboard) {
-        key_grab = &p.keyboard->RequestKeyGrab(*this, ui::AnsiKey::Escape, false, false, false,
+      key_grab = &ui::Keyboard::RequestKeyGrab(*this, ui::AnsiKey::Escape, false, false, false,
                                                false, [this](Status& status) {
                                                  if (!OK(status)) {
                                                    LOG << "Couldn't grab the escape key:" << status;
                                                    ReleaseGrabs();
                                                  }
                                                });
-      }
     };
     auto content_bounds = kCoarseBounds.Outset(-kBorderWidth - kContentMargin);
     auto title_bounds = Rect(kCoarseBounds.rect.left, kCoarseBounds.rect.top - kTitleHeight,

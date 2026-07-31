@@ -65,7 +65,7 @@ UsePkgConfig(hook)
 if build.platform == 'win32':
   # Windows-target clang folds girepository/cmph's debug macros into
   # -Werror=format=2; the Linux build of the same sources does not warn.
-  hook.ConfigureOption('c_args', '-Wno-error=format-nonliteral')
+  hook.ConfigureOption('c_args', '-Wno-error=format-nonliteral -DFFI_STATIC_BUILD')
 # bin-devel carries glib-mkenums & glib-genmarshal, which GStreamer's build runs.
 hook.ConfigureWithMeson(
   build.PREFIX / 'include' / 'glib-2.0' / 'glib.h',

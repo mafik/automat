@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 #include "win32_window.hpp"
 
-#include <src/base/SkUTF.h>
+#include <imm.h>
 #include <winuser.h>
 #include <xkbcommon/xkbcommon.h>
 
-#include <bitset>
+#pragma comment(lib, "imm32.lib")
 
 #include "automat.hpp"
 #include "hid.hpp"
@@ -255,7 +255,6 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
   }
   Win32Window& window = *window_it->second;
 
-  static wchar_t vk_packet_first_half = 0;
   if (std::optional<LRESULT> result = touchpad::ProcessEvent(hWnd, uMsg, wParam, lParam)) {
     return *result;
   }
@@ -337,9 +336,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       keyboard.caps_lock_on = GetKeyState(VK_CAPITAL) & 1;
       keyboard.num_lock_on = GetKeyState(VK_NUMLOCK) & 1;
       if (window.window_active) {
-        for (AnsiKey modifier : {AnsiKey::ShiftLeft, AnsiKey::ShiftRight, AnsiKey::ControlLeft,
-                                 AnsiKey::ControlRight, AnsiKey::AltLeft, AnsiKey::AltRight,
-                                 AnsiKey::SuperLeft, AnsiKey::SuperRight}) {
+        for (AnsiKey modifier :
+             {AnsiKey::ShiftLeft, AnsiKey::ShiftRight, AnsiKey::ControlLeft, AnsiKey::ControlRight,
+              AnsiKey::AltLeft, AnsiKey::AltRight, AnsiKey::SuperLeft, AnsiKey::SuperRight}) {
           if (GetAsyncKeyState(KeyToVirtualKey(modifier)) & 0x8000) {
             keyboard.pressed_keys.set((size_t)modifier);
           }
@@ -379,51 +378,30 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         // down or up.
         RAWKEYBOARD& ev = raw_input->data.keyboard;
         bool down = !(ev.Flags & RI_KEY_BREAK);
+        if (ev.VKey == VK_PACKET) {
+          return DefWindowProc(hWnd, uMsg, wParam, lParam);
+        }
         ui::Key key = {};
         auto lock = window.Lock();
         auto& keyboard_widget = window.root.keyboard;
         auto& keyboard = *keyboard_widget.keyboard;
-        if (ev.VKey == VK_PACKET) {
-          if (down) {
-            wchar_t unit = ev.MakeCode;
-            if (unit >= 0xD800 && unit < 0xDC00) {
-              vk_packet_first_half = unit;
-              return DefWindowProc(hWnd, uMsg, wParam, lParam);
-            }
-            wchar_t units[2] = {unit, 0};
-            int units_len = 1;
-            if (unit >= 0xDC00 && unit < 0xE000 && vk_packet_first_half) {
-              units[0] = vk_packet_first_half;
-              units[1] = unit;
-              units_len = 2;
-              vk_packet_first_half = 0;
-            }
-            std::array<char, 8> utf8_buffer;
-            int utf8_len = SkUTF::UTF16ToUTF8(utf8_buffer.data(), utf8_buffer.size(),
-                                              (uint16_t*)units, units_len);
-            if (utf8_len > 0) {
-              key.text.assign(utf8_buffer.data(), utf8_len);
-            }
-          }
-        } else {
-          U32 scan_code = ev.MakeCode;
-          if (ev.Flags & RI_KEY_E0) {
-            scan_code |= 0xE000;
-          }
-          if (ev.Flags & RI_KEY_E1) {
-            scan_code |= 0xE11D00;
-          }
-          key.physical = ScanCodeToKey(scan_code);
+        U32 scan_code = ev.MakeCode;
+        if (ev.Flags & RI_KEY_E0) {
+          scan_code |= 0xE000;
+        }
+        if (ev.Flags & RI_KEY_E1) {
+          scan_code |= 0xE11D00;
+        }
+        key.physical = ScanCodeToKey(scan_code);
 
-          if (key.physical == AnsiKey::AltRight && ev.VKey == VK_CONTROL) {
-            // Right Alt sends key double events for VKey set to (first) Control & (second) Alt.
-            // We ignore the ones with VKey set to VK_CONTROL.
-            return DefWindowProc(hWnd, uMsg, wParam, lParam);
-          }
+        if (key.physical == AnsiKey::AltRight && ev.VKey == VK_CONTROL) {
+          // Right Alt sends key double events for VKey set to (first) Control & (second) Alt.
+          // We ignore the ones with VKey set to VK_CONTROL.
+          return DefWindowProc(hWnd, uMsg, wParam, lParam);
+        }
 
-          if (!keyboard.TranslateRawKey(key, down, keymap ? keymap->ActiveGroup() : 0)) {
-            return DefWindowProc(hWnd, uMsg, wParam, lParam);
-          }
+        if (!keyboard.TranslateRawKey(key, down, keymap ? keymap->ActiveGroup() : 0)) {
+          return DefWindowProc(hWnd, uMsg, wParam, lParam);
         }
         if (window.keylogging_enabled) {
           if (down) {
@@ -533,6 +511,29 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         return DefWindowProc(hWnd, uMsg, wParam, lParam);
       }
       return DefWindowProc(hWnd, uMsg, wParam, lParam);
+    }
+    case WM_IME_COMPOSITION: {
+      if (!(lParam & GCS_RESULTSTR)) {
+        return DefWindowProc(hWnd, uMsg, wParam, lParam);
+      }
+      HIMC himc = ImmGetContext(hWnd);
+      if (himc == nullptr) return 0;
+      LONG bytes = ImmGetCompositionStringW(himc, GCS_RESULTSTR, nullptr, 0);
+      if (bytes > 0) {
+        std::wstring result(bytes / sizeof(wchar_t), L'\0');
+        ImmGetCompositionStringW(himc, GCS_RESULTSTR, result.data(), bytes);
+        ui::Key key = {};
+        key.text = win32::WideToUtf8(result);
+        auto lock = window.Lock();
+        if (window.keylogging_enabled) {
+          window.root.keyboard.LogKeyDown(key);
+        }
+        if (window.window_active) {
+          window.root.keyboard.KeyDown(key);
+        }
+      }
+      ImmReleaseContext(hWnd, himc);
+      return 0;
     }
     case WM_KEYDOWN:
     case WM_KEYUP:
@@ -720,8 +721,6 @@ void Win32Window::MainLoop(std::stop_token) {
         // return (int)msg.wParam;
         return;
       default:
-        // For some reason TranslateMessage generates CP-1250 characters instead
-        // of UTF-8. TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
   }

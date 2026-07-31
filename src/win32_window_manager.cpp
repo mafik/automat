@@ -18,10 +18,12 @@
 
 #include <unordered_map>
 
+#include "board.hpp"
 #include "keyboard.hpp"
 #include "log.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
+#include "unique_ptr.hpp"
 #include "vm.hpp"
 #include "win32.hpp"
 #include "win32_capture.hpp"
@@ -148,64 +150,67 @@ IApplicationViewCollection : public IUnknown {
 constexpr CLSID kImmersiveShell = {
     0xC2F03A33, 0x21F5, 0x47FA, {0xB4, 0xBB, 0x15, 0x63, 0x62, 0xA2, 0xF2, 0x39}};
 
-static HRESULT AppViewFor(HWND hwnd, ComPtr<IApplicationView>& view) {
-  ComPtr<IServiceProvider> shell;
-  HRESULT hr = CoCreateInstance(kImmersiveShell, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&shell));
-  if (FAILED(hr)) return hr;
-  ComPtr<IApplicationViewCollection> views;
-  hr = shell->QueryService(__uuidof(IApplicationViewCollection), IID_PPV_ARGS(&views));
-  if (FAILED(hr)) return hr;
-  return views->GetViewForHwnd(hwnd, &view);
-}
-
-static HRESULT CloakThroughShell(HWND hwnd, int flags) {
-  ComPtr<IApplicationView> view;
-  HRESULT hr = AppViewFor(hwnd, view);
-  if (FAILED(hr)) return hr;
-  return view->SetCloak(1, flags);
-}
-
 static bool ShellCloaked(HWND hwnd) {
   DWORD cloaked = 0;
   return SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) &&
          cloaked != 0;
 }
 
-static void SetCloaked(HWND hwnd, bool cloaked) {
-  if (!IsWindow(hwnd)) return;
-  if (ShellCloaked(hwnd) == cloaked) return;
-  HRESULT init = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-  HRESULT hr = CloakThroughShell(hwnd, cloaked ? 2 : 0);
-  if (SUCCEEDED(init)) CoUninitialize();
-  if (FAILED(hr)) {
-    ERROR << "Could not " << (cloaked ? "cloak " : "uncloak ") << WindowTitle(hwnd) << ": "
-          << win32::ErrorStr(hr);
-  }
-}
+constexpr wchar_t kAutomatPID[] = L"AutomatPID";
 
 static HWND hidden_owner = nullptr;
 
-static void SetHiddenFromSwitchers(AppWindow& window, HWND hwnd, bool hidden) {
+static void SetEmbedded(AppWindow* window, HWND hwnd, bool embedded) {
   if (!IsWindow(hwnd)) return;
-  if (hidden) {
-    window.prev_owner = (void*)GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT);
-    if (hidden_owner) SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, (LONG_PTR)hidden_owner);
+  HWND old_owner = (HWND)GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT);
+  if (embedded) {
+    if (old_owner != hidden_owner) {
+      if (window) window->prev_owner = IsWindow(old_owner) ? old_owner : nullptr;
+      SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, (LONG_PTR)hidden_owner);
+    }
   } else {
-    SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, (LONG_PTR)window.prev_owner);
-    window.prev_owner = nullptr;
+    HWND restored = window ? (HWND)window->prev_owner : nullptr;
+    if (window) window->prev_owner = nullptr;
+    if (old_owner != restored && (old_owner == hidden_owner || !IsWindow(old_owner))) {
+      SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, (LONG_PTR)restored);
+    }
   }
   HRESULT init = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
   ComPtr<ITaskbarList> taskbar;
   if (SUCCEEDED(
           CoCreateInstance(__uuidof(TaskbarList), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&taskbar))) &&
       SUCCEEDED(taskbar->HrInit())) {
-    if (hidden) {
+    if (embedded) {
       taskbar->DeleteTab(hwnd);
     } else {
       taskbar->AddTab(hwnd);
     }
   }
+  if (ShellCloaked(hwnd) != embedded) {
+    ComPtr<IServiceProvider> shell;
+    ComPtr<IApplicationViewCollection> views;
+    ComPtr<IApplicationView> view;
+    HRESULT hr = CoCreateInstance(kImmersiveShell, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&shell));
+    if (SUCCEEDED(hr)) {
+      hr = shell->QueryService(__uuidof(IApplicationViewCollection), IID_PPV_ARGS(&views));
+    }
+    if (SUCCEEDED(hr)) hr = views->GetViewForHwnd(hwnd, &view);
+    if (SUCCEEDED(hr)) hr = view->SetCloak(1, embedded ? 2 : 0);
+    if (FAILED(hr)) {
+      ERROR << "Could not " << (embedded ? "cloak " : "uncloak ") << WindowTitle(hwnd) << ": "
+            << win32::ErrorStr(hr);
+    }
+  }
   if (SUCCEEDED(init)) CoUninitialize();
+}
+
+static bool ProcessAlive(DWORD pid) {
+  if (pid == GetCurrentProcessId()) return true;
+  std::unique_ptr<void, DeleteWith<CloseHandle>> process(
+      OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid));
+  if (!process) return GetLastError() == ERROR_ACCESS_DENIED;
+  DWORD exit_code = 0;
+  return GetExitCodeProcess(process.get(), &exit_code) && exit_code == STILL_ACTIVE;
 }
 
 // The compositor only produces a new frame when the program paints, so a
@@ -360,14 +365,64 @@ static void StartCaptureFor(AppWindow& window) {
 static void ApplyMode(AppWindow& window) {
   HWND hwnd = window.hwnd.load();
   if (hwnd == nullptr) return;
-  if (window.mode.load(std::memory_order_relaxed) == AppWindow::Mode::Embedded) {
-    SetHiddenFromSwitchers(window, hwnd, true);
-    SetCloaked(hwnd, true);
-  } else {
-    SetHiddenFromSwitchers(window, hwnd, false);
-    SetCloaked(hwnd, false);
-  }
+  SetEmbedded(&window, hwnd,
+              window.mode.load(std::memory_order_relaxed) == AppWindow::Mode::Embedded);
   window.WakeToys();
+}
+
+static void Bind(const Ptr<AppWindow>& window, HWND hwnd, DWORD pid) {
+  window->hwnd.store(hwnd);
+  tracked[hwnd] = window->AcquireWeakPtr();
+  SetPropW(hwnd, kAutomatPID, (HANDLE)(UINT_PTR)GetCurrentProcessId());
+  {
+    auto lock = std::lock_guard(window->mutex);
+    window->client_gone = false;
+    window->client_pid = pid;
+    window->title = WindowTitle(hwnd);
+    window->client_decorated = (GetWindowLongW(hwnd, GWL_STYLE) & WS_CAPTION) != 0;
+    window->content_size = WindowSize(hwnd);
+  }
+  StartCaptureFor(*window);
+  ApplyMode(*window);
+  RequestRepaint(hwnd);
+}
+
+static void RecoverOrphans() {
+  Vec<HWND> orphans;
+  EnumWindows(
+      [](HWND hwnd, LPARAM lparam) -> BOOL {
+        HANDLE prop = GetPropW(hwnd, kAutomatPID);
+        if (prop != nullptr && !ProcessAlive((DWORD)(UINT_PTR)prop)) {
+          ((Vec<HWND>*)lparam)->push_back(hwnd);
+        }
+        return TRUE;
+      },
+      (LPARAM)&orphans);
+  if (orphans.empty()) return;
+  std::unordered_map<HWND, Ptr<AppWindow>> saved;
+  {
+    auto lock = std::lock_guard(vm.mutex);
+    for (auto& board : vm.boards) {
+      for (auto& loc : board->locations) {
+        if (auto* window = dynamic_cast<AppWindow*>(loc->object.get())) {
+          if (window->prev_hwnd) saved[window->prev_hwnd] = window->AcquirePtr();
+        }
+      }
+    }
+  }
+  for (HWND hwnd : orphans) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    auto it = saved.find(hwnd);
+    if (it != saved.end() && pid != 0) {
+      LOG << "Reconnecting " << WindowTitle(hwnd) << " - left behind by an Automat that is gone.";
+      Bind(it->second, hwnd, pid);
+      saved.erase(it);
+    } else {
+      LOG << "Revealing " << WindowTitle(hwnd) << " - left behind by an Automat that is gone.";
+      SetEmbedded(nullptr, hwnd, false);
+    }
+  }
 }
 
 static void Adopt(HWND hwnd) {
@@ -379,30 +434,19 @@ static void Adopt(HWND hwnd) {
   Ptr<Launch> launch = Launch::Find(pid);
   if (!launch) return;
   if (ShellCloaked(hwnd)) {
-    SetCloaked(hwnd, false);
+    SetEmbedded(nullptr, hwnd, false);
     if (ShellCloaked(hwnd)) return;
   }
 
   auto window = launch->LockRestoring<AppWindow>();
   bool restored = (bool)window;
   if (!window) window = MAKE_PTR(AppWindow);
-  window->hwnd.store(hwnd);
-  tracked[hwnd] = window->AcquireWeakPtr();
-  {
+  if (!restored) {
     auto lock = std::lock_guard(window->mutex);
-    window->client_gone = false;
-    window->client_pid = pid;
-    window->title = WindowTitle(hwnd);
-    window->client_decorated = (GetWindowLongW(hwnd, GWL_STYLE) & WS_CAPTION) != 0;
-    window->content_size = WindowSize(hwnd);
-    if (!restored) {
-      window->recipe = launch->argv;
-      window->launched_by = launch;
-    }
+    window->recipe = launch->argv;
+    window->launched_by = launch;
   }
-  StartCaptureFor(*window);
-  ApplyMode(*window);
-  RequestRepaint(hwnd);
+  Bind(window, hwnd, pid);
   launch->WindowAppeared();
   if (restored) {
     launch->RestoredInto(*window);
@@ -419,8 +463,7 @@ static void Drop(HWND hwnd) {
   tracked.erase(hwnd);
   if (!window) return;
   if (window->mode.load(std::memory_order_relaxed) == AppWindow::Mode::Embedded) {
-    SetCloaked(hwnd, false);
-    SetHiddenFromSwitchers(*window, hwnd, false);
+    SetEmbedded(window.Get(), hwnd, false);
   }
   window->hwnd.store(nullptr);
   window->capture.reset();
@@ -473,7 +516,7 @@ static void CALLBACK OnWindowEvent(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG o
           auto now = time::SteadyNow();
           if (now - window->last_recloak > std::chrono::seconds(1)) {
             window->last_recloak = now;
-            SetCloaked(hwnd, true);
+            SetEmbedded(window.Get(), hwnd, true);
           }
         }
       }
@@ -826,6 +869,7 @@ void AppWindowToy::VisitOptions(const OptionsVisitor& visitor) const {
 void Start(Status& status) {
   hidden_owner = CreateWindowExW(WS_EX_TOOLWINDOW, L"STATIC", L"", WS_POPUP, 0, 0, 0, 0, nullptr,
                                  nullptr, GetModuleHandleW(nullptr), nullptr);
+  RecoverOrphans();
   object_hook =
       SetWinEventHook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_NAMECHANGE, nullptr, OnWindowEvent, 0, 0,
                       WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
@@ -857,8 +901,7 @@ void Stop() {
     }
     popups.clear();
     if (window->mode.load(std::memory_order_relaxed) == AppWindow::Mode::Embedded) {
-      SetCloaked(hwnd, false);
-      SetHiddenFromSwitchers(*window, hwnd, false);
+      SetEmbedded(window.Get(), hwnd, false);
       PostMessageW(hwnd, WM_CLOSE, 0, 0);
     }
   }
@@ -903,9 +946,10 @@ AppWindow::~AppWindow() {
   capture.reset();
   if (HWND hwnd = this->hwnd.load()) {
     if (mode.load(std::memory_order_relaxed) == Mode::Embedded) {
-      win32_wm::SetCloaked(hwnd, false);
-      win32_wm::SetHiddenFromSwitchers(*this, hwnd, false);
+      win32_wm::SetEmbedded(this, hwnd, false);
       PostMessageW(hwnd, WM_CLOSE, 0, 0);
+    } else {
+      RemovePropW(hwnd, win32_wm::kAutomatPID);
     }
   }
 }
@@ -929,6 +973,10 @@ void AppWindow::SerializeState(ObjectSerializer& writer) const {
     writer.Key("mode");
     writer.String(v.data(), v.size());
   }
+  if (HWND hwnd = this->hwnd.load()) {
+    writer.Key("hwnd");
+    writer.Uint64((uint64_t)(uintptr_t)hwnd);
+  }
 }
 
 bool AppWindow::DeserializeKey(ObjectDeserializer& d, StrView key) {
@@ -937,6 +985,13 @@ bool AppWindow::DeserializeKey(ObjectDeserializer& d, StrView key) {
     Str v;
     d.Get(v, status);
     mode.store(v == "connected" ? Mode::Connected : Mode::Embedded, std::memory_order_relaxed);
+    return true;
+  }
+  if (key == "hwnd") {
+    Status status;
+    uint64_t v = 0;
+    d.Get(v, status);
+    prev_hwnd = (os::WindowHandle)(uintptr_t)v;
     return true;
   }
   return ClientWindow::DeserializeKey(d, key);

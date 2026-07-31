@@ -23,6 +23,7 @@ struct Font {
 
   static sk_sp<SkTypeface> LoadTypeface(fs::VFile& ttf_file);
   static sk_sp<SkTypeface> GetNotoSans();
+  static sk_sp<SkTypeface> GetNotoColorEmoji();
   static sk_sp<SkTypeface> GetBelanosimaRegular();
   static sk_sp<SkTypeface> GetBelanosimaSemiBold();
   static sk_sp<SkTypeface> GetBelanosimaBold();

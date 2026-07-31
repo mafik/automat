@@ -21,6 +21,7 @@ struct AppWindow : ClientWindow {
   enum class Mode : uint8_t { Embedded, Connected };
   std::atomic<Mode> mode{Mode::Embedded};
   void* prev_owner = nullptr;
+  os::WindowHandle prev_hwnd = os::kNoWindow;
   time::SteadyPoint last_recloak = {};
 
   std::atomic<os::WindowHandle> hwnd{os::kNoWindow};

@@ -10,6 +10,7 @@
 #include <include/core/SkTypeface.h>
 #include <modules/skshaper/include/SkShaper.h>
 #include <modules/skshaper/include/SkShaper_harfbuzz.h>
+#include <modules/skshaper/include/SkShaper_skunicode.h>
 #include <modules/skunicode/include/SkUnicode_icu.h>
 #include <src/base/SkUTF.h>
 
@@ -56,6 +57,12 @@ sk_sp<SkTypeface> Font::LoadTypeface(fs::VFile& ttf_file) {
 sk_sp<SkTypeface> Font::GetNotoSans() {
   static sk_sp<SkTypeface> noto_sans = LoadTypeface(embedded::assets_NotoSans_wght__ttf);
   return noto_sans;
+}
+
+sk_sp<SkTypeface> Font::GetNotoColorEmoji() {
+  static sk_sp<SkTypeface> noto_color_emoji =
+      LoadTypeface(embedded::assets_NotoColorEmoji_Regular_ttf);
+  return noto_color_emoji;
 }
 
 sk_sp<SkTypeface> Font::GetBelanosimaRegular() {
@@ -265,26 +272,101 @@ struct MeasureLineRunHandler : public LineRunHandler {
   }
 };
 
-SkShaper& GetShaper() {
-  thread_local std::unique_ptr<SkShaper> shaper = [] {
+static sk_sp<SkUnicode> GetUnicode() {
+  thread_local sk_sp<SkUnicode> unicode = [] {
 #if defined(_WIN32)
     Status status;
     fs::Copy(fs::real, "C:\\Windows\\Globalization\\ICU\\icudtl.dat", fs::real,
              Path::ExecutablePath().Parent() / "icudtl.dat", status);
 #endif  // defined(_WIN32)
-    return SkShapers::HB::ShapeDontWrapOrReorder(SkUnicodes::ICU::Make(), GetFontMgr());
+    return SkUnicodes::ICU::Make();
   }();
+  return unicode;
+}
+
+SkShaper& GetShaper() {
+  thread_local std::unique_ptr<SkShaper> shaper =
+      SkShapers::HB::ShapeDontWrapOrReorder(GetUnicode(), GetFontMgr());
   return *shaper;
+}
+
+struct EmojiFallbackRunIterator : public SkShaper::FontRunIterator {
+  const char* const utf8_begin;
+  const char* const utf8_end;
+  const char* run_end;
+  SkFont primary;
+  SkFont emoji;
+  const SkFont* run_font;
+
+  EmojiFallbackRunIterator(std::string_view utf8, const SkFont& primary_font,
+                           sk_sp<SkTypeface> emoji_typeface)
+      : utf8_begin(utf8.data()),
+        utf8_end(utf8.data() + utf8.size()),
+        run_end(utf8.data()),
+        primary(primary_font),
+        emoji(primary_font),
+        run_font(&primary) {
+    emoji.setTypeface(std::move(emoji_typeface));
+  }
+
+  static bool ExtendsRun(SkUnichar cp) {
+    return cp == 0x200D || (cp >= 0xFE00 && cp <= 0xFE0F) || (cp >= 0x1F3FB && cp <= 0x1F3FF) ||
+           cp == 0x20E3 || (cp >= 0xE0020 && cp <= 0xE007F);
+  }
+
+  const SkFont* Pick(const char* ptr) const {
+    SkUnichar cp = SkUTF::NextUTF8(&ptr, utf8_end);
+    SkUnichar next = 0;
+    if (ptr < utf8_end) {
+      const char* peek = ptr;
+      next = SkUTF::NextUTF8(&peek, utf8_end);
+    }
+    if (next == 0xFE0F && emoji.unicharToGlyph(cp)) return &emoji;
+    if (next == 0xFE0E && primary.unicharToGlyph(cp)) return &primary;
+    if (primary.unicharToGlyph(cp)) return &primary;
+    if (emoji.unicharToGlyph(cp)) return &emoji;
+    return &primary;
+  }
+
+  void consume() override {
+    const char* ptr = run_end;
+    run_font = Pick(ptr);
+    SkUTF::NextUTF8(&ptr, utf8_end);
+    while (ptr < utf8_end) {
+      const char* cp_start = ptr;
+      SkUnichar cp = SkUTF::NextUTF8(&ptr, utf8_end);
+      if (ExtendsRun(cp)) continue;
+      if (Pick(cp_start) != run_font) {
+        ptr = cp_start;
+        break;
+      }
+    }
+    run_end = ptr;
+  }
+  size_t endOfCurrentRun() const override { return run_end - utf8_begin; }
+  bool atEnd() const override { return run_end == utf8_end; }
+  const SkFont& currentFont() const override { return *run_font; }
+};
+
+static void ShapeWithFallback(const SkFont& font, std::string_view text,
+                              SkShaper::RunHandler& handler) {
+  SkShaper& shaper = GetShaper();
+  EmojiFallbackRunIterator font_runs(text, font, Font::GetNotoColorEmoji());
+  auto bidi =
+      SkShapers::unicode::BidiRunIterator(GetUnicode(), text.data(), text.size(), SkBidiIterator::kLTR);
+  auto script = SkShapers::HB::ScriptRunIterator(text.data(), text.size());
+  auto language = SkShaper::MakeStdLanguageRunIterator(text.data(), text.size());
+  if (!bidi || !script || !language) return;
+  shaper.shape(text.data(), text.size(), font_runs, *bidi, *script, *language, 0, &handler);
 }
 
 int Font::PrevIndex(std::string_view text, int index) {
   if (index == 0) {
     return 0;
   }
-  SkShaper& shaper = GetShaper();
   MeasureLineRunHandler run_handler(text);
   text = run_handler.utf8_text;
-  shaper.shape(text.data(), index, sk_font, true, 0, &run_handler);
+  ShapeWithFallback(sk_font, text.substr(0, index), run_handler);
   if (run_handler.utf8_indices.size() > 1) {
     return run_handler.utf8_indices[run_handler.utf8_indices.size() - 2];
   }
@@ -295,11 +377,10 @@ int Font::NextIndex(std::string_view text, int index) {
   if (index + 1 >= text.size()) {
     return text.size();
   }
-  SkShaper& shaper = GetShaper();
   text = text.substr(index);
   MeasureLineRunHandler run_handler(text);
   text = run_handler.utf8_text;
-  shaper.shape(text.data(), run_handler.utf8_text.size(), sk_font, true, 0, &run_handler);
+  ShapeWithFallback(sk_font, text, run_handler);
   if (run_handler.utf8_indices.size() > 1) {
     return index + run_handler.utf8_indices[1];
   }
@@ -310,33 +391,30 @@ float Font::PositionFromIndex(std::string_view text, int index) {
   if (index == 0) {
     return 0;
   }
-  SkShaper& shaper = GetShaper();
   LineRunHandler run_handler(text);
   text = run_handler.utf8_text;
   if (index >= text.size()) {
     index = text.size();
   }
-  shaper.shape(text.data(), index, sk_font, true, 0, &run_handler);
+  ShapeWithFallback(sk_font, text.substr(0, index), run_handler);
   return run_handler.offset.x * font_scale;
 }
 
 int Font::IndexFromPosition(std::string_view text, float x) {
   // LOG << "IndexFromPosition " << x << " text=[" << text << "] " << text.size() << "B";
   x /= font_scale;
-  SkShaper& shaper = GetShaper();
   MeasureLineRunHandler run_handler(text);
   text = run_handler.utf8_text;
-  shaper.shape(text.data(), text.size(), sk_font, true, 0, &run_handler);
+  ShapeWithFallback(sk_font, text, run_handler);
   return run_handler.IndexFromPosition(x);
 }
 
 void Font::DrawText(SkCanvas& canvas, std::string_view text, const SkPaint& paint) {
   // LOG << "Drawing " << text.size() << " characters: [" << text << "]";
   canvas.scale(font_scale, -font_scale);
-  SkShaper& shaper = GetShaper();
   LineRunHandler run_handler(text);
   text = run_handler.utf8_text;
-  shaper.shape(text.data(), text.size(), sk_font, true, 0, &run_handler);
+  ShapeWithFallback(sk_font, text, run_handler);
 
   sk_sp<SkTextBlob> text_blob = run_handler.makeBlob();
   canvas.drawTextBlob(text_blob, 0, 0, paint);

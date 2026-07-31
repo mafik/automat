@@ -67,6 +67,9 @@ static const std::vector<sk_sp<SkTypeface>>& FontChain() {
     if (auto t = ui::Font::LoadTypeface(embedded::assets_NotoSans_wght__ttf)) {
       v.push_back(std::move(t));
     }
+    if (auto t = ui::Font::GetNotoColorEmoji()) {
+      v.push_back(std::move(t));
+    }
     return v;
   }();
   return chain;

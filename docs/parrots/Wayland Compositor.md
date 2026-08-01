@@ -83,7 +83,10 @@ One renderer fact matters to anyone extending this: an idle Automat does not
 tick the root widget. Every path that needs `Tick` to run (window
 appeared, window disappeared, the compositor itself starting while restored
 windows wait for their launches) must call `vm.WakeToys()`, which `PackFrame`
-watches.
+watches. The wake has to come after the item is in the queue the UI thread
+drains, never before: the compositor runs on the epoll thread, so a wake sent
+first can be serviced while the queue is still empty, and the item then waits
+for an unrelated later wake that an idle client never produces.
 
 ## Protocol surface
 
@@ -200,7 +203,8 @@ Each surface keeps its own committed image on a `WaylandSurface` object, and a
 parent surface owns its subsurfaces as `Ptr<WaylandSurface>` children; at every
 commit that changes the visible tree the compositor updates this object tree to
 match the Wayland tree (`UpdateSurfaceNode`). Each surface's toy draws only its own
-texture and hosts a child toy per child surface, so Automat's renderer composites
+texture and owns a child toy per child surface (`WaylandSurfaceToy::child_toys_` —
+never a ToyStore entry, see docs/parrots/Boards.md), so Automat's renderer composites
 the subtree the way it composites any widget tree, each surface a node with its
 own cached texture. A parent with a transparent centre (a client that draws its
 own decorations) shows its child's content through it. The window extent and board
@@ -208,6 +212,15 @@ size come from the toplevel surface; subsurfaces are placed within it, and each 
 be stacked above the parent's own content or below it. The offset of a child within its parent is stored on
 the stack entry, not on the child, so the toy reads a surface's geometry and its
 children as one consistent snapshot under one mutex.
+
+A child surface joins the tree when its protocol object is created — a subsurface
+at `get_subsurface`, a popup at `get_popup` — which happens before the client has
+committed a buffer to it. Until that buffer arrives the surface has no size and
+nothing to draw, so its toy reports no draw bounds at all rather than an empty
+rectangle, which is what the renderer requires of a widget that draws nothing
+(`WaylandSurfaceToy::DrawBounds`). Toolkits rely on this window existing: Firefox
+creates and commits its content subsurface before it has pixels for it, and a GTK
+menu exists as a popup for a moment before it is drawn.
 
 Subsurface state is double-buffered against the parent. `set_position` and, in
 sync mode (the default), the child's committed buffer apply at the parent

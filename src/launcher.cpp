@@ -108,8 +108,9 @@ static Str Linearize(const StreamCapture& c) {
 constexpr DWORD kPipeBuffer = 64 * 1024;
 
 static SECURITY_ATTRIBUTES Inheritable() {
-  return SECURITY_ATTRIBUTES{
-      .nLength = sizeof(SECURITY_ATTRIBUTES), .lpSecurityDescriptor = nullptr, .bInheritHandle = TRUE};
+  return SECURITY_ATTRIBUTES{.nLength = sizeof(SECURITY_ATTRIBUTES),
+                             .lpSecurityDescriptor = nullptr,
+                             .bInheritHandle = TRUE};
 }
 
 static bool MakeCapturePipe(HANDLE& read_end, HANDLE& write_end, Status& status) {
@@ -168,8 +169,7 @@ struct CaptureReader {
       return;
     }
     Status status;
-    mux::WatchHandle(
-        event, [this] { Finish(); }, status);
+    mux::WatchHandle(event, [this] { Finish(); }, status);
     if (!OK(status)) delete this;
   }
 
@@ -338,7 +338,8 @@ static Ptr<Launch> StartProcess(Vec<Str>& words, const SpawnFds& fds, Status& st
 
   STARTUPINFOEXW startup = {};
   startup.StartupInfo.cb = sizeof(startup);
-  startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+  startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+  startup.StartupInfo.wShowWindow = SW_SHOWMINNOACTIVE;
   startup.StartupInfo.hStdInput = child_stdio[0];
   startup.StartupInfo.hStdOutput = child_stdio[1];
   startup.StartupInfo.hStdError = child_stdio[2];
@@ -347,10 +348,9 @@ static Ptr<Launch> StartProcess(Vec<Str>& words, const SpawnFds& fds, Status& st
   std::wstring command_line = win32::Utf8ToWide(BuildCommandLine(words));
   command_line.push_back(L'\0');
   PROCESS_INFORMATION process = {};
-  BOOL started =
-      CreateProcessW(nullptr, command_line.data(), nullptr, nullptr, TRUE,
-                     CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW, nullptr,
-                     nullptr, &startup.StartupInfo, &process);
+  BOOL started = CreateProcessW(nullptr, command_line.data(), nullptr, nullptr, TRUE,
+                                CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW,
+                                nullptr, nullptr, &startup.StartupInfo, &process);
   DWORD spawn_error = GetLastError();
   DeleteProcThreadAttributeList(attributes);
   CloseHandle(err_write);
@@ -536,25 +536,24 @@ Ptr<Launch> Launch::Spawn(const Vec<Str>& argv_in, Object* source, ClientWindow*
   }
 
   Status watch_status;
-  mux::WatchProcess(
-      (int)launch->pid,
-      [weak = launch->AcquireWeakPtr()](int wait_status) {
-        if (auto l = weak.Lock()) {
-          Vec<std::move_only_function<void()>> callbacks;
-          {
-            auto lock = std::lock_guard(l->mutex);
-            l->wait_status = wait_status;
+  mux::WatchProcess((int)launch->pid,
+                    [weak = launch->AcquireWeakPtr()](int wait_status) {
+                      if (auto l = weak.Lock()) {
+                        Vec<std::move_only_function<void()>> callbacks;
+                        {
+                          auto lock = std::lock_guard(l->mutex);
+                          l->wait_status = wait_status;
 #if defined(_WIN32)
-            if (!l->job_tracked) l->exited = true;
+                          if (!l->job_tracked) l->exited = true;
 #else
-            l->exited = true;
+                          l->exited = true;
 #endif
-            if (l->exited) callbacks.swap(l->on_exit);
-          }
-          FireExit(*l, std::move(callbacks));
-        }
-      },
-      watch_status);
+                          if (l->exited) callbacks.swap(l->on_exit);
+                        }
+                        FireExit(*l, std::move(callbacks));
+                      }
+                    },
+                    watch_status);
   if (!OK(watch_status)) {
     auto lock = std::lock_guard(launch->mutex);
 #if defined(_WIN32)

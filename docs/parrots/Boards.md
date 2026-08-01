@@ -41,7 +41,9 @@ Each board widget has its own ToyStore, which guarantees one widget per object o
 (src/widget.cpp). The pointer needs no uniqueness guarantee, so it holds the dragged widget
 directly through a unique_ptr, together with an owning Ptr to the object. ToyStore is one way
 of managing widget lifetimes and is used only where the one-widget constraint must be
-enforced.
+enforced. Toys that a widget creates for its own subtree — a Wayland window's client surface
+toys, for example — are owned by the parent toy directly and never enter a store, so they
+move between boards together with the widget tree.
 
 One resident widget per object per board is a deliberate limit:
 

@@ -7,9 +7,6 @@
 // clang-format on
 
 #include <dwmapi.h>
-#include <inspectable.h>
-#include <objectarray.h>
-#include <servprov.h>
 #include <shobjidl.h>
 #include <wrl/client.h>
 
@@ -23,6 +20,7 @@
 #include "log.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
+#include "time.hpp"
 #include "unique_ptr.hpp"
 #include "vm.hpp"
 #include "win32.hpp"
@@ -50,7 +48,6 @@ static ClientArrivals ui_arrivals;
 
 static HWINEVENTHOOK object_hook = nullptr;
 static HWINEVENTHOOK move_hook = nullptr;
-static HWINEVENTHOOK cloak_hook = nullptr;
 
 static Str WindowTitle(HWND hwnd) {
   int length = GetWindowTextLengthW(hwnd);
@@ -67,98 +64,33 @@ static SkISize WindowSize(HWND hwnd) {
   return {r.right - r.left, r.bottom - r.top};
 }
 
-struct IApplicationViewChangeListener;
-struct IApplicationViewOperation;
-struct IApplicationViewPosition;
-struct IAsyncCallback;
-struct IImmersiveApplication;
-struct IImmersiveMonitor;
-using APPLICATION_VIEW_CLOAK_TYPE = UINT;
-using APPLICATION_VIEW_COMPATIBILITY_POLICY = UINT;
-
-MIDL_INTERFACE("372E1D3B-38D3-42E4-A15B-8AB2B178F513")
-IApplicationView : public IInspectable {
-  STDMETHOD(SetFocus)() = 0;
-  STDMETHOD(SwitchTo)() = 0;
-  STDMETHOD(TryInvokeBack)(IAsyncCallback*) = 0;
-  STDMETHOD(GetThumbnailWindow)(HWND*) = 0;
-  STDMETHOD(GetMonitor)(IImmersiveMonitor**) = 0;
-  STDMETHOD(GetVisibility)(void*) = 0;
-  STDMETHOD(SetCloak)(APPLICATION_VIEW_CLOAK_TYPE cloak_type, int flags) = 0;
-  STDMETHOD(GetPosition)(const GUID*, void*) = 0;
-  STDMETHOD(SetPosition)(IApplicationViewPosition*) = 0;
-  STDMETHOD(InsertAfterWindow)(HWND) = 0;
-  STDMETHOD(GetExtendedFramePosition)(RECT*) = 0;
-  STDMETHOD(GetAppUserModelId)(PWSTR*) = 0;
-  STDMETHOD(SetAppUserModelId)(PCWSTR) = 0;
-  STDMETHOD(IsEqualByAppUserModelId)(PCWSTR, int*) = 0;
-  STDMETHOD(GetViewState)(UINT*) = 0;
-  STDMETHOD(SetViewState)(UINT) = 0;
-  STDMETHOD(GetNeediness)(int*) = 0;
-  STDMETHOD(GetLastActivationTimestamp)(ULONGLONG*) = 0;
-  STDMETHOD(SetLastActivationTimestamp)(ULONGLONG) = 0;
-  STDMETHOD(GetVirtualDesktopId)(GUID*) = 0;
-  STDMETHOD(SetVirtualDesktopId)(const GUID*) = 0;
-  STDMETHOD(GetShowInSwitchers)(int*) = 0;
-  STDMETHOD(SetShowInSwitchers)(int) = 0;
-  STDMETHOD(GetScaleFactor)(int*) = 0;
-  STDMETHOD(CanReceiveInput)(BOOL*) = 0;
-  STDMETHOD(GetCompatibilityPolicyType)(APPLICATION_VIEW_COMPATIBILITY_POLICY*) = 0;
-  STDMETHOD(SetCompatibilityPolicyType)(APPLICATION_VIEW_COMPATIBILITY_POLICY) = 0;
-  STDMETHOD(GetSizeConstraints)(IImmersiveMonitor*, SIZE*, SIZE*) = 0;
-  STDMETHOD(GetSizeConstraintsForDpi)(UINT, SIZE*, SIZE*) = 0;
-  STDMETHOD(SetSizeConstraintsForDpi)(const UINT*, const SIZE*, const SIZE*) = 0;
-  STDMETHOD(OnMinSizePreferencesUpdated)(HWND) = 0;
-  STDMETHOD(ApplyOperation)(IApplicationViewOperation*) = 0;
-  STDMETHOD(IsTray)(BOOL*) = 0;
-  STDMETHOD(IsInHighZOrderBand)(BOOL*) = 0;
-  STDMETHOD(IsSplashScreenPresented)(BOOL*) = 0;
-  STDMETHOD(Flash)() = 0;
-  STDMETHOD(GetRootSwitchableOwner)(IApplicationView**) = 0;
-  STDMETHOD(EnumerateOwnershipTree)(IObjectArray**) = 0;
-  STDMETHOD(GetEnterpriseId)(PWSTR*) = 0;
-  STDMETHOD(IsMirrored)(BOOL*) = 0;
-  STDMETHOD(Unknown1)(int*) = 0;
-  STDMETHOD(Unknown2)(int*) = 0;
-  STDMETHOD(Unknown3)(int*) = 0;
-  STDMETHOD(Unknown4)(int) = 0;
-  STDMETHOD(Unknown5)(int*) = 0;
-  STDMETHOD(Unknown6)(int) = 0;
-  STDMETHOD(Unknown7)() = 0;
-  STDMETHOD(Unknown8)(int*) = 0;
-  STDMETHOD(Unknown9)(int) = 0;
-  STDMETHOD(Unknown10)(int, int) = 0;
-  STDMETHOD(Unknown11)(int) = 0;
-  STDMETHOD(Unknown12)(SIZE*) = 0;
-};
-
-MIDL_INTERFACE("1841C6D7-4F9D-42C0-AF41-8747538F10E5")
-IApplicationViewCollection : public IUnknown {
-  STDMETHOD(GetViews)(IObjectArray**) = 0;
-  STDMETHOD(GetViewsByZOrder)(IObjectArray**) = 0;
-  STDMETHOD(GetViewsByAppUserModelId)(PCWSTR, IObjectArray**) = 0;
-  STDMETHOD(GetViewForHwnd)(HWND, IApplicationView**) = 0;
-  STDMETHOD(GetViewForApplication)(IImmersiveApplication*, IApplicationView**) = 0;
-  STDMETHOD(GetViewForAppUserModelId)(PCWSTR, IApplicationView**) = 0;
-  STDMETHOD(GetViewInFocus)(IApplicationView**) = 0;
-  STDMETHOD(TryGetLastActiveVisibleView)(IApplicationView**) = 0;
-  STDMETHOD(RefreshCollection)() = 0;
-  STDMETHOD(RegisterForApplicationViewChanges)(IApplicationViewChangeListener*, DWORD*) = 0;
-  STDMETHOD(UnregisterForApplicationViewChanges)(DWORD) = 0;
-};
-
-constexpr CLSID kImmersiveShell = {
-    0xC2F03A33, 0x21F5, 0x47FA, {0xB4, 0xBB, 0x15, 0x63, 0x62, 0xA2, 0xF2, 0x39}};
-
-static bool ShellCloaked(HWND hwnd) {
-  DWORD cloaked = 0;
-  return SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) &&
-         cloaked != 0;
-}
-
 constexpr wchar_t kAutomatPID[] = L"AutomatPID";
 
 static HWND hidden_owner = nullptr;
+
+static bool Transient(HWND hwnd) {
+  if (GetWindowLongW(hwnd, GWL_EXSTYLE) & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)) return true;
+  wchar_t class_name[16] = {};
+  if (GetClassNameW(hwnd, class_name, 16) && wcscmp(class_name, L"#32768") == 0) return true;
+  return false;
+}
+
+static void CloakPopup(HWND hwnd) {
+  if (IsWindow(GetWindow(hwnd, GW_OWNER))) return;
+  SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, (LONG_PTR)hidden_owner);
+}
+
+static void Uncloak(HWND hwnd, HWND restored_owner) {
+  HWND reveal = CreateWindowExW(WS_EX_TOOLWINDOW, L"STATIC", L"", WS_POPUP, 0, 0, 0, 0, nullptr,
+                                nullptr, GetModuleHandleW(nullptr), nullptr);
+  SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, (LONG_PTR)reveal);
+  BOOL cloak = TRUE;
+  DwmSetWindowAttribute(reveal, DWMWA_CLOAK, &cloak, sizeof(cloak));
+  cloak = FALSE;
+  DwmSetWindowAttribute(reveal, DWMWA_CLOAK, &cloak, sizeof(cloak));
+  SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, (LONG_PTR)restored_owner);
+  DestroyWindow(reveal);
+}
 
 static void SetEmbedded(AppWindow* window, HWND hwnd, bool embedded) {
   if (!IsWindow(hwnd)) return;
@@ -172,8 +104,28 @@ static void SetEmbedded(AppWindow* window, HWND hwnd, bool embedded) {
     HWND restored = window ? (HWND)window->prev_owner : nullptr;
     if (window) window->prev_owner = nullptr;
     if (old_owner != restored && (old_owner == hidden_owner || !IsWindow(old_owner))) {
-      SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, (LONG_PTR)restored);
+      Uncloak(hwnd, restored);
     }
+  }
+  DWORD thread = GetWindowThreadProcessId(hwnd, nullptr);
+  if (embedded) {
+    EnumThreadWindows(
+        thread,
+        [](HWND popup, LPARAM) -> BOOL {
+          if (Transient(popup)) CloakPopup(popup);
+          return TRUE;
+        },
+        0);
+  } else {
+    EnumThreadWindows(
+        thread,
+        [](HWND popup, LPARAM) -> BOOL {
+          if (Transient(popup) && GetWindow(popup, GW_OWNER) == hidden_owner) {
+            Uncloak(popup, nullptr);
+          }
+          return TRUE;
+        },
+        0);
   }
   HRESULT init = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
   ComPtr<ITaskbarList> taskbar;
@@ -184,21 +136,6 @@ static void SetEmbedded(AppWindow* window, HWND hwnd, bool embedded) {
       taskbar->DeleteTab(hwnd);
     } else {
       taskbar->AddTab(hwnd);
-    }
-  }
-  if (ShellCloaked(hwnd) != embedded) {
-    ComPtr<IServiceProvider> shell;
-    ComPtr<IApplicationViewCollection> views;
-    ComPtr<IApplicationView> view;
-    HRESULT hr = CoCreateInstance(kImmersiveShell, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&shell));
-    if (SUCCEEDED(hr)) {
-      hr = shell->QueryService(__uuidof(IApplicationViewCollection), IID_PPV_ARGS(&views));
-    }
-    if (SUCCEEDED(hr)) hr = views->GetViewForHwnd(hwnd, &view);
-    if (SUCCEEDED(hr)) hr = view->SetCloak(1, embedded ? 2 : 0);
-    if (FAILED(hr)) {
-      ERROR << "Could not " << (embedded ? "cloak " : "uncloak ") << WindowTitle(hwnd) << ": "
-            << win32::ErrorStr(hr);
     }
   }
   if (SUCCEEDED(init)) CoUninitialize();
@@ -217,13 +154,6 @@ static bool ProcessAlive(DWORD pid) {
 // window that has not painted since it was embedded is asked to.
 static void RequestRepaint(HWND hwnd) {
   RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
-}
-
-static bool Transient(HWND hwnd) {
-  if (GetWindowLongW(hwnd, GWL_EXSTYLE) & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)) return true;
-  wchar_t class_name[16] = {};
-  if (GetClassNameW(hwnd, class_name, 16) && wcscmp(class_name, L"#32768") == 0) return true;
-  return false;
 }
 
 // The windows a user would see in the taskbar: on screen and not a helper
@@ -267,6 +197,8 @@ static void MirrorPopup(HWND hwnd) {
   if (!window) return;
   RECT rect = {};
   if (!GetWindowRect(hwnd, &rect)) return;
+  // Win32 menus are born as placeholder 1x1 - there is nothing to capture at this point
+  if (rect.right - rect.left < 2 || rect.bottom - rect.top < 2) return;
   Status status;
   auto capture = StartCapture(
       hwnd,
@@ -286,7 +218,11 @@ static void MirrorPopup(HWND hwnd) {
         vm.WakeToys();
       },
       status);
-  if (!capture) return;
+  if (!capture) {
+    ERROR << "Could not mirror " << WindowTitle(hwnd) << ": " << status.ToStr();
+    return;
+  }
+  if (window->mode.load(std::memory_order_relaxed) == AppWindow::Mode::Embedded) CloakPopup(hwnd);
   {
     auto lock = std::lock_guard(window->mutex);
     window->popups.push_back({.hwnd = hwnd,
@@ -311,7 +247,9 @@ static void PopupMoved(HWND hwnd) {
   {
     auto lock = std::lock_guard(window->mutex);
     for (auto& popup : window->popups) {
-      if (popup.hwnd == hwnd) popup.screen_pos = SkIPoint::Make(rect.left, rect.top);
+      if (popup.hwnd == hwnd) {
+        popup.screen_pos = SkIPoint::Make(rect.left, rect.top);
+      }
     }
   }
   window->WakeToys();
@@ -365,8 +303,8 @@ static void StartCaptureFor(AppWindow& window) {
 static void ApplyMode(AppWindow& window) {
   HWND hwnd = window.hwnd.load();
   if (hwnd == nullptr) return;
-  SetEmbedded(&window, hwnd,
-              window.mode.load(std::memory_order_relaxed) == AppWindow::Mode::Embedded);
+  bool embedded = window.mode.load(std::memory_order_relaxed) == AppWindow::Mode::Embedded;
+  SetEmbedded(&window, hwnd, embedded);
   window.WakeToys();
 }
 
@@ -374,6 +312,8 @@ static void Bind(const Ptr<AppWindow>& window, HWND hwnd, DWORD pid) {
   window->hwnd.store(hwnd);
   tracked[hwnd] = window->AcquireWeakPtr();
   SetPropW(hwnd, kAutomatPID, (HANDLE)(UINT_PTR)GetCurrentProcessId());
+  ApplyMode(*window);
+  if (IsIconic(hwnd)) ShowWindow(hwnd, SW_SHOWNOACTIVATE);
   {
     auto lock = std::lock_guard(window->mutex);
     window->client_gone = false;
@@ -383,7 +323,6 @@ static void Bind(const Ptr<AppWindow>& window, HWND hwnd, DWORD pid) {
     window->content_size = WindowSize(hwnd);
   }
   StartCaptureFor(*window);
-  ApplyMode(*window);
   RequestRepaint(hwnd);
 }
 
@@ -433,11 +372,6 @@ static void Adopt(HWND hwnd) {
   if (pid == 0) return;
   Ptr<Launch> launch = Launch::Find(pid);
   if (!launch) return;
-  if (ShellCloaked(hwnd)) {
-    SetEmbedded(nullptr, hwnd, false);
-    if (ShellCloaked(hwnd)) return;
-  }
-
   auto window = launch->LockRestoring<AppWindow>();
   bool restored = (bool)window;
   if (!window) window = MAKE_PTR(AppWindow);
@@ -505,21 +439,11 @@ static void CALLBACK OnWindowEvent(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG o
       DropPopup(hwnd);
       break;
     case EVENT_OBJECT_LOCATIONCHANGE:
+      MirrorPopup(hwnd);
       PopupMoved(hwnd);
       break;
     case EVENT_OBJECT_NAMECHANGE:
       TitleChanged(hwnd);
-      break;
-    case EVENT_OBJECT_UNCLOAKED:
-      if (auto window = Find(hwnd)) {
-        if (window->mode.load(std::memory_order_relaxed) == AppWindow::Mode::Embedded) {
-          auto now = time::SteadyNow();
-          if (now - window->last_recloak > std::chrono::seconds(1)) {
-            window->last_recloak = now;
-            SetEmbedded(window.Get(), hwnd, true);
-          }
-        }
-      }
       break;
     case EVENT_SYSTEM_MOVESIZESTART:
       if (auto window = Find(hwnd)) {
@@ -869,15 +793,17 @@ void AppWindowToy::VisitOptions(const OptionsVisitor& visitor) const {
 void Start(Status& status) {
   hidden_owner = CreateWindowExW(WS_EX_TOOLWINDOW, L"STATIC", L"", WS_POPUP, 0, 0, 0, 0, nullptr,
                                  nullptr, GetModuleHandleW(nullptr), nullptr);
+  BOOL cloak = TRUE;
+  if (FAILED(DwmSetWindowAttribute(hidden_owner, DWMWA_CLOAK, &cloak, sizeof(cloak)))) {
+    AppendErrorMessage(status) += "Could not cloak the hidden owner window.";
+  }
   RecoverOrphans();
   object_hook =
       SetWinEventHook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_NAMECHANGE, nullptr, OnWindowEvent, 0, 0,
                       WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
   move_hook = SetWinEventHook(EVENT_SYSTEM_MOVESIZESTART, EVENT_SYSTEM_MOVESIZEEND, nullptr,
                               OnWindowEvent, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-  cloak_hook = SetWinEventHook(EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED, nullptr, OnWindowEvent,
-                               0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-  if (object_hook == nullptr || move_hook == nullptr || cloak_hook == nullptr) {
+  if (object_hook == nullptr || move_hook == nullptr) {
     AppendErrorMessage(status) += "Could not watch for new windows.";
   }
 }
@@ -885,10 +811,8 @@ void Start(Status& status) {
 void Stop() {
   if (object_hook) UnhookWinEvent(object_hook);
   if (move_hook) UnhookWinEvent(move_hook);
-  if (cloak_hook) UnhookWinEvent(cloak_hook);
   object_hook = nullptr;
   move_hook = nullptr;
-  cloak_hook = nullptr;
   for (auto& [hwnd, weak] : tracked) {
     auto window = weak.Lock();
     if (!window) continue;

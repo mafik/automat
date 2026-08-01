@@ -537,7 +537,6 @@ void ApplyAndPublish(Surface& surf) {
   // Wake the toy; on the first frame insert the window onto the board (unless it was restored,
   // in which case its Location already exists).
   win_obj->WakeToys();
-  vm.WakeToys();
   if (!t.mapped) {
     t.mapped = true;
     if (!restored) {
@@ -545,6 +544,7 @@ void ApplyAndPublish(Surface& surf) {
       s.ui_appeared.emplace_back(std::move(win_obj), std::move(launch));
     }
   }
+  vm.WakeToys();
 }
 
 // Derives the displayed surface size and the buffer rectangle to sample from the wp_viewport (if
@@ -1803,9 +1803,24 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
   int stack_self_i_ = 0;
   Optional<ui::Pointer::IconOverride> cursor_override_;
 
+  ankerl::unordered_dense::map<WaylandSurface*, std::unique_ptr<WaylandSurfaceToy>> child_toys_;
+
   WaylandSurfaceToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {}
 
   Ptr<WaylandSurface> LockSurface() const { return LockObject<WaylandSurface>(); }
+
+  WaylandSurfaceToy& FindOrMakeSurfaceToy(WaylandSurface& surface) {
+    auto it = child_toys_.find(&surface);
+    if (it == child_toys_.end()) {
+      it = child_toys_.emplace_hint(it, &surface,
+                                    std::make_unique<WaylandSurfaceToy>(this, surface));
+    }
+    return *it->second;
+  }
+
+  void OnPoll(time::Timer& timer) override {
+    for (auto& [surface, child] : child_toys_) child->Poll(timer);
+  }
 
   // Child surfaces are placed relative to `TopLeft`.
   virtual Vec2 TopLeft() const { return Vec2(0, 0); }
@@ -1871,14 +1886,14 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
     if (input_shape_ != prev_input_shape) tock |= Tock::Shape;
 
     auto content_origin = TopLeft();
-    auto& toys = ToyStore();
+    erase_if(child_toys_, [](auto& entry) { return entry.second->dead; });
 
     SmallVec<WaylandSurface*> untouched = {};  // used to remove animation entries for old popups
     for (auto& entry : popup_positions) {
       untouched.push_back(entry.first);
     }
     auto place = [&](WaylandSurface::Child& c) {
-      auto& ct = toys.FindOrMake(*c.surface, this);
+      auto& ct = FindOrMakeSurfaceToy(*c.surface);
       Vec2 p;
       if (c.is_popup) {
         Vec2 target = PlacePopup(c, content_origin);
@@ -1915,6 +1930,7 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
 
   SkPath Shape() const override { return input_shape_; }
   Optional<Rect> DrawBounds() const override {
+    if (dst_size_.isEmpty()) return std::nullopt;
     float w = dst_size_.width() * kClientPx, h = dst_size_.height() * kClientPx;
     return Rect{0, -h, w, 0};
   }
@@ -2018,6 +2034,7 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
   SkIRect geo_ = {};              // the window geometry within the content buffer, client px
   bool content_present_ = false;  // the content surface currently has an image
   ui::Caret* caret_ = nullptr;    // present while the keyboard flows into the client
+  std::unique_ptr<WaylandSurfaceToy> content_toy_;  // owned like the surface toys' children
 
   WaylandWindowToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     PullState();
@@ -2073,13 +2090,22 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
       auto lock = std::lock_guard(win->mutex);
       content = win->surface;
     }
-    if (!content) return;
-    auto& ct = ToyStore().FindOrMake(*content, this);
+    if (!content) {
+      content_toy_.reset();
+      return;
+    }
+    if (!content_toy_ || content_toy_->LockSurface().Get() != content.Get()) {
+      content_toy_ = std::make_unique<WaylandSurfaceToy>(this, *content);
+    }
     Vec2 tl = TopLeft();
     tl.x -= geo_.x() * kClientPx;
     tl.y += geo_.y() * kClientPx;
-    ct.local_to_parent = SkM44(SkMatrix::Translate(tl.x, tl.y));
-    layers.OrderBelow(&ct);
+    content_toy_->local_to_parent = SkM44(SkMatrix::Translate(tl.x, tl.y));
+    layers.OrderBelow(content_toy_.get());
+  }
+
+  void OnPoll(time::Timer& timer) override {
+    if (content_toy_) content_toy_->Poll(timer);
   }
 
   Tock Tick(time::Timer&) override {

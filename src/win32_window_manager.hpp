@@ -9,7 +9,6 @@
 #include "launcher.hpp"
 #include "os_window.hpp"
 #include "status.hpp"
-#include "time.hpp"
 
 namespace automat::win32_wm {
 struct Capture;
@@ -22,7 +21,6 @@ struct AppWindow : ClientWindow {
   std::atomic<Mode> mode{Mode::Embedded};
   void* prev_owner = nullptr;
   os::WindowHandle prev_hwnd = os::kNoWindow;
-  time::SteadyPoint last_recloak = {};
 
   std::atomic<os::WindowHandle> hwnd{os::kNoWindow};
   std::unique_ptr<win32_wm::Capture> capture;

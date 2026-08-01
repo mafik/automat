@@ -8,12 +8,13 @@
 #include <inspectable.h>
 #include <windows.graphics.capture.interop.h>
 #include <windows.graphics.directx.direct3d11.interop.h>
-#include <wrl/client.h>
-
-#include <mutex>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Graphics.Capture.h>
 #include <winrt/Windows.Graphics.DirectX.Direct3D11.h>
+#include <wrl/client.h>
+
+#include <algorithm>
+#include <mutex>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -30,8 +31,8 @@ namespace automat::win32_wm {
 using Microsoft::WRL::ComPtr;
 namespace capture = winrt::Windows::Graphics::Capture;
 namespace direct3d = winrt::Windows::Graphics::DirectX::Direct3D11;
-constexpr auto kPixelFormat = winrt::Windows::Graphics::DirectX::DirectXPixelFormat::
-    B8G8R8A8UIntNormalized;
+constexpr auto kPixelFormat =
+    winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized;
 
 // The Direct3D device and every Skia import run under this. Frames arrive on
 // system thread pool threads.
@@ -59,10 +60,10 @@ static bool EnsureDevice(Status& status) {
   if (d3d_device) return true;
   ComPtr<IDXGIAdapter1> adapter = AdapterVulkanUses();
   D3D_FEATURE_LEVEL level = {};
-  HRESULT hr = D3D11CreateDevice(adapter.Get(),
-                                 adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE,
-                                 nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0,
-                                 D3D11_SDK_VERSION, &d3d_device, &level, &d3d_context);
+  HRESULT hr =
+      D3D11CreateDevice(adapter.Get(), adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE,
+                        nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, D3D11_SDK_VERSION,
+                        &d3d_device, &level, &d3d_context);
   if (FAILED(hr)) {
     AppendErrorMessage(status) += f("D3D11CreateDevice: {}", win32::ErrorStr(hr));
     return false;
@@ -197,6 +198,11 @@ struct Session {
       ERROR_ONCE << "Window capture: CreateTexture2D: " << win32::ErrorStr(hr);
       return false;
     }
+    ComPtr<ID3D11RenderTargetView> rtv;
+    if (SUCCEEDED(d3d_device->CreateRenderTargetView(shared_texture.Get(), nullptr, &rtv))) {
+      float transparent[4] = {};
+      d3d_context->ClearRenderTargetView(rtv.Get(), transparent);
+    }
     ComPtr<IDXGIResource1> resource;
     if (HRESULT hr = shared_texture.As(&resource); FAILED(hr)) {
       ERROR_ONCE << "Window capture: the texture cannot be shared: " << win32::ErrorStr(hr);
@@ -227,31 +233,39 @@ struct Session {
       if (closed || !pool) return;
       auto frame = pool.TryGetNextFrame();
       if (!frame) return;
+      auto content = frame.ContentSize();
+      SkISize content_size = {content.Width, content.Height};
+      if (content_size.width() < 1 || content_size.height() < 1) return;
       auto surface = frame.Surface();
       auto access =
           surface.as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
       ComPtr<ID3D11Texture2D> arrived;
-      if (HRESULT hr = access->GetInterface(__uuidof(ID3D11Texture2D),
-                                            (void**)arrived.GetAddressOf());
+      if (HRESULT hr =
+              access->GetInterface(__uuidof(ID3D11Texture2D), (void**)arrived.GetAddressOf());
           FAILED(hr)) {
         ERROR_ONCE << "Window capture: the frame holds no texture: " << win32::ErrorStr(hr);
         return;
       }
+      if (size != content_size || !image) {
+        if (!Adopt(content.Width, content.Height)) return;
+      }
+      if (pool_size != content_size) {
+        pool_size = content_size;
+        pool.Recreate(capture_device, kPixelFormat, 2, content);
+      }
       D3D11_TEXTURE2D_DESC desc = {};
       arrived->GetDesc(&desc);
-      SkISize arrived_size = {(int)desc.Width, (int)desc.Height};
-      if (size != arrived_size || !image) {
-        if (!Adopt(desc.Width, desc.Height)) return;
-      }
-      if (pool_size != arrived_size) {
-        pool_size = arrived_size;
-        pool.Recreate(capture_device, kPixelFormat, 2,
-                      {(int32_t)desc.Width, (int32_t)desc.Height});
-      }
+      D3D11_BOX valid = {0,
+                         0,
+                         0,
+                         std::min((UINT)content.Width, desc.Width),
+                         std::min((UINT)content.Height, desc.Height),
+                         1};
       {
         auto device_lock = std::lock_guard(device_mutex);
         if (!d3d_context) return;
-        d3d_context->CopyResource(shared_texture.Get(), arrived.Get());
+        d3d_context->CopySubresourceRegion(shared_texture.Get(), 0, 0, 0, 0, arrived.Get(), 0,
+                                           &valid);
         d3d_context->Flush();
       }
       ready = image;

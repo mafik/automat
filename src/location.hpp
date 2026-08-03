@@ -88,7 +88,8 @@ struct Location : Object {
   std::unordered_set<Location*> update_observers;
   std::unordered_set<Location*> observing_updates;
 
-  // Cached LocationWidget (set by MakeToy).
+  // DEPRECATED: a VM-space object must not reference UI-space widgets. Widgets are not
+  // thread-aware and may vanish between two VM reads. Look them up through a ToyStore instead.
   MortalPtr<LocationWidget> widget;
 
   // ToyMaker concept
@@ -240,15 +241,14 @@ struct LocationWidget : ObjectToy {
   // Set while the widget is dragged outside of a Board (toy is pointer-owned vs board-owned)
   std::unique_ptr<Toy> owned_toy;
 
-  // A fading ghost of this widget's toy.
-  struct IncomingFlight {
-    Vec2 position;
-    float scale = 1;
-    Vec2 position_vel = {};
-    float scale_vel = 0;
-    float transparency = 0;
-  };
-  Vec<IncomingFlight> incoming_flights;
+  // A merged copy: its location is the resident it flies into, fading out; dies on arrival.
+  bool ghost = false;
+
+  // The on-screen point holding the toy (set while dragged); the toy is drawn anchored to it.
+  Optional<Vec2> stable_position;
+  Vec2 grip_offset = {};  // slack between the stable position and the drawn anchor; decays to zero
+  // Springs towards the snapped position (Location's position & scale); the stretch's far end.
+  SkMatrix snap_pose = SkMatrix::I();
 
   MortalList<LocationWidget> overlapping_above;
   MortalList<LocationWidget> overlapping_below;
@@ -267,8 +267,6 @@ struct LocationWidget : ObjectToy {
 
   ObjectToy& ToyForObject();
   Vec2 LocalAnchor() const override;
-
-  void AddIncomingFlight(const SkMatrix& source);
 
   // Widget overrides
   Tock Tick(time::Timer& timer) override;

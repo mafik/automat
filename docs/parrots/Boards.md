@@ -106,12 +106,13 @@ Duplication starts in this state: the pointer holds the new widget while the sou
 under it still owns the object. Extraction reaches this state when some other board also owns
 the object.
 
-The drop merges: the dragged widget and its Location are destroyed at the drop, and the
-resident widget animates a fading ghost of its own toy flying in from the drop point
-(`LocationWidget::AddIncomingFlight`, src/location.cpp). The flight tweens towards the
-resident widget's live transform, so it keeps converging even when the resident moves
-mid-animation, and several quick drops run several flights. The pointer releases its
-owning reference and no widget changes position.
+The drop merges: the dragged Location is destroyed at the drop, but the dragged widget survives
+it as a ghost (`LocationWidget::ghost`, src/location.hpp). Its location reference is repointed
+at the resident Location, the pointer widget keeps it alive as a zombie, and its snapped pose
+springs towards the resident's position while the widget fades out; it dies on arrival. The
+target is read from the resident every frame, so the ghost keeps converging even when the
+resident moves mid-animation, and several quick drops run several ghosts. No resting widget
+changes position.
 
 Two alternatives were rejected. Moving the resident widget to the drop point would move a
 widget the user did not pick up and would disturb the arrangement around it. Rejecting the
@@ -120,15 +121,40 @@ already owns it usually does not know that the board owns it, so the most useful
 to show where the object already is. When the drop position was intended, one board-owned move
 after the merge places the resident widget there.
 
-Feedback: from the start of every pointer-owned drag, each visible board that owns the object
-marks its resident widget with a rotating dashed ring. While the drag point is over an owning
-board, a dashed line is drawn from the dragged widget to the resident widget, showing where
-the drop will land (`DragLocationWidget::Draw`, src/drag_action.cpp). This marker is a
-separate decoration from the connection radar, because the radar's only function is to show
-where a dragged connection would auto-connect.
+Feedback: the merge is announced before it happens, by the same mechanism that previews every
+other snap. A dragged widget has two poses. The snapped pose springs towards where the Location
+would rest — `Location::Position` and `Location::Scale`, written every update from the drop
+target's `DropSnap`, or set to the resting copy's position and scale while the drag hovers a
+board that owns the object (`DragLocationAction::Update`, src/drag_action.cpp). The drawn pose
+is anchored to the stable position — the on-screen point where the pointer holds the toy — so a
+held widget never follows a distant snapped pose off the screen, where the renderer would clip
+it. `LocationWidget::Tick` (src/location.cpp) animates both; `LocationWidget::Draw` renders the
+body at the drawn pose with its material pulled towards the snapped pose (assets/pull_rt.sksl).
+A region of roughly one finger around the held point stays rigid, the rest of the body is
+displaced with bounded compression, and the r/g/b channels separate slightly along the pull,
+more for distant targets. Because the preview reads `Location::Position`, every `DropSnap`
+implementation gets it with no code of its own: the board grid, the merge onto an owning board,
+and the black hole, which shrinks the held widget in place. It is a separate decoration from the
+connection radar, because the radar's only function is to show where a dragged connection would
+auto-connect.
 
-The marker also identifies the pickup mode: a duplication marks the source board's resident
-widget from the first frame, while an extraction leaves nothing behind to mark.
+The stretch is a displacement of the held widget's own rendering, so it is made of the object
+the user is holding rather than of ink invented for the occasion, and it never samples the
+target's texture, which may be off-screen. Both ends mark the same material point: the held
+point on the drawn body and its image under the snapped pose. There is at most one merge
+target: an object rests on at most one board while a copy of it is in hand.
+
+The point where the widget is held is clamped to the nearest point within the toy's coarse
+bounds (`RRect::Clamp`, src/math.hpp), so the rigid region around the finger always holds ink.
+A fresh clone does not appear at the pointer: the slack between its spawn pose and the stable
+position is stored (`LocationWidget::grip_offset`) and decays to zero, so the clone grows out
+of its original and glides into the hand.
+
+The mark also identifies the pickup mode: a duplication stretches towards its original from the
+first frame, while an extraction has nothing to merge into and rests under the pointer.
+
+A ghost is not held, so its drawn pose is its snapped pose and it flies rigidly, with no
+stretch: the merge animation is the plain snap of the same widget, plus a fade.
 
 ## Connections
 

@@ -36,27 +36,11 @@ struct DropTarget {
 };
 }  // namespace ui
 
-struct DragLocationAction;
-
-struct DragLocationWidget : ui::Widget {
-  DragLocationAction& action;
-  double time_seconds = 0;  // animates the ownership marker dashes
-  DragLocationWidget(ui::Widget* parent, DragLocationAction& action)
-      : ui::Widget(parent), action(action) {}
-  SkPath Shape() const override;
-  Optional<Rect> DrawBounds() const override { return std::nullopt; }
-  Tock Tick(time::Timer&) override;
-  void Draw(SkCanvas&) const override;
-};
-
 struct DragLocationAction : Action {
-  Vec2 last_position;     // root widget coordinates
   Vec2 current_position;  // root widget coordinates
-  time::SteadyPoint last_update;
   Vec<Ptr<Location>> locations;
   MortalPtr<BoardWidget> board_widget;     // set while board-owned
   Vec<std::unique_ptr<Toy>> held_widgets;  // owns the LocationWidgets while pointer-owned
-  unique_ptr<DragLocationWidget> widget;
 
   // Pointer-owned pickup: the locations belong to no board yet.
   DragLocationAction(ui::Pointer&, Ptr<Location>&&);
@@ -67,7 +51,6 @@ struct DragLocationAction : Action {
 
   void Update() override;
   void Poll(time::Timer&) override;
-  ui::Widget* Widget() override { return widget.get(); }
 
   void VisitObjects(std::function<void(Object&)>) override;
 

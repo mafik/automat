@@ -3,14 +3,12 @@
 #include "drag_action.hpp"
 
 #include <include/core/SkPath.h>
-#include <include/effects/SkDashPathEffect.h>
 
 #include <cmath>
 #include <ranges>
 
 #include "action.hpp"
 #include "board.hpp"
-#include "color.hpp"
 #include "embedded.hpp"
 #include "math.hpp"
 #include "pointer.hpp"
@@ -51,19 +49,16 @@ void DragLocationAction::Update() {
   if (board_widget && hovered_board != board_widget.Get()) {
     Extract();
   }
-  if (!board_widget && hovered_board) {
-    if (auto board = hovered_board->LockBoard()) {
-      bool any_owned = false;
-      for (auto& location : locations) {
-        if (location->object && board->LocationOrNull(*location->object)) {
-          any_owned = true;
-          break;
-        }
-      }
-      if (!any_owned) {
-        Enter(*hovered_board);
-      }
-    }
+  auto hovered = !board_widget && hovered_board ? hovered_board->LockBoard() : nullptr;
+  bool any_owned = false;
+  Location* merge_targets[locations.size()];
+  for (size_t i = 0; i < locations.size(); ++i) {
+    merge_targets[i] =
+        hovered && locations[i]->object ? hovered->LocationOrNull(*locations[i]->object) : nullptr;
+    any_owned |= merge_targets[i] != nullptr;
+  }
+  if (hovered && !any_owned) {
+    Enter(*hovered_board);
   }
 
   Vec2 owner_offset = {0, 0};
@@ -122,14 +117,21 @@ void DragLocationAction::Update() {
     float new_scale;
     Location::FromMatrix(location_transform[i], locations[i]->widget->LocalAnchor(), new_position,
                          new_scale);
-    Vec2& loc_position = locations[i]->Position(*locations[i]->widget);
+    if (merge_targets[i]) {
+      new_position = hovered->position + merge_targets[i]->PeekPosition();
+      new_scale = merge_targets[i]->PeekScale();
+    }
+    LocationWidget& lw = *locations[i]->widget;
+    Vec2& loc_position = locations[i]->Position(lw);
     if (!NearlyEqual(new_position, loc_position)) {
       moved = true;
-      Vec2 fix = current_position - last_position;
-      widgets[i]->local_to_parent.postTranslate(fix.x, fix.y);
     }
     loc_position = new_position;
-    locations[i]->Scale(*locations[i]->widget) = new_scale;
+    locations[i]->Scale(lw) = new_scale;
+    if (!lw.stable_position) {
+      lw.grip_offset = Vec2(lw.snap_pose.mapPoint(lw.LocalAnchor())) - owner_position;
+    }
+    lw.stable_position = owner_position;
   }
 
   if (moved) {
@@ -144,8 +146,6 @@ void DragLocationAction::Update() {
       location->InvalidateConnectionWidgets(true, false);
     }
   }
-
-  last_position = current_position;
 }
 
 void DragLocationAction::Extract() {
@@ -169,7 +169,6 @@ void DragLocationAction::Extract() {
     location->WakeToys();
   }
   bw->WakeAnimation();
-  widget->WakeAnimation();  // restart the ownership-marker animation
   audio::Play(embedded::assets_SFX_canvas_pick_wav);
 }
 
@@ -238,66 +237,9 @@ void DragLocationAction::VisitObjects(std::function<void(Object&)> visitor) {
   }
 }
 
-SkPath DragLocationWidget::Shape() const { return SkPath(); }
-
 void DragLocationAction::Poll(time::Timer& timer) {
   for (auto& held : held_widgets) {
     if (held) held->Poll(timer);
-  }
-}
-
-ui::Tock DragLocationWidget::Tick(time::Timer& timer) {
-  if (action.held_widgets.empty()) {
-    return {};
-  }
-  time_seconds = timer.NowSeconds();
-  return Tock::Drawing;
-}
-
-void DragLocationWidget::Draw(SkCanvas& canvas) const {
-  if (action.board_widget || action.held_widgets.empty()) return;
-
-  constexpr SkColor kMarkerColor = "#ffd76a"_color;
-  static const SkScalar kDashPattern[] = {3_mm, 2_mm};
-
-  SkPaint ring_paint;
-  ring_paint.setColor(kMarkerColor);
-  ring_paint.setStyle(SkPaint::kStroke_Style);
-  ring_paint.setStrokeWidth(0.5_mm);
-  ring_paint.setAntiAlias(true);
-  ring_paint.setPathEffect(SkDashPathEffect::Make(kDashPattern, (float)(-time_seconds * 8_mm)));
-
-  SkPaint tether_paint = ring_paint;
-  tether_paint.setAlphaf(0.8f);
-
-  auto lock = std::lock_guard(vm.mutex);
-  Vec2 drag_point = action.current_position;
-  for (auto& location : action.locations) {
-    if (!location || !location->object) continue;
-    for (auto& board : vm.boards) {
-      auto* resident = board->LocationOrNull(*location->object);
-      if (!resident || resident == location.get()) continue;
-
-      Vec2 center = board->position + resident->PeekPosition();
-      float radius = 1_cm;
-      if (resident->widget && resident->widget->toy) {
-        auto m = ui::TransformBetween(*resident->widget->toy, *this);
-        Rect bounds = resident->widget->toy->CoarseBounds().rect;
-        m.mapRect(&bounds.sk);
-        center = bounds.Center();
-        radius = bounds.Hypotenuse() / 2 + 2_mm;
-      }
-      canvas.drawCircle(center, radius, ring_paint);
-
-      Vec2 within_board = drag_point - board->position;
-      bool hovering = fabsf(within_board.x) <= 50_cm && fabsf(within_board.y) <= 50_cm;
-      if (hovering && location->widget && location->widget->toy) {
-        auto m = ui::TransformBetween(*location->widget->toy, *this);
-        Vec2 from = m.mapPoint(location->widget->toy->LocalAnchor());
-        Vec2 dir = Normalize(center - from);
-        canvas.drawLine(from, center - dir * radius, tether_paint);
-      }
-    }
   }
 }
 
@@ -307,22 +249,19 @@ void DragLocationAction::Init() {
   if (root.drag_action_count == 1) {
     root.black_hole.WakeAnimation();
   }
-  widget->ValidateHierarchy();
-  widget->RedrawThisFrame();
+  pointer.GetWidget()->ValidateHierarchy();
   root.WakeAnimation();
-  last_position = current_position = pointer.PositionOnCanvas();
+  current_position = pointer.PositionOnCanvas();
   Update();
 }
 
 DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&& locations_arg,
                                        BoardWidget& bw)
-    : Action(pointer),
-      locations(std::move(locations_arg)),
-      board_widget(&bw),
-      widget(new DragLocationWidget(pointer.GetWidget(), *this)) {
+    : Action(pointer), locations(std::move(locations_arg)), board_widget(&bw) {
   for (auto& location : std::ranges::reverse_view(locations)) {
     auto& lw = bw.toys.FindOrMake(*location, &bw);
-    lw.local_anchor = pointer.PositionWithin(lw.ToyForObject());
+    auto& toy = lw.ToyForObject();
+    lw.local_anchor = toy.CoarseBounds().Clamp(pointer.PositionWithin(toy));
     location->WakeToys();
   }
   SetRadar(bw, 1);
@@ -331,14 +270,13 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
 }
 
 DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&& locations_arg)
-    : Action(pointer),
-      locations(std::move(locations_arg)),
-      widget(new DragLocationWidget(pointer.GetWidget(), *this)) {
+    : Action(pointer), locations(std::move(locations_arg)) {
   for (auto& location : std::ranges::reverse_view(locations)) {
     auto lw_unique = LocationWidget::MakePointerOwned(pointer.GetWidget(), *location);
     auto* lw = lw_unique.get();
     held_widgets.insert(held_widgets.begin(), std::move(lw_unique));
-    lw->local_anchor = pointer.PositionWithin(lw->ToyForObject());
+    auto& toy = lw->ToyForObject();
+    lw->local_anchor = toy.CoarseBounds().Clamp(pointer.PositionWithin(toy));
     location->WakeToys();
   }
   Init();
@@ -357,8 +295,14 @@ DragLocationAction::~DragLocationAction() {
     auto matrix =
         Location::ToMatrix(location.Position(widget), location.Scale(widget), *widget.local_anchor);
     widget.local_anchor.reset();
+    widget.stable_position.reset();
     Location::FromMatrix(matrix, widget.LocalAnchor(), location.Position(widget),
                          location.Scale(widget));
+    if (widget.toy) {
+      widget.snap_pose = widget.toy->local_to_parent.asM33();
+      widget.position_vel = {};
+      widget.scale_vel = 0;
+    }
     widget.RedrawThisFrame();
   };
 
@@ -384,15 +328,15 @@ DragLocationAction::~DragLocationAction() {
         SettleAnchor(*location);
         Location* resident = location->object ? board->LocationOrNull(*location->object) : nullptr;
         if (resident && resident != location.get()) {
-          if (resident->widget) {
-            auto* lw = i < held_widgets.size() ? static_cast<LocationWidget*>(held_widgets[i].get())
-                                               : nullptr;
-            if (lw && lw->toy) {
-              resident->widget->AddIncomingFlight(
-                  ui::TransformBetween(*lw->toy, *resident->widget));
-            } else {
-              resident->widget->WakeAnimation();
-            }
+          auto* lw = i < held_widgets.size() ? static_cast<LocationWidget*>(held_widgets[i].get())
+                                             : nullptr;
+          if (lw && lw->toy) {
+            lw->location_weak = resident->AcquireWeakPtr();
+            lw->ghost = true;
+            lw->WakeAnimation();
+            if (auto* pw = pointer.GetWidget()) pw->AdoptZombie(std::move(held_widgets[i]));
+          } else if (auto* resident_widget = bw->toys.FindOrNull(*resident)) {
+            resident_widget->WakeAnimation();
           }
         } else {
           GiveToBoard(*bw, *board, i);

@@ -183,6 +183,7 @@ std::unique_ptr<LocationWidget> LocationWidget::MakeBoardOwned(ui::Widget* paren
     widget->toy = obj_toy;
     obj_toy->Reparent(*widget);
     widget->layers.OrderInside(widget->toy.Get());
+    widget->snap_pose = obj_toy->local_to_parent.asM33();
   }
   return widget;
 }
@@ -194,6 +195,7 @@ std::unique_ptr<LocationWidget> LocationWidget::MakePointerOwned(ui::Widget* par
     widget->toy = static_cast<ObjectToy*>(premade.get());
     widget->toy->Reparent(*widget);
     widget->layers.OrderInside(widget->toy.Get());
+    widget->snap_pose = widget->toy->local_to_parent.asM33();
     widget->owned_toy = std::move(premade);
   }
   return widget;
@@ -213,6 +215,7 @@ ObjectToy& LocationWidget::ToyForObject() {
         scale = toy->GetBaseScale();
         toy->local_to_parent =
             SkM44(Location::ToMatrix(loc->Position(*this), scale * 1.2, LocalAnchor()));
+        snap_pose = toy->local_to_parent.asM33();
         transparency = 1;
         layers.OrderInside(toy.Get());
       }
@@ -229,13 +232,6 @@ Vec2 LocationWidget::LocalAnchor() const {
     return toy->LocalAnchor();
   }
   return Vec2();
-}
-
-void LocationWidget::AddIncomingFlight(const SkMatrix& source) {
-  IncomingFlight flight;
-  Location::FromMatrix(source, LocalAnchor(), flight.position, flight.scale);
-  incoming_flights.push_back(flight);
-  WakeAnimation();
 }
 
 SkPath LocationWidget::Shape() const {
@@ -267,7 +263,9 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
     return tock;
   }
 
-  tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.1, transparency);
+  auto transparency_progress =
+      animation::ExponentialApproach(ghost ? 1 : 0, timer.d, 0.1, transparency);
+  tock.drawing |= transparency_progress;
 
   ToyForObject();  // fills toy
 
@@ -280,42 +278,53 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
   if (toy) {
     toy->shadow_elevation = 1_mm + elevation * 8_mm;
     Vec2 local_pivot = LocalAnchor();
-    Vec2 position_curr;
-    float scale_curr;
-    Location::FromMatrix(toy->local_to_parent.asM33(), local_pivot, position_curr, scale_curr);
+    Vec2 snap_position;
+    float snap_scale;
+    Location::FromMatrix(snap_pose, local_pivot, snap_position, snap_scale);
 
-    Vec2& loc_position = loc->Position(*this);
-    tock.drawing |= animation::LowLevelSpringTowards(loc->Scale(*this), timer.d, kScaleSpringPeriod,
-                                                     kSpringHalfTime, scale_curr, scale_vel);
-    tock.drawing |= animation::LowLevelSineTowards(loc_position.x, timer.d, kPositionSpringPeriod,
-                                                   position_curr.x, position_vel.x);
-    tock.drawing |= animation::LowLevelSineTowards(loc_position.y, timer.d, kPositionSpringPeriod,
-                                                   position_curr.y, position_vel.y);
-
-    toy->local_to_parent = SkM44(Location::ToMatrix(position_curr, scale_curr, local_pivot));
-
-    for (Size i = incoming_flights.size(); i-- > 0;) {
-      auto& flight = incoming_flights[i];
-      auto scale_progress = animation::LowLevelSpringTowards(
-          scale_curr, timer.d, kScaleSpringPeriod, kSpringHalfTime, flight.scale, flight.scale_vel);
-      auto x_progress =
-          animation::LowLevelSineTowards(position_curr.x, timer.d, kPositionSpringPeriod,
-                                         flight.position.x, flight.position_vel.x);
-      auto y_progress =
-          animation::LowLevelSineTowards(position_curr.y, timer.d, kPositionSpringPeriod,
-                                         flight.position.y, flight.position_vel.y);
-      tock.drawing |= scale_progress;
-      tock.drawing |= x_progress;
-      tock.drawing |= y_progress;
-      tock.drawing |= animation::ExponentialApproach(1, timer.d, 0.1, flight.transparency);
-      if (scale_progress.settled && x_progress.settled && y_progress.settled) {
-        incoming_flights.EraseIndex(i);
+    Vec2 target_position;
+    float target_scale;
+    if (ghost) {
+      target_position = loc->PeekPosition();
+      target_scale = loc->PeekScale();
+      if (auto board = loc->LockBoard()) {
+        target_position += board->position;
       }
+    } else {
+      target_position = loc->Position(*this);
+      target_scale = loc->Scale(*this);
+    }
+    auto scale_progress = animation::LowLevelSpringTowards(
+        target_scale, timer.d, kScaleSpringPeriod, kSpringHalfTime, snap_scale, scale_vel);
+    auto x_progress = animation::LowLevelSineTowards(
+        target_position.x, timer.d, kPositionSpringPeriod, snap_position.x, position_vel.x);
+    auto y_progress = animation::LowLevelSineTowards(
+        target_position.y, timer.d, kPositionSpringPeriod, snap_position.y, position_vel.y);
+    tock.drawing |= scale_progress;
+    tock.drawing |= x_progress;
+    tock.drawing |= y_progress;
+
+    snap_pose = Location::ToMatrix(snap_position, snap_scale, local_pivot);
+    if (stable_position) {
+      tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.1, grip_offset.x);
+      tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.1, grip_offset.y);
+      toy->local_to_parent = SkM44(Location::ToMatrix(*stable_position + grip_offset - local_pivot,
+                                                      snap_scale, local_pivot));
+    } else {
+      toy->local_to_parent = SkM44(snap_pose);
+    }
+
+    if (ghost && scale_progress.settled && x_progress.settled && y_progress.settled &&
+        transparency_progress.settled) {
+      toy->MarkDead(timer.now);
+      MarkDead(timer.now);
     }
   }
 
   // Connection widgets rely on position, scale & transparency so make sure they're updated.
-  loc->InvalidateConnectionWidgets(true, false);
+  if (!ghost) {
+    loc->InvalidateConnectionWidgets(true, false);
+  }
 
   {
     float target_elevation = IsDragged(*this) ? 1 : 0;
@@ -365,31 +374,53 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
   float line_height = ui::kLetterSize * 1.5;
   auto& font = ui::GetFont();
 
-  for (auto& flight : incoming_flights) {
-    int save = canvas.save();
-    canvas.concat(Location::ToMatrix(flight.position, flight.scale, LocalAnchor()));
-    SkPaint flight_paint;
-    flight_paint.setAlphaf(1.f - flight.transparency);
-    Optional<Rect> flight_bounds = toy->subtree_draw_bounds;
-    if (flight_bounds) *flight_bounds = ShadowBounds(*flight_bounds, toy->shadow_elevation);
-    canvas.saveLayer(flight_bounds ? &flight_bounds->sk : nullptr, &flight_paint);
-    toy->DrawStack(canvas);
-    canvas.restoreToCount(save);
+  SkMatrix draw_pose = toy->local_to_parent.asM33();
+  Vec2 anchor = LocalAnchor();
+  SkMatrix toy_to_window = SkMatrix::Concat(local_to_window, draw_pose);
+  Vec2 stable_px = toy_to_window.mapPoint(anchor);
+  Vec2 snapped_px = local_to_window.mapPoint(snap_pose.mapPoint(anchor));
+  float gap = Length(snapped_px - stable_px);
+  float alpha = 1.f - transparency;
+  int save = canvas.save();
+
+  if (gap >= 1) {
+    if (auto ink = toy->subtree_draw_bounds) {
+      Rect ink_px = ShadowBounds(*ink, toy->shadow_elevation);
+      toy_to_window.mapRect(&ink_px.sk);
+      Rect layer_px = ink_px;
+      layer_px.ExpandToInclude(ink_px.MoveBy(snapped_px - stable_px));
+      layer_px = layer_px.Outset(4);  // r/g/b split margin
+
+      Status status;
+      static auto effect = resources::CompileShader(embedded::assets_pull_rt_sksl, status);
+      if (effect) {
+        SkRuntimeEffectBuilder builder(effect);
+        builder.uniform("iStable") = stable_px;
+        builder.uniform("iSnapped") = snapped_px;
+        builder.uniform("iPlateau") = local_to_window.mapRadius(5_mm);
+        SkPaint pull_paint;
+        pull_paint.setAlphaf(alpha);
+        pull_paint.setImageFilter(SkImageFilters::RuntimeShader(builder, "iToy", nullptr));
+        canvas.resetMatrix();
+        canvas.saveLayer(&layer_px.sk, &pull_paint);
+        canvas.concat(local_to_window);
+        alpha = 1;  // folded into the pull layer
+      } else {
+        ERROR_ONCE << "pull_rt.sksl: " << status;
+      }
+    }
   }
 
-  int saveCount = canvas.save();
-  canvas.concat(toy->local_to_parent);
-  if (transparency > 0) {
+  canvas.concat(draw_pose);
+  if (alpha < 1) {
     SkPaint alpha_paint;
-    alpha_paint.setAlphaf(1.f - transparency);
+    alpha_paint.setAlphaf(alpha);
     Optional<Rect> layer_bounds = toy->subtree_draw_bounds;
     if (layer_bounds) *layer_bounds = ShadowBounds(*layer_bounds, toy->shadow_elevation);
     canvas.saveLayer(layer_bounds ? &layer_bounds->sk : nullptr, &alpha_paint);
   }
-
   toy->DrawStack(canvas);
-
-  canvas.restoreToCount(saveCount);
+  canvas.restoreToCount(save);
 
   auto loc = LockLocation();
   if (!loc) {
@@ -765,11 +796,10 @@ void AnimateGrowFrom(Location& source, Location& grown) {
 void LocationWidget::OnReparent(ui::Widget& new_parent, SkM44& fix) {
   auto& toy = ToyForObject();
   toy.local_to_parent.postConcat(fix);
-  {  // Transform velocities
-    auto fix33 = fix.asM33();
-    fix33.mapVector(position_vel);
-    fix33.mapRadius(scale_vel);
-  }
+  auto fix33 = fix.asM33();
+  snap_pose.postConcat(fix33);
+  fix33.mapVector(position_vel);
+  fix33.mapRadius(scale_vel);
 }
 
 void LocationWidget::OnChildReparentedAway(ui::Widget& child) {

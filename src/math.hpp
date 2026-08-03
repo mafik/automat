@@ -509,6 +509,24 @@ union RRect {
   // At the moment only supports simple RRects.
   void EquidistantPoints(std::span<Vec2> points) const;
 
+  // Nearest point to `p` within this rounded rect.
+  Vec2 Clamp(Vec2 p) const {
+    p.x = std::clamp(p.x, rect.left, rect.right);
+    p.y = std::clamp(p.y, rect.bottom, rect.top);
+    constexpr Vec2 kInward[4] = {{1, 1}, {-1, 1}, {-1, -1}, {1, -1}};
+    const Vec2 corners[4] = {rect.BottomLeftCorner(), rect.BottomRightCorner(),
+                             rect.TopRightCorner(), rect.TopLeftCorner()};
+    for (int i = 0; i < 4; ++i) {
+      Vec2 arc_center = corners[i] + kInward[i] * radii[i];
+      Vec2 v = p - arc_center;
+      if (v.x * kInward[i].x < 0 && v.y * kInward[i].y < 0) {
+        float len = Length(v / radii[i]);
+        if (len > 1) p = arc_center + v / len;
+      }
+    }
+    return p;
+  }
+
   constexpr Vec2 Center() const { return rect.Center(); }
 
   constexpr RRect Outset(float amount) {

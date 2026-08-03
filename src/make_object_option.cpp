@@ -28,9 +28,10 @@ std::unique_ptr<Action> MakeObjectOption::Activate(ui::Pointer& pointer) const {
   loc->InsertHere(std::move(obj));
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
   auto action = std::make_unique<DragLocationAction>(pointer, std::move(loc));
-  // Resetting the anchor makes the object dragged by the center point
-  if (action->locations.front()->widget)
-    action->locations.front()->widget->local_anchor = Vec2(0, 0);
+  // Drag by the point of the toy's bounds nearest to its origin, not by the menu position.
+  if (auto& widget = action->locations.front()->widget) {
+    widget->local_anchor = widget->ToyForObject().CoarseBounds().Clamp(Vec2(0, 0));
+  }
   return action;
 }
 std::unique_ptr<Option> MakeObjectOption::Clone() const {

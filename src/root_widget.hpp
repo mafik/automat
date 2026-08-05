@@ -129,7 +129,7 @@ struct RootWidget final : Widget {
 
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
-  Compositor GetCompositor() const override { return Compositor::COPY_RAW; }
+  Compositor GetCompositor() const override { return Compositor::WARP; }
 
   Vec2 move_velocity = Vec2(0, 0);
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;

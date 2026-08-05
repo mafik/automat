@@ -227,28 +227,19 @@ struct LocationWidget : ObjectToy {
   constexpr static float kScaleSpringPeriod = 0.3;
   constexpr static float kSpringHalfTime = kScaleSpringPeriod / 4;
 
-  WeakPtr<Location> location_weak;
-
   // Animation state (moved from Location)
-  float transparency = 0;
   animation::SpringV2<float> elevation;
-  Optional<Vec2> local_anchor;
   Vec2 position_vel = {};
   float scale_vel = 0;
   MortalPtr<ObjectToy> toy;  // cached Object Toy (auto-nulled on destruction)
-  std::vector<ui::Widget*> overlays;
 
   // Set while the widget is dragged outside of a Board (toy is pointer-owned vs board-owned)
   std::unique_ptr<Toy> owned_toy;
 
   // A merged copy: its location is the resident it flies into, fading out; dies on arrival.
-  bool ghost = false;
+  bool merging = false;
 
-  // The on-screen point holding the toy (set while dragged); the toy is drawn anchored to it.
-  Optional<Vec2> stable_position;
-  Vec2 grip_offset = {};  // slack between the stable position and the drawn anchor; decays to zero
-  // Springs towards the snapped position (Location's position & scale); the stretch's far end.
-  SkMatrix snap_pose = SkMatrix::I();
+  float local_to_parent_weight_target = 1;
 
   MortalList<LocationWidget> overlapping_above;
   MortalList<LocationWidget> overlapping_below;
@@ -263,10 +254,15 @@ struct LocationWidget : ObjectToy {
   // Keep Toy owned locally.
   static std::unique_ptr<LocationWidget> MakePointerOwned(ui::Widget* parent, Location& loc);
 
-  Ptr<Location> LockLocation() const { return location_weak.Lock(); }
+  Ptr<Location> LockLocation() const { return LockObject<Location>(); }
 
   ObjectToy& ToyForObject();
   Vec2 LocalAnchor() const override;
+
+  // The pointer-bound texture anchor placed by AnchorToPointer; null when not grabbed.
+  ui::Widget::TextureAnchor* GrabAnchor() const;
+
+  void AnchorToPointer(ui::Pointer&, Vec2 grab);
 
   // Widget overrides
   Tock Tick(time::Timer& timer) override;

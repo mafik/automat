@@ -122,33 +122,44 @@ to show where the object already is. When the drop position was intended, one bo
 after the merge places the resident widget there.
 
 Feedback: the merge is announced before it happens, by the same mechanism that previews every
-other snap. A dragged widget has two poses. The snapped pose springs towards where the Location
-would rest — `Location::Position` and `Location::Scale`, written every update from the drop
-target's `DropSnap`, or set to the resting copy's position and scale while the drag hovers a
-board that owns the object (`DragLocationAction::Update`, src/drag_action.cpp). The drawn pose
-is anchored to the stable position — the on-screen point where the pointer holds the toy — so a
-held widget never follows a distant snapped pose off the screen, where the renderer would clip
-it. `LocationWidget::Tick` (src/location.cpp) animates both; `LocationWidget::Draw` renders the
-body at the drawn pose with its material pulled towards the snapped pose (assets/pull_rt.sksl).
-A region of roughly one finger around the held point stays rigid, the rest of the body is
-displaced with bounded compression, and the r/g/b channels separate slightly along the pull,
-more for distant targets. Because the preview reads `Location::Position`, every `DropSnap`
-implementation gets it with no code of its own: the board grid, the merge onto an owning board,
-and the black hole, which shrinks the held widget in place. It is a separate decoration from the
-connection radar, because the radar's only function is to show where a dragged connection would
-auto-connect.
+other snap. The widget's body is drawn at the snapped pose, which springs towards where the
+Location would rest — `Location::Position` and `Location::Scale`, written every update from the
+drop target's `DropSnap`, or set to the resting copy's position and scale while the drag hovers
+a board that owns the object (`DragLocationAction::Update`, src/drag_action.cpp). The stretch
+towards the hand is not drawn by the location at all: the location only places a texture anchor
+(`LocationWidget::AnchorToPointer`, src/location.cpp) — the grab point, bound to the pointer —
+and the `WARP` compositor deforms the rendered texture so the body follows the anchor
+(assets/warp.sksl, `WidgetDrawable::onDraw` in src/renderer.cpp): an anchor's influence
+reach grows with its displacement, so the texture around the grab is displaced to the hand
+while a tapered tail stays stretched towards the snapped position. The stretch exists only while the
+widget's local coordinate space holds the texture against the anchors —
+`Widget::local_to_parent_weight`, the shader's `weightBias`.
+`DragLocationAction::Update` aims that weight at 1 while a drop target imposes a pose and at 0
+while the drag is over no target, where the lone grab anchor displaces the texture rigidly;
+the location eases the weight between the two, so leaving or entering a board is a fade rather
+than a mode switch. An anchor holds the texture rigidly within its grip `radius`; beyond that
+its pull falls off with distance, dropping to half at `decay` beyond the grip edge
+(`Widget::TextureAnchor`, src/widget.hpp; assets/warp_field.sksl). A merge drop writes the
+displacement the pointer was producing into the anchor (`Widget::TextureAnchor::warp_by`) and
+springs that displacement to zero, releasing the stretch. The
+displacement is stored in the anchor rather than derived from the position recorded in the
+rendered texture, so a widget that re-renders during the flight keeps it.
+Because the pointer-bound anchor is
+resolved against the live pointer at composite time, the body follows the hand even while the
+widget's animation sleeps. Because
+the snapped pose reads `Location::Position`, every `DropSnap` implementation gets the preview
+with no code of its own: the board grid, the merge onto an owning board, and the black hole,
+which shrinks the held widget in place. It is a separate decoration from the connection radar,
+because the radar's only function is to show where a dragged connection would auto-connect.
 
-The stretch is a displacement of the held widget's own rendering, so it is made of the object
-the user is holding rather than of ink invented for the occasion, and it never samples the
-target's texture, which may be off-screen. Both ends mark the same material point: the held
-point on the drawn body and its image under the snapped pose. There is at most one merge
-target: an object rests on at most one board while a copy of it is in hand.
+The stretch is a deformation of the held widget's own texture, so it is made of the object the
+user is holding rather than of ink invented for the occasion, and it never samples the target's
+texture. There is at most one merge target: an object rests on at most one board while a copy
+of it is in hand.
 
-The point where the widget is held is clamped to the nearest point within the toy's coarse
-bounds (`RRect::Clamp`, src/math.hpp), so the rigid region around the finger always holds ink.
-A fresh clone does not appear at the pointer: the slack between its spawn pose and the stable
-position is stored (`LocationWidget::grip_offset`) and decays to zero, so the clone grows out
-of its original and glides into the hand.
+The grab point is clamped to the nearest point within the toy's coarse bounds (`RRect::Clamp`,
+src/math.hpp), so the stretched texture is always ink. A fresh clone's body sticks to the hand
+from the first frame, trailing its tail back to the original it was pulled out of.
 
 The mark also identifies the pickup mode: a duplication stretches towards its original from the
 first frame, while an extraction has nothing to merge into and rests under the pointer.

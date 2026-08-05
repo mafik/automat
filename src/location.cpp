@@ -172,7 +172,7 @@ void Location::FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_
 ///////////////////////////////////////////////////////////////////////////////
 
 LocationWidget::LocationWidget(ui::Widget* parent, Location& loc)
-    : ObjectToy(parent, loc), elevation(0), location_weak(loc.AcquireWeakPtr()) {
+    : ObjectToy(parent, loc), elevation(0) {
   loc.widget = this;
 }
 
@@ -183,7 +183,6 @@ std::unique_ptr<LocationWidget> LocationWidget::MakeBoardOwned(ui::Widget* paren
     widget->toy = obj_toy;
     obj_toy->Reparent(*widget);
     widget->layers.OrderInside(widget->toy.Get());
-    widget->snap_pose = obj_toy->local_to_parent.asM33();
   }
   return widget;
 }
@@ -195,7 +194,6 @@ std::unique_ptr<LocationWidget> LocationWidget::MakePointerOwned(ui::Widget* par
     widget->toy = static_cast<ObjectToy*>(premade.get());
     widget->toy->Reparent(*widget);
     widget->layers.OrderInside(widget->toy.Get());
-    widget->snap_pose = widget->toy->local_to_parent.asM33();
     widget->owned_toy = std::move(premade);
   }
   return widget;
@@ -215,8 +213,7 @@ ObjectToy& LocationWidget::ToyForObject() {
         scale = toy->GetBaseScale();
         toy->local_to_parent =
             SkM44(Location::ToMatrix(loc->Position(*this), scale * 1.2, LocalAnchor()));
-        snap_pose = toy->local_to_parent.asM33();
-        transparency = 1;
+        alpha = 0;
         layers.OrderInside(toy.Get());
       }
     }
@@ -224,14 +221,31 @@ ObjectToy& LocationWidget::ToyForObject() {
   return *toy;
 }
 
+ui::Widget::TextureAnchor* LocationWidget::GrabAnchor() const {
+  if (toy) {
+    for (auto& anchor : toy->texture_anchors) {
+      if (anchor.pointer) {
+        return &anchor;
+      }
+    }
+  }
+  return nullptr;
+}
+
 Vec2 LocationWidget::LocalAnchor() const {
-  if (local_anchor.has_value()) {
-    return local_anchor.value();
+  if (auto* grab = GrabAnchor()) {
+    return grab->pos;
   }
   if (toy) {
     return toy->LocalAnchor();
   }
   return Vec2();
+}
+
+void LocationWidget::AnchorToPointer(ui::Pointer& pointer, Vec2 grab) {
+  auto& toy = ToyForObject();
+  Vec2 offset = grab - pointer.PositionWithin(toy);
+  toy.texture_anchors = {{grab, ui::Widget::TextureAnchor::NewId(), &pointer, offset, 1_cm}};
 }
 
 SkPath LocationWidget::Shape() const {
@@ -251,8 +265,8 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
 
   if (!loc) {
     // Location is dead — fade out and eventually expire
-    auto transparency_progress = animation::ExponentialApproach(1, timer.d, 0.1, transparency);
-    tock.drawing |= transparency_progress;
+    auto alpha_progress = animation::ExponentialApproach(0, timer.d, 0.1, alpha);
+    tock.drawing |= alpha_progress;
     if (!tock.ing) {
       // Bring our cached ObjectToy with us so it doesn't outlive the path back to RootWidget.
       if (toy && toy->parent == this) {
@@ -263,9 +277,8 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
     return tock;
   }
 
-  auto transparency_progress =
-      animation::ExponentialApproach(ghost ? 1 : 0, timer.d, 0.1, transparency);
-  tock.drawing |= transparency_progress;
+  auto alpha_progress = animation::LinearApproach(merging ? 0 : 1, timer.d, 2, alpha);
+  tock.drawing |= alpha_progress;
 
   ToyForObject();  // fills toy
 
@@ -280,11 +293,11 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
     Vec2 local_pivot = LocalAnchor();
     Vec2 snap_position;
     float snap_scale;
-    Location::FromMatrix(snap_pose, local_pivot, snap_position, snap_scale);
+    Location::FromMatrix(toy->local_to_parent.asM33(), local_pivot, snap_position, snap_scale);
 
     Vec2 target_position;
     float target_scale;
-    if (ghost) {
+    if (merging) {
       target_position = loc->PeekPosition();
       target_scale = loc->PeekScale();
       if (auto board = loc->LockBoard()) {
@@ -304,25 +317,46 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
     tock.drawing |= x_progress;
     tock.drawing |= y_progress;
 
-    snap_pose = Location::ToMatrix(snap_position, snap_scale, local_pivot);
-    if (stable_position) {
-      tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.1, grip_offset.x);
-      tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.1, grip_offset.y);
-      toy->local_to_parent = SkM44(Location::ToMatrix(*stable_position + grip_offset - local_pivot,
-                                                      snap_scale, local_pivot));
-    } else {
-      toy->local_to_parent = SkM44(snap_pose);
+    toy->local_to_parent = SkM44(Location::ToMatrix(snap_position, snap_scale, local_pivot));
+
+    if (merging) {
+      if (!toy->texture_anchors.empty()) {
+        auto& anchor = toy->texture_anchors.front();
+        struct AnchorAnimationState {
+          Vec2 warp_by_velocity = {};
+        };
+        if (anchor.animation_state.size() != sizeof(AnchorAnimationState)) {
+          anchor.animation_state.resize(sizeof(AnchorAnimationState));
+          new (anchor.animation_state.data()) AnchorAnimationState;
+        }
+        AnchorAnimationState& animation_state =
+            *reinterpret_cast<AnchorAnimationState*>(anchor.animation_state.data());
+        animation::Progress release;
+        constexpr float kPeriod = 0.2;
+        constexpr float kHalfTime = 0.03;
+        release |= animation::LowLevelSpringTowards(
+            0, timer.d, kPeriod, kHalfTime, anchor.warp_by.x, animation_state.warp_by_velocity.x);
+        release |= animation::LowLevelSpringTowards(
+            0, timer.d, kPeriod, kHalfTime, anchor.warp_by.y, animation_state.warp_by_velocity.y);
+        tock.drawing |= release;
+        if (release.settled) {
+          toy->texture_anchors.clear();
+        }
+      }
+      if ((toy->texture_anchors.empty() && scale_progress.settled && x_progress.settled &&
+           y_progress.settled) ||
+          alpha_progress.settled) {
+        toy->MarkDead(timer.now);
+        MarkDead(timer.now);
+      }
     }
 
-    if (ghost && scale_progress.settled && x_progress.settled && y_progress.settled &&
-        transparency_progress.settled) {
-      toy->MarkDead(timer.now);
-      MarkDead(timer.now);
-    }
+    tock.drawing |= animation::ExponentialApproach(local_to_parent_weight_target, timer.d, 0.1,
+                                                   toy->local_to_parent_weight);
   }
 
-  // Connection widgets rely on position, scale & transparency so make sure they're updated.
-  if (!ghost) {
+  // Connection widgets rely on position, scale & alpha so make sure they're updated.
+  if (!merging) {
     loc->InvalidateConnectionWidgets(true, false);
   }
 
@@ -374,53 +408,8 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
   float line_height = ui::kLetterSize * 1.5;
   auto& font = ui::GetFont();
 
-  SkMatrix draw_pose = toy->local_to_parent.asM33();
-  Vec2 anchor = LocalAnchor();
-  SkMatrix toy_to_window = SkMatrix::Concat(local_to_window, draw_pose);
-  Vec2 stable_px = toy_to_window.mapPoint(anchor);
-  Vec2 snapped_px = local_to_window.mapPoint(snap_pose.mapPoint(anchor));
-  float gap = Length(snapped_px - stable_px);
-  float alpha = 1.f - transparency;
-  int save = canvas.save();
-
-  if (gap >= 1) {
-    if (auto ink = toy->subtree_draw_bounds) {
-      Rect ink_px = ShadowBounds(*ink, toy->shadow_elevation);
-      toy_to_window.mapRect(&ink_px.sk);
-      Rect layer_px = ink_px;
-      layer_px.ExpandToInclude(ink_px.MoveBy(snapped_px - stable_px));
-      layer_px = layer_px.Outset(4);  // r/g/b split margin
-
-      Status status;
-      static auto effect = resources::CompileShader(embedded::assets_pull_rt_sksl, status);
-      if (effect) {
-        SkRuntimeEffectBuilder builder(effect);
-        builder.uniform("iStable") = stable_px;
-        builder.uniform("iSnapped") = snapped_px;
-        builder.uniform("iPlateau") = local_to_window.mapRadius(5_mm);
-        SkPaint pull_paint;
-        pull_paint.setAlphaf(alpha);
-        pull_paint.setImageFilter(SkImageFilters::RuntimeShader(builder, "iToy", nullptr));
-        canvas.resetMatrix();
-        canvas.saveLayer(&layer_px.sk, &pull_paint);
-        canvas.concat(local_to_window);
-        alpha = 1;  // folded into the pull layer
-      } else {
-        ERROR_ONCE << "pull_rt.sksl: " << status;
-      }
-    }
-  }
-
-  canvas.concat(draw_pose);
-  if (alpha < 1) {
-    SkPaint alpha_paint;
-    alpha_paint.setAlphaf(alpha);
-    Optional<Rect> layer_bounds = toy->subtree_draw_bounds;
-    if (layer_bounds) *layer_bounds = ShadowBounds(*layer_bounds, toy->shadow_elevation);
-    canvas.saveLayer(layer_bounds ? &layer_bounds->sk : nullptr, &alpha_paint);
-  }
+  canvas.concat(toy->local_to_parent);
   toy->DrawStack(canvas);
-  canvas.restoreToCount(save);
 
   auto loc = LockLocation();
   if (!loc) {
@@ -797,7 +786,6 @@ void LocationWidget::OnReparent(ui::Widget& new_parent, SkM44& fix) {
   auto& toy = ToyForObject();
   toy.local_to_parent.postConcat(fix);
   auto fix33 = fix.asM33();
-  snap_pose.postConcat(fix33);
   fix33.mapVector(position_vel);
   fix33.mapRadius(scale_vel);
 }

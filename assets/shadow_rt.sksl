@@ -1,8 +1,7 @@
 // kind=shader
 
-uniform shader caster;      // caster texture, window-oriented
+uniform shader caster;      // silhouette source, evaluated in caster-local coordinates
 uniform shader height_map;  // R channel = receiver height / kMaxHeight
-uniform mat3 local_to_tex;     // caster local -> caster texture px
 uniform mat3 local_to_height;  // caster local -> height map px
 uniform float elevation;       // caster height, metres
 uniform half4 tint;            // premultiplied shadow color at full strength
@@ -37,7 +36,7 @@ vec4 main(vec2 local) {
     vec2 t = kTaps[i];
     float w = exp(-2.0 * dot(t, t));
     vec2 p = local + towards_caster + vec2(t.x * c - t.y * s, t.x * s + t.y * c) * radius;
-    coverage += w * caster.eval((local_to_tex * vec3(p, 1)).xy).a;
+    coverage += w * caster.eval(p).a;
     total += w;
   }
   coverage /= total;

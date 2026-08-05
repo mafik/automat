@@ -26,6 +26,7 @@
 #include "span.hpp"
 #include "str.hpp"
 #include "time.hpp"
+#include "units.hpp"
 #include "vec.hpp"
 
 #if defined(_MSC_VER)
@@ -116,6 +117,8 @@ struct Widget : OptionsProvider {
   MortalCoil mortal_coil;
   MortalPtr<Widget> parent;
   SkM44 local_to_parent = SkM44();
+
+  float local_to_parent_weight = 1;
 
   // TODO: maybe replace with subtree_shape_invalid
   SkM44 packed_local_to_parent = SkM44();  // used by PackFrame to recompute subtree_shape
@@ -276,23 +279,36 @@ struct Widget : OptionsProvider {
   // Compositors are a client-side feature and are implemented in WidgetDrawable::onDraw
   // (renderer.cpp).
   enum class Compositor {
-    // Copy this surface to the parent canvas. This ignores any anchor points & widget's
-    // local_to_parent transform.
-    COPY_RAW,
-    // Fill in the missing part of the widget using CRT-like glitch effect.
-    GLITCH,
-    // Deform the image based on returned anchor points.
-    ANCHOR_WARP,
+    // Warps the texture
+    WARP,
     // Limit scale using fancy zoom in effect.
     QUANTUM_REALM,
     // TODO: Add a value that will prevent rendering to separate texture.
   };
 
-  virtual Compositor GetCompositor() const { return Compositor::GLITCH; }
+  virtual Compositor GetCompositor() const { return Compositor::WARP; }
+
+  // `pos` is drawn displaced by `warp_by` plus, when a pointer is set, `pointer position - pos`.
+  struct TextureAnchor {
+    Vec2 pos;
+    uint32_t id = 0;
+    MortalPtr<Pointer> pointer;  // optional
+    Vec2 warp_by = {};
+    float decay = 5_mm;  // controls smoothness of the pull (outside radius)
+    float radius = 5_mm;
+    Str animation_state;
+
+    static uint32_t NewId();
+  };
+
+  // Maintained by the widget (typically in its Tick); empty by default.
+  SmallVec<TextureAnchor, 2> texture_anchors;
 
   // Metres above the board; > 0 makes this widget's texture cast a drop shadow onto layers
   // composited beneath it.
   float shadow_elevation = 0;
+
+  float alpha = 1;
 
   // Each Widget has a shape that defines its region of reactivity, in local coordinates.
   virtual SkPath Shape() const = 0;
@@ -374,8 +390,6 @@ struct Widget : OptionsProvider {
   }
 
   SkIRect CoverBoundsInWindowPx() const;
-
-  virtual Vec<Vec2> TextureAnchors() { return {}; }
 
   // This will draw the given child widget using it's precomputed texture (if available).
   //

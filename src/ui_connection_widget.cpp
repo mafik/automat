@@ -56,7 +56,10 @@ static Location* FindOnSameBoard(const automat::ArgumentToy& w, Object& obj) {
 }
 
 ConnectionWidget::ConnectionWidget(Widget* parent, Object& start, Argument::Table& arg)
-    : ArgumentToy(parent, start, &arg), tint(arg.tint.toSkColor()) {}
+    : ArgumentToy(parent, start, &arg), tint(arg.tint.toSkColor()) {
+  alpha = 0;
+  local_to_parent_weight = 0;
+}
 
 SpotlightWidget::SpotlightWidget(Widget* parent, Object& start, Argument::Table& arg)
     : ArgumentToy(parent, start, &arg) {}
@@ -154,7 +157,7 @@ void SpotlightWidget::Draw(SkCanvas& canvas) const {
 
 struct AutoconnectRadar : Widget {
   ArgumentToy& connection;
-  float alpha = 0;
+  float activation = 0;
   double time_seconds = 0;
   AutoconnectRadar(ArgumentToy* parent) : Widget(parent), connection(*parent) {}
   StrView Name() const override { return "AutoconnectRadar"; }
@@ -169,9 +172,9 @@ struct AutoconnectRadar : Widget {
 
   Tock Tick(time::Timer& timer) override {
     auto arg = connection.LockBind<Argument>();
-    auto progress =
-        animation::LinearApproach(arg ? connection.radar_alpha_target : 0, timer.d, 2.f, alpha);
-    if (progress.settled && alpha < 0.01f) {
+    auto progress = animation::LinearApproach(arg ? connection.radar_activation_target : 0, timer.d,
+                                              2.f, activation);
+    if (progress.settled && activation < 0.01f) {
       MarkDead(timer.now);
       return {};
     }
@@ -185,13 +188,13 @@ struct AutoconnectRadar : Widget {
     auto* from_ptr = FindOnSameBoard(connection, *arg.object_ptr);
     if (!from_ptr) return;
     Location& from = *from_ptr;
-    if (alpha < 0.01f) return;
+    if (activation < 0.01f) return;
     auto& pos_dir = connection.pos_dir;
 
     SkPaint radius_paint;
     SkColor4f tint = arg.table->tint;
     SkColor4f colors[] = {{tint.fR, tint.fG, tint.fB, 0},
-                          {tint.fR, tint.fG, tint.fB, alpha * 96 / 255.f},
+                          {tint.fR, tint.fG, tint.fB, activation * 96 / 255.f},
                           SkColors::kTransparent};
     float pos[] = {0, 1, 1};
     constexpr float kPeriod = 2.f;
@@ -204,38 +207,40 @@ struct AutoconnectRadar : Widget {
     // TODO: switch to drawArc instead
     float autoconnect_radius = arg.table->autoconnect_radius;
 
-    float crt_width = animation::SinInterp(alpha, 0.2f, 0.1f, 0.5f, 1.f) * autoconnect_radius * 2;
-    float crt_height = animation::SinInterp(alpha, 0.4f, 0.1f, 0.8f, 1.f) * autoconnect_radius * 2;
+    float crt_width =
+        animation::SinInterp(activation, 0.2f, 0.1f, 0.5f, 1.f) * autoconnect_radius * 2;
+    float crt_height =
+        animation::SinInterp(activation, 0.4f, 0.1f, 0.8f, 1.f) * autoconnect_radius * 2;
     SkRect crt_oval = Rect::MakeCenter(pos_dir.pos, crt_width, crt_height);
     canvas.drawArc(crt_oval, 0, 360, true, radius_paint);
 
     SkPaint stroke_paint;
-    stroke_paint.setColor(SkColor4f{tint.fR, tint.fG, tint.fB, alpha * 128 / 255.f});
+    stroke_paint.setColor(SkColor4f{tint.fR, tint.fG, tint.fB, activation * 128 / 255.f});
     stroke_paint.setStyle(SkPaint::kStroke_Style);
 
-    float radar_alpha_sin = sin((alpha - 0.5f) * M_PI) * 0.5f + 0.5f;
-    radar_alpha_sin *= radar_alpha_sin;
+    float radar_activation_sin = sin((activation - 0.5f) * M_PI) * 0.5f + 0.5f;
+    radar_activation_sin *= radar_activation_sin;
     constexpr float kQuadrantSweep = 80;
     float quadrant_offset = -fmod(t, 360) * 15;
-    canvas.drawArc(crt_oval, quadrant_offset - kQuadrantSweep / 2 * radar_alpha_sin,
-                   kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
-    canvas.drawArc(crt_oval, quadrant_offset + 90 - kQuadrantSweep / 2 * radar_alpha_sin,
-                   kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
-    canvas.drawArc(crt_oval, quadrant_offset + 180 - kQuadrantSweep / 2 * radar_alpha_sin,
-                   kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
-    canvas.drawArc(crt_oval, quadrant_offset + 270 - kQuadrantSweep / 2 * radar_alpha_sin,
-                   kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
+    canvas.drawArc(crt_oval, quadrant_offset - kQuadrantSweep / 2 * radar_activation_sin,
+                   kQuadrantSweep * radar_activation_sin, false, stroke_paint);
+    canvas.drawArc(crt_oval, quadrant_offset + 90 - kQuadrantSweep / 2 * radar_activation_sin,
+                   kQuadrantSweep * radar_activation_sin, false, stroke_paint);
+    canvas.drawArc(crt_oval, quadrant_offset + 180 - kQuadrantSweep / 2 * radar_activation_sin,
+                   kQuadrantSweep * radar_activation_sin, false, stroke_paint);
+    canvas.drawArc(crt_oval, quadrant_offset + 270 - kQuadrantSweep / 2 * radar_activation_sin,
+                   kQuadrantSweep * radar_activation_sin, false, stroke_paint);
 
     auto& font = GetFont();
     auto name = arg.table->name;
     SkRSXform transforms[name.size()];
     for (size_t i = 0; i < name.size(); ++i) {
       float i_fract = (i + 1.f) / (name.size() + 1.f);
-      float letter_a = (i_fract - 0.5f) * kQuadrantSweep / 180 / 2 * radar_alpha_sin * kPi +
+      float letter_a = (i_fract - 0.5f) * kQuadrantSweep / 180 / 2 * radar_activation_sin * kPi +
                        quadrant_offset / 180 * kPi;
 
-      float x = sin(letter_a) * autoconnect_radius * radar_alpha_sin;
-      float y = cos(letter_a) * autoconnect_radius * radar_alpha_sin;
+      float x = sin(letter_a) * autoconnect_radius * radar_activation_sin;
+      float y = cos(letter_a) * autoconnect_radius * radar_activation_sin;
       float w = font.sk_font.measureText(name.data() + i, 1, SkTextEncoding::kUTF8, nullptr);
 
       transforms[i] = SkRSXform::MakeFromRadians(font.font_scale, -letter_a, x, y, w / 2, 0);
@@ -244,7 +249,7 @@ struct AutoconnectRadar : Widget {
     auto text_blob =
         SkTextBlob::MakeFromRSXform(name.data(), name.size(), transforms_span, font.sk_font);
     SkPaint text_paint;
-    float text_alpha = animation::SinInterp(alpha, 0.5f, 0.0f, 1.f, 1.f);
+    float text_alpha = animation::SinInterp(activation, 0.5f, 0.0f, 1.f, 1.f);
     text_paint.setColor(SkColor4f{tint.fR, tint.fG, tint.fB, text_alpha});
 
     canvas.save();
@@ -269,7 +274,7 @@ struct AutoconnectRadar : Widget {
             }
             auto arcline = RouteCable(pos_dir, to_points, &canvas);
             auto it = ArcLine::Iterator(arcline);
-            float total_length = it.AdvanceToEnd() * alpha;
+            float total_length = it.AdvanceToEnd() * activation;
             Vec2 end_point = it.Position();
             float relative_dist = Length(pos_dir.pos - to_points[0].pos) / autoconnect_radius;
             auto path = arcline.ToPath(false, std::lerp(total_length, 0, relative_dist - 1));
@@ -282,7 +287,6 @@ struct AutoconnectRadar : Widget {
 
 struct PrototypeGhost : Widget {
   ArgumentToy& connection;
-  float alpha = 0;
   std::unique_ptr<ObjectToy> prototype_widget;
 
   PrototypeGhost(ArgumentToy* parent, Argument::Table& table)
@@ -303,8 +307,8 @@ struct PrototypeGhost : Widget {
       MarkDead(timer.now);
       return {};
     }
-    float target = arg.IsConnected() ? 0 : connection.prototype_alpha_target;
-    auto progress = animation::LinearApproach(target, timer.d, 2.f, alpha);
+    float target = (arg.IsConnected() ? 0 : connection.prototype_alpha_target) * 0.4f;
+    auto progress = animation::LinearApproach(target, timer.d, 0.8f, alpha);
     if (progress.settled && alpha < 0.01f) {
       MarkDead(timer.now);
       return {};
@@ -316,13 +320,6 @@ struct PrototypeGhost : Widget {
     Tock tock;
     tock.drawing |= progress;
     return tock;
-  }
-
-  void Draw(SkCanvas& canvas) const override {
-    Rect bounds = prototype_widget->Shape().getBounds();
-    canvas.saveLayerAlphaf(&bounds.sk, alpha * 0.4f);
-    BakeChildren(canvas);
-    canvas.restore();
   }
 };
 
@@ -355,7 +352,7 @@ struct ConnectionWidgetLocker {
   Object* EndObj() const { return end_iface.Owner<Object>(); }
 };
 
-// Recomputes pos_dir & to_points. Shared by Tick (animation) and TextureAnchors (texture stretch).
+// Recomputes pos_dir & to_points.
 static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
   if (a.start_widget && a.start_arg) {
     w.pos_dir = a.start_widget->ArgStart(*a.start_arg.table, a.board_widget);
@@ -387,6 +384,38 @@ static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
       }
       w.to_points.pop_back();
     }
+  }
+}
+
+constexpr uint32_t kStartAnchorId = 1;
+constexpr uint32_t kEndAnchorId = 2;
+constexpr float kEndpointAnchorRadius = 2_cm;
+constexpr float kEndpointAnchorDecay = 2_cm;
+
+static Widget::TextureAnchor EndpointAnchor(ConnectionWidget& w, uint32_t id, ui::Widget* toy,
+                                            Vec2 pos) {
+  if (toy) {
+    for (auto& anchor : toy->texture_anchors) {
+      if (anchor.pointer) {
+        Vec2 pointer_pos = Vec2(TransformBetween(*toy, w).mapPoint(anchor.pos - anchor.warp_by));
+        return {pos, id, anchor.pointer, pos - pointer_pos, kEndpointAnchorDecay,
+                kEndpointAnchorRadius};
+      }
+    }
+  }
+  return {pos, id, nullptr, {}, kEndpointAnchorDecay, kEndpointAnchorRadius};
+}
+
+static void UpdateTextureAnchors(ConnectionWidget& w, ConnectionWidgetLocker& a) {
+  w.texture_anchors.clear();
+  w.texture_anchors.push_back(EndpointAnchor(w, kStartAnchorId, a.start_widget, w.pos_dir.pos));
+  if (w.manual_position.has_value()) {
+    w.texture_anchors.push_back(
+        {w.manual_grab, kEndAnchorId, w.manual_pointer, {}, kEndpointAnchorDecay,
+         kEndpointAnchorRadius});
+  } else if (a.end_widget && w.end_anchor_local.has_value()) {
+    w.texture_anchors.push_back(EndpointAnchor(w, kEndAnchorId, a.end_widget,
+                                               a.end_transform.mapPoint(*w.end_anchor_local)));
   }
 }
 
@@ -458,13 +487,13 @@ static Tock TickVisibility(ConnectionWidget& w, ConnectionWidgetLocker& a, time:
   Tock tock;
   tock.shaping |= animation::LinearApproach(w.hidden ? 1 : 0, timer.d, 5, w.transparency);
 
-  float loc_transparency = 0.f;
+  float loc_alpha = 1.f;
   if (auto* start_loc = FindOnSameBoard(w, *a.StartObj())) {
     if (start_loc->widget) {
-      loc_transparency = start_loc->widget->transparency;
+      loc_alpha = start_loc->widget->alpha;
     }
   }
-  w.alpha = (1.f - loc_transparency) * (1.f - w.transparency);
+  w.alpha = loc_alpha * (1.f - w.transparency);
   return tock;
 }
 
@@ -512,6 +541,7 @@ ui::Tock ConnectionWidget::Tick(time::Timer& timer) {
   RouteArcline(*this, false);
   tock |= TickRefusal(*this, timer);
   ComputeEndAnchor(*this, a, arcline);
+  UpdateTextureAnchors(*this, a);
   TickAutoconnectUI(timer);
   TickSplits();
   return tock;
@@ -571,6 +601,7 @@ ui::Tock CableWidget::Tick(time::Timer& timer) {
   tock.shaping |= SimulateCablePhysics(timer, *state, pos_dir, to_points);
 
   ComputeEndAnchor(*this, a, state->arcline);
+  UpdateTextureAnchors(*this, a);
   TickAutoconnectUI(timer);
   TickSplits();
   return tock;
@@ -601,28 +632,18 @@ ui::Tock RoutedCableWidget::Tick(time::Timer& timer) {
   tock.drawing |= cable_width.Tick(timer);
 
   ComputeEndAnchor(*this, a, arcline);
+  UpdateTextureAnchors(*this, a);
   TickAutoconnectUI(timer);
   TickSplits();
   return tock;
 }
 
 void RoutedCableWidget::Draw(SkCanvas& canvas) const {
-  bool using_layer = false;
-
-  if (alpha < 1.0f) {
-    using_layer = true;
-    canvas.saveLayerAlphaf(nullptr, alpha);
-  }
-
   if (cable_width > 0.01_mm && alpha > 0.01f && arcline) {
     auto color = SkColorSetA(tint, 255 * cable_width.value / 2_mm);
     auto color_filter = color::MakeTintFilter(color, 30);
     auto path = arcline->ToPath(false);
     DrawCable(canvas, path, color_filter, CableTexture::Smooth, cable_width, cable_width);
-  }
-
-  if (using_layer) {
-    canvas.restore();
   }
 }
 
@@ -687,6 +708,7 @@ ui::Tock StreamPipeWidget::Tick(time::Timer& timer) {
   tock.shaping |= cable_width.Tick(timer);
 
   ComputeEndAnchor(*this, a, arcline);
+  UpdateTextureAnchors(*this, a);
   TickAutoconnectUI(timer);
   TickSplits();
   return tock;
@@ -714,13 +736,6 @@ ui::Tock InvisibleWidget::Tick(time::Timer& timer) {
 }
 
 void ConnectionWidget::Draw(SkCanvas& canvas) const {
-  bool using_layer = false;
-
-  if (alpha < 1.0f) {
-    using_layer = true;
-    canvas.saveLayerAlphaf(nullptr, alpha);
-  }
-
   if (to_shape.isEmpty() && !to_points.empty()) {
     SkPath dummy_to_shape = SkPathBuilder().moveTo(to_points[0].pos).detach();
     DrawArrow(canvas, from_shape, dummy_to_shape);
@@ -728,20 +743,9 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
   if (!to_shape.isEmpty()) {
     DrawArrow(canvas, from_shape, to_shape);
   }
-
-  if (using_layer) {
-    canvas.restore();
-  }
 }
 
 void CableWidget::Draw(SkCanvas& canvas) const {
-  bool using_layer = false;
-
-  if (alpha < 1.0f) {
-    using_layer = true;
-    canvas.saveLayerAlphaf(nullptr, alpha);
-  }
-
   if (state) {
     if (alpha > 0.01f) {
       float dispenser_scale = state->start_widget->local_to_parent.rc(0, 0);
@@ -1035,19 +1039,9 @@ void CableWidget::Draw(SkCanvas& canvas) const {
       }
     }
   }
-  if (using_layer) {
-    canvas.restore();
-  }
 }
 
 void StreamPipeWidget::Draw(SkCanvas& canvas) const {
-  bool using_layer = false;
-
-  if (alpha < 1.0f) {
-    using_layer = true;
-    canvas.saveLayerAlphaf(nullptr, alpha);
-  }
-
   if (cable_width > 0.2_mm && alpha > 0.01f && arcline) {
     SkPath path = arcline->ToPath(false);
     float bore = cable_width;
@@ -1212,9 +1206,6 @@ void StreamPipeWidget::Draw(SkCanvas& canvas) const {
       }
     }
   }
-  if (using_layer) {
-    canvas.restore();
-  }
 }
 
 void ConnectionWidget::ShowRefusal(Str text) {
@@ -1250,6 +1241,8 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& c
       grab_offset = mat_inv.mapPoint(pointer_pos);
     }
     widget->manual_position = pointer_pos - grab_offset * cable->state->connector_scale;
+    widget->manual_grab = pointer_pos;
+    widget->manual_pointer = &pointer;
   }
 
   widget->WakeAnimation();
@@ -1274,6 +1267,7 @@ DragConnectionAction::~DragConnectionAction() {
     mw->ConnectAtPoint(arg, pos);
   }
   widget->manual_position.reset();
+  widget->manual_pointer = nullptr;
   widget->WakeAnimation();
 }
 
@@ -1287,6 +1281,8 @@ void DragConnectionAction::Update() {
   auto* cable = dynamic_cast<CableWidget*>(widget.Get());
   float connector_scale = cable && cable->state ? (float)cable->state->connector_scale : 1.f;
   widget->manual_position = new_position - grab_offset * connector_scale;
+  widget->manual_grab = new_position;
+  widget->manual_pointer = &pointer;
   widget->WakeAnimation();
 }
 
@@ -1336,23 +1332,6 @@ Optional<Rect> StreamPipeWidget::DrawBounds() const {
     bounds.ExpandToInclude(Rect::MakeCenter(pos_dir.pos - Vec2(0, 2_cm), 24_cm, 6_cm));
   }
   return bounds;
-}
-
-Vec<Vec2> ConnectionWidget::TextureAnchors() {
-  ConnectionWidgetLocker a(*this);
-  UpdateEndpoints(*this, a);
-  Vec<Vec2> anchors;
-  anchors.push_back(pos_dir.pos);
-  Optional<Vec2> end_pos;
-  if (manual_position.has_value()) {
-    end_pos = *manual_position;
-  } else if (a.end_widget && end_anchor_local.has_value()) {
-    end_pos = a.end_transform.mapPoint(*end_anchor_local);
-  }
-  if (end_pos) {
-    anchors.push_back(*end_pos);
-  }
-  return anchors;
 }
 
 }  // namespace automat::ui
@@ -1420,7 +1399,7 @@ void ArgumentToy::TickAutoconnectUI(time::Timer& timer) {
   if (!arg || arg.table->autoconnect_radius <= 0) {
     return;
   }
-  if (!radar && radar_alpha_target > 0) {
+  if (!radar && radar_activation_target > 0) {
     radar = std::make_unique<ui::AutoconnectRadar>(this);
     layers.OrderBelow(radar.get());
   }

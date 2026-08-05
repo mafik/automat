@@ -264,8 +264,6 @@ struct SyncBelt : ArgumentToy {
   SkPath Shape() const override;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   Tock Tick(time::Timer& t) override;
-  Compositor GetCompositor() const override { return Compositor::ANCHOR_WARP; }
-  Vec<Vec2> TextureAnchors() override;
   void Draw(SkCanvas& canvas) const override;
   Optional<Rect> DrawBounds() const override;
 };

@@ -214,6 +214,9 @@ struct CloneOption : TextOption {
       position += board->position;
     }
     new_loc->placement = Location::Direct{position, location->PeekScale()};
+    if (auto* orig_lw = location->widget.Get(); orig_lw && orig_lw->toy) {
+      pointer.root_widget.toys.FindOrMake(*new_loc->object, orig_lw->toy.Get());
+    }
     audio::Play(embedded::assets_SFX_canvas_pick_wav);
     return std::make_unique<DragLocationAction>(pointer, std::move(new_loc));
   }

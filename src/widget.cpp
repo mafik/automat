@@ -340,6 +340,11 @@ uint32_t Widget::ID() const {
   return id;
 }
 
+uint32_t Widget::TextureAnchor::NewId() {
+  static atomic<uint32_t> counter = 0;
+  return ++counter;
+}
+
 Widget* Widget::Find(uint32_t id) {
   if (auto it = GetWidgetIndex().find(id); it != GetWidgetIndex().end()) {
     return it->second;

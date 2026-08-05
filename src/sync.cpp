@@ -486,10 +486,10 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
     tock |= Tock::Shape;
   }
 
+  texture_anchors = {{pinion + pinion_deflection, 1}, {origin, 2}};
+
   return tock;
 }
-
-Vec<Vec2> SyncBelt::TextureAnchors() { return {pinion + pinion_deflection, origin}; }
 
 void SyncBelt::Draw(SkCanvas& canvas) const {
   auto& effect = GearShader();

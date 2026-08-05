@@ -32,7 +32,9 @@ struct DragConnectionAction : Action {
 };
 
 struct ConnectionWidget : ArgumentToy {
-  Optional<Vec2> manual_position;  // position of the plug (bottom center)
+  Optional<Vec2> manual_position;         // position of the plug (bottom center)
+  Vec2 manual_grab = {};                  // local point held by the dragging pointer
+  MortalPtr<ui::Pointer> manual_pointer;  // the dragging pointer
 
   // Updated in `Tick()`
   SkColor tint;
@@ -41,7 +43,6 @@ struct ConnectionWidget : ArgumentToy {
   animation::Approach<> cable_width;
   Vec<Vec2AndDir> to_points;
   float transparency = 1;
-  float alpha = 0;
   bool hidden = false;
   Optional<ArcLine> arcline;        // routed cable for non-physical connections
   Optional<Vec2> end_anchor_local;  // cable end in the end widget's local frame
@@ -55,10 +56,8 @@ struct ConnectionWidget : ArgumentToy {
   SkPath Shape() const override;
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
-  Compositor GetCompositor() const override { return Compositor::ANCHOR_WARP; }
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
   Optional<Rect> DrawBounds() const override;
-  Vec<Vec2> TextureAnchors() override;
 };
 
 struct CableWidget : ConnectionWidget {

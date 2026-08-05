@@ -30,7 +30,7 @@ std::unique_ptr<Action> MakeObjectOption::Activate(ui::Pointer& pointer) const {
   auto action = std::make_unique<DragLocationAction>(pointer, std::move(loc));
   // Drag by the point of the toy's bounds nearest to its origin, not by the menu position.
   if (auto& widget = action->locations.front()->widget) {
-    widget->local_anchor = widget->ToyForObject().CoarseBounds().Clamp(Vec2(0, 0));
+    widget->AnchorToPointer(pointer, widget->ToyForObject().CoarseBounds().Clamp(Vec2(0, 0)));
   }
   return action;
 }

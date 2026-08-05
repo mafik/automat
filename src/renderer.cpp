@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 #include "renderer.hpp"
 
+#include <include/core/SkBlendMode.h>
 #include <include/core/SkColor.h>
+#include <include/core/SkColorFilter.h>
 #include <include/core/SkColorType.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPathBuilder.h>
@@ -58,6 +60,7 @@ constexpr bool kDebugRenderEvents = false;
 constexpr bool kDebugPackFrame = false;
 constexpr bool kDebugVisual = false;
 constexpr bool kDebugShapes = false;
+constexpr bool kDebugStarveRenderBudget = false;
 
 using namespace automat::ui;
 using namespace std;
@@ -92,6 +95,32 @@ namespace automat {
 string debug_render_events;
 
 PackFrameRequest next_frame_request = {};
+
+// Pointer identities & window-px positions, sampled as late as possible - just before compositing
+// starts - so the OS event thread can deliver fresh positions until then. Compositors read it
+// directly - no locking, since it's constant while they run. The Pointer* is only compared, never
+// dereferenced (the pointer may die at any time).
+static SmallVec<std::pair<ui::Pointer*, Vec2>, 4> compositor_pointers;
+
+// A thread-inert snapshot of Widget::TextureAnchor: MortalPtr flattened to a comparison-only key.
+struct AnchorSnapshot {
+  Vec2 pos;
+  uint32_t id;
+  ui::Pointer* pointer;
+  Vec2 warp_by;
+  float decay;
+  float radius;
+};
+
+static SmallVec<AnchorSnapshot, 2> SnapshotAnchors(
+    const SmallVec<Widget::TextureAnchor, 2>& anchors) {
+  SmallVec<AnchorSnapshot, 2> out;
+  for (auto& anchor : anchors) {
+    out.push_back({anchor.pos, anchor.id, anchor.pointer.Get(), anchor.warp_by, anchor.decay,
+                   anchor.radius});
+  }
+  return out;
+}
 
 time::SteadyPoint frame_start = time::kZeroSteady;
 static CostModel cost_model;
@@ -129,14 +158,30 @@ struct WidgetDrawable : SkDrawableRTTI {
   SkMatrix update_matrix;  // transform at the time of the last UpdateState
 
   Optional<SkRect> pack_frame_draw_bounds;
-  Vec<Vec2> pack_frame_texture_anchors;
+  SmallVec<AnchorSnapshot, 2> pack_frame_texture_anchors;
 
-  Vec<Vec2> fresh_texture_anchors;
+  SmallVec<AnchorSnapshot, 2> fresh_texture_anchors;
+  float fresh_alpha = 1;
+  float fresh_weight = 1;
   time::SteadyPoint last_tick;
 
   Widget::Compositor compositor;
   float shadow_elevation = 0;
-  vector<ShadowCaster> shadow_casters;  // shadow-casting children composited by this widget
+
+  vector<WidgetDrawable*> shadow_casters;
+  vector<WidgetDrawable*> warp_children;
+  skgpu::graphite::BackendTexture height_texture;
+
+  enum class WarpMode { Rest, Rigid, Warped };
+  struct WarpPlan {
+    WarpMode mode = WarpMode::Rest;
+    Vec2 shift;
+    float max_displacement = 0;
+    Rect draw_bounds;
+    Rect domain;
+    skgpu::graphite::BackendTexture map_texture;
+    sk_sp<SkImage> map_image;
+  } warp;
 
   // RenderToSurface results
   struct Rendered {
@@ -147,7 +192,7 @@ struct WidgetDrawable : SkDrawableRTTI {
     // TODO: size part of this is already stored in `image_info`. Maybe only store the top/left
     // position?
     SkIRect surface_bounds_root;
-    Vec<Vec2> texture_anchors;
+    SmallVec<AnchorSnapshot, 2> texture_anchors;
     // Bounds of the widget's texture (without any clipping) in its local coordinate space.
     // Note that surface have different dimensions. It may be larger (to account for rounding to
     // full pixels) or smaller (due too clipping).
@@ -184,7 +229,7 @@ struct WidgetDrawable : SkDrawableRTTI {
   int wait_count = 0;  // number of children that must be rendered first, cleared after every frame
 
   WidgetDrawable(uint32_t id);
-  ~WidgetDrawable() = default;
+  ~WidgetDrawable();
 
   struct Update {
     uint32_t id;
@@ -204,7 +249,7 @@ struct WidgetDrawable : SkDrawableRTTI {
     sk_sp<SkData> recording_data;
 
     Optional<SkRect> pack_frame_draw_bounds;
-    Vec<Vec2> pack_frame_texture_anchors;
+    SmallVec<AnchorSnapshot, 2> pack_frame_texture_anchors;
 
     Widget::Compositor compositor;
   };
@@ -311,6 +356,12 @@ const skgpu::graphite::TextureInfo kTextureInfo = [] {
 moodycamel::BlockingConcurrentQueue<WidgetDrawable*> recording_queue;
 moodycamel::BlockingConcurrentQueue<WidgetDrawable*> recorded_queue;
 
+static void RenderDisplacementMap(skgpu::graphite::Recorder&, WidgetDrawable&);
+static void RenderHeightMap(skgpu::graphite::Recorder&, WidgetDrawable&, SkIVector origin);
+
+thread_local sk_sp<SkImage> baker_height_map;
+thread_local SkIVector baker_height_origin;
+
 void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> recorder) {
   SetThreadName("VkRecorder" + std::to_string(thread_id), 1);
 
@@ -324,9 +375,13 @@ void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> 
 
     auto cpu_started = time::SteadyNow();
     auto& frame = w->in_progress();
+    for (auto* child : w->warp_children) {
+      RenderDisplacementMap(*recorder, *child);
+    }
+    baker_height_map = nullptr;
     if (!w->shadow_casters.empty()) {
-      RenderShadowHeightMap(*recorder, w->shadow_casters, frame.image_info.dimensions(),
-                            {frame.surface_bounds_root.left(), frame.surface_bounds_root.top()});
+      RenderHeightMap(*recorder, *w,
+                      {frame.surface_bounds_root.left(), frame.surface_bounds_root.top()});
     }
     auto graphite_canvas = recorder->makeDeferredCanvas(frame.image_info, kTextureInfo);
     graphite_canvas->clear(SK_ColorTRANSPARENT);
@@ -358,6 +413,28 @@ constexpr int kNumVkRecorderThreads = 4;
 std::jthread vk_recorder_threads[kNumVkRecorderThreads];
 
 std::unique_ptr<skgpu::graphite::Recorder> global_foreground_recorder;
+
+constexpr int kWarpMapSize = 128;
+
+const skgpu::graphite::TextureInfo kWarpMapTextureInfo = [] {
+  skgpu::graphite::VulkanTextureInfo info{};
+  info.fFormat = VK_FORMAT_R16G16_SFLOAT;
+  info.fImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                           VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
+                           VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  return skgpu::graphite::TextureInfos::MakeVulkan(info);
+}();
+
+WidgetDrawable::~WidgetDrawable() {
+  if (global_foreground_recorder) {
+    if (height_texture.isValid()) {
+      global_foreground_recorder->deleteBackendTexture(height_texture);
+    }
+    if (warp.map_texture.isValid()) {
+      global_foreground_recorder->deleteBackendTexture(warp.map_texture);
+    }
+  }
+}
 
 bool renderer_initialized = false;
 
@@ -402,7 +479,6 @@ void RendererShutdown() {
     image_provider->cache.clear();
   }
 
-  ShutdownShadows(*global_foreground_recorder);
   global_foreground_recorder.reset();
   vk::graphite_context->submit({skgpu::graphite::SyncToCpu::kYes});
   vk::background_context->submit({skgpu::graphite::SyncToCpu::kYes});
@@ -463,16 +539,195 @@ void WidgetDrawable::InsertRecording() {
   // submit() is deferred and batched to preserve semaphore ordering
 }
 
+// Takes care of:
+// - ignoring new & obsolete anchors
+// - getting pointer positons
+static int FillAnchors(WidgetDrawable& w, Vec2 anchors_last[4], Vec2 anchors_curr[4],
+                       float anchors_radius[4], float anchors_decay[4]) {
+  auto& frame = w.rendered();
+  int anchor_count = min<int>(4, (int)w.fresh_texture_anchors.size());
+  SkMatrix window_to_local;
+  (void)w.fresh_matrix.invert(&window_to_local);
+  for (int i = 0; i < anchor_count; ++i) {
+    auto& fresh = w.fresh_texture_anchors[i];
+    anchors_last[i] = fresh.pos;
+    if (fresh.id) {
+      for (auto& rendered : frame.texture_anchors) {
+        if (rendered.id == fresh.id) {
+          anchors_last[i] = rendered.pos;
+          break;
+        }
+      }
+    }
+    Vec2 target = fresh.pos + fresh.warp_by;
+    if (fresh.pointer) {
+      for (auto& [pointer, position] : compositor_pointers) {
+        if (pointer == fresh.pointer) {
+          target += Vec2(window_to_local.mapPoint(position)) - fresh.pos;
+          break;
+        }
+      }
+    }
+    anchors_curr[i] = target;
+    anchors_radius[i] = fresh.radius;
+    anchors_decay[i] = fresh.decay;
+  }
+  return anchor_count;
+}
+
+static void DecideWarpPlan(WidgetDrawable& w) {
+  auto& frame = w.rendered();
+  Vec2 anchors_last[4];
+  Vec2 anchors_curr[4];
+  float anchors_radius[4];
+  float anchors_decay[4];
+  int anchor_count = FillAnchors(w, anchors_last, anchors_curr, anchors_radius, anchors_decay);
+  bool moved = false;
+  float max_displacement = 0;
+  Vec2 shift = {};
+  Rect draw_bounds = frame.surface_bounds_local;
+  for (int i = 0; i < anchor_count; ++i) {
+    Vec2 d = anchors_curr[i] - anchors_last[i];
+    float len = Length(d);
+    if (len > max_displacement) {
+      max_displacement = len;
+      shift = d;
+    }
+    moved |= len > 1e-6f;
+    draw_bounds.ExpandToInclude(frame.surface_bounds_local.MoveBy(d));
+  }
+  bool rigid = w.fresh_weight <= 0;
+  for (int i = 0; rigid && i < anchor_count; ++i) {
+    rigid = Length(anchors_curr[i] - anchors_last[i] - shift) < 1e-6f;
+  }
+  w.warp.mode = !moved  ? WidgetDrawable::WarpMode::Rest
+                : rigid ? WidgetDrawable::WarpMode::Rigid
+                        : WidgetDrawable::WarpMode::Warped;
+  w.warp.shift = shift;
+  w.warp.max_displacement = max_displacement;
+  w.warp.draw_bounds = draw_bounds;
+  w.warp.domain = ShadowBounds(draw_bounds, w.shadow_elevation);
+}
+
+static Rect WarpDrawBounds(WidgetDrawable& w) {
+  return w.warp.mode == WidgetDrawable::WarpMode::Rest ? w.rendered().surface_bounds_local
+                                                       : w.warp.draw_bounds;
+}
+
+static sk_sp<SkShader> WarpSourceShader(WidgetDrawable& w) {
+  auto& frame = w.rendered();
+  SkMatrix root_to_local;
+  (void)frame.matrix.invert(&root_to_local);
+  SkMatrix surface_to_local =
+      SkMatrix::Translate(frame.surface_bounds_root.left(), frame.surface_bounds_root.top());
+  surface_to_local.postConcat(root_to_local);
+  if (w.warp.mode == WidgetDrawable::WarpMode::Rigid) {
+    surface_to_local.postTranslate(w.warp.shift.x, w.warp.shift.y);
+  }
+  auto texture = SkSurfaces::AsImage(frame.surface)
+                     ->makeShader(SkTileMode::kDecal, SkTileMode::kDecal, kFastSamplingOptions,
+                                  &surface_to_local);
+  if (w.warp.mode != WidgetDrawable::WarpMode::Warped || !w.warp.map_image) {
+    return texture;
+  }
+  Status status;
+  static auto effect = resources::CompileShader(embedded::assets_warp_sksl, status);
+  assert(effect);
+  SkRuntimeEffectBuilder builder(effect);
+  SkMatrix map_to_local =
+      SkMatrix::RectToRect(SkRect::MakeWH(kWarpMapSize, kWarpMapSize), w.warp.domain.sk);
+  builder.child("surface") = texture;
+  builder.child("displacement") =
+      w.warp.map_image->makeShader(SkTileMode::kClamp, SkTileMode::kClamp,
+                                   SkSamplingOptions(SkFilterMode::kLinear), &map_to_local);
+  builder.uniform("maxDisplacement") = w.warp.max_displacement;
+  return builder.makeShader();
+}
+
+static void RenderDisplacementMap(skgpu::graphite::Recorder& recorder, WidgetDrawable& w) {
+  w.warp.map_image = nullptr;
+  auto surface = SkSurfaces::WrapBackendTexture(&recorder, w.warp.map_texture,
+                                                kR16G16_float_SkColorType, nullptr, nullptr);
+  if (!surface) {
+    return;
+  }
+  Vec2 anchors_last[4];
+  Vec2 anchors_curr[4];
+  float anchors_radius[4];
+  float anchors_decay[4];
+  int anchor_count = FillAnchors(w, anchors_last, anchors_curr, anchors_radius, anchors_decay);
+  Status status;
+  static auto effect = resources::CompileShader(embedded::assets_warp_field_sksl, status);
+  assert(effect);
+  SkRuntimeEffectBuilder builder(effect);
+  builder.uniform("anchorCount") = anchor_count;
+  float min_radius = 0.02f;
+  for (int i = 0; i < anchor_count; ++i) {
+    min_radius = min(min_radius, max(anchors_radius[i], 0.001f));
+  }
+  builder.uniform("steps") = clamp((int)ceilf(w.warp.max_displacement / min_radius), 4, 32);
+  builder.uniform("weightBias") = w.fresh_weight;
+  builder.uniform("anchorsLast").set(anchors_last, 4);
+  builder.uniform("anchorsCurr").set(anchors_curr, 4);
+  builder.uniform("anchorRadius").set(anchors_radius, 4);
+  builder.uniform("anchorDecay").set(anchors_decay, 4);
+  SkPaint paint;
+  paint.setShader(builder.makeShader());
+  paint.setBlendMode(SkBlendMode::kSrc);
+  auto* canvas = surface->getCanvas();
+  canvas->setMatrix(
+      SkMatrix::RectToRect(w.warp.domain.sk, SkRect::MakeWH(kWarpMapSize, kWarpMapSize)));
+  canvas->drawRect(w.warp.domain.sk, paint);
+  w.warp.map_image = SkSurfaces::AsImage(surface);
+}
+
+static void RenderHeightMap(skgpu::graphite::Recorder& recorder, WidgetDrawable& baker,
+                            SkIVector origin) {
+  SkISize dims = baker.in_progress().image_info.dimensions();
+  if (baker.height_texture.isValid() && baker.height_texture.dimensions() != dims) {
+    recorder.deleteBackendTexture(baker.height_texture);
+    baker.height_texture = {};
+  }
+  if (!baker.height_texture.isValid()) {
+    baker.height_texture = recorder.createBackendTexture(dims, kTextureInfo);
+  }
+  auto surface = SkSurfaces::WrapBackendTexture(&recorder, baker.height_texture,
+                                                kBGRA_8888_SkColorType, nullptr, nullptr);
+  if (!surface) {
+    return;
+  }
+  auto* canvas = surface->getCanvas();
+  canvas->clear(SK_ColorTRANSPARENT);
+  for (auto* caster_ptr : baker.shadow_casters) {
+    auto& caster = *caster_ptr;
+    if (!caster.rendered().surface) {
+      continue;
+    }
+    float encoded = std::min(caster.shadow_elevation / kMaxShadowHeight, 1.f) * caster.fresh_alpha;
+    float alpha_to_red[20] = {};  // r = a * encoded, a = 1
+    alpha_to_red[3] = encoded;
+    alpha_to_red[19] = 1;
+    SkPaint paint;
+    paint.setShader(WarpSourceShader(caster));
+    paint.setColorFilter(SkColorFilters::Matrix(alpha_to_red));
+    paint.setBlendMode(SkBlendMode::kLighten);
+    canvas->save();
+    canvas->translate(-origin.x(), -origin.y());
+    canvas->concat(caster.fresh_matrix);
+    canvas->drawRect(WarpDrawBounds(caster).sk, paint);
+    canvas->restore();
+  }
+  baker_height_map = SkSurfaces::AsImage(surface);
+  baker_height_origin = origin;
+}
+
 void WidgetDrawable::onDraw(SkCanvas* canvas) {
   const auto& frame = rendered();
   if (frame.surface == nullptr) {
     // This widget wasn't included by frame packing - there is no need to draw anything.
     return;
   }
-  if (shadow_elevation > 0) {
-    DrawShadow(*canvas, {SkSurfaces::AsImage(frame.surface), frame.surface_bounds_root,
-                         frame.matrix, frame.surface_bounds_local, shadow_elevation});
-  }
+
   if constexpr (kDebugVisual) {
     SkPaint texture_bounds_paint;  // translucent black
     texture_bounds_paint.setStyle(SkPaint::kStroke_Style);
@@ -480,137 +735,36 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     canvas->drawRect(frame.surface_bounds_local.sk, texture_bounds_paint);
   }
 
-  SkRect surface_size = SkRect::MakeWH(frame.surface->width(), frame.surface->height());
-  auto anchor_count = min<int>(frame.texture_anchors.size(), fresh_texture_anchors.size());
-
-  if (compositor == Widget::Compositor::COPY_RAW) {
-    canvas->resetMatrix();
-    // It feels like SkSurface::draw should work, but for unknown reason it doesn't:
-    // frame.surface->draw(canvas, 0, 0);
-    canvas->drawImage(SkSurfaces::AsImage(frame.surface), 0, 0);
-  } else if (compositor == Widget::Compositor::ANCHOR_WARP) {
-    Status status;
-    static auto effect = resources::CompileShader(embedded::assets_anchor_warp_rt_sksl, status);
-    assert(effect);
-    SkRuntimeEffectBuilder builder(effect);
-
-    SkMatrix root_to_local;
-    (void)frame.matrix.invert(&root_to_local);
-    Rect local_surface_bounds = SkRect::Make(frame.surface_bounds_root);
-    root_to_local.mapRect(&local_surface_bounds.sk);
-    builder.uniform("surfaceOrigin") = local_surface_bounds.BottomLeftCorner();
-    builder.uniform("surfaceSize") = local_surface_bounds.Size();
-    builder.uniform("surfaceResolution") = Vec2(frame.surface->width(), frame.surface->height());
-    Vec2 anchors_last[2] = {
-        frame.texture_anchors[0],
-        frame.texture_anchors[anchor_count > 1 ? 1 : 0],
-    };
-    Vec2 anchors_curr[2] = {
-        fresh_texture_anchors[0],
-        fresh_texture_anchors[anchor_count > 1 ? 1 : 0],
-    };
-    builder.uniform("anchorsLast").set(anchors_last, 2);
-    builder.uniform("anchorsCurr").set(anchors_curr, 2);
-    builder.child("surface") = SkSurfaces::AsImage(frame.surface)->makeShader({});
-
-    auto shader = builder.makeShader();
-    SkPaint paint;
-    paint.setShader(shader);
-
-    // Heuristic for finding same texture bounds (guaranteed to contain the whole widget):
-    // - for every anchor move the old texture bounds by its displacement
-    // - compute a union of all the moved bounds
-    Rect new_anchor_bounds = Rect::MakeEmptyAt(fresh_texture_anchors[0]);
-    for (int i = 0; i < anchor_count; ++i) {
-      Vec2 delta = fresh_texture_anchors[i] - frame.texture_anchors[i];
-      Rect offset_bounds = frame.surface_bounds_local.MoveBy(delta);
-      new_anchor_bounds.ExpandToInclude(offset_bounds);
+  if (compositor == Widget::Compositor::WARP) {
+    if (shadow_elevation > 0 && baker_height_map) {
+      SkMatrix local_to_height = fresh_matrix;
+      local_to_height.postTranslate(-baker_height_origin.x(), -baker_height_origin.y());
+      DrawShadow(*canvas, WarpSourceShader(*this), baker_height_map, local_to_height,
+                 shadow_elevation, fresh_alpha,
+                 ShadowBounds(WarpDrawBounds(*this), shadow_elevation));
     }
-    canvas->drawRect(new_anchor_bounds.sk, paint);
-  } else if (compositor == Widget::Compositor::GLITCH) {
-    canvas->save();
 
-    // TODO: use `fresh_matrix` to draw the object at its most recent position.
-    // Here is the "classic" approach to do it:
-    // SkMatrix inverse;
-    // (void)rendered_matrix.invert(&inverse);
-    // canvas->concat(inverse);
-    // canvas->concat(fresh_matrix);
-    // Unfortunately this doesn't work because `rendered_matrix` and `fresh_matrix` include the
-    // whole chain of transforms of parent widgets. This causes complex jittering that changes
-    // its behavior depending on which widgets are rendered to textures and whether they've been
-    // packed or sent to overflow.
-    // Proper solution would probably require some careful test cases.
-
-    SkRect draw_bounds = frame.surface_bounds_local.sk;
-
-    /////////////////////////////////////////////////
-    // Map from the local coordinates to surface UV
-    /////////////////////////////////////////////////
-    // First go from local space (metric) to window space (pixels)
-    SkMatrix surface_transform = frame.matrix;
-    // Now our surface is axis-aligned.
-    // Map the surface bounds to unit square.
-    surface_transform.postConcat(
-        SkMatrix::RectToRect(SkRect::Make(frame.surface_bounds_root), SkRect::MakeWH(1, 1)));
-    // Finally flip the y-axis (Skia uses bottom-left origin, but we use top-left)
-    surface_transform.postScale(1, -1, 0, 0.5);
-
-    // Skia puts the origin at the top left corner (going down), but we use bottom left (going
-    // up). This flip makes all the textures composite in our coordinate system correctly.
-    if (anchor_count) {
-      SkMatrix anchor_mapping;
-      // Apply the inverse transform to the surface mapping - we want to get the original texture
-      // position. Note that this transform uses `draw_texture_anchors` which have been saved
-      // during the last RenderToSurface.
-      if (anchor_mapping.setPolyToPoly(
-              SkSpan<const SkPoint>{&fresh_texture_anchors[0].sk, size_t(anchor_count)},
-              SkSpan<const SkPoint>{&frame.texture_anchors[0].sk, size_t(anchor_count)})) {
-        surface_transform.preConcat(anchor_mapping);
-        SkMatrix inverse;
-        (void)anchor_mapping.invert(&inverse);
-        inverse.mapRectScaleTranslate(&draw_bounds, draw_bounds);
+    if (warp.mode == WarpMode::Warped && warp.map_image) {
+      SkPaint paint;
+      paint.setShader(WarpSourceShader(*this));
+      paint.setAlphaf(fresh_alpha);
+      canvas->drawRect(warp.draw_bounds.sk, paint);
+    } else {
+      canvas->save();
+      SkMatrix root_to_local;
+      (void)frame.matrix.invert(&root_to_local);
+      SkMatrix surface_to_local =
+          SkMatrix::Translate(frame.surface_bounds_root.left(), frame.surface_bounds_root.top());
+      surface_to_local.postConcat(root_to_local);
+      if (warp.mode == WarpMode::Rigid) {
+        surface_to_local.postTranslate(warp.shift.x, warp.shift.y);
       }
+      canvas->concat(surface_to_local);
+      SkPaint paint;
+      paint.setAlphaf(fresh_alpha);
+      canvas->drawImage(SkSurfaces::AsImage(frame.surface), 0, 0, kFastSamplingOptions, &paint);
+      canvas->restore();
     }
-
-    Status status;
-    static auto effect = resources::CompileShader(embedded::assets_glitch_rt_sksl, status);
-    assert(effect);
-
-    SkRuntimeEffectBuilder builder(effect);
-    builder.uniform("surfaceResolution") = Vec2(frame.surface->width(), frame.surface->height());
-    builder.uniform("surfaceTransform") = surface_transform;
-    float time = time::SteadySaw<1.0>();
-    builder.uniform("time") = time;
-    SkSamplingOptions sampling;
-    builder.child("surface") = SkSurfaces::AsImage(frame.surface)
-                                   ->makeShader(SkTileMode::kClamp, SkTileMode::kClamp, sampling);
-    auto shader = builder.makeShader();
-    SkPaint paint;
-    paint.setShader(shader);
-    canvas->drawRect(draw_bounds, paint);
-
-    if constexpr (kDebugVisual) {
-      SkPaint surface_bounds_paint;
-      constexpr int kNumColors = 10;
-      SkColor4f colors[kNumColors];
-      float pos[kNumColors];
-      double fraction = time::ToSeconds(last_tick.time_since_epoch() % 4s);
-      SkMatrix shader_matrix = SkMatrix::RotateDeg(fraction * -360.0f, surface_size.center());
-      for (int i = 0; i < kNumColors; ++i) {
-        float hsv[] = {i * 360.0f / kNumColors, 1.0f, 1.0f};
-        colors[i] = SkColor4f::FromColor(SkHSVToColor((kNumColors - i) * 255 / kNumColors, hsv));
-        pos[i] = (float)i / (kNumColors - 1);
-      }
-      surface_bounds_paint.setShader(SkShaders::SweepGradient(
-          surface_size.center(),
-          SkGradient{SkGradient::Colors{colors, pos, SkTileMode::kClamp}, {}}, &shader_matrix));
-      surface_bounds_paint.setStyle(SkPaint::kStroke_Style);
-      surface_bounds_paint.setStrokeWidth(2.0f);
-      canvas->concat(SkMatrix::RectToRect(surface_size, frame.surface_bounds_local.sk));
-      canvas->drawRect(surface_size.makeInset(1, 1), surface_bounds_paint);
-    }
-    canvas->restore();
   } else if (compositor == Widget::Compositor::QUANTUM_REALM) {
     SkMatrix surface_transform = frame.matrix;
     surface_transform.postConcat(
@@ -625,7 +779,9 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       SkMatrix inverse;
       (void)surface_transform.invert(&inverse);
       canvas->concat(inverse);
-      canvas->drawImage(SkSurfaces::AsImage(frame.surface), 0, 0);
+      SkPaint paint;
+      paint.setAlphaf(fresh_alpha);
+      canvas->drawImage(SkSurfaces::AsImage(frame.surface), 0, 0, kFastSamplingOptions, &paint);
     } else {
       Status status;
       static auto effect = resources::CompileShader(embedded::assets_quantum_realm_sksl, status);
@@ -649,6 +805,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       auto shader = builder.makeShader();
       SkPaint paint;
       paint.setShader(shader);
+      paint.setAlphaf(fresh_alpha);
       canvas->drawRect(frame.surface_bounds_local.sk, paint);
 
       SkPaint green;
@@ -664,14 +821,17 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     SkPaint new_anchor_paint;
     new_anchor_paint.setStyle(SkPaint::kStroke_Style);
     new_anchor_paint.setColor(SkColorSetARGB(255, 0, 0, 255));
-    SkPaint bounds_paint;
-    bounds_paint.setStyle(SkPaint::kStroke_Style);
-    bounds_paint.setColor(SkColorSetARGB(128, 0, 255, 0));
 
+    Vec2 anchors_last[4];
+    Vec2 anchors_curr[4];
+    float anchors_radius[4];
+    float anchors_decay[4];
+    int anchor_count =
+        FillAnchors(*this, anchors_last, anchors_curr, anchors_radius, anchors_decay);
     for (int i = 0; i < anchor_count; ++i) {
-      canvas->drawCircle(frame.texture_anchors[i].sk, 1_mm, old_anchor_paint);
-      canvas->drawCircle(fresh_texture_anchors[i].sk, 1_mm, new_anchor_paint);
-      canvas->drawLine(frame.texture_anchors[i].sk, fresh_texture_anchors[i].sk, new_anchor_paint);
+      canvas->drawCircle(anchors_last[i].sk, 1_mm, old_anchor_paint);
+      canvas->drawCircle(anchors_curr[i].sk, 1_mm, new_anchor_paint);
+      canvas->drawLine(anchors_last[i].sk, anchors_curr[i].sk, new_anchor_paint);
     }
   }
 
@@ -689,13 +849,15 @@ WidgetDrawable::WidgetDrawable(uint32_t id) : id(id) {}
 
 struct PackedFrame {
   vector<WidgetDrawable::Update> frame;
-  map<uint32_t, Vec<Vec2>> fresh_texture_anchors;
-  map<uint32_t, SkMatrix> fresh_matrices;
-  struct ShadowCasterRef {
-    uint32_t id, baker_id;
-    float elevation;
+  struct Fresh {
+    SkMatrix matrix;
+    float alpha;
+    float weight;
+    float shadow_elevation;
+    uint32_t baker_id;
+    SmallVec<AnchorSnapshot, 2> texture_anchors;
   };
-  vector<ShadowCasterRef> shadow_casters;
+  map<uint32_t, Fresh> fresh;
 };
 
 void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pack) {
@@ -744,7 +906,9 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     int type_id = -1;
     SkMatrix window_to_local;
     SkIRect surface_bounds_root;  // copied over to Widget, if drawn
-    Vec<Vec2> pack_frame_texture_anchors;
+    SmallVec<AnchorSnapshot, 2> pack_frame_texture_anchors;
+    float effective_alpha = 1;
+    float effective_weight = 1;
     // Bounds (in local coords) which are rendered to the surface.
     Rect new_visible_bounds;
     const RenderResult* render_result = nullptr;
@@ -978,8 +1142,31 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     }
 
     // Record anchor positions, after all animations have "Tick"-ed.
-    for (auto& node : tree) {
-      node.pack_frame_texture_anchors = node.widget->TextureAnchors();
+    for (int i = 0; i < tree.size(); ++i) {
+      auto& node = tree[i];
+      node.pack_frame_texture_anchors = SnapshotAnchors(node.widget->texture_anchors);
+      node.effective_alpha = node.widget->alpha;
+      node.effective_weight = node.widget->local_to_parent_weight;
+      bool outside_parent_texture =
+          node.parent != i && (node.detached || !tree[node.parent].widget->pack_frame_draw_bounds);
+      if (outside_parent_texture) {
+        node.effective_alpha *= tree[node.parent].effective_alpha;
+      }
+      if (node.pack_frame_texture_anchors.empty() && outside_parent_texture &&
+          !tree[node.parent].pack_frame_texture_anchors.empty()) {
+        SkMatrix parent_to_local;
+        if (node.widget->local_to_parent.asM33().invert(&parent_to_local)) {
+          for (auto& anchor : tree[node.parent].pack_frame_texture_anchors) {
+            node.pack_frame_texture_anchors.push_back(
+                {Vec2(parent_to_local.mapPoint(anchor.pos)), anchor.id, anchor.pointer,
+                 Vec2(parent_to_local.mapVector(anchor.warp_by)),
+                 parent_to_local.mapRadius(anchor.decay),
+                 parent_to_local.mapRadius(anchor.radius)});
+          }
+          // A child warping along inherited anchors must warp against the same weight bias.
+          node.effective_weight = tree[node.parent].effective_weight;
+        }
+      }
     }
 
     // Update `subtree_shape` and `subtree_draw_bounds`.
@@ -1097,6 +1284,9 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     remaining_millis -= 3.0f * cost_model.mae;  // 3 standard deviations of margin
     if constexpr (kDebugPackFrame) LOG << "after stddev margin: " << remaining_millis;
     remaining_millis -= cost_model.floor_millis;  // learned floor of our render costs
+    if constexpr (kDebugStarveRenderBudget) {
+      remaining_millis = 0;
+    }
     if constexpr (kDebugPackFrame) LOG << "after floor margin: " << remaining_millis;
 
     auto Pack = [&](int pack_i) {
@@ -1260,62 +1450,20 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     pack.frame.push_back(update);
   }
 
-  {  // Update Pack::fresh_matrices
+  {
     for (int i = 0; i < tree.size(); ++i) {
       auto& node = tree[i];
       bool include = node.verdict == Verdict::Pack;
       if (node.baker != i) {
         include |= tree[node.baker].verdict == Verdict::Pack;
       }
-      if (node.detached) {
-        // A detached child is composited during its baker's rasterization, so it needs a fresh
-        // matrix whenever the baker repacks - even if its logical parent did not.
-        include |= tree[node.baker].verdict == Verdict::Pack;
-      }
       if (include) {
-        pack.fresh_matrices[node.widget->ID()] = node.widget->local_to_window;
+        pack.fresh[node.widget->ID()] = {
+            node.widget->local_to_window,  node.effective_alpha,
+            node.effective_weight,         node.widget->shadow_elevation,
+            tree[node.baker].widget->ID(), node.pack_frame_texture_anchors};
       }
     }
-  }
-
-  // Update fresh_texture_anchors for all widgets that will be drawn & their children.
-  // This allows WidgetDrawable::onDraw to properly deform the texture.
-  {
-    for (auto& update : pack.frame) {
-      if (pack.fresh_texture_anchors.find(update.id) != pack.fresh_texture_anchors.end()) {
-        continue;
-      }
-      if (auto* widget = Widget::Find(update.id)) {
-        pack.fresh_texture_anchors[update.id] = widget->TextureAnchors();
-        for (auto* child : widget->layers) {
-          if (pack.fresh_texture_anchors.find(child->ID()) != pack.fresh_texture_anchors.end()) {
-            continue;
-          }
-          pack.fresh_texture_anchors[child->ID()] = child->TextureAnchors();
-        }
-      }
-    }
-    // Detached children composite into a baker that is not their logical parent, so the loop above
-    // (which walks each packed widget's own children) does not reach them. Publish their anchors
-    // whenever their baker repacks.
-    for (auto& node : tree) {
-      if (!node.detached || tree[node.baker].verdict != Verdict::Pack) {
-        continue;
-      }
-      auto id = node.widget->ID();
-      if (pack.fresh_texture_anchors.find(id) == pack.fresh_texture_anchors.end()) {
-        pack.fresh_texture_anchors[id] = node.widget->TextureAnchors();
-      }
-    }
-  }
-
-  for (auto& node : tree) {
-    if (node.widget->shadow_elevation <= 0 || node.verdict == Verdict::Skip_Clipped ||
-        node.verdict == Verdict::Skip_NoTexture) {
-      continue;
-    }
-    pack.shadow_casters.push_back(
-        {node.widget->ID(), tree[node.baker].widget->ID(), node.widget->shadow_elevation});
   }
 
   if constexpr (kDebugRendering && kDebugRenderEvents) {
@@ -1401,15 +1549,17 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
     PackFrame(rw, request, pack);
   }
 
-  // Update all WidgetRenderStates
-  for (auto& [id, fresh_texture_anchors] : pack.fresh_texture_anchors) {
+  for (auto& [id, fresh] : pack.fresh) {
     if (auto* cached_widget_drawable = WidgetDrawable::FindOrNull(id)) {
-      cached_widget_drawable->fresh_texture_anchors = fresh_texture_anchors;
-    }
-  }
-  for (auto& [id, matrix] : pack.fresh_matrices) {
-    if (auto* cached_widget_drawable = WidgetDrawable::FindOrNull(id)) {
-      cached_widget_drawable->fresh_matrix = matrix;
+      cached_widget_drawable->fresh_matrix = fresh.matrix;
+      cached_widget_drawable->fresh_alpha = fresh.alpha;
+      cached_widget_drawable->fresh_weight = fresh.weight;
+      cached_widget_drawable->fresh_texture_anchors = std::move(fresh.texture_anchors);
+      cached_widget_drawable->shadow_elevation = fresh.shadow_elevation;
+      cached_widget_drawable->warp.mode = WidgetDrawable::WarpMode::Rest;
+      cached_widget_drawable->warp.map_image = nullptr;
+      cached_widget_drawable->shadow_casters.clear();
+      cached_widget_drawable->warp_children.clear();
     }
   }
 
@@ -1462,22 +1612,37 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
     }
   }
 
-  for (auto& ref : pack.shadow_casters) {
-    if (auto* baker = WidgetDrawable::FindOrNull(ref.baker_id)) {
-      baker->shadow_casters.clear();
+  {  // Sample pointer positions as late as possible - compositing starts just below.
+    lock_guard lock(rw.mutex);
+    compositor_pointers.clear();
+    for (auto& pointer : rw.pointers) {
+      compositor_pointers.push_back({&pointer, pointer.pointer_position});
     }
   }
-  for (auto& ref : pack.shadow_casters) {
-    auto* w = WidgetDrawable::FindOrNull(ref.id);
-    auto* baker = WidgetDrawable::FindOrNull(ref.baker_id);
+
+  for (auto& [id, fresh] : pack.fresh) {
+    auto* w = WidgetDrawable::FindOrNull(id);
+    auto* baker = WidgetDrawable::FindOrNull(fresh.baker_id);
     if (!w || !baker || !w->rendered().surface) {
       continue;
     }
-    w->shadow_elevation = ref.elevation;
-    auto& rendered = w->rendered();
-    baker->shadow_casters.push_back({SkSurfaces::AsImage(rendered.surface),
-                                     rendered.surface_bounds_root, rendered.matrix,
-                                     rendered.surface_bounds_local, ref.elevation});
+    if (!w->fresh_texture_anchors.empty()) {
+      DecideWarpPlan(*w);
+      if (w->warp.mode == WidgetDrawable::WarpMode::Warped) {
+        if (!w->warp.map_texture.isValid()) {
+          w->warp.map_texture = global_foreground_recorder->createBackendTexture(
+              {kWarpMapSize, kWarpMapSize}, kWarpMapTextureInfo);
+        }
+        if (w->warp.map_texture.isValid()) {
+          baker->warp_children.push_back(w);
+        } else {
+          w->warp.mode = WidgetDrawable::WarpMode::Rest;
+        }
+      }
+    }
+    if (w->shadow_elevation > 0 && baker != w) {
+      baker->shadow_casters.push_back(w);
+    }
   }
 
   int pending_recordings = 0;
@@ -1499,12 +1664,7 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
     }
   }
 
-  // Submit the child→parent DAG one wave at a time. Every widget that is ready simultaneously is
-  // mutually independent (a waiter only becomes ready once all the children it waits on have been
-  // processed), so a whole wave shares a single vkQueueSubmit without a parent ever waiting on a
-  // sibling in the same batch. Each wave is submitted before the next is inserted, so a parent's
-  // wait semaphores resolve against children whose signals are already queued. This collapses the
-  // submits from one-per-widget to one-per-DAG-level.
+  // Submit the child->parent DAG one level (wave) at a time.
   vector<WidgetDrawable*> wave;
   while (!ready_for_gpu.empty()) {
     wave.swap(ready_for_gpu);

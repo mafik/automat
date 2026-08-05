@@ -1,0 +1,50 @@
+// kind=shader
+
+const int N = 4;
+const int kMaxSteps = 32;
+
+uniform int anchorCount;
+uniform int steps;
+uniform float weightBias;  // the local space's hold on the texture (local_to_parent_weight)
+uniform float2 anchorsLast[N];  // anchor positions in the rendered texture (widget-local)
+uniform float2 anchorsCurr[N];  // anchor positions now (widget-local)
+uniform float anchorRadius[N];  // grip radius of each anchor, metres
+uniform float anchorDecay[N];  // pull decays to half this far beyond the grip radius, metres
+
+vec2 Velocity(vec2 p, float t) {
+    vec2 pull = vec2(0);
+    float weight_sum = weightBias;
+    for (int i = 0;
+    i < N;
+    ++i) {
+        if (i >= anchorCount) {
+            break;
+        }
+        float2 last = anchorsLast[i];
+        float2 curr = anchorsCurr[i];
+        float r = anchorRadius[i];
+        float h = anchorDecay[i];
+        vec2 d = last - curr;
+
+        vec2 to_grip = p - mix(curr, last, t);
+        float dist = max(length(to_grip) - r, 0.0);
+        float weight = h * h / (dist * dist + r * r * 0.0001);
+        pull += weight * d;
+        weight_sum += weight;
+    }
+    return pull / max(weight_sum, 1e-9);
+}
+
+vec4 main(vec2 local) {
+    vec2 p = local;
+    float dt = 1.0 / float(steps);
+    for (int k = 0;
+    k < kMaxSteps;
+    ++k) {
+        if (k >= steps) {
+            break;
+        }
+        p += Velocity(p, (float(k) + 0.5) * dt) * dt;
+    }
+    return vec4(p - local, 0, 1);
+}

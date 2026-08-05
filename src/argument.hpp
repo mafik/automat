@@ -24,7 +24,7 @@ enum class CableTexture {
 
 struct ArgumentToy : Toy {
   Vec2AndDir pos_dir;
-  float radar_alpha_target = 0;
+  float radar_activation_target = 0;
   float prototype_alpha_target = 0;
   std::unique_ptr<ui::Widget> radar;
   std::unique_ptr<ui::Widget> prototype_ghost;

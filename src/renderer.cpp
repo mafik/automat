@@ -292,7 +292,13 @@ static void WarnLargeRecording(StrView name, Size size) {
   }
 }
 
-SkRect WidgetDrawable::onGetBounds() { return *pack_frame_draw_bounds; }
+SkRect WidgetDrawable::onGetBounds() {
+  Rect bounds = *pack_frame_draw_bounds;
+  if (warp.mode != WarpMode::Rest) {
+    bounds.ExpandToInclude(warp.draw_bounds);
+  }
+  return bounds.sk;
+}
 void WidgetDrawable::flatten(SkWriteBuffer& buffer) const {
   // Normally this shouldn't be called. There is no point serializing the render state.
   buffer.writeInt(id);
@@ -570,6 +576,14 @@ static int FillAnchors(WidgetDrawable& w, Vec2 anchors_last[4], Vec2 anchors_cur
   return anchor_count;
 }
 
+static Rect ExpandByDisplacements(const Rect& base, Span<const Vec2> displacements) {
+  Rect expanded = base;
+  for (auto& d : displacements) {
+    expanded.ExpandToInclude(base.MoveBy(d));
+  }
+  return expanded;
+}
+
 static void DecideWarpPlan(WidgetDrawable& w) {
   auto& frame = w.rendered();
   Vec2 anchors_last[4];
@@ -577,31 +591,32 @@ static void DecideWarpPlan(WidgetDrawable& w) {
   float anchors_radius[4];
   float anchors_decay[4];
   int anchor_count = FillAnchors(w, anchors_last, anchors_curr, anchors_radius, anchors_decay);
+  Vec2 displacements[4];
   bool moved = false;
   float max_displacement = 0;
   Vec2 shift = {};
-  Rect draw_bounds = frame.surface_bounds_local;
   for (int i = 0; i < anchor_count; ++i) {
     Vec2 d = anchors_curr[i] - anchors_last[i];
+    displacements[i] = d;
     float len = Length(d);
     if (len > max_displacement) {
       max_displacement = len;
       shift = d;
     }
     moved |= len > 1e-6f;
-    draw_bounds.ExpandToInclude(frame.surface_bounds_local.MoveBy(d));
   }
   bool rigid = w.fresh_weight <= 0;
   for (int i = 0; rigid && i < anchor_count; ++i) {
-    rigid = Length(anchors_curr[i] - anchors_last[i] - shift) < 1e-6f;
+    rigid = Length(displacements[i] - shift) < 1e-6f;
   }
   w.warp.mode = !moved  ? WidgetDrawable::WarpMode::Rest
                 : rigid ? WidgetDrawable::WarpMode::Rigid
                         : WidgetDrawable::WarpMode::Warped;
   w.warp.shift = shift;
   w.warp.max_displacement = max_displacement;
-  w.warp.draw_bounds = draw_bounds;
-  w.warp.domain = ShadowBounds(draw_bounds, w.shadow_elevation);
+  w.warp.draw_bounds = ExpandByDisplacements(frame.surface_bounds_local,
+                                             Span<const Vec2>(displacements, anchor_count));
+  w.warp.domain = ShadowBounds(w.warp.draw_bounds, w.shadow_elevation);
 }
 
 static Rect WarpDrawBounds(WidgetDrawable& w) {
@@ -902,6 +917,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     SkMatrix window_to_local;
     SkIRect surface_bounds_root;  // copied over to Widget, if drawn
     SmallVec<AnchorSnapshot, 2> pack_frame_texture_anchors;
+    SmallVec<Vec2, 2> anchor_displacements_root;
     float effective_alpha = 1;
     float effective_weight = 1;
     // Bounds (in local coords) which are rendered to the surface.
@@ -1050,6 +1066,17 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       }
       widget->packed_local_to_parent = widget->local_to_parent;
 
+      if (parent != tree_index) {
+        node.anchor_displacements_root = tree[parent].anchor_displacements_root;
+      }
+      for (auto& anchor : widget->texture_anchors) {
+        Vec2 d = anchor.warp_by;
+        if (auto* pointer = anchor.pointer.Get()) {
+          d += Vec2(node.window_to_local.mapPoint(pointer->pointer_position)) - anchor.pos;
+        }
+        node.anchor_displacements_root.push_back(Vec2(widget->local_to_window.mapVector(d)));
+      }
+
       if (widget->shape_invalid) {
         widget->shape = widget->Shape();
         widget->shape_invalid = false;
@@ -1086,10 +1113,15 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
         // Clip the `root_bounds` to the root widget bounds;
         if (root_bounds.width() * root_bounds.height() < 512 * 512) {
           // Render small objects without clipping
-          visible = SkRect::Intersects(root_bounds, root_widget_bounds_px);
+          Rect warped_bounds = ExpandByDisplacements(root_bounds, node.anchor_displacements_root);
+          visible = SkRect::Intersects(warped_bounds.sk, root_widget_bounds_px);
         } else {
           // This mutates the `root_bounds` - they're clipped to `root_widget_bounds_px`!
-          visible = root_bounds.intersect(root_widget_bounds_px);
+          Rect clip = root_widget_bounds_px;
+          for (auto& d : node.anchor_displacements_root) {
+            clip.ExpandToInclude(root_widget_bounds_px.MoveBy(-d));
+          }
+          visible = root_bounds.intersect(clip.sk);
         }
 
         root_bounds.roundOut(&node.surface_bounds_root);

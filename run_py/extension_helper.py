@@ -306,7 +306,7 @@ class ExtensionHelper:
       import meson
       build_stamp = build_dir / '.automat.build_stamp'
       recipe.add_step(
-        partial(Popen, [ninja.BIN, '-C', build_dir, *self.meson_build_targets]),
+        partial(Popen, [ninja.BIN, '-C', build_dir, *self.meson_build_targets], env=env),
         outputs=[build_stamp],
         inputs=configure_inputs + [makefile, ninja.BIN],
         desc=f'Building {self.name}',

@@ -295,7 +295,8 @@ void AppendObscurers(Location* loc, Location* other_end, Vec<ui::Widget*>& wante
 // This uses the arg's position & direction within `origin`.
 //
 // This is a UI function.
-Vec2 PositionAhead(Location& origin, const Argument::Table& arg, const ObjectToy& target_widget);
+Vec2 PositionAhead(ObjectToy& origin_toy, const Argument::Table& arg,
+                   const ObjectToy& target_widget);
 
 // Return position for the given `target_widget` beside the `origin` (to its right, tops
 // aligned), stepping down past locations already sitting there.

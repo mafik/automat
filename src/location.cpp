@@ -134,8 +134,13 @@ void Location::FillPosition(LocationWidget& w) {
   if (auto* ahead = std::get_if<PlaceAhead>(&request)) {
     auto origin = ahead->origin.Lock();
     if (origin && origin->widget && ahead->arg) {
+      SkMatrix m =
+          Location::ToMatrix(origin->Position(*origin->widget), origin->Scale(*origin->widget),
+                             origin->widget->LocalAnchor());
       std::get_if<Direct>(&placement)->position =
-          PositionAhead(*origin, *static_cast<Argument::Table*>(ahead->arg), w.ToyForObject());
+          Vec2(m.mapPoint(PositionAhead(origin->widget->ToyForObject(),
+                                        *static_cast<Argument::Table*>(ahead->arg),
+                                        w.ToyForObject())));
       PositionBelow(*this, *origin);
     }
   } else if (auto* between = std::get_if<PlaceBetween>(&request)) {
@@ -701,25 +706,17 @@ void PositionBelow(Location& origin, Location& below) {
   }
 }
 
-Vec2 PositionAhead(Location& origin, const Argument::Table& arg, const ObjectToy& target_widget) {
-  auto& origin_toy = origin.widget->ToyForObject();
+Vec2 PositionAhead(ObjectToy& origin_toy, const Argument::Table& arg,
+                   const ObjectToy& target_widget) {
   auto origin_shape = origin_toy.Shape();           // origin's local coordinates
   Vec2AndDir arg_start = origin_toy.ArgStart(arg);  // origin's local coordinates
   Vec2 drop_point;
-
-  // Construct a matrix that transforms from the origin's local coordinates to the canvas
-  // coordinates. Normally this could be done with TransformUp but that would include the animation.
-  // We don't want to include the animation when placing objects around.
-  {
-    SkMatrix m = Location::ToMatrix(origin.Position(*origin.widget), origin.Scale(*origin.widget),
-                                    origin.widget->LocalAnchor());
-    if (auto intersection = Raycast(origin_shape, arg_start)) {
-      // Try to drop the target location so that it overlaps with the origin shape by 1mm.
-      drop_point = m.mapPoint(*intersection - Vec2::Polar(arg_start.dir, 1_mm));
-    } else {
-      // Otherwise put it 3cm ahead of the argument start point.
-      drop_point = m.mapPoint(arg_start.pos + Vec2::Polar(arg_start.dir, 3_cm));
-    }
+  if (auto intersection = Raycast(origin_shape, arg_start)) {
+    // Try to drop the target location so that it overlaps with the origin shape by 1mm.
+    drop_point = *intersection - Vec2::Polar(arg_start.dir, 1_mm);
+  } else {
+    // Otherwise put it 3cm ahead of the argument start point.
+    drop_point = arg_start.pos + Vec2::Polar(arg_start.dir, 3_cm);
   }
 
   // Pick the position that allows the cable to come in most horizontally (left to right).

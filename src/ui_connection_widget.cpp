@@ -289,9 +289,12 @@ struct PrototypeGhost : Widget {
   ArgumentToy& connection;
   std::unique_ptr<ObjectToy> prototype_widget;
 
-  PrototypeGhost(ArgumentToy* parent, Argument::Table& table)
-      : Widget(parent), connection(*parent), prototype_widget(table.prototype()->MakeToy(this)) {
+  PrototypeGhost(ObjectToy& parent, ArgumentToy& connection, Argument::Table& table)
+      : Widget(&parent), connection(connection), prototype_widget(table.prototype()->MakeToy(this)) {
+    alpha = 0;
     layers.OrderInside(prototype_widget.get());
+    Vec2 pos = PositionAhead(parent, table, *prototype_widget);
+    local_to_parent = SkM44(SkMatrix::Translate(pos.x, pos.y));
   }
   StrView Name() const override { return "PrototypeGhost"; }
   SkPath Shape() const override { return SkPath(); }
@@ -312,10 +315,6 @@ struct PrototypeGhost : Widget {
     if (progress.settled && alpha < 0.01f) {
       MarkDead(timer.now);
       return {};
-    }
-    if (auto* from = FindOnSameBoard(connection, *arg.object_ptr)) {
-      Vec2 pos = PositionAhead(*from, *arg.table, *prototype_widget);
-      local_to_parent = SkM44(SkMatrix::Translate(pos.x, pos.y));
     }
     Tock tock;
     tock.drawing |= progress;
@@ -1411,8 +1410,10 @@ void ArgumentToy::TickAutoconnectUI(time::Timer& timer) {
     layers.OrderBelow(radar.get());
   }
   if (!prototype_ghost && prototype_alpha_target > 0 && !arg.IsConnected()) {
-    prototype_ghost = std::make_unique<ui::PrototypeGhost>(this, *arg.table);
-    layers.OrderBelow(prototype_ghost.get());
+    if (auto* toy = ToyStore().FindOrNull(*arg.object_ptr)) {
+      prototype_ghost = std::make_unique<ui::PrototypeGhost>(*toy, *this, *arg.table);
+      toy->layers.OrderBelow(prototype_ghost.get());
+    }
   }
   if (radar) radar->WakeAnimation(&timer);
   if (prototype_ghost) prototype_ghost->WakeAnimation(&timer);

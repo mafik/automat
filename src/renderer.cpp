@@ -96,13 +96,8 @@ string debug_render_events;
 
 PackFrameRequest next_frame_request = {};
 
-// Pointer identities & window-px positions, sampled as late as possible - just before compositing
-// starts - so the OS event thread can deliver fresh positions until then. Compositors read it
-// directly - no locking, since it's constant while they run. The Pointer* is only compared, never
-// dereferenced (the pointer may die at any time).
 static SmallVec<std::pair<ui::Pointer*, Vec2>, 4> compositor_pointers;
 
-// A thread-inert snapshot of Widget::TextureAnchor: MortalPtr flattened to a comparison-only key.
 struct AnchorSnapshot {
   Vec2 pos;
   uint32_t id;
@@ -116,8 +111,8 @@ static SmallVec<AnchorSnapshot, 2> SnapshotAnchors(
     const SmallVec<Widget::TextureAnchor, 2>& anchors) {
   SmallVec<AnchorSnapshot, 2> out;
   for (auto& anchor : anchors) {
-    out.push_back({anchor.pos, anchor.id, anchor.pointer.Get(), anchor.warp_by, anchor.decay,
-                   anchor.radius});
+    out.push_back(
+        {anchor.pos, anchor.id, anchor.pointer.Get(), anchor.warp_by, anchor.decay, anchor.radius});
   }
   return out;
 }
@@ -729,7 +724,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
   }
 
   if constexpr (kDebugVisual) {
-    SkPaint texture_bounds_paint;  // translucent black
+    SkPaint texture_bounds_paint;
     texture_bounds_paint.setStyle(SkPaint::kStroke_Style);
     texture_bounds_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
     canvas->drawRect(frame.surface_bounds_local.sk, texture_bounds_paint);
@@ -1163,7 +1158,6 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
                  parent_to_local.mapRadius(anchor.decay),
                  parent_to_local.mapRadius(anchor.radius)});
           }
-          // A child warping along inherited anchors must warp against the same weight bias.
           node.effective_weight = tree[node.parent].effective_weight;
         }
       }
@@ -1612,7 +1606,7 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
     }
   }
 
-  {  // Sample pointer positions as late as possible - compositing starts just below.
+  {  // Sample pointer positions as late as possible
     lock_guard lock(rw.mutex);
     compositor_pointers.clear();
     for (auto& pointer : rw.pointers) {

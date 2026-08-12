@@ -32,9 +32,9 @@ struct DragConnectionAction : Action {
 };
 
 struct ConnectionWidget : ArgumentToy {
-  Optional<Vec2> manual_position;         // position of the plug (bottom center)
-  Vec2 manual_grab = {};                  // local point held by the dragging pointer
-  MortalPtr<ui::Pointer> manual_pointer;  // the dragging pointer
+  Optional<Vec2> manual_position;  // position of the plug (bottom center)
+  Vec2 manual_grab = {};
+  MortalPtr<ui::Pointer> manual_pointer;
 
   // Updated in `Tick()`
   SkColor tint;

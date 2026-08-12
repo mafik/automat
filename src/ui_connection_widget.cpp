@@ -352,7 +352,7 @@ struct ConnectionWidgetLocker {
   Object* EndObj() const { return end_iface.Owner<Object>(); }
 };
 
-// Recomputes pos_dir & to_points.
+// Recomputes pos_dir & to_points. Shared by Tick (animation) and TextureAnchors (texture stretch).
 static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
   if (a.start_widget && a.start_arg) {
     w.pos_dir = a.start_widget->ArgStart(*a.start_arg.table, a.board_widget);
@@ -398,7 +398,11 @@ static Widget::TextureAnchor EndpointAnchor(ConnectionWidget& w, uint32_t id, ui
     for (auto& anchor : toy->texture_anchors) {
       if (anchor.pointer) {
         Vec2 pointer_pos = Vec2(TransformBetween(*toy, w).mapPoint(anchor.pos - anchor.warp_by));
-        return {pos, id, anchor.pointer, pos - pointer_pos, kEndpointAnchorDecay,
+        return {pos,
+                id,
+                anchor.pointer,
+                pos - pointer_pos,
+                kEndpointAnchorDecay,
                 kEndpointAnchorRadius};
       }
     }
@@ -410,9 +414,12 @@ static void UpdateTextureAnchors(ConnectionWidget& w, ConnectionWidgetLocker& a)
   w.texture_anchors.clear();
   w.texture_anchors.push_back(EndpointAnchor(w, kStartAnchorId, a.start_widget, w.pos_dir.pos));
   if (w.manual_position.has_value()) {
-    w.texture_anchors.push_back(
-        {w.manual_grab, kEndAnchorId, w.manual_pointer, {}, kEndpointAnchorDecay,
-         kEndpointAnchorRadius});
+    w.texture_anchors.push_back({w.manual_grab,
+                                 kEndAnchorId,
+                                 w.manual_pointer,
+                                 {},
+                                 kEndpointAnchorDecay,
+                                 kEndpointAnchorRadius});
   } else if (a.end_widget && w.end_anchor_local.has_value()) {
     w.texture_anchors.push_back(EndpointAnchor(w, kEndAnchorId, a.end_widget,
                                                a.end_transform.mapPoint(*w.end_anchor_local)));

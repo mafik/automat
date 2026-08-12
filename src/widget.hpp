@@ -301,7 +301,6 @@ struct Widget : OptionsProvider {
     static uint32_t NewId();
   };
 
-  // Maintained by the widget (typically in its Tick); empty by default.
   SmallVec<TextureAnchor, 2> texture_anchors;
 
   // Metres above the board; > 0 makes this widget's texture cast a drop shadow onto layers

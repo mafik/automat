@@ -259,7 +259,6 @@ struct LocationWidget : ObjectToy {
   ObjectToy& ToyForObject();
   Vec2 LocalAnchor() const override;
 
-  // The pointer-bound texture anchor placed by AnchorToPointer; null when not grabbed.
   ui::Widget::TextureAnchor* GrabAnchor() const;
 
   void AnchorToPointer(ui::Pointer&, Vec2 grab);

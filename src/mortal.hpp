@@ -81,6 +81,8 @@ struct MortalPtr : mortal_priv::PtrNode {
   T* operator->() const { return Get(); }
   T& operator*() const { return *Get(); }
   operator T*() const { return Get(); }
+  bool operator==(std::nullptr_t) const { return mortal == nullptr; }
+  bool operator!=(std::nullptr_t) const { return mortal != nullptr; }
   explicit operator bool() const { return mortal != nullptr; }
 
  private:

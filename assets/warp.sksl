@@ -4,10 +4,10 @@ uniform shader surface;
 uniform shader displacement;
 uniform float maxDisplacement;
 
-const float kRgbSplitRatio = 0.01;
-const float kRgbSplitMax = 0.0005;
-const float kRgbSplitStart = 0.01;
-const float kRgbSplitFull = 0.03;
+// metric units (meters)
+const float kRgbSplitMax = 0.001;
+const float kRgbSplitStart = 0.02;
+const float kRgbSplitFull = 0.05;
 
 vec4 main(vec2 local) {
     vec2 offset = displacement.eval(local).rg;
@@ -17,13 +17,10 @@ vec4 main(vec2 local) {
         return surface.eval(p);
     }
     // RGB split
-    float t = clamp(len / maxDisplacement, 0.0, 1.0);
-    // TODO: drop components that don't bring any significant effects
-    vec2 split =
-    offset / len *
-    min(kRgbSplitMax, maxDisplacement * kRgbSplitRatio) *
-    smoothstep(0.02, 0.3, t) * (1.0 - smoothstep(0.7, 0.92, t)) *
-    smoothstep(kRgbSplitStart, kRgbSplitFull, maxDisplacement);
+    vec2 split = offset / len *  // direction vector (unitless)
+    smoothstep(kRgbSplitStart, kRgbSplitFull, maxDisplacement) *  // ratio (unitless) - makes the effect start smoothly
+    min(len * 0.25, kRgbSplitMax) *  // length
+    (1 - clamp(len / maxDisplacement, 0.0, 1.0));  // ratio (unitless) - reduces split to 0 at anchor
     vec4 r = surface.eval(p);
     vec4 g = surface.eval(p - split);
     vec4 b = surface.eval(p - 2.0 * split);

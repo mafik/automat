@@ -11,6 +11,7 @@
 #include "casting.hpp"
 #include "control_flow.hpp"
 #include "deserializer.hpp"
+#include "error_flames.hpp"
 #include "ptr.hpp"
 #include "string_multimap.hpp"
 #include "toy.hpp"
@@ -139,7 +140,7 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
 //
 // It's rendered as a green box with the name of the object.
 struct ObjectToy : Toy {
-  ObjectToy(Widget* parent, Object& obj) : Toy(parent, obj, nullptr) {}
+  ObjectToy(Widget* parent, Object& obj) : Toy(parent, obj, nullptr, obj.wake_counter) {}
 
   virtual float Width() const;
   virtual std::string Text() const { return std::string(Name()); }
@@ -168,6 +169,12 @@ struct ObjectToy : Toy {
 
   // Shortcut for automat::IsIconified(Object*).
   bool IsIconified() const;
+
+  std::unique_ptr<ErrorFlames> error_flames;
+  void UpdateErrorFlames();
+
+  // Warning: if you ever override this, make sure to call ObjectToy::OnWake()!
+  void OnWake() final { UpdateErrorFlames(); }
 
   template <typename T>
   Ptr<T> LockObject() const {

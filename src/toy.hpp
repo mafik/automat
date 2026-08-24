@@ -4,6 +4,7 @@
 
 #include <ankerl/unordered_dense.h>
 
+#include <atomic>
 #include <concepts>
 #include <functional>
 #include <type_traits>
@@ -31,9 +32,12 @@ struct Object;
 struct Toy : ui::Widget {
   WeakPtr<Object> owner;
   Interface::Table* iface;
-  uint32_t observed_wake_counter = 0;  // UI-thread only — last seen notify_counter
+  const std::atomic<uint32_t>& wake_counter;
+  uint32_t observed_wake_counter = 0;  // UI-thread only
 
-  Toy(ui::Widget* parent, Object& owner, Interface::Table* iface);
+  // wake_counter must be readable even after owner expires
+  Toy(ui::Widget* parent, Object& owner, Interface::Table* iface,
+      const std::atomic<uint32_t>& wake_counter);
 
   template <typename T = Object>
   Ptr<T> LockOwner() const {
@@ -64,6 +68,8 @@ struct Toy : ui::Widget {
 
   // Called on the UI thread; wakes this toy when its owner's state has changed.
   void Poll(time::Timer&);
+
+  virtual void OnWake() {}
 
   // Used to forward Poll to any nested toys.
   virtual void OnPoll(time::Timer&) {}

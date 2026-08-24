@@ -82,6 +82,9 @@ def LDFLAGS():
 compile_args += ['-static', '-std=gnu++26', '-fcolor-diagnostics', '-ffunction-sections',
     '-fdata-sections', '-funsigned-char', '-fno-signed-zeros',
     '-fno-strict-aliasing',
+    # -fnon-call-exceptions makes error recovery more robust
+    # clang doesn't support it yet but might someday...
+    '-fnon-call-exceptions', 
     '-D_FORTIFY_SOURCE=2', '-Wformat', '-Wno-c99-designator',
     '-Wformat-security', '-Werror=format-security', '-Wno-vla-extension', '-Wno-trigraphs', '-Werror=return-type',
     '-Wno-c23-extensions',

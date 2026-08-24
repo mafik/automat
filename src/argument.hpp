@@ -12,6 +12,7 @@
 namespace automat {
 
 struct Location;
+struct ArgumentToy;
 
 namespace ui {
 struct Widget;
@@ -20,24 +21,6 @@ struct Widget;
 enum class CableTexture {
   Smooth,
   Braided,
-};
-
-struct ArgumentToy : Toy {
-  Vec2AndDir pos_dir;
-  float radar_activation_target = 0;
-  float prototype_alpha_target = 0;
-  std::unique_ptr<ui::Widget> radar;
-  std::unique_ptr<ui::Widget> prototype_ghost;
-
-  using Toy::Toy;
-
-  Location* StartLocation() const;
-  Location* EndLocation() const;
-
-  virtual bool DrawnUnderEndpoints() const { return false; }
-
-  void TickSplits();
-  void TickAutoconnectUI(time::Timer&);
 };
 
 // Arguments are responsible for finding dependencies (input & output) of objects.
@@ -243,6 +226,25 @@ struct Argument : Interface {
 
     inline constinit static Table tbl = MakeTable();
   };
+};
+
+struct ArgumentToy : Toy {
+  Vec2AndDir pos_dir;
+  float radar_activation_target = 0;
+  float prototype_alpha_target = 0;
+  std::unique_ptr<ui::Widget> radar;
+  std::unique_ptr<ui::Widget> prototype_ghost;
+
+  ArgumentToy(ui::Widget* parent, Object& owner, Argument::Table& table)
+      : Toy(parent, owner, &table, Argument(owner, table).state->wake_counter) {}
+
+  Location* StartLocation() const;
+  Location* EndLocation() const;
+
+  virtual bool DrawnUnderEndpoints() const { return false; }
+
+  void TickSplits();
+  void TickAutoconnectUI(time::Timer&);
 };
 
 // ObjectArgument<T> — connects to a top-level object of type T.

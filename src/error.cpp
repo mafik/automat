@@ -70,6 +70,7 @@ void ManipulateError(Object& target, Fn<void(Error&)> manip_error) {
     errors.emplace_back(std::move(tmp));
     errors.back().target = target.AcquireWeakPtr();
   }
+  target.WakeToys();
 }
 
 }  // namespace automat

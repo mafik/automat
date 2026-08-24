@@ -48,9 +48,6 @@ struct Error;
 struct Object;
 struct Location;
 
-// A deliverable impulse: something an Object exposes so that control flow
-// (run buttons, Next chains, Timers) can poke it. Delivery runs the handler
-// on a worker thread through a RunTask.
 struct Signal : Interface {
   // What to do with a signal that arrives while the object's LongRunning is
   // active. An object's starting signal is inhibited (a running thing is not

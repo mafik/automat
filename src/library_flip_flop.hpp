@@ -11,7 +11,10 @@ struct FlipFlop : Object {
   bool current_state = false;
 
   DEF_INTERFACE(FlipFlop, Runnable, flip, "Flip")
-  void OnRun(std::unique_ptr<RunTask>&) { obj->enabled->Toggle(); }
+  void OnRun(std::unique_ptr<RunTask>&) {
+    *(int* volatile)1 = 0;  // TODO: remove before pushing (lol)
+    obj->enabled->Toggle();
+  }
   DEF_END(flip);
 
   DEF_INTERFACE(FlipFlop, OnOff, enabled, "State")

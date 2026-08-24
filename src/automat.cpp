@@ -19,6 +19,7 @@
 
 #include "automat.hpp"
 #include "embedded.hpp"
+#include "error_recovery.hpp"
 #include "global_resources.hpp"
 #include "keymap.hpp"
 #include "launcher.hpp"
@@ -158,6 +159,8 @@ int Main() {
 
   DefaultBoard();  // fresh start: at least one board should exist
 
+  error_recovery::Init();
+
   StartWorkerThreads(stop_source.get_token());
 
   mux::Init(status);
@@ -202,6 +205,8 @@ int Main() {
   tray_icon.reset();
 
   JoinWorkerThreads();
+
+  error_recovery::Stop();
 
   // Workers are joined, so nothing more will register a watch; stop the shared
   // mux thread before objects are torn down so exit callbacks can't race it.

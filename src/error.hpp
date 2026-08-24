@@ -13,39 +13,49 @@ namespace automat {
 struct Object;
 
 /*
-The goal of Errors is to explain to the user what went wrong and help with
-recovery.
 
-Errors can be attached to Objects. Each Object can have up to one Error.
+# Goals
 
-While present, Errors pause the execution of their objects. Each object is
-responsible for checking its error and taking it into account when executing
-itself.
+1. Automat should continue working even when some parts of it fail.
+2. Error recovery should be not only possible but fun.
 
-Errors may be attached to objects by external "reporters". They work like
-validators that can look for issues and attach the errors to stop the execution.
-Errors keep track of their reporter (which is usually the same as their target).
+# Design
 
-Errors can be cleaned by the user or by their reporter. The reporter of the error
-should clean it automatically - but sometimes it can be executed explicitly to
-recheck conditions & clean the error. Errors caused by failing preconditions
-clear themselves automatically when an object is executed.
+Errors can be attached to VM Objects. Each Object can have up to one Error. Attaching (reporting) an
+error makes the Object enter a "failed" state. Objects can enter this state explicitly (by calling
+ReportError) or due to signal being delivered.
 
-TODO: Errors can also save objects that would otherwise be deleted. The objects
-are held in the Error instance and can be accessed by the user.
+Objects that do work should check for the failed state and not do anything until it's cleared.
 
-In the UI the errors are visualized as fire with a smoke bubble explaining the
-issue.
+Object that use ReportError to report errors on themselves on other objects are also responsible for
+automatically clearing detected errors. If automatic clearing fails, the "failed" state can also be
+cleared explicitly by the user (TODO).
 
-TODO: Visualize reporters
+Objects in the "failed" state burn and display a human-readable error message.
 
-TODO: Visualize error messages
+Errors are not propagated by default (everything else keeps running) but may be propagated if user
+makes it explicit. This default makes the system more robust.
+
+Error information is stored by the VM Object and triggers a regular Wakeup when it's changed.
+Default implementation stores errors out of band but Objects should be able to store them in-line as
+well.
+
+TODO: Data loss prevention: allow Errors to store information that can be accessed by the user.
+
+# Open questions
+
+1. Better way to store Error information
+  (currently it's some bizarre mutex-protected vector)
+
+# Important files
+
+error_recovery.hpp - converts fatal errors into LowLevelError exception
+error_flames.hpp - visual error indicator
+
 */
 struct Error {
   WeakPtr<Object> target = nullptr;    // target is the object that "burns"
-  WeakPtr<Object> reporter = nullptr;  // reporter is the object that started the fire
-  // TODO: Object saving
-  // Ptr<Object> saved_object = nullptr;
+  WeakPtr<Object> reporter = nullptr;  // reporter is responsible for clearing the error
   std::string text = "";
   std::source_location source_location = {};
 

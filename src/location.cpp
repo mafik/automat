@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 #include "location.hpp"
 
-#include <include/core/SkBlurTypes.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPath.h>
@@ -14,7 +13,6 @@
 #include <include/core/SkSurface.h>
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkGradient.h>
-#include <include/effects/SkImageFilters.h>
 
 #include <algorithm>
 #include <cmath>
@@ -25,10 +23,7 @@
 #include "color.hpp"
 #include "control_flow.hpp"
 #include "drag_action.hpp"
-#include "embedded.hpp"
-#include "font.hpp"
 #include "format.hpp"
-#include "global_resources.hpp"
 #include "interface.hpp"
 #include "math.hpp"
 #include "object_iconified.hpp"
@@ -38,7 +33,6 @@
 #include "time.hpp"
 #include "timer_thread.hpp"
 #include "ui_connection_widget.hpp"
-#include "ui_constants.hpp"
 #include "widget.hpp"
 
 using namespace automat::ui;
@@ -370,9 +364,6 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
     auto elevation_progress = elevation.SineTowards(target_elevation, timer.d, 0.2);
     tock.drawing |= elevation_progress;
   }
-  if (HasError(*loc->object)) {
-    tock |= Tock::Drawing;
-  }
   return tock;
 }
 
@@ -406,86 +397,7 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
     canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_border);
   }
 
-  // Draw debug text log below the Location
-  float n_lines = 1;
-  float offset_y = bounds.bottom;
-  float offset_x = bounds.left;
-  float line_height = ui::kLetterSize * 1.5;
-  auto& font = ui::GetFont();
-
-  canvas.concat(toy->local_to_parent);
-  toy->DrawStack(canvas);
-
-  auto loc = LockLocation();
-  if (!loc) {
-    return;
-  }
-
-  HasError(*loc->object, [&](Error& error) {
-    constexpr float b = 0.00025;
-    SkPaint error_paint;
-    error_paint.setColor(SK_ColorRED);
-    error_paint.setStyle(SkPaint::kStroke_Style);
-    error_paint.setStrokeWidth(2 * b);
-    error_paint.setAntiAlias(true);
-    offset_x -= b;
-    offset_y -= 3 * b;
-    error_paint.setStyle(SkPaint::kFill_Style);
-    canvas.translate(offset_x, offset_y - n_lines * line_height);
-    font.DrawText(canvas, error.text, error_paint);
-    canvas.translate(-offset_x, -offset_y + n_lines * line_height);
-    n_lines += 1;
-
-    auto ctm = canvas.getLocalToDeviceAs3x3().preConcat(toy->local_to_parent.asM33());
-    auto my_shape_px = my_shape.makeTransform(ctm);
-    Rect bounds_px = my_shape_px.getBounds();
-    float blur_radius = ctm.mapRadius(7_mm);
-    auto clip = bounds.Outset(blur_radius * 3);
-    auto clip_px = bounds_px.Outset(blur_radius * 3);
-    Status status;
-    static auto shader = resources::CompileShader(embedded::assets_error_sksl, status);
-    if (!OK(status)) {
-      ERROR << status;
-    }
-
-    SkRuntimeEffectBuilder builder(shader);
-    static auto t0 = time::SecondsSinceEpoch();
-    builder.uniform("iTime") = (float)(time::SecondsSinceEpoch() - t0) * 3;
-    builder.uniform("iLeft") = bounds_px.left;
-    builder.uniform("iRight") = bounds_px.right;
-    builder.uniform("iTop") = bounds_px.top;
-    builder.uniform("iBottom") = bounds_px.bottom;
-
-    SkPaint fire_paint;
-    fire_paint.setImageFilter(SkImageFilters::RuntimeShader(builder, "iMask", nullptr));
-
-    // Note that we're saving the canvas state twice.
-    // This is because of https://issues.skia.org/issues/447458443
-    // Otherwise the coordinates passed to the shader will be messed up.
-    canvas.save();
-    canvas.resetMatrix();
-    canvas.clipRect(clip_px.sk);
-    canvas.saveLayer(&clip_px.sk, &fire_paint);
-
-    SkPaint paint;
-    paint.setAntiAlias(false);
-
-    SkPaint stroke_paint;
-    stroke_paint.setAntiAlias(false);
-    stroke_paint.setStyle(SkPaint::kStroke_Style);
-    stroke_paint.setStrokeWidth(1);
-    canvas.drawPath(my_shape_px, stroke_paint);
-
-    paint.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, blur_radius, false));
-    canvas.drawPath(my_shape_px, paint);
-
-    paint.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, blur_radius / 4, false));
-    my_shape_px = my_shape_px.makeToggleInverseFillType();
-    canvas.drawPath(my_shape_px, paint);
-
-    canvas.restore();
-    canvas.restore();
-  });
+  BakeChildStack(canvas, *toy);
 }
 
 std::unique_ptr<Action> LocationWidget::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {

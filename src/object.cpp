@@ -491,12 +491,23 @@ Vec2AndDir ObjectToy::ArgStart(const Interface::Table& arg, ui::Widget* coordina
   return pos_dir;
 }
 
-Object::~Object() {
-  LifetimeObserver::CheckDestroyNotified(*this);
-  WakeToys();  // wake the zombie toys
-}
+Object::~Object() { LifetimeObserver::CheckDestroyNotified(*this); }
 
 bool ObjectToy::AllowChildPointerEvents(ui::Widget&) const { return !IsIconified(); }
+
+void ObjectToy::UpdateErrorFlames() {
+  auto obj = LockOwner();
+  Str text;
+  bool burning = obj && HasError(*obj, [&](Error& error) { text = error.text; });
+  if (!burning) {
+    error_flames.reset();
+    return;
+  }
+  if (!error_flames) {
+    error_flames = std::make_unique<ErrorFlames>(*this);
+  }
+  error_flames->SetText(text);
+}
 
 bool ObjectToy::IsIconified() const {
   return automat::IsIconified(static_cast<Object*>(owner.GetUnsafe()));

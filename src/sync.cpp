@@ -325,7 +325,7 @@ struct GearWidget : ObjectToy {
 };
 
 SyncBelt::SyncBelt(Widget* parent, Object& object, Syncable::Table& syncable)
-    : ArgumentToy(parent, object, &syncable) {}
+    : ArgumentToy(parent, object, syncable) {}
 
 SkPath SyncBelt::Shape() const {
   return SkPath::Circle(pinion.x, pinion.y, kSecondaryGearRadius + kTeethAmplitude);

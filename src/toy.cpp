@@ -4,12 +4,14 @@
 
 #include "board.hpp"
 #include "location.hpp"
+#include "object.hpp"
 #include "root_widget.hpp"
 
 namespace automat {
 
-Toy::Toy(ui::Widget* parent, Object& owner, Interface::Table* iface)
-    : Widget(parent), owner(owner.AcquireWeakPtr()), iface(iface) {}
+Toy::Toy(ui::Widget* parent, Object& owner, Interface::Table* iface,
+         const std::atomic<uint32_t>& wake_counter)
+    : Widget(parent), owner(owner.AcquireWeakPtr()), iface(iface), wake_counter(wake_counter) {}
 
 Toy* Toy::BaseToy() const {
   Widget* base = const_cast<Widget*>((const Widget*)this);
@@ -40,25 +42,11 @@ void ToyMakerMixin::ForEachToyImpl(Object& owner, Interface::Table* iface,
 }
 
 void Toy::Poll(time::Timer& timer) {
-  uint32_t current;
-  if (iface == nullptr) {  // Object toys
-    // Safe to read without locking: memory survives until weak_refs hits 0.
-    // Counter at `wake_counter` is valid even after ~Object.
-    current = owner.GetUnsafe()->wake_counter.load(std::memory_order_relaxed);
-  } else if (auto obj = LockOwner()) {  // True interface toys
-    Interface interface(*obj, *iface);
-    if (auto arg = dyn_cast<Argument>(interface)) {
-      current = arg.state->wake_counter.load(std::memory_order_relaxed);
-    } else {
-      return;  // Not an Argument toy, no wake_counter to check
-    }
-  } else {
-    // Interface owner has been destroyed
-    current = ~observed_wake_counter;
-  }
-  if (current != observed_wake_counter) {
+  uint32_t current = wake_counter.load(std::memory_order_relaxed);
+  if (current != observed_wake_counter || owner.IsExpired()) {
     observed_wake_counter = current;
     WakeAnimationAt(timer.last);
+    OnWake();
   }
   OnPoll(timer);
 }

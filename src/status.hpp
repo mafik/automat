@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: MIT
 
 #include <memory>
-#include <source_location>
 
+#include "source_location.hpp"
 #include "str.hpp"
 
 namespace automat {
@@ -17,7 +17,7 @@ enum StatusCode {
 struct Status {
   struct Entry {
     std::unique_ptr<Entry> next;
-    std::source_location location;
+    SourceLocation location;
     Str message;
     Str advice;
   };
@@ -28,7 +28,7 @@ struct Status {
 
   Status();
 
-  Str& operator()(const std::source_location location_arg = std::source_location::current());
+  Str& operator()(SourceLocation location_arg = std::source_location::current());
 
   bool Ok() const;
   Str ToStr() const;
@@ -39,9 +39,9 @@ struct Status {
 
 inline bool OK(const Status& status) { return status.Ok(); }
 inline Str ErrorMessage(const Status& s) { return s.ToStr(); }
-inline Str& AppendErrorMessage(
-    Status& status, const std::source_location location_arg = std::source_location::current()) {
-  return status(location_arg);
+inline Str& AppendErrorMessage(Status& status,
+                               SourceLocation location_arg = std::source_location::current()) {
+  return status(std::move(location_arg));
 }
 void AppendErrorAdvice(Status&, StrView advice);
 

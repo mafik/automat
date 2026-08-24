@@ -13,6 +13,9 @@
 #include "blockingconcurrentqueue.hpp"
 #include "casting.hpp"
 #include "error.hpp"
+#include "error_recovery.hpp"
+#include "memory.hpp"
+#include "source_location.hpp"
 #include "thread_name.hpp"
 #include "time.hpp"
 #include "ui_connection_widget.hpp"
@@ -29,13 +32,69 @@ struct NoopTask : Task {
 
 static void AutomatLoop(std::stop_token stop_token) {
   SetThreadName("Automat Loop");
+  error_recovery::SignalStack signal_stack;
   while (!stop_token.stop_requested()) {
     Task* task;
     {
       ZoneScopedN("Dequeue");
       queue.wait_dequeue(task);
     }
-    task->Execute(std::unique_ptr<Task>(task));
+    WeakPtr<Object> target = task->target;
+    try {
+      task->Execute(std::unique_ptr<Task>(task));
+    } catch (LowLevelError error) {
+      Str file;
+      intptr_t offset;
+      ResolveAddress(error.instruction_pointer, file, offset);
+
+      Str source_human_readable;
+      if (file.empty()) {
+        source_human_readable = f("{:#x}", offset);
+      } else {
+        source_human_readable = f("{}+{:#x}", file, offset);
+      }
+      Str message;
+
+      switch (error.type) {
+        using enum LowLevelError::Type;
+        case EXECUTED_UNKNOWN_INSTRUCTION:
+          message = f("Executed an unknown instruction at {}", source_human_readable);
+          break;
+        case READ_PROTECTED_MEMORY:
+          message = f("Code at {} read protected memory", source_human_readable);
+          break;
+        case WROTE_PROTECTED_MEMORY:
+          message = f("Code at {} wrote to protected memory", source_human_readable);
+          break;
+        case EXECUTED_PROTECTED_MEMORY:
+          message = f("Executed protected memory at {}", source_human_readable);
+          break;
+        case READ_UNMAPPED_MEMORY:
+          message = f("Code at {} read unmapped memory", source_human_readable);
+          break;
+        case WROTE_UNMAPPED_MEMORY:
+          message = f("Code at {} wrote to unmapped memory", source_human_readable);
+          break;
+        case EXECUTED_UNMAPPED_MEMORY:
+          message = f("Executed unmapped memory at {}", source_human_readable);
+          break;
+        case ACCESSED_UNALIGNED_MEMORY:
+          message = f("Code at {} accessed unaligned memory", source_human_readable);
+          break;
+        case ARITHMETIC_ERROR:
+          message = f("Arithmetic error caused by code at {}", source_human_readable);
+          break;
+        case STACK_OVERFLOW:
+          message = f("Code at {} overflowed the stack", source_human_readable);
+          break;
+      }
+      auto location = error.FindSourceLocation().value_or(SourceLocation());
+      if (auto obj = target.Lock()) {
+        obj->ReportError(message, location);
+      } else {
+        ERROR << "Recovered from an error with no target object: " << message;
+      }
+    }
   }
 }
 

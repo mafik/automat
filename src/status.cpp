@@ -10,12 +10,12 @@ namespace automat {
 
 Status::Status() : errsv(0) {}
 
-Str& Status::operator()(const std::source_location location_arg) {
+Str& Status::operator()(SourceLocation location_arg) {
   if (errsv == 0) {
     errsv = errno;
     errno = 0;
   }
-  entry.reset(new Entry{.next = std::move(entry), .location = location_arg, .message = {}});
+  entry.reset(new Entry{.next = std::move(entry), .location = std::move(location_arg), .message = {}});
   return entry->message;
 }
 
@@ -38,7 +38,7 @@ Str Status::ToStr() const {
       ret += " ";
     }
     auto& location = i->location;
-    ret += f("({}:{}).", location.file_name(), location.line());
+    ret += f("({}:{}).", location.file_name(), location.line);
   }
   if (errsv) {
     if (!ret.empty()) {

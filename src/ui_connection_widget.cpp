@@ -56,16 +56,16 @@ static Location* FindOnSameBoard(const automat::ArgumentToy& w, Object& obj) {
 }
 
 ConnectionWidget::ConnectionWidget(Widget* parent, Object& start, Argument::Table& arg)
-    : ArgumentToy(parent, start, &arg), tint(arg.tint.toSkColor()) {
+    : ArgumentToy(parent, start, arg), tint(arg.tint.toSkColor()) {
   alpha = 0;
   local_to_parent_weight = 0;
 }
 
 SpotlightWidget::SpotlightWidget(Widget* parent, Object& start, Argument::Table& arg)
-    : ArgumentToy(parent, start, &arg) {}
+    : ArgumentToy(parent, start, arg) {}
 
 InvisibleWidget::InvisibleWidget(Widget* parent, Object& start, Argument::Table& arg)
-    : ArgumentToy(parent, start, &arg) {}
+    : ArgumentToy(parent, start, arg) {}
 
 constexpr float kStreamBore = 4_mm;
 constexpr float kStreamWall = 0.5_mm;

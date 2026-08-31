@@ -81,12 +81,50 @@ copy-relocated data objects and nothing else.
 
 ## Debug information
 
-The fast and debug variants compile and link with `-gz=zstd`: DWARF5, compressed about 2.6x
-(667 MB to 258 MB in the fast variant). gdb reads the compressed sections natively. The release variant links with `-Wl,--strip-all`
-and carries no symbol table at all.
+Every variant compiles and links with `-gz=zstd`: DWARF5, compressed about 2.6x (667 MB to
+258 MB in the fast variant). gdb reads the compressed sections natively. The fast and debug
+variants keep the debug information embedded. The release variant compiles with
+`-gsplit-dwarf`, so the heavyweight debug sections go into a `.dwo` file next to each object
+under `build/release/obj/` and never enter the link, and it links with `-Wl,--strip-all`, so
+the released binary carries no debug information and no symbol table at all. The `.dwo` files
+stay on the machine that built the release; `llvm-dwp` can bundle them into a single file for
+archiving.
 
 ## Inspecting
 
 `readelf -d` shows the dependency list and `BIND_NOW`; `nm -D --defined-only` lists the
 dynamic exports; `readelf -rW` counts the relocations. A regression in any of the three is a
 regression in this design.
+
+## Windows
+
+The Windows build follows the same intent with PE mechanics. The toolchain is clang with the
+MSVC ABI and lld-link; every library is a locally built static archive, linked by explicit
+path or through the defaultlib directives embedded in object files. The shared library
+dependencies are operating-system DLLs plus the delay-loaded tensorflow.dll
+(`src/tensorflow.py`). The C runtime is hybrid: vcruntime and the STL are linked statically,
+while malloc comes from the OS-provided ucrtbase, so automat.exe and tensorflow.dll share one
+heap and C++ objects can cross between them (the flags live in `run_py/build.py`). 128-bit
+arithmetic helpers that the MSVC runtime lacks come from compiler-rt's builtins archive.
+
+Clang emits CodeView debug information and every variant links with `-Wl,/debug`, which
+merges the CodeView from all objects into automat.pdb next to the executable; error
+recovery's symbolization reads it (`docs/parrots/Error Recovery.md`). Writing the 400 MB PDB
+adds about five seconds to the link. The PDB is the platform's separate-debug-file
+convention: the executable itself carries no debug information and shipping the PDB is
+optional. The symbolizer accepts a PDB found through the path recorded in the executable or
+next to the executable, and only when its identity matches; without it, fault reports keep
+addresses for offline symbolization. `/opt:ref` and `/opt:icf` stay explicit so that
+`/debug` does not disable them; the release link also writes a .map file for binary size
+attribution.
+
+The executable links with `/fixed`, mirroring the fixed load address of the ELF build: the
+image always loads at its preferred base of 0x140000000, carries no base relocation section,
+and its symbol addresses are stable across runs, so error recovery symbolizes raw virtual
+addresses exactly as on Linux. High-entropy address space layout randomization is switched
+off together with the dynamic base, since neither can apply to an image without
+relocations.
+
+`llvm-readobj --file-headers` shows the image base and the DLL characteristics;
+`llvm-objdump -h` lists the sections. The binary itself stays free of debug information; the
+PDB is a separate file.

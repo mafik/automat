@@ -56,8 +56,7 @@ if __name__ == '__main__':
   class Slave:
     ssh_host: str
     repo_dir: str
-    out_binary: str
-    out_name: str
+    assets: dict[str, str]
 
     def is_windows(self) -> bool:
       '''Check if this slave is a Windows machine based on repo_dir path.'''
@@ -122,30 +121,28 @@ if __name__ == '__main__':
     Slave(
       ssh_host='maf@vr',
       repo_dir='~/Pulpit/automat-release',
-      out_binary='automat',
-      out_name='automat_linux_64bit'),
+      assets={'automat': 'automat_linux_64bit'}),
     # maf's windows pc
     Slave(
       ssh_host='user@wall-e',
       repo_dir='C:/Users/User/Desktop/automat-release',
-      out_binary='automat.exe',
-      out_name='automat_windows_64bit.exe'),
+      assets={'automat.exe': 'automat_windows_64bit.exe', 'automat.pdb': 'automat.pdb'}),
     # maf's laptop - backup in case that wall-e fails
     # Slave(
     #   ssh_host='nano',
     #   repo_dir='C:/Users/maf/automat-release',
-    #   out_binary='automat.exe',
-    #   out_name='automat_windows_64bit.exe'),
+    #   assets={'automat.exe': 'automat_windows_64bit.exe', 'automat.pdb': 'automat.pdb'}),
   ]
 
   release_assets = []
   for slave in slaves:
-    out = Path('/tmp') / slave.out_name
     slave.ssh(['git', 'fetch', 'origin'], cwd=slave.repo_dir)
     slave.ssh(['git', 'checkout', main_hash], cwd=slave.repo_dir)
     slave.ssh(['python', 'run.py', 'link automat', '--variant=release'], cwd=slave.repo_dir)
-    slave.scp(f'{slave.repo_dir}/build/release/{slave.out_binary}', out)
-    release_assets.append(out)
+    for build_output, asset_name in slave.assets.items():
+      out = Path('/tmp') / asset_name
+      slave.scp(f'{slave.repo_dir}/build/release/{build_output}', out)
+      release_assets.append(out)
 
   # Upload to github
   today = datetime.date.today()

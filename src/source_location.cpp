@@ -51,6 +51,21 @@ SourceLocation::~SourceLocation() {
 }
 
 SourceLocation::operator std::source_location() const {
+  Names impl_names = owned ? Join(file_name(), function_name()) : names;
+  const char* file = owned ? impl_names.heap.buffer : impl_names.view.file_name;
+  const char* function = owned ? impl_names.heap.buffer + impl_names.heap.file_name_size + 1
+                               : impl_names.view.function_name;
+#if defined(_MSVC_STL_VERSION)
+  struct Record {
+    unsigned line;
+    unsigned column;
+    const char* file_name;
+    const char* function_name;
+  };
+  static_assert(sizeof(std::source_location) == sizeof(Record));
+  return std::bit_cast<std::source_location>(
+      Record{.line = line, .column = column, .file_name = file, .function_name = function});
+#else
   struct Impl {  // layout of libstdc++'s private std::source_location::__impl
     const char* file_name;
     const char* function_name;
@@ -58,14 +73,12 @@ SourceLocation::operator std::source_location() const {
     unsigned column;
   };
   static_assert(sizeof(std::source_location) == sizeof(const Impl*));
-  Names impl_names = owned ? Join(file_name(), function_name()) : names;
-  auto* impl = new Impl{
-      .file_name = owned ? impl_names.heap.buffer : impl_names.view.file_name,
-      .function_name = owned ? impl_names.heap.buffer + impl_names.heap.file_name_size + 1
-                             : impl_names.view.function_name,
+  return std::bit_cast<std::source_location>(new Impl{
+      .file_name = file,
+      .function_name = function,
       .line = line,
-      .column = column};  // leaked - std::source_location can only view its data
-  return std::bit_cast<std::source_location>(impl);
+      .column = column});  // leaked - std::source_location can only view its data
+#endif
 }
 
 }  // namespace automat

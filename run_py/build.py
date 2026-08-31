@@ -116,7 +116,7 @@ if fast:
 
 # Build type intended for practical usage (slow to build but fast to run)
 if release:
-    compile_args += ['-O3', '-DNDEBUG', '-flto', '-fstack-protector', '-fno-trapping-math']
+    compile_args += ['-O3', '-g', '-DNDEBUG', '-flto', '-fstack-protector', '-fno-trapping-math']
     link_args += ['-flto']
 
 # Build type intended for debugging
@@ -129,9 +129,11 @@ if platform == 'linux':
         compile_args += ['-fno-pie']
         link_args += ['-no-pie']
 
-    if fast or debug:
-        compile_args += ['-gz=zstd']
-        link_args += ['-gz=zstd']
+    compile_args += ['-gz=zstd']
+    link_args += ['-gz=zstd']
+
+    if release:
+        compile_args += ['-gsplit-dwarf']
 
     if build_variant.asan:
         compile_args += ['-fsanitize=address', '-fsanitize-address-use-after-return=always']
@@ -269,8 +271,7 @@ if platform == 'win32':
     link_args += [subprocess.check_output(
         [compiler_c, '--rtlib=compiler-rt', '-print-libgcc-file-name'],
         text=True).strip()]
-    if debug:
-        link_args += ['-Wl,/debug']
+    link_args += ['-Wl,/fixed', '-Wl,/highentropyva:no', '-Wl,/debug']
 else:
     link_args += ['-Wl,--as-needed', '-Wl,--exclude-libs,ALL', '-Wl,--gc-sections',
                   '-Wl,--build-id=none', '-Wl,-z,relro', '-Wl,-z,now']

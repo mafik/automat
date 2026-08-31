@@ -2,10 +2,19 @@
 // SPDX-License-Identifier: MIT
 #include "memory.hpp"
 
+#if defined(__linux__)
+
 #include "status.hpp"
 #include "virtual_fs.hpp"
 
+extern "C" char __executable_start[];
+extern "C" char _end[];
+
 namespace automat {
+
+bool InMainExecutable(intptr_t address) {
+  return address >= (intptr_t)__executable_start && address < (intptr_t)_end;
+}
 
 MemoryMap MemoryMap::SnapshotSelf() {
   MemoryMap memory_map;
@@ -70,7 +79,6 @@ void MemoryMap::iterator::ParseNextEntry() {
 }
 
 void ResolveAddress(intptr_t addr, Str& out_filename, intptr_t& out_offset) {
-#ifdef __linux__
   for (auto& entry : MemoryMap::SnapshotSelf()) {
     if (addr >= entry.address_start && addr < entry.address_end) {
       out_filename = entry.file_path;
@@ -78,10 +86,42 @@ void ResolveAddress(intptr_t addr, Str& out_filename, intptr_t& out_offset) {
       return;
     }
   }
-#endif
-  // TODO: resolve the address on Windows
   out_filename = "";
   out_offset = addr;
 }
 
 }  // namespace automat
+
+#elif defined(_WIN32)
+
+#include "win32.hpp"
+
+extern "C" IMAGE_DOS_HEADER __ImageBase;
+
+namespace automat {
+
+bool InMainExecutable(intptr_t address) {
+  auto begin = (intptr_t)&__ImageBase;
+  auto* nt_headers = (IMAGE_NT_HEADERS*)((char*)begin + __ImageBase.e_lfanew);
+  return address >= begin && address < begin + nt_headers->OptionalHeader.SizeOfImage;
+}
+
+void ResolveAddress(intptr_t addr, Str& out_filename, intptr_t& out_offset) {
+  HMODULE module = nullptr;
+  if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                             GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                         (LPCWSTR)addr, &module)) {
+    wchar_t path[MAX_PATH];
+    if (GetModuleFileNameW(module, path, MAX_PATH)) {
+      out_filename = win32::WideToUtf8(path);
+      out_offset = addr - (intptr_t)module;
+      return;
+    }
+  }
+  out_filename = "";
+  out_offset = addr;
+}
+
+}  // namespace automat
+
+#endif

@@ -225,6 +225,14 @@ struct RunOption : TextOption {
   Dir PreferredDir() const override { return S; }
 };
 
+struct ThisIsFineOption : TextOption {
+  WeakPtr<Object> weak;
+  ThisIsFineOption(WeakPtr<Object> object);
+  std::unique_ptr<Option> Clone() const override;
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override;
+  Dir PreferredDir() const override { return S; }
+};
+
 // Interface for objects that can hold other objects within.
 struct Container {
   // Remove the given `descendant` from this object and return it wrapped in a (possibly newly

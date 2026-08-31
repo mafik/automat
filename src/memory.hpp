@@ -8,11 +8,10 @@
 
 namespace automat {
 
+#if defined(__linux__)
 // Utility for iterating over process memory maps
 struct MemoryMap {
-#ifdef __linux__
   Str proc_self_maps;
-#endif
   static MemoryMap SnapshotSelf();
 
   struct end_iterator {};
@@ -26,7 +25,6 @@ struct MemoryMap {
 
   struct iterator {
     Entry current;
-#ifdef __linux__
     const char* next_unparsed;
 
     void ParseNextEntry();
@@ -39,7 +37,6 @@ struct MemoryMap {
       ParseNextEntry();
       return *this;
     }
-#endif
     const Entry& operator*() { return current; }
     bool operator==(end_iterator) { return next_unparsed == 0; }
   };
@@ -47,6 +44,9 @@ struct MemoryMap {
   iterator begin() { return iterator(*this); }
   end_iterator end() { return {}; }
 };
+#endif
+
+bool InMainExecutable(intptr_t address);
 
 // Find filename & offset where the addr is mapped to.
 //

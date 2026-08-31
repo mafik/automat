@@ -11,6 +11,7 @@
 
 using namespace automat;
 
+#if defined(__linux__)
 TEST(MemoryMap, ParsesProcSelfMaps) {
   MemoryMap map;
   map.proc_self_maps =
@@ -40,8 +41,15 @@ TEST(MemoryMap, EmptyMapHasNoEntries) {
   MemoryMap map;
   EXPECT_TRUE(map.begin() == map.end());
 }
+#endif
 
-TEST(MemoryMap, ResolvesOwnCode) {
+TEST(InMainExecutable, DetectsOwnImage) {
+  int local;
+  EXPECT_TRUE(InMainExecutable((intptr_t)&InMainExecutable));
+  EXPECT_FALSE(InMainExecutable((intptr_t)&local));
+}
+
+TEST(ResolveAddress, ResolvesOwnCode) {
   Str file;
   intptr_t offset;
   ResolveAddress((intptr_t)&ResolveAddress, file, offset);

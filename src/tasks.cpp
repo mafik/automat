@@ -40,23 +40,27 @@ static void AutomatLoop(std::stop_token stop_token) {
       queue.wait_dequeue(task);
     }
     WeakPtr<Object> target = task->target;
-    try {
-      task->Execute(std::unique_ptr<Task>(task));
-    } catch (LowLevelError error) {
-      Str file;
-      intptr_t offset;
-      ResolveAddress(error.instruction_pointer, file, offset);
-
+    ERROR_RECOVERY_TRY { task->Execute(std::unique_ptr<Task>(task)); }
+    ERROR_RECOVERY_CATCH(error) {
       Str source_human_readable;
-      if (file.empty()) {
-        source_human_readable = f("{:#x}", offset);
+      if (InMainExecutable(error.instruction_pointer)) {
+        source_human_readable = f("{:#x}", error.instruction_pointer);
       } else {
-        source_human_readable = f("{}+{:#x}", file, offset);
+        Str file;
+        intptr_t offset;
+        ResolveAddress(error.instruction_pointer, file, offset);
+        if (file.empty()) {
+          source_human_readable = f("{:#x}", offset);
+        } else {
+          source_human_readable = f("{}+{:#x}", file, offset);
+        }
       }
       Str message;
 
       switch (error.type) {
         using enum LowLevelError::Type;
+        case NONE:
+          break;
         case EXECUTED_UNKNOWN_INSTRUCTION:
           message = f("Executed an unknown instruction at {}", source_human_readable);
           break;

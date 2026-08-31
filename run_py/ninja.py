@@ -14,8 +14,6 @@ if BIN_STR:
   def hook_recipe(recipe):
     pass
 else:
-  print('Ninja not found - adding recipe to download it.')
-
   import build, sys, fs_utils
   if sys.platform == 'win32':
     ZIP_NAME = 'ninja-win.zip'

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "base.hpp"
 
+#include "error.hpp"
 #include "tasks.hpp"
 
 using namespace std;
@@ -51,4 +52,13 @@ std::unique_ptr<Action> RunOption::Activate(ui::Pointer& pointer) const {
   return nullptr;
 }
 
+ThisIsFineOption::ThisIsFineOption(WeakPtr<Object> object)
+    : TextOption("This Is Fine"), weak(std::move(object)) {}
+std::unique_ptr<Option> ThisIsFineOption::Clone() const {
+  return std::make_unique<ThisIsFineOption>(weak);
+}
+std::unique_ptr<Action> ThisIsFineOption::Activate(ui::Pointer& pointer) const {
+  ManipulateError(*weak.GetUnsafe(), [](Error& err) { err.Clear(); });
+  return nullptr;
+}
 }  // namespace automat

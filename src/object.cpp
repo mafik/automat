@@ -373,8 +373,13 @@ void ObjectToy::VisitOptions(const OptionsVisitor& visitor) const {
       NewOption make_new{loc_weak, owner.Copy<Object>()};
       visitor(make_new);
       if (auto runnable = loc->object->As<Runnable>()) {
-        RunOption run{owner.Copy<Object>(), *runnable.table};
-        visitor(run);
+        if (HasError(*loc->object)) {
+          ThisIsFineOption this_is_fine{owner.Copy<Object>()};
+          visitor(this_is_fine);
+        } else {
+          RunOption run{owner.Copy<Object>(), *runnable.table};
+          visitor(run);
+        }
       }
       if (IsIconified()) {
         DeiconifyOption deiconify{loc_weak};

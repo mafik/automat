@@ -24,7 +24,7 @@ struct SourceLocation {
   } names = {.view = {"", ""}};
   U32 line = 0;
   U32 column : 31 = 0;
-  bool owned : 1 = false;
+  U32 owned : 1 = false;
 
   SourceLocation() = default;
   SourceLocation(std::source_location loc)
@@ -38,6 +38,7 @@ struct SourceLocation {
   SourceLocation& operator=(SourceLocation);
   ~SourceLocation();
 
+  // Warning: on Linux this leaks ~24 B every time it's called
   operator std::source_location() const;
 
   StrView file_name() const {

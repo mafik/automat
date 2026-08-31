@@ -10,6 +10,7 @@ path_to_package = {
     "/usr/bin/python": "python-is-python3",
     "/usr/bin/clang": "clang",
     "/usr/bin/ld.lld": "lld",
+    "/usr/bin/strip": "binutils",
     "/usr/bin/ninja": "ninja-build",
     "/usr/bin/cmake": "cmake",
     "/usr/include/zlib.h": "zlib1g-dev",

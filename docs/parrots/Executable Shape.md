@@ -6,8 +6,9 @@ The Automat executable should be as close to a statically linked binary as possi
 symbol that can be resolved at link time is resolved at link time. The dynamic symbol table
 carries no symbols beyond what the dynamic linking model itself requires. The binary loads at
 a fixed address, so it needs no relocation pass at startup and its symbol addresses are stable
-across runs, which makes debugger output reproducible. The fast and debug variants carry full
-debug information; the release variant is stripped completely.
+across runs, which makes debugger output reproducible. Every variant carries full debug
+information embedded in the binary; the release variant strips the symbol tables and keeps
+only the DWARF.
 
 The flags that produce this shape live in `run_py/build.py`. This document records why each
 decision was made and which dependencies are exempt.
@@ -82,13 +83,18 @@ copy-relocated data objects and nothing else.
 ## Debug information
 
 Every variant compiles and links with `-gz=zstd`: DWARF5, compressed about 2.6x (667 MB to
-258 MB in the fast variant). gdb reads the compressed sections natively. The fast and debug
-variants keep the debug information embedded. The release variant compiles with
-`-gsplit-dwarf`, so the heavyweight debug sections go into a `.dwo` file next to each object
-under `build/release/obj/` and never enter the link, and it links with `-Wl,--strip-all`, so
-the released binary carries no debug information and no symbol table at all. The `.dwo` files
-stay on the machine that built the release; `llvm-dwp` can bundle them into a single file for
-archiving.
+258 MB in the fast variant). gdb reads the compressed sections natively. All variants,
+including release, keep the debug information embedded in the binary, so
+`LowLevelError::FindSourceLocation` (`src/error_recovery.cpp`) can symbolize faults in every
+variant and a released binary can be debugged as shipped.
+
+The Linux release additionally drops the linker symbol tables, whose strings cost more than
+the compressed DWARF and duplicate what the DWARF already knows. `-Wl,--exclude-libs,ALL`
+localizes archive symbols only after the linker's own `--discard-all` filtering, so no link
+flag can drop them; instead the linker writes `automat.unstripped` and a separate build step
+produces the released binary with `strip --strip-all --keep-section=.debug_*`. The `link
+automat` shortcut names the stripping step, so every caller, including `src/release.py` on
+the build slaves, receives the stripped binary.
 
 ## Inspecting
 

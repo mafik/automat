@@ -78,7 +78,6 @@ def CFLAGS():
 def LDFLAGS():
     return [str(x) for x in link_args]
 
-# As of 2025-07-02, libunwind doesn't support -gsplit-dwarf.
 compile_args += ['-static', '-std=gnu++26', '-fcolor-diagnostics', '-ffunction-sections',
     '-fdata-sections', '-funsigned-char', '-fno-signed-zeros',
     '-fno-strict-aliasing',
@@ -131,9 +130,6 @@ if platform == 'linux':
 
     compile_args += ['-gz=zstd']
     link_args += ['-gz=zstd']
-
-    if release:
-        compile_args += ['-gsplit-dwarf']
 
     if build_variant.asan:
         compile_args += ['-fsanitize=address', '-fsanitize-address-use-after-return=always']
@@ -275,8 +271,6 @@ if platform == 'win32':
 else:
     link_args += ['-Wl,--as-needed', '-Wl,--exclude-libs,ALL', '-Wl,--gc-sections',
                   '-Wl,--build-id=none', '-Wl,-z,relro', '-Wl,-z,now']
-    if release:
-        link_args += ['-Wl,--strip-all']
 
 
 if 'g++' in compiler and 'clang' not in compiler:

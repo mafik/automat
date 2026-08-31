@@ -52,9 +52,14 @@ is logged instead.
 ## Low-level recovery
 
 `src/error_recovery.hpp` declares the interface, which is the same on every platform:
-`LowLevelError`, the per-thread `SignalStack`, `Init` and `Stop`. `src/error_recovery.cpp` holds both implementations behind platform conditionals: the Linux
-half converts SIGSEGV, SIGBUS, SIGILL and SIGFPE into a thrown `LowLevelError`; the Windows
-half converts the corresponding Windows exceptions. The recovered cases are reads, writes and executions of protected memory
+`LowLevelError`, the per-thread `SignalStack`, `Init` and `Stop`. `src/error_recovery.cpp`
+shares the symbolizer state, `FindSourceLocation` and the frames of `Init` and `Stop` between
+platforms, and holds the fault interception behind platform conditionals: the Linux part
+converts SIGSEGV, SIGBUS, SIGILL and SIGFPE into a thrown `LowLevelError`; the Windows part
+converts the corresponding Windows exceptions. Both parts re-aim the faulting instruction
+pointer with their platform's `UnwindReturnAddress` before the throw, so that the faulting
+frame's destructors run; the shared rule is described in the Linux section and the Windows
+section points out the differences. The recovered cases are reads, writes and executions of protected memory
 (a mapping that lacks the required permission) and of unmapped memory, unaligned accesses,
 unknown instructions, arithmetic errors, and stack overflow.
 
@@ -65,17 +70,19 @@ empty instance. Moving from a `LowLevelError` empties it, and destroying an inst
 holds `STACK_OVERFLOW` restores the stack guard. It is deliberately minimal: throwing `Status` or `SourceLocation` from the handler is too heavy.
 `Description` of the fault is produced at the task boundary; `FindSourceLocation` resolves
 the instruction pointer with `LLVMSymbolizer` under a mutex, and `error_recovery::Init` loads
-the module information once so that the first fault does not wait for it. On Linux the
+the module information once so that the first fault does not wait for it. `Init` also records
+the executable path the symbolizer reads; before it runs, `FindSourceLocation` reports
+nothing. On Linux the
 symbolizer reads `/proc/self/exe` and takes the address unchanged, because the binary loads
 at a fixed address. On Windows the symbolizer reads the executable and its PDB, and the
 address is also taken unchanged, because the executable links as a fixed-base image and
 always loads at its preferred base (`docs/parrots/Executable Shape.md`). A design that
 converted addresses at run time could not even read the preferred base from the running
 process, because the loader rewrites the `ImageBase` field of the in-memory headers to the
-actual base. In the release variant the debug information lives outside the binary on both platforms:
-split-DWARF `.dwo` files next to the objects on Linux, the PDB on Windows. When the running
-binary has no debug information to offer, `FindSourceLocation` reports nothing and the fault
-message keeps the address.
+actual base. Every Linux variant, including release, embeds zstd-compressed debug information
+in the binary, and every Windows variant writes a PDB (`docs/parrots/Executable Shape.md`), so
+faults symbolize in every variant. When the running binary has no debug information to offer,
+`FindSourceLocation` reports nothing and the fault message keeps the address.
 
 ### Catching a LowLevelError
 
@@ -106,8 +113,9 @@ exception handling, and a handler that intercepted those on every thread would b
 
 ### The signal handler (Linux)
 
-`ErrorRecoverySignalHandler` classifies the signal (`ClassifySignal`), unblocks the signal and
-throws the `LowLevelError`. Throwing from the handler works because GCC's stack unwinder can
+`ErrorRecoverySignalHandler` classifies the signal (`ClassifySignal`), re-aims the saved
+instruction pointer (`UnwindReturnAddress`, described below), unblocks the signal and throws
+the `LowLevelError`. Throwing from the handler works because GCC's stack unwinder can
 properly unwind signal handler frames. When the fault is an execution of protected or unmapped
 memory, the handler first replaces the saved instruction pointer with the return address found
 at the saved stack pointer and pops it, so that unwinding resumes in the caller of the
@@ -136,20 +144,16 @@ be reported as a write to protected memory (glibc maps it `PROT_NONE`) or to unm
 (on Linux 6.13 and later, glibc installs it with `MADV_GUARD_INSTALL`, and the kernel reports
 a fault there as `SEGV_MAPERR`).
 
-### The personality wrapper (Linux)
+### The unwind return address (Linux)
 
-The Linux half of `src/error_recovery.cpp` is linked with `-Wl,--wrap=__gxx_personality_v0`. The stock
-personality terminates the process when a frame's instruction pointer is not covered by any
-call-site entry of its exception table, which is where a faulting instruction between calls
-lands, because the compiler only records call sites. `__wrap___gxx_personality_v0` parses the
-call-site table itself: covered instruction pointers defer to the stock personality
-unchanged. For an uncovered one, the search phase reports no handler, and the cleanup phase
-installs the cleanup landing pad of the next call-site entry after the instruction pointer,
-with the selector register set to zero, exactly as the standard personality installs a
-cleanup; the landing pad runs the frame's destructors and returns to the unwinder through
-`_Unwind_Resume`. Entries without a cleanup in their action chain are not installed, so a
-handler-only landing pad (for example the terminate path of a noexcept function) is never
-entered; the frame is then skipped.
+The compiler records exception-table entries only around calls, so the table misdescribes the
+unwinding obligations of a faulting instruction between calls: the fault lies either outside
+every call-site entry, or inside an entry with no landing pad, recorded for a call that
+genuinely needs no cleanup (for example a constructor call, before which there is nothing to
+destroy yet). Unwinding from the faulting instruction pointer as it is would skip the
+destructors of the faulting frame. `UnwindReturnAddress` therefore re-aims the saved
+instruction pointer at the start of the next call-site entry after the fault, and the stock
+personality applies that entry's rule during the throw.
 
 The next call site is the right source of cleanups because destruction obligations of
 interest are anchored at calls: a mutex is held after its lock call returned, so the unlock
@@ -158,8 +162,29 @@ leaking the lock and hanging whoever waits for it, including third-party code wh
 Automat cannot know about. The remaining imprecision is RAII whose liveness changes through
 fully inlined code between the fault and the surrounding calls; its cleanup can be run
 spuriously or missed. That imprecision is accepted until Clang implements
-`-fnon-call-exceptions`, which records the tables exactly. The Windows half reaches the same
-result by a different route, described below.
+`-fnon-call-exceptions`, which records the tables exactly. Windows reaches the same decision
+over its IP-to-state map, described below.
+
+`UnwindReturnAddress` reaches the faulting frame's exception table with `_Unwind_Backtrace`:
+the walk crosses the signal frame, the first frame reported with the ip-before-instruction
+flag is the faulting frame, and the table is available there through
+`_Unwind_GetLanguageSpecificData` and `_Unwind_GetRegionStart`. The saved instruction pointer
+is kept when the covering call-site entry has a landing pad, because the table's rule for
+that region already applies. It is also kept when the table cannot be parsed or when no entry
+after the fault qualifies. An entry qualifies when it has no action chain or its action chain
+contains a cleanup, so a handler-only entry (for example the terminate path of a noexcept
+function) is never chosen and the frame is skipped through the next qualifying entry instead.
+The thrown `LowLevelError` carries the original instruction pointer, so the fault is reported
+and symbolized where it happened.
+
+The stock personality terminates the process when a frame's instruction pointer is not
+covered by any call-site entry of its exception table. The re-aiming keeps that from
+happening for the layouts the compiler emits today, but a fault where no later entry
+qualifies (for example inside a landing pad, while a destructor faults during unwinding)
+could still present an uncovered instruction pointer. The Linux part is therefore linked with
+`-Wl,--wrap=__gxx_personality_v0`; `__wrap___gxx_personality_v0` defers covered instruction
+pointers to the stock personality unchanged and reports "continue unwinding" for uncovered
+ones, so such a frame is skipped instead of terminating the process.
 
 ### The exception handler (Windows)
 

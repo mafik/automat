@@ -92,8 +92,7 @@ __attribute__((noinline)) void OuterWithRaii() {
     }
     bool wrong_raii = !outer_destroyed || !inner_destroyed;
     if (wrong_raii) {
-      fprintf(stderr, "outer_destroyed=%d inner_destroyed=%d\n", outer_destroyed,
-              inner_destroyed);
+      fprintf(stderr, "outer_destroyed=%d inner_destroyed=%d\n", outer_destroyed, inner_destroyed);
       _exit(kWrongRaii);
     }
     _exit(kRecovered);
@@ -185,9 +184,9 @@ void ExecUnmappedMemory() {
 
 void TouchTruncatedMapping() {
   int fd = memfd_create("error_recovery_test_sigbus", 0);
-  ftruncate(fd, 4096);
+  (void)ftruncate(fd, 4096);
   char* p = (char*)mmap(nullptr, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-  ftruncate(fd, 0);
+  (void)ftruncate(fd, 0);
   *(volatile char*)p = 1;
 }
 #elif defined(_WIN32)
@@ -248,12 +247,8 @@ void DivideByZero() {
 
 bool OverflowIsRecovered() {
   void (*volatile barrier)() = [] { Recurse(nullptr); };
-  ERROR_RECOVERY_TRY {
-    barrier();
-  }
-  ERROR_RECOVERY_CATCH(error) {
-    return error.type == LowLevelError::Type::STACK_OVERFLOW;
-  }
+  ERROR_RECOVERY_TRY { barrier(); }
+  ERROR_RECOVERY_CATCH(error) { return error.type == LowLevelError::Type::STACK_OVERFLOW; }
   return false;
 }
 
@@ -318,9 +313,9 @@ TEST(ErrorRecoveryTest, StackOverflowIsRecovered) {
 }
 
 TEST(ErrorRecoveryTest, StackOverflowOnWorkerThreadIsRecovered) {
-  EXPECT_EXIT(RunScenarioOnWorkerThread([] { Recurse(nullptr); },
-                                        LowLevelError::Type::STACK_OVERFLOW),
-              ExitedWithCode(kRecovered), "")
+  EXPECT_EXIT(
+      RunScenarioOnWorkerThread([] { Recurse(nullptr); }, LowLevelError::Type::STACK_OVERFLOW),
+      ExitedWithCode(kRecovered), "")
       << "A worker thread overflows into the guard region of its own stack, which must still be "
          "reported as a stack overflow.";
 }
@@ -332,10 +327,10 @@ TEST(ErrorRecoveryTest, StackOverflowTwiceIsRecovered) {
 }
 
 TEST(ErrorRecoveryTest, AccessBelowStackIsNotStackOverflow) {
-  EXPECT_EXIT(RunScenarioOnWorkerThread(ReadBelowOwnStack,
-                                        {LowLevelError::Type::READ_PROTECTED_MEMORY,
-                                         LowLevelError::Type::READ_UNMAPPED_MEMORY}),
-              ExitedWithCode(kRecovered), "")
+  EXPECT_EXIT(
+      RunScenarioOnWorkerThread(ReadBelowOwnStack, {LowLevelError::Type::READ_PROTECTED_MEMORY,
+                                                    LowLevelError::Type::READ_UNMAPPED_MEMORY}),
+      ExitedWithCode(kRecovered), "")
       << "A wild pointer into the region guarding the stack is not a stack overflow. The region "
          "is reported as protected or unmapped memory, depending on how the platform installs "
          "it.";
@@ -377,9 +372,9 @@ TEST(ErrorRecoveryTest, SigbusIsRecovered) {
 #endif
 
 TEST(ErrorRecoveryTest, UnknownInstructionIsRecovered) {
-  EXPECT_EXIT(RunScenario([] { __builtin_trap(); },
-                          LowLevelError::Type::EXECUTED_UNKNOWN_INSTRUCTION),
-              ExitedWithCode(kRecovered), "")
+  EXPECT_EXIT(
+      RunScenario([] { __builtin_trap(); }, LowLevelError::Type::EXECUTED_UNKNOWN_INSTRUCTION),
+      ExitedWithCode(kRecovered), "")
       << "__builtin_trap emits an instruction that the CPU refuses to execute, which is reported "
          "as an unknown instruction.";
 }

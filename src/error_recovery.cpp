@@ -2,35 +2,53 @@
 // SPDX-License-Identifier: MIT
 #include "error_recovery.hpp"
 
-#ifdef __linux__
-
 #include <llvm/DebugInfo/Symbolize/Symbolize.h>
-#include <pthread.h>
-#include <signal.h>
-#include <ucontext.h>
-#include <unwind.h>
 
 #include <cstdint>
-#include <iterator>
 #include <mutex>
 
 #include "format.hpp"
 #include "log.hpp"
 
+#if defined(__linux__)
+
+#include <pthread.h>
+#include <signal.h>
+#include <ucontext.h>
+#include <unwind.h>
+
+#include <iterator>
+
 #pragma maf add link argument "-Wl,--wrap=__gxx_personality_v0"
+
+#elif defined(_WIN32)
+
+#include <malloc.h>
+
+#include <atomic>
+#include <exception>
+
+#include "win32.hpp"
+
+extern "C" void __CxxFrameHandler3();
+
+#endif
 
 namespace automat {
 
 namespace {
 
-constexpr bool kDebugErrorRecovery = false;
-
 bool initialized;
-constexpr int kSignals[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE};
-struct sigaction old_actions[std::size(kSignals)];
-
 std::mutex symbolizer_mutex;
 llvm::symbolize::LLVMSymbolizer symbolizer;
+Str exe_path;
+
+#if defined(__linux__)
+
+constexpr bool kDebugErrorRecovery = false;
+
+constexpr int kSignals[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE};
+struct sigaction old_actions[std::size(kSignals)];
 
 constexpr uintptr_t kStackOverflowReach = 4096;
 
@@ -62,53 +80,9 @@ LowLevelError::Type ClassifySignal(int sig, siginfo_t* si, ucontext_t* context) 
   }
 }
 
-void ErrorRecoverySignalHandler(int sig, siginfo_t* si, ucontext_t* context) {
-  auto& regs = context->uc_mcontext.gregs;
-
-  if constexpr (kDebugErrorRecovery) {
-    LOG << "Signal " << sig;
-    LOG << "siginfo:";
-    {
-      LOG_IndentGuard indent;
-      LOG << dump_struct(*si);
-    }
-    LOG << "ucontext:";
-    {
-      LOG_IndentGuard indent;
-      LOG << dump_struct(*context);
-    }
-  }
-
-  LowLevelError error{ClassifySignal(sig, si, context), (intptr_t)regs[REG_RIP]};
-
-  using enum LowLevelError::Type;
-  if (error.type == EXECUTED_PROTECTED_MEMORY || error.type == EXECUTED_UNMAPPED_MEMORY) {
-    regs[REG_RIP] = *(uint64_t*)regs[REG_RSP] - 1;
-    regs[REG_RSP] += 8;
-  }
-
-  sigset_t unblock;
-  sigemptyset(&unblock);
-  sigaddset(&unblock, sig);
-  pthread_sigmask(SIG_UNBLOCK, &unblock, nullptr);
-
-  if constexpr (kDebugErrorRecovery) {
-    LOG << "ErrorRecoverySignalHandler: walking stack:";
-    _Unwind_Backtrace(
-        [](_Unwind_Context* ctx, void*) {
-          int ip_before;
-          uintptr_t ip = _Unwind_GetIPInfo(ctx, &ip_before);
-          LOG << f("  unwind frame ip={} cfa={}", ip, _Unwind_GetCFA(ctx));
-          return _URC_NO_REASON;
-        },
-        nullptr);
-  }
-  throw error;
-}
-
 constexpr uint8_t kOmit = 0xff;
 
-uint64_t ReadUleb(const uint8_t*& p) {
+[[gnu::always_inline]] inline uint64_t ReadUleb(const uint8_t*& p) {
   uint64_t result = 0;
   int shift = 0;
   uint8_t byte;
@@ -120,7 +94,7 @@ uint64_t ReadUleb(const uint8_t*& p) {
   return result;
 }
 
-int64_t ReadSleb(const uint8_t*& p) {
+[[gnu::always_inline]] inline int64_t ReadSleb(const uint8_t*& p) {
   int64_t result = 0;
   int shift = 0;
   uint8_t byte;
@@ -133,7 +107,7 @@ int64_t ReadSleb(const uint8_t*& p) {
   return result;
 }
 
-uint64_t ReadEncoded(const uint8_t*& p, uint8_t encoding) {
+[[gnu::always_inline]] inline uint64_t ReadEncoded(const uint8_t*& p, uint8_t encoding) {
   switch (encoding & 0x0f) {
     case 0x00:  // absptr
       p += sizeof(uintptr_t);
@@ -165,7 +139,7 @@ uint64_t ReadEncoded(const uint8_t*& p, uint8_t encoding) {
   }
 }
 
-bool ChainHasCleanup(const uint8_t* action_table, uint64_t action) {
+[[gnu::always_inline]] inline bool ChainHasCleanup(const uint8_t* action_table, uint64_t action) {
   const uint8_t* record = action_table + (action - 1);
   while (true) {
     int64_t ttype_index = ReadSleb(record);
@@ -177,175 +151,152 @@ bool ChainHasCleanup(const uint8_t* action_table, uint64_t action) {
   }
 }
 
-struct CallSiteSearch {
-  bool defer_to_real;
-  uintptr_t cleanup_landing_pad;
+struct CallSite {
+  uint64_t start;
+  uint64_t length;
+  uint64_t landing_pad;
+  uint64_t action;
 };
 
-CallSiteSearch FindCallSiteForIp(_Unwind_Context* context) {
-  CallSiteSearch defer = {.defer_to_real = true, .cleanup_landing_pad = 0};
-  auto* p = (const uint8_t*)_Unwind_GetLanguageSpecificData(context);
-  if (!p) return defer;
+struct CallSiteTable {
+  const uint8_t* p;
+  const uint8_t* end = nullptr;
+  const uint8_t* action_table = nullptr;
+  uint8_t call_site_encoding = kOmit;
+  bool broken = false;
 
+  [[gnu::always_inline]] inline CallSiteTable(const uint8_t* lsda) : p(lsda) {
+    if (!p) {
+      broken = true;
+      return;
+    }
+    uint8_t lpstart_encoding = *p++;
+    if (lpstart_encoding != kOmit && ReadEncoded(p, lpstart_encoding) == ~0ULL) {
+      broken = true;
+      return;
+    }
+    uint8_t ttype_encoding = *p++;
+    if (ttype_encoding != kOmit) ReadUleb(p);
+    call_site_encoding = *p++;
+    uint64_t call_site_table_length = ReadUleb(p);
+    end = p + call_site_table_length;
+    action_table = end;
+  }
+
+  [[gnu::always_inline]] inline bool Next(CallSite& out) {
+    if (broken || p >= end) return false;
+    out.start = ReadEncoded(p, call_site_encoding);
+    out.length = ReadEncoded(p, call_site_encoding);
+    out.landing_pad = ReadEncoded(p, call_site_encoding);
+    out.action = ReadUleb(p);
+    if (out.start == ~0ULL || out.length == ~0ULL || out.landing_pad == ~0ULL) {
+      broken = true;
+      return false;
+    }
+    return true;
+  }
+};
+
+struct ReturnAddressSearch {
+  uintptr_t fault_ip;
+  uintptr_t result;
+};
+
+_Unwind_Reason_Code FindFaultCallSite(_Unwind_Context* context, void* arg) {
+  auto& search = *(ReturnAddressSearch*)arg;
+  int ip_before = 0;
+  uintptr_t ip = _Unwind_GetIPInfo(context, &ip_before);
+  if (!ip_before || ip != search.fault_ip) return _URC_NO_REASON;
+  uintptr_t region_start = _Unwind_GetRegionStart(context);
+  uintptr_t offset = ip - region_start;
+  CallSiteTable table((const uint8_t*)_Unwind_GetLanguageSpecificData(context));
+  CallSite call_site;
+  bool covered_with_landing_pad = false;
+  uint64_t next_start = ~0ULL;
+  while (table.Next(call_site)) {
+    if (offset >= call_site.start && offset < call_site.start + call_site.length) {
+      if (call_site.landing_pad != 0) covered_with_landing_pad = true;
+    } else if (call_site.start > offset && call_site.start < next_start &&
+               (call_site.action == 0 || ChainHasCleanup(table.action_table, call_site.action))) {
+      next_start = call_site.start;
+    }
+  }
+  if (!table.broken && !covered_with_landing_pad && next_start != ~0ULL) {
+    search.result = region_start + (uintptr_t)next_start;
+  }
+  return _URC_END_OF_STACK;
+}
+
+uintptr_t UnwindReturnAddress(uintptr_t fault_ip) {
+  ReturnAddressSearch search = {.fault_ip = fault_ip, .result = fault_ip};
+  _Unwind_Backtrace(FindFaultCallSite, &search);
+  return search.result;
+}
+
+void ErrorRecoverySignalHandler(int sig, siginfo_t* si, ucontext_t* context) {
+  auto& regs = context->uc_mcontext.gregs;
+
+  if constexpr (kDebugErrorRecovery) {
+    LOG << "Signal " << sig;
+    LOG << "siginfo:";
+    {
+      LOG_IndentGuard indent;
+      LOG << dump_struct(*si);
+    }
+    LOG << "ucontext:";
+    {
+      LOG_IndentGuard indent;
+      LOG << dump_struct(*context);
+    }
+  }
+
+  LowLevelError error{ClassifySignal(sig, si, context), (intptr_t)regs[REG_RIP]};
+
+  using enum LowLevelError::Type;
+  if (error.type == EXECUTED_PROTECTED_MEMORY || error.type == EXECUTED_UNMAPPED_MEMORY) {
+    regs[REG_RIP] = *(uint64_t*)regs[REG_RSP] - 1;
+    regs[REG_RSP] += 8;
+  }
+
+  regs[REG_RIP] = UnwindReturnAddress(regs[REG_RIP]);
+
+  sigset_t unblock;
+  sigemptyset(&unblock);
+  sigaddset(&unblock, sig);
+  pthread_sigmask(SIG_UNBLOCK, &unblock, nullptr);
+
+  if constexpr (kDebugErrorRecovery) {
+    LOG << "ErrorRecoverySignalHandler: walking stack:";
+    _Unwind_Backtrace(
+        [](_Unwind_Context* ctx, void*) {
+          int ip_before;
+          uintptr_t ip = _Unwind_GetIPInfo(ctx, &ip_before);
+          LOG << f("  unwind frame ip={} cfa={}", ip, _Unwind_GetCFA(ctx));
+          return _URC_NO_REASON;
+        },
+        nullptr);
+  }
+  throw error;
+}
+
+bool IpCoveredByCallSites(_Unwind_Context* context) {
+  auto* lsda = (const uint8_t*)_Unwind_GetLanguageSpecificData(context);
+  if (!lsda) return true;
   int ip_before = 0;
   uintptr_t ip = _Unwind_GetIPInfo(context, &ip_before);
   if (!ip_before) ip -= 1;
-  uintptr_t region_start = _Unwind_GetRegionStart(context);
-  uintptr_t offset = ip - region_start;
-
-  uintptr_t landing_pad_base = region_start;
-  uint8_t lpstart_encoding = *p++;
-  if (lpstart_encoding != kOmit) {
-    uint64_t value = ReadEncoded(p, lpstart_encoding);
-    if (value == ~0ULL) return defer;
-    landing_pad_base = value;
+  uintptr_t offset = ip - _Unwind_GetRegionStart(context);
+  CallSiteTable table(lsda);
+  CallSite call_site;
+  while (table.Next(call_site)) {
+    if (offset >= call_site.start && offset < call_site.start + call_site.length) return true;
   }
-  uint8_t ttype_encoding = *p++;
-  if (ttype_encoding != kOmit) ReadUleb(p);
-  uint8_t call_site_encoding = *p++;
-  uint64_t call_site_table_length = ReadUleb(p);
-  const uint8_t* action_table = p + call_site_table_length;
-
-  uint64_t next_start = ~0ULL;
-  uint64_t next_landing_pad = 0;
-  uint64_t next_action = 0;
-  while (p < action_table) {
-    uint64_t start = ReadEncoded(p, call_site_encoding);
-    uint64_t length = ReadEncoded(p, call_site_encoding);
-    uint64_t landing_pad = ReadEncoded(p, call_site_encoding);
-    uint64_t action = ReadUleb(p);
-    if (start == ~0ULL || length == ~0ULL || landing_pad == ~0ULL) return defer;
-    if (offset >= start && offset < start + length) return defer;
-    if (start > offset && start < next_start) {
-      next_start = start;
-      next_landing_pad = landing_pad;
-      next_action = action;
-    }
-  }
-
-  CallSiteSearch uncovered = {.defer_to_real = false, .cleanup_landing_pad = 0};
-  if (next_start == ~0ULL || next_landing_pad == 0) return uncovered;
-  if (next_action != 0 && !ChainHasCleanup(action_table, next_action)) return uncovered;
-  uncovered.cleanup_landing_pad = landing_pad_base + (uintptr_t)next_landing_pad;
-  return uncovered;
+  return table.broken;
 }
-
-}  // namespace
-
-LowLevelError::~LowLevelError() {}
-
-Optional<SourceLocation> LowLevelError::FindSourceLocation() const {
-  auto lock = std::lock_guard(symbolizer_mutex);
-  llvm::DILineInfo info;
-  auto result = symbolizer.symbolizeCode(
-      std::string("/proc/self/exe"),
-      llvm::object::SectionedAddress{(uint64_t)instruction_pointer,
-                                     llvm::object::SectionedAddress::UndefSection});
-  if (result) {
-    info = *result;
-  } else {
-    llvm::consumeError(result.takeError());
-  }
-  bool has_file = info.FileName != llvm::DILineInfo::BadString;
-  bool has_function = info.FunctionName != llvm::DILineInfo::BadString;
-  if (!has_file && !has_function) {
-    return std::nullopt;
-  }
-  return SourceLocation(has_file ? StrView(info.FileName) : StrView("<unknown file>"),
-                        has_function ? Str(info.FunctionName) : f("{:#x}", instruction_pointer),
-                        info.Line, info.Column);
-}
-
-extern "C" _Unwind_Reason_Code __real___gxx_personality_v0(int, _Unwind_Action, uint64_t,
-                                                           _Unwind_Exception*, _Unwind_Context*);
-
-extern "C" _Unwind_Reason_Code __wrap___gxx_personality_v0(int version, _Unwind_Action actions,
-                                                           uint64_t exception_class,
-                                                           _Unwind_Exception* unwind_exception,
-                                                           _Unwind_Context* context) {
-  auto search = FindCallSiteForIp(context);
-  if (search.defer_to_real) {
-    return __real___gxx_personality_v0(version, actions, exception_class, unwind_exception,
-                                       context);
-  }
-  if ((actions & _UA_CLEANUP_PHASE) && search.cleanup_landing_pad) {
-    _Unwind_SetGR(context, __builtin_eh_return_data_regno(0), (uintptr_t)unwind_exception);
-    _Unwind_SetGR(context, __builtin_eh_return_data_regno(1), 0);
-    _Unwind_SetIP(context, search.cleanup_landing_pad);
-    return _URC_INSTALL_CONTEXT;
-  }
-  return _URC_CONTINUE_UNWIND;
-}
-
-namespace error_recovery {
-
-SignalStack::SignalStack() {
-  stack_t ss = {.ss_sp = stack, .ss_flags = 0, .ss_size = sizeof(stack)};
-  sigaltstack(&ss, nullptr);
-}
-
-SignalStack::~SignalStack() {
-  stack_t disable = {.ss_flags = SS_DISABLE};
-  sigaltstack(&disable, nullptr);
-}
-
-void Init() {
-  if (initialized) return;
-
-  if (auto module = symbolizer.getOrCreateModuleInfo("/proc/self/exe"); !module) {
-    llvm::consumeError(module.takeError());
-  }
-
-  struct sigaction sa = {};
-  sa.sa_sigaction = (void (*)(int, siginfo_t*, void*))ErrorRecoverySignalHandler;
-  sigemptyset(&sa.sa_mask);
-  sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
-  for (size_t i = 0; i < std::size(kSignals); ++i) {
-    if (sigaction(kSignals[i], &sa, &old_actions[i]) == -1) {
-      ERROR << f("Couldn't install the recovery handler for signal {}", kSignals[i]);
-    }
-  }
-
-  initialized = true;
-}
-
-void Stop() {
-  if (!initialized) return;
-  for (size_t i = 0; i < std::size(kSignals); ++i) {
-    sigaction(kSignals[i], &old_actions[i], nullptr);
-  }
-  initialized = false;
-}
-
-}  // namespace error_recovery
-
-}  // namespace automat
 
 #elif defined(_WIN32)
 
-#include <llvm/DebugInfo/Symbolize/Symbolize.h>
-#include <malloc.h>
-
-#include <atomic>
-#include <exception>
-#include <mutex>
-
-#include "format.hpp"
-#include "log.hpp"
-#include "win32.hpp"
-
-extern "C" void __CxxFrameHandler3();
-
-namespace automat {
-
-namespace {
-
-bool initialized;
 void* exception_handler;
-
-std::mutex symbolizer_mutex;
-llvm::symbolize::LLVMSymbolizer symbolizer;
-Str exe_path;
 
 std::atomic<DWORD> recovered_threads[64];
 
@@ -478,19 +429,22 @@ LONG NTAPI ErrorRecoveryExceptionHandler(EXCEPTION_POINTERS* exception) {
   return EXCEPTION_CONTINUE_EXECUTION;
 }
 
+#endif
+
 }  // namespace
 
 LowLevelError::~LowLevelError() {
+#if defined(_WIN32)
   if (type == Type::STACK_OVERFLOW && !_resetstkoflw()) {
     ERROR << "_resetstkoflw failed, the next stack overflow on this thread will be fatal";
   }
+#endif
 }
 
 Optional<SourceLocation> LowLevelError::FindSourceLocation() const {
   auto lock = std::lock_guard(symbolizer_mutex);
   if (exe_path.empty()) return std::nullopt;
   llvm::DIInliningInfo inlining_info;
-  llvm::DILineInfo info;
   auto result = symbolizer.symbolizeInlinedCode(
       exe_path, llvm::object::SectionedAddress{(uint64_t)instruction_pointer,
                                                llvm::object::SectionedAddress::UndefSection});
@@ -502,7 +456,7 @@ Optional<SourceLocation> LowLevelError::FindSourceLocation() const {
   if (inlining_info.getNumberOfFrames() == 0) {
     return std::nullopt;
   }
-  info = inlining_info.getFrame(0);
+  llvm::DILineInfo info = inlining_info.getFrame(0);
   bool has_file = info.FileName != llvm::DILineInfo::BadString;
   bool has_function = info.FunctionName != llvm::DILineInfo::BadString;
   if (!has_file && !has_function) {
@@ -513,7 +467,39 @@ Optional<SourceLocation> LowLevelError::FindSourceLocation() const {
                         info.Line, info.Column);
 }
 
+#if defined(__linux__)
+
+extern "C" _Unwind_Reason_Code __real___gxx_personality_v0(int, _Unwind_Action, uint64_t,
+                                                           _Unwind_Exception*, _Unwind_Context*);
+
+extern "C" _Unwind_Reason_Code __wrap___gxx_personality_v0(int version, _Unwind_Action actions,
+                                                           uint64_t exception_class,
+                                                           _Unwind_Exception* unwind_exception,
+                                                           _Unwind_Context* context) {
+  if (IpCoveredByCallSites(context)) {
+    return __real___gxx_personality_v0(version, actions, exception_class, unwind_exception,
+                                       context);
+  }
+  return _URC_CONTINUE_UNWIND;
+}
+
+#endif
+
 namespace error_recovery {
+
+#if defined(__linux__)
+
+SignalStack::SignalStack() {
+  stack_t ss = {.ss_sp = stack, .ss_flags = 0, .ss_size = sizeof(stack)};
+  sigaltstack(&ss, nullptr);
+}
+
+SignalStack::~SignalStack() {
+  stack_t disable = {.ss_flags = SS_DISABLE};
+  sigaltstack(&disable, nullptr);
+}
+
+#elif defined(_WIN32)
 
 SignalStack::SignalStack() {
   ULONG guarantee = 64 * 1024;
@@ -536,29 +522,55 @@ SignalStack::~SignalStack() {
   }
 }
 
+#endif
+
 void Init() {
   if (initialized) return;
 
+#if defined(__linux__)
+  exe_path = "/proc/self/exe";
+#elif defined(_WIN32)
   wchar_t path[MAX_PATH];
   if (GetModuleFileNameW(nullptr, path, MAX_PATH)) {
     exe_path = win32::WideToUtf8(path);
+  }
+#endif
+  if (!exe_path.empty()) {
     if (auto module = symbolizer.getOrCreateModuleInfo(exe_path); !module) {
       llvm::consumeError(module.takeError());
     }
   }
+
+#if defined(__linux__)
+  struct sigaction sa = {};
+  sa.sa_sigaction = (void (*)(int, siginfo_t*, void*))ErrorRecoverySignalHandler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+  for (size_t i = 0; i < std::size(kSignals); ++i) {
+    if (sigaction(kSignals[i], &sa, &old_actions[i]) == -1) {
+      ERROR << f("Couldn't install the recovery handler for signal {}", kSignals[i]);
+    }
+  }
+#elif defined(_WIN32)
   exception_handler = AddVectoredExceptionHandler(1, ErrorRecoveryExceptionHandler);
+#endif
+
   initialized = true;
 }
 
 void Stop() {
   if (!initialized) return;
+#if defined(__linux__)
+  for (size_t i = 0; i < std::size(kSignals); ++i) {
+    sigaction(kSignals[i], &old_actions[i], nullptr);
+  }
+#elif defined(_WIN32)
   RemoveVectoredExceptionHandler(exception_handler);
   exception_handler = nullptr;
+#endif
   initialized = false;
 }
 
 }  // namespace error_recovery
 
 }  // namespace automat
-
-#endif

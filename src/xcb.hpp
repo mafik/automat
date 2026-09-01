@@ -30,31 +30,54 @@ extern std::atomic<xcb_window_t> active_window;
 
 namespace atom {
 
-#define ATOMS(MACRO)                     \
-  MACRO(WM_STATE)                        \
-  MACRO(WM_PROTOCOLS)                    \
-  MACRO(WM_DELETE_WINDOW)                \
-  MACRO(WM_NAME)                         \
-  MACRO(_NET_ACTIVE_WINDOW)              \
-  MACRO(_NET_WM_USER_TIME)               \
-  MACRO(_NET_WM_STATE)                   \
-  MACRO(_NET_WM_STATE_MODAL)             \
-  MACRO(_NET_WM_STATE_STICKY)            \
-  MACRO(_NET_WM_STATE_MAXIMIZED_VERT)    \
-  MACRO(_NET_WM_STATE_MAXIMIZED_HORZ)    \
-  MACRO(_NET_WM_STATE_SHADED)            \
-  MACRO(_NET_WM_STATE_SKIP_TASKBAR)      \
-  MACRO(_NET_WM_STATE_SKIP_PAGER)        \
-  MACRO(_NET_WM_STATE_HIDDEN)            \
-  MACRO(_NET_WM_STATE_FULLSCREEN)        \
-  MACRO(_NET_WM_STATE_ABOVE)             \
-  MACRO(_NET_WM_STATE_BELOW)             \
-  MACRO(_NET_WM_STATE_DEMANDS_ATTENTION) \
-  MACRO(_GTK_FRAME_EXTENTS)
+#define ATOM_FROM_IDENTIFIER(name) ATOM(name, #name)
+#define ATOMS                                            \
+  ATOM_FROM_IDENTIFIER(WM_STATE)                         \
+  ATOM_FROM_IDENTIFIER(WM_PROTOCOLS)                     \
+  ATOM_FROM_IDENTIFIER(WM_DELETE_WINDOW)                 \
+  ATOM_FROM_IDENTIFIER(WM_NAME)                          \
+  ATOM_FROM_IDENTIFIER(_NET_ACTIVE_WINDOW)               \
+  ATOM_FROM_IDENTIFIER(_NET_WM_USER_TIME)                \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE)                    \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_MODAL)              \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_STICKY)             \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_MAXIMIZED_VERT)     \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_MAXIMIZED_HORZ)     \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_SHADED)             \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_SKIP_TASKBAR)       \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_SKIP_PAGER)         \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_HIDDEN)             \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_FULLSCREEN)         \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_ABOVE)              \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_BELOW)              \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_DEMANDS_ATTENTION)  \
+  ATOM_FROM_IDENTIFIER(_GTK_FRAME_EXTENTS)               \
+  ATOM_FROM_IDENTIFIER(INCR)                             \
+  ATOM_FROM_IDENTIFIER(XdndAware)                        \
+  ATOM_FROM_IDENTIFIER(XdndEnter)                        \
+  ATOM_FROM_IDENTIFIER(XdndPosition)                     \
+  ATOM_FROM_IDENTIFIER(XdndStatus)                       \
+  ATOM_FROM_IDENTIFIER(XdndLeave)                        \
+  ATOM_FROM_IDENTIFIER(XdndDrop)                         \
+  ATOM_FROM_IDENTIFIER(XdndFinished)                     \
+  ATOM_FROM_IDENTIFIER(XdndSelection)                    \
+  ATOM_FROM_IDENTIFIER(XdndTypeList)                     \
+  ATOM_FROM_IDENTIFIER(XdndActionCopy)                   \
+  ATOM_FROM_IDENTIFIER(XdndActionList)                   \
+  ATOM_FROM_IDENTIFIER(XdndActionDescription)            \
+  ATOM_FROM_IDENTIFIER(XdndDirectSave0)                  \
+  ATOM(image_png, "image/png")                           \
+  ATOM(image_webp, "image/webp")                         \
+  ATOM(image_jpeg, "image/jpeg")                         \
+  ATOM(image_jpg, "image/jpg")                           \
+  ATOM(image_gif, "image/gif")                           \
+  ATOM(image_bmp, "image/bmp")                           \
+  ATOM(application_octet_stream, "application/octet-stream") \
+  ATOM(text_uri_list, "text/uri-list")
 
-#define DECLARE_ATOM(name) extern xcb_atom_t name;
-ATOMS(DECLARE_ATOM)
-#undef DECLARE_ATOM
+#define ATOM(name, str) extern xcb_atom_t name;
+ATOMS
+#undef ATOM
 
 automat::Str ToStr(xcb_atom_t);
 

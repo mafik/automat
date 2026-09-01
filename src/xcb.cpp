@@ -3,10 +3,8 @@
 
 #include "xcb.hpp"
 
+#include <ankerl/unordered_dense.h>
 #include <xkbcommon/xkbcommon-x11.h>
-
-#include <cstring>
-#include <map>
 
 using namespace automat;
 
@@ -25,25 +23,24 @@ std::atomic<xcb_window_t> active_window{XCB_WINDOW_NONE};
 
 namespace atom {
 
-#define DEFINE_ATOM(name) xcb_atom_t name;
-ATOMS(DEFINE_ATOM)
-#undef DEFINE_ATOM
+#define ATOM(name, str) xcb_atom_t name;
+ATOMS
+#undef ATOM
 
-std::map<xcb_atom_t, Str> atom_names;
+ankerl::unordered_dense::map<xcb_atom_t, Str> atom_names;
 
-void Initialize(){
-#define REQUEST_ATOM(name) \
-  auto name##_request = xcb_intern_atom(connection, 0, strlen(#name), #name);
-    ATOMS(REQUEST_ATOM)
-#undef REQUEST_ATOM
+void Initialize() {
+#define ATOM(name, str) auto name##_request = xcb_intern_atom(connection, 0, sizeof(str) - 1, str);
+  ATOMS
+#undef ATOM
 
-#define ATOM_REPLY(name)                                                    \
+#define ATOM(name, str)                                                                  \
   auto name##_reply = std::unique_ptr<xcb_intern_atom_reply_t, automat::DeleteWithFree>( \
-      xcb_intern_atom_reply(connection, name##_request, nullptr));           \
-  name = name##_reply->atom;                                                 \
-  atom_names[name] = #name;
-        ATOMS(ATOM_REPLY)
-#undef ATOM_REPLY
+      xcb_intern_atom_reply(connection, name##_request, nullptr));                       \
+  name = name##_reply->atom;                                                             \
+  atom_names[name] = str;
+  ATOMS
+#undef ATOM
 }
 
 Str ToStr(xcb_atom_t atom) {

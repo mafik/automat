@@ -9,8 +9,8 @@
 #include <bit>
 #include <stop_token>
 
-#include "automat.hpp"
 #include "fn.hpp"
+#include "log.hpp"
 #include "root_widget.hpp"
 #include "vec.hpp"
 #include "x11_keys.hpp"
@@ -95,6 +95,59 @@ struct WM_STATE {
         MODAL, STICKY, MAXIMIZED_VERT, MAXIMIZED_HORZ, SHADED, SKIP_TASKBAR, SKIP_PAGER, HIDDEN,
         FULLSCREEN, ABOVE, BELOW, DEMANDS_ATTENTION);
   }
+};
+
+static void SendToDragSource(xcb_window_t source, xcb_atom_t message, const uint32_t data[5]) {
+  xcb_client_message_event_t event = {
+      .response_type = XCB_CLIENT_MESSAGE,
+      .format = 32,
+      .window = source,
+      .type = message,
+  };
+  memcpy(event.data.data32, data, sizeof(uint32_t) * 5);
+  xcb_send_event(connection, false, source, XCB_EVENT_MASK_NO_EVENT, (const char*)&event);
+  flush();
+}
+
+constexpr bool kDebugDragAndDrop = true;
+
+static Str JoinAtomNames(const xcb_atom_t* atoms, size_t count) {
+  Str result;
+  for (size_t i = 0; i < count; ++i) {
+    if (i) result += ", ";
+    result += atom::ToStr(atoms[i]);
+  }
+  return result;
+}
+
+static Str TakeDragData(xcb_window_t window, xcb_atom_t property, xcb_atom_t* out_type) {
+  auto cookie = xcb_get_property(connection, true, window, property, XCB_GET_PROPERTY_TYPE_ANY, 0,
+                                 UINT32_MAX / 4);
+  std::unique_ptr<xcb_get_property_reply_t, DeleteWithFree> reply(
+      xcb_get_property_reply(connection, cookie, nullptr));
+  if (!reply) {
+    *out_type = XCB_NONE;
+    return "";
+  }
+  *out_type = reply->type;
+  return Str((char*)xcb_get_property_value(reply.get()),
+             (size_t)xcb_get_property_value_length(reply.get()));
+}
+
+struct DataOffer {
+  xcb_window_t source = XCB_NONE;
+  xcb_atom_t type = XCB_NONE;
+  xcb_atom_t action = XCB_NONE;
+  Vec2 position;
+  Vec<xcb_atom_t> offered;
+};
+
+struct Transfer {
+  DataOffer offer;
+  xcb_atom_t property;
+  xcb_timestamp_t time;
+  Str data;
+  bool incremental = false;
 };
 
 float fp1616_to_float(xcb_input_fp1616_t fp) { return fp / 65536.0f; }
@@ -225,6 +278,8 @@ std::unique_ptr<automat::ui::Window> XCBWindow::Make(automat::ui::RootWidget& ro
 
   xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window->xcb_window, atom::WM_PROTOCOLS,
                       XCB_ATOM_ATOM, 32, 1, &atom::WM_DELETE_WINDOW);
+
+  ReplaceProperty32(window->xcb_window, atom::XdndAware, XCB_ATOM_ATOM, 5);
 
   // Setting user time to 0 indicates that the window wasn't created as a result of a user action
   // and prevents window activation.
@@ -634,6 +689,78 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
     xcb_flush(connection);
   });
 
+  DataOffer drag;
+  SmallVec<Transfer, 1> transfers;
+  SmallVec<xcb_atom_t, 4> free_transfer_properties;
+  int transfer_property_counter = 0;
+
+  auto AcquireTransferProperty = [&] {
+    if (!free_transfer_properties.empty()) {
+      return free_transfer_properties.pop_back_val();
+    }
+    Str name = f("AUTOMAT_TRANSFER_{}", transfer_property_counter++);
+    auto cookie = xcb_intern_atom(connection, false, name.size(), name.data());
+    std::unique_ptr<xcb_intern_atom_reply_t, DeleteWithFree> reply(
+        xcb_intern_atom_reply(connection, cookie, nullptr));
+    return reply ? reply->atom : (xcb_atom_t)XCB_NONE;
+  };
+
+  auto FinishTransfer = [&](Transfer& transfer) {
+    if constexpr (kDebugDragAndDrop) {
+      Str type_name = atom::ToStr(transfer.offer.type);
+      // TODO: Function that summarizes arbitrary-length string into a one-line summary:
+      // Str BlobSummary(StrView blob, int max_columns = 80) {
+      //   ...
+      // }
+      // UTF-8 is recognized even if it includes multi-byte chars:
+      // => "(utf-8) Decoded UTF-8 text (including weird chars: łóźð)" (it should also cover ASCII)
+      // Same for UTF-16:
+      // => "(utf-16) Decoded UTF-16 text (including weird chars)"
+      // Other formats are hex dumps
+      // => "...At..5n  00204426421034203" (ASCII subset (with dots for non-ASCII chars) followed by
+      // equivalent hex dump) Long buffers are summarized with ellipsis in the middle:
+      // "(utf-8) Some initial text sudd...and some final text."
+      if (transfer.data.empty()) {
+        LOG << "  " << type_name << ": <no data>";
+        return;
+      }
+      StrView sample = StrView(transfer.data).substr(0, 80);
+      bool text = true;
+      for (char c : sample) {
+        if ((unsigned char)c < 0x20 && c != '\n' && c != '\t' && c != '\r') {
+          text = false;
+          break;
+        }
+      }
+      Str printable;
+      if (text) {
+        printable = Str(sample);
+        for (auto& c : printable) {
+          if (c == '\n' || c == '\r' || c == '\t') c = ' ';
+        }
+      } else {
+        for (char c : sample) {
+          printable += f("{:02x}", (unsigned char)c);
+        }
+      }
+      LOG << "  " << type_name
+          << f(" ({} bytes{}): {}", transfer.data.size(),
+               transfer.data.size() > sample.size() ? ", truncated" : "", printable);
+    }
+    if (!transfer.data.empty()) {
+      // TODO: convert into an object
+    }
+    auto source = transfer.offer.source;
+    auto time = transfer.time;
+    free_transfer_properties.push_back(transfer.property);
+    transfers.erase(transfers.begin() + (&transfer - transfers.data()));
+    for (auto& t : transfers) {
+      if (t.offer.source == source && t.time == time) return;
+    }
+    uint32_t reply[5] = {xcb_window, 1u, atom::XdndActionCopy, 0, 0};
+    SendToDragSource(source, atom::XdndFinished, reply);
+  };
+
   while (running) {
     if (peeked_event) {
       event = peeked_event;
@@ -702,9 +829,54 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
           }
           break;
         }
+        case XCB_SELECTION_NOTIFY: {
+          auto* ev = (xcb_selection_notify_event_t*)event;
+          if (ev->selection != atom::XdndSelection || ev->requestor != xcb_window) break;
+          Transfer* transfer = nullptr;
+          for (auto& t : transfers) {
+            if (ev->property == XCB_NONE ? t.time == ev->time && t.offer.type == ev->target
+                                         : t.property == ev->property) {
+              transfer = &t;
+              break;
+            }
+          }
+          if (transfer == nullptr) break;
+          if (ev->property == XCB_NONE) {
+            FinishTransfer(*transfer);
+            break;
+          }
+          xcb_atom_t type = XCB_NONE;
+          Str data = TakeDragData(xcb_window, transfer->property, &type);
+          if (type == atom::INCR) {
+            transfer->incremental = true;
+            break;
+          }
+          transfer->data = std::move(data);
+          FinishTransfer(*transfer);
+          break;
+        }
         case XCB_PROPERTY_NOTIFY: {
           xcb_property_notify_event_t* ev = (xcb_property_notify_event_t*)event;
           xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
+          if (ev->window == xcb_window && ev->state == XCB_PROPERTY_NEW_VALUE) {
+            Transfer* transfer = nullptr;
+            for (auto& t : transfers) {
+              if (t.incremental && t.property == ev->atom) {
+                transfer = &t;
+                break;
+              }
+            }
+            if (transfer) {
+              xcb_atom_t type = XCB_NONE;
+              Str chunk = TakeDragData(xcb_window, transfer->property, &type);
+              if (chunk.empty()) {
+                FinishTransfer(*transfer);
+              } else {
+                transfer->data += chunk;
+              }
+              break;
+            }
+          }
           if (ev->window == xcb_window && ev->atom == atom::_NET_WM_STATE) {
             WM_STATE wm_state = WM_STATE::Get(xcb_window);
             root.maximized_horizontally = wm_state.MAXIMIZED_HORZ;
@@ -725,6 +897,143 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
         }
         case XCB_CLIENT_MESSAGE: {
           xcb_client_message_event_t* cm = (xcb_client_message_event_t*)event;
+          if (cm->type == atom::XdndEnter) {
+            if constexpr (kDebugDragAndDrop) {
+              xcb_window_t source = cm->data.data32[0];
+              SmallVec<xcb_atom_t, 3> inline_types;
+              for (int i = 2; i <= 4; ++i) {
+                if (cm->data.data32[i] != XCB_NONE) {
+                  inline_types.push_back(cm->data.data32[i]);
+                }
+              }
+              LOG << f("XdndEnter from 0x{:x}, inline types: {}", source,
+                       JoinAtomNames(inline_types.data(), inline_types.size()));
+              if (auto reply = get_property(source, atom::XdndTypeList, XCB_ATOM_ATOM, 0, 256);
+                  reply && reply->value_len) {
+                LOG << f("  XdndTypeList: {}",
+                         JoinAtomNames((xcb_atom_t*)xcb_get_property_value(reply.get()),
+                                       reply->value_len));
+              }
+              if (auto reply = get_property(source, atom::XdndActionList, XCB_ATOM_ATOM, 0, 256);
+                  reply && reply->value_len) {
+                Vec<StrView> descriptions;
+                auto desc_reply =
+                    get_property(source, atom::XdndActionDescription, XCB_ATOM_STRING, 0, 4096);
+                if (desc_reply && desc_reply->value_len) {
+                  StrView blob((char*)xcb_get_property_value(desc_reply.get()),
+                               (size_t)xcb_get_property_value_length(desc_reply.get()));
+                  while (!blob.empty()) {
+                    auto len = blob.find('\0');
+                    descriptions.push_back(blob.substr(0, len));
+                    if (len == StrView::npos) break;
+                    blob.remove_prefix(len + 1);
+                  }
+                }
+                auto* actions = (xcb_atom_t*)xcb_get_property_value(reply.get());
+                Str line;
+                for (uint32_t i = 0; i < reply->value_len; ++i) {
+                  if (i) line += ", ";
+                  line += atom::ToStr(actions[i]);
+                  if (i < descriptions.size() && !descriptions[i].empty()) {
+                    line += f(" \"{}\"", descriptions[i]);
+                  }
+                }
+                LOG << f("  XdndActionList: {}", line);
+              }
+              if (auto reply = get_property(source, atom::XdndDirectSave0,
+                                            XCB_GET_PROPERTY_TYPE_ANY, 0, 256);
+                  reply && reply->type != XCB_NONE) {
+                LOG << f("  XdndDirectSave0 ({}): {}", atom::ToStr(reply->type),
+                         StrView((char*)xcb_get_property_value(reply.get()),
+                                 (size_t)xcb_get_property_value_length(reply.get())));
+              }
+            }
+            drag.source = cm->data.data32[0];
+            drag.offered.clear();
+            if (cm->data.data32[1] & 1) {
+              auto reply =
+                  get_property(cm->data.data32[0], atom::XdndTypeList, XCB_ATOM_ATOM, 0, 256);
+              if (reply) {
+                auto* list = (xcb_atom_t*)xcb_get_property_value(reply.get());
+                for (uint32_t i = 0; i < reply->value_len; ++i) {
+                  drag.offered.push_back(list[i]);
+                }
+              }
+            } else {
+              for (int i = 2; i <= 4; ++i) {
+                if (cm->data.data32[i] != XCB_NONE) {
+                  drag.offered.push_back(cm->data.data32[i]);
+                }
+              }
+            }
+
+            static const xcb_atom_t kXdndWantedTypes[] = {
+                atom::image_png,
+                atom::image_webp,
+                atom::image_jpeg,
+                atom::image_jpg,
+                atom::image_gif,
+                atom::image_bmp,
+                atom::application_octet_stream,
+                atom::text_uri_list,
+            };
+            drag.type = XCB_NONE;
+            for (auto wanted : kXdndWantedTypes) {
+              if (drag.type != XCB_NONE) break;
+              for (auto type : drag.offered) {
+                if (type == wanted) {
+                  drag.type = wanted;
+                  break;
+                }
+              }
+            }
+            break;
+          }
+          if (cm->type == atom::XdndPosition) {
+            if (cm->data.data32[4] != drag.action) {  // requested action
+              drag.action = cm->data.data32[4];
+              if constexpr (kDebugDragAndDrop) {
+                LOG << "XdndPosition action: " << atom::ToStr(drag.action);
+              }
+            }
+            Vec2 screen_px =
+                Vec2((int16_t)(cm->data.data32[2] >> 16), (int16_t)(cm->data.data32[2] & 0xffff));
+            drag.position = Vec2(root.PointerToCanvas().mapPoint(ScreenToWindowPx(screen_px)));
+            uint32_t reply[5] = {xcb_window, drag.type != XCB_NONE ? 1u : 0u, 0, 0,
+                                 atom::XdndActionCopy};  // TODO: handle other action types
+            SendToDragSource(cm->data.data32[0], atom::XdndStatus, reply);
+            break;
+          }
+          if (cm->type == atom::XdndLeave) {
+            drag = {};
+            break;
+          }
+          if (cm->type == atom::XdndDrop) {
+            if constexpr (kDebugDragAndDrop) {
+              LOG << "XdndDrop";
+            }
+            if (drag.type == XCB_NONE) {
+              uint32_t reply[5] = {xcb_window, 0, 0, 0, 0};
+              SendToDragSource(cm->data.data32[0], atom::XdndFinished, reply);
+              drag = {};
+              break;
+            }
+            auto time = (xcb_timestamp_t)cm->data.data32[2];
+            for (auto type : drag.offered) {
+              auto& transfer =
+                  transfers.emplace_back(Transfer{.offer = {.source = drag.source,
+                                                            .type = type,
+                                                            .action = drag.action,
+                                                            .position = drag.position},
+                                                  .property = AcquireTransferProperty(),
+                                                  .time = time});
+              xcb_convert_selection(connection, xcb_window, atom::XdndSelection, type,
+                                    transfer.property, time);
+            }
+            drag = {};
+            flush();
+            break;
+          }
           if (cm->data.data32[0] == atom::WM_DELETE_WINDOW) {
             running = false;
           }
@@ -833,7 +1142,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                   break;
                 }
                 for (auto& logging : pointer.loggings) {
-                  logging.logger.PointerLoggerButtonDown(logging,btn);
+                  logging.logger.PointerLoggerButtonDown(logging, btn);
                 }
                 break;
               }
@@ -851,7 +1160,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                   break;
                 }
                 for (auto& logging : pointer.loggings) {
-                  logging.logger.PointerLoggerButtonUp(logging,btn);
+                  logging.logger.PointerLoggerButtonUp(logging, btn);
                 }
                 break;
               }
@@ -867,12 +1176,12 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                 auto valuators = RawButtonValuators(*ev);
                 if (auto delta = valuators.GetVerticalScrollDelta(false)) {
                   for (auto& logging : pointer.loggings) {
-                    logging.logger.PointerLoggerScrollY(logging,*delta);
+                    logging.logger.PointerLoggerScrollY(logging, *delta);
                   }
                 }
                 if (auto xy = valuators.GetRelativeXY()) {
                   for (auto& logging : pointer.loggings) {
-                    logging.logger.PointerLoggerMove(logging,*xy);
+                    logging.logger.PointerLoggerMove(logging, *xy);
                   }
                 }
                 break;

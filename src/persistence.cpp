@@ -95,7 +95,7 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
                   DefaultBoard().ReportError(f("Unknown object type: {}", type));
                 } else {
                   auto object = proto->Clone();
-                  object->inhibit_sync_notifications = true;
+                  object->suspended = true;
                   d.RegisterObject(key, *object);
                 }
               }
@@ -147,7 +147,7 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
   }
 
   for (auto& [key, obj] : d.objects) {
-    obj->inhibit_sync_notifications = false;
+    obj->suspended = false;
   }
 
   // Objects may have been rendered in their incomplete state - re-render them all.

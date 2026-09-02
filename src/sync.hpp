@@ -200,11 +200,10 @@ void Syncable::ForwardDo(this T self, F&& lambda) {
 
 template <typename T, typename F>
 void Syncable::ForwardNotify(this T self, F&& lambda) {
-  if (self.object_ptr->inhibit_sync_notifications) {
+  if (self.object_ptr->suspended) {
     return;
   }
-  // self.obj.inhibit_sync_notifications is guaranteed to be false at this point.
-  self.object_ptr->inhibit_sync_notifications = true;
+  self.object_ptr->suspended = true;
   --self.state->sync_balance;
   self.WakeToys();
   auto& st = *self.state;
@@ -227,7 +226,7 @@ void Syncable::ForwardNotify(this T self, F&& lambda) {
       }
     }
   }
-  self.object_ptr->inhibit_sync_notifications = false;
+  self.object_ptr->suspended = false;
 }
 
 // Returns a reference to the existing or a new Gear.

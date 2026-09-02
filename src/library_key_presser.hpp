@@ -28,13 +28,13 @@ struct KeyPresser : Object, ui::Keylogger {
   void OnTurnOff() { obj->Release(); }
   void OnSync() {
     // Prevent monitoring from being started while object is being deserialized.
-    if (obj->inhibit_sync_notifications) {
+    if (obj->suspended) {
       return;
     }
     obj->monitoring->TurnOn();
   }
   void OnUnsync() {
-    if (obj->inhibit_sync_notifications) {
+    if (obj->suspended) {
       return;
     }
     obj->monitoring->TurnOff();

@@ -220,6 +220,11 @@ int Main() {
   {
     auto lock = std::lock_guard(vm.mutex);
     for (auto& board : vm.boards) {
+      for (auto& location : board->locations) {
+        location->object->suspended = true;
+      }
+    }
+    for (auto& board : vm.boards) {
       board->locations.clear();
     }
   }

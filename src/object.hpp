@@ -38,7 +38,7 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   AtomicCounter wake_counter = 0;
 
   // Used during initialization & to prevent feedback loops in synchronization.
-  bool inhibit_sync_notifications = false;
+  bool suspended = false;
 
   // Note: 3 bytes of padding here
 

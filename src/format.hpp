@@ -24,6 +24,13 @@ std::string IndentString(std::string in, int spaces = 2);
 
 std::string Slugify(std::string in);
 
+// Summarizes arbitrary blob of data as a single line.
+// - returned string includes type (utf-8/utf-16/blob)
+// - returned string includes byte size
+// - should ellipsize center of long strings
+// - max_columns is used to roughly control the width of text when printed to terminal
+Str BlobSummary(StrView blob, int max_columns = 80);
+
 template <typename T>
 Str AddrToStr(T* t) {
   return f("{}", (void*)(t));

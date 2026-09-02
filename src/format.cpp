@@ -3,6 +3,15 @@
 #include "format.hpp"
 
 #include <fmt/format.h>
+#include <src/base/SkUTF.h>
+
+#include <cstring>
+#include <ranges>
+
+#include "hex.hpp"
+#include "int.hpp"
+
+#pragma comment(lib, "skia")
 
 namespace automat {
 
@@ -49,6 +58,225 @@ std::string Slugify(std::string in) {
       out += c;
     } else {
       unk = true;
+    }
+  }
+  return out;
+}
+
+static bool IsEscapedControl(SkUnichar c) { return c == '\t' || c == '\n' || c == '\r'; }
+
+static int Columns(SkUnichar c) { return IsEscapedControl(c) ? 2 : 1; }
+
+Str BlobSummary(StrView blob, int max_columns) {
+  if (blob.empty()) return "(0 B)";
+  bool is_utf8 = true;
+  {  // UTF-8 test
+    const char* begin = blob.begin();
+    const char* end = blob.end();
+    int n_ascii = 0, n_non_ascii = 0;
+    while (begin < end) {
+      auto c = SkUTF::NextUTF8(&begin, end);
+      if (c < 32 && !IsEscapedControl(c) || (c >= 0x7F && c <= 0x9F)) {
+        is_utf8 = false;
+        break;
+      }
+      if (c == 0xFEFF) continue;
+      ++(c < 128 ? n_ascii : n_non_ascii);
+    }
+    if (n_ascii < n_non_ascii) {
+      is_utf8 = false;
+    }
+  }
+  bool is_utf16 = true;
+  {  // UTF-16 test
+    const uint16_t* begin = (const uint16_t*)blob.begin();
+    const uint16_t* end = (const uint16_t*)blob.end();
+    int n_ascii = 0, n_non_ascii = 0;
+    while (begin < end) {
+      auto c = SkUTF::NextUTF16(&begin, end);
+      if (c < 32 && !IsEscapedControl(c) || (c >= 0x7F && c <= 0x9F)) {
+        is_utf16 = false;
+        break;
+      }
+      if (c == 0xFEFF) continue;
+      ++(c < 128 ? n_ascii : n_non_ascii);
+    }
+    if (n_ascii < n_non_ascii) {
+      is_utf16 = false;
+    }
+  }
+  SmallVec<SkUnichar, 64> prefix, suffix;
+  Str out;
+  if (is_utf8) {
+    out = f("(utf-8 {} B)", blob.size());
+    max_columns -= out.size();
+    if (max_columns > 0) {
+      max_columns -= 1;
+      out += ' ';
+    }
+    while (max_columns > 0 && !blob.empty()) {
+      if (prefix.size() <= suffix.size()) {
+        const char* p = blob.begin();
+        auto c = SkUTF::NextUTF8(&p, blob.end());
+        if (Columns(c) > max_columns) break;
+        blob.remove_prefix(p - blob.begin());
+        if (c == '\t') {
+          prefix.push_back('\\');
+          prefix.push_back('t');
+          max_columns -= 2;
+        } else if (c == '\n') {
+          prefix.push_back('\\');
+          prefix.push_back('n');
+          max_columns -= 2;
+        } else if (c == '\r') {
+          prefix.push_back('\\');
+          prefix.push_back('r');
+          max_columns -= 2;
+        } else {
+          prefix.push_back(c);
+          max_columns -= 1;
+        }
+      } else {
+        const char* p = blob.end() - 1;
+        while (((U8)*p & 0xC0) == 0x80) --p;
+        const char* q = p;
+        auto c = SkUTF::NextUTF8(&q, blob.end());
+        if (Columns(c) > max_columns) break;
+        blob.remove_suffix(blob.end() - p);
+        if (c == '\t') {
+          suffix.push_back('t');
+          suffix.push_back('\\');
+          max_columns -= 2;
+        } else if (c == '\n') {
+          suffix.push_back('n');
+          suffix.push_back('\\');
+          max_columns -= 2;
+        } else if (c == '\r') {
+          suffix.push_back('r');
+          suffix.push_back('\\');
+          max_columns -= 2;
+        } else {
+          suffix.push_back(c);
+          max_columns -= 1;
+        }
+      }
+    }
+  } else if (is_utf16) {
+    out = f("(utf-16 {} B)", blob.size());
+    max_columns -= out.size();
+    if (max_columns > 0) {
+      max_columns -= 1;
+      out += ' ';
+    }
+    while (max_columns > 0 && !blob.empty()) {
+      if (prefix.size() <= suffix.size()) {
+        const uint16_t* p = (const uint16_t*)blob.begin();
+        auto c = SkUTF::NextUTF16(&p, (const uint16_t*)blob.end());
+        if (Columns(c) > max_columns) break;
+        blob.remove_prefix((intptr_t)p - (intptr_t)blob.begin());
+        if (c == '\t') {
+          prefix.push_back('\\');
+          prefix.push_back('t');
+          max_columns -= 2;
+        } else if (c == '\n') {
+          prefix.push_back('\\');
+          prefix.push_back('n');
+          max_columns -= 2;
+        } else if (c == '\r') {
+          prefix.push_back('\\');
+          prefix.push_back('r');
+          max_columns -= 2;
+        } else {
+          prefix.push_back(c);
+          max_columns -= 1;
+        }
+      } else {
+        const uint16_t* p = ((const uint16_t*)blob.end()) - 1;
+        if (SkUTF::IsTrailingSurrogateUTF16(*p)) --p;
+        const uint16_t* q = p;
+        auto c = SkUTF::NextUTF16(&q, (const uint16_t*)blob.end());
+        if (Columns(c) > max_columns) break;
+        blob.remove_suffix((intptr_t)blob.end() - (intptr_t)p);
+        if (c == '\t') {
+          suffix.push_back('t');
+          suffix.push_back('\\');
+          max_columns -= 2;
+        } else if (c == '\n') {
+          suffix.push_back('n');
+          suffix.push_back('\\');
+          max_columns -= 2;
+        } else if (c == '\r') {
+          suffix.push_back('r');
+          suffix.push_back('\\');
+          max_columns -= 2;
+        } else {
+          suffix.push_back(c);
+          max_columns -= 1;
+        }
+      }
+    }
+  } else {  // Hex dump: every byte prints ASCII-or-dot + two-digit hex
+    out = f("(blob {} B)", blob.size());
+    max_columns -= out.size();
+    if (max_columns > 0) {
+      max_columns -= 1;
+      out += ' ';
+    }
+    max_columns -= 2;  // two spaces between ASCII & hex
+    if (max_columns <= 0) {
+      // that's enough!
+    } else if (blob.size() > max_columns / 3) {  // ellipsized hex dump
+      max_columns -= 2;                          // use two columns for '|'
+      int n_chars = max_columns > 0 ? max_columns / 3 : 0;
+      int prefix_bytes = (n_chars + 1) / 2;
+      int suffix_bytes = n_chars / 2;
+      for (int i = 0; i < prefix_bytes; ++i) {  // ASCII 1st half
+        prefix.push_back(PrintableOrDot(blob[i]));
+      }
+      prefix.push_back('|');
+      for (int i = blob.size() - suffix_bytes; i < blob.size(); ++i) {  // ASCII 2nd half
+        prefix.push_back(PrintableOrDot(blob[i]));
+      }
+      prefix.push_back(' ');
+      prefix.push_back(' ');
+      for (int i = 0; i < prefix_bytes; ++i) {  // Hex 1st half
+        auto hex = ByteToHex(blob[i]);
+        prefix.push_back(hex.first);
+        prefix.push_back(hex.second);
+      }
+      prefix.push_back('|');
+      for (int i = blob.size() - suffix_bytes; i < blob.size(); ++i) {  // Hex 2nd half
+        auto hex = ByteToHex(blob[i]);
+        prefix.push_back(hex.first);
+        prefix.push_back(hex.second);
+      }
+    } else {  // continuous hex dump
+      for (int i = 0; i < blob.size(); ++i) {
+        prefix.push_back(PrintableOrDot(blob[i]));
+      }
+      prefix.push_back(' ');
+      prefix.push_back(' ');
+      for (int i = 0; i < blob.size(); ++i) {
+        auto hex = ByteToHex(blob[i]);
+        prefix.push_back(hex.first);
+        prefix.push_back(hex.second);
+      }
+    }
+  }
+  for (auto c : prefix) {
+    char buf[8];
+    int n = SkUTF::ToUTF8(c, buf);
+    out.append(buf, n);
+  }
+  if (!suffix.empty()) {
+    if (!blob.empty()) {
+      out.append("...");
+      suffix.pop_back_n(3);  // to make space for ellipsis
+    }
+    for (auto c : std::ranges::reverse_view(suffix)) {
+      char buf[8];
+      int n = SkUTF::ToUTF8(c, buf);
+      out.append(buf, n);
     }
   }
   return out;

@@ -11,6 +11,9 @@ namespace automat {
 
 void HexToBytesUnchecked(StrView hex, char* out_bytes);
 
+inline std::pair<char, char> ByteToHex(U8 byte) {
+  return std::make_pair("0123456789abcdef"[byte >> 4], "0123456789abcdef"[byte & 0xf]);
+}
 Str BytesToHex(Span<> bytes);
 
 inline Str BytesToHex(const char* bytes, size_t len) {
@@ -44,6 +47,8 @@ constexpr Arr<char, (N - 1) / 2> HexArr(const char (&str)[N]) {
   HexToBytesUnchecked(StrView(str, N - 1), arr.data());
   return arr;
 }
+
+constexpr char PrintableOrDot(char c) { return c < 32 || c > 126 ? '.' : c; }
 
 // Print the given bytes as a hex dump.
 //

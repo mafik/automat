@@ -32,8 +32,9 @@ Str BytesToHex(Span<> bytes) {
   Str result;
   result.reserve(bytes.size() * 2);
   for (U8 byte : bytes) {
-    result += "0123456789abcdef"[byte >> 4];
-    result += "0123456789abcdef"[byte & 0xf];
+    auto hex = ByteToHex(byte);
+    result += hex.first;
+    result += hex.second;
   }
   return result;
 }
@@ -75,11 +76,7 @@ Str HexDump(StrView bytes) {
     for (int col = 0; col < 16; ++col) {
       int byte = line * 16 + col;
       if (byte < bytes.size()) {
-        char c = bytes[byte];
-        if (c < 32 || c > 126) {
-          c = '.';
-        }
-        result += c;
+        result += PrintableOrDot(bytes[byte]);
       } else {
         result += " ";
       }

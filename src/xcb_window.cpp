@@ -10,6 +10,7 @@
 #include <stop_token>
 
 #include "fn.hpp"
+#include "format.hpp"
 #include "log.hpp"
 #include "root_widget.hpp"
 #include "vec.hpp"
@@ -707,45 +708,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
 
   auto FinishTransfer = [&](Transfer& transfer) {
     if constexpr (kDebugDragAndDrop) {
-      Str type_name = atom::ToStr(transfer.offer.type);
-      // TODO: Function that summarizes arbitrary-length string into a one-line summary:
-      // Str BlobSummary(StrView blob, int max_columns = 80) {
-      //   ...
-      // }
-      // UTF-8 is recognized even if it includes multi-byte chars:
-      // => "(utf-8) Decoded UTF-8 text (including weird chars: łóźð)" (it should also cover ASCII)
-      // Same for UTF-16:
-      // => "(utf-16) Decoded UTF-16 text (including weird chars)"
-      // Other formats are hex dumps
-      // => "...At..5n  00204426421034203" (ASCII subset (with dots for non-ASCII chars) followed by
-      // equivalent hex dump) Long buffers are summarized with ellipsis in the middle:
-      // "(utf-8) Some initial text sudd...and some final text."
-      if (transfer.data.empty()) {
-        LOG << "  " << type_name << ": <no data>";
-        return;
-      }
-      StrView sample = StrView(transfer.data).substr(0, 80);
-      bool text = true;
-      for (char c : sample) {
-        if ((unsigned char)c < 0x20 && c != '\n' && c != '\t' && c != '\r') {
-          text = false;
-          break;
-        }
-      }
-      Str printable;
-      if (text) {
-        printable = Str(sample);
-        for (auto& c : printable) {
-          if (c == '\n' || c == '\r' || c == '\t') c = ' ';
-        }
-      } else {
-        for (char c : sample) {
-          printable += f("{:02x}", (unsigned char)c);
-        }
-      }
-      LOG << "  " << type_name
-          << f(" ({} bytes{}): {}", transfer.data.size(),
-               transfer.data.size() > sample.size() ? ", truncated" : "", printable);
+      LOG << f("  {}: {}", atom::ToStr(transfer.offer.type), BlobSummary(transfer.data));
     }
     if (!transfer.data.empty()) {
       // TODO: convert into an object

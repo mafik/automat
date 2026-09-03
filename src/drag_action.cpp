@@ -4,6 +4,8 @@
 
 #include <include/core/SkPath.h>
 
+#include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <ranges>
 
@@ -40,6 +42,84 @@ static ui::DropTarget* FindDropTarget(DragLocationAction& a) {
   return FindDropTarget(a, a.pointer.root_widget);
 }
 
+static void SettleAnchor(Location& location) {
+  if (!location.widget) return;
+  LocationWidget& widget = *location.widget;
+  auto* grab = widget.GrabAnchor();
+  if (!grab) return;
+  auto matrix = Location::ToMatrix(location.Position(widget), location.Scale(widget), grab->pos);
+  widget.toy->texture_anchors.clear();
+  widget.toy->local_to_parent_weight = 1;
+  widget.local_to_parent_weight_target = 1;
+  Location::FromMatrix(matrix, widget.LocalAnchor(), location.Position(widget),
+                       location.Scale(widget));
+}
+
+DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&& locations_arg,
+                                       BoardWidget* board, Optional<Vec2> grab)
+    : Action(pointer), locations(std::move(locations_arg)), board_widget(board) {
+  assert(!locations.empty());
+  size_t n = locations.size();
+  LocationWidget* widgets[n];
+  if (board) {
+    for (size_t i = 0; i < n; ++i) {
+      widgets[i] = &board->toys.FindOrMake(*locations[i], board);
+    }
+  } else {
+    for (size_t i = 0; i < n; ++i) {
+      auto widget = LocationWidget::MakePointerOwned(pointer.GetWidget(), *locations[i]);
+      widgets[i] = widget.get();
+      held_widgets.push_back(std::move(widget));
+    }
+    OrderHeldWidgets();
+  }
+  auto& base_toy = widgets[n - 1]->ToyForObject();
+  if (!grab) {
+    grab = base_toy.CoarseBounds().Clamp(pointer.PositionWithin(base_toy));
+  }
+  for (size_t i = n; i-- > 0;) {
+    auto& toy = widgets[i]->ToyForObject();
+    widgets[i]->AnchorToPointer(pointer, TransformBetween(base_toy, toy).mapPoint(*grab));
+    locations[i]->WakeToys();
+  }
+  if (board) {
+    SetRadar(1);
+    board->RedrawThisFrame();  // unbudgeted pick-up frame; other roots' views repaint via the wakes
+  }
+  auto& root = pointer.root_widget;
+  root.drag_action_count++;
+  if (root.drag_action_count == 1) {
+    root.black_hole.WakeAnimation();
+  }
+  pointer.GetWidget()->ValidateHierarchy();
+  root.WakeAnimation();
+  Update();
+}
+
+DragLocationAction::DragLocationAction(ui::Pointer& pointer, Ptr<Location>&& location,
+                                       BoardWidget* board, Optional<Vec2> grab)
+    : DragLocationAction(pointer, MakeVec(std::move(location)), board, grab) {}
+
+DragLocationAction::~DragLocationAction() {
+  if (!locations.empty()) {
+    Drop();
+  }
+  auto& root = pointer.root_widget;
+  root.drag_action_count--;
+  root.WakeAnimation();
+}
+
+Vec2 DragLocationAction::OwnerOffset() {
+  return board_widget ? board_widget->LockBoard()->position : Vec2(0, 0);
+}
+
+void DragLocationAction::OrderHeldWidgets() {
+  auto& layers = pointer.GetWidget()->layers;
+  for (size_t i = 1; i < held_widgets.size(); ++i) {
+    layers.OrderBelow(held_widgets[i].get(), held_widgets[i - 1].get());
+  }
+}
+
 void DragLocationAction::Update() {
   current_position = pointer.PositionOnCanvas();
 
@@ -58,7 +138,7 @@ void DragLocationAction::Update() {
     any_owned |= merge_targets[i] != nullptr;
   }
   if (hovered && !any_owned) {
-    Enter(*hovered_board);
+    Enter(*hovered_board, *hovered);
   }
 
   float weight_target = drop_target ? 1 : 0;
@@ -71,13 +151,7 @@ void DragLocationAction::Update() {
     }
   }
 
-  Vec2 owner_offset = {0, 0};
-  if (board_widget) {
-    if (auto board = board_widget->LockBoard()) {
-      owner_offset = board->position;
-    }
-  }
-  Vec2 owner_position = current_position - owner_offset;
+  Vec2 owner_position = current_position - OwnerOffset();
 
   int n = locations.size();
   ObjectToy* widgets[n];
@@ -155,64 +229,130 @@ void DragLocationAction::Update() {
 }
 
 void DragLocationAction::Extract() {
-  auto* bw = board_widget.Get();
+  BoardWidget& bw = *board_widget;
+  auto board = bw.LockBoard();
+  SetRadar(0);
   board_widget = nullptr;
-  auto board = bw->LockBoard();
-  if (!board) return;
-  SetRadar(*bw, 0);
   for (auto& location : locations) {
     location->InvalidateConnectionWidgets(true, false);
     board->Extract(*location);
-    location->Position(*location->widget) += board->position;
-    auto lw_unique = bw->toys.Extract(*location);
+    auto lw_unique = bw.toys.Extract(*location);
     if (auto* lw = static_cast<LocationWidget*>(lw_unique.get())) {
       if (location->object) {
-        lw->owned_toy = bw->toys.Extract(*location->object);
+        lw->owned_toy = bw.toys.Extract(*location->object);
       }
       lw->Reparent(*pointer.GetWidget());
-      held_widgets.push_back(std::move(lw_unique));
+    } else {
+      lw_unique = LocationWidget::MakePointerOwned(pointer.GetWidget(), *location);
     }
+    location->Position(static_cast<LocationWidget&>(*lw_unique)) += board->position;
+    held_widgets.push_back(std::move(lw_unique));
     location->WakeToys();
   }
-  bw->WakeAnimation();
+  OrderHeldWidgets();
+  bw.WakeAnimation();
   audio::Play(embedded::assets_SFX_canvas_pick_wav);
+}
+
+void DragLocationAction::Enter(BoardWidget& bw, Board& board) {
+  for (size_t i = locations.size(); i-- > 0;) {
+    GiveToBoard(bw, board, i);
+  }
+  held_widgets.clear();
+  board_widget = &bw;
+  SetRadar(1);
+  bw.WakeAnimation();
 }
 
 void DragLocationAction::GiveToBoard(BoardWidget& bw, Board& board, size_t i) {
   auto& location = locations[i];
+  auto& lw = static_cast<LocationWidget&>(*held_widgets[i]);
   location->board = board.AcquireWeakPtr();
-  location->Position(*location->widget) -= board.position;
+  location->Position(lw) -= board.position;
   {
     auto lock = std::lock_guard(vm.mutex);
     board.locations.insert(board.locations.begin(), location);
   }
-  if (i < held_widgets.size() && held_widgets[i]) {
-    auto* lw = static_cast<LocationWidget*>(held_widgets[i].get());
-    held_widgets[i]->Reparent(bw);
-    bw.toys.Insert(*location, std::move(held_widgets[i]));
-    if (lw->owned_toy && location->object) {
-      lw->owned_toy->Reparent(*lw);
-      bw.toys.Insert(*location->object, std::move(lw->owned_toy));
-    }
+  lw.Reparent(bw);
+  bw.toys.Insert(*location, std::move(held_widgets[i]));
+  if (lw.owned_toy && location->object) {
+    lw.owned_toy->Reparent(lw);
+    bw.toys.Insert(*location->object, std::move(lw.owned_toy));
   }
   location->WakeToys();
   location->InvalidateConnectionWidgets(true, false);
 }
 
-void DragLocationAction::Enter(BoardWidget& bw) {
-  auto board = bw.LockBoard();
-  if (!board) return;
+void DragLocationAction::MergeIntoResidents(BoardWidget& bw, Board& board) {
   for (size_t i = locations.size(); i-- > 0;) {
-    GiveToBoard(bw, *board, i);
+    Location& dragged = *locations[i];
+    Location* resident = dragged.object ? board.LocationOrNull(*dragged.object) : nullptr;
+    if (!resident || resident == &dragged) continue;
+    auto& widget = static_cast<LocationWidget&>(*held_widgets[i]);
+    if (widget.toy) {
+      widget.owner = resident->AcquireWeakPtr();
+      widget.merging = true;
+      if (auto* grab = widget.GrabAnchor()) {
+        grab->warp_by += pointer.PositionWithin(*widget.toy) - grab->pos;
+        grab->pointer = nullptr;
+      }
+      widget.WakeAnimation();
+      pointer.GetWidget()->AdoptZombie(std::move(held_widgets[i]));
+    } else if (auto* resident_widget = bw.toys.FindOrNull(*resident)) {
+      resident_widget->WakeAnimation();
+    }
+    held_widgets.erase(held_widgets.begin() + i);
+    locations.erase(locations.begin() + i);
   }
-  held_widgets.clear();
-  board_widget = &bw;
-  SetRadar(bw, 1);
-  bw.WakeAnimation();
 }
 
-void DragLocationAction::SetRadar(BoardWidget& bw, float target) {
-  for (auto& [key, toy] : bw.toys.container) {
+void DragLocationAction::Drop() {
+  auto& root = pointer.root_widget;
+  if (!board_widget) {
+    ui::DropTarget* drop_target = FindDropTarget(*this);
+    auto* bw = dynamic_cast<BoardWidget*>(drop_target);
+    auto board = bw ? bw->LockBoard() : nullptr;
+    if (board) {
+      MergeIntoResidents(*bw, *board);
+      Enter(*bw, *board);
+    } else if (drop_target) {
+      for (size_t i = locations.size(); i-- > 0;) {
+        SettleAnchor(*locations[i]);
+        pointer.GetWidget()->AdoptZombie(std::move(held_widgets[i]));
+        drop_target->DropLocation(std::move(locations[i]));
+      }
+    } else {
+      auto new_board = MAKE_PTR(Board);
+      new_board->position = RoundToMilimeters(current_position);
+      {
+        auto lock = std::lock_guard(vm.mutex);
+        vm.boards.insert(vm.boards.begin(), new_board);
+      }
+      auto& new_bw = root.toys.FindOrMake(*new_board, &root);
+      SkM44 board_transform(root.CanvasToWindow());
+      board_transform.preTranslate(new_board->position.x, new_board->position.y);
+      new_bw.local_to_parent = board_transform;
+      Enter(new_bw, *new_board);
+      vm.WakeToys();
+    }
+  }
+  if (board_widget) {
+    SetRadar(0);
+    for (auto& location : std::ranges::reverse_view(locations)) {
+      location->WakeToys();
+      SettleAnchor(*location);
+    }
+    if (auto board = board_widget->LockBoard()) {
+      for (auto& location : std::ranges::reverse_view(locations)) {
+        board->MoveToTop(*location);
+      }
+    }
+    audio::Play(embedded::assets_SFX_canvas_drop_wav);
+  }
+}
+
+void DragLocationAction::SetRadar(float target) {
+  for (auto& [key, toy] : board_widget->toys.container) {
     auto* connection_widget = dynamic_cast<ArgumentToy*>(toy.get());
     if (!connection_widget) continue;
     float value = 0;
@@ -245,152 +385,62 @@ void DragLocationAction::VisitObjects(std::function<void(Object&)> visitor) {
 
 void DragLocationAction::Poll(time::Timer& timer) {
   for (auto& held : held_widgets) {
-    if (held) held->Poll(timer);
+    held->Poll(timer);
   }
 }
 
-void DragLocationAction::Init() {
-  auto& root = pointer.root_widget;
-  root.drag_action_count++;
-  if (root.drag_action_count == 1) {
-    root.black_hole.WakeAnimation();
+void DragLocationAction::AddToGroup(Ptr<Location>&& loc_arg) {
+  Location* loc = loc_arg.get();
+  Vec2 pile = Vec2(locations.size() * 6_mm, locations.size() * -6_mm);
+  if (auto* direct = std::get_if<Location::Direct>(&loc->placement)) {
+    direct->position = pointer.PositionOnCanvas() - OwnerOffset() + pile;
   }
-  pointer.GetWidget()->ValidateHierarchy();
-  root.WakeAnimation();
-  current_position = pointer.PositionOnCanvas();
-  Update();
-}
-
-DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&& locations_arg,
-                                       BoardWidget& bw)
-    : Action(pointer), locations(std::move(locations_arg)), board_widget(&bw) {
-  auto& base_toy = bw.toys.FindOrMake(*locations.back(), &bw).ToyForObject();
-  Vec2 base_grab = base_toy.CoarseBounds().Clamp(pointer.PositionWithin(base_toy));
-  for (auto& location : std::ranges::reverse_view(locations)) {
-    auto& lw = bw.toys.FindOrMake(*location, &bw);
-    auto& toy = lw.ToyForObject();
-    lw.AnchorToPointer(pointer, TransformBetween(base_toy, toy).mapPoint(base_grab));
-    location->WakeToys();
-  }
-  SetRadar(bw, 1);
-  bw.RedrawThisFrame();  // unbudgeted pick-up frame; other roots' views repaint via the wakes
-  Init();
-}
-
-DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&& locations_arg)
-    : Action(pointer), locations(std::move(locations_arg)) {
-  ObjectToy* base_toy = nullptr;
-  Vec2 base_grab;
-  for (auto& location : std::ranges::reverse_view(locations)) {
-    auto lw_unique = LocationWidget::MakePointerOwned(pointer.GetWidget(), *location);
-    auto* lw = lw_unique.get();
-    held_widgets.insert(held_widgets.begin(), std::move(lw_unique));
-    auto& toy = lw->ToyForObject();
-    if (!base_toy) {
-      base_toy = &toy;
-      base_grab = toy.CoarseBounds().Clamp(pointer.PositionWithin(toy));
-    }
-    lw->AnchorToPointer(pointer, TransformBetween(*base_toy, toy).mapPoint(base_grab));
-    location->WakeToys();
-  }
-  Init();
-}
-
-DragLocationAction::DragLocationAction(ui::Pointer& pointer, Ptr<Location>&& location_arg)
-    : DragLocationAction(pointer, MakeVec<Ptr<Location>>(std::move(location_arg))) {}
-
-DragLocationAction::~DragLocationAction() {
-  auto& root = pointer.root_widget;
-
-  auto SettleAnchor = [](Location& location) {
-    // Use matrix to keep the object in place while clearing the grab anchor
-    if (!location.widget) return;
-    LocationWidget& widget = *location.widget;
-    auto* grab = widget.GrabAnchor();
-    if (!grab) return;
-    auto matrix = Location::ToMatrix(location.Position(widget), location.Scale(widget), grab->pos);
-    widget.toy->texture_anchors.clear();
-    widget.toy->local_to_parent_weight = 1;
-    widget.local_to_parent_weight_target = 1;
-    Location::FromMatrix(matrix, widget.LocalAnchor(), location.Position(widget),
-                         location.Scale(widget));
-  };
-
+  Location* above = locations.back().get();
+  locations.push_back(std::move(loc_arg));
+  LocationWidget* lw;
   if (board_widget) {
-    SetRadar(*board_widget, 0);
-    for (auto& location : std::ranges::reverse_view(locations)) {
-      location->WakeToys();
-      SettleAnchor(*location);
+    auto board = board_widget->LockBoard();
+    loc->board = board->AcquireWeakPtr();
+    {
+      auto lock = std::lock_guard(vm.mutex);
+      auto& list = board->locations;
+      auto it = std::find_if(list.begin(), list.end(), [&](auto& l) { return l.get() == above; });
+      list.insert(it == list.end() ? list.begin() : std::next(it), locations.back());
     }
-    if (auto board = board_widget->LockBoard()) {
-      for (auto& location : std::ranges::reverse_view(locations)) {
-        board->MoveToTop(*location);
-      }
-    }
-    audio::Play(embedded::assets_SFX_canvas_drop_wav);
+    lw = &board_widget->toys.FindOrMake(*loc, board_widget.Get());
+    SetRadar(1);
   } else {
-    ui::DropTarget* drop_target = FindDropTarget(*this);
-    auto* bw = dynamic_cast<BoardWidget*>(drop_target);
-    auto board = bw ? bw->LockBoard() : nullptr;
-    if (board) {
-      for (size_t i = locations.size(); i-- > 0;) {
-        Location& dragged_loc = *locations[i];
-        Location* preexisting_loc =
-            dragged_loc.object ? board->LocationOrNull(*dragged_loc.object) : nullptr;
-        if (preexisting_loc && preexisting_loc != &dragged_loc) {
-          auto* dragged_widget = i < held_widgets.size()
-                                     ? static_cast<LocationWidget*>(held_widgets[i].get())
-                                     : nullptr;
-          if (dragged_widget && dragged_widget->toy) {
-            dragged_widget->owner = preexisting_loc->AcquireWeakPtr();
-            dragged_widget->merging = true;
-            // Freeze the displacement that the pointer was producing.
-            if (auto* grab = dragged_widget->GrabAnchor()) {
-              grab->warp_by += pointer.PositionWithin(*dragged_widget->toy) - grab->pos;
-              grab->pointer = nullptr;
-            }
-            dragged_widget->WakeAnimation();
-            if (auto* pw = pointer.GetWidget()) pw->AdoptZombie(std::move(held_widgets[i]));
-          } else if (auto* resident_widget = bw->toys.FindOrNull(*preexisting_loc)) {
-            resident_widget->WakeAnimation();
-          }
-        } else {
-          SettleAnchor(dragged_loc);
-          GiveToBoard(*bw, *board, i);
-        }
-      }
-      audio::Play(embedded::assets_SFX_canvas_drop_wav);
-    } else if (drop_target) {
-      for (size_t i = locations.size(); i-- > 0;) {
-        auto& location = locations[i];
-        SettleAnchor(*location);
-        if (i < held_widgets.size() && held_widgets[i]) {
-          if (auto* pw = pointer.GetWidget()) pw->AdoptZombie(std::move(held_widgets[i]));
-        }
-        drop_target->DropLocation(std::move(location));
-      }
-    } else {
-      auto new_board = MAKE_PTR(Board);
-      new_board->position = RoundToMilimeters(current_position);
-      {
-        auto lock = std::lock_guard(vm.mutex);
-        vm.boards.insert(vm.boards.begin(), new_board);
-      }
-      auto& new_bw = root.toys.FindOrMake(*new_board, &root);
-      SkM44 board_transform(root.CanvasToWindow());
-      board_transform.preTranslate(new_board->position.x, new_board->position.y);
-      new_bw.local_to_parent = board_transform;
-      for (size_t i = locations.size(); i-- > 0;) {
-        SettleAnchor(*locations[i]);
-        GiveToBoard(new_bw, *new_board, i);
-      }
-      vm.WakeToys();
-      audio::Play(embedded::assets_SFX_canvas_drop_wav);
-    }
+    auto widget = LocationWidget::MakePointerOwned(pointer.GetWidget(), *loc);
+    lw = widget.get();
+    held_widgets.push_back(std::move(widget));
+    OrderHeldWidgets();
   }
+  auto& toy = lw->ToyForObject();
+  lw->AnchorToPointer(pointer, toy.CoarseBounds().Clamp(pointer.PositionWithin(toy)));
+  loc->WakeToys();
+  pointer.GetWidget()->ValidateHierarchy();
+  pointer.root_widget.WakeAnimation();
+}
 
-  root.drag_action_count--;
-  root.WakeAnimation();
+Ptr<Location> DragLocationAction::RemoveFromGroup(Location& loc) {
+  for (size_t i = 0; i < locations.size(); ++i) {
+    if (locations[i].get() != &loc) continue;
+    Ptr<Location> result = std::move(locations[i]);
+    locations.erase(locations.begin() + i);
+    if (board_widget) {
+      if (auto board = board_widget->LockBoard()) board->Extract(loc);
+      SetRadar(1);
+    } else {
+      pointer.GetWidget()->AdoptZombie(std::move(held_widgets[i]));
+      held_widgets.erase(held_widgets.begin() + i);
+    }
+    pointer.root_widget.WakeAnimation();
+    if (locations.empty()) {
+      pointer.ReplaceAction(*this, nullptr);
+    }
+    return result;
+  }
+  return nullptr;
 }
 
 bool IsDragged(const LocationWidget& location) { return location.GrabAnchor() != nullptr; }

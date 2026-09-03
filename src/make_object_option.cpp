@@ -24,15 +24,12 @@ std::unique_ptr<Action> MakeObjectOption::Activate(ui::Pointer& pointer) const {
   // This could be even handled by the "Create" method - it could take existing widget to "adopt".
   auto loc = MAKE_PTR(Location);
   auto obj = proto->Clone();
-  pointer.root_widget.toys.FindOrMake(*obj, icon.Get());
+  auto& toy = pointer.root_widget.toys.FindOrMake(*obj, icon.Get());
   loc->InsertHere(std::move(obj));
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
-  auto action = std::make_unique<DragLocationAction>(pointer, std::move(loc));
   // Drag by the point of the toy's bounds nearest to its origin, not by the menu position.
-  if (auto& widget = action->locations.front()->widget) {
-    widget->AnchorToPointer(pointer, widget->ToyForObject().CoarseBounds().Clamp(Vec2(0, 0)));
-  }
-  return action;
+  return std::make_unique<DragLocationAction>(pointer, std::move(loc), nullptr,
+                                              toy.CoarseBounds().Clamp(Vec2(0, 0)));
 }
 std::unique_ptr<Option> MakeObjectOption::Clone() const {
   return std::make_unique<MakeObjectOption>(proto, dir);

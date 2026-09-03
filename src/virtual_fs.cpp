@@ -50,66 +50,70 @@ void EmbeddedFS::Write(const Path& path, StrView contents, Status& status, Mode)
 }
 
 #if defined(__linux__)
-void RealFS::Map(const Path& path, Fn<void(StrView)> callback, Status& status) {
+StrView RealFS::MapFile(const Path& path, Status& status) {
   int f = open(path, O_RDONLY);
   if (f == -1) {
     status() += "Failed to open " + Str(path);
-    return;
+    return {};
   }
   struct stat buffer;
   if (fstat(f, &buffer) != 0) {
     status() += "Failed to fstat " + Str(path);
     close(f);
-    return;
+    return {};
   }
   void* ptr = mmap(nullptr, buffer.st_size, PROT_READ, MAP_PRIVATE, f, 0);
+  close(f);
   if (ptr == MAP_FAILED) {
     status() += "Failed to mmap " + Str(path);
-    close(f);
-    return;
+    return {};
   }
-  close(f);
-  callback(StrView((char*)ptr, buffer.st_size));
-  munmap(ptr, buffer.st_size);
+  return StrView((char*)ptr, buffer.st_size);
 }
+
+void RealFS::UnmapFile(StrView mapped) { munmap((void*)mapped.data(), mapped.size()); }
 #elif defined(_WIN32)
-void RealFS::Map(const Path& path, Fn<void(StrView)> callback, Status& status) {
+StrView RealFS::MapFile(const Path& path, Status& status) {
   HANDLE hFile = CreateFileA(path.str.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
                              OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
   if (hFile == INVALID_HANDLE_VALUE) {
     AppendErrorMessage(status) += f("Couldn't open {}\n", path.str);
-    return;
+    return {};
   };
 
   LARGE_INTEGER size;
   if (!GetFileSizeEx(hFile, &size)) {
     CloseHandle(hFile);
     AppendErrorMessage(status) += f("Couldn't get size of {}\n", path.str);
-    return;
+    return {};
   };
 
   HANDLE hMapping = CreateFileMappingA(hFile, nullptr, PAGE_READONLY, 0, 0, nullptr);
   if (hMapping == nullptr) {
     CloseHandle(hFile);
     AppendErrorMessage(status) += f("Couldn't create mapping for {}\n", path.str);
-    return;
+    return {};
   };
 
   char* data = (char*)MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
-  if (data == nullptr) {
-    CloseHandle(hMapping);
-    CloseHandle(hFile);
-    AppendErrorMessage(status) += f("Couldn't map {}\n", path.str);
-    return;
-  };
-
-  callback(StrView((char*)data, size.QuadPart));
-
-  UnmapViewOfFile(data);
   CloseHandle(hMapping);
   CloseHandle(hFile);
+  if (data == nullptr) {
+    AppendErrorMessage(status) += f("Couldn't map {}\n", path.str);
+    return {};
+  };
+  return StrView(data, size.QuadPart);
 }
+
+void RealFS::UnmapFile(StrView mapped) { UnmapViewOfFile(mapped.data()); }
 #endif
+
+void RealFS::Map(const Path& path, Fn<void(StrView)> callback, Status& status) {
+  StrView mapped = MapFile(path, status);
+  if (!OK(status)) return;
+  callback(mapped);
+  UnmapFile(mapped);
+}
 
 #if defined(__linux__)
 Str RealFS::Read(const Path& path, Status& status) {

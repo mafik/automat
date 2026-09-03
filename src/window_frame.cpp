@@ -123,7 +123,7 @@ bool StartClientMove(DecoratedWindow& window) {
   auto* mw = pointer.root_widget.toys.FindOrNull(*board);
   if (!mw) return false;
   pointer.ReplaceAction(*input,
-                        std::make_unique<DragLocationAction>(pointer, mw->DragStack(*loc), *mw));
+                        std::make_unique<DragLocationAction>(pointer, mw->DragStack(*loc), mw));
   return true;
 }
 
@@ -317,18 +317,17 @@ Font& WindowFrame::GetFont() {
   return *font;
 }
 
-SkPath WindowFrame::Shape() const {
-  auto& font = GetFont();
-  float w = font.sk_font.measureText(title.data(), title.size(), SkTextEncoding::kUTF8);
+SkPath TitleText::Shape() const {
+  float w = font.sk_font.measureText(text.data(), text.size(), SkTextEncoding::kUTF8);
   SkPath title_fill;
-  SkTextUtils::GetPath(title.data(), title.size(), SkTextEncoding::kUTF8, -w / 2, 0, font.sk_font,
+  SkTextUtils::GetPath(text.data(), text.size(), SkTextEncoding::kUTF8, -w / 2, 0, font.sk_font,
                        &title_fill);
 
   SkPaint paint;
   paint.setStyle(SkPaint::kStroke_Style);
   // 0.3 is larger than 0.2 used for the real outline - this is to help in filling the holes in
   // the text
-  paint.setStrokeWidth(kTitleH * 0.3 / font.font_scale);
+  paint.setStrokeWidth(height * 0.3 / font.font_scale);
   SkPath title_outline = skpathutils::FillPathWithPaint(title_fill, paint);
 
   SkPath s = title_fill;
@@ -336,10 +335,47 @@ SkPath WindowFrame::Shape() const {
   if (auto shift = Op(s, s.makeOffset(0, 2_mm / font.font_scale), SkPathOp::kUnion_SkPathOp)) {
     s = *shift;
   }
+  return s.makeTransform(SkMatrix::Scale(font.font_scale, -font.font_scale));
+}
+
+void TitleText::DrawSide(SkCanvas& canvas) const {
+  float w = font.MeasureText(text);
+  canvas.save();
+  canvas.translate(-w / 2, -height * 0.1);
+  SkPaint title_side_paint;
+  title_side_paint.setColor(kSideColor);
+  title_side_paint.setStyle(SkPaint::kStrokeAndFill_Style);
+  title_side_paint.setStrokeWidth(height * 0.2 / font.font_scale);
+  font.DrawText(canvas, text, title_side_paint);
+  canvas.restore();
+}
+
+void TitleText::DrawOutline(SkCanvas& canvas) const {
+  float w = font.MeasureText(text);
+  canvas.save();
+  canvas.translate(-w / 2, 0);
+  SkPaint text_outline_paint;
+  text_outline_paint.setColor(kOutlineColor);
+  text_outline_paint.setStyle(SkPaint::kStrokeAndFill_Style);
+  text_outline_paint.setStrokeWidth(height * 0.2 / font.font_scale);
+  font.DrawText(canvas, text, text_outline_paint);
+  canvas.restore();
+}
+
+void TitleText::DrawFill(SkCanvas& canvas) const {
+  float w = font.MeasureText(text);
+  canvas.save();
+  canvas.translate(-w / 2, 0);
+  SkPaint title_paint;
+  title_paint.setColor(kFillColor);
+  font.DrawText(canvas, text, title_paint);
+  canvas.restore();
+}
+
+SkPath WindowFrame::Shape() const {
   auto frame = OutRRect();
-  auto matrix = SkMatrix::ScaleTranslate(font.font_scale, -font.font_scale, 0, frame.rect.top);
-  if (auto with_frame =
-          Op(s.makeTransform(matrix), SkPath::RRect(frame), SkPathOp::kUnion_SkPathOp)) {
+  SkPath s = TitleText{GetFont(), title, kTitleH}.Shape().makeOffset(0, frame.rect.top);
+  if (auto with_frame = Op(s, SkPath::RRect(frame), SkPathOp::kUnion_SkPathOp)) {
     s = *with_frame;
   }
   return s;
@@ -358,32 +394,22 @@ void WindowFrame::Draw(SkCanvas& canvas) const {
   auto frame_outer = OutRRect();
   auto lights_rrect = LightsRRect();
 
-  auto& font = GetFont();
-
-  float w = font.MeasureText(title);
+  TitleText title_text{GetFont(), title, kTitleH};
 
   float one_pixel = 1.0f / canvas.getTotalMatrix().getScaleX();
 
   canvas.save();
-  canvas.translate(-w / 2, frame_outer.rect.top - kTitleH * 0.1);
-  SkPaint title_side_paint;
-  title_side_paint.setColor("#3a2021"_color);
-  title_side_paint.setStyle(SkPaint::kStrokeAndFill_Style);
-  title_side_paint.setStrokeWidth(kTitleH * 0.2 / font.font_scale);
-  font.DrawText(canvas, title, title_side_paint);
+  canvas.translate(0, frame_outer.rect.top);
+  title_text.DrawSide(canvas);
   canvas.restore();
 
   SkPaint flat_border_paint;
-  flat_border_paint.setColor("#9b252a"_color);
+  flat_border_paint.setColor(TitleText::kOutlineColor);
   canvas.drawDRRect(frame_outer, frame_mid, flat_border_paint);
 
   canvas.save();
-  canvas.translate(-w / 2, frame_outer.rect.top);
-  SkPaint text_outline_paint;
-  text_outline_paint.setColor(flat_border_paint.getColor());
-  text_outline_paint.setStyle(SkPaint::kStrokeAndFill_Style);
-  text_outline_paint.setStrokeWidth(kTitleH * 0.2 / font.font_scale);
-  font.DrawText(canvas, title, text_outline_paint);
+  canvas.translate(0, frame_outer.rect.top);
+  title_text.DrawOutline(canvas);
   canvas.restore();
 
   SkPaint bevel_border_paint;
@@ -438,11 +464,9 @@ void WindowFrame::Draw(SkCanvas& canvas) const {
     canvas.restore();
   }
 
-  SkPaint title_paint;
-  title_paint.setColor("#e7e5cd"_color);
   canvas.save();
-  canvas.translate(-w / 2, frame_outer.rect.top);
-  font.DrawText(canvas, title, title_paint);
+  canvas.translate(0, frame_outer.rect.top);
+  title_text.DrawFill(canvas);
   canvas.restore();
 }
 

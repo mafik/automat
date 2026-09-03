@@ -5,6 +5,8 @@
 #include <llvm/ADT/SmallVector.h>
 
 #include <algorithm>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "span.hpp"
@@ -70,11 +72,12 @@ struct Vec : std::vector<T> {
   }
 };
 
-template <typename T, typename... Args>
-Vec<T> MakeVec(Args&&... t) {
-  Vec<T> vec;
+template <typename T = void, typename... Args>
+auto MakeVec(Args&&... t) {
+  using Elem = std::conditional_t<std::is_void_v<T>, std::common_type_t<std::decay_t<Args>...>, T>;
+  Vec<Elem> vec;
   vec.reserve(sizeof...(Args));
-  (vec.emplace_back(std::move(t)), ...);
+  (vec.emplace_back(std::forward<Args>(t)), ...);
   return vec;
 }
 

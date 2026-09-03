@@ -6,31 +6,29 @@ This document describes the intended design of DnD support in Automat.
 
 ## X11
 
-When a file is being dragged over Automat, it should immediately create a "DataOffer" object & place it under the mouse position. The goal of this object is to receive & describe the data transferred from another application. DataOffer should start data transfer immediately & use some proxy image to describe its contents even before they're fully received.
+When a file is being dragged over Automat, it immediately creates a "DataOffer" object & places it under the mouse position. The goal of this object is to receive & describe the data transferred from another application. DataOffer starts data transfer immediately & uses proxy images to describe its contents even before they're fully received.
 
-DataOffer should use regular DragLocationAction for dragging.
+DataOffer uses regular DragLocationAction for dragging.
 
-On X11 DataOffer should use XDS (extension of XDND) to store the result as a new file in the same directory as 'automat_state.json'. If XDS fails - it should fall back to the "application/octet-stream" type.
+On X11 DataOffer stores the result as a new file in the same directory as 'automat_state.json'.
 
-If XdndActionCopy then DataOffer should create the new file directly. With XdndActionDirectSave the remote app is expected to create the file. When XdndActionMove is used, DataOffer is expected to locate the file(s) using the "text/uri-list" type & move it into Automat's directory. XdndActionMove should be refused if copy-free move is not possible. XdndActionAsk should be replaced by XdndActionCopy.
+If XdndActionCopy then DataOffer creates the new file directly. When XdndActionMove is used, DataOffer is expected to locate the file(s) using the "text/uri-list" type & move it into Automat's directory. XdndActionMove is refused if copy-free move is not possible (fallback to regular Copy).
 
-DataOffer should use the extension from XdndDirectSave0 (or from "text/uri-list") to display the icon of the file type being transferred. Single DataOffer should be able to handle multiple files being transferred. Around the icon it should display a ring indicating the transfer progress.
+DataOffer uses the extension from XdndDirectSave0 (or from "text/uri-list") to display the icon of the file type being transferred. Single DataOffer handles multiple files being transferred. It displays a ring around the icon indicating the transfer progress.
 
-If a file with the given name already exists, Automat should check if the base name ends with a number and bump the number by one - until a the given filename is available. If there is no number then Automat should add "2" (the file without number is assumed to have 1).
+If a file with the given name already exists, Automat checks if the base name ends with a number and bumps the number by one - until a the given filename is available. If there is no number then Automat adds "2" (the file without number is assumed to have number 1).
 
-Once the transfer completes, DataOffer should identify the file format and create another object - File. The newly created object should be created in the same place as DataOffer - it should be dragged if DataOffer was dragged - and it should be part of the Board if it was dropped on the Board.
+Once the transfer completes (which typically happens while drag is still in progress), DataOffer identifies the file format and creates another object - File. The newly created object is created in the same place as DataOffer - dragged if DataOffer was dragged - and on the Board if it was dropped on the Board.
 
-Once all transfers complete, DataOffer should delete itself (leaving only the transferred Files).
+Once all transfers complete, DataOffer deletes itself (leaving only the transferred Files).
 
-If the drag ends without a drop, the Files should be deleted.
+If the drag ends without a drop, the Files are deleted.
 
 ## File
 
-File is an Object that wraps arbitrary files. It should recognize image formats, load them and display them directly. Other file types should be displayed as icons.
+File is an Object that wraps arbitrary files. It recognizes image formats, loads them and displays them directly. Other file types are displayed as icons.
 
-File object "owns" the OS file - if the object is deleted by the user, the OS file should be removed as well. This should not happen when Automat is closed. File should serialize the managed path as a "file://" URI.
-
-File URIs should include the hostname: "file://hostname/home/user/image.png".
+File object "owns" the OS file - when the object is deleted by the user, the OS file is removed as well. This does not happen when Automat is being closed. File serializes the managed path as a "file://" URI.
 
 ## Core use-cases to test
 

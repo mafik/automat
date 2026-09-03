@@ -6,6 +6,7 @@
 #include "library_beta_shelf.hpp"
 #include "library_command.hpp"
 #include "library_ffmpeg.hpp"
+#include "library_data_offer.hpp"
 #include "library_file.hpp"
 #include "library_flip_flop.hpp"
 #include "library_gegl.hpp"
@@ -92,7 +93,8 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<Gear, HideInToolbar>();
   index.Register<BetaShelf>();
   index.Register<X11Window, HideInToolbar>();
-  index.Register<RegularFile, HideInToolbar>();
+  index.Register<File, HideInToolbar>();
+  index.Register<DataOffer, HideInToolbar>();
   index.Register<MediaFile, HideInToolbar>();
   index.Register<FfmpegDecoder, HideInToolbar>();
   // Every compiled-in GStreamer factory; the shelf presents them by klass.

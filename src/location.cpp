@@ -242,9 +242,7 @@ Vec2 LocationWidget::LocalAnchor() const {
 }
 
 void LocationWidget::AnchorToPointer(ui::Pointer& pointer, Vec2 grab) {
-  auto& toy = ToyForObject();
-  Vec2 offset = grab - pointer.PositionWithin(toy);
-  toy.texture_anchors = {{grab, ui::Widget::TextureAnchor::NewId(), &pointer, offset, 1_cm}};
+  ToyForObject().texture_anchors = {{grab, ui::Widget::TextureAnchor::NewId(), &pointer, {}, 1_cm}};
 }
 
 SkPath LocationWidget::Shape() const {

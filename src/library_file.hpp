@@ -4,65 +4,60 @@
 
 // Warning: coded with a stochastic parrot
 
+#include <include/core/SkData.h>
+#include <include/core/SkImage.h>
+#include <include/core/SkPicture.h>
+
 #include <mutex>
 
 #include "base.hpp"
-#include "fd_provider.hpp"
-#include "status.hpp"
+#include "image_provider.hpp"
+#include "optional.hpp"
 #include "str.hpp"
-#include "stream.hpp"
 
 namespace automat::library {
 
-// A regular file on disk, as recipe data: a path plus the append flag. The
-// object is the data element of UNIX pipelines the way the paper is
-// Leptonica's: Commands connect to it through the ordinary stream ports, and
-// at their start they resolve it to a concrete descriptor (FdProvider) - a
-// fresh open per run, so writing reruns rebuild the file exactly like a
-// shell `>` redirection, and `append` turns that into `>>`. The face shows
-// the file as it is on disk right now: size and the tail of its content,
-// polled while the toy is visible.
-struct RegularFile : Object {
-  mutable std::mutex mutex;  // guards the recipe fields below
+struct File : Object {
+  mutable std::mutex mutex;
 
-  Str path;
-  bool append = false;  // write opens O_APPEND instead of O_TRUNC
+  Str path;               // absolute path on disk, empty when unset
+  bool owns_file = true;  // remove the disk file when the object is deleted
+  Optional<bool> show_filename;
 
-  DEF_INTERFACE(RegularFile, StreamInput, in_stream, "input")
-  Str OnFormat() { return "bytes"; }
-  DEF_END(in_stream);
+  DEF_INTERFACE(File, ImageProvider, image_provider, "Image")
+  sk_sp<SkImage> GetImage() { return obj->Image(); }
+  DEF_END(image_provider);
 
-  DEF_INTERFACE(RegularFile, StreamArgument, out_stream, "output")
-  Str OnFormat() { return "bytes"; }
-  DEF_END(out_stream);
-
-  DEF_INTERFACE(RegularFile, FdProvider, fd_provider, "fd")
-  int OnResolve(FdProvider::Dir dir, Status& status) { return obj->Open(dir, status); }
-  DEF_END(fd_provider);
-
-  INTERFACES(in_stream, out_stream, fd_provider);
-
-  RegularFile() = default;
-  RegularFile(const RegularFile& o)
-      : Object(o), path(o.path), append(o.append), out_stream(o.out_stream) {}
+  File() = default;
+  File(const File&);
+  ~File() override;
 
   StrView Name() const override { return "File"; }
-  Ptr<Object> Clone() const override { return MAKE_PTR(RegularFile, *this); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(File, *this); }
+
+  void Interfaces(const std::function<LoopControl(Interface)>&) override;
+
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 
   void SerializeState(ObjectSerializer&) const override;
   bool DeserializeKey(ObjectDeserializer&, StrView key) override;
 
   void SetPath(StrView new_path);
-  void SetAppend(bool a);
-  Str Path() const;
-  bool Append() const;
+  void ToggleFilename();
 
-  // Opens the path for `dir` and returns the owned descriptor, or -1 with
-  // `status` filled (the error also lands on this object's face). Reading is
-  // O_RDONLY; writing creates the file and truncates it, or appends when the
-  // append flag is set.
-  int Open(FdProvider::Dir dir, Status& status);
+  Str Path() const;
+  Str Filename() const;
+  bool IsImage() const;
+  bool ShowsFilename() const;
+  sk_sp<SkImage> Image() const;
+  sk_sp<SkPicture> Icon() const;
+  Vec2 Size() const;
+
+ private:
+  sk_sp<SkData> contents;
+  sk_sp<SkImage> image;
+  sk_sp<SkPicture> icon;
+  Vec2 size;
 };
 
 }  // namespace automat::library

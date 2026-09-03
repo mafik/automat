@@ -56,6 +56,8 @@ struct RealFS final : VirtualFS {
   Str Read(const Path&, Status&) override;
   void Write(const Path&, StrView contents, Status&, Mode = RW_R__R__) override;
   void Copy(const Path& from, const Path& to, Status&, Mode = RW_R__R__);
+  StrView MapFile(const Path&, Status&);
+  void UnmapFile(StrView);
 };
 
 struct OverlayFS final : VirtualFS {

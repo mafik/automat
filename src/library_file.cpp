@@ -2,369 +2,403 @@
 // SPDX-License-Identifier: MIT
 
 // Warning: coded with a stochastic parrot
-
 #include "library_file.hpp"
 
-#include <fcntl.h>
 #include <include/core/SkCanvas.h>
-#include <sys/stat.h>
+#include <include/pathops/SkPathOps.h>
+#include <include/private/SkExif.h>
 
-#include <cstdio>
+#include <algorithm>
+#include <cctype>
 
-#if defined(_WIN32)
-#include <io.h>
-#else
-#include <unistd.h>
-#endif
-
-#include "format.hpp"
-#include "text_field.hpp"
-#include "ui_beta.hpp"
+#include "control_flow.hpp"
+#include "deserializer.hpp"
+#include "file_import.hpp"
+#include "font.hpp"
+#include "object.hpp"
+#include "root_widget.hpp"
+#include "textures.hpp"
 #include "units.hpp"
+#include "virtual_fs.hpp"
+#include "window_frame.hpp"
+#include "xdg_icon.hpp"
+
+#pragma comment(lib, "skia")
 
 namespace automat::library {
 
-using ui::beta::Hash2;
+namespace {
 
-void RegularFile::SerializeState(ObjectSerializer& writer) const {
-  auto lock = std::lock_guard(mutex);
-  if (!path.empty()) {
-    writer.Key("path");
-    writer.String(path.data(), path.size());
-  }
-  if (append) {
-    writer.Key("append");
-    writer.Bool(append);
+constexpr float kIconSize = 1.5_cm;
+constexpr float kMinSize = 1_mm;
+constexpr float kMaxSize = 100_cm;
+constexpr float kLabelHeight = ui::WindowFrame::kTitleH / 2;
+
+Str Basename(StrView path) {
+  auto slash = path.find_last_of("/\\");
+  return Str(slash == StrView::npos ? path : path.substr(slash + 1));
+}
+
+Str ExtensionOf(StrView path) {
+  Str name = Basename(path);
+  auto dot = name.rfind('.');
+  if (dot == Str::npos) return "";
+  Str ext = name.substr(dot + 1);
+  for (char& c : ext) c = std::tolower((unsigned char)c);
+  return ext;
+}
+
+uint32_t BigEndian32(StrView s, size_t i) {
+  return (U8)s[i] << 24 | (U8)s[i + 1] << 16 | (U8)s[i + 2] << 8 | (U8)s[i + 3];
+}
+
+uint32_t BigEndian16(StrView s, size_t i) { return (U8)s[i] << 8 | (U8)s[i + 1]; }
+
+uint32_t LittleEndian32(StrView s, size_t i) {
+  return (U8)s[i + 3] << 24 | (U8)s[i + 2] << 16 | (U8)s[i + 1] << 8 | (U8)s[i];
+}
+
+Optional<Vec2> ExifPixelsPerMeter(StrView tiff) {
+  SkExif::Metadata metadata;
+  SkExif::Parse(metadata, SkData::MakeWithoutCopy(tiff.data(), tiff.size()).get());
+  if (!metadata.fXResolution || !metadata.fYResolution) return std::nullopt;
+  switch (metadata.fResolutionUnit.value_or(2)) {
+    case 2:
+      return Vec2(*metadata.fXResolution, *metadata.fYResolution) / kMetersPerInch;
+    case 3:
+      return Vec2(*metadata.fXResolution, *metadata.fYResolution) * 100;
+    default:
+      return std::nullopt;
   }
 }
 
-bool RegularFile::DeserializeKey(ObjectDeserializer& d, StrView key) {
-  Status status;
+Optional<Vec2> PixelsPerMeter(StrView bytes) {
+  if (bytes.starts_with("\x89PNG\r\n\x1a\n")) {
+    for (size_t i = 8; i + 12 <= bytes.size();) {
+      size_t length = BigEndian32(bytes, i);
+      StrView type = bytes.substr(i + 4, 4);
+      if (i + 12 + length > bytes.size()) break;
+      StrView data = bytes.substr(i + 8, length);
+      if (type == "pHYs" && length >= 9 && data[8] == 1) {
+        return Vec2(BigEndian32(data, 0), BigEndian32(data, 4));
+      }
+      if (type == "eXIf") {
+        if (auto exif = ExifPixelsPerMeter(data)) return exif;
+      }
+      if (type == "IDAT" || type == "IEND") break;
+      i += 12 + length;
+    }
+    return std::nullopt;
+  }
+  if (bytes.starts_with("\xFF\xD8")) {
+    Optional<Vec2> jfif;
+    for (size_t i = 2; i + 4 <= bytes.size() && (U8)bytes[i] == 0xFF;) {
+      U8 marker = bytes[i + 1];
+      if (marker == 0xD8 || marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) {
+        i += 2;
+        continue;
+      }
+      if (marker == 0xDA || marker == 0xD9) break;
+      size_t length = BigEndian16(bytes, i + 2);
+      if (length < 2 || i + 2 + length > bytes.size()) break;
+      StrView segment = bytes.substr(i + 4, length - 2);
+      if (marker == 0xE0 && segment.size() >= 12 && segment.starts_with(StrView("JFIF\0", 5))) {
+        U8 units = segment[7];
+        Vec2 density(BigEndian16(segment, 8), BigEndian16(segment, 10));
+        if (units == 1) jfif = density / kMetersPerInch;
+        if (units == 2) jfif = density * 100;
+      }
+      if (marker == 0xE1 && segment.starts_with(StrView("Exif\0\0", 6))) {
+        if (auto exif = ExifPixelsPerMeter(segment.substr(6))) return exif;
+      }
+      i += 2 + length;
+    }
+    return jfif;
+  }
+  if (bytes.starts_with("BM") && bytes.size() >= 46 && LittleEndian32(bytes, 14) >= 40) {
+    int32_t x = LittleEndian32(bytes, 38), y = LittleEndian32(bytes, 42);
+    if (x > 0 && y > 0) return Vec2(x, y);
+    return std::nullopt;
+  }
+  if (bytes.starts_with("RIFF") && bytes.size() >= 12 && bytes.substr(8, 4) == "WEBP") {
+    for (size_t i = 12; i + 8 <= bytes.size();) {
+      StrView fourcc = bytes.substr(i, 4);
+      size_t length = LittleEndian32(bytes, i + 4);
+      if (i + 8 + length > bytes.size()) break;
+      if (fourcc == "EXIF") {
+        StrView data = bytes.substr(i + 8, length);
+        if (data.starts_with(StrView("Exif\0\0", 6))) data.remove_prefix(6);
+        return ExifPixelsPerMeter(data);
+      }
+      i += 8 + length + (length & 1);
+    }
+  }
+  return std::nullopt;
+}
+
+Vec2 FitAspect(Vec2 size, float min_side, float max_side) {
+  float longer = std::max(size.x, size.y);
+  if (longer > max_side) size *= max_side / longer;
+  float shorter = std::min(size.x, size.y);
+  if (shorter < min_side) size *= min_side / shorter;
+  return size;
+}
+
+ui::Font& LabelFont() {
+  static auto font = ui::Font::MakeV2(ui::Font::GetBelanosimaRegular(), kLabelHeight);
+  return *font;
+}
+
+}  // namespace
+
+File::File(const File& o) : Object(o) {
+  Str o_path;
+  {
+    auto lock = std::lock_guard(o.mutex);
+    o_path = o.path;
+    owns_file = o.owns_file;
+    show_filename = o.show_filename;
+  }
+  SetPath(o_path);
+}
+
+File::~File() {
+  if (owns_file && !suspended && !path.empty()) {
+    Status status;
+    automat::Path(path).Unlink(status, true);
+  }
+}
+
+void File::Interfaces(const std::function<LoopControl(Interface)>& cb) {
+  if (IsImage()) {
+    cb(image_provider.Bind());
+  }
+}
+
+void File::SerializeState(ObjectSerializer& writer) const {
+  auto lock = std::lock_guard(mutex);
+  if (!path.empty()) {
+    Str uri = FileURIFromPath(path);
+    writer.Key("path");
+    writer.String(uri.data(), uri.size());
+  }
+  if (show_filename) {
+    writer.Key("show_filename");
+    writer.Bool(*show_filename);
+  }
+}
+
+bool File::DeserializeKey(ObjectDeserializer& d, StrView key) {
   if (key == "path") {
-    Str new_path;
-    d.Get(new_path, status);
-    if (OK(status)) SetPath(new_path);
+    Status status;
+    Str uri;
+    d.Get(uri, status);
+    if (!OK(status)) return true;
+    automat::Path p = PathFromFileURI(uri, status);
+    if (OK(status)) {
+      SetPath(p.str);
+    } else {
+      ReportError(status.ToStr());
+    }
     return true;
   }
-  if (key == "append") {
-    bool a = false;
-    d.Get(a, status);
-    if (OK(status)) SetAppend(a);
+  if (key == "show_filename") {
+    Status status;
+    bool value;
+    d.Get(value, status);
+    if (OK(status)) {
+      auto lock = std::lock_guard(mutex);
+      show_filename = value;
+    }
     return true;
   }
   return false;
 }
 
-void RegularFile::SetPath(StrView new_path) {
+void File::SetPath(StrView new_path) {
   {
     auto lock = std::lock_guard(mutex);
     path = new_path;
+    contents = nullptr;
+    image = nullptr;
+    icon = nullptr;
+    Status status;
+    StrView mapped = fs::real.MapFile(automat::Path(path), status);
+    if (OK(status)) {
+      contents = SkData::MakeWithProc(
+          mapped.data(), mapped.size(),
+          [](const void* ptr, void* size) {
+            fs::real.UnmapFile(StrView((const char*)ptr, (size_t)size));
+          },
+          (void*)mapped.size());
+      image = SkImages::DeferredFromEncodedData(contents);
+    }
+    if (image) {
+      image = image->withDefaultMipmaps();
+      float screen = ui::root_widget->display_pixels_per_meter;
+      Vec2 pixels_per_meter = PixelsPerMeter(mapped).value_or(Vec2(screen, screen));
+      size =
+          FitAspect(Vec2(image->width(), image->height()) / pixels_per_meter, kMinSize, kMaxSize);
+    } else {
+      contents = nullptr;
+      icon = IconForExtension(ExtensionOf(path));
+      size = Vec2(kIconSize, kIconSize);
+      if (icon) {
+        SkRect bounds = icon->cullRect();
+        size = FitAspect(Vec2(bounds.width(), bounds.height()), 0, kIconSize);
+      }
+    }
   }
   WakeToys();
 }
 
-void RegularFile::SetAppend(bool a) {
+void File::ToggleFilename() {
   {
     auto lock = std::lock_guard(mutex);
-    append = a;
+    show_filename = !show_filename.value_or(image == nullptr);
   }
   WakeToys();
 }
 
-Str RegularFile::Path() const {
+Str File::Path() const {
   auto lock = std::lock_guard(mutex);
   return path;
 }
 
-bool RegularFile::Append() const {
+Str File::Filename() const {
   auto lock = std::lock_guard(mutex);
-  return append;
+  return Basename(path);
 }
 
-int RegularFile::Open(FdProvider::Dir dir, Status& status) {
-  Str p;
-  bool a;
-  {
-    auto lock = std::lock_guard(mutex);
-    p = path;
-    a = append;
-  }
-  if (p.empty()) {
-    AppendErrorMessage(status) += "no path set";
-    ReportError("no path set");
-    return -1;
-  }
-  int fd;
-#if defined(_WIN32)
-  // _O_NOINHERIT stands in for O_CLOEXEC; binary mode keeps redirection byte-exact.
-  if (dir == FdProvider::Dir::Read) {
-    fd = _open(p.c_str(), _O_RDONLY | _O_BINARY | _O_NOINHERIT);
-  } else {
-    fd = _open(p.c_str(),
-               _O_WRONLY | _O_CREAT | _O_BINARY | _O_NOINHERIT | (a ? _O_APPEND : _O_TRUNC),
-               _S_IREAD | _S_IWRITE);
-  }
-#else
-  if (dir == FdProvider::Dir::Read) {
-    fd = open(p.c_str(), O_RDONLY | O_CLOEXEC);
-  } else {
-    fd = open(p.c_str(), O_WRONLY | O_CREAT | O_CLOEXEC | (a ? O_APPEND : O_TRUNC), 0644);
-  }
-#endif
-  if (fd < 0) {
-    Str msg = f("{}: {}", p, strerror(errno));
-    AppendErrorMessage(status) += msg;
-    ReportError(msg);
-    return -1;
-  }
-  ClearOwnError();
-  return fd;
+bool File::IsImage() const {
+  auto lock = std::lock_guard(mutex);
+  return image != nullptr;
 }
 
-// ============================================================================
-// Toy
-// ============================================================================
-
-namespace {
-
-constexpr float kPlateW = 6.5_cm;
-constexpr float kBand = ui::beta::kTitleSize + 2 * ui::beta::kPadS + 0.45_mm;
-constexpr float kCreditRow = 2.0_mm;
-constexpr float kSide = 2.0_mm;
-constexpr float kPathRow = 6.0_mm;
-constexpr float kAppendRow = 4.2_mm;
-constexpr float kSizeRow = 3.2_mm;
-constexpr float kTailH = 16.0_mm;
-constexpr float kBottomPad = 2.2_mm;
-constexpr float kPlateH =
-    kBand + kCreditRow + kPathRow + kAppendRow + kSizeRow + kTailH + kBottomPad;
-
-constexpr uint32_t kSeed = 0xF11E;
-
-constexpr float kPathTop = kPlateH / 2 - kBand - kCreditRow;
-constexpr float kAppendTop = kPathTop - kPathRow;
-constexpr float kSizeTop = kAppendTop - kAppendRow;
-constexpr float kTailTop = kSizeTop - kSizeRow;
-
-constexpr int kTailLines = 7;
-constexpr size_t kTailBytes = 4096;
-
-Str Basename(StrView path) {
-  auto slash = path.find_last_of("/\\");
-  StrView base = slash == StrView::npos ? path : path.substr(slash + 1);
-  return Str(base);
+bool File::ShowsFilename() const {
+  auto lock = std::lock_guard(mutex);
+  return show_filename.value_or(image == nullptr);
 }
 
-}  // namespace
+sk_sp<SkImage> File::Image() const {
+  auto lock = std::lock_guard(mutex);
+  return image;
+}
 
-struct FilePathField : ui::TextField {
-  FilePathField(ui::Widget* parent, std::string* text, float width)
-      : ui::TextField(parent, text, width) {}
-  StrView Name() const override { return "FilePathField"; }
+sk_sp<SkPicture> File::Icon() const {
+  auto lock = std::lock_guard(mutex);
+  return icon;
+}
+
+Vec2 File::Size() const {
+  auto lock = std::lock_guard(mutex);
+  return size;
+}
+
+struct ToggleFilenameOption : TextOption {
+  WeakPtr<File> weak;
+
+  ToggleFilenameOption(WeakPtr<File> weak) : TextOption("Toggle filename"), weak(weak) {}
+
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<ToggleFilenameOption>(weak);
+  }
+
+  std::unique_ptr<Action> Activate(ui::Pointer&) const override {
+    if (auto file = weak.lock()) file->ToggleFilename();
+    return nullptr;
+  }
 };
 
-struct RegularFileToy : ui::beta::ObjectToy {
-  std::unique_ptr<FilePathField> field;
-  std::string path_edit_;
+struct FileToy : automat::ObjectToy {
+  sk_sp<SkImage> image;
+  sk_sp<SkPicture> icon;
+  Vec2 size;
+  Str filename;
+  bool show_filename = false;
+  Rect label_bounds;
 
-  // Tick-cached facts (UI thread only):
-  Str path_applied_;
-  bool append_ = false;
-  bool exists_ = false;
-  uint64_t size_ = 0;
-  int64_t mtime_ns_ = 0;
-  Vec<Str> tail_;  // the last lines of the file, ready to draw
-
-  RegularFileToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
-    if (auto file = LockObject<RegularFile>()) {
-      path_edit_ = file->Path();
-      path_applied_ = path_edit_;
-    }
-    field = std::make_unique<FilePathField>(this, &path_edit_, kPlateW - 2 * kSide);
-    field->local_to_parent =
-        SkM44::Translate(-kPlateW / 2 + kSide, kPathTop - kPathRow) * SkM44::Scale(0.55f, 0.55f, 1);
-    UpdateFromObject();
-  }
+  FileToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) { Pull(); }
 
   bool CenteredAtZero() const override { return true; }
-  SkPath Shape() const override {
-    return SkPath::RRect(RRect::MakeSimple(Rect::MakeCenterZero(kPlateW, kPlateH), 3_mm).sk);
-  }
-  Optional<Rect> DrawBounds() const override { return Shape().getBounds().makeOutset(4_mm, 4_mm); }
-  Vec2AndDir ArgStart(const Interface::Table& arg) override {
-    if (&arg == static_cast<const Interface::Table*>(&RegularFile::out_stream_tbl)) {
-      return Vec2AndDir{.pos = Vec2(-kPlateW / 2 + 10_mm, -kPlateH / 2), .dir = -90_deg};
-    }
-    return ObjectToy::ArgStart(arg);
-  }
 
-  Rect AppendBox() const {
-    return Rect{-kPlateW / 2 + kSide, kAppendTop - 3.9_mm, -kPlateW / 2 + kSide + 3.4_mm,
-                kAppendTop - 0.5_mm};
-  }
+  Rect Body() const { return Rect::MakeCenterZero(size.x, size.y); }
 
-  // Reads the last lines of the file into tail_.
-  void ReadTail() {
-    tail_.clear();
-    FILE* file = fopen(path_applied_.c_str(), "rb");
+  ui::TitleText Label() const { return {LabelFont(), filename, kLabelHeight}; }
+
+  bool ShowsLabel() const { return show_filename && !filename.empty(); }
+
+  void Pull() {
+    auto file = LockObject<File>();
     if (!file) return;
-    bool partial_first = size_ > kTailBytes;
-    long back = (long)std::min<uint64_t>(size_, kTailBytes);
-    char buf[kTailBytes];
-    if (fseek(file, -back, SEEK_END) != 0) {
-      fclose(file);
-      return;
-    }
-    size_t len = fread(buf, 1, sizeof(buf), file);
-    fclose(file);
-    if (len == 0) return;
-    Str text(buf, len);
-    Vec<Str> lines;
-    size_t start = 0;
-    while (start <= text.size()) {
-      size_t nl = text.find('\n', start);
-      if (nl == Str::npos) {
-        lines.push_back(text.substr(start));
-        break;
-      }
-      lines.push_back(text.substr(start, nl - start));
-      start = nl + 1;
-    }
-    if (!lines.empty() && lines.back().empty()) lines.pop_back();
-    if (partial_first && !lines.empty()) lines.erase(lines.begin());  // partial first line
-    int first = std::max(0, (int)lines.size() - kTailLines);
-    for (int i = first; i < (int)lines.size(); ++i) {
-      Str& line = lines[i];
-      for (char& c : line) {
-        if (c == '\t') c = ' ';
-        if ((unsigned char)c < 32) c = '.';
-      }
-      tail_.push_back(std::move(line));
-    }
+    image = file->Image();
+    icon = file->Icon();
+    size = file->Size();
+    filename = file->Filename();
+    show_filename = file->ShowsFilename();
+    label_bounds =
+        ShowsLabel() ? Rect(Label().Shape().getBounds()).MoveBy({0, Body().top}) : Rect();
   }
 
-  // Returns whether any drawn fact changed.
-  bool UpdateFromObject() {
-    bool changed = false;
-    if (auto file = LockObject<RegularFile>()) {
-      if (Str(path_edit_) != path_applied_) {
-        path_applied_ = path_edit_;
-        file->SetPath(path_applied_);
-        changed = true;
+  SkPath Shape() const override {
+    SkPath shape = SkPath::Rect(Body());
+    if (ShowsLabel()) {
+      if (auto with_label =
+              Op(shape, Label().Shape().makeOffset(0, Body().top), SkPathOp::kUnion_SkPathOp)) {
+        shape = *with_label;
       }
-      bool append = file->Append();
-      changed |= (append != append_);
-      append_ = append;
     }
-#if defined(_WIN32)
-    // Whole-second mtime; sub-second rewrites are still caught through the size.
-    struct _stat64 st;
-    bool exists = !path_applied_.empty() && _stat64(path_applied_.c_str(), &st) == 0;
-    int64_t mtime_ns = exists ? (int64_t)st.st_mtime * 1'000'000'000ll : 0;
-#else
-    struct stat st;
-    bool exists = !path_applied_.empty() && stat(path_applied_.c_str(), &st) == 0;
-    int64_t mtime_ns = exists ? st.st_mtim.tv_sec * 1'000'000'000ll + st.st_mtim.tv_nsec : 0;
-#endif
-    uint64_t size = exists ? (uint64_t)st.st_size : 0;
-    if (exists != exists_ || size != size_ || mtime_ns != mtime_ns_) {
-      exists_ = exists;
-      size_ = size;
-      mtime_ns_ = mtime_ns;
-      if (exists_) ReadTail();
-      changed = true;
-    }
-    return changed;
+    return shape;
+  }
+
+  Optional<Rect> DrawBounds() const override {
+    Rect bounds = Body();
+    if (ShowsLabel()) bounds.ExpandToInclude(label_bounds);
+    return bounds.Outset(1_mm);
   }
 
   Tock Tick(time::Timer&) override {
-    // The face mirrors the file on disk, so it keeps watching; it repaints
-    // only when the file or the recipe moved.
-    Tock tock = Tock::Ing;
-    if (UpdateFromObject()) tock |= Tock::Draw;
-    return tock;
-  }
-
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      if (AppendBox().Contains(pos)) {
-        if (auto file = LockObject<RegularFile>()) file->SetAppend(!append_);
-        WakeAnimation();
-        return nullptr;
-      }
-    }
-    return ObjectToy::FindAction(p, btn);
+    Pull();
+    return Tock::Draw;
   }
 
   void Draw(SkCanvas& canvas) const override {
-    Str title = path_applied_.empty() ? Str("file") : Basename(path_applied_);
-    ui::beta::Panel(canvas, Rect::MakeCenterZero(kPlateW, kPlateH), title, ui::beta::kGold,
-                    ui::beta::State::Default, Seed(kSeed), true);
-
-    {  // credit: the contract this object stands for
-      StrView credit = "open(2)";
-      float w = ui::beta::TextWidth(credit, ui::beta::kMicroSize);
-      ui::beta::DrawText(canvas, credit, {kPlateW / 2 - kSide - w, kPlateH / 2 - kBand - 1.6_mm},
-                         ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
-    }
-
-    {  // stream ports on the edges the data flows through
-      float w = ui::beta::TextWidth("input", ui::beta::kMicroSize);
-      ui::beta::DrawText(canvas, "input", {-w / 2, kPlateH / 2 - kBand - 1.6_mm},
-                         ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
-      float ow = ui::beta::TextWidth("output", ui::beta::kMicroSize);
-      ui::beta::DrawText(canvas, "output", {-kPlateW / 2 + 10_mm - ow / 2, -kPlateH / 2 + 0.8_mm},
-                         ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
-    }
-
-    {  // caption over the path field
-      ui::beta::DrawText(canvas, "path", {-kPlateW / 2 + kSide + 0.6_mm, kPathTop - 1.4_mm},
-                         ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
-    }
-
-    {  // append: `>>` instead of `>`
-      uint32_t cs = Seed(Hash2(kSeed, 0x72));
-      Rect box = AppendBox();
-      ui::beta::Checkbox(canvas, box, append_, ui::beta::State::Default, cs);
-      ui::beta::DrawText(canvas, "append", {box.right + 1.5_mm, box.bottom + 0.9_mm},
-                         ui::beta::kMicroSize, ui::beta::kInk, false, cs);
-    }
-
-    {  // size readout, or the file's absence
-      Str label = !exists_ ? Str("missing") : FormatBytes(size_);
-      SkColor color = exists_ ? ui::beta::kInk : ui::beta::kGrayDark;
-      ui::beta::DrawText(canvas, label, {-kPlateW / 2 + kSide, kSizeTop - 2.6_mm},
-                         ui::beta::kMicroSize, color, false, Seed(kSeed));
-    }
-
-    {  // the tail of the content, like a terminal
-      Rect box{-kPlateW / 2 + kSide, kTailTop - kTailH, kPlateW / 2 - kSide, kTailTop};
-      SkPaint bg;
-      bg.setColor(ui::beta::kInk);
-      canvas.drawRect(box.sk, bg);
-      float line_h = 2.2_mm;
-      float y = box.bottom + 0.7_mm;
+    Rect body = Body();
+    if (image) {
+      SkRect src = SkRect::Make(image->dimensions());
+      SkMatrix m = SkMatrix::RectToRect(src, body.sk, SkMatrix::kFill_ScaleToFit);
+      m.preTranslate(0, image->height() / 2.f);
+      m.preScale(1, -1);
+      m.preTranslate(0, -image->height() / 2.f);
       canvas.save();
-      canvas.clipRect(box.sk);
-      for (int i = (int)tail_.size() - 1; i >= 0; --i) {
-        ui::beta::DrawText(canvas, tail_[i], {box.left + 0.8_mm, y}, ui::beta::kMicroSize,
-                           ui::beta::kPaper, false, Seed(kSeed));
-        y += line_h;
-      }
+      canvas.concat(m);
+      canvas.drawImage(image, 0, 0, kDefaultSamplingOptions, nullptr);
       canvas.restore();
-      SkPaint frame;
-      frame.setStyle(SkPaint::kStroke_Style);
-      frame.setStrokeWidth(ui::beta::kStroke * 0.8f);
-      frame.setColor(ui::beta::kInk);
-      canvas.drawRect(box.sk, frame);
+    } else if (icon) {
+      DrawIconIn(canvas, *icon, body);
     }
-    BakeChildren(canvas);
+    if (ShowsLabel()) {
+      ui::TitleText label = Label();
+      canvas.save();
+      canvas.translate(0, body.top);
+      label.DrawSide(canvas);
+      label.DrawOutline(canvas);
+      label.DrawFill(canvas);
+      canvas.restore();
+    }
+  }
+
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    ObjectToy::VisitOptions(visitor);
+    if (auto file = LockObject<File>()) {
+      ToggleFilenameOption toggle(file);
+      visitor(toggle);
+    }
   }
 };
 
-std::unique_ptr<ObjectToy> RegularFile::MakeToy(ui::Widget* parent) {
-  return std::make_unique<RegularFileToy>(parent, *this);
+std::unique_ptr<automat::ObjectToy> File::MakeToy(ui::Widget* parent) {
+  return std::make_unique<FileToy>(parent, *this);
 }
 
 }  // namespace automat::library

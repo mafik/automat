@@ -9,11 +9,18 @@
 #include <bit>
 #include <stop_token>
 
+#include "board.hpp"
+#include "drag_action.hpp"
+#include "file_import.hpp"
 #include "fn.hpp"
 #include "format.hpp"
+#include "library_data_offer.hpp"
+#include "library_file.hpp"
+#include "location.hpp"
 #include "log.hpp"
 #include "root_widget.hpp"
 #include "vec.hpp"
+#include "vm.hpp"
 #include "x11_keys.hpp"
 #include "xcb.hpp"
 
@@ -134,22 +141,6 @@ static Str TakeDragData(xcb_window_t window, xcb_atom_t property, xcb_atom_t* ou
   return Str((char*)xcb_get_property_value(reply.get()),
              (size_t)xcb_get_property_value_length(reply.get()));
 }
-
-struct DataOffer {
-  xcb_window_t source = XCB_NONE;
-  xcb_atom_t type = XCB_NONE;
-  xcb_atom_t action = XCB_NONE;
-  Vec2 position;
-  Vec<xcb_atom_t> offered;
-};
-
-struct Transfer {
-  DataOffer offer;
-  xcb_atom_t property;
-  xcb_timestamp_t time;
-  Str data;
-  bool incremental = false;
-};
 
 float fp1616_to_float(xcb_input_fp1616_t fp) { return fp / 65536.0f; }
 double fp3232_to_double(xcb_input_fp3232_t fp) { return fp.integral + fp.frac / 4294967296.0; }
@@ -690,9 +681,23 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
     xcb_flush(connection);
   });
 
-  DataOffer drag;
-  SmallVec<Transfer, 1> transfers;
-  SmallVec<xcb_atom_t, 4> free_transfer_properties;
+  using library::DataOffer;
+  using library::File;
+
+  Ptr<DataOffer> current_offer;
+  Ptr<Location> offer_loc;
+  Vec<WeakPtr<DataOffer>> live_offers;  // every offer still transferring
+  xcb_atom_t uri_probe_property = XCB_NONE;
+  WeakPtr<DataOffer> uri_probe_offer;
+
+  auto Drag = [&]() -> DragLocationAction* {
+    ui::Pointer* mouse = MouseOrNull();
+    if (!mouse) return nullptr;
+    return dynamic_cast<DragLocationAction*>(
+        mouse->actions[static_cast<int>(ui::PointerButton::Left)].get());
+  };
+
+  SmallVec<xcb_atom_t, 8> free_transfer_properties;
   int transfer_property_counter = 0;
 
   auto AcquireTransferProperty = [&] {
@@ -706,22 +711,113 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
     return reply ? reply->atom : (xcb_atom_t)XCB_NONE;
   };
 
-  auto FinishTransfer = [&](Transfer& transfer) {
-    if constexpr (kDebugDragAndDrop) {
-      LOG << f("  {}: {}", atom::ToStr(transfer.offer.type), BlobSummary(transfer.data));
+  auto Basename = [](StrView s) {
+    auto slash = s.find_last_of('/');
+    return Str(slash == StrView::npos ? s : s.substr(slash + 1));
+  };
+
+  struct Found {
+    Ptr<DataOffer> offer;
+    DataOffer::Entry* entry;
+  };
+  auto FindEntry = [&](xcb_atom_t property, xcb_timestamp_t time, xcb_atom_t target) -> Found {
+    for (auto& w : live_offers) {
+      auto offer = w.Lock();
+      if (!offer) continue;
+      int n = offer->Count();
+      for (int i = 0; i < n; ++i) {
+        auto& e = offer->entries[i];
+        if (e.done.load(std::memory_order_acquire)) continue;
+        bool match = property != XCB_NONE ? (e.property == property)
+                                          : (e.time == time && e.type == target);
+        if (match) return {offer, &e};
+      }
     }
-    if (!transfer.data.empty()) {
-      // TODO: convert into an object
+    return {nullptr, nullptr};
+  };
+
+  auto CheckDone = [&](DataOffer& offer) {
+    if (!offer.Done()) return;
+    {
+      auto lock = Lock();
+      if (offer_loc && &offer == current_offer.get()) {
+        if (auto* drag = Drag()) drag->RemoveFromGroup(*offer_loc);
+        offer_loc.reset();
+      } else if (auto* L = offer.MyLocation()) {
+        if (auto board = L->LockBoard()) board->Extract(*L);
+      }
     }
-    auto source = transfer.offer.source;
-    auto time = transfer.time;
-    free_transfer_properties.push_back(transfer.property);
-    transfers.erase(transfers.begin() + (&transfer - transfers.data()));
-    for (auto& t : transfers) {
-      if (t.offer.source == source && t.time == time) return;
+    std::erase_if(live_offers, [&](WeakPtr<DataOffer>& w) {
+      auto p = w.Lock();
+      return !p || p.get() == &offer;
+    });
+    if (!offer.dropped) return;
+    int n = offer.Count();
+    bool accepted = false;
+    for (int i = 0; i < n; ++i) {
+      accepted |= !offer.entries[i].failed.load(std::memory_order_relaxed);
     }
-    uint32_t reply[5] = {xcb_window, 1u, atom::XdndActionCopy, 0, 0};
-    SendToDragSource(source, atom::XdndFinished, reply);
+    if (accepted && offer.action == atom::XdndActionMove) {
+      for (int i = 0; i < n; ++i) {
+        auto& e = offer.entries[i];
+        if (e.failed.load(std::memory_order_relaxed) || e.source_path.str.empty()) continue;
+        Status st;
+        e.source_path.Unlink(st, true);
+      }
+    }
+    uint32_t reply[5] = {xcb_window, accepted ? 1u : 0u, accepted ? (xcb_atom_t)offer.action : 0, 0,
+                         0};
+    SendToDragSource((xcb_window_t)offer.source, atom::XdndFinished, reply);
+  };
+
+  auto CompleteEntry = [&](Ptr<DataOffer> offer, DataOffer::Entry& e, bool success) {
+    if (success && e.type == atom::application_octet_stream) {
+      Status st;
+      WriteInto(e.dst, e.data, st);
+      success = OK(st);
+    }
+    if (e.property != XCB_NONE) {
+      free_transfer_properties.push_back((xcb_atom_t)e.property);
+      e.property = XCB_NONE;
+    }
+    offer->Complete(e, success);
+    if (success && !e.spawned) {
+      e.spawned = true;
+      auto lock = Lock();
+      auto file = MAKE_PTR(File);
+      file->SetPath(e.dst.str);
+      auto loc = MAKE_PTR(Location);
+      loc->InsertHere(file.Cast<Object>());
+      DragLocationAction* drag = offer.get() == current_offer.get() ? Drag() : nullptr;
+      if (drag) {
+        drag->AddToGroup(std::move(loc));
+      } else if (auto* offer_location = offer->MyLocation()) {
+        if (auto board = offer_location->LockBoard()) {
+          Vec2 pos = offer_location->PeekPosition() + Vec2(6_mm, -6_mm);
+          loc->board = board->AcquireWeakPtr();
+          {
+            auto vm_lock = std::lock_guard(vm.mutex);
+            board->locations.insert(board->locations.begin(), loc);
+          }
+          if (auto* direct = std::get_if<Location::Direct>(&loc->placement)) direct->position = pos;
+          loc->WakeToys();
+        }
+      }
+    }
+    CheckDone(*offer);
+  };
+
+  auto StartOctet = [&](Ptr<DataOffer> offer, StrView name) {
+    auto* e = offer->Add(name.empty() ? StrView("file") : name);
+    if (!e) return;
+    e->type = atom::application_octet_stream;
+    e->source = offer->source;
+    e->dst = UniqueNameIn(AutomatDir(), e->name);
+    e->property = AcquireTransferProperty();
+    e->time = xcb::last_event_time.load(std::memory_order_relaxed);
+    xcb_convert_selection(connection, xcb_window, atom::XdndSelection,
+                          atom::application_octet_stream, e->property, e->time);
+    flush();
   };
 
   while (running) {
@@ -795,47 +891,86 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
         case XCB_SELECTION_NOTIFY: {
           auto* ev = (xcb_selection_notify_event_t*)event;
           if (ev->selection != atom::XdndSelection || ev->requestor != xcb_window) break;
-          Transfer* transfer = nullptr;
-          for (auto& t : transfers) {
-            if (ev->property == XCB_NONE ? t.time == ev->time && t.offer.type == ev->target
-                                         : t.property == ev->property) {
-              transfer = &t;
-              break;
+          if (uri_probe_property != XCB_NONE && ev->property == uri_probe_property) {
+            Ptr<DataOffer> offer = uri_probe_offer.Lock();
+            xcb_atom_t type = XCB_NONE;
+            Str list = TakeDragData(xcb_window, uri_probe_property, &type);
+            free_transfer_properties.push_back(uri_probe_property);
+            uri_probe_property = XCB_NONE;
+            if (!offer) break;
+            Vec<Str> paths;
+            Str url_name;
+            StrView remaining = list;
+            size_t i = 0;
+            while (i < remaining.size()) {
+              size_t eol = remaining.find('\n', i);
+              StrView line = remaining.substr(i, eol == StrView::npos ? StrView::npos : eol - i);
+              i = eol == StrView::npos ? remaining.size() : eol + 1;
+              while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) {
+                line.remove_suffix(1);
+              }
+              if (line.empty() || line.front() == '#') continue;
+              if (line.starts_with("file://")) {
+                Status st;
+                Path p = PathFromFileURI(line, st);
+                if (OK(st) && !p.str.empty()) paths.push_back(p.str);
+              } else if (url_name.empty()) {
+                url_name = Basename(line);
+              }
             }
+            if (!paths.empty()) {
+              for (auto& p : paths) {
+                auto* e = offer->Add(Basename(p));
+                if (!e) break;
+                e->type = atom::text_uri_list;
+                e->source = offer->source;
+                e->source_path = Path(p);
+                e->dst = UniqueNameIn(AutomatDir(), e->name);
+                e->bytes_total.store(FileSize(e->source_path), std::memory_order_relaxed);
+                offer->WakeToys();
+                Status st;
+                CopyInto(e->source_path, e->dst, st, &e->bytes_done);
+                CompleteEntry(offer, *e, OK(st));
+              }
+            } else if (offer->types.Contains(atom::application_octet_stream)) {
+              StartOctet(offer, offer->xds_name.empty() ? url_name : offer->xds_name);
+            }
+            offer->sealed = true;
+            CheckDone(*offer);
+            break;
           }
-          if (transfer == nullptr) break;
+          Found found = FindEntry(ev->property, ev->time, ev->target);
+          if (!found.entry) break;
           if (ev->property == XCB_NONE) {
-            FinishTransfer(*transfer);
+            CompleteEntry(found.offer, *found.entry, false);
             break;
           }
           xcb_atom_t type = XCB_NONE;
-          Str data = TakeDragData(xcb_window, transfer->property, &type);
+          Str data = TakeDragData(xcb_window, (xcb_atom_t)found.entry->property, &type);
           if (type == atom::INCR) {
-            transfer->incremental = true;
+            found.entry->incremental = true;
             break;
           }
-          transfer->data = std::move(data);
-          FinishTransfer(*transfer);
+          found.entry->data = std::move(data);
+          found.entry->bytes_done.store(found.entry->data.size(), std::memory_order_relaxed);
+          CompleteEntry(found.offer, *found.entry, true);
           break;
         }
         case XCB_PROPERTY_NOTIFY: {
           xcb_property_notify_event_t* ev = (xcb_property_notify_event_t*)event;
           xcb::last_event_time.store(ev->time, std::memory_order_relaxed);
           if (ev->window == xcb_window && ev->state == XCB_PROPERTY_NEW_VALUE) {
-            Transfer* transfer = nullptr;
-            for (auto& t : transfers) {
-              if (t.incremental && t.property == ev->atom) {
-                transfer = &t;
-                break;
-              }
-            }
-            if (transfer) {
+            Found found = FindEntry(ev->atom, 0, XCB_NONE);
+            if (found.entry && found.entry->incremental) {
               xcb_atom_t type = XCB_NONE;
-              Str chunk = TakeDragData(xcb_window, transfer->property, &type);
+              Str chunk = TakeDragData(xcb_window, (xcb_atom_t)found.entry->property, &type);
               if (chunk.empty()) {
-                FinishTransfer(*transfer);
+                CompleteEntry(found.offer, *found.entry, true);
               } else {
-                transfer->data += chunk;
+                found.entry->data += chunk;
+                found.entry->bytes_done.store(found.entry->data.size(),
+                                              std::memory_order_relaxed);
+                found.offer->WakeToys();
               }
               break;
             }
@@ -911,89 +1046,106 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                                  (size_t)xcb_get_property_value_length(reply.get())));
               }
             }
-            drag.source = cm->data.data32[0];
-            drag.offered.clear();
+            current_offer = MAKE_PTR(DataOffer);
+            current_offer->source = cm->data.data32[0];
             if (cm->data.data32[1] & 1) {
               auto reply =
-                  get_property(cm->data.data32[0], atom::XdndTypeList, XCB_ATOM_ATOM, 0, 256);
+                  get_property(current_offer->source, atom::XdndTypeList, XCB_ATOM_ATOM, 0, 256);
               if (reply) {
                 auto* list = (xcb_atom_t*)xcb_get_property_value(reply.get());
                 for (uint32_t i = 0; i < reply->value_len; ++i) {
-                  drag.offered.push_back(list[i]);
+                  current_offer->types.push_back(list[i]);
                 }
               }
             } else {
               for (int i = 2; i <= 4; ++i) {
                 if (cm->data.data32[i] != XCB_NONE) {
-                  drag.offered.push_back(cm->data.data32[i]);
-                }
-              }
-            }
-
-            static const xcb_atom_t kXdndWantedTypes[] = {
-                atom::image_png,
-                atom::image_webp,
-                atom::image_jpeg,
-                atom::image_jpg,
-                atom::image_gif,
-                atom::image_bmp,
-                atom::application_octet_stream,
-                atom::text_uri_list,
-            };
-            drag.type = XCB_NONE;
-            for (auto wanted : kXdndWantedTypes) {
-              if (drag.type != XCB_NONE) break;
-              for (auto type : drag.offered) {
-                if (type == wanted) {
-                  drag.type = wanted;
-                  break;
+                  current_offer->types.push_back(cm->data.data32[i]);
                 }
               }
             }
             break;
           }
           if (cm->type == atom::XdndPosition) {
-            if (cm->data.data32[4] != drag.action) {  // requested action
-              drag.action = cm->data.data32[4];
-              if constexpr (kDebugDragAndDrop) {
-                LOG << "XdndPosition action: " << atom::ToStr(drag.action);
-              }
-            }
+            if (!current_offer) break;
+            DataOffer& offer = *current_offer;
+            offer.action = cm->data.data32[4];
             Vec2 screen_px =
                 Vec2((int16_t)(cm->data.data32[2] >> 16), (int16_t)(cm->data.data32[2] & 0xffff));
-            drag.position = Vec2(root.PointerToCanvas().mapPoint(ScreenToWindowPx(screen_px)));
-            uint32_t reply[5] = {xcb_window, drag.type != XCB_NONE ? 1u : 0u, 0, 0,
-                                 atom::XdndActionCopy};  // TODO: handle other action types
+            bool usable = offer.types.Contains(atom::text_uri_list) ||
+                          offer.types.Contains(atom::application_octet_stream);
+            {
+              auto lock = Lock();
+              mouse_position_on_screen = screen_px;
+              auto& mouse = GetMouse();
+              mouse.Move(ScreenToWindowPx(screen_px));
+              if (usable && !offer.started) {  // Show the offer card and start the transfers
+                offer.started = true;
+                auto xds = get_property(offer.source, atom::XdndDirectSave0,
+                                        XCB_GET_PROPERTY_TYPE_ANY, 0, 1024);
+                if (xds && xds->type != XCB_NONE && xds->value_len) {
+                  offer.xds_name = Str((char*)xcb_get_property_value(xds.get()),
+                                       (size_t)xcb_get_property_value_length(xds.get()));
+                }
+                offer_loc = MAKE_PTR(Location);
+                offer_loc->InsertHere(offer.AcquirePtr());
+                offer_loc->placement = Location::Direct{mouse.PositionOnCanvas()};
+                mouse.actions[static_cast<int>(ui::PointerButton::Left)] =
+                    std::make_unique<DragLocationAction>(mouse, offer_loc->AcquirePtr());
+                live_offers.push_back(offer.AcquireWeakPtr());
+                if (offer.types.Contains(atom::text_uri_list)) {
+                  uri_probe_property = AcquireTransferProperty();
+                  uri_probe_offer = offer.AcquireWeakPtr();
+                  xcb_convert_selection(connection, xcb_window, atom::XdndSelection,
+                                        atom::text_uri_list, uri_probe_property,
+                                        xcb::last_event_time.load(std::memory_order_relaxed));
+                  flush();
+                } else {
+                  StartOctet(current_offer, offer.xds_name);
+                  offer.sealed = true;
+                }
+              }
+            }
+            xcb_atom_t accepted =
+                offer.action == atom::XdndActionMove ? atom::XdndActionMove : atom::XdndActionCopy;
+            uint32_t reply[5] = {xcb_window, usable ? 1u : 0u, 0, 0, accepted};
             SendToDragSource(cm->data.data32[0], atom::XdndStatus, reply);
             break;
           }
           if (cm->type == atom::XdndLeave) {
-            drag = {};
+            {
+              auto lock = Lock();
+              while (auto* drag = Drag()) {
+                Ptr<Location> l = drag->RemoveFromGroup(*drag->locations.front());
+                if (!l) break;
+              }
+            }
+            offer_loc.reset();
+            current_offer.reset();
+            std::erase_if(live_offers, [](WeakPtr<DataOffer>& w) { return !w.Lock(); });
             break;
           }
           if (cm->type == atom::XdndDrop) {
             if constexpr (kDebugDragAndDrop) {
               LOG << "XdndDrop";
             }
-            if (drag.type == XCB_NONE) {
+            if (!current_offer) {
               uint32_t reply[5] = {xcb_window, 0, 0, 0, 0};
               SendToDragSource(cm->data.data32[0], atom::XdndFinished, reply);
-              drag = {};
               break;
             }
-            auto time = (xcb_timestamp_t)cm->data.data32[2];
-            for (auto type : drag.offered) {
-              auto& transfer =
-                  transfers.emplace_back(Transfer{.offer = {.source = drag.source,
-                                                            .type = type,
-                                                            .action = drag.action,
-                                                            .position = drag.position},
-                                                  .property = AcquireTransferProperty(),
-                                                  .time = time});
-              xcb_convert_selection(connection, xcb_window, atom::XdndSelection, type,
-                                    transfer.property, time);
+            Ptr<DataOffer> offer = current_offer;
+            current_offer.reset();
+            offer_loc.reset();
+            offer->action =
+                offer->action == atom::XdndActionMove ? atom::XdndActionMove : atom::XdndActionCopy;
+            offer->dropped = true;
+            if (!offer->started) offer->sealed = true;
+            {
+              auto lock = Lock();
+              GetMouse().ButtonUp(ui::PointerButton::Left);
             }
-            drag = {};
+            CheckDone(*offer);
             flush();
             break;
           }

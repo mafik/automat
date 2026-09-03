@@ -147,7 +147,7 @@ struct MoveLocationOption : TextOption {
     if (board && location->object) {
       auto* mw = pointer.root_widget.toys.FindOrNull(*board);
       if (mw) {
-        return std::make_unique<DragLocationAction>(pointer, mw->DragStack(*location), *mw);
+        return std::make_unique<DragLocationAction>(pointer, mw->DragStack(*location), mw);
       }
     }
     return nullptr;

@@ -71,8 +71,8 @@ Str BlobSummary(StrView blob, int max_columns) {
   if (blob.empty()) return "(0 B)";
   bool is_utf8 = true;
   {  // UTF-8 test
-    const char* begin = blob.begin();
-    const char* end = blob.end();
+    const char* begin = blob.data();
+    const char* end = (blob.data() + blob.size());
     int n_ascii = 0, n_non_ascii = 0;
     while (begin < end) {
       auto c = SkUTF::NextUTF8(&begin, end);
@@ -89,8 +89,8 @@ Str BlobSummary(StrView blob, int max_columns) {
   }
   bool is_utf16 = true;
   {  // UTF-16 test
-    const uint16_t* begin = (const uint16_t*)blob.begin();
-    const uint16_t* end = (const uint16_t*)blob.end();
+    const uint16_t* begin = (const uint16_t*)blob.data();
+    const uint16_t* end = (const uint16_t*)(blob.data() + blob.size());
     int n_ascii = 0, n_non_ascii = 0;
     while (begin < end) {
       auto c = SkUTF::NextUTF16(&begin, end);
@@ -116,10 +116,10 @@ Str BlobSummary(StrView blob, int max_columns) {
     }
     while (max_columns > 0 && !blob.empty()) {
       if (prefix.size() <= suffix.size()) {
-        const char* p = blob.begin();
-        auto c = SkUTF::NextUTF8(&p, blob.end());
+        const char* p = blob.data();
+        auto c = SkUTF::NextUTF8(&p, (blob.data() + blob.size()));
         if (Columns(c) > max_columns) break;
-        blob.remove_prefix(p - blob.begin());
+        blob.remove_prefix(p - blob.data());
         if (c == '\t') {
           prefix.push_back('\\');
           prefix.push_back('t');
@@ -137,12 +137,12 @@ Str BlobSummary(StrView blob, int max_columns) {
           max_columns -= 1;
         }
       } else {
-        const char* p = blob.end() - 1;
+        const char* p = (blob.data() + blob.size()) - 1;
         while (((U8)*p & 0xC0) == 0x80) --p;
         const char* q = p;
-        auto c = SkUTF::NextUTF8(&q, blob.end());
+        auto c = SkUTF::NextUTF8(&q, (blob.data() + blob.size()));
         if (Columns(c) > max_columns) break;
-        blob.remove_suffix(blob.end() - p);
+        blob.remove_suffix((blob.data() + blob.size()) - p);
         if (c == '\t') {
           suffix.push_back('t');
           suffix.push_back('\\');
@@ -170,10 +170,10 @@ Str BlobSummary(StrView blob, int max_columns) {
     }
     while (max_columns > 0 && !blob.empty()) {
       if (prefix.size() <= suffix.size()) {
-        const uint16_t* p = (const uint16_t*)blob.begin();
-        auto c = SkUTF::NextUTF16(&p, (const uint16_t*)blob.end());
+        const uint16_t* p = (const uint16_t*)blob.data();
+        auto c = SkUTF::NextUTF16(&p, (const uint16_t*)(blob.data() + blob.size()));
         if (Columns(c) > max_columns) break;
-        blob.remove_prefix((intptr_t)p - (intptr_t)blob.begin());
+        blob.remove_prefix((intptr_t)p - (intptr_t)blob.data());
         if (c == '\t') {
           prefix.push_back('\\');
           prefix.push_back('t');
@@ -191,12 +191,12 @@ Str BlobSummary(StrView blob, int max_columns) {
           max_columns -= 1;
         }
       } else {
-        const uint16_t* p = ((const uint16_t*)blob.end()) - 1;
+        const uint16_t* p = ((const uint16_t*)(blob.data() + blob.size())) - 1;
         if (SkUTF::IsTrailingSurrogateUTF16(*p)) --p;
         const uint16_t* q = p;
-        auto c = SkUTF::NextUTF16(&q, (const uint16_t*)blob.end());
+        auto c = SkUTF::NextUTF16(&q, (const uint16_t*)(blob.data() + blob.size()));
         if (Columns(c) > max_columns) break;
-        blob.remove_suffix((intptr_t)blob.end() - (intptr_t)p);
+        blob.remove_suffix((intptr_t)(blob.data() + blob.size()) - (intptr_t)p);
         if (c == '\t') {
           suffix.push_back('t');
           suffix.push_back('\\');

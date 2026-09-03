@@ -4,10 +4,9 @@
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPath.h>
 
-#include <optional>
-
 #include "action.hpp"
 #include "object.hpp"
+#include "optional.hpp"
 #include "time.hpp"
 
 namespace automat {
@@ -42,11 +41,10 @@ struct DragLocationAction : Action {
   MortalPtr<BoardWidget> board_widget;     // set while board-owned
   Vec<std::unique_ptr<Toy>> held_widgets;  // owns the LocationWidgets while pointer-owned
 
-  // Pointer-owned pickup: the locations belong to no board yet.
-  DragLocationAction(ui::Pointer&, Ptr<Location>&&);
-  DragLocationAction(ui::Pointer&, Vec<Ptr<Location>>&&);
-  // Board-owned pickup: the locations stay in the board (see BoardWidget::DragStack).
-  DragLocationAction(ui::Pointer&, Vec<Ptr<Location>>&&, BoardWidget&);
+  DragLocationAction(ui::Pointer&, Vec<Ptr<Location>>&&, BoardWidget* board = nullptr,
+                     Optional<Vec2> grab = std::nullopt);
+  DragLocationAction(ui::Pointer&, Ptr<Location>&&, BoardWidget* board = nullptr,
+                     Optional<Vec2> grab = std::nullopt);
   ~DragLocationAction() override;
 
   void Update() override;
@@ -54,13 +52,20 @@ struct DragLocationAction : Action {
 
   void VisitObjects(std::function<void(Object&)>) override;
 
+  // Warning: coded with a stochastic parrot
+  void AddToGroup(Ptr<Location>&&);
+  Ptr<Location> RemoveFromGroup(Location&);
+
  private:
-  void Init();
+  Vec2 OwnerOffset();
+  void OrderHeldWidgets();
   void Extract();
-  void Enter(BoardWidget&);
+  void Enter(BoardWidget&, Board&);
   // Move location `i` (pointer-owned) into the board, together with its widgets.
   void GiveToBoard(BoardWidget&, Board&, size_t i);
-  void SetRadar(BoardWidget&, float target);
+  void MergeIntoResidents(BoardWidget&, Board&);
+  void Drop();
+  void SetRadar(float target);
 };
 
 bool IsDragged(const LocationWidget& location);

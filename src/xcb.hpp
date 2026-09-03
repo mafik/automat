@@ -31,47 +31,44 @@ extern std::atomic<xcb_window_t> active_window;
 namespace atom {
 
 #define ATOM_FROM_IDENTIFIER(name) ATOM(name, #name)
-#define ATOMS                                            \
-  ATOM_FROM_IDENTIFIER(WM_STATE)                         \
-  ATOM_FROM_IDENTIFIER(WM_PROTOCOLS)                     \
-  ATOM_FROM_IDENTIFIER(WM_DELETE_WINDOW)                 \
-  ATOM_FROM_IDENTIFIER(WM_NAME)                          \
-  ATOM_FROM_IDENTIFIER(_NET_ACTIVE_WINDOW)               \
-  ATOM_FROM_IDENTIFIER(_NET_WM_USER_TIME)                \
-  ATOM_FROM_IDENTIFIER(_NET_WM_STATE)                    \
-  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_MODAL)              \
-  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_STICKY)             \
-  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_MAXIMIZED_VERT)     \
-  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_MAXIMIZED_HORZ)     \
-  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_SHADED)             \
-  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_SKIP_TASKBAR)       \
-  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_SKIP_PAGER)         \
-  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_HIDDEN)             \
-  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_FULLSCREEN)         \
-  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_ABOVE)              \
-  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_BELOW)              \
-  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_DEMANDS_ATTENTION)  \
-  ATOM_FROM_IDENTIFIER(_GTK_FRAME_EXTENTS)               \
-  ATOM_FROM_IDENTIFIER(INCR)                             \
-  ATOM_FROM_IDENTIFIER(XdndAware)                        \
-  ATOM_FROM_IDENTIFIER(XdndEnter)                        \
-  ATOM_FROM_IDENTIFIER(XdndPosition)                     \
-  ATOM_FROM_IDENTIFIER(XdndStatus)                       \
-  ATOM_FROM_IDENTIFIER(XdndLeave)                        \
-  ATOM_FROM_IDENTIFIER(XdndDrop)                         \
-  ATOM_FROM_IDENTIFIER(XdndFinished)                     \
-  ATOM_FROM_IDENTIFIER(XdndSelection)                    \
-  ATOM_FROM_IDENTIFIER(XdndTypeList)                     \
-  ATOM_FROM_IDENTIFIER(XdndActionCopy)                   \
-  ATOM_FROM_IDENTIFIER(XdndActionList)                   \
-  ATOM_FROM_IDENTIFIER(XdndActionDescription)            \
-  ATOM_FROM_IDENTIFIER(XdndDirectSave0)                  \
-  ATOM(image_png, "image/png")                           \
-  ATOM(image_webp, "image/webp")                         \
-  ATOM(image_jpeg, "image/jpeg")                         \
-  ATOM(image_jpg, "image/jpg")                           \
-  ATOM(image_gif, "image/gif")                           \
-  ATOM(image_bmp, "image/bmp")                           \
+#define ATOMS                                                \
+  ATOM_FROM_IDENTIFIER(WM_STATE)                             \
+  ATOM_FROM_IDENTIFIER(WM_PROTOCOLS)                         \
+  ATOM_FROM_IDENTIFIER(WM_DELETE_WINDOW)                     \
+  ATOM_FROM_IDENTIFIER(WM_NAME)                              \
+  ATOM_FROM_IDENTIFIER(_NET_ACTIVE_WINDOW)                   \
+  ATOM_FROM_IDENTIFIER(_NET_WM_USER_TIME)                    \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE)                        \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_MODAL)                  \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_STICKY)                 \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_MAXIMIZED_VERT)         \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_MAXIMIZED_HORZ)         \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_SHADED)                 \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_SKIP_TASKBAR)           \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_SKIP_PAGER)             \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_HIDDEN)                 \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_FULLSCREEN)             \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_ABOVE)                  \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_BELOW)                  \
+  ATOM_FROM_IDENTIFIER(_NET_WM_STATE_DEMANDS_ATTENTION)      \
+  ATOM_FROM_IDENTIFIER(_GTK_FRAME_EXTENTS)                   \
+  ATOM_FROM_IDENTIFIER(INCR)                                 \
+  ATOM_FROM_IDENTIFIER(XdndAware)                            \
+  ATOM_FROM_IDENTIFIER(XdndEnter)                            \
+  ATOM_FROM_IDENTIFIER(XdndPosition)                         \
+  ATOM_FROM_IDENTIFIER(XdndStatus)                           \
+  ATOM_FROM_IDENTIFIER(XdndLeave)                            \
+  ATOM_FROM_IDENTIFIER(XdndDrop)                             \
+  ATOM_FROM_IDENTIFIER(XdndFinished)                         \
+  ATOM_FROM_IDENTIFIER(XdndSelection)                        \
+  ATOM_FROM_IDENTIFIER(XdndTypeList)                         \
+  ATOM_FROM_IDENTIFIER(XdndActionCopy)                       \
+  ATOM_FROM_IDENTIFIER(XdndActionMove)                       \
+  ATOM_FROM_IDENTIFIER(XdndActionList)                       \
+  ATOM_FROM_IDENTIFIER(XdndActionDescription)                \
+  ATOM_FROM_IDENTIFIER(XdndActionDirectSave)                 \
+  ATOM_FROM_IDENTIFIER(XdndDirectSave0)                      \
+  ATOM(text_plain, "text/plain")                             \
   ATOM(application_octet_stream, "application/octet-stream") \
   ATOM(text_uri_list, "text/uri-list")
 
@@ -87,15 +84,15 @@ void Connect(automat::Status& status);
 
 inline void flush() { xcb_flush(connection); }
 
-inline std::unique_ptr<xcb_input_xi_query_device_reply_t, automat::DeleteWithFree> input_xi_query_device(
-    xcb_input_device_id_t deviceid) {
+inline std::unique_ptr<xcb_input_xi_query_device_reply_t, automat::DeleteWithFree>
+input_xi_query_device(xcb_input_device_id_t deviceid) {
   return std::unique_ptr<xcb_input_xi_query_device_reply_t, automat::DeleteWithFree>(
       xcb_input_xi_query_device_reply(connection, xcb_input_xi_query_device(connection, deviceid),
                                       nullptr));
 }
 
-inline std::unique_ptr<xcb_input_xi_query_version_reply_t, automat::DeleteWithFree> input_xi_query_version(
-    uint16_t major_version, uint16_t minor_version) {
+inline std::unique_ptr<xcb_input_xi_query_version_reply_t, automat::DeleteWithFree>
+input_xi_query_version(uint16_t major_version, uint16_t minor_version) {
   return std::unique_ptr<xcb_input_xi_query_version_reply_t, automat::DeleteWithFree>(
       xcb_input_xi_query_version_reply(
           connection, xcb_input_xi_query_version(connection, major_version, minor_version),
@@ -107,7 +104,8 @@ inline std::unique_ptr<xcb_query_pointer_reply_t, automat::DeleteWithFree> query
       xcb_query_pointer_reply(connection, xcb_query_pointer(connection, screen->root), nullptr));
 }
 
-inline std::unique_ptr<xcb_query_tree_reply_t, automat::DeleteWithFree> query_tree(xcb_window_t window) {
+inline std::unique_ptr<xcb_query_tree_reply_t, automat::DeleteWithFree> query_tree(
+    xcb_window_t window) {
   return std::unique_ptr<xcb_query_tree_reply_t, automat::DeleteWithFree>(
       xcb_query_tree_reply(connection, xcb_query_tree(connection, window), nullptr));
 }
@@ -117,11 +115,9 @@ inline std::span<xcb_window_t> query_tree_children(const xcb_query_tree_reply_t&
 }
 
 // Note: the `delete` flag is always set to false by this wrapper.
-inline std::unique_ptr<xcb_get_property_reply_t, automat::DeleteWithFree> get_property(xcb_window_t window,
-                                                                           xcb_atom_t property,
-                                                                           xcb_atom_t type,
-                                                                           uint32_t long_offset,
-                                                                           uint32_t long_length) {
+inline std::unique_ptr<xcb_get_property_reply_t, automat::DeleteWithFree> get_property(
+    xcb_window_t window, xcb_atom_t property, xcb_atom_t type, uint32_t long_offset,
+    uint32_t long_length) {
   return std::unique_ptr<xcb_get_property_reply_t, automat::DeleteWithFree>(xcb_get_property_reply(
       connection,
       xcb_get_property(connection, false, window, property, type, long_offset, long_length),
@@ -138,16 +134,17 @@ inline std::unique_ptr<xcb_get_geometry_reply_t, automat::DeleteWithFree> get_ge
       xcb_get_geometry_reply(connection, xcb_get_geometry(connection, window), nullptr));
 }
 
-inline std::unique_ptr<xcb_translate_coordinates_reply_t, automat::DeleteWithFree> translate_coordinates(
-    xcb_window_t src_window, xcb_window_t dst_window, int16_t src_x, int16_t src_y) {
+inline std::unique_ptr<xcb_translate_coordinates_reply_t, automat::DeleteWithFree>
+translate_coordinates(xcb_window_t src_window, xcb_window_t dst_window, int16_t src_x,
+                      int16_t src_y) {
   return std::unique_ptr<xcb_translate_coordinates_reply_t, automat::DeleteWithFree>(
       xcb_translate_coordinates_reply(
           connection, xcb_translate_coordinates(connection, src_window, dst_window, src_x, src_y),
           nullptr));
 }
 
-inline std::unique_ptr<xcb_get_window_attributes_reply_t, automat::DeleteWithFree> get_window_attributes(
-    xcb_window_t window) {
+inline std::unique_ptr<xcb_get_window_attributes_reply_t, automat::DeleteWithFree>
+get_window_attributes(xcb_window_t window) {
   return std::unique_ptr<xcb_get_window_attributes_reply_t, automat::DeleteWithFree>(
       xcb_get_window_attributes_reply(connection, xcb_get_window_attributes(connection, window),
                                       nullptr));

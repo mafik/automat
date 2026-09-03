@@ -14,6 +14,7 @@
 #include <atomic>
 
 #include "action.hpp"
+#include "color.hpp"
 #include "keyboard.hpp"
 #include "math.hpp"
 #include "menu.hpp"
@@ -147,6 +148,21 @@ struct ClientArrivals {
 namespace automat::ui {
 
 struct Font;
+
+struct TitleText {
+  Font& font;
+  StrView text;
+  float height;
+
+  static constexpr SkColor kSideColor = "#3a2021"_color;
+  static constexpr SkColor kOutlineColor = "#9b252a"_color;
+  static constexpr SkColor kFillColor = "#e7e5cd"_color;
+
+  SkPath Shape() const;
+  void DrawSide(SkCanvas&) const;
+  void DrawOutline(SkCanvas&) const;
+  void DrawFill(SkCanvas&) const;
+};
 
 struct WindowFrame {
   Vec2 content_size;

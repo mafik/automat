@@ -100,6 +100,16 @@ appear and disappear during the pass.
 Dropping a pointer-owned object on the background, outside every board, creates a new board
 under the dropped widget and transfers the object's ownership and the widget to it.
 
+One `DragLocationAction` object lasts for the whole drag. A set board widget marks it as
+board-owned; otherwise it is pointer-owned and holds the location widgets itself. Extraction
+and entry switch these members in place, so a mode change never touches the pointer slot, the
+drag count or the grab anchors. The action never holds an empty
+stack: it is constructed with at least one location, and removing the last member
+(`DragLocationAction::RemoveFromGroup`) ends the action through `Pointer::ReplaceAction`.
+Drags that arrive from outside the process, such as X11 drag and drop (src/xcb_window.cpp),
+are ordinary pointer actions in the mouse pointer's left-button slot and end with a
+synthesized button release.
+
 ## Dropping onto an owning board
 
 Duplication starts in this state: the pointer holds the new widget while the source board
@@ -157,9 +167,18 @@ user is holding rather than of ink invented for the occasion, and it never sampl
 texture. There is at most one merge target: an object rests on at most one board while a copy
 of it is in hand.
 
-The grab point is clamped to the nearest point within the toy's coarse bounds (`RRect::Clamp`,
-src/math.hpp), so the stretched texture is always ink. A fresh clone's body sticks to the hand
-from the first frame, trailing its tail back to the original it was pulled out of.
+The grab point is a position in the coordinates of the base toy, the toy of the bottom location
+of the dragged stack. By default `DragLocationAction` reads it at pick-up from the pointer
+position, clamped to the nearest point within the toy's coarse bounds (`RRect::Clamp`,
+src/math.hpp), so the stretched texture is always ink. A caller whose new object starts away
+from the pointer passes the grab point to the constructor instead: the "New..." menu and an
+external X11 drag entering the window hold the new object by the point of its bounds nearest to
+its origin (src/make_object_option.cpp, src/xcb_window.cpp). The snapped pose places the grab
+point under the pointer, and the anchor pulls the grab point to the pointer with no offset, so
+both follow from the same point and a converged pose shows no stretch. Neither is derived from
+the widget's current transform, which is transient at pick-up: an anchor offset computed from
+it would remain as a permanent stretch after the pose converged. A fresh clone's body sticks to
+the hand from the first frame, trailing its tail back to the original it was pulled out of.
 
 The mark also identifies the pickup mode: a duplication stretches towards its original from the
 first frame, while an extraction has nothing to merge into and rests under the pointer.

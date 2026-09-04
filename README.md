@@ -31,6 +31,7 @@ Automat can be downloaded from the [releases page](https://github.com/mafik/auto
 In reverse chronological order:
 
 - [Live-Coding](https://www.youtube.com/@MarekRogalski/streams) ([YouTube](https://www.youtube.com/@MarekRogalski/streams) / [Twitch](https://twitch.tv/maf_pl), 3 &times; a week, ~4 hours / stream, since 2024-02) - development livestreams
+- [Flexible Rendering in Automat](https://youtu.be/y6JUm11l1S8?si=12qbBB40cOUJjl8K&t=2651) (15 minutes, Feeling of Computing, 2026-08) - explains how the wobbliness helps with rendering latency
 - [Automat](https://www.youtube.com/watch?v=hUFDF62e37s) (1 hour, Feeling of Computing, 2026-01) - overview of Automat's design
 - [Automat: Objects As Syntax Not Data](https://www.youtube.com/watch?v=7CwxoUwY9aQ) (6 min, [LIVE 2025](https://liveprog.org/), 2025-09) - introduction to Automat, comes along with an [article](https://automat.org/live2025)
 - [Make building software more "fun"](https://www.youtube.com/watch?v=In_BjcsDlfY&list=PLCC8lmauZTzeEP7mIsOOI4HKeeyBN2rIy&index=4&t=67s) (15 min, Feeling of Computing, 2025-06) - provides motivation and explains design decisions that shaped Automat's build system

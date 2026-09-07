@@ -2,7 +2,11 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
 
+#include "animation.hpp"
 #include "base.hpp"
+#include "image_provider.hpp"
+#include "ptr.hpp"
+#include "resizable.hpp"
 #include "vm.hpp"
 
 namespace automat {
@@ -15,6 +19,38 @@ struct Board : Object {
 
   // Center of the board in RootWidget's coordinates.
   Vec2 position = {0, 0};
+
+  Vec2 size = {1, 1};  // 1x1 m
+
+  bool frame_visible = false;
+
+  // TODO: Board background styling
+
+  // Locked<ImageProvider> background;  // uses default background if null
+
+  // enum class BackgroundSizing {
+  //   Natural,
+  //   Cover,
+  //   Contain,
+  //   FitHeight,
+  //   FitWidth,
+  // } bg_sizing;
+
+  // enum class BackgroundAnchor {
+  //   TopLeft,
+  //   TopRight,
+  //   BottomLeft,
+  //   BottomRight,
+  //   Center,
+  // } bg_anchor;
+
+  // enum class BackgroundRepeat {
+  //   NoRepeat,
+  //   Repeat,
+  //   Mirror,
+  // } bg_repeat;
+
+  float PxToMetric() const;
 
   deque<Ptr<Location>> locations;
 
@@ -70,11 +106,21 @@ struct Board : Object {
   }
 
   string ToStr() const { return "Board"; }
+
+  DEF_INTERFACE(Board, Resizable, resizable, "Resizable")
+  bool ResizePx(int top, int right, int bottom, int left);
+  bool ResizeM(Rect grow);
+  DEF_END(resizable);
+
+  INTERFACES(resizable);
 };
 
 // UI widget for Board. Handles drawing, drop target, and spatial queries.
 struct BoardWidget : ObjectToy, ui::DropTarget {
   struct ToyStore toys;
+
+  animation::SpringV2<Vec2> size;
+  animation::SpringV2<float> frame_width;
 
   BoardWidget(ui::Widget* parent, Board& board);
 
@@ -87,6 +133,12 @@ struct BoardWidget : ObjectToy, ui::DropTarget {
   // Widget overrides
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
+
+  Rect BgBounds() const { return Rect::MakeCenterZero(size.value.width, size.value.height); }
+  RRect FrameBounds() const {
+    return RRect::MakeSimple(BgBounds().Outset(frame_width), frame_width);
+  }
+
   SkPath Shape() const override;
   SkPath SubtreeShape() const override;
   Compositor GetCompositor() const override { return Compositor::QUANTUM_REALM; }

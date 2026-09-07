@@ -7,3 +7,6 @@ constexpr float operator""_mm(unsigned long long x) { return x / 1000.f; }
 
 constexpr float operator""_cm(long double x) { return x / 100; }
 constexpr float operator""_cm(unsigned long long x) { return x / 100.f; }
+
+constexpr float operator""_m(long double x) { return x; }
+constexpr float operator""_m(unsigned long long x) { return x; }

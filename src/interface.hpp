@@ -61,6 +61,7 @@ struct Interface {
     // Standalone interfaces
     kSignal,
     kImageProvider,
+    kResizable,
     kStreamInput,
     kFdProvider,
   };
@@ -108,7 +109,7 @@ struct Interface {
     }
 
     template <typename T>
-    operator typename T::Bound(this const T & self) {
+    operator typename T::Bound(this const T& self) {
       return self.Bind();
     }
 

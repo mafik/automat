@@ -18,11 +18,13 @@
 #include "argument.hpp"
 #include "control_flow.hpp"
 #include "drag_action.hpp"
+#include "drawing.hpp"
 #include "embedded.hpp"
 #include "global_resources.hpp"
 #include "location.hpp"
 #include "math.hpp"
 #include "root_widget.hpp"
+#include "status.hpp"
 #include "textures.hpp"
 #include "ui_connection_widget.hpp"
 #include "vm.hpp"
@@ -43,6 +45,13 @@ void Board::SerializeState(ObjectSerializer& writer) const {
   writer.Double(round(position.x * 1000000.) / 1000000.);
   writer.Double(round(position.y * 1000000.) / 1000000.);
   writer.EndArray();
+  writer.Key("size");
+  writer.StartArray();
+  writer.Double(round(size.width * 1000000.) / 1000000.);
+  writer.Double(round(size.height * 1000000.) / 1000000.);
+  writer.EndArray();
+  writer.Key("frame_visible");
+  writer.Bool(frame_visible);
   if (!locations.empty()) {
     writer.Key("locations");
     writer.StartObject();
@@ -73,6 +82,23 @@ bool Board::DeserializeKey(ObjectDeserializer& d, StrView key) {
         d.Skip();
       }
     }
+  } else if (key == "size") {
+    for (auto i : ArrayView(d, status)) {
+      if (i == 0) {
+        d.Get(size.width, status);
+      } else if (i == 1) {
+        d.Get(size.height, status);
+      } else {
+        d.Skip();
+      }
+    }
+  } else if (key == "frame_visible") {
+    Status status;
+    d.Get(frame_visible, status);
+    if (!OK(status)) {
+      d.Skip();
+      frame_visible = false;
+    }
   } else if (key == "locations") {
     for (auto& object_name : ObjectView(d, status)) {
       auto* object = d.LookupObject(object_name);
@@ -102,6 +128,26 @@ bool Board::DeserializeKey(ObjectDeserializer& d, StrView key) {
   if (!OK(status)) {
     ReportError(status.ToStr());
   }
+  return true;
+}
+
+float Board::PxToMetric() const {
+  // TODO: convert pixels to metric units (grab background, position it, figure out effective dpi)
+  return 1_m / 3840;
+}
+
+bool Board::resizable_Impl::ResizePx(int top, int right, int bottom, int left) {
+  auto px_to_m = obj->PxToMetric();
+  return ResizeM(Rect(left * px_to_m, bottom * px_to_m, right * px_to_m, top * px_to_m));
+}
+
+bool Board::resizable_Impl::ResizeM(Rect grow) {
+  obj->position.y += (grow.top - grow.bottom) / 2;
+  obj->position.x += (grow.right - grow.left) / 2;
+  obj->size.y += (grow.top + grow.bottom) / 2;
+  obj->size.x += (grow.right + grow.left) / 2;
+  obj->size.y = max(obj->size.y, 10_cm);
+  obj->size.x = max(obj->size.y, 10_cm);
   return true;
 }
 
@@ -150,6 +196,8 @@ Location& Board::CreateEmpty() {
 
 BoardWidget::BoardWidget(ui::Widget* parent, Board& board) : ObjectToy(parent, board) {
   parent->layers.OrderInside(this);
+  size.value = board.size;
+  frame_width.value = board.frame_visible ? 1_cm : 0_cm;
 }
 
 BoardWidget* BoardOrNull(const ui::Widget& widget) {
@@ -159,7 +207,7 @@ BoardWidget* BoardOrNull(const ui::Widget& widget) {
   return nullptr;
 }
 
-SkPath BoardWidget::Shape() const { return SkPath::Rect(Rect::MakeCenterZero(100_cm, 100_cm)); }
+SkPath BoardWidget::Shape() const { return SkPath::RRect(FrameBounds()); }
 
 SkPath BoardWidget::SubtreeShape() const { return shape; }
 
@@ -202,6 +250,10 @@ ui::Tock BoardWidget::Tick(time::Timer& timer) {
   auto board = LockBoard();
   if (!board) return {};
   auto lock = std::lock_guard(vm.mutex);
+
+  ui::Tock tock;
+  tock.shaping |= frame_width.SineTowards(board->frame_visible ? 1_cm : 0, timer.d, 0.4);
+  tock.shaping |= size.SineTowards(board->size, timer.d, 0.4);
 
   for (auto& loc : board->locations) {
     auto& lw = toys.FindOrMake(*loc, this);
@@ -256,7 +308,7 @@ ui::Tock BoardWidget::Tick(time::Timer& timer) {
   if (overlaps_dirty) {
     RebuildOverlaps(*board);
   }
-  return {};
+  return tock;
 }
 
 void BoardWidget::RebuildOverlaps(Board& board) {
@@ -315,14 +367,18 @@ void BoardWidget::RebuildOverlaps(Board& board) {
 }
 
 void BoardWidget::Draw(SkCanvas& canvas) const {
-  auto shape = Shape();
+  Rect bg_bounds = BgBounds();
   float px_per_m = canvas.getLocalToDeviceAs3x3().mapRadius(1);
   SkPaint background_paint = GetBackgroundPaint(px_per_m);
-  canvas.drawPath(shape, background_paint);
+  canvas.drawRect(bg_bounds, background_paint);
   SkPaint border_paint;
   border_paint.setColor("#404040"_color);
-  border_paint.setStyle(SkPaint::kStroke_Style);
-  canvas.drawPath(shape, border_paint);
+  if (frame_width == 0) {
+    border_paint.setStyle(SkPaint::kStroke_Style);
+  }
+  auto frame_rect = FrameBounds();
+  SetRRectShader(border_paint, frame_rect, "#f7f5c2"_color4f, "#e8b044"_color4f, "#66370b"_color4f);
+  canvas.drawDRRect(frame_rect, RRect::MakeSimple(bg_bounds, 0), border_paint);
   BakeChildren(canvas);  // nothing gets baked actually
 }
 
@@ -610,10 +666,29 @@ struct MoveBoardOption : TextOption {
   Dir PreferredDir() const override { return N; }
 };
 
+struct ToggleFrameOption : TextOption {
+  WeakPtr<Board> weak;
+  ToggleFrameOption(WeakPtr<Board> weak) : TextOption("Toggle Frame"), weak(weak) {}
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<ToggleFrameOption>(weak);
+  }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    if (auto board = weak.Lock()) {
+      board->frame_visible = !board->frame_visible;
+      board->WakeToys();
+      return nullptr;
+    }
+    return nullptr;
+  }
+  Dir PreferredDir() const override { return S; }
+};
+
 void BoardWidget::VisitOptions(const OptionsVisitor& visitor) const {
   if (auto board = LockBoard()) {
     MoveBoardOption move{board->AcquireWeakPtr()};
     visitor(move);
+    ToggleFrameOption toggle_frame{board->AcquireWeakPtr()};
+    visitor(toggle_frame);
   }
 }
 

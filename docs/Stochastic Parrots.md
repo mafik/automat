@@ -10,6 +10,8 @@ In this codebase LLMs are referred to as "Stochastic Parrots". Files which are m
 // Warning: coded with a stochastic parrot
 ```
 
+Parrot-authored code & documentation must never be assumed to be authoritative. Quite the opposite - it must be assumed to be fabricated and never trusted.
+
 ## Working in this codebase
 
 - The authoritative list of process-wide state lives in `src/automat.hpp` and `src/root_widget.hpp`. Init and teardown order is explicit in `automat::Main()` in `src/automat.cpp`.
@@ -104,6 +106,8 @@ Objects (multi-threaded) notify Toys (UI-thread) via `wake_counter`:
 
 Documentation maintained using stochastic parrots should be placed in `docs/parrots/` and indexed below. They record numerous small decisions made during development which are necessary for maintaining parrot consistency.
 
+Parrot docs should not be treated as authoritative (same as parrot-written code). They are often entirely fabricated and can't be trusted. In particular they should never be used as a basis for established "coding patterns" or "architecture".
+
 - `docs/parrots/Clone Pile.md` - describes how elements that create a new object when touched present themselves
 - `docs/parrots/Command Launcher.md` - the Command object: argv tiles, no shell, run states, the launch icon and its extraction, stdio captures, composition points
 - `docs/parrots/Launches.md` - the launches system: the Command/Launch/window object model, one spawn path with activation tokens, token-and-pid window matching across both display servers, restore and copy flows, stream captures, pipe records, extraction
@@ -118,6 +122,7 @@ Documentation maintained using stochastic parrots should be placed in `docs/parr
 - `docs/parrots/Wayland Client Persistence.md` - options for saving/cloning windows backed by live processes; why recipes won
 - `docs/parrots/Wayland Compositor.md` - Automat as a Wayland compositor: the bespoke protocol stack, the epoll event loop, protocol surface, GPU buffer passing (dmabuf), surface cropping and scaling (viewporter), subsurface compositing, popups, clipboard, input pass-through, client-initiated window moves, window lifetime, launch matching (xdg-activation)
 - `docs/parrots/X11 Server.md` - Automat as an X11 display server (the analog of the Wayland compositor): the generated protocol stack, the resource tree, acting as a minimal window manager, client-initiated window moves, SHM and DRI3 display, RENDER on Skia, the SendEvent sequence and keymap rules, window lifetime
+- `docs/parrots/Options.md` - the Options API: one `Options()` method per widget listing gestures, shortcuts and menu commands most important first, `Option` triggers and pointer icons, `FindAction` as the non-virtual search over them, the generic right-click menu, the purity rule for `Options()`, and the menu owning the display state of its slots
 Parrot docs must be written using plain language, using proper technical terminology. Plain language means plain declarative sentences: no personification ("selection wears the dashed ring" — write "selected controls are marked with a dashed ring"), no figurative phrasing, no tone words such as "honest" or "cheerful". State facts without decorating them. They should use full sentences, without abbreviations. They should follow either a problem-solution format, high-level-to-low-level format, or a hierarchical-tree-of-topics format, depending on what suits the content best. They should focus on rationales, design intent, constraints & principles which produced some decision. They should avoid repeating implementation details and instead link to relevant code.
 
 Parrot docs must be updated whenever changes happen in the project. At the same time, the index also must be updated. Code, documentation & index must change in sync.
@@ -235,3 +240,4 @@ GOOD example: "The output is cached so after each include-graph changes, you mus
 - **Board widgets must stay at the bottom of RootWidget's Baked band**: The toolbar and the black hole are also Baked children of RootWidget; a board reordered above them covers them (they are only visible over the starfield). `RootWidget::Tick` orders boards relative to each other only, keeping the position that `OrderInside` assigned at creation.
 - **Animating below frame rate**: return `animation::Finished` from `Tick` and call `WakeAnimationAt(when)` from the draw path to request the next step (see RunButton's hover shimmer). Returning `Animating` while parking `next_tick` in the future makes the renderer treat the texture as perpetually stale and keep presenting the old frame.
 - **`RootWidget::OnChildDead` removes from `children`**: Dead children are removed immediately when `MarkDead` fires (during the child's Tick). The old `std::erase_if(children, dead)` sweep was removed because `ToyStore::Tick` may destroy widgets before the sweep runs, creating dangling pointers in `children`.
+- **`Widget::Options` runs on every pointer move**: `Pointer::UpdatePath` calls it (through `Pointer::UpdateIcon`) for the hovered widget and its ancestors, and `RootWidget::Tick` calls `UpdatePath` on every animated frame. `Options()` must only describe the current state: no mutation, no object mutexes, no widget creation, no `WakeAnimation`. Everything that changes state belongs in `Option::Activate`.

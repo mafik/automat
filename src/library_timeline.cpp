@@ -31,6 +31,7 @@
 #include "font.hpp"
 #include "library_mouse.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "number_text_field.hpp"
 #include "pointer.hpp"
 #include "random.hpp"
@@ -744,7 +745,7 @@ struct SpliceAction : Action {
   time::Duration splice_to;
   bool snapped = false;
   bool cancel = true;
-  ui::Pointer::IconOverride resize_icon;
+  ui::Pointer::CursorOverride resize_cursor;
   SpliceAction(ui::Pointer&, TimelineWidget&);
   ~SpliceAction();
   void Update() override;
@@ -1546,7 +1547,7 @@ struct TimelineWidget : ObjectToy {
     return SkPath::RRect(r);
   }
   bool CenteredAtZero() const override { return true; }
-  std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
+  void Options(ui::Pointer&, OptionVisitor&) override;
   using ObjectToy::ArgStart;
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     auto timeline = LockObject<Timeline>();
@@ -1749,7 +1750,7 @@ struct DragZoomAction : Action {
 SpliceAction::SpliceAction(ui::Pointer& pointer, TimelineWidget& timeline_widget_ref)
     : Action(pointer),
       timeline_widget(&timeline_widget_ref),
-      resize_icon(pointer, ui::Pointer::kIconResizeHorizontal) {
+      resize_cursor(pointer, ui::Pointer::Cursor::ResizeHorizontal) {
   assert(timeline_widget_ref.splice_action == nullptr);
   timeline_widget_ref.splice_action = this;
   splice_to = timeline_widget_ref.current_offset;
@@ -1817,34 +1818,84 @@ void SpliceAction::Update() {
   timeline_widget->WakeAnimation();
 }
 
-std::unique_ptr<Action> TimelineWidget::FindAction(ui::Pointer& ptr, ui::ActionTrigger btn) {
-  if (!IsIconified() && btn == ui::PointerButton::Left) {
+struct SpliceOption : TextOption {
+  TimelineWidget& widget;
+  SpliceOption(TimelineWidget& widget) : TextOption("Splice"), widget(widget) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SpliceOption, widget); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& ptr) override {
+    if (widget.splice_action) return nullptr;
+    return make_unique<SpliceAction>(ptr, widget);
+  }
+};
+
+struct DragBridgeOption : TextOption {
+  TimelineWidget& widget;
+  DragBridgeOption(TimelineWidget& widget) : TextOption("Bridge"), widget(widget) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragBridgeOption, widget); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& ptr) override {
+    return make_unique<DragBridgeAction>(ptr, widget);
+  }
+};
+
+struct DragZoomOption : TextOption {
+  TimelineWidget& widget;
+  DragZoomOption(TimelineWidget& widget) : TextOption("Zoom"), widget(widget) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragZoomOption, widget); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& ptr) override {
+    return make_unique<DragZoomAction>(ptr, widget);
+  }
+};
+
+struct DragTimelineOption : TextOption {
+  TimelineWidget& widget;
+  DragTimelineOption(TimelineWidget& widget) : TextOption("Scroll"), widget(widget) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragTimelineOption, widget); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& ptr) override {
+    return make_unique<DragTimelineAction>(ptr, widget);
+  }
+};
+
+struct SeekOption : TextOption {
+  TimelineWidget& widget;
+  float pos_ratio;
+  SeekOption(TimelineWidget& widget, float pos_ratio)
+      : TextOption("Seek"), widget(widget), pos_ratio(pos_ratio) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SeekOption, widget, pos_ratio); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& ptr) override {
+    auto timeline = widget.LockObject<Timeline>();
+    if (!timeline) return nullptr;
+    auto lock = std::lock_guard(timeline->mutex);
+    widget.SetPosRatio(*timeline, pos_ratio, ptr.root_widget.timer.now);
+    return make_unique<DragBridgeAction>(ptr, widget);
+  }
+};
+
+void TimelineWidget::Options(ui::Pointer& ptr, OptionVisitor& visit) {
+  if (!IsIconified()) {
     int n = track_widgets.size();
-    auto splicer_shape = SplicerShape(n, current_pos_ratio);
-    auto bridge_shape = BridgeShape(n, current_pos_ratio);
-    auto window_shape = WindowShape(n);
     auto pos = ptr.PositionWithin(*this);
-    if (splicer_shape.contains(pos.x, pos.y) && splice_action == nullptr) {
-      return make_unique<SpliceAction>(ptr, *this);
-    } else if (bridge_shape.contains(pos.x, pos.y)) {
-      return make_unique<DragBridgeAction>(ptr, *this);
-    } else if (window_shape.contains(pos.x, pos.y)) {
+    if (SplicerShape(n, current_pos_ratio).contains(pos.x, pos.y) && splice_action == nullptr) {
+      visit(SpliceOption(*this));
+    } else if (BridgeShape(n, current_pos_ratio).contains(pos.x, pos.y)) {
+      visit(DragBridgeOption(*this));
+    } else if (WindowShape(n).contains(pos.x, pos.y)) {
       if (pos.y < -kRulerHeight) {
         if (LengthSquared(pos - ZoomDialCenter(WindowHeight(n))) < kZoomRadius * kZoomRadius) {
-          return make_unique<DragZoomAction>(ptr, *this);
+          visit(DragZoomOption(*this));
         } else {
-          return make_unique<DragTimelineAction>(ptr, *this);
+          visit(DragTimelineOption(*this));
         }
       } else {
-        if (auto timeline = LockObject<Timeline>()) {
-          auto lock = std::lock_guard(timeline->mutex);
-          SetPosRatio(*timeline, PosRatioFromBridgeOffsetX(pos.x), ptr.root_widget.timer.now);
-          return make_unique<DragBridgeAction>(ptr, *this);
-        }
+        visit(SeekOption(*this, PosRatioFromBridgeOffsetX(pos.x)));
       }
     }
   }
-  return ObjectToy::FindAction(ptr, btn);
+  ObjectToy::Options(ptr, visit);
 }
 
 std::unique_ptr<ObjectToy> Timeline::MakeToy(ui::Widget* parent) {
@@ -1936,12 +1987,12 @@ struct TrackBaseWidget : ObjectToy {
     return nullopt;
   }
   void Draw(SkCanvas& canvas) const override { canvas.drawRect(shape.sk, kTrackPaint); }
-  std::unique_ptr<Action> FindAction(ui::Pointer& ptr, ui::ActionTrigger btn) override {
+  void Options(ui::Pointer& ptr, OptionVisitor& visit) override {
     Context ctx(*this);
     if (ctx.timeline_widget) {
-      return ctx.timeline_widget->FindAction(ptr, btn);
+      ctx.timeline_widget->Options(ptr, visit);
     } else {
-      return ObjectToy::FindAction(ptr, btn);
+      ObjectToy::Options(ptr, visit);
     }
   }
 };

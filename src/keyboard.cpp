@@ -64,12 +64,12 @@ static SkPath PointerIBeam(const KeyboardWidget& keyboard) {
     float px = 1 / keyboard.root_widget.PxPerMeter();
     Vec2 pos = keyboard.pointer->PositionOnCanvas();
     SkRect bounds = SkRect::MakeXYWH(pos.x, pos.y, 0, 0);
-    switch (keyboard.pointer->Icon()) {
-      case Pointer::IconType::kIconArrow:
+    switch (keyboard.pointer->cursor) {
+      case Pointer::Cursor::Arrow:
         bounds.fRight += 2 * px;
         bounds.fTop -= 16 * px;
         break;
-      case Pointer::IconType::kIconIBeam:
+      case Pointer::Cursor::IBeam:
         bounds.fRight += px;
         bounds.fTop -= 9 * px;
         bounds.fBottom += 8 * px;
@@ -598,7 +598,7 @@ void KeyboardWidget::KeyDown(Key key) {
     if (actions[i] == nullptr && pointer && pointer->hover) {
       Widget* current = pointer->hover;
       do {
-        actions[i] = current->FindAction(*pointer, key.physical);
+        actions[i] = current->TriggerAction(*pointer, key.physical);
         current = current->parent;
       } while (actions[i] == nullptr && current);
       if (actions[i]) {
@@ -770,7 +770,8 @@ void KeyGrab::Release() {
   }
 #endif
   grabber.ReleaseKeyGrab(*this);
-  Keyboard::key_grabs.erase(Keyboard::key_grabs.get_iterator(this));  // KeyGrab deletes itself here!
+  Keyboard::key_grabs.erase(
+      Keyboard::key_grabs.get_iterator(this));  // KeyGrab deletes itself here!
 }
 
 void Keylogging::Release() {

@@ -36,19 +36,16 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
-#include <queue>
 #include <string>
 #include <vector>
 
 #include "color.hpp"
 #include "font.hpp"
-#include "library_window.hpp"
+#include "menu.hpp"
 #include "path.hpp"
 #include "pointer.hpp"
 #include "svg.hpp"
-#include "text_widget.hpp"
 #include "ui_beta.hpp"
-#include "ui_button.hpp"
 #include "ui_enum_knob_widget.hpp"
 #include "ui_leptonica.hpp"
 #include "ui_shape_widget.hpp"
@@ -1227,11 +1224,7 @@ struct ThresholdBladeDrag : Action {
   void Update() override;
 };
 
-struct ThresholdPolarityPoke : Action {
-  ThresholdPolarityPoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
-};
-
+constexpr const char* const kThresholdMethods[4] = {"FIXED", "OTSU", "SAUVOLA", "COMPS"};
 struct ThresholdToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;  // the live 1-bpp stencil (the result of the cut)
   uint32_t preview_param_hash = 0;
@@ -1614,7 +1607,6 @@ struct ThresholdToy : beta::ObjectToy {
       }
 
       {
-        static const char* const kMeth[4] = {"FIXED", "OTSU", "SAUVOLA", "COMPS"};
         for (int which = 0; which < 4; ++which) {
           Rect cell = MethodCellM(which);
           bool sel = method == which;
@@ -1628,9 +1620,10 @@ struct ThresholdToy : beta::ObjectToy {
           beta::SketchyStroke(canvas, cp, beta::kInk, sel ? beta::kStroke : beta::kStrokeHair,
                               Seed(0x7FCu + (uint32_t)which), 1);
           float fs2 = 1.6_mm;
-          float lw = beta::TextWidth(kMeth[which], fs2);
-          beta::DrawText(canvas, kMeth[which], {cell.CenterX() - lw / 2, cell.CenterY() - 0.6_mm},
-                         fs2, sel ? beta::kInk : beta::kInkSoft, false, Seed(0));
+          float lw = beta::TextWidth(kThresholdMethods[which], fs2);
+          beta::DrawText(canvas, kThresholdMethods[which],
+                         {cell.CenterX() - lw / 2, cell.CenterY() - 0.6_mm}, fs2,
+                         sel ? beta::kInk : beta::kInkSoft, false, Seed(0));
           if (sel) beta::Highlight(canvas, cell, beta::kBlue, Seed(0x7F2));
         }
       }
@@ -1651,43 +1644,76 @@ struct ThresholdToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      float mx = MarkerXM();
-      bool near_blade = std::abs(pos.x - mx) <= 0.45_cm && pos.y >= kBaseY - 1.0_cm &&
-                        pos.y <= CardTopM() + 0.2_cm;
-      bool on_knob = std::hypot(pos.x - mx, pos.y - (kBaseY - 0.16_cm)) <= 0.5_cm;
-      if ((near_blade || on_knob) && !driven && method == 0)
-        return std::make_unique<ThresholdBladeDrag>(p, *this);
-      for (int which = 0; which < 4; ++which) {
-        Rect r = MethodCellM(which);
-        if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.bottom && pos.y <= r.top) {
-          if (auto th = LockObject<Threshold>()) {
-            {
-              auto lock = std::lock_guard(th->mutex);
-              th->method = which;
-            }
-            th->WakeToys();
-          }
-          return std::make_unique<ThresholdPolarityPoke>(p);
-        }
-      }
-      if (pos.x >= kHalfW + 0.02_cm && pos.x <= kHalfW + 1.1_cm && pos.y >= kBaseY - 0.44_cm &&
-          pos.y <= kBaseY + 0.08_cm) {
-        if (auto th = LockObject<Threshold>()) {
-          {
-            auto lock = std::lock_guard(th->mutex);
-            th->bright_fg = !th->bright_fg;
-          }
-          th->WakeToys();
-        }
-        return std::make_unique<ThresholdPolarityPoke>(p);
-      }
-    }
-    return ObjectToy::FindAction(p, btn);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct DragThresholdBladeOption : TextOption {
+  ThresholdToy& toy;
+  DragThresholdBladeOption(ThresholdToy& toy) : TextOption("Blade"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragThresholdBladeOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<ThresholdBladeDrag>(p, toy);
   }
 };
+
+struct SelectThresholdMethodOption : TextOption {
+  ThresholdToy& toy;
+  int which;
+  SelectThresholdMethodOption(ThresholdToy& toy, int which)
+      : TextOption(kThresholdMethods[which]), toy(toy), which(which) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectThresholdMethodOption, toy, which); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockObject<Threshold>()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->method = which;
+      }
+      t->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+struct ToggleThresholdPolarityOption : TextOption {
+  ThresholdToy& toy;
+  ToggleThresholdPolarityOption(ThresholdToy& toy) : TextOption("Polarity"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleThresholdPolarityOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockObject<Threshold>()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->bright_fg = !t->bright_fg;
+      }
+      t->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+void ThresholdToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  float mx = MarkerXM();
+  bool near_blade =
+      std::abs(pos.x - mx) <= 0.45_cm && pos.y >= kBaseY - 1.0_cm && pos.y <= CardTopM() + 0.2_cm;
+  bool on_knob = std::hypot(pos.x - mx, pos.y - (kBaseY - 0.16_cm)) <= 0.5_cm;
+  if ((near_blade || on_knob) && !driven && method == 0) visit(DragThresholdBladeOption(*this));
+  for (int which = 0; which < 4; ++which) {
+    Rect r = MethodCellM(which);
+    if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.bottom && pos.y <= r.top) {
+      visit(SelectThresholdMethodOption(*this, which));
+    }
+  }
+  if (pos.x >= kHalfW + 0.02_cm && pos.x <= kHalfW + 1.1_cm && pos.y >= kBaseY - 0.44_cm &&
+      pos.y <= kBaseY + 0.08_cm) {
+    visit(ToggleThresholdPolarityOption(*this));
+  }
+  ObjectToy::Options(p, visit);
+}
 
 ThresholdBladeDrag::ThresholdBladeDrag(ui::Pointer& p, ThresholdToy& w) : Action(p), widget(&w) {
   if (widget) widget->dragging = true;
@@ -1875,12 +1901,6 @@ bool Morphology::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 struct MorphologyToy;
 
-// A click that toggles a Stamp cell or selects a Mode-wheel option (mutation done in FindAction).
-struct MorphPoke : Action {
-  MorphPoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
-};
-
 // Dragging the per-mode parameter row: BRICK size (TOPHAT) or HEIGHT (DOME).
 struct MorphLevelDrag : Action {
   MortalPtr<MorphologyToy> widget;
@@ -1970,6 +1990,8 @@ static const SkPath* MorphWheelGlyphs() {
   return paths.data();
 }
 
+constexpr const char* const kMorphOps[] = {"DILATE", "ERODE", "OPEN", "CLOSE",
+                                           "TOPHAT", "DOME",  "HMT",  "THIN"};
 struct MorphologyToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;
   uint32_t preview_hash = 0;
@@ -2204,8 +2226,7 @@ struct MorphologyToy : beta::ObjectToy {
         beta::DrawText(canvas, gl, {gm.CenterX() - tw * 0.5f, gm.bottom - 0.34_cm}, fs, kLabelInk,
                        false, Seed(0));
       }
-      const char* morph[] = {"DILATE", "ERODE", "OPEN", "CLOSE", "TOPHAT", "DOME", "HMT", "THIN"};
-      ui::leptonica::DrawModeWheel(canvas, WheelCenter(), WheelR(), morph, 8, op_mode,
+      ui::leptonica::DrawModeWheel(canvas, WheelCenter(), WheelR(), kMorphOps, 8, op_mode,
                                    beta::State::Default, 0x9D0, MorphWheelGlyphs());
       if (ColorApplies()) {
         Rect pm = PolarityRectM();
@@ -2254,88 +2275,156 @@ struct MorphologyToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      int cx, cy;
-      if (SelApplies() && ui::leptonica::StampCellAt(GridRectM(), pos, sel_w, sel_h, cx, cy)) {
-        if (auto m = LockMorph()) {
-          {
-            auto lock = std::lock_guard(m->mutex);
-            int idx = cy * m->sel_w + cx;
-            if (idx >= 0 && idx < Morphology::kMaxN * Morphology::kMaxN) {
-              if (m->op_mode == 6)
-                m->cells[idx] = (m->cells[idx] + 1) % 3;
-              else
-                m->cells[idx] = m->cells[idx] ? 0 : 1;
-            }
-          }
-          m->WakeToys();
-        }
-        return std::make_unique<MorphPoke>(p);
-      }
-      int mode = ui::leptonica::ModeWheelHit(WheelCenter(), WheelR(), pos, 8);
-      if (mode >= 0) {
-        if (auto m = LockMorph()) {
-          {
-            auto lock = std::lock_guard(m->mutex);
-            m->op_mode = mode;
-          }
-          m->WakeToys();
-        }
-        return std::make_unique<MorphPoke>(p);
-      }
-      if (ColorApplies()) {
-        Rect pm = PolarityRectM();
-        if (pos.x >= pm.left && pos.x <= pm.left + 0.9_cm && pos.y >= pm.bottom - 0.1_cm &&
-            pos.y <= pm.top + 0.1_cm) {
-          if (auto m = LockMorph()) {
-            {
-              auto lock = std::lock_guard(m->mutex);
-              m->color = !m->color;
-            }
-            m->WakeToys();
-          }
-          return std::make_unique<MorphPoke>(p);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct ToggleMorphCellOption : TextOption {
+  MorphologyToy& toy;
+  int cx;
+  int cy;
+  ToggleMorphCellOption(MorphologyToy& toy, int cx, int cy)
+      : TextOption("Cell"), toy(toy), cx(cx), cy(cy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleMorphCellOption, toy, cx, cy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto m = toy.LockMorph()) {
+      {
+        auto lock = std::lock_guard(m->mutex);
+        int idx = cy * m->sel_w + cx;
+        if (idx >= 0 && idx < Morphology::kMaxN * Morphology::kMaxN) {
+          if (m->op_mode == 6)
+            m->cells[idx] = (m->cells[idx] + 1) % 3;
+          else
+            m->cells[idx] = m->cells[idx] ? 0 : 1;
         }
       }
-      if (PolarityApplies()) {
-        Rect pm = PolarityRectM();
-        if (pos.x >= pm.left && pos.x <= pm.right && pos.y >= pm.bottom - 0.1_cm &&
-            pos.y <= pm.top + 0.1_cm) {
-          if (auto m = LockMorph()) {
-            {
-              auto lock = std::lock_guard(m->mutex);
-              m->peaks = !m->peaks;
-            }
-            m->WakeToys();
-          }
-          return std::make_unique<MorphPoke>(p);
-        }
-      }
-      if (op_mode != 7) {
-        Rect rm = ParamRowM();
-        if (pos.x >= rm.left - 0.2_cm && pos.x <= rm.right + 0.2_cm &&
-            pos.y >= rm.bottom - 0.2_cm && pos.y <= rm.top + 0.2_cm)
-          return std::make_unique<MorphLevelDrag>(p, *this);
-      } else {
-        Rect rm = ConnRectM();
-        int conn = ui::leptonica::ConnectivityHit(rm, pos);
-        if (conn) {
-          if (auto m = LockMorph()) {
-            {
-              auto lock = std::lock_guard(m->mutex);
-              m->connectivity = conn;
-            }
-            m->WakeToys();
-          }
-          return std::make_unique<MorphPoke>(p);
-        }
-      }
+      m->WakeToys();
     }
-    return ObjectToy::FindAction(p, btn);
+    return std::make_unique<EmptyAction>(p);
   }
 };
+
+struct SelectMorphOpOption : TextOption {
+  MorphologyToy& toy;
+  int mode;
+  SelectMorphOpOption(MorphologyToy& toy, int mode)
+      : TextOption(kMorphOps[mode]), toy(toy), mode(mode) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectMorphOpOption, toy, mode); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto m = toy.LockMorph()) {
+      {
+        auto lock = std::lock_guard(m->mutex);
+        m->op_mode = mode;
+      }
+      m->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+struct ToggleMorphColorOption : TextOption {
+  MorphologyToy& toy;
+  ToggleMorphColorOption(MorphologyToy& toy) : TextOption("Color"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleMorphColorOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto m = toy.LockMorph()) {
+      {
+        auto lock = std::lock_guard(m->mutex);
+        m->color = !m->color;
+      }
+      m->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+struct ToggleMorphPeaksOption : TextOption {
+  MorphologyToy& toy;
+  ToggleMorphPeaksOption(MorphologyToy& toy) : TextOption("Polarity"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleMorphPeaksOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto m = toy.LockMorph()) {
+      {
+        auto lock = std::lock_guard(m->mutex);
+        m->peaks = !m->peaks;
+      }
+      m->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+struct DragMorphLevelOption : TextOption {
+  MorphologyToy& toy;
+  DragMorphLevelOption(MorphologyToy& toy) : TextOption("Level"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragMorphLevelOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<MorphLevelDrag>(p, toy);
+  }
+};
+
+struct SelectMorphConnectivityOption : TextOption {
+  MorphologyToy& toy;
+  int conn;
+  SelectMorphConnectivityOption(MorphologyToy& toy, int conn)
+      : TextOption(conn == 8 ? "8-connected" : "4-connected"), toy(toy), conn(conn) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectMorphConnectivityOption, toy, conn); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto m = toy.LockMorph()) {
+      {
+        auto lock = std::lock_guard(m->mutex);
+        m->connectivity = conn;
+      }
+      m->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+void MorphologyToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  int cx, cy;
+  if (SelApplies() && ui::leptonica::StampCellAt(GridRectM(), pos, sel_w, sel_h, cx, cy)) {
+    visit(ToggleMorphCellOption(*this, cx, cy));
+  }
+  int mode = ui::leptonica::ModeWheelHit(WheelCenter(), WheelR(), pos, 8);
+  if (mode >= 0) visit(SelectMorphOpOption(*this, mode));
+  if (ColorApplies()) {
+    Rect pm = PolarityRectM();
+    if (pos.x >= pm.left && pos.x <= pm.left + 0.9_cm && pos.y >= pm.bottom - 0.1_cm &&
+        pos.y <= pm.top + 0.1_cm) {
+      visit(ToggleMorphColorOption(*this));
+    }
+  }
+  if (PolarityApplies()) {
+    Rect pm = PolarityRectM();
+    if (pos.x >= pm.left && pos.x <= pm.right && pos.y >= pm.bottom - 0.1_cm &&
+        pos.y <= pm.top + 0.1_cm) {
+      visit(ToggleMorphPeaksOption(*this));
+    }
+  }
+  if (op_mode != 7) {
+    Rect rm = ParamRowM();
+    if (pos.x >= rm.left - 0.2_cm && pos.x <= rm.right + 0.2_cm && pos.y >= rm.bottom - 0.2_cm &&
+        pos.y <= rm.top + 0.2_cm) {
+      visit(DragMorphLevelOption(*this));
+    }
+  } else {
+    int conn = ui::leptonica::ConnectivityHit(ConnRectM(), pos);
+    if (conn) visit(SelectMorphConnectivityOption(*this, conn));
+  }
+  ObjectToy::Options(p, visit);
+}
 
 MorphLevelDrag::MorphLevelDrag(ui::Pointer& p, MorphologyToy& w) : Action(p), widget(&w) {}
 void MorphLevelDrag::Update() {
@@ -2456,10 +2545,6 @@ struct ToneHandleDrag : Action {
   ToneHandleDrag(ui::Pointer& p, ToneToy& w, int which);
   ~ToneHandleDrag();
   void Update() override;
-};
-struct TonePoke : Action {  // a click that flips the invert toggle
-  TonePoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
 };
 
 struct ToneToy : beta::ObjectToy {
@@ -2710,29 +2795,51 @@ struct ToneToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      for (int k = 0; k < 3; ++k) {
-        Vec2 hm = HandlePosM(k);
-        if (std::hypot(pos.x - hm.x, pos.y - hm.y) <= 0.4_cm)
-          return std::make_unique<ToneHandleDrag>(p, *this, k);
-      }
-      Rect it = InvertToggleM();
-      if (pos.x >= it.left && pos.x <= it.right && pos.y >= it.bottom && pos.y <= it.top) {
-        if (auto t = LockTone()) {
-          {
-            auto lock = std::lock_guard(t->mutex);
-            t->invert = !t->invert;
-          }
-          t->WakeToys();
-        }
-        return std::make_unique<TonePoke>(p);
-      }
-    }
-    return ObjectToy::FindAction(p, btn);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct DragToneHandleOption : TextOption {
+  ToneToy& toy;
+  int handle;
+  DragToneHandleOption(ToneToy& toy, int handle)
+      : TextOption(f("Handle {}", handle + 1)), toy(toy), handle(handle) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragToneHandleOption, toy, handle); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<ToneHandleDrag>(p, toy, handle);
   }
 };
+
+struct ToggleToneInvertOption : TextOption {
+  ToneToy& toy;
+  ToggleToneInvertOption(ToneToy& toy) : TextOption("Invert"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleToneInvertOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockTone()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->invert = !t->invert;
+      }
+      t->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+void ToneToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  for (int k = 0; k < 3; ++k) {
+    Vec2 hm = HandlePosM(k);
+    if (std::hypot(pos.x - hm.x, pos.y - hm.y) <= 0.4_cm) visit(DragToneHandleOption(*this, k));
+  }
+  Rect it = InvertToggleM();
+  if (pos.x >= it.left && pos.x <= it.right && pos.y >= it.bottom && pos.y <= it.top) {
+    visit(ToggleToneInvertOption(*this));
+  }
+  ObjectToy::Options(p, visit);
+}
 
 ToneHandleDrag::ToneHandleDrag(ui::Pointer& p, ToneToy& w, int which)
     : Action(p), widget(&w), which(which) {
@@ -2953,10 +3060,8 @@ struct GeoScaleYDrag : Action {
   ~GeoScaleYDrag();
   void Update() override;
 };
-struct GeoTogglePoke : Action {
-  GeoTogglePoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
-};
+
+constexpr const char* const kGeoFlags[5] = {"Mirror", "Flip", "Lock aspect", "Pixels", "Size"};
 
 struct GeometryToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;
@@ -3302,69 +3407,132 @@ struct GeometryToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      if (cached_preview && !absolute) {
-        Rect fit = FittedRectM();
-        SkPoint corners[4] = {{fit.left, fit.top},
-                              {fit.right, fit.top},
-                              {fit.left, fit.bottom},
-                              {fit.right, fit.bottom}};
-        for (int i2 = 0; i2 < 4; ++i2) {
-          if (std::hypot(pos.x - corners[i2].fX, pos.y - corners[i2].fY) <= 0.28_cm)
-            return std::make_unique<GeoCornerDrag>(p, *this);
-        }
-      }
-      if (!angle_driven) {
-        Vec2 rc = RingCenterM();
-        if (ui::leptonica::TransformRingHit({rc.x, rc.y}, RingRadiusM(), {pos.x, pos.y}, 0.16_cm))
-          return std::make_unique<GeoRingDrag>(p, *this);
-      }
-      float dd = std::hypot(pos.x - kDialCX, pos.y - kDialCY);
-      if (!angle_driven && dd <= kDialR + 0.2_cm && dd >= kDialR * 0.2f)
-        return std::make_unique<GeoDialDrag>(p, *this);
-      Rect ss = ScaleSliderM();
-      if (pos.x >= ss.left - 0.2_cm && pos.x <= ss.right + 0.2_cm && pos.y >= ss.bottom - 0.2_cm &&
-          pos.y <= ss.top + 0.2_cm)
-        return std::make_unique<GeoScaleDrag>(p, *this);
-      {
-        Rect sy = ScaleYSliderM();
-        if (!lock_aspect && pos.x >= sy.left - 0.2_cm && pos.x <= sy.right + 0.2_cm &&
-            pos.y >= sy.bottom - 0.15_cm && pos.y <= sy.top + 0.15_cm)
-          return std::make_unique<GeoScaleYDrag>(p, *this);
-      }
-      for (int which = 0; which < 5; ++which) {
-        Rect r = which == 0   ? MirrorToggleM()
-                 : which == 1 ? FlipToggleM()
-                 : which == 2 ? LockToggleM()
-                 : which == 3 ? PixelsToggleM()
-                              : SizeToggleM();
-        if (pos.x >= r.left - 0.1_cm && pos.x <= r.right + 0.1_cm && pos.y >= r.bottom - 0.1_cm &&
-            pos.y <= r.top + 0.1_cm) {
-          if (auto t = LockGeo()) {
-            {
-              auto lock = std::lock_guard(t->mutex);
-              if (which == 0)
-                t->mirror = !t->mirror;
-              else if (which == 1)
-                t->flip = !t->flip;
-              else if (which == 2)
-                t->lock_aspect = !t->lock_aspect;
-              else if (which == 3)
-                t->pixels = !t->pixels;
-              else
-                t->absolute = !t->absolute;
-            }
-            t->WakeToys();
-          }
-          return std::make_unique<GeoTogglePoke>(p);
-        }
-      }
-    }
-    return ObjectToy::FindAction(p, btn);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct DragGeoCornerOption : TextOption {
+  GeometryToy& toy;
+  DragGeoCornerOption(GeometryToy& toy) : TextOption("Corner"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragGeoCornerOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<GeoCornerDrag>(p, toy);
   }
 };
+
+struct DragGeoRingOption : TextOption {
+  GeometryToy& toy;
+  DragGeoRingOption(GeometryToy& toy) : TextOption("Rotate"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragGeoRingOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<GeoRingDrag>(p, toy);
+  }
+};
+
+struct DragGeoDialOption : TextOption {
+  GeometryToy& toy;
+  DragGeoDialOption(GeometryToy& toy) : TextOption("Angle"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragGeoDialOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<GeoDialDrag>(p, toy);
+  }
+};
+
+struct DragGeoScaleOption : TextOption {
+  GeometryToy& toy;
+  DragGeoScaleOption(GeometryToy& toy) : TextOption("Scale"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragGeoScaleOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<GeoScaleDrag>(p, toy);
+  }
+};
+
+struct DragGeoScaleYOption : TextOption {
+  GeometryToy& toy;
+  DragGeoScaleYOption(GeometryToy& toy) : TextOption("Scale Y"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragGeoScaleYOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<GeoScaleYDrag>(p, toy);
+  }
+};
+
+struct ToggleGeoFlagOption : TextOption {
+  GeometryToy& toy;
+  int which;
+  ToggleGeoFlagOption(GeometryToy& toy, int which)
+      : TextOption(kGeoFlags[which]), toy(toy), which(which) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleGeoFlagOption, toy, which); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockGeo()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        if (which == 0)
+          t->mirror = !t->mirror;
+        else if (which == 1)
+          t->flip = !t->flip;
+        else if (which == 2)
+          t->lock_aspect = !t->lock_aspect;
+        else if (which == 3)
+          t->pixels = !t->pixels;
+        else
+          t->absolute = !t->absolute;
+      }
+      t->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+void GeometryToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  if (cached_preview && !absolute) {
+    Rect fit = FittedRectM();
+    SkPoint corners[4] = {
+        {fit.left, fit.top}, {fit.right, fit.top}, {fit.left, fit.bottom}, {fit.right, fit.bottom}};
+    for (int i2 = 0; i2 < 4; ++i2) {
+      if (std::hypot(pos.x - corners[i2].fX, pos.y - corners[i2].fY) <= 0.28_cm) {
+        visit(DragGeoCornerOption(*this));
+      }
+    }
+  }
+  if (!angle_driven) {
+    Vec2 rc = RingCenterM();
+    if (ui::leptonica::TransformRingHit({rc.x, rc.y}, RingRadiusM(), {pos.x, pos.y}, 0.16_cm)) {
+      visit(DragGeoRingOption(*this));
+    }
+  }
+  float dd = std::hypot(pos.x - kDialCX, pos.y - kDialCY);
+  if (!angle_driven && dd <= kDialR + 0.2_cm && dd >= kDialR * 0.2f)
+    visit(DragGeoDialOption(*this));
+  Rect ss = ScaleSliderM();
+  if (pos.x >= ss.left - 0.2_cm && pos.x <= ss.right + 0.2_cm && pos.y >= ss.bottom - 0.2_cm &&
+      pos.y <= ss.top + 0.2_cm) {
+    visit(DragGeoScaleOption(*this));
+  }
+  Rect sy = ScaleYSliderM();
+  if (!lock_aspect && pos.x >= sy.left - 0.2_cm && pos.x <= sy.right + 0.2_cm &&
+      pos.y >= sy.bottom - 0.15_cm && pos.y <= sy.top + 0.15_cm) {
+    visit(DragGeoScaleYOption(*this));
+  }
+  for (int which = 0; which < 5; ++which) {
+    Rect r = which == 0   ? MirrorToggleM()
+             : which == 1 ? FlipToggleM()
+             : which == 2 ? LockToggleM()
+             : which == 3 ? PixelsToggleM()
+                          : SizeToggleM();
+    if (pos.x >= r.left - 0.1_cm && pos.x <= r.right + 0.1_cm && pos.y >= r.bottom - 0.1_cm &&
+        pos.y <= r.top + 0.1_cm) {
+      visit(ToggleGeoFlagOption(*this, which));
+    }
+  }
+  ObjectToy::Options(p, visit);
+}
 
 GeoDialDrag::GeoDialDrag(ui::Pointer& p, GeometryToy& w) : Action(p), widget(&w) {
   if (widget) widget->dragging = 1;
@@ -3570,10 +3738,6 @@ bool Channel::DeserializeKey(ObjectDeserializer& d, StrView key) {
 }
 
 struct ChannelToy;
-struct ChannelPoke : Action {
-  ChannelPoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
-};
 
 struct ChannelToy;
 struct ChannelWeightDrag : Action {
@@ -3583,6 +3747,8 @@ struct ChannelWeightDrag : Action {
   ~ChannelWeightDrag();
   void Update() override;
 };
+
+constexpr const char* const kChannelWeights[3] = {"Red weight", "Green weight", "Blue weight"};
 
 struct ChannelToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;
@@ -3807,32 +3973,56 @@ struct ChannelToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      if (channel == 7) {
-        for (int i = 0; i < 3; ++i) {
-          Rect s = WeightSliderM(i);
-          if (pos.x >= s.left - 0.2_cm && pos.x <= s.right + 0.2_cm &&
-              pos.y >= s.bottom - 0.08_cm && pos.y <= s.top + 0.08_cm)
-            return std::make_unique<ChannelWeightDrag>(p, *this, i);
-        }
-      }
-      int ch = ui::leptonica::ChannelTapAt(TapRectM(), pos, 8);
-      if (ch >= 0) {
-        if (auto t = LockChannel()) {
-          {
-            auto lock = std::lock_guard(t->mutex);
-            t->channel = ch;
-          }
-          t->WakeToys();
-        }
-        return std::make_unique<ChannelPoke>(p);
-      }
-    }
-    return ObjectToy::FindAction(p, btn);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct DragChannelWeightOption : TextOption {
+  ChannelToy& toy;
+  int index;
+  DragChannelWeightOption(ChannelToy& toy, int index)
+      : TextOption(kChannelWeights[index]), toy(toy), index(index) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragChannelWeightOption, toy, index); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<ChannelWeightDrag>(p, toy, index);
   }
 };
+
+struct SelectChannelOption : TextOption {
+  ChannelToy& toy;
+  int channel;
+  SelectChannelOption(ChannelToy& toy, int channel)
+      : TextOption(f("Channel {}", channel)), toy(toy), channel(channel) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectChannelOption, toy, channel); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockChannel()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->channel = channel;
+      }
+      t->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+void ChannelToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  if (channel == 7) {
+    for (int i = 0; i < 3; ++i) {
+      Rect s = WeightSliderM(i);
+      if (pos.x >= s.left - 0.2_cm && pos.x <= s.right + 0.2_cm && pos.y >= s.bottom - 0.08_cm &&
+          pos.y <= s.top + 0.08_cm) {
+        visit(DragChannelWeightOption(*this, i));
+      }
+    }
+  }
+  int ch = ui::leptonica::ChannelTapAt(TapRectM(), pos, 8);
+  if (ch >= 0) visit(SelectChannelOption(*this, ch));
+  ObjectToy::Options(p, visit);
+}
 
 ChannelWeightDrag::ChannelWeightDrag(ui::Pointer& p, ChannelToy& w, int which)
     : Action(p), widget(&w), which(which) {}
@@ -3970,10 +4160,6 @@ struct ConvRadiusDrag : Action {
   ~ConvRadiusDrag();
   void Update() override;
 };
-struct ConvPoke : Action {
-  ConvPoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
-};
 
 struct ConvAmountDrag : Action {
   MortalPtr<ConvolveToy> widget;
@@ -3989,6 +4175,7 @@ struct ConvRankDrag : Action {
   void Update() override;
 };
 
+constexpr const char* const kConvModes[] = {"BLUR", "SHARP", "EDGE", "BAND", "RANK", "BILAT"};
 struct ConvolveToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;
   uint32_t preview_hash = 0;
@@ -4194,8 +4381,7 @@ struct ConvolveToy : beta::ObjectToy {
                           beta::WobbleEllipse({0, kLensCY}, kLensR, kLensR, beta::kWonk, 0xD10, 56),
                           beta::kInk, beta::kStrokeBold, Seed(0xD11), 2);
 
-      const char* modes[] = {"BLUR", "SHARP", "EDGE", "BAND", "RANK", "BILAT"};
-      ui::leptonica::DrawModeWheel(canvas, {WheelCX(), WheelCY()}, WheelR(), modes, 6, mode,
+      ui::leptonica::DrawModeWheel(canvas, {WheelCX(), WheelCY()}, WheelR(), kConvModes, 6, mode,
                                    beta::State::Default, 0xD20);
 
       Rect rs = RadiusSliderM();
@@ -4261,36 +4447,80 @@ struct ConvolveToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      int m = ui::leptonica::ModeWheelHit({WheelCX(), WheelCY()}, WheelR(), pos, 6);
-      if (m >= 0) {
-        if (auto t = LockConv()) {
-          {
-            auto lock = std::lock_guard(t->mutex);
-            t->mode = m;
-          }
-          t->WakeToys();
-        }
-        return std::make_unique<ConvPoke>(p);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct SelectConvModeOption : TextOption {
+  ConvolveToy& toy;
+  int mode;
+  SelectConvModeOption(ConvolveToy& toy, int mode)
+      : TextOption(kConvModes[mode]), toy(toy), mode(mode) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectConvModeOption, toy, mode); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockConv()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->mode = mode;
       }
-      Rect rs = RadiusSliderM();
-      if (!radius_driven && pos.x >= rs.left - 0.2_cm && pos.x <= rs.right + 0.2_cm &&
-          pos.y >= rs.bottom - 0.2_cm && pos.y <= rs.top + 0.2_cm)
-        return std::make_unique<ConvRadiusDrag>(p, *this);
-      Rect as2 = AmountSliderM();
-      if ((mode == 1 || mode == 5) && pos.x >= as2.left - 0.2_cm && pos.x <= as2.right + 0.2_cm &&
-          pos.y >= as2.bottom - 0.2_cm && pos.y <= as2.top + 0.2_cm)
-        return std::make_unique<ConvAmountDrag>(p, *this);
-      Rect ks = RankSliderM();
-      if (mode == 4 && pos.x >= ks.left - 0.2_cm && pos.x <= ks.right + 0.2_cm &&
-          pos.y >= ks.bottom - 0.2_cm && pos.y <= ks.top + 0.2_cm)
-        return std::make_unique<ConvRankDrag>(p, *this);
+      t->WakeToys();
     }
-    return ObjectToy::FindAction(p, btn);
+    return std::make_unique<EmptyAction>(p);
   }
 };
+
+struct DragConvRadiusOption : TextOption {
+  ConvolveToy& toy;
+  DragConvRadiusOption(ConvolveToy& toy) : TextOption("Radius"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragConvRadiusOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<ConvRadiusDrag>(p, toy);
+  }
+};
+
+struct DragConvAmountOption : TextOption {
+  ConvolveToy& toy;
+  DragConvAmountOption(ConvolveToy& toy) : TextOption("Amount"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragConvAmountOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<ConvAmountDrag>(p, toy);
+  }
+};
+
+struct DragConvRankOption : TextOption {
+  ConvolveToy& toy;
+  DragConvRankOption(ConvolveToy& toy) : TextOption("Rank"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragConvRankOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<ConvRankDrag>(p, toy);
+  }
+};
+
+void ConvolveToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  int m = ui::leptonica::ModeWheelHit({WheelCX(), WheelCY()}, WheelR(), pos, 6);
+  if (m >= 0) visit(SelectConvModeOption(*this, m));
+  Rect rs = RadiusSliderM();
+  if (!radius_driven && pos.x >= rs.left - 0.2_cm && pos.x <= rs.right + 0.2_cm &&
+      pos.y >= rs.bottom - 0.2_cm && pos.y <= rs.top + 0.2_cm) {
+    visit(DragConvRadiusOption(*this));
+  }
+  Rect as2 = AmountSliderM();
+  if ((mode == 1 || mode == 5) && pos.x >= as2.left - 0.2_cm && pos.x <= as2.right + 0.2_cm &&
+      pos.y >= as2.bottom - 0.2_cm && pos.y <= as2.top + 0.2_cm) {
+    visit(DragConvAmountOption(*this));
+  }
+  Rect ks = RankSliderM();
+  if (mode == 4 && pos.x >= ks.left - 0.2_cm && pos.x <= ks.right + 0.2_cm &&
+      pos.y >= ks.bottom - 0.2_cm && pos.y <= ks.top + 0.2_cm) {
+    visit(DragConvRankOption(*this));
+  }
+  ObjectToy::Options(p, visit);
+}
 
 ConvRadiusDrag::ConvRadiusDrag(ui::Pointer& p, ConvolveToy& w) : Action(p), widget(&w) {
   if (widget) widget->dragging = true;
@@ -4474,10 +4704,6 @@ struct BlendAmountDrag : Action {
   ~BlendAmountDrag();
   void Update() override;
 };
-struct BlendPoke : Action {
-  BlendPoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
-};
 
 // Operator glyphs for the wheel face: MIX, ADD, MULT, DIFF.
 static const SkPath* BlendWheelGlyphs() {
@@ -4513,6 +4739,7 @@ static const SkPath* BlendWheelGlyphs() {
   return paths.data();
 }
 
+constexpr const char* const kBlendModes[] = {"MIX", "ADD", "MULT", "DIFF"};
 struct BlendToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;
   uint32_t preview_hash = 0;
@@ -4701,8 +4928,7 @@ struct BlendToy : beta::ObjectToy {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xE01), 1);
       DrawFittedDepthChip(canvas, pr, cached_preview, out_depth, out_cmap, Seed(0xE09));
 
-      const char* modes[] = {"MIX", "ADD", "MULT", "DIFF"};
-      ui::leptonica::DrawModeWheel(canvas, {WheelCX(), WheelCY()}, WheelR(), modes, 4, mode,
+      ui::leptonica::DrawModeWheel(canvas, {WheelCX(), WheelCY()}, WheelR(), kBlendModes, 4, mode,
                                    beta::State::Default, 0xE10, BlendWheelGlyphs());
 
       Rect as = AmountSliderM();
@@ -4733,28 +4959,50 @@ struct BlendToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      int m = ui::leptonica::ModeWheelHit({WheelCX(), WheelCY()}, WheelR(), pos, 4);
-      if (m >= 0) {
-        if (auto t = LockBlend()) {
-          {
-            auto lock = std::lock_guard(t->mutex);
-            t->mode = m;
-          }
-          t->WakeToys();
-        }
-        return std::make_unique<BlendPoke>(p);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct SelectBlendModeOption : TextOption {
+  BlendToy& toy;
+  int mode;
+  SelectBlendModeOption(BlendToy& toy, int mode)
+      : TextOption(kBlendModes[mode]), toy(toy), mode(mode) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectBlendModeOption, toy, mode); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockBlend()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->mode = mode;
       }
-      Rect as = AmountSliderM();
-      if (pos.x >= as.left - 0.2_cm && pos.x <= as.right + 0.2_cm && pos.y >= as.bottom - 0.2_cm &&
-          pos.y <= as.top + 0.2_cm)
-        return std::make_unique<BlendAmountDrag>(p, *this);
+      t->WakeToys();
     }
-    return ObjectToy::FindAction(p, btn);
+    return std::make_unique<EmptyAction>(p);
   }
 };
+
+struct DragBlendAmountOption : TextOption {
+  BlendToy& toy;
+  DragBlendAmountOption(BlendToy& toy) : TextOption("Amount"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragBlendAmountOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<BlendAmountDrag>(p, toy);
+  }
+};
+
+void BlendToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  int m = ui::leptonica::ModeWheelHit({WheelCX(), WheelCY()}, WheelR(), pos, 4);
+  if (m >= 0) visit(SelectBlendModeOption(*this, m));
+  Rect as = AmountSliderM();
+  if (pos.x >= as.left - 0.2_cm && pos.x <= as.right + 0.2_cm && pos.y >= as.bottom - 0.2_cm &&
+      pos.y <= as.top + 0.2_cm) {
+    visit(DragBlendAmountOption(*this));
+  }
+  ObjectToy::Options(p, visit);
+}
 
 BlendAmountDrag::BlendAmountDrag(ui::Pointer& p, BlendToy& w) : Action(p), widget(&w) {
   if (widget) widget->dragging = true;
@@ -4951,11 +5199,8 @@ struct QuantCountDrag : Action {
   ~QuantCountDrag();
   void Update() override;
 };
-struct QuantPoke : Action {
-  QuantPoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
-};
 
+constexpr const char* const kQuantAlgos[] = {"MEDIAN", "OCTREE", "MIXED", "FROM B"};
 struct QuantizeToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;
   std::vector<SkColor> palette;  // the real output colormap (UI thread only)
@@ -5219,9 +5464,8 @@ struct QuantizeToy : beta::ObjectToy {
                      2.2_mm, kLabelInk, false, Seed(0));
 
       {
-        static const char* const kAlgoLabels[] = {"MEDIAN", "OCTREE", "MIXED", "FROM B"};
         Vec2 wc = AlgoWheelCM();
-        ui::leptonica::DrawModeWheel(canvas, wc, kAlgoWheelR, kAlgoLabels, 4, algo,
+        ui::leptonica::DrawModeWheel(canvas, wc, kAlgoWheelR, kQuantAlgos, 4, algo,
                                      beta::State::Default, 0xE60);
         beta::DrawText(
             canvas, "ALGORITHM",
@@ -5259,63 +5503,113 @@ struct QuantizeToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct SelectQuantAlgoOption : TextOption {
+  QuantizeToy& toy;
+  int algo;
+  SelectQuantAlgoOption(QuantizeToy& toy, int algo)
+      : TextOption(kQuantAlgos[algo]), toy(toy), algo(algo) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectQuantAlgoOption, toy, algo); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockQuant()) {
       {
-        Vec2 wc = AlgoWheelCM();
-        int hit = ui::leptonica::ModeWheelHit(wc, kAlgoWheelR, pos, 4);
-        if (hit >= 0) {
-          if (auto t = LockQuant()) {
-            {
-              auto lock = std::lock_guard(t->mutex);
-              t->algo = hit;
-            }
-            t->WakeToys();
-          }
-          return std::make_unique<QuantPoke>(p);
-        }
+        auto lock = std::lock_guard(t->mutex);
+        t->algo = algo;
       }
-      {
-        Rect pc = PaletteChipM();
-        if (pos.x >= pc.left && pos.x <= pc.right && pos.y >= pc.bottom - 0.1_cm &&
-            pos.y <= pc.top + 0.1_cm) {
-          if (auto t = LockQuant()) {
-            {
-              auto lock = std::lock_guard(t->mutex);
-              t->emit_palette = !t->emit_palette;
-            }
-            t->WakeToys();
-          }
-          return std::make_unique<QuantPoke>(p);
-        }
-      }
-      if (algo == 2) {
-        Rect gs = GraysSliderM();
-        if (pos.x >= gs.left - 0.2_cm && pos.x <= gs.right + 0.2_cm &&
-            pos.y >= gs.bottom - 0.15_cm && pos.y <= gs.top + 0.15_cm)
-          return std::make_unique<QuantGraysDrag>(p, *this);
-      }
-      Rect dt = DitherToggleM();
-      if (algo == 0 && pos.x >= dt.left - 0.15_cm && pos.x <= dt.right + 0.15_cm &&
-          pos.y >= dt.bottom - 0.15_cm && pos.y <= dt.top + 0.15_cm) {
-        if (auto t = LockQuant()) {
-          {
-            auto lock = std::lock_guard(t->mutex);
-            t->dither = !t->dither;
-          }
-          t->WakeToys();
-        }
-        return std::make_unique<QuantPoke>(p);
-      }
-      Rect cs = CountSliderM();
-      if (!colors_driven && pos.x >= cs.left - 0.2_cm && pos.x <= cs.right + 0.2_cm &&
-          pos.y >= cs.bottom - 0.2_cm && pos.y <= cs.top + 0.2_cm)
-        return std::make_unique<QuantCountDrag>(p, *this);
+      t->WakeToys();
     }
-    return ObjectToy::FindAction(p, btn);
+    return std::make_unique<EmptyAction>(p);
   }
 };
+
+struct ToggleQuantPaletteOption : TextOption {
+  QuantizeToy& toy;
+  ToggleQuantPaletteOption(QuantizeToy& toy) : TextOption("Palette"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleQuantPaletteOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockQuant()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->emit_palette = !t->emit_palette;
+      }
+      t->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+struct DragQuantGraysOption : TextOption {
+  QuantizeToy& toy;
+  DragQuantGraysOption(QuantizeToy& toy) : TextOption("Grays"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragQuantGraysOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<QuantGraysDrag>(p, toy);
+  }
+};
+
+struct ToggleQuantDitherOption : TextOption {
+  QuantizeToy& toy;
+  ToggleQuantDitherOption(QuantizeToy& toy) : TextOption("Dither"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleQuantDitherOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockQuant()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->dither = !t->dither;
+      }
+      t->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+struct DragQuantCountOption : TextOption {
+  QuantizeToy& toy;
+  DragQuantCountOption(QuantizeToy& toy) : TextOption("Colors"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragQuantCountOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<QuantCountDrag>(p, toy);
+  }
+};
+
+void QuantizeToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  int hit = ui::leptonica::ModeWheelHit(AlgoWheelCM(), kAlgoWheelR, pos, 4);
+  if (hit >= 0) visit(SelectQuantAlgoOption(*this, hit));
+  Rect pc = PaletteChipM();
+  if (pos.x >= pc.left && pos.x <= pc.right && pos.y >= pc.bottom - 0.1_cm &&
+      pos.y <= pc.top + 0.1_cm) {
+    visit(ToggleQuantPaletteOption(*this));
+  }
+  if (algo == 2) {
+    Rect gs = GraysSliderM();
+    if (pos.x >= gs.left - 0.2_cm && pos.x <= gs.right + 0.2_cm && pos.y >= gs.bottom - 0.15_cm &&
+        pos.y <= gs.top + 0.15_cm) {
+      visit(DragQuantGraysOption(*this));
+    }
+  }
+  Rect dt = DitherToggleM();
+  if (algo == 0 && pos.x >= dt.left - 0.15_cm && pos.x <= dt.right + 0.15_cm &&
+      pos.y >= dt.bottom - 0.15_cm && pos.y <= dt.top + 0.15_cm) {
+    visit(ToggleQuantDitherOption(*this));
+  }
+  Rect cs = CountSliderM();
+  if (!colors_driven && pos.x >= cs.left - 0.2_cm && pos.x <= cs.right + 0.2_cm &&
+      pos.y >= cs.bottom - 0.2_cm && pos.y <= cs.top + 0.2_cm) {
+    visit(DragQuantCountOption(*this));
+  }
+  ObjectToy::Options(p, visit);
+}
 
 QuantCountDrag::QuantCountDrag(ui::Pointer& p, QuantizeToy& w) : Action(p), widget(&w) {
   if (widget) widget->dragging = true;
@@ -5467,10 +5761,6 @@ bool Flatten::DeserializeKey(ObjectDeserializer& d, StrView key) {
 }
 
 struct FlattenToy;
-struct FlattenPoke : Action {
-  FlattenPoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
-};
 struct FlattenSliderDrag : Action {
   MortalPtr<FlattenToy> widget;
   int which;  // 0 = bg value, 1 = tile size
@@ -5479,6 +5769,7 @@ struct FlattenSliderDrag : Action {
   void Update() override;
 };
 
+constexpr const char* const kFlattenMethods[] = {"TILE", "MORPH", "FLEX", "CONTRAST"};
 struct FlattenToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;
   uint32_t preview_hash = 0;
@@ -5715,8 +6006,7 @@ struct FlattenToy : beta::ObjectToy {
         beta::DrawText(canvas, buf, {ts.left, ts.top + 0.14_cm}, 2.2_mm, kLabelInk, false, Seed(0));
       }
       {
-        const char* methods[] = {"TILE", "MORPH", "FLEX", "CONTRAST"};
-        ui::leptonica::DrawModeWheel(canvas, WheelCM(), WheelRM(), methods, 4, method,
+        ui::leptonica::DrawModeWheel(canvas, WheelCM(), WheelRM(), kFlattenMethods, 4, method,
                                      beta::State::Default, 0xF60);
       }
       {
@@ -5754,41 +6044,72 @@ struct FlattenToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      auto inRect = [&](const Rect& r) {
-        return pos.x >= r.left - 0.2_cm && pos.x <= r.right + 0.2_cm &&
-               pos.y >= r.bottom - 0.2_cm && pos.y <= r.top + 0.2_cm;
-      };
-      int mhit = ui::leptonica::ModeWheelHit(WheelCM(), WheelRM(), pos, 4);
-      if (mhit >= 0) {
-        if (auto t = LockFlat()) {
-          {
-            auto lock = std::lock_guard(t->mutex);
-            t->method = mhit;
-          }
-          t->WakeToys();
-        }
-        return std::make_unique<FlattenPoke>(p);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct SelectFlattenMethodOption : TextOption {
+  FlattenToy& toy;
+  int method;
+  SelectFlattenMethodOption(FlattenToy& toy, int method)
+      : TextOption(kFlattenMethods[method]), toy(toy), method(method) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectFlattenMethodOption, toy, method); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockFlat()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->method = method;
       }
-      if (method < 2 && inRect(MapChipM())) {
-        if (auto t = LockFlat()) {
-          {
-            auto lock = std::lock_guard(t->mutex);
-            t->show_map = !t->show_map;
-          }
-          t->WakeToys();
-        }
-        return std::make_unique<FlattenPoke>(p);
-      }
-      if ((method == 0 || method == 1) && inRect(BgSliderM()))
-        return std::make_unique<FlattenSliderDrag>(p, *this, 0);
-      if (inRect(TileSliderM())) return std::make_unique<FlattenSliderDrag>(p, *this, 1);
+      t->WakeToys();
     }
-    return ObjectToy::FindAction(p, btn);
+    return std::make_unique<EmptyAction>(p);
   }
 };
+
+struct ToggleFlattenMapOption : TextOption {
+  FlattenToy& toy;
+  ToggleFlattenMapOption(FlattenToy& toy) : TextOption("Map"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleFlattenMapOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockFlat()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->show_map = !t->show_map;
+      }
+      t->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+struct DragFlattenSliderOption : TextOption {
+  FlattenToy& toy;
+  int which;
+  DragFlattenSliderOption(FlattenToy& toy, int which)
+      : TextOption(which == 0 ? "Background" : "Tile"), toy(toy), which(which) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragFlattenSliderOption, toy, which); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<FlattenSliderDrag>(p, toy, which);
+  }
+};
+
+void FlattenToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  auto inRect = [&](const Rect& r) {
+    return pos.x >= r.left - 0.2_cm && pos.x <= r.right + 0.2_cm && pos.y >= r.bottom - 0.2_cm &&
+           pos.y <= r.top + 0.2_cm;
+  };
+  int mhit = ui::leptonica::ModeWheelHit(WheelCM(), WheelRM(), pos, 4);
+  if (mhit >= 0) visit(SelectFlattenMethodOption(*this, mhit));
+  if (method < 2 && inRect(MapChipM())) visit(ToggleFlattenMapOption(*this));
+  if ((method == 0 || method == 1) && inRect(BgSliderM())) visit(DragFlattenSliderOption(*this, 0));
+  if (inRect(TileSliderM())) visit(DragFlattenSliderOption(*this, 1));
+  ObjectToy::Options(p, visit);
+}
 
 FlattenSliderDrag::FlattenSliderDrag(ui::Pointer& p, FlattenToy& w, int which)
     : Action(p), widget(&w), which(which) {
@@ -6063,22 +6384,35 @@ struct PosterizeToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      Rect st = StepperM();
-      float kw = std::min(st.Height(), st.Width() * 0.3f);  // the Stepper's key slice width
-      Rect minus = Rect(st.left - 0.1_cm, st.bottom - 0.1_cm, st.left + kw, st.top + 0.1_cm);
-      Rect plus = Rect(st.right - kw, st.bottom - 0.1_cm, st.right + 0.1_cm, st.top + 0.1_cm);
-      auto in = [&](const Rect& r) {
-        return pos.x >= r.left && pos.x <= r.right && pos.y >= r.bottom && pos.y <= r.top;
-      };
-      if (in(minus)) return std::make_unique<PosterStepPoke>(p, *this, -1);
-      if (in(plus)) return std::make_unique<PosterStepPoke>(p, *this, +1);
-    }
-    return ObjectToy::FindAction(p, btn);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct StepPosterizeOption : TextOption {
+  PosterizeToy& toy;
+  int delta;
+  StepPosterizeOption(PosterizeToy& toy, int delta)
+      : TextOption(delta < 0 ? "Fewer levels" : "More levels"), toy(toy), delta(delta) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(StepPosterizeOption, toy, delta); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<PosterStepPoke>(p, toy, delta);
   }
 };
+
+void PosterizeToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  Rect st = StepperM();
+  float kw = std::min(st.Height(), st.Width() * 0.3f);
+  Rect minus = Rect(st.left - 0.1_cm, st.bottom - 0.1_cm, st.left + kw, st.top + 0.1_cm);
+  Rect plus = Rect(st.right - kw, st.bottom - 0.1_cm, st.right + 0.1_cm, st.top + 0.1_cm);
+  auto in = [&](const Rect& r) {
+    return pos.x >= r.left && pos.x <= r.right && pos.y >= r.bottom && pos.y <= r.top;
+  };
+  if (in(minus)) visit(StepPosterizeOption(*this, -1));
+  if (in(plus)) visit(StepPosterizeOption(*this, +1));
+  ObjectToy::Options(p, visit);
+}
 
 PosterStepPoke::PosterStepPoke(ui::Pointer& p, PosterizeToy& w, int delta) : Action(p) {
   if (auto t = w.LockPoster()) {
@@ -6375,29 +6709,39 @@ struct DitherToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      Rect band = WindowM();
-      bool lo_grab = ui::leptonica::LevelGrabsMarker(band, pos, (float)clip_black, 0.f, 255.f);
-      bool hi_grab =
-          ui::leptonica::LevelGrabsMarker(band, pos, (float)(255 - clip_white), 0.f, 255.f);
-      if (lo_grab || hi_grab) {
-        int which;
-        if (lo_grab && hi_grab) {
-          // Both in reach: take the nearer marker.
-          float lox = ui::leptonica::LevelValueToX(band, (float)clip_black, 0.f, 255.f);
-          float hix = ui::leptonica::LevelValueToX(band, (float)(255 - clip_white), 0.f, 255.f);
-          which = std::abs(pos.x - lox) <= std::abs(pos.x - hix) ? 0 : 1;
-        } else {
-          which = lo_grab ? 0 : 1;
-        }
-        return std::make_unique<DitherClipDrag>(p, *this, which);
-      }
-    }
-    return ObjectToy::FindAction(p, btn);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct DragDitherClipOption : TextOption {
+  DitherToy& toy;
+  int which;
+  DragDitherClipOption(DitherToy& toy, int which)
+      : TextOption(which == 0 ? "Black clip" : "White clip"), toy(toy), which(which) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragDitherClipOption, toy, which); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<DitherClipDrag>(p, toy, which);
   }
 };
+
+void DitherToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  Rect band = WindowM();
+  bool lo_grab = ui::leptonica::LevelGrabsMarker(band, pos, (float)clip_black, 0.f, 255.f);
+  bool hi_grab = ui::leptonica::LevelGrabsMarker(band, pos, (float)(255 - clip_white), 0.f, 255.f);
+  if (lo_grab || hi_grab) {
+    int which;
+    if (lo_grab && hi_grab) {
+      float lox = ui::leptonica::LevelValueToX(band, (float)clip_black, 0.f, 255.f);
+      float hix = ui::leptonica::LevelValueToX(band, (float)(255 - clip_white), 0.f, 255.f);
+      which = std::abs(pos.x - lox) <= std::abs(pos.x - hix) ? 0 : 1;
+    } else {
+      which = lo_grab ? 0 : 1;
+    }
+    visit(DragDitherClipOption(*this, which));
+  }
+  ObjectToy::Options(p, visit);
+}
 
 DitherClipDrag::DitherClipDrag(ui::Pointer& p, DitherToy& w, int which)
     : Action(p), widget(&w), which(which) {
@@ -6824,26 +7168,39 @@ struct DeskewToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      for (int which = 0; which < 2; ++which) {
-        Rect r = ModeCellM(which);
-        if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.bottom && pos.y <= r.top) {
-          if (auto t = LockObject<Deskew>()) {
-            {
-              auto lock = std::lock_guard(t->mutex);
-              t->mode = which;
-            }
-            t->WakeToys();
-          }
-          return std::make_unique<QuantPoke>(p);  // momentary poke (declared earlier)
-        }
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct SelectDeskewModeOption : TextOption {
+  DeskewToy& toy;
+  int which;
+  SelectDeskewModeOption(DeskewToy& toy, int which)
+      : TextOption(which == 0 ? "Search 7\xc2\xb0" : "Search 90\xc2\xb0"), toy(toy), which(which) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectDeskewModeOption, toy, which); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockObject<Deskew>()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->mode = which;
       }
+      t->WakeToys();
     }
-    return ObjectToy::FindAction(p, btn);
+    return std::make_unique<EmptyAction>(p);
   }
 };
+
+void DeskewToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  for (int which = 0; which < 2; ++which) {
+    Rect r = ModeCellM(which);
+    if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.bottom && pos.y <= r.top) {
+      visit(SelectDeskewModeOption(*this, which));
+    }
+  }
+  ObjectToy::Options(p, visit);
+}
 
 std::unique_ptr<ObjectToy> Deskew::MakeToy(ui::Widget* parent) {
   return std::make_unique<DeskewToy>(parent, *this);
@@ -7190,17 +7547,28 @@ struct FindLevelToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      Rect fs = FractSliderM();
-      if (pos.x >= fs.left - 0.2_cm && pos.x <= fs.right + 0.2_cm && pos.y >= fs.bottom - 0.2_cm &&
-          pos.y <= fs.top + 0.2_cm)
-        return std::make_unique<FindLevelFractDrag>(p, *this);
-    }
-    return ObjectToy::FindAction(p, btn);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct DragFindLevelFractOption : TextOption {
+  FindLevelToy& toy;
+  DragFindLevelFractOption(FindLevelToy& toy) : TextOption("Fraction"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragFindLevelFractOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<FindLevelFractDrag>(p, toy);
   }
 };
+
+void FindLevelToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  Rect fs = FractSliderM();
+  if (pos.x >= fs.left - 0.2_cm && pos.x <= fs.right + 0.2_cm && pos.y >= fs.bottom - 0.2_cm &&
+      pos.y <= fs.top + 0.2_cm) {
+    visit(DragFindLevelFractOption(*this));
+  }
+  ObjectToy::Options(p, visit);
+}
 
 FindLevelFractDrag::FindLevelFractDrag(ui::Pointer& p, FindLevelToy& w) : Action(p), widget(&w) {
   widget->dragging = true;
@@ -7289,10 +7657,6 @@ bool Count::DeserializeKey(ObjectDeserializer& d, StrView key) {
 }
 
 struct CountToy;
-struct CountConnPoke : Action {
-  CountConnPoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
-};
 
 struct CountToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;  // binarized blobs, muted (what is being counted)
@@ -7502,24 +7866,35 @@ struct CountToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      int hit = ui::leptonica::ConnectivityHit(ConnM(), {pos.x, pos.y});
-      if (hit != 0) {
-        if (auto t = LockCount()) {
-          {
-            auto lock = std::lock_guard(t->mutex);
-            t->eight = hit == 8;
-          }
-          t->WakeToys();
-        }
-        return std::make_unique<CountConnPoke>(p);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct SelectCountConnectivityOption : TextOption {
+  CountToy& toy;
+  int conn;
+  SelectCountConnectivityOption(CountToy& toy, int conn)
+      : TextOption(conn == 8 ? "8-connected" : "4-connected"), toy(toy), conn(conn) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectCountConnectivityOption, toy, conn); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockCount()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->eight = conn == 8;
       }
+      t->WakeToys();
     }
-    return ObjectToy::FindAction(p, btn);
+    return std::make_unique<EmptyAction>(p);
   }
 };
+
+void CountToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  int hit = ui::leptonica::ConnectivityHit(ConnM(), {pos.x, pos.y});
+  if (hit != 0) visit(SelectCountConnectivityOption(*this, hit));
+  ObjectToy::Options(p, visit);
+}
 
 std::unique_ptr<ObjectToy> Count::MakeToy(ui::Widget* parent) {
   return std::make_unique<CountToy>(parent, *this);
@@ -7625,10 +8000,9 @@ struct SelectBandDrag : Action {
   ~SelectBandDrag();
   void Update() override;
 };
-struct SelectPoke : Action {
-  SelectPoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
-};
+
+constexpr const char* const kSelectAxes[] = {"LUM", "H\xc2\xb7S", "H\xc2\xb7V", "S\xc2\xb7V"};
+constexpr const char* const kSelectBands[4] = {"Low", "High", "Low B", "High B"};
 
 struct SelectToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;
@@ -7893,8 +8267,7 @@ struct SelectToy : beta::ObjectToy {
                        false, Seed(0));
       }
       {
-        const char* axlabels[] = {"LUM", "H\xc2\xb7S", "H\xc2\xb7V", "S\xc2\xb7V"};
-        ui::leptonica::DrawModeWheel(canvas, WheelCM(), WheelRM(), axlabels, 4, axes,
+        ui::leptonica::DrawModeWheel(canvas, WheelCM(), WheelRM(), kSelectAxes, 4, axes,
                                      beta::State::Default, 0x5E50);
       }
 
@@ -7932,71 +8305,107 @@ struct SelectToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      for (int which = 0; which < 2; ++which) {
-        Rect r = InChipM(which);
-        if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.bottom && pos.y <= r.top) {
-          if (auto t = LockSel()) {
-            {
-              auto lock = std::lock_guard(t->mutex);
-              t->inside = which == 0;
-            }
-            t->WakeToys();
-          }
-          return std::make_unique<SelectPoke>(p);
-        }
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct SelectInsideOption : TextOption {
+  SelectToy& toy;
+  bool inside;
+  SelectInsideOption(SelectToy& toy, bool inside)
+      : TextOption(inside ? "Inside" : "Outside"), toy(toy), inside(inside) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectInsideOption, toy, inside); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockSel()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->inside = inside;
       }
-      int whit = ui::leptonica::ModeWheelHit(WheelCM(), WheelRM(), pos, 4);
-      if (whit >= 0) {
-        if (auto t = LockSel()) {
-          {
-            auto lock = std::lock_guard(t->mutex);
-            t->axes = whit;
-            int amax = (whit == 1 || whit == 2) ? 239 : 255;
-            t->lo = std::min(t->lo, amax);
-            t->hi = std::min(t->hi, amax);
-          }
-          t->WakeToys();
-        }
-        return std::make_unique<SelectPoke>(p);
-      }
-      Rect band = WindowM();
-      float amax = (float)AxisAMax();
-      bool lo_grab = ui::leptonica::LevelGrabsMarker(band, pos, (float)lo, 0.f, amax);
-      bool hi_grab = ui::leptonica::LevelGrabsMarker(band, pos, (float)hi, 0.f, amax);
-      if (lo_grab || hi_grab) {
-        int which;
-        if (lo_grab && hi_grab) {
-          float lox = ui::leptonica::LevelValueToX(band, (float)lo, 0.f, amax);
-          float hix = ui::leptonica::LevelValueToX(band, (float)hi, 0.f, amax);
-          which = std::abs(pos.x - lox) <= std::abs(pos.x - hix) ? 0 : 1;
-        } else {
-          which = lo_grab ? 0 : 1;
-        }
-        return std::make_unique<SelectBandDrag>(p, *this, which);
-      }
-      if (axes != 0) {
-        Rect bandb = WindowBM();
-        bool lo2g = ui::leptonica::LevelGrabsMarker(bandb, pos, (float)lo2, 0.f, 255.f);
-        bool hi2g = ui::leptonica::LevelGrabsMarker(bandb, pos, (float)hi2, 0.f, 255.f);
-        if (lo2g || hi2g) {
-          int which;
-          if (lo2g && hi2g) {
-            float lox = ui::leptonica::LevelValueToX(bandb, (float)lo2, 0.f, 255.f);
-            float hix = ui::leptonica::LevelValueToX(bandb, (float)hi2, 0.f, 255.f);
-            which = std::abs(pos.x - lox) <= std::abs(pos.x - hix) ? 2 : 3;
-          } else {
-            which = lo2g ? 2 : 3;
-          }
-          return std::make_unique<SelectBandDrag>(p, *this, which);
-        }
-      }
+      t->WakeToys();
     }
-    return ObjectToy::FindAction(p, btn);
+    return std::make_unique<EmptyAction>(p);
   }
 };
+
+struct SelectAxesOption : TextOption {
+  SelectToy& toy;
+  int axes;
+  SelectAxesOption(SelectToy& toy, int axes)
+      : TextOption(kSelectAxes[axes]), toy(toy), axes(axes) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectAxesOption, toy, axes); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockSel()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->axes = axes;
+        int amax = (axes == 1 || axes == 2) ? 239 : 255;
+        t->lo = std::min(t->lo, amax);
+        t->hi = std::min(t->hi, amax);
+      }
+      t->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+struct DragSelectBandOption : TextOption {
+  SelectToy& toy;
+  int which;
+  DragSelectBandOption(SelectToy& toy, int which)
+      : TextOption(kSelectBands[which]), toy(toy), which(which) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragSelectBandOption, toy, which); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<SelectBandDrag>(p, toy, which);
+  }
+};
+
+void SelectToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  for (int which = 0; which < 2; ++which) {
+    Rect r = InChipM(which);
+    if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.bottom && pos.y <= r.top) {
+      visit(SelectInsideOption(*this, which == 0));
+    }
+  }
+  int whit = ui::leptonica::ModeWheelHit(WheelCM(), WheelRM(), pos, 4);
+  if (whit >= 0) visit(SelectAxesOption(*this, whit));
+  Rect band = WindowM();
+  float amax = (float)AxisAMax();
+  bool lo_grab = ui::leptonica::LevelGrabsMarker(band, pos, (float)lo, 0.f, amax);
+  bool hi_grab = ui::leptonica::LevelGrabsMarker(band, pos, (float)hi, 0.f, amax);
+  if (lo_grab || hi_grab) {
+    int which;
+    if (lo_grab && hi_grab) {
+      float lox = ui::leptonica::LevelValueToX(band, (float)lo, 0.f, amax);
+      float hix = ui::leptonica::LevelValueToX(band, (float)hi, 0.f, amax);
+      which = std::abs(pos.x - lox) <= std::abs(pos.x - hix) ? 0 : 1;
+    } else {
+      which = lo_grab ? 0 : 1;
+    }
+    visit(DragSelectBandOption(*this, which));
+  }
+  if (axes != 0) {
+    Rect bandb = WindowBM();
+    bool lo2g = ui::leptonica::LevelGrabsMarker(bandb, pos, (float)lo2, 0.f, 255.f);
+    bool hi2g = ui::leptonica::LevelGrabsMarker(bandb, pos, (float)hi2, 0.f, 255.f);
+    if (lo2g || hi2g) {
+      int which;
+      if (lo2g && hi2g) {
+        float lox = ui::leptonica::LevelValueToX(bandb, (float)lo2, 0.f, 255.f);
+        float hix = ui::leptonica::LevelValueToX(bandb, (float)hi2, 0.f, 255.f);
+        which = std::abs(pos.x - lox) <= std::abs(pos.x - hix) ? 2 : 3;
+      } else {
+        which = lo2g ? 2 : 3;
+      }
+      visit(DragSelectBandOption(*this, which));
+    }
+  }
+  ObjectToy::Options(p, visit);
+}
 
 SelectBandDrag::SelectBandDrag(ui::Pointer& p, SelectToy& w, int which)
     : Action(p), widget(&w), which(which) {
@@ -8102,10 +8511,6 @@ bool Fade::DeserializeKey(ObjectDeserializer& d, StrView key) {
 }
 
 struct FadeToy;
-struct FadePoke : Action {
-  FadePoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
-};
 struct FadeSliderDrag : Action {
   MortalPtr<FadeToy> widget;
   int which;  // 0 reach, 1 strength
@@ -8113,6 +8518,7 @@ struct FadeSliderDrag : Action {
   void Update() override;
 };
 
+constexpr const char* const kFadeDirs[] = {"TOP", "RIGHT", "BOT", "LEFT"};
 struct FadeToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;
   uint32_t preview_hash = 0;
@@ -8301,12 +8707,11 @@ struct FadeToy : beta::ObjectToy {
       DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0xFA90));
 
       {
-        static const char* const kDirLabels[] = {"TOP", "RIGHT", "BOT", "LEFT"};
         static const int kDirAtPos[] = {2, 1, 3, 0};  // wheel position -> dir value
         int sel_pos = 0;
         for (int k = 0; k < 4; ++k)
           if (kDirAtPos[k] == dir) sel_pos = k;
-        ui::leptonica::DrawModeWheel(canvas, DirWheelCM(), kDirWheelR, kDirLabels, 4, sel_pos,
+        ui::leptonica::DrawModeWheel(canvas, DirWheelCM(), kDirWheelR, kFadeDirs, 4, sel_pos,
                                      beta::State::Default, 0xFA10);
       }
       ui::leptonica::DrawPolarity(canvas, PolarityM(), !to_black, beta::State::Default, 0xFA20);
@@ -8344,43 +8749,77 @@ struct FadeToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      int hit = ui::leptonica::ModeWheelHit(DirWheelCM(), kDirWheelR, pos, 4);
-      if (hit >= 0) {
-        static const int kDirAtPos[] = {2, 1, 3, 0};
-        if (auto t = LockFade()) {
-          {
-            auto lock = std::lock_guard(t->mutex);
-            t->dir = kDirAtPos[hit];
-          }
-          t->WakeToys();
-        }
-        return std::make_unique<FadePoke>(p);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct SelectFadeDirOption : TextOption {
+  FadeToy& toy;
+  int wheel_pos;
+  SelectFadeDirOption(FadeToy& toy, int wheel_pos)
+      : TextOption(kFadeDirs[wheel_pos]), toy(toy), wheel_pos(wheel_pos) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectFadeDirOption, toy, wheel_pos); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    static const int kDirAtPos[] = {2, 1, 3, 0};
+    if (auto t = toy.LockFade()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->dir = kDirAtPos[wheel_pos];
       }
-      Rect pm = PolarityM();
-      if (pos.x >= pm.left && pos.x <= pm.right && pos.y >= pm.bottom - 0.1_cm &&
-          pos.y <= pm.top + 0.1_cm) {
-        if (auto t = LockFade()) {
-          {
-            auto lock = std::lock_guard(t->mutex);
-            t->to_black = !t->to_black;
-          }
-          t->WakeToys();
-        }
-        return std::make_unique<FadePoke>(p);
-      }
-      auto inRect = [&](const Rect& r) {
-        return pos.x >= r.left - 0.2_cm && pos.x <= r.right + 0.2_cm &&
-               pos.y >= r.bottom - 0.15_cm && pos.y <= r.top + 0.15_cm;
-      };
-      if (inRect(ReachSliderM())) return std::make_unique<FadeSliderDrag>(p, *this, 0);
-      if (inRect(StrengthSliderM())) return std::make_unique<FadeSliderDrag>(p, *this, 1);
+      t->WakeToys();
     }
-    return ObjectToy::FindAction(p, btn);
+    return std::make_unique<EmptyAction>(p);
   }
 };
+
+struct ToggleFadePolarityOption : TextOption {
+  FadeToy& toy;
+  ToggleFadePolarityOption(FadeToy& toy) : TextOption("Fade to"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleFadePolarityOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockFade()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->to_black = !t->to_black;
+      }
+      t->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+struct DragFadeSliderOption : TextOption {
+  FadeToy& toy;
+  int which;
+  DragFadeSliderOption(FadeToy& toy, int which)
+      : TextOption(which == 0 ? "Reach" : "Strength"), toy(toy), which(which) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragFadeSliderOption, toy, which); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<FadeSliderDrag>(p, toy, which);
+  }
+};
+
+void FadeToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  int hit = ui::leptonica::ModeWheelHit(DirWheelCM(), kDirWheelR, pos, 4);
+  if (hit >= 0) visit(SelectFadeDirOption(*this, hit));
+  Rect pm = PolarityM();
+  if (pos.x >= pm.left && pos.x <= pm.right && pos.y >= pm.bottom - 0.1_cm &&
+      pos.y <= pm.top + 0.1_cm) {
+    visit(ToggleFadePolarityOption(*this));
+  }
+  auto inRect = [&](const Rect& r) {
+    return pos.x >= r.left - 0.2_cm && pos.x <= r.right + 0.2_cm && pos.y >= r.bottom - 0.15_cm &&
+           pos.y <= r.top + 0.15_cm;
+  };
+  if (inRect(ReachSliderM())) visit(DragFadeSliderOption(*this, 0));
+  if (inRect(StrengthSliderM())) visit(DragFadeSliderOption(*this, 1));
+  ObjectToy::Options(p, visit);
+}
 
 FadeSliderDrag::FadeSliderDrag(ui::Pointer& p, FadeToy& w, int which)
     : Action(p), widget(&w), which(which) {}
@@ -8417,8 +8856,8 @@ Pix* Reduce::ApplyOp(Pix* in, const float*) const {
     ru = std::clamp(rule, 0, 4);
     rk = std::clamp(rank, 1, 4);
   }
-  static const int kFactors[] = {2, 3, 4, 8};
-  int f = kFactors[fi];
+  static const int kReduceFactors[] = {2, 3, 4, 8};
+  int f = kReduceFactors[fi];
   if (ru == 0) {
     // GRAY: binarize, then the antialiased integer reduction (the classic scan shrink).
     Pix* b = pixConvertTo1(in, 128);
@@ -8488,16 +8927,22 @@ bool Reduce::DeserializeKey(ObjectDeserializer& d, StrView key) {
 }
 
 struct ReduceToy;
-struct ReducePoke : Action {
-  ReducePoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
-};
 struct ReduceRankDrag : Action {
   MortalPtr<ReduceToy> widget;
   ReduceRankDrag(ui::Pointer& p, ReduceToy& w);
   void Update() override;
 };
 
+constexpr const char* const kReduceRules[] = {"GRAY", "MIN", "MAX", "DIFF", "RANK"};
+constexpr const char* const kReduceFactors[] = {
+    "\xc3\x97"
+    "2",
+    "\xc3\x97"
+    "3",
+    "\xc3\x97"
+    "4",
+    "\xc3\x97"
+    "8"};
 struct ReduceToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;
   uint32_t preview_hash = 0;
@@ -8664,15 +9109,6 @@ struct ReduceToy : beta::ObjectToy {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xDE01), 1);
       DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0xDE90));
 
-      static const char* const kFactors[] = {
-          "\xc3\x97"
-          "2",
-          "\xc3\x97"
-          "3",
-          "\xc3\x97"
-          "4",
-          "\xc3\x97"
-          "8"};
       for (int i = 0; i < 4; ++i) {
         Rect chip = FactorChipM(i);
         bool sel = i == factor_idx;
@@ -8687,10 +9123,10 @@ struct ReduceToy : beta::ObjectToy {
         beta::SketchyStroke(canvas, cp, na ? beta::kGray : beta::kInk,
                             sel ? beta::kStroke : beta::kStrokeHair, Seed(0xDE2Cu + (uint32_t)i),
                             1);
-        float lw = beta::TextWidth(kFactors[i], 1.9_mm);
-        beta::DrawText(canvas, kFactors[i], {chip.CenterX() - lw / 2, chip.CenterY() - 0.66_mm},
-                       1.9_mm, na ? beta::kGrayDark : (sel ? beta::kInk : beta::kInkSoft), false,
-                       Seed(0));
+        float lw = beta::TextWidth(kReduceFactors[i], 1.9_mm);
+        beta::DrawText(canvas, kReduceFactors[i],
+                       {chip.CenterX() - lw / 2, chip.CenterY() - 0.66_mm}, 1.9_mm,
+                       na ? beta::kGrayDark : (sel ? beta::kInk : beta::kInkSoft), false, Seed(0));
         if (sel) beta::Highlight(canvas, chip, beta::kBlue, Seed(0xDE34));
         if (na)
           beta::HatchRect(canvas, chip, beta::kInkSoft, chip.Height() * 0.3f,
@@ -8700,8 +9136,7 @@ struct ReduceToy : beta::ObjectToy {
                      kLabelInk, false, Seed(0));
 
       {
-        static const char* const kRules[] = {"GRAY", "MIN", "MAX", "DIFF", "RANK"};
-        ui::leptonica::DrawModeWheel(canvas, RuleWheelCM(), kRuleWheelR, kRules, 5, rule,
+        ui::leptonica::DrawModeWheel(canvas, RuleWheelCM(), kRuleWheelR, kReduceRules, 5, rule,
                                      beta::State::Default, 0xDE40);
       }
 
@@ -8728,45 +9163,80 @@ struct ReduceToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      for (int i = 0; i < 4; ++i) {
-        Rect r = FactorChipM(i);
-        if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.bottom && pos.y <= r.top) {
-          if (rule == 4 && i == 1) return std::make_unique<ReducePoke>(p);  // x3 N/A under RANK
-          if (auto t = LockRed()) {
-            {
-              auto lock = std::lock_guard(t->mutex);
-              t->factor_idx = i;
-            }
-            t->WakeToys();
-          }
-          return std::make_unique<ReducePoke>(p);
-        }
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct SelectReduceFactorOption : TextOption {
+  ReduceToy& toy;
+  int factor_idx;
+  SelectReduceFactorOption(ReduceToy& toy, int factor_idx)
+      : TextOption(kReduceFactors[factor_idx]), toy(toy), factor_idx(factor_idx) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectReduceFactorOption, toy, factor_idx); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (toy.rule == 4 && factor_idx == 1) return std::make_unique<EmptyAction>(p);
+    if (auto t = toy.LockRed()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->factor_idx = factor_idx;
       }
-      int hit = ui::leptonica::ModeWheelHit(RuleWheelCM(), kRuleWheelR, {pos.x, pos.y}, 5);
-      if (hit >= 0) {
-        if (auto t = LockRed()) {
-          {
-            auto lock = std::lock_guard(t->mutex);
-            t->rule = hit;
-            if (hit == 4 && t->factor_idx == 1) t->factor_idx = 0;  // x3 has no rank form
-          }
-          t->WakeToys();
-        }
-        return std::make_unique<ReducePoke>(p);
-      }
-      if (rule == 4) {
-        Rect rr = RankRowM();
-        if (pos.x >= rr.left - 0.2_cm && pos.x <= rr.right + 0.2_cm &&
-            pos.y >= rr.bottom - 0.15_cm && pos.y <= rr.top + 0.15_cm)
-          return std::make_unique<ReduceRankDrag>(p, *this);
-      }
+      t->WakeToys();
     }
-    return ObjectToy::FindAction(p, btn);
+    return std::make_unique<EmptyAction>(p);
   }
 };
+
+struct SelectReduceRuleOption : TextOption {
+  ReduceToy& toy;
+  int rule;
+  SelectReduceRuleOption(ReduceToy& toy, int rule)
+      : TextOption(kReduceRules[rule]), toy(toy), rule(rule) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectReduceRuleOption, toy, rule); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockRed()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->rule = rule;
+        if (rule == 4 && t->factor_idx == 1) t->factor_idx = 0;
+      }
+      t->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+struct DragReduceRankOption : TextOption {
+  ReduceToy& toy;
+  DragReduceRankOption(ReduceToy& toy) : TextOption("Rank"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragReduceRankOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<ReduceRankDrag>(p, toy);
+  }
+};
+
+void ReduceToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  for (int i = 0; i < 4; ++i) {
+    Rect r = FactorChipM(i);
+    if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.bottom && pos.y <= r.top) {
+      visit(SelectReduceFactorOption(*this, i));
+    }
+  }
+  int hit = ui::leptonica::ModeWheelHit(RuleWheelCM(), kRuleWheelR, {pos.x, pos.y}, 5);
+  if (hit >= 0) visit(SelectReduceRuleOption(*this, hit));
+  if (rule == 4) {
+    Rect rr = RankRowM();
+    if (pos.x >= rr.left - 0.2_cm && pos.x <= rr.right + 0.2_cm && pos.y >= rr.bottom - 0.15_cm &&
+        pos.y <= rr.top + 0.15_cm) {
+      visit(DragReduceRankOption(*this));
+    }
+  }
+  ObjectToy::Options(p, visit);
+}
 
 ReduceRankDrag::ReduceRankDrag(ui::Pointer& p, ReduceToy& w) : Action(p), widget(&w) {}
 void ReduceRankDrag::Update() {
@@ -8916,11 +9386,8 @@ struct MeasureRegionDrag : Action {
   ~MeasureRegionDrag();
   void Update() override;
 };
-struct MeasurePoke : Action {
-  MeasurePoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
-};
 
+constexpr const char* const kMeasureStats[3] = {"MEAN", "MIN", "MAX"};
 struct MeasureToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;  // the SOURCE (the marquee rides on it)
   uint32_t preview_hash = 0;
@@ -9164,7 +9631,6 @@ struct MeasureToy : beta::ObjectToy {
       }
 
       {
-        static const char* const kStat[3] = {"MEAN", "MIN", "MAX"};
         for (int which = 0; which < 3; ++which) {
           Rect cell = StatCellM(which);
           bool sel = stat == which;
@@ -9177,9 +9643,10 @@ struct MeasureToy : beta::ObjectToy {
                            Seed(0xE338u + (uint32_t)which));
           beta::SketchyStroke(canvas, cp, beta::kInk, sel ? beta::kStroke : beta::kStrokeHair,
                               Seed(0xE33Cu + (uint32_t)which), 1);
-          float lw = beta::TextWidth(kStat[which], 1.75_mm);
-          beta::DrawText(canvas, kStat[which], {cell.CenterX() - lw / 2, cell.CenterY() - 0.6_mm},
-                         1.75_mm, sel ? beta::kInk : beta::kInkSoft, false, Seed(0));
+          float lw = beta::TextWidth(kMeasureStats[which], 1.75_mm);
+          beta::DrawText(canvas, kMeasureStats[which],
+                         {cell.CenterX() - lw / 2, cell.CenterY() - 0.6_mm}, 1.75_mm,
+                         sel ? beta::kInk : beta::kInkSoft, false, Seed(0));
           if (sel) beta::Highlight(canvas, cell, beta::kBlue, Seed(0xE340));
         }
       }
@@ -9197,33 +9664,58 @@ struct MeasureToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      for (int which = 0; which < 3; ++which) {
-        Rect r = StatCellM(which);
-        if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.bottom && pos.y <= r.top) {
-          if (auto t = LockMeasure()) {
-            {
-              auto lock = std::lock_guard(t->mutex);
-              t->stat = which;
-            }
-            t->WakeToys();
-          }
-          return std::make_unique<MeasurePoke>(p);
-        }
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct SelectMeasureStatOption : TextOption {
+  MeasureToy& toy;
+  int stat;
+  SelectMeasureStatOption(MeasureToy& toy, int stat)
+      : TextOption(kMeasureStats[stat]), toy(toy), stat(stat) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectMeasureStatOption, toy, stat); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockMeasure()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->stat = stat;
       }
-      if (cached_preview) {
-        Rect fit = FittedRectM();
-        Rect mq{fit.left + u0 * fit.Width(), fit.top - v1 * fit.Height(),
-                fit.left + u1 * fit.Width(), fit.top - v0 * fit.Height()};
-        int hit = ui::leptonica::RegionHit(mq, {pos.x, pos.y});
-        if (hit != 0) return std::make_unique<MeasureRegionDrag>(p, *this, hit);
-      }
+      t->WakeToys();
     }
-    return ObjectToy::FindAction(p, btn);
+    return std::make_unique<EmptyAction>(p);
   }
 };
+
+struct DragMeasureRegionOption : TextOption {
+  MeasureToy& toy;
+  int hit;
+  DragMeasureRegionOption(MeasureToy& toy, int hit)
+      : TextOption(hit == 5 ? "Move region" : "Resize region"), toy(toy), hit(hit) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragMeasureRegionOption, toy, hit); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<MeasureRegionDrag>(p, toy, hit);
+  }
+};
+
+void MeasureToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  for (int which = 0; which < 3; ++which) {
+    Rect r = StatCellM(which);
+    if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.bottom && pos.y <= r.top) {
+      visit(SelectMeasureStatOption(*this, which));
+    }
+  }
+  if (cached_preview) {
+    Rect fit = FittedRectM();
+    Rect mq{fit.left + u0 * fit.Width(), fit.top - v1 * fit.Height(), fit.left + u1 * fit.Width(),
+            fit.top - v0 * fit.Height()};
+    int hit = ui::leptonica::RegionHit(mq, {pos.x, pos.y});
+    if (hit != 0) visit(DragMeasureRegionOption(*this, hit));
+  }
+  ObjectToy::Options(p, visit);
+}
 
 MeasureRegionDrag::MeasureRegionDrag(ui::Pointer& p, MeasureToy& w, int which)
     : Action(p), widget(&w), which(which) {
@@ -9352,11 +9844,8 @@ struct WarpAmountDrag : Action {
   ~WarpAmountDrag();
   void Update() override;
 };
-struct WarpPoke : Action {
-  WarpPoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
-};
 
+constexpr const char* const kWarpModes[3] = {"STRETCH", "SHEAR", "WAVES"};
 struct WarpToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;
   uint32_t preview_hash = 0;
@@ -9532,8 +10021,7 @@ struct WarpToy : beta::ObjectToy {
       }
 
       {
-        static const char* const kModes[3] = {"STRETCH", "SHEAR", "WAVES"};
-        ui::leptonica::DrawModeWheel(canvas, ModeWheelCM(), kModeWheelR, kModes, 3, mode,
+        ui::leptonica::DrawModeWheel(canvas, ModeWheelCM(), kModeWheelR, kWarpModes, 3, mode,
                                      beta::State::Default, 0xA220);
       }
 
@@ -9554,28 +10042,50 @@ struct WarpToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      int m = ui::leptonica::ModeWheelHit(ModeWheelCM(), kModeWheelR, pos, 3);
-      if (m >= 0) {
-        if (auto t = LockWarp()) {
-          {
-            auto lock = std::lock_guard(t->mutex);
-            t->mode = m;
-          }
-          t->WakeToys();
-        }
-        return std::make_unique<WarpPoke>(p);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct SelectWarpModeOption : TextOption {
+  WarpToy& toy;
+  int mode;
+  SelectWarpModeOption(WarpToy& toy, int mode)
+      : TextOption(kWarpModes[mode]), toy(toy), mode(mode) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectWarpModeOption, toy, mode); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockWarp()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->mode = mode;
       }
-      Rect as = AmountSliderM();
-      if (pos.x >= as.left - 0.2_cm && pos.x <= as.right + 0.2_cm && pos.y >= as.bottom - 0.2_cm &&
-          pos.y <= as.top + 0.2_cm)
-        return std::make_unique<WarpAmountDrag>(p, *this);
+      t->WakeToys();
     }
-    return ObjectToy::FindAction(p, btn);
+    return std::make_unique<EmptyAction>(p);
   }
 };
+
+struct DragWarpAmountOption : TextOption {
+  WarpToy& toy;
+  DragWarpAmountOption(WarpToy& toy) : TextOption("Amount"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragWarpAmountOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<WarpAmountDrag>(p, toy);
+  }
+};
+
+void WarpToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  int m = ui::leptonica::ModeWheelHit(ModeWheelCM(), kModeWheelR, pos, 3);
+  if (m >= 0) visit(SelectWarpModeOption(*this, m));
+  Rect as = AmountSliderM();
+  if (pos.x >= as.left - 0.2_cm && pos.x <= as.right + 0.2_cm && pos.y >= as.bottom - 0.2_cm &&
+      pos.y <= as.top + 0.2_cm) {
+    visit(DragWarpAmountOption(*this));
+  }
+  ObjectToy::Options(p, visit);
+}
 
 WarpAmountDrag::WarpAmountDrag(ui::Pointer& p, WarpToy& w) : Action(p), widget(&w) {
   widget->dragging = true;
@@ -9692,6 +10202,7 @@ struct ColorSliderDrag : Action {
   void Update() override;
 };
 
+constexpr const char* const kColorSliders[4] = {"SAT", "R", "G", "B"};
 struct ColorToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;
   uint32_t preview_hash = 0;
@@ -9892,7 +10403,6 @@ struct ColorToy : beta::ObjectToy {
       beta::SketchyStroke(canvas, shape, beta::kInk, beta::kStroke, Seed(0xC101), 1);
       DrawFittedDepthChip(canvas, PreviewM(), cached_preview, out_depth, out_cmap, Seed(0xC190));
 
-      static const char* const kLab[4] = {"SAT", "R", "G", "B"};
       static const SkColor kLabCol[4] = {0xff7a6f5c, 0xffed1c24, 0xff22b14c, 0xff3f48cc};
       const float vals[4] = {sat, r_shift, g_shift, b_shift};
       for (int i = 0; i < 4; ++i) {
@@ -9900,7 +10410,7 @@ struct ColorToy : beta::ObjectToy {
         beta::Slider(canvas, s, std::clamp((vals[i] + 1.f) * 0.5f, 0.f, 1.f), beta::State::Default,
                      Seed(0xC110u + (uint32_t)i));
         char buf[20];
-        snprintf(buf, sizeof(buf), "%s %+.2f", kLab[i], vals[i]);
+        snprintf(buf, sizeof(buf), "%s %+.2f", kColorSliders[i], vals[i]);
         beta::DrawText(canvas, buf, {s.left - 0.62_cm, s.top - 0.02_cm}, 1.75_mm, kLabCol[i], false,
                        Seed(0));
         float cx = s.CenterX();
@@ -9935,23 +10445,46 @@ struct ColorToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      float cy = kBodyTop - 0.05_cm;
-      float d = std::hypot(pos.x, pos.y - cy);
-      if (pos.y >= cy && d <= kWheelR + 0.15_cm && d >= kWheelR * 0.25f)
-        return std::make_unique<ColorHueDrag>(p, *this);
-      for (int i = 0; i < 4; ++i) {
-        Rect s = SliderM(i);
-        if (pos.x >= s.left - 0.2_cm && pos.x <= s.right + 0.2_cm && pos.y >= s.bottom - 0.12_cm &&
-            pos.y <= s.top + 0.12_cm)
-          return std::make_unique<ColorSliderDrag>(p, *this, i);
-      }
-    }
-    return ObjectToy::FindAction(p, btn);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct DragColorHueOption : TextOption {
+  ColorToy& toy;
+  DragColorHueOption(ColorToy& toy) : TextOption("Hue"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragColorHueOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<ColorHueDrag>(p, toy);
   }
 };
+
+struct DragColorSliderOption : TextOption {
+  ColorToy& toy;
+  int index;
+  DragColorSliderOption(ColorToy& toy, int index)
+      : TextOption(kColorSliders[index]), toy(toy), index(index) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragColorSliderOption, toy, index); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<ColorSliderDrag>(p, toy, index);
+  }
+};
+
+void ColorToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  float cy = kBodyTop - 0.05_cm;
+  float d = std::hypot(pos.x, pos.y - cy);
+  if (pos.y >= cy && d <= kWheelR + 0.15_cm && d >= kWheelR * 0.25f)
+    visit(DragColorHueOption(*this));
+  for (int i = 0; i < 4; ++i) {
+    Rect s = SliderM(i);
+    if (pos.x >= s.left - 0.2_cm && pos.x <= s.right + 0.2_cm && pos.y >= s.bottom - 0.12_cm &&
+        pos.y <= s.top + 0.12_cm) {
+      visit(DragColorSliderOption(*this, i));
+    }
+  }
+  ObjectToy::Options(p, visit);
+}
 
 ColorHueDrag::ColorHueDrag(ui::Pointer& p, ColorToy& w) : Action(p), widget(&w) {
   widget->dragging = 4;
@@ -10118,10 +10651,6 @@ struct SeedDrag : Action {
   SeedDrag(ui::Pointer& p, SeedfillToy& w);
   ~SeedDrag();
   void Update() override;
-};
-struct ConnPoke : Action {
-  ConnPoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
 };
 
 struct SeedfillToy : beta::ObjectToy {
@@ -10474,56 +11003,98 @@ struct SeedfillToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct SelectSeedConnectivityOption : TextOption {
+  SeedfillToy& toy;
+  int conn;
+  SelectSeedConnectivityOption(SeedfillToy& toy, int conn)
+      : TextOption(conn == 8 ? "8-connected" : "4-connected"), toy(toy), conn(conn) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectSeedConnectivityOption, toy, conn); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockSeed()) {
       {
-        int hit = ui::leptonica::ConnectivityHit(ConnM(), pos);
-        if (hit != 0) {
-          if (auto t = LockSeed()) {
-            {
-              auto lock = std::lock_guard(t->mutex);
-              t->eight = hit == 8;
-            }
-            t->WakeToys();
-          }
-          return std::make_unique<ConnPoke>(p);
-        }
+        auto lock = std::lock_guard(t->mutex);
+        t->eight = conn == 8;
       }
-      {
-        int hit = ui::leptonica::PaletteHit(PaletteM(), pos);
-        if (hit >= 0) {
-          if (auto t = LockSeed()) {
-            {
-              auto lock = std::lock_guard(t->mutex);
-              t->paint_rgb = ui::leptonica::kPaletteColors[hit] & 0xFFFFFF;
-            }
-            t->WakeToys();
-          }
-          return std::make_unique<ConnPoke>(p);
-        }
-      }
-      for (int which = 0; which < 2; ++which) {
-        Rect r = ModeChipM(which);
-        if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.bottom && pos.y <= r.top) {
-          if (auto t = LockSeed()) {
-            {
-              auto lock = std::lock_guard(t->mutex);
-              t->emit_mask = which == 1;
-            }
-            t->WakeToys();
-          }
-          return std::make_unique<ConnPoke>(p);
-        }
-      }
-      Rect fit = FittedRectM();
-      if (pos.x >= fit.left - 0.1_cm && pos.x <= fit.right + 0.1_cm &&
-          pos.y >= fit.bottom - 0.1_cm && pos.y <= fit.top + 0.1_cm)
-        return std::make_unique<SeedDrag>(p, *this);
+      t->WakeToys();
     }
-    return ObjectToy::FindAction(p, btn);
+    return std::make_unique<EmptyAction>(p);
   }
 };
+
+struct SelectSeedPaintOption : TextOption {
+  SeedfillToy& toy;
+  int index;
+  SelectSeedPaintOption(SeedfillToy& toy, int index)
+      : TextOption(f("Paint {}", index + 1)), toy(toy), index(index) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectSeedPaintOption, toy, index); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockSeed()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->paint_rgb = ui::leptonica::kPaletteColors[index] & 0xFFFFFF;
+      }
+      t->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+struct SelectSeedOutputOption : TextOption {
+  SeedfillToy& toy;
+  bool mask;
+  SelectSeedOutputOption(SeedfillToy& toy, bool mask)
+      : TextOption(mask ? "Output mask" : "Output paint"), toy(toy), mask(mask) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectSeedOutputOption, toy, mask); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockSeed()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->emit_mask = mask;
+      }
+      t->WakeToys();
+    }
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+struct DragSeedOption : TextOption {
+  SeedfillToy& toy;
+  DragSeedOption(SeedfillToy& toy) : TextOption("Seed"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragSeedOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<SeedDrag>(p, toy);
+  }
+};
+
+void SeedfillToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  int conn = ui::leptonica::ConnectivityHit(ConnM(), pos);
+  if (conn != 0) visit(SelectSeedConnectivityOption(*this, conn));
+  int paint = ui::leptonica::PaletteHit(PaletteM(), pos);
+  if (paint >= 0) visit(SelectSeedPaintOption(*this, paint));
+  for (int which = 0; which < 2; ++which) {
+    Rect r = ModeChipM(which);
+    if (pos.x >= r.left && pos.x <= r.right && pos.y >= r.bottom && pos.y <= r.top) {
+      visit(SelectSeedOutputOption(*this, which == 1));
+    }
+  }
+  Rect fit = FittedRectM();
+  if (pos.x >= fit.left - 0.1_cm && pos.x <= fit.right + 0.1_cm && pos.y >= fit.bottom - 0.1_cm &&
+      pos.y <= fit.top + 0.1_cm) {
+    visit(DragSeedOption(*this));
+  }
+  ObjectToy::Options(p, visit);
+}
 
 static void SeedfillSetFromPointer(SeedfillToy& w, ui::Pointer& pointer) {
   Vec2 pos = pointer.PositionWithin(w);
@@ -10607,16 +11178,13 @@ bool Generate::DeserializeKey(ObjectDeserializer& d, StrView key) {
 }
 
 struct GenerateToy;
-struct GenPoke : Action {
-  GenPoke(ui::Pointer& p) : Action(p) {}
-  void Update() override {}
-};
 struct GenSliderDrag : Action {
   MortalPtr<GenerateToy> widget;
   GenSliderDrag(ui::Pointer& p, GenerateToy& w);
   void Update() override;
 };
 
+constexpr const char* const kGenModes[2] = {"GAMUT", "NOISE"};
 struct GenerateToy : beta::ObjectToy {
   sk_sp<SkImage> cached_preview;
   uint32_t preview_hash = 0;
@@ -10803,8 +11371,7 @@ struct GenerateToy : beta::ObjectToy {
         }
       }
 
-      const char* kModes[2] = {"GAMUT", "NOISE"};
-      ui::leptonica::DrawModeWheel(canvas, ModeWheelCM(), kModeWheelR, kModes, 2, mode,
+      ui::leptonica::DrawModeWheel(canvas, ModeWheelCM(), kModeWheelR, kGenModes, 2, mode,
                                    beta::State::Default, 0x6E30);
 
       {
@@ -10839,28 +11406,50 @@ struct GenerateToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      int m = ui::leptonica::ModeWheelHit(ModeWheelCM(), kModeWheelR, pos, 2);
-      if (m >= 0) {
-        if (auto t = LockGen()) {
-          {
-            auto lock = std::lock_guard(t->mutex);
-            t->mode = m;
-          }
-          t->WakeToys();
-        }
-        return std::make_unique<GenPoke>(p);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct SelectGenModeOption : TextOption {
+  GenerateToy& toy;
+  int mode;
+  SelectGenModeOption(GenerateToy& toy, int mode)
+      : TextOption(kGenModes[mode]), toy(toy), mode(mode) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SelectGenModeOption, toy, mode); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto t = toy.LockGen()) {
+      {
+        auto lock = std::lock_guard(t->mutex);
+        t->mode = mode;
       }
-      Rect s = SliderM();
-      if (pos.x >= s.left - 0.2_cm && pos.x <= s.right + 0.2_cm && pos.y >= s.bottom - 0.2_cm &&
-          pos.y <= s.top + 0.2_cm)
-        return std::make_unique<GenSliderDrag>(p, *this);
+      t->WakeToys();
     }
-    return ObjectToy::FindAction(p, btn);
+    return std::make_unique<EmptyAction>(p);
   }
 };
+
+struct DragGenSliderOption : TextOption {
+  GenerateToy& toy;
+  DragGenSliderOption(GenerateToy& toy) : TextOption("Amount"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragGenSliderOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<GenSliderDrag>(p, toy);
+  }
+};
+
+void GenerateToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  int m = ui::leptonica::ModeWheelHit(ModeWheelCM(), kModeWheelR, pos, 2);
+  if (m >= 0) visit(SelectGenModeOption(*this, m));
+  Rect s = SliderM();
+  if (pos.x >= s.left - 0.2_cm && pos.x <= s.right + 0.2_cm && pos.y >= s.bottom - 0.2_cm &&
+      pos.y <= s.top + 0.2_cm) {
+    visit(DragGenSliderOption(*this));
+  }
+  ObjectToy::Options(p, visit);
+}
 
 GenSliderDrag::GenSliderDrag(ui::Pointer& p, GenerateToy& w) : Action(p), widget(&w) {}
 void GenSliderDrag::Update() {
@@ -11191,18 +11780,32 @@ struct CropToy : beta::ObjectToy {
     BakeChildren(canvas);
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left && cached_preview) {
-      Vec2 pos = p.PositionWithin(*this);
-      Rect fit = FittedRectM();
-      Rect mq{fit.left + u0 * fit.Width(), fit.top - v1 * fit.Height(), fit.left + u1 * fit.Width(),
-              fit.top - v0 * fit.Height()};
-      int hit = ui::leptonica::RegionHit(mq, pos);
-      if (hit != 0) return std::make_unique<CropDrag>(p, *this, hit);
-    }
-    return ObjectToy::FindAction(p, btn);
+  void Options(ui::Pointer&, OptionVisitor&) override;
+};
+
+struct DragCropOption : TextOption {
+  CropToy& toy;
+  int hit;
+  DragCropOption(CropToy& toy, int hit)
+      : TextOption(hit == 5 ? "Move crop" : "Resize crop"), toy(toy), hit(hit) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragCropOption, toy, hit); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<CropDrag>(p, toy, hit);
   }
 };
+
+void CropToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  if (cached_preview) {
+    Rect fit = FittedRectM();
+    Rect mq{fit.left + u0 * fit.Width(), fit.top - v1 * fit.Height(), fit.left + u1 * fit.Width(),
+            fit.top - v0 * fit.Height()};
+    int hit = ui::leptonica::RegionHit(mq, pos);
+    if (hit != 0) visit(DragCropOption(*this, hit));
+  }
+  ObjectToy::Options(p, visit);
+}
 
 CropDrag::CropDrag(ui::Pointer& p, CropToy& w, int which) : Action(p), widget(&w), which(which) {
   widget->dragging = which;

@@ -16,7 +16,6 @@ struct PrototypeButton : Widget {
   MortalPtr<Widget> proto_widget;
   float natural_width;
   mutable animation::SpringV2<float> width{kToolbarIconSize};
-  Optional<Pointer::IconOverride> hand_icon;
 
   PrototypeButton(Widget* parent, Ptr<Object>& proto) : ui::Widget(parent), proto(proto) {}
 
@@ -28,13 +27,9 @@ struct PrototypeButton : Widget {
 
   Optional<Rect> DrawBounds() const override { return std::nullopt; }
 
-  void PointerEnter(Pointer& pointer) override { hand_icon.emplace(pointer, Pointer::kIconHand); }
-
-  void PointerLeave(Pointer& pointer) override { hand_icon.reset(); }
-
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
 
-  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger btn) override;
+  void Options(Pointer&, OptionVisitor&) override;
 
   StrView Name() const override { return "PrototypeButton"; }
 };

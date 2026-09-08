@@ -268,7 +268,6 @@ struct LocationWidget : ObjectToy {
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   Optional<Rect> DrawBounds() const override;
-  std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
 
   void OnPoll(time::Timer& timer) override {
     if (owned_toy) owned_toy->Poll(timer);

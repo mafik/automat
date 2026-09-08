@@ -22,6 +22,7 @@
 #include "global_resources.hpp"
 #include "log.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "root_widget.hpp"
 #include "status.hpp"
 #include "textures.hpp"
@@ -331,15 +332,19 @@ SkPath SyncBelt::Shape() const {
   return SkPath::Circle(pinion.x, pinion.y, kSecondaryGearRadius + kTeethAmplitude);
 }
 
-std::unique_ptr<Action> SyncBelt::FindAction(ui::Pointer& pointer, ui::ActionTrigger trigger) {
-  auto owner = LockOwner<Object>();
-  if (!owner) return nullptr;
-  auto syncable = Bind<Syncable>(*owner);
-  if (trigger == ui::PointerButton::Left) {
-    return std::make_unique<SyncAction>(pointer, syncable);
+struct SyncBeltOption : TextOption {
+  SyncBelt& belt;
+  SyncBeltOption(SyncBelt& belt) : TextOption("Sync"), belt(belt) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SyncBeltOption, belt); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
+    auto owner = belt.LockOwner<Object>();
+    if (!owner) return nullptr;
+    return std::make_unique<SyncAction>(pointer, belt.Bind<Syncable>(*owner));
   }
-  return nullptr;
-}
+};
+
+void SyncBelt::Options(ui::Pointer&, OptionVisitor& visit) { visit(SyncBeltOption(*this)); }
 
 ui::Tock SyncBelt::Tick(time::Timer& t) {
   Tock tock;

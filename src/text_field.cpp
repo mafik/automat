@@ -13,20 +13,11 @@
 #include "animation.hpp"
 #include "base.hpp"
 #include "font.hpp"
+#include "menu.hpp"
 #include "root_widget.hpp"
 #include "ui_connection_widget.hpp"
 
 namespace automat::ui {
-
-void TextFieldBase::PointerEnter(Pointer& pointer) {
-  ibeam_icon.emplace(pointer, Pointer::kIconIBeam);
-  WakeAnimation();
-}
-
-void TextFieldBase::PointerLeave(Pointer& pointer) {
-  ibeam_icon.reset();  // Reset Optional to release icon
-  WakeAnimation();
-}
 
 void DrawDebugTextOutlines(SkCanvas& canvas, std::string* text) {
   const char* c_str = text->c_str();
@@ -182,12 +173,18 @@ struct TextSelectAction : Action {
   void Update() override { UpdateCaretFromPointer(pointer); }
 };
 
-std::unique_ptr<Action> TextFieldBase::FindAction(Pointer& pointer, ActionTrigger btn) {
-  if (btn == PointerButton::Left) {
-    return std::make_unique<TextSelectAction>(pointer, *this);
+struct TextSelectOption : TextOption {
+  TextFieldBase& field;
+  TextSelectOption(TextFieldBase& field) : TextOption("Select text"), field(field) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(TextSelectOption, field); }
+  Span<const ActionTrigger> Triggers() const override { return kLeftButton; }
+  Pointer::Cursor Cursor() const override { return Pointer::Cursor::IBeam; }
+  std::unique_ptr<Action> Activate(Pointer& pointer) override {
+    return std::make_unique<TextSelectAction>(pointer, field);
   }
-  return nullptr;
-}
+};
+
+void TextFieldBase::Options(Pointer&, OptionVisitor& visit) { visit(TextSelectOption(*this)); }
 
 void TextFieldBase::ReleaseCaret(Caret& caret) { caret_positions.erase(&caret); }
 

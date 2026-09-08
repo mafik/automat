@@ -15,15 +15,15 @@
 
 namespace automat::ui {
 
-// Helper for widgets that can be clicked. Takes care of changing the pointer icon and animating
-// a `highlight` value. Users of this class should make sure to call the `PointerHover`,
+// Helper for widgets that can be clicked.
+// Takes care of animating the `highlight` value.
+// Users of this class should make sure to call the `PointerHover`,
 // `PointerUnhover`, `Tick` and `FindAction` methods.
 struct Clickable {
   const Widget& widget;
   int pointers_over = 0;
   int pointers_pressing = 0;
   float highlight = 0;
-  Optional<Pointer::IconOverride> hand_icon = std::nullopt;
   std::function<void(Pointer&)> activate = nullptr;
 
   Clickable(Widget& widget) : widget(widget) {}
@@ -31,7 +31,7 @@ struct Clickable {
   void PointerHover(Pointer&);
   void PointerUnhover(Pointer&);
   Tock Tick(time::Timer&);
-  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger);
+  void Options(Pointer&, OptionVisitor&);
 };
 
 struct Button : Widget {
@@ -45,9 +45,7 @@ struct Button : Widget {
   virtual SkRRect RRect() const;
   void PointerHover(Pointer& p) override { clickable.PointerHover(p); }
   void PointerUnhover(Pointer& p) override { clickable.PointerUnhover(p); }
-  std::unique_ptr<Action> FindAction(Pointer& p, ActionTrigger a) override {
-    return clickable.FindAction(p, a);
-  }
+  void Options(Pointer& p, OptionVisitor& visit) override { clickable.Options(p, visit); }
   virtual SkColor4f ForegroundColor() const { return SkColors::kBlack; }
   virtual SkColor4f BackgroundColor() const { return SkColors::kWhite; }
 

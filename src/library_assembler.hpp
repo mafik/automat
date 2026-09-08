@@ -80,7 +80,7 @@ struct AssemblerWidget : ObjectToy {
   void OnPoll(time::Timer&) override;
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
-  void VisitOptions(const OptionsVisitor&) const override;
+  void Options(ui::Pointer&, OptionVisitor&) override;
 };
 
 struct Register : Object, Buffer {

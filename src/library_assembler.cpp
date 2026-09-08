@@ -62,10 +62,8 @@ struct ImageWidget : ui::Widget {
 struct RegistersMenuOption : TextOption, OptionsProvider {
   WeakPtr<Assembler> weak;
   RegistersMenuOption(WeakPtr<Assembler> weak) : TextOption("Registers"), weak(weak) {}
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<RegistersMenuOption>(weak);
-  }
-  void VisitOptions(const OptionsVisitor& visitor) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(RegistersMenuOption, weak); }
+  void Options(ui::Pointer&, OptionVisitor& visitor) override {
     auto assembler = weak.Lock();
     if (!assembler) return;
     for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
@@ -73,14 +71,12 @@ struct RegistersMenuOption : TextOption, OptionsProvider {
       visitor(opt);
     }
   }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    return OpenMenu(pointer);
-  }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override { return OpenMenu(pointer); }
   Dir PreferredDir() const override { return S; }
 };
 
-void AssemblerWidget::VisitOptions(const OptionsVisitor& visitor) const {
-  ObjectToy::VisitOptions(visitor);
+void AssemblerWidget::Options(ui::Pointer& pointer, OptionVisitor& visitor) {
+  ObjectToy::Options(pointer, visitor);
   RegistersMenuOption registers_option{owner.Copy<Assembler>()};
   visitor(registers_option);
 }

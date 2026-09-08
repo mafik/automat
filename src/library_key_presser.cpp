@@ -77,10 +77,10 @@ static SkPath GetHandShape() {
 struct DragAndClickAction : Action {
   ui::PointerButton btn;
   std::unique_ptr<Action> drag_action;
-  std::unique_ptr<Option> click_option;
+  Ptr<Option> click_option;
   time::SteadyPoint press_time;
   DragAndClickAction(ui::Pointer& pointer, ui::PointerButton btn,
-                     std::unique_ptr<Action>&& drag_action, std::unique_ptr<Option>&& click_option)
+                     std::unique_ptr<Action>&& drag_action, Ptr<Option>&& click_option)
       : Action(pointer),
         btn(btn),
         drag_action(std::move(drag_action)),
@@ -114,11 +114,9 @@ struct UseObjectOption : TextOption {
   ui::Widget* widget;
 
   UseObjectOption(ui::Widget* widget) : TextOption("Use"), widget(widget) {}
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<UseObjectOption>(widget);
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) const override {
-    return widget->FindAction(p, ui::PointerButton::Left);
+  Ptr<Option> Clone() const override { return MAKE_PTR(UseObjectOption, widget); }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return widget->TriggerAction(p, ui::PointerButton::Left);
   }
 };
 
@@ -194,21 +192,7 @@ struct KeyPresserWidget : ObjectToy {
     }
   }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn != ui::PointerButton::Left) return ObjectToy::FindAction(p, btn);
-    auto hand_shape = GetHandShape();
-    auto local_pos = p.PositionWithin(*this);
-    if (hand_shape.contains(local_pos.x, local_pos.y)) {
-      auto key_presser = LockObject<KeyPresser>();
-      return std::make_unique<DragAndClickAction>(
-          p, btn, ObjectToy::FindAction(p, btn),
-          std::make_unique<RunOption>(key_presser->AcquireWeakPtr(), KeyPresser::run_tbl));
-    } else {
-      return std::make_unique<DragAndClickAction>(
-          p, btn, ObjectToy::FindAction(p, btn),
-          std::make_unique<UseObjectOption>(shortcut_button.get()));
-    }
-  }
+  void Options(ui::Pointer&, OptionVisitor&) override;
 
   void KeyDown(ui::Caret&, ui::Key k) override {
     key_selector->Release();
@@ -224,6 +208,50 @@ struct KeyPresserWidget : ObjectToy {
 
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
 };
+
+static std::unique_ptr<Action> DragKeyPresser(ui::Pointer& p, KeyPresserWidget& widget) {
+  auto* lw = ui::Closest<LocationWidget>(widget);
+  auto loc = lw ? lw->LockLocation() : nullptr;
+  auto key_presser = widget.LockObject<KeyPresser>();
+  if (!loc || !key_presser) return nullptr;
+  return PickUp(p, *loc, *key_presser);
+}
+
+struct PressKeyOption : TextOption {
+  KeyPresserWidget& widget;
+  PressKeyOption(KeyPresserWidget& widget) : TextOption("Press key"), widget(widget) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(PressKeyOption, widget); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    auto key_presser = widget.LockObject<KeyPresser>();
+    if (!key_presser) return nullptr;
+    return std::make_unique<DragAndClickAction>(
+        p, ui::PointerButton::Left, DragKeyPresser(p, widget),
+        MAKE_PTR(RunOption, key_presser->AcquireWeakPtr(), KeyPresser::run_tbl));
+  }
+};
+
+struct SetKeyOption : TextOption {
+  KeyPresserWidget& widget;
+  SetKeyOption(KeyPresserWidget& widget) : TextOption("Set key"), widget(widget) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(SetKeyOption, widget); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<DragAndClickAction>(
+        p, ui::PointerButton::Left, DragKeyPresser(p, widget),
+        MAKE_PTR(UseObjectOption, widget.shortcut_button.get()));
+  }
+};
+
+void KeyPresserWidget::Options(ui::Pointer& p, OptionVisitor& visit) {
+  auto local_pos = p.PositionWithin(*this);
+  if (GetHandShape().contains(local_pos.x, local_pos.y)) {
+    visit(PressKeyOption(*this));
+  } else {
+    visit(SetKeyOption(*this));
+  }
+  ObjectToy::Options(p, visit);
+}
 
 KeyPresser::KeyPresser(ui::AnsiKey key) : key(key) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }

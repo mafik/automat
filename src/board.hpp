@@ -142,8 +142,7 @@ struct BoardWidget : ObjectToy, ui::DropTarget {
   SkPath Shape() const override;
   SkPath SubtreeShape() const override;
   Compositor GetCompositor() const override { return Compositor::QUANTUM_REALM; }
-  void VisitOptions(const OptionsVisitor&) const override;
-  std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
+  void Options(ui::Pointer&, OptionVisitor&) override;
 
   // DropTarget overrides
   ui::DropTarget* AsDropTarget() override { return this; }

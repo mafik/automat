@@ -18,7 +18,7 @@ namespace {
 
 constexpr float kStampRadius = 1.1_cm;
 
-void VisitProto(const OptionsVisitor& visitor, StrView name, Option::Dir dir) {
+void VisitProto(OptionVisitor& visitor, StrView name, Option::Dir dir) {
   if (auto* proto = prototypes ? prototypes->Find(name) : nullptr) {
     MakeObjectOption opt(proto->AcquirePtr(), dir);
     visitor(opt);
@@ -28,15 +28,13 @@ void VisitProto(const OptionsVisitor& visitor, StrView name, Option::Dir dir) {
 // A named sub-menu; activating it opens a ring with the visited options.
 struct GroupOption : TextOption, OptionsProvider {
   GroupOption(Str label) : TextOption(label) {}
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    return OpenMenu(pointer);
-  }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override { return OpenMenu(pointer); }
 };
 
 struct FfmpegOption : GroupOption {
   FfmpegOption() : GroupOption("FFmpeg") {}
-  std::unique_ptr<Option> Clone() const override { return std::make_unique<FfmpegOption>(); }
-  void VisitOptions(const OptionsVisitor& visitor) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(FfmpegOption); }
+  void Options(ui::Pointer&, OptionVisitor& visitor) override {
     VisitProto(visitor, "avformat", Option::N);
     VisitProto(visitor, "avcodec", Option::S);
   }
@@ -45,8 +43,8 @@ struct FfmpegOption : GroupOption {
 
 struct TensorFlowOption : GroupOption {
   TensorFlowOption() : GroupOption("TensorFlow") {}
-  std::unique_ptr<Option> Clone() const override { return std::make_unique<TensorFlowOption>(); }
-  void VisitOptions(const OptionsVisitor& visitor) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(TensorFlowOption); }
+  void Options(ui::Pointer&, OptionVisitor& visitor) override {
     VisitProto(visitor, "tf:tensor", Option::N);
     VisitProto(visitor, "Square", Option::S);
   }
@@ -55,8 +53,8 @@ struct TensorFlowOption : GroupOption {
 
 struct PipelinesOption : GroupOption {
   PipelinesOption() : GroupOption("Pipelines") {}
-  std::unique_ptr<Option> Clone() const override { return std::make_unique<PipelinesOption>(); }
-  void VisitOptions(const OptionsVisitor& visitor) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(PipelinesOption); }
+  void Options(ui::Pointer&, OptionVisitor& visitor) override {
     VisitProto(visitor, "GStreamer", Option::NW);
     static FfmpegOption ffmpeg;
     visitor(ffmpeg);
@@ -82,8 +80,8 @@ struct BetaShelfToy : ObjectToy {
     ui::beta::DrawBetaStamp(canvas, {0, 0}, kStampRadius - 1_mm, -12, ID());
   }
 
-  void VisitOptions(const OptionsVisitor& visitor) const override {
-    ObjectToy::VisitOptions(visitor);
+  void Options(ui::Pointer& pointer, OptionVisitor& visitor) override {
+    ObjectToy::Options(pointer, visitor);
     VisitProto(visitor, "Command", Option::W);
     VisitProto(visitor, "File", Option::SW);
     VisitProto(visitor, "Leptonica", Option::E);

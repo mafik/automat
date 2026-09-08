@@ -13,8 +13,8 @@ struct MakeObjectOption : Option {
   MortalPtr<ui::Widget> icon;
   MakeObjectOption(Ptr<Object> proto, Dir dir = DIR_NONE);
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override;
-  std::unique_ptr<Option> Clone() const override;
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override;
+  Ptr<Option> Clone() const override;
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override;
   Dir PreferredDir() const override { return dir; }
 };
 

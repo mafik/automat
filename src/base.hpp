@@ -24,6 +24,7 @@
 #include "format.hpp"
 #include "location.hpp"
 #include "log.hpp"
+#include "menu.hpp"
 #include "on_off.hpp"
 #include "pointer.hpp"
 #include "prototypes.hpp"
@@ -220,16 +221,16 @@ struct RunOption : TextOption {
   WeakPtr<Object> weak;
   Runnable::Table* runnable;
   RunOption(WeakPtr<Object> object, Runnable::Table& runnable);
-  std::unique_ptr<Option> Clone() const override;
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override;
+  Ptr<Option> Clone() const override;
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override;
   Dir PreferredDir() const override { return S; }
 };
 
 struct ThisIsFineOption : TextOption {
   WeakPtr<Object> weak;
   ThisIsFineOption(WeakPtr<Object> object);
-  std::unique_ptr<Option> Clone() const override;
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override;
+  Ptr<Option> Clone() const override;
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override;
   Dir PreferredDir() const override { return S; }
 };
 

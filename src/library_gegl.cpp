@@ -13,6 +13,7 @@
 #include <thread>
 
 #include "format.hpp"
+#include "menu.hpp"
 #include "mortal.hpp"
 #include "prototypes.hpp"
 #include "ui_beta.hpp"
@@ -773,26 +774,7 @@ struct GeglOperationToy : ui::beta::ObjectToy {
     }
     SetPropValue(index, nicks[(at + 1) % nicks.size()]);
   }
-
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      for (int i = 0; i < (int)prop_infos_.size(); ++i) {
-        if (!prop_rects_[i].Contains(pos)) continue;
-        switch (prop_infos_[i].kind) {
-          case PropInfo::kEnum:
-            CycleProp(i);
-            return nullptr;
-          case PropInfo::kBool:
-            SetPropValue(i, prop_values_[i] == "true" ? "false" : "true");
-            return nullptr;
-          case PropInfo::kNumber:
-            return std::make_unique<GeglPropDrag>(p, *this, i);
-        }
-      }
-    }
-    return ObjectToy::FindAction(p, btn);
-  }
+  void Options(ui::Pointer&, OptionVisitor&) override;
 
   void Draw(SkCanvas& canvas) const override {
     ui::beta::Panel(canvas, Rect::MakeCenterZero(kPlateW, plate_h_), op_, ui::beta::kCyan,
@@ -902,6 +884,40 @@ struct GeglOperationToy : ui::beta::ObjectToy {
     BakeChildren(canvas);
   }
 };
+
+struct GeglPropOption : TextOption {
+  GeglOperationToy& toy;
+  int index;
+  GeglPropOption(GeglOperationToy& toy, int index)
+      : TextOption(toy.prop_infos_[index].name), toy(toy), index(index) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(GeglPropOption, toy, index); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override {
+    return toy.prop_infos_[index].kind == PropInfo::kNumber ? ui::Pointer::Cursor::None
+                                                            : ui::Pointer::Cursor::Hand;
+  }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    switch (toy.prop_infos_[index].kind) {
+      case PropInfo::kEnum:
+        toy.CycleProp(index);
+        return std::make_unique<EmptyAction>(p);
+      case PropInfo::kBool:
+        toy.SetPropValue(index, toy.prop_values_[index] == "true" ? "false" : "true");
+        return std::make_unique<EmptyAction>(p);
+      case PropInfo::kNumber:
+        return std::make_unique<GeglPropDrag>(p, toy, index);
+    }
+    return nullptr;
+  }
+};
+
+void GeglOperationToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  for (int i = 0; i < (int)prop_infos_.size(); ++i) {
+    if (prop_rects_[i].Contains(pos)) visit(GeglPropOption(*this, i));
+  }
+  ObjectToy::Options(p, visit);
+}
 
 GeglPropDrag::GeglPropDrag(ui::Pointer& p, GeglOperationToy& w, int index)
     : Action(p), widget(&w), index(index) {

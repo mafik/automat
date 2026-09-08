@@ -12,6 +12,7 @@
 #include "arcline.hpp"
 #include "automat.hpp"
 #include "control_flow.hpp"
+#include "menu.hpp"
 #include "object.hpp"
 #include "root_widget.hpp"
 #include "time.hpp"
@@ -67,6 +68,31 @@ static bool FillPath(Pointer& p, Widget& w) {
   return false;
 }
 
+static void CheckCursorChanged(Pointer& pointer) {
+  auto new_cursor = [&]() {
+    if (!pointer.cursors.empty()) {
+      return pointer.cursors.back();
+    }
+    Pointer::Cursor cursor = Pointer::Cursor::None;
+    auto callback = [&](Option& option) {
+      if (!std::ranges::contains(option.Triggers(), ActionTrigger(PointerButton::Left)))
+        return LoopControl::Continue;
+      cursor = option.Cursor();
+      return LoopControl::Break;
+    };
+    for (Widget* w = pointer.hover; w; w = w->parent) {
+      OptionVisitor visit{callback};
+      w->Options(pointer, visit);
+      if (visit.done) break;
+    }
+    return cursor == Pointer::Cursor::None ? Pointer::Cursor::Arrow : cursor;
+  }();
+  if (pointer.cursor != new_cursor) {
+    pointer.OnCursorChanged(pointer.cursor, new_cursor);
+    pointer.cursor = new_cursor;
+  }
+}
+
 void Pointer::UpdatePath() {
   auto old_path = std::move(path);
 
@@ -113,6 +139,7 @@ void Pointer::UpdatePath() {
       new_w->PointerEnter(*this);
     }
   }
+  CheckCursorChanged(*this);
 }
 
 void Pointer::Move(Vec2 position) {
@@ -192,12 +219,13 @@ void Pointer::ButtonDown(PointerButton btn) {
   UpdatePath();
 
   if (action == nullptr && hover) {
-    // TODO: process this similarly to keyboard shortcuts
-    action = hover->FindAction(*this, btn);
-    Widget* curr = hover;
-    while (action == nullptr && curr->parent) {
-      curr = curr->parent;
-      action = curr->FindAction(*this, btn);
+    for (Widget* w = hover; w && !action; w = w->parent) {
+      action = w->TriggerAction(*this, btn);
+    }
+    if (action == nullptr && btn == PointerButton::Right) {
+      for (Widget* w = hover; w && !action; w = w->parent) {
+        action = w->OpenMenu(*this);
+      }
     }
     if (action) {
       pointer_widget->ValidateHierarchy();
@@ -223,32 +251,18 @@ void Pointer::ButtonUp(PointerButton btn) {
   button_down_time[static_cast<int>(btn)] = time::kZeroSteady;
   pointer_widget->WakeAnimation();
 }
-Pointer::IconType Pointer::Icon() const {
-  if (icons.empty()) {
-    return Pointer::kIconArrow;
-  }
-  return icons.back();
+
+Pointer::CursorOverride::CursorOverride(Pointer& pointer, Cursor cursor) : pointer(pointer) {
+  it = pointer.cursors.insert(pointer.cursors.end(), cursor);
+  CheckCursorChanged(pointer);
 }
 
-Pointer::IconOverride::IconOverride(Pointer& pointer, IconType icon) : pointer(pointer) {
-  IconType old_icon = pointer.Icon();
-  it = pointer.icons.insert(pointer.icons.end(), icon);
-  IconType new_icon = pointer.Icon();
-  if (old_icon != new_icon) {
-    pointer.OnIconChanged(old_icon, new_icon);
-  }
-}
-
-Pointer::IconOverride::~IconOverride() {
-  if (it == pointer.icons.end()) {
+Pointer::CursorOverride::~CursorOverride() {
+  if (it == pointer.cursors.end()) {
     return;
   }
-  IconType old_icon = pointer.Icon();
-  pointer.icons.erase(it);
-  IconType new_icon = pointer.Icon();
-  if (old_icon != new_icon) {
-    pointer.OnIconChanged(old_icon, new_icon);
-  }
+  pointer.cursors.erase(it);
+  CheckCursorChanged(pointer);
 }
 
 Vec2 Pointer::PositionWithin(const Widget& widget) const {

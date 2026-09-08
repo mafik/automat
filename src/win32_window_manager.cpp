@@ -696,7 +696,7 @@ struct AppWindowToy : ClientWindowToy {
   bool AllowClientPress(ui::Pointer& p) override;
   std::unique_ptr<Action> BeginClientPress(ui::Pointer& p) override;
 
-  void VisitOptions(const OptionsVisitor& visitor) const override;
+  void Options(ui::Pointer&, OptionVisitor&) override;
 };
 
 // Held while a button pressed over the window is down: routes the press and
@@ -765,21 +765,19 @@ struct ModeOption : TextOption {
         window(std::move(window)),
         target(target) {}
 
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<ModeOption>(window.Copy(), target);
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer&) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(ModeOption, window.Copy(), target); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     if (auto w = window.Lock()) {
       w->mode.store(target, std::memory_order_relaxed);
       PostApplyMode(w->AcquireWeakPtr());
     }
-    return nullptr;
+    return std::make_unique<EmptyAction>(pointer);
   }
   Option::Dir PreferredDir() const override { return Option::S; }
 };
 
-void AppWindowToy::VisitOptions(const OptionsVisitor& visitor) const {
-  ClientWindowToy::VisitOptions(visitor);
+void AppWindowToy::Options(ui::Pointer& pointer, OptionVisitor& visitor) {
+  ClientWindowToy::Options(pointer, visitor);
   ModeOption toggle(owner.Copy<AppWindow>(), mode_ == AppWindow::Mode::Embedded
                                                  ? AppWindow::Mode::Connected
                                                  : AppWindow::Mode::Embedded);

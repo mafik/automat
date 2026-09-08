@@ -6,6 +6,7 @@
 #include <include/core/SkBlurTypes.h>
 #include <include/effects/SkImageFilters.h>
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 
@@ -36,23 +37,13 @@ constexpr float kMenuSize = 2_cm;
 
 struct MenuAction;
 
-// Menus have always 8 slots for options.
-//
-// The plan for menus with more options is to create sub-menus but it's not clear how to approach
-// it.
-// Option 1 - if a clash happens, alert developers and re-position the options to avoid it (current
-// solution)
-// Option 2 - copress the extra options into linked-list of sub-menus
-//  a) singly-linked
-//  b) doubly-linked, where it's possible to go left & right
-//  c) tree-like, to minimize the distance to furthest options
-//
-// It is also possible to track the option usage and figure out which options are more important
-// than others and should have priority in menu allocation.
+// See: `docs/Bubble Menu, Options & Actions.md`
 struct Menu : ui::Widget {
-  using enum Option::Dir;  // N, S, W, E, NW, NE, SW, SE, DIR_COUNT, DIR_NONE
+  using enum Option::Dir;  // E, NE, N, NW, W, SW, S, SE, DIR_COUNT, DIR_NONE
 
-  std::unique_ptr<Option> options[DIR_COUNT] = {};
+  Ptr<Option> options[DIR_COUNT] = {};
+  std::unique_ptr<ui::Widget> icons[DIR_COUNT] = {};
+  animation::SpringV2<Vec2> offsets[DIR_COUNT] = {};
 
   // If some menu option wanted to be placed at position X but had to be moved around, we record
   // that here.
@@ -81,7 +72,7 @@ struct Menu : ui::Widget {
       [MODE_1_DIR] = {false, false, false, false, false, false, true, false},
   };
 
-  Menu(ui::Widget* parent, Vec<std::unique_ptr<Option>>&& options_vec, MenuAction* action)
+  Menu(ui::Widget* parent, Vec<Ptr<Option>>&& options_vec, MenuAction* action)
       : ui::Widget(parent), action(action) {
     int n_opts = options_vec.size();
 
@@ -191,8 +182,14 @@ struct Menu : ui::Widget {
 
     for (int i = 0; i < Option::DIR_COUNT; ++i) {
       if (options[i] == nullptr) continue;
-      options[i]->icon = options[i]->MakeIcon(this);
-      layers.OrderInside(options[i]->icon.get());
+      icons[i] = options[i]->MakeIcon(this);
+      if (icons[i] == nullptr) {
+        ERROR_ONCE << CleanTypeName(typeid(*options[i]).name())
+                   << "::MakeIcon returned null. Every option shown in a menu must create an icon "
+                      "widget (TextOption gives a text label); this option gets an empty slot.";
+        continue;
+      }
+      layers.OrderInside(icons[i].get());
     }
   }
   Option::Dir SinCosToDir(SinCos sc) {
@@ -308,11 +305,11 @@ struct Menu : ui::Widget {
         SkImageFilters::DropShadowOnly(0, 0, 0.5_mm, 0.5_mm, "#000000"_color, nullptr));
     auto saved = canvas.getLocalToDevice();
     canvas.saveLayer(nullptr, &shadow_paint);
-    for (auto& opt : options) {
-      if (opt == nullptr) continue;
+    for (auto& icon : icons) {
+      if (icon == nullptr) continue;
       canvas.setMatrix(saved);
-      canvas.concat(opt->icon->local_to_parent);
-      canvas.drawDrawable(opt->icon->sk_drawable.get());
+      canvas.concat(icon->local_to_parent);
+      canvas.drawDrawable(icon->sk_drawable.get());
     }
     canvas.restore();
     BakeChildren(canvas);
@@ -324,7 +321,7 @@ struct MenuAction : Action {
   unique_ptr<Menu> menu_widget;
   Option::Dir last_dir = Option::DIR_NONE;
   Vec2 last_pos;
-  MenuAction(ui::Pointer& pointer, Vec<std::unique_ptr<Option>>&& options)
+  MenuAction(ui::Pointer& pointer, Vec<Ptr<Option>>&& options)
       : Action(pointer), menu_widget(new Menu(pointer.GetWidget(), std::move(options), this)) {
     auto pos = pointer.PositionWithin(*pointer.GetWidget());
     menu_widget->local_to_parent = SkM44::Translate(pos.x, pos.y);
@@ -340,7 +337,7 @@ struct MenuAction : Action {
           ((menu_widget->mode == Menu::MODE_1_DIR) || (length > kMenuSize * 2 / 3))) {
         auto delta = pos - last_pos;
         if (menu_widget->options[dir] != nullptr) {
-          menu_widget->options[dir]->animation.offset.value += delta;
+          menu_widget->offsets[dir].value += delta;
         }
       }
     }
@@ -374,12 +371,12 @@ ui::Tock Menu::Tick(time::Timer& timer) {
       } else {
         target = {0, 0};
       }
-      auto& anim = options[i]->animation;
+      auto& offset = offsets[i];
       if (first_tick) {
-        anim.offset.value = target;
-        anim.offset.velocity = {0, 0};
+        offset.value = target;
+        offset.velocity = {0, 0};
       } else {
-        anim.offset.SineTowards(target, timer.d, 0.3);
+        offset.SineTowards(target, timer.d, 0.3);
       }
     }
     first_tick = false;
@@ -394,8 +391,8 @@ ui::Tock Menu::Tick(time::Timer& timer) {
   float bubble_area = kMenuSize * kMenuSize * M_PI;
   float area_per_option = bubble_area / SlotCount() / 2;
   for (int i = 0; i < DIR_COUNT; ++i) {
-    if (options[i] == nullptr) continue;
-    auto& opt = options[i]->icon;
+    if (icons[i] == nullptr) continue;
+    auto& opt = icons[i];
     Rect bounds = opt->CoarseBounds().rect;
     float required_area = bounds.Area();
 
@@ -404,7 +401,7 @@ ui::Tock Menu::Tick(time::Timer& timer) {
 
     auto angle = DirToSinCos((Option::Dir)i);
     float r = kMenuSize * 2 / 3;
-    auto center = Vec2::Polar(angle, r) + options[i]->animation.offset.value;
+    auto center = Vec2::Polar(angle, r) + offsets[i].value;
 
     auto desired_size =
         Rect::MakeCenter(center, bounds.Width() * scale_to_fit, bounds.Height() * scale_to_fit);
@@ -414,14 +411,28 @@ ui::Tock Menu::Tick(time::Timer& timer) {
   return Tock::Drawing;
 }
 
-Vec<std::unique_ptr<Option>> OptionsProvider::CloneOptions() const {
-  Vec<std::unique_ptr<Option>> options;
-  VisitOptions([&](Option& opt) { options.push_back(opt.Clone()); });
-  return options;
+std::unique_ptr<Action> OptionsProvider::TriggerActivate(ui::Pointer& pointer,
+                                                         ui::ActionTrigger trigger) {
+  std::unique_ptr<Action> action;
+  auto callback = [&](Option& option) {
+    if (std::ranges::contains(option.Triggers(), trigger)) action = option.Activate(pointer);
+    return action ? LoopControl::Break : LoopControl::Continue;
+  };
+  OptionVisitor visit{callback};
+  Options(pointer, visit);
+  return action;
 }
 
-std::unique_ptr<Action> OptionsProvider::OpenMenu(ui::Pointer& pointer) const {
-  return std::make_unique<MenuAction>(pointer, CloneOptions());
+std::unique_ptr<Action> OptionsProvider::OpenMenu(ui::Pointer& pointer) {
+  Vec<Ptr<Option>> options;
+  auto callback = [&](Option& option) {
+    if (auto clone = option.Clone()) options.push_back(std::move(clone));
+    return LoopControl::Continue;
+  };
+  OptionVisitor visit{callback};
+  Options(pointer, visit);
+  if (options.empty()) return nullptr;
+  return std::make_unique<MenuAction>(pointer, std::move(options));
 }
 
 TextOption::TextOption(Str text) : text(text) {}

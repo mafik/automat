@@ -434,14 +434,6 @@ ToyStore& Widget::ToyStore() const {
   return FindRootWidget().toys;
 }
 
-std::unique_ptr<Action> Widget::FindAction(Pointer& pointer, ActionTrigger btn) {
-  if (btn == PointerButton::Right) {
-    LOG << "Right click on " << Name();
-    return nullptr;
-  }
-  return nullptr;
-}
-
 void DebugCheckParents(Widget& widget) {
   using namespace mortal_priv;
   if (Widget* parent = widget.parent) {

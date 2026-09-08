@@ -34,6 +34,7 @@
 #include "font.hpp"
 #include "image_provider.hpp"
 #include "log.hpp"
+#include "menu.hpp"
 #include "str.hpp"
 #include "svg.hpp"
 #include "text_widget.hpp"
@@ -102,7 +103,6 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
 
   enum class DragMode { None, Top, Bottom, Left, Right, Move };
 
-  mutable DragMode hover_mode = DragMode::None;
   DragMode drag_mode = DragMode::None;
   Vec2 drag_start_pos;
   float drag_start_x_min, drag_start_x_max, drag_start_y_min, drag_start_y_max;
@@ -110,7 +110,6 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
   Optional<Vec2> iris_target;  // Where the eye is pointing (board coords)
   animation::SpringV2<Vec2> iris_dir;
   std::string ocr_text;
-  Optional<ui::Pointer::IconOverride> icon_override;
   animation::SpringV2<float> aspect_ratio = 1.618f;
   Rect status_rect;
   Optional<float> status_progress_ratio;
@@ -317,18 +316,18 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
     return DragMode::None;
   }
 
-  ui::Pointer::IconType GetCursorForMode(DragMode mode) const {
+  ui::Pointer::Cursor GetCursorForMode(DragMode mode) const {
     switch (mode) {
       case DragMode::Top:
       case DragMode::Bottom:
-        return ui::Pointer::kIconResizeVertical;
+        return ui::Pointer::Cursor::ResizeVertical;
       case DragMode::Left:
       case DragMode::Right:
-        return ui::Pointer::kIconResizeHorizontal;
+        return ui::Pointer::Cursor::ResizeHorizontal;
       case DragMode::Move:
-        return ui::Pointer::kIconAllScroll;
+        return ui::Pointer::Cursor::AllScroll;
       default:
-        return ui::Pointer::kIconArrow;
+        return ui::Pointer::Cursor::Arrow;
     }
   }
 
@@ -889,30 +888,15 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
 
   void PointerEnter(ui::Pointer& pointer) override {
     if (IsIconified()) return;
-    Vec2 pos = pointer.PositionWithin(*this);
-    hover_mode = GetDragModeAt(pos);
-    icon_override.emplace(pointer, GetCursorForMode(hover_mode));
     StartWatching(pointer);  // Start watching pointer movement
   }
 
   void PointerLeave(ui::Pointer& pointer) override {
-    hover_mode = DragMode::None;
-    icon_override.reset();  // Release the icon override
     StopWatching(pointer);  // Stop watching pointer movement
   }
 
   // PointerMoveCallback implementation
-  void PointerMove(ui::Pointer& pointer, Vec2 position) override {
-    Vec2 pos = pointer.PositionWithin(*this);
-    DragMode new_mode = GetDragModeAt(pos);
-
-    if (new_mode != hover_mode) {
-      hover_mode = new_mode;
-      // Update icon override with new cursor
-      icon_override.emplace(pointer, GetCursorForMode(hover_mode));
-    }
-    WakeAnimation();
-  }
+  void PointerMove(ui::Pointer& pointer, Vec2 position) override { WakeAnimation(); }
 
   // Forward declaration for drag action
   struct RegionDragAction : Action {
@@ -1021,16 +1005,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
     }
   };
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    if (!IsIconified() && trigger == ui::PointerButton::Left) {
-      Vec2 pos = pointer.PositionWithin(*this);
-      DragMode mode = GetDragModeAt(pos);
-      if (mode != DragMode::None) {
-        return std::make_unique<RegionDragAction>(pointer, *this, mode);
-      }
-    }
-    return ObjectToy::FindAction(pointer, trigger);
-  }
+  void Options(ui::Pointer&, OptionVisitor&) override;
 
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     Vec2AndDir pos_dir;
@@ -1050,6 +1025,29 @@ const SkPath TesseractWidget::kEyeShape = PathFromSVG(
     "4.9339-6.0203 7.3365-5.2166 8.8584-3.994 10.9103-2.0104 12.1074-.326 12.5263.871 10.9531 "
     "2.3929 9.8245 3.2222 7.6101 4.6757 5.3956 5.4623 3.5744 5.8813 1.2659 6.0694-2.5645 "
     "6.001-4.5481 5.7701-7.3867 5.1033-9.3703 4.0431-11.5847 2.4955-13.0382 1.2985-13.3888.9308Z");
+
+struct TesseractRegionOption : TextOption {
+  TesseractWidget& widget;
+  TesseractWidget::DragMode mode;
+  TesseractRegionOption(TesseractWidget& widget, TesseractWidget::DragMode mode)
+      : TextOption(mode == TesseractWidget::DragMode::Move ? "Move region" : "Resize region"),
+        widget(widget),
+        mode(mode) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(TesseractRegionOption, widget, mode); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return widget.GetCursorForMode(mode); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
+    return std::make_unique<TesseractWidget::RegionDragAction>(pointer, widget, mode);
+  }
+};
+
+void TesseractWidget::Options(ui::Pointer& pointer, OptionVisitor& visit) {
+  if (!IsIconified()) {
+    DragMode mode = GetDragModeAt(pointer.PositionWithin(*this));
+    if (mode != DragMode::None) visit(TesseractRegionOption(*this, mode));
+  }
+  ObjectToy::Options(pointer, visit);
+}
 
 std::unique_ptr<ObjectToy> TesseractOCR::MakeToy(ui::Widget* parent) {
   return std::make_unique<TesseractWidget>(parent, *this);

@@ -132,7 +132,7 @@ struct RootWidget final : Widget {
   Compositor GetCompositor() const override { return Compositor::WARP; }
 
   Vec2 move_velocity = Vec2(0, 0);
-  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
+  void Options(Pointer&, OptionVisitor&) override;
 
   void Zoom(float delta);
   std::unique_ptr<Pointer> MakePointer(Vec2 position);

@@ -17,7 +17,7 @@ std::unique_ptr<ui::Widget> MakeObjectOption::MakeIcon(ui::Widget* parent) {
   icon = new_icon.get();
   return new_icon;
 }
-std::unique_ptr<Action> MakeObjectOption::Activate(ui::Pointer& pointer) const {
+std::unique_ptr<Action> MakeObjectOption::Activate(ui::Pointer& pointer) {
   // Idea: reuse the `icon` widget.
   // The icon is the right widget type for the given proto, so theoretically it could be
   // reattached to the newly cloned object.
@@ -31,9 +31,7 @@ std::unique_ptr<Action> MakeObjectOption::Activate(ui::Pointer& pointer) const {
   return std::make_unique<DragLocationAction>(pointer, std::move(loc), nullptr,
                                               toy.CoarseBounds().Clamp(Vec2(0, 0)));
 }
-std::unique_ptr<Option> MakeObjectOption::Clone() const {
-  return std::make_unique<MakeObjectOption>(proto, dir);
-}
+Ptr<Option> MakeObjectOption::Clone() const { return MAKE_PTR(MakeObjectOption, proto, dir); }
 MakeObjectOption::MakeObjectOption(Ptr<Object> proto, Dir dir)
     : proto(proto), dir(dir), icon(nullptr) {}
 }  // namespace automat

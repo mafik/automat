@@ -111,7 +111,7 @@ struct InstructionLibrary : Object {
     SkPath Shape() const override;
     Tock Tick(time::Timer&) override;
     void Draw(SkCanvas&) const override;
-    std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
+    void Options(ui::Pointer&, OptionVisitor&) override;
 
     bool AllowChildPointerEvents(ui::Widget& child) const override { return false; }
 

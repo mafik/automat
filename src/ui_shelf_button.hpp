@@ -32,11 +32,7 @@ struct ShelfButton : Widget {
   Optional<Rect> DrawBounds() const override { return std::nullopt; }
   bool AllowChildPointerEvents(Widget&) const override { return false; }
 
-  void PointerEnter(Pointer&) override;
-  void PointerLeave(Pointer&) override;
-  Optional<Pointer::IconOverride> hand_icon;
-
-  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger btn) override;
+  void Options(Pointer&, OptionVisitor&) override;
 };
 
 }  // namespace automat::ui

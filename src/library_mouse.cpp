@@ -292,17 +292,13 @@ struct MouseDownMenuOption : Option, OptionsProvider {
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
     return std::make_unique<MouseIcon>(parent, ui::PointerButton::Unknown, down, false);
   }
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<MouseDownMenuOption>(down);
-  }
-  void VisitOptions(const OptionsVisitor& visitor) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(MouseDownMenuOption, down); }
+  void Options(ui::Pointer&, OptionVisitor& visitor) override {
     for (auto& option : button_options) {
       visitor(option);
     }
   }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    return OpenMenu(pointer);
-  }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override { return OpenMenu(pointer); }
   Dir PreferredDir() const override { return down ? SW : SE; }
 };
 
@@ -312,10 +308,8 @@ struct MousePresserMenuOption : Option, OptionsProvider {
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
     return std::make_unique<MouseIcon>(parent, ui::PointerButton::Unknown, std::nullopt, true);
   }
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<MousePresserMenuOption>();
-  }
-  void VisitOptions(const OptionsVisitor& visitor) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(MousePresserMenuOption); }
+  void Options(ui::Pointer&, OptionVisitor& visitor) override {
 #define BUTTON(button, dir)                                                           \
   static MakeObjectOption button##_presser_option =                                   \
       MakeObjectOption(MAKE_PTR(MouseButtonPresser, ui::PointerButton::button), dir); \
@@ -327,9 +321,7 @@ struct MousePresserMenuOption : Option, OptionsProvider {
     BUTTON(Forward, NE);
 #undef BUTTON
   }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    return OpenMenu(pointer);
-  }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override { return OpenMenu(pointer); }
   Dir PreferredDir() const override { return S; }
 };
 
@@ -340,18 +332,14 @@ struct MouseScrollMenuOption : Option, OptionsProvider {
     return std::make_unique<MouseIcon>(parent, ui::PointerButton::Unknown, std::nullopt, false,
                                        true);
   }
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<MouseScrollMenuOption>();
-  }
-  void VisitOptions(const OptionsVisitor& visitor) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(MouseScrollMenuOption); }
+  void Options(ui::Pointer&, OptionVisitor& visitor) override {
     static MakeObjectOption x = MakeObjectOption(MAKE_PTR(MouseScrollX), Option::N);
     visitor(x);
     static MakeObjectOption y = MakeObjectOption(MAKE_PTR(MouseScrollY), Option::S);
     visitor(y);
   }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    return OpenMenu(pointer);
-  }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override { return OpenMenu(pointer); }
   Dir PreferredDir() const override { return E; }
 };
 
@@ -374,8 +362,8 @@ struct MouseWidget : MouseWidgetBase {
     MouseWidgetCommon::Draw(canvas, ui::PointerButton::Unknown, std::nullopt, nullptr, false);
   }
 
-  void VisitOptions(const OptionsVisitor& options_visitor) const override {
-    ObjectToy::VisitOptions(options_visitor);
+  void Options(ui::Pointer& pointer, OptionVisitor& options_visitor) override {
+    ObjectToy::Options(pointer, options_visitor);
     static MousePresserMenuOption presser_option;
     options_visitor(presser_option);
     static MouseDownMenuOption down_option(true);
@@ -542,10 +530,8 @@ struct MouseMoveWidget : MouseWidget {
   MouseMoveWidget(ui::Widget* parent, Object& weak_mouse_move)
       : MouseWidget(parent, weak_mouse_move) {}
 
-  void VisitOptions(const OptionsVisitor& options_visitor) const override {
-    // Note that we're not calling the MouseWidget's VisitOptions because we don't want to offer
-    // other objects from here.
-    ObjectToy::VisitOptions(options_visitor);
+  void Options(ui::Pointer& pointer, OptionVisitor& options_visitor) override {
+    ObjectToy::Options(pointer, options_visitor);
   }
 
   void Draw(SkCanvas& canvas) const override {

@@ -16,6 +16,7 @@
 #include "format.hpp"
 #include "location.hpp"
 #include "log.hpp"
+#include "menu.hpp"
 #include "text_field.hpp"
 #include "ui_beta.hpp"
 #include "ui_shelf_button.hpp"
@@ -986,21 +987,7 @@ struct PipeWireNodeToy : ui::beta::ObjectToy {
     if (UpdateFromObject()) tock |= Tock::Draw;
     return tock;
   }
-
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      if (has_mute_ && MuteBox().Contains(pos)) {
-        if (auto node = LockObject<PipeWireNode>()) node->SetMute(!mute_);
-        WakeAnimation();
-        return nullptr;
-      }
-      if (has_volume_ && VolumeBand().Contains(pos)) {
-        return std::make_unique<VolumeDrag>(p, *this);
-      }
-    }
-    return ObjectToy::FindAction(p, btn);
-  }
+  void Options(ui::Pointer&, OptionVisitor&) override;
 
   void Draw(SkCanvas& canvas) const override {
     Str title = name_applied_.empty() ? Str("pipewire node") : name_applied_;
@@ -1104,6 +1091,36 @@ struct PipeWireNodeToy : ui::beta::ObjectToy {
     BakeChildren(canvas);
   }
 };
+
+struct ToggleMuteOption : TextOption {
+  PipeWireNodeToy& toy;
+  ToggleMuteOption(PipeWireNodeToy& toy) : TextOption(toy.mute_ ? "Unmute" : "Mute"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleMuteOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (auto node = toy.LockObject<PipeWireNode>()) node->SetMute(!toy.mute_);
+    toy.WakeAnimation();
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+struct DragVolumeOption : TextOption {
+  PipeWireNodeToy& toy;
+  DragVolumeOption(PipeWireNodeToy& toy) : TextOption("Volume"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragVolumeOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<VolumeDrag>(p, toy);
+  }
+};
+
+void PipeWireNodeToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  if (has_mute_ && MuteBox().Contains(pos)) visit(ToggleMuteOption(*this));
+  if (has_volume_ && VolumeBand().Contains(pos)) visit(DragVolumeOption(*this));
+  ObjectToy::Options(p, visit);
+}
 
 VolumeDrag::VolumeDrag(ui::Pointer& p, PipeWireNodeToy& w) : Action(p), widget(&w) { Update(); }
 

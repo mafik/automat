@@ -18,6 +18,7 @@
 #include "audio.hpp"
 #include "color.hpp"
 #include "embedded.hpp"
+#include "menu.hpp"
 #include "pointer.hpp"
 #include "ui_constants.hpp"
 #include "ui_shadow.hpp"
@@ -29,13 +30,11 @@ namespace automat::ui {
 
 void Clickable::PointerHover(Pointer& pointer) {
   pointers_over++;
-  hand_icon.emplace(pointer, Pointer::kIconHand);
   widget.WakeAnimation();
 }
 
 void Clickable::PointerUnhover(Pointer& pointer) {
   pointers_over--;
-  hand_icon.reset();  // Reset Optional to release icon
   widget.WakeAnimation();
 }
 
@@ -81,12 +80,18 @@ struct ClickAction : public Action {
   }
 };
 
-std::unique_ptr<Action> Clickable::FindAction(Pointer& pointer, ActionTrigger pointer_button) {
-  if (pointer_button == PointerButton::Left) {
-    return std::make_unique<ClickAction>(pointer, *this);
+struct ClickOption : TextOption {
+  Clickable& clickable;
+  ClickOption(Clickable& clickable) : TextOption("Press"), clickable(clickable) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ClickOption, clickable); }
+  Span<const ActionTrigger> Triggers() const override { return kLeftButton; }
+  Pointer::Cursor Cursor() const override { return Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(Pointer& pointer) override {
+    return std::make_unique<ClickAction>(pointer, clickable);
   }
-  return nullptr;
-}
+};
+
+void Clickable::Options(Pointer&, OptionVisitor& visit) { visit(ClickOption(*this)); }
 
 SkRRect Button::RRect() const {
   SkRect child_bounds = ChildBounds();

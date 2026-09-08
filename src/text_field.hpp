@@ -27,14 +27,10 @@ using TextVisitor = std::function<bool(std::string&)>;
 struct TextFieldBase : Widget {
   std::unordered_map<Caret*, CaretPosition> caret_positions;
   NestedWeakPtr<Argument::Table> argument;
-  Optional<Pointer::IconOverride> ibeam_icon;
 
   TextFieldBase(ui::Widget* parent) : Widget(parent) {}
 
-  void PointerEnter(Pointer&) override;
-  void PointerLeave(Pointer&) override;
-
-  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
+  void Options(Pointer&, OptionVisitor&) override;
 
   // Update the given caret to its current position from `caret_positions`.
   void UpdateCaret(Caret& caret);

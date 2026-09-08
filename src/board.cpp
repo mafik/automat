@@ -23,6 +23,7 @@
 #include "global_resources.hpp"
 #include "location.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "root_widget.hpp"
 #include "status.hpp"
 #include "textures.hpp"
@@ -656,8 +657,8 @@ struct MoveBoardAction : Action {
 struct MoveBoardOption : TextOption {
   WeakPtr<Board> weak;
   MoveBoardOption(WeakPtr<Board> weak) : TextOption("Move"), weak(weak) {}
-  std::unique_ptr<Option> Clone() const override { return std::make_unique<MoveBoardOption>(weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(MoveBoardOption, weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     if (auto board = weak.Lock()) {
       return std::make_unique<MoveBoardAction>(pointer, std::move(board));
     }
@@ -669,34 +670,24 @@ struct MoveBoardOption : TextOption {
 struct ToggleFrameOption : TextOption {
   WeakPtr<Board> weak;
   ToggleFrameOption(WeakPtr<Board> weak) : TextOption("Toggle Frame"), weak(weak) {}
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<ToggleFrameOption>(weak);
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleFrameOption, weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     if (auto board = weak.Lock()) {
       board->frame_visible = !board->frame_visible;
       board->WakeToys();
-      return nullptr;
     }
-    return nullptr;
+    return std::make_unique<EmptyAction>(pointer);
   }
   Dir PreferredDir() const override { return S; }
 };
 
-void BoardWidget::VisitOptions(const OptionsVisitor& visitor) const {
+void BoardWidget::Options(ui::Pointer&, OptionVisitor& visitor) {
   if (auto board = LockBoard()) {
     MoveBoardOption move{board->AcquireWeakPtr()};
     visitor(move);
     ToggleFrameOption toggle_frame{board->AcquireWeakPtr()};
     visitor(toggle_frame);
   }
-}
-
-std::unique_ptr<Action> BoardWidget::FindAction(ui::Pointer& pointer, ui::ActionTrigger btn) {
-  if (btn == ui::PointerButton::Right) {
-    return OpenMenu(pointer);
-  }
-  return nullptr;
 }
 
 }  // namespace automat

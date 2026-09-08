@@ -84,14 +84,14 @@ struct EnumKnobWidget : ui::Widget {
   struct ChangeEnumKnobAction : public Action {
     MortalPtr<EnumKnobWidget> widget;
     time::SteadyPoint start_time;
-    ui::Pointer::IconOverride scroll_icon;
+    ui::Pointer::CursorOverride scroll_cursor;
 
     ChangeEnumKnobAction(ui::Pointer& pointer, EnumKnobWidget& enum_knob_widget);
     void Update() override;
     ~ChangeEnumKnobAction();
   };
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& pointer, ui::ActionTrigger trigger) override;
+  void Options(ui::Pointer&, OptionVisitor&) override;
 };
 
 }  // namespace automat::ui

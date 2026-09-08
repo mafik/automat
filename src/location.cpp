@@ -398,10 +398,6 @@ void LocationWidget::Draw(SkCanvas& canvas) const {
   BakeChildStack(canvas, *toy);
 }
 
-std::unique_ptr<Action> LocationWidget::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
-  return nullptr;
-}
-
 void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const {
   if (!object) return;
   object->Each<Argument>([&](Argument arg) {

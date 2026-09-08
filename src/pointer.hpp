@@ -78,34 +78,35 @@ struct Pointer {
 
   PointerWidget* GetWidget();
 
-  enum IconType {
-    kIconArrow,
-    kIconHand,
-    kIconIBeam,
-    kIconAllScroll,
-    kIconResizeHorizontal,
-    kIconResizeVertical,
-    kIconCrosshair,
+  enum class Cursor {
+    None = 0,
+    Arrow,
+    Hand,
+    IBeam,
+    AllScroll,
+    ResizeHorizontal,
+    ResizeVertical,
+    Crosshair,
   };
 
   // RAII wrapper for icon lifetime management
-  struct IconOverride {
-    IconOverride(Pointer&, IconType);
-    ~IconOverride();
+  struct CursorOverride {
+    CursorOverride(Pointer&, Cursor);
+    ~CursorOverride();
 
     // Non-copyable and non-movable
-    IconOverride(const IconOverride&) = delete;
-    IconOverride(IconOverride&&) = delete;
-    IconOverride& operator=(const IconOverride&) = delete;
-    IconOverride& operator=(IconOverride&&) = delete;
+    CursorOverride(const CursorOverride&) = delete;
+    CursorOverride(CursorOverride&&) = delete;
+    CursorOverride& operator=(const CursorOverride&) = delete;
+    CursorOverride& operator=(CursorOverride&&) = delete;
 
     Pointer& pointer;
-    std::list<IconType>::iterator it;
+    std::list<Cursor>::iterator it;
 
-    IconType GetIconType() { return *it; }
+    Cursor GetCursor() { return *it; }
   };
 
-  IconType Icon() const;
+  Cursor cursor = Cursor::None;
 
   void UpdatePath();
 
@@ -131,7 +132,7 @@ struct Pointer {
   MortalPtr<KeyboardWidget> keyboard;
 
   Vec2 pointer_position;
-  std::list<Pointer::IconType> icons;
+  std::list<Pointer::Cursor> cursors;
 
   Vec2 button_down_position[static_cast<int>(PointerButton::Count)];
   time::SteadyPoint button_down_time[static_cast<int>(PointerButton::Count)];
@@ -146,7 +147,7 @@ struct Pointer {
   unique_ptr<PointerWidget> pointer_widget;
 
   // Called when icon state changes (for platform-specific cursor updates)
-  virtual void OnIconChanged(IconType old_icon, IconType new_icon) {}
+  virtual void OnCursorChanged(Cursor old_cursor, Cursor new_cursor) {}
 
   struct Logging;
 

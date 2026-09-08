@@ -15,6 +15,7 @@
 #include "deserializer.hpp"
 #include "file_import.hpp"
 #include "font.hpp"
+#include "menu.hpp"
 #include "object.hpp"
 #include "root_widget.hpp"
 #include "textures.hpp"
@@ -300,13 +301,11 @@ struct ToggleFilenameOption : TextOption {
 
   ToggleFilenameOption(WeakPtr<File> weak) : TextOption("Toggle filename"), weak(weak) {}
 
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<ToggleFilenameOption>(weak);
-  }
+  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleFilenameOption, weak); }
 
-  std::unique_ptr<Action> Activate(ui::Pointer&) const override {
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     if (auto file = weak.lock()) file->ToggleFilename();
-    return nullptr;
+    return std::make_unique<EmptyAction>(pointer);
   }
 };
 
@@ -388,8 +387,8 @@ struct FileToy : automat::ObjectToy {
     }
   }
 
-  void VisitOptions(const OptionsVisitor& visitor) const override {
-    ObjectToy::VisitOptions(visitor);
+  void Options(ui::Pointer& pointer, OptionVisitor& visitor) override {
+    ObjectToy::Options(pointer, visitor);
     if (auto file = LockObject<File>()) {
       ToggleFilenameOption toggle(file);
       visitor(toggle);

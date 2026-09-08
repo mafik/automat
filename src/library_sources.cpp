@@ -8,6 +8,7 @@
 #include "action.hpp"
 #include "embedded.hpp"
 #include "log.hpp"
+#include "menu.hpp"
 #include "path.hpp"
 #include "textures.hpp"
 #include "virtual_fs.hpp"
@@ -38,11 +39,9 @@ struct ExtractFilesOption : TextOption {
 
   ExtractFilesOption(WeakPtr<Sources> weak) : TextOption("Extract Files"), weak(weak) {}
 
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<ExtractFilesOption>(weak);
-  }
+  Ptr<Option> Clone() const override { return MAKE_PTR(ExtractFilesOption, weak); }
 
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     // Extract all embedded files to the current directory
     Status status;
     int file_count = 0;
@@ -67,7 +66,7 @@ struct ExtractFilesOption : TextOption {
       ++file_count;
     }
     LOG << "Extracted " << file_count << " files";
-    return nullptr;
+    return std::make_unique<EmptyAction>(pointer);
   }
 
   Dir PreferredDir() const override { return SW; }
@@ -86,8 +85,8 @@ struct SourcesWidget : ObjectToy {
 
   void Draw(SkCanvas& canvas) const override { SourcesImage().draw(canvas); }
 
-  void VisitOptions(const OptionsVisitor& visitor) const override {
-    ObjectToy::VisitOptions(visitor);
+  void Options(ui::Pointer& pointer, OptionVisitor& visitor) override {
+    ObjectToy::Options(pointer, visitor);
     if (auto sources = LockSources()) {
       ExtractFilesOption extract(sources);
       visitor(extract);

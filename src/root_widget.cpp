@@ -25,6 +25,7 @@
 #include "global_resources.hpp"
 #include "loading_animation.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "object.hpp"
 #include "pointer.hpp"
 #include "prototypes.hpp"
@@ -528,19 +529,43 @@ struct DragCameraAction : Action {
   }
 };
 
-std::unique_ptr<Action> RootWidget::FindAction(Pointer& p, ActionTrigger trigger) {
-  if (trigger == AnsiKey::W) {
-    return std::make_unique<MoveCameraAction>(p, *this, Vec2(0, 0.1));
-  } else if (trigger == AnsiKey::S) {
-    return std::make_unique<MoveCameraAction>(p, *this, Vec2(0, -0.1));
-  } else if (trigger == AnsiKey::A) {
-    return std::make_unique<MoveCameraAction>(p, *this, Vec2(-0.1, 0));
-  } else if (trigger == AnsiKey::D) {
-    return std::make_unique<MoveCameraAction>(p, *this, Vec2(0.1, 0));
-  } else if (trigger == PointerButton::Middle) {
-    return std::make_unique<DragCameraAction>(p, *this);
+struct CameraDirOption : TextOption {
+  RootWidget& root;
+  ActionTrigger trigger;
+  Vec2 delta;
+  Dir dir;
+  CameraDirOption(RootWidget& root, Str text, AnsiKey key, Vec2 delta, Dir dir)
+      : TextOption(text), root(root), trigger(key), delta(delta), dir(dir) {}
+  Ptr<Option> Clone() const override {
+    return MAKE_PTR(CameraDirOption, root, text, trigger, delta, dir);
   }
-  return nullptr;
+  Span<const ActionTrigger> Triggers() const override {
+    return Span<const ActionTrigger>(&trigger, 1);
+  }
+  Dir PreferredDir() const override { return dir; }
+  std::unique_ptr<Action> Activate(Pointer& pointer) override {
+    return std::make_unique<MoveCameraAction>(pointer, root, delta);
+  }
+};
+
+constexpr ActionTrigger kMiddleButton[] = {PointerButton::Middle};
+
+struct DragCameraOption : TextOption {
+  RootWidget& root;
+  DragCameraOption(RootWidget& root) : TextOption("Drag camera"), root(root) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragCameraOption, root); }
+  Span<const ActionTrigger> Triggers() const override { return kMiddleButton; }
+  std::unique_ptr<Action> Activate(Pointer& pointer) override {
+    return std::make_unique<DragCameraAction>(pointer, root);
+  }
+};
+
+void RootWidget::Options(Pointer&, OptionVisitor& visit) {
+  visit(CameraDirOption(*this, "Camera up", AnsiKey::W, Vec2(0, 0.1), Option::N));
+  visit(CameraDirOption(*this, "Camera down", AnsiKey::S, Vec2(0, -0.1), Option::S));
+  visit(CameraDirOption(*this, "Camera left", AnsiKey::A, Vec2(-0.1, 0), Option::W));
+  visit(CameraDirOption(*this, "Camera right", AnsiKey::D, Vec2(0.1, 0), Option::E));
+  visit(DragCameraOption(*this));
 }
 
 void RootWidget::Zoom(float delta) {

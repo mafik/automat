@@ -43,7 +43,7 @@ static std::vector<Win32PointerGrab*> active_pointer_grabs;
 
 struct Win32PointerGrab : automat::ui::PointerGrab {
   Win32Window& win32_window;
-  Optional<automat::ui::Pointer::IconOverride> crosshair_icon;
+  Optional<automat::ui::Pointer::CursorOverride> crosshair_cursor;
 
   Win32PointerGrab(automat::ui::Pointer& pointer, automat::ui::PointerGrabber& grabber,
                    Win32Window& win32_window)
@@ -55,7 +55,7 @@ struct Win32PointerGrab : automat::ui::PointerGrab {
         ERROR << "Failed to install global mouse hook: " << GetLastError();
         return;
       }
-      crosshair_icon.emplace(pointer, ui::Pointer::kIconCrosshair);
+      crosshair_cursor.emplace(pointer, ui::Pointer::Cursor::Crosshair);
     }
 
     if (global_mouse_hook) {
@@ -71,7 +71,7 @@ struct Win32PointerGrab : automat::ui::PointerGrab {
     if (active_pointer_grabs.size() == 0 && global_mouse_hook) {
       UnhookWindowsHookEx(global_mouse_hook);
       global_mouse_hook = nullptr;
-      crosshair_icon.reset();
+      crosshair_cursor.reset();
     }
   }
 };
@@ -82,33 +82,33 @@ struct Win32Pointer : automat::ui::Pointer {
   Win32Pointer(automat::ui::RootWidget& root, Vec2 position, Win32Window& win32_window)
       : automat::ui::Pointer(root, position), win32_window(win32_window) {}
 
-  void OnIconChanged(automat::ui::Pointer::IconType old_icon,
-                     automat::ui::Pointer::IconType new_icon) override {
-    UpdateCursor(new_icon);
+  void OnCursorChanged(automat::ui::Pointer::Cursor old_cursor,
+                       automat::ui::Pointer::Cursor new_cursor) override {
+    UpdateCursor(new_cursor);
   }
 
-  void UpdateCursor(automat::ui::Pointer::IconType icon) {
+  void UpdateCursor(automat::ui::Pointer::Cursor icon) {
     HCURSOR cursor;
     switch (icon) {
-      case automat::ui::Pointer::kIconArrow:
+      case automat::ui::Pointer::Cursor::Arrow:
         cursor = LoadCursor(nullptr, IDC_ARROW);
         break;
-      case automat::ui::Pointer::kIconHand:
+      case automat::ui::Pointer::Cursor::Hand:
         cursor = LoadCursor(nullptr, IDC_HAND);
         break;
-      case automat::ui::Pointer::kIconIBeam:
+      case automat::ui::Pointer::Cursor::IBeam:
         cursor = LoadCursor(nullptr, IDC_IBEAM);
         break;
-      case automat::ui::Pointer::kIconAllScroll:
+      case automat::ui::Pointer::Cursor::AllScroll:
         cursor = LoadCursor(nullptr, IDC_SIZEALL);
         break;
-      case automat::ui::Pointer::kIconResizeHorizontal:
+      case automat::ui::Pointer::Cursor::ResizeHorizontal:
         cursor = LoadCursor(nullptr, IDC_SIZEWE);
         break;
-      case automat::ui::Pointer::kIconResizeVertical:
+      case automat::ui::Pointer::Cursor::ResizeVertical:
         cursor = LoadCursor(nullptr, IDC_SIZENS);
         break;
-      case automat::ui::Pointer::kIconCrosshair:
+      case automat::ui::Pointer::Cursor::Crosshair:
         cursor = LoadCursor(nullptr, IDC_CROSS);
         break;
       default:
@@ -147,7 +147,7 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
           if (i == 0) {
             auto hwnd = grab->win32_window.hwnd;
             // Change the cursor immediately
-            static_cast<Win32Pointer&>(grab->pointer).UpdateCursor(grab->pointer.Icon());
+            static_cast<Win32Pointer&>(grab->pointer).UpdateCursor(grab->pointer.cursor);
             // First timer helps restoring the cursor when the OS changes the cursor back to arrow
             // in the first 10ms
             SetTimer(hwnd, 1, 10, SetCursorTimer);
@@ -304,12 +304,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       // Intercept this message to prevent Windows from changing the cursor back
       // to an arrow.
       if (LOWORD(lParam) == HTCLIENT) {
-        ui::Pointer::IconType icon;
+        ui::Pointer::Cursor cursor;
         {
           auto lock = window.Lock();
           auto& mouse = static_cast<Win32Pointer&>(window.GetMouse());
-          icon = mouse.Icon();
-          mouse.UpdateCursor(icon);
+          cursor = mouse.cursor;
+          mouse.UpdateCursor(cursor);
         }
         return TRUE;
       }

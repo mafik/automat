@@ -16,6 +16,7 @@
 #include <thread>
 
 #include "format.hpp"
+#include "menu.hpp"
 #include "prototypes.hpp"
 #include "ui_beta.hpp"
 #include "ui_shelf_button.hpp"
@@ -1529,26 +1530,7 @@ struct GStreamerToy : ui::beta::ObjectToy {
     }
     SetPropValue(index, nicks[(at + 1) % nicks.size()]);
   }
-
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      for (int i = 0; i < (int)prop_infos_.size(); ++i) {
-        if (!prop_rects_[i].Contains(pos)) continue;
-        switch (prop_infos_[i].kind) {
-          case PropInfo::kEnum:
-            CycleProp(i);
-            return nullptr;
-          case PropInfo::kBool:
-            SetPropValue(i, prop_values_[i] == "true" ? "false" : "true");
-            return nullptr;
-          case PropInfo::kNumber:
-            return std::make_unique<PropSliderDrag>(p, *this, i);
-        }
-      }
-    }
-    return ObjectToy::FindAction(p, btn);
-  }
+  void Options(ui::Pointer&, OptionVisitor&) override;
 
   void Draw(SkCanvas& canvas) const override {
     ui::beta::Panel(canvas, Rect::MakeCenterZero(kPlateW, plate_h_), factory_, ui::beta::kPurple,
@@ -1729,6 +1711,40 @@ struct GStreamerToy : ui::beta::ObjectToy {
   }
 };
 
+struct GStreamerPropOption : TextOption {
+  GStreamerToy& toy;
+  int index;
+  GStreamerPropOption(GStreamerToy& toy, int index)
+      : TextOption(toy.prop_infos_[index].name), toy(toy), index(index) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(GStreamerPropOption, toy, index); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override {
+    return toy.prop_infos_[index].kind == PropInfo::kNumber ? ui::Pointer::Cursor::None
+                                                            : ui::Pointer::Cursor::Hand;
+  }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    switch (toy.prop_infos_[index].kind) {
+      case PropInfo::kEnum:
+        toy.CycleProp(index);
+        return std::make_unique<EmptyAction>(p);
+      case PropInfo::kBool:
+        toy.SetPropValue(index, toy.prop_values_[index] == "true" ? "false" : "true");
+        return std::make_unique<EmptyAction>(p);
+      case PropInfo::kNumber:
+        return std::make_unique<PropSliderDrag>(p, toy, index);
+    }
+    return nullptr;
+  }
+};
+
+void GStreamerToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  Vec2 pos = p.PositionWithin(*this);
+  for (int i = 0; i < (int)prop_infos_.size(); ++i) {
+    if (prop_rects_[i].Contains(pos)) visit(GStreamerPropOption(*this, i));
+  }
+  ObjectToy::Options(p, visit);
+}
+
 PropSliderDrag::PropSliderDrag(ui::Pointer& p, GStreamerToy& w, int index)
     : Action(p), widget(&w), index(index) {
   Update();
@@ -1859,22 +1875,7 @@ struct BoundaryToy : ui::beta::ObjectToy {
     }
     WakeAnimation();
   }
-
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn == ui::PointerButton::Left) {
-      Vec2 pos = p.PositionWithin(*this);
-      if (step_rect_.Contains(pos)) {
-        if (is_sink) {
-          if (auto sink = LockObject<AppSinkBoundary>()) sink->step->ScheduleRun();
-        } else {
-          if (auto src = LockObject<AppSrcBoundary>()) src->step->ScheduleRun();
-        }
-        WakeAnimation();
-        return nullptr;
-      }
-    }
-    return ObjectToy::FindAction(p, btn);
-  }
+  void Options(ui::Pointer&, OptionVisitor&) override;
 
   void Draw(SkCanvas& canvas) const override {
     ui::beta::Panel(canvas, Rect::MakeCenterZero(kPlateW, kBPlateH), factory_, ui::beta::kPurple,
@@ -1985,6 +1986,28 @@ struct BoundaryToy : ui::beta::ObjectToy {
     BakeChildren(canvas);
   }
 };
+
+struct StepOption : TextOption {
+  BoundaryToy& toy;
+  StepOption(BoundaryToy& toy) : TextOption("Step"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(StepOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    if (toy.is_sink) {
+      if (auto sink = toy.LockObject<AppSinkBoundary>()) sink->step->ScheduleRun();
+    } else {
+      if (auto src = toy.LockObject<AppSrcBoundary>()) src->step->ScheduleRun();
+    }
+    toy.WakeAnimation();
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+void BoundaryToy::Options(ui::Pointer& p, OptionVisitor& visit) {
+  if (step_rect_.Contains(p.PositionWithin(*this))) visit(StepOption(*this));
+  ObjectToy::Options(p, visit);
+}
 
 std::unique_ptr<ObjectToy> AppSinkBoundary::MakeToy(ui::Widget* parent) {
   return std::make_unique<BoundaryToy>(parent, *this, true);

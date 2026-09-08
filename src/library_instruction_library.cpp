@@ -23,6 +23,7 @@
 #include "library_instruction.hpp"
 #include "llvm_asm.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "root_widget.hpp"
 #include "textures.hpp"
 #include "time.hpp"
@@ -1085,97 +1086,134 @@ static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary
   library.Filter();
 }
 
-std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(ui::Pointer& p,
-                                                               ui::ActionTrigger btn) {
-  if (!IsIconified() && btn == ui::PointerButton::Left) {
+struct PickInstructionOption : TextOption {
+  InstructionLibrary::Widget& widget;
+  PickInstructionOption(InstructionLibrary::Widget& widget)
+      : TextOption("Pick instruction"), widget(widget) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(PickInstructionOption, widget); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    auto obj = widget.instruction_helix.front().instruction->Clone();
+    auto& toy = p.root_widget.toys.FindOrMake(*obj, &widget);
+    toy.local_to_parent.setTranslate(kFrontInstructionRect.left, kFrontInstructionRect.bottom);
+    auto loc = MAKE_PTR(Location);
+    loc->InsertHere(std::move(obj));
+    audio::Play(embedded::assets_SFX_toolbar_pick_wav);
+    return std::make_unique<DragLocationAction>(p, std::move(loc));
+  }
+};
+
+struct ScrollDeckOption : TextOption {
+  InstructionLibrary::Widget& widget;
+  ScrollDeckOption(InstructionLibrary::Widget& widget) : TextOption("Scroll"), widget(widget) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ScrollDeckOption, widget); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    return std::make_unique<ScrollDeckAction>(p, widget, widget.LockOwner<Object>());
+  }
+};
+
+struct ToggleRegisterFilterOption : TextOption {
+  InstructionLibrary::Widget& widget;
+  RegisterFilterButton button;
+  ToggleRegisterFilterOption(InstructionLibrary::Widget& widget, RegisterFilterButton button)
+      : TextOption(button.read ? "Read filter" : "Write filter"), widget(widget), button(button) {}
+  Ptr<Option> Clone() const override {
+    return MAKE_PTR(ToggleRegisterFilterOption, widget, button);
+  }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    auto library = widget.LockObject<InstructionLibrary>();
+    if (!library) return nullptr;
+    lock_guard lock(library->mutex);
+    vector<unsigned>* queue = button.read ? &library->read_from : &library->write_to;
+    if (auto it = std::find(queue->begin(), queue->end(), button.reg); it != queue->end()) {
+      queue->erase(it);
+    } else {
+      queue->push_back(button.reg);
+    }
+    UpdateFilterCounters(*library, widget);
+    widget.WakeAnimation();
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+struct ToggleCategoryOption : TextOption {
+  InstructionLibrary::Widget& widget;
+  int category;
+  ToggleCategoryOption(InstructionLibrary::Widget& widget, int category)
+      : TextOption("Select"), widget(widget), category(category) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleCategoryOption, widget, category); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    auto library = widget.LockObject<InstructionLibrary>();
+    if (!library) return nullptr;
+    lock_guard lock(library->mutex);
+    if (library->selected_category != category) {
+      library->selected_category = category;
+    } else {
+      library->selected_category = -1;
+    }
+    library->selected_group = -1;
+    UpdateFilterCounters(*library, widget);
+    widget.WakeAnimation();
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+struct ToggleGroupOption : TextOption {
+  InstructionLibrary::Widget& widget;
+  int category;
+  int group;
+  ToggleGroupOption(InstructionLibrary::Widget& widget, int category, int group)
+      : TextOption("Select"), widget(widget), category(category), group(group) {}
+  Ptr<Option> Clone() const override {
+    return MAKE_PTR(ToggleGroupOption, widget, category, group);
+  }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
+    auto library = widget.LockObject<InstructionLibrary>();
+    if (!library) return nullptr;
+    lock_guard lock(library->mutex);
+    library->selected_category = category;
+    if (library->selected_group == group) {
+      library->selected_group = -1;
+    } else {
+      library->selected_group = group;
+    }
+    widget.category_states[category].leaves[group].shake.velocity = 150;
+    UpdateFilterCounters(*library, widget);
+    widget.WakeAnimation();
+    return std::make_unique<EmptyAction>(p);
+  }
+};
+
+void InstructionLibrary::Widget::Options(ui::Pointer& p, OptionVisitor& visit) {
+  if (!IsIconified()) {
     auto contact_point = p.PositionWithin(*this);
-
-    if (kFrontInstructionRect.Contains(contact_point)) {
-      auto obj = instruction_helix.front().instruction->Clone();
-      auto& toy = p.root_widget.toys.FindOrMake(*obj, this);
-      toy.local_to_parent.setTranslate(kFrontInstructionRect.left, kFrontInstructionRect.bottom);
-      auto loc = MAKE_PTR(Location);
-      loc->InsertHere(std::move(obj));
-      audio::Play(embedded::assets_SFX_toolbar_pick_wav);
-      return std::make_unique<DragLocationAction>(p, std::move(loc));
-    }
-
-    if (Length(contact_point) < kCornerDist) {
-      return std::make_unique<ScrollDeckAction>(p, *this, LockOwner<Object>());
-    }
-
+    if (kFrontInstructionRect.Contains(contact_point)) visit(PickInstructionOption(*this));
+    if (Length(contact_point) < kCornerDist) visit(ScrollDeckOption(*this));
     if (auto reg_btn = FindRegisterFilterButton(contact_point)) {
-      auto object_Ptr = LockOwner<Object>();
-      if (!object_Ptr) return nullptr;
-
-      auto* library = dynamic_cast<InstructionLibrary*>(object_Ptr.get());
-      if (!library) return nullptr;
-
-      lock_guard lock(library->mutex);
-
-      vector<unsigned>* queue = reg_btn->read ? &library->read_from : &library->write_to;
-      // Check if reg is in the queue
-      if (auto it = std::find(queue->begin(), queue->end(), reg_btn->reg); it != queue->end()) {
-        queue->erase(it);
-      } else {
-        queue->push_back(reg_btn->reg);
-      }
-      UpdateFilterCounters(*library, *this);
-      WakeAnimation();
-      return nullptr;
+      visit(ToggleRegisterFilterOption(*this, *reg_btn));
     }
-
     for (int i = 0; i < category_states.size(); ++i) {
       auto& category_state = category_states[i];
-      float distance = Length(category_state.position - contact_point);
-      if (distance < category_state.radius) {
-        auto object_Ptr = LockOwner<Object>();
-        if (!object_Ptr) return nullptr;
-
-        auto* library = dynamic_cast<InstructionLibrary*>(object_Ptr.get());
-        if (!library) return nullptr;
-
-        lock_guard lock(library->mutex);
-
-        if (library->selected_category != i) {
-          library->selected_category = i;
-          library->selected_group = -1;
-        } else {
-          library->selected_category = -1;
-          library->selected_group = -1;
-        }
-        UpdateFilterCounters(*library, *this);
-        WakeAnimation();
-        return nullptr;
+      if (Length(category_state.position - contact_point) < category_state.radius) {
+        visit(ToggleCategoryOption(*this, i));
       }
-
       for (int j = 0; j < category_state.leaves.size(); ++j) {
         auto& leaf_state = category_state.leaves[j];
-        float distance = Length(leaf_state.position - contact_point);
-        if (distance < leaf_state.radius) {
-          auto object_Ptr = LockOwner<Object>();
-          if (!object_Ptr) return nullptr;
-
-          auto* library = dynamic_cast<InstructionLibrary*>(object_Ptr.get());
-          if (!library) return nullptr;
-
-          lock_guard lock(library->mutex);
-
-          library->selected_category = i;
-          if (library->selected_group == j) {
-            library->selected_group = -1;
-          } else {
-            library->selected_group = j;
-          }
-          leaf_state.shake.velocity = 150;
-          UpdateFilterCounters(*library, *this);
-          WakeAnimation();
-          return nullptr;
+        if (Length(leaf_state.position - contact_point) < leaf_state.radius) {
+          visit(ToggleGroupOption(*this, i, j));
         }
       }
     }
   }
-  return ObjectToy::FindAction(p, btn);
+  ObjectToy::Options(p, visit);
 }
 
 }  // namespace automat::library

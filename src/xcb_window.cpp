@@ -468,21 +468,21 @@ struct XCBPointerGrab : automat::ui::PointerGrab {
 struct XCBPointer : automat::ui::Pointer {
   XCBWindow& xcb_window;
 
-  static const char* GetCursorName(automat::ui::Pointer::IconType icon) {
+  static const char* GetCursorName(automat::ui::Pointer::Cursor icon) {
     switch (icon) {
-      case automat::ui::Pointer::kIconArrow:
+      case automat::ui::Pointer::Cursor::Arrow:
         return "left_ptr";
-      case automat::ui::Pointer::kIconHand:
+      case automat::ui::Pointer::Cursor::Hand:
         return "hand1";
-      case automat::ui::Pointer::kIconIBeam:
+      case automat::ui::Pointer::Cursor::IBeam:
         return "xterm";
-      case automat::ui::Pointer::kIconAllScroll:
+      case automat::ui::Pointer::Cursor::AllScroll:
         return "all-scroll";
-      case automat::ui::Pointer::kIconResizeHorizontal:
+      case automat::ui::Pointer::Cursor::ResizeHorizontal:
         return "size_hor";
-      case automat::ui::Pointer::kIconResizeVertical:
+      case automat::ui::Pointer::Cursor::ResizeVertical:
         return "size_ver";
-      case automat::ui::Pointer::kIconCrosshair:
+      case automat::ui::Pointer::Cursor::Crosshair:
         return "crosshair";
       default:
         return "left_ptr";
@@ -492,12 +492,12 @@ struct XCBPointer : automat::ui::Pointer {
   XCBPointer(automat::ui::RootWidget& root, Vec2 position, XCBWindow& xcb_window)
       : automat::ui::Pointer(root, position), xcb_window(xcb_window) {}
 
-  void OnIconChanged(automat::ui::Pointer::IconType old_icon,
-                     automat::ui::Pointer::IconType new_icon) override {
-    UpdateCursor(new_icon);
+  void OnCursorChanged(automat::ui::Pointer::Cursor old_cursor,
+                       automat::ui::Pointer::Cursor new_cursor) override {
+    UpdateCursor(new_cursor);
   }
 
-  void UpdateCursor(automat::ui::Pointer::IconType icon) {
+  void UpdateCursor(automat::ui::Pointer::Cursor icon) {
     xcb_cursor_t cursor =
         xcb_cursor_load_cursor(xcb_window.cursor_context.get(), GetCursorName(icon));
     if (cursor != XCB_NONE) {
@@ -728,8 +728,8 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
       for (int i = 0; i < n; ++i) {
         auto& e = offer->entries[i];
         if (e.done.load(std::memory_order_acquire)) continue;
-        bool match = property != XCB_NONE ? (e.property == property)
-                                          : (e.time == time && e.type == target);
+        bool match =
+            property != XCB_NONE ? (e.property == property) : (e.time == time && e.type == target);
         if (match) return {offer, &e};
       }
     }
@@ -968,8 +968,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                 CompleteEntry(found.offer, *found.entry, true);
               } else {
                 found.entry->data += chunk;
-                found.entry->bytes_done.store(found.entry->data.size(),
-                                              std::memory_order_relaxed);
+                found.entry->bytes_done.store(found.entry->data.size(), std::memory_order_relaxed);
                 found.offer->WakeToys();
               }
               break;

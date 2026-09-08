@@ -18,8 +18,9 @@
 
 #include "action.hpp"
 #include "animation.hpp"
+#include "control_flow.hpp"
+#include "fn_ref.hpp"
 #include "key.hpp"
-#include "menu.hpp"
 #include "mortal.hpp"
 #include "optional.hpp"
 #include "ptr.hpp"
@@ -39,8 +40,32 @@ namespace automat {
 struct Object;
 struct Argument;
 struct Location;
+struct Option;
 struct Syncable;
 struct ToyStore;
+
+namespace ui {
+struct ActionTrigger;
+}
+
+struct OptionVisitor {
+  FnRef<LoopControl(Option&)> callback;
+  bool done = false;
+  void operator()(Option& option) {
+    // TODO: early return shouldn't be handled with a boolean - but an actual early return
+    if (done) return;
+    if (callback(option) == LoopControl::Break) {
+      done = true;
+    }
+  }
+  void operator()(Option&& option) { (*this)(option); }
+};
+
+struct OptionsProvider {
+  virtual void Options(ui::Pointer&, OptionVisitor&) = 0;
+  std::unique_ptr<Action> TriggerActivate(ui::Pointer&, ui::ActionTrigger);
+  std::unique_ptr<Action> OpenMenu(ui::Pointer&);
+};
 }  // namespace automat
 
 namespace automat::ui {
@@ -90,6 +115,7 @@ struct ActionTrigger {
   }
 
   constexpr auto operator<=>(const ActionTrigger&) const = default;
+  constexpr bool operator==(const ActionTrigger&) const = default;
   constexpr bool operator==(PointerButton button) const {
     return ActionTrigger(button).repr == repr;
   }
@@ -368,8 +394,7 @@ struct Widget : OptionsProvider {
     return CoarseBounds().Center();
   }
 
-  void VisitOptions(const OptionsVisitor&) const override {}
-  virtual std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger);
+  void Options(Pointer&, OptionVisitor&) override {}
 
   // Return true if the widget should be highlighted as draggable.
   virtual bool CanDrag() { return false; }

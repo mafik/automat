@@ -96,15 +96,15 @@ SkPath ObjectToy::Shape() const {
 struct DeleteOption : TextOption {
   WeakPtr<Location> weak;
   DeleteOption(WeakPtr<Location> weak) : TextOption("Delete"), weak(weak) {}
-  std::unique_ptr<Option> Clone() const override { return std::make_unique<DeleteOption>(weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(DeleteOption, weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     if (Ptr<Location> loc = weak.lock()) {
       if (auto parent_board = loc->LockBoard()) {
         parent_board->Extract(*loc);
         audio::Play(embedded::assets_SFX_canvas_pick_wav);
       }
     }
-    return nullptr;
+    return std::make_unique<EmptyAction>(pointer);
   }
   Dir PreferredDir() const override { return NW; }
 };
@@ -115,10 +115,11 @@ struct MoveLocationOption : TextOption {
 
   MoveLocationOption(WeakPtr<Location> location_weak, WeakPtr<Object> object_weak)
       : TextOption("Move"), location_weak(location_weak), object_weak(object_weak) {}
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<MoveLocationOption>(location_weak, object_weak);
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  Ptr<Option> Clone() const override {
+    return MAKE_PTR(MoveLocationOption, location_weak, object_weak);
   }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     auto location = location_weak.lock();
     if (location == nullptr) {
       return nullptr;
@@ -127,34 +128,36 @@ struct MoveLocationOption : TextOption {
     if (object == nullptr) {
       return nullptr;
     }
-    // Sometimes we may want to pick an object that's stored within another object.
-    // This branch handles such cases.
-    if (location->object != object) {
-      Object& container_object = *location->object;
-      if (auto container = container_object.AsContainer()) {
-        if (auto extracted = container->Extract(*object)) {
-          return std::make_unique<DragLocationAction>(pointer, std::move(extracted));
-        } else {
-          LOG << "Unable to extract " << object->Name() << " from " << container_object.Name()
-              << " (no location)";
-        }
-      } else {
-        LOG << "Unable to extract " << object->Name() << " from " << container_object.Name()
-            << " (not a Container)";
-      }
-    }
-    auto board = location->LockBoard();
-    if (board && location->object) {
-      auto* mw = pointer.root_widget.toys.FindOrNull(*board);
-      if (mw) {
-        return std::make_unique<DragLocationAction>(pointer, mw->DragStack(*location), mw);
-      }
-    }
-    return nullptr;
+    return PickUp(pointer, *location, *object);
   }
 
   Dir PreferredDir() const override { return N; }
 };
+
+std::unique_ptr<Action> PickUp(ui::Pointer& pointer, Location& location, Object& object) {
+  if (location.object.Get() != &object) {
+    Object& container_object = *location.object;
+    if (auto container = container_object.AsContainer()) {
+      if (auto extracted = container->Extract(object)) {
+        return std::make_unique<DragLocationAction>(pointer, std::move(extracted));
+      } else {
+        LOG << "Unable to extract " << object.Name() << " from " << container_object.Name()
+            << " (no location)";
+      }
+    } else {
+      LOG << "Unable to extract " << object.Name() << " from " << container_object.Name()
+          << " (not a Container)";
+    }
+  }
+  auto board = location.LockBoard();
+  if (board && location.object) {
+    auto* mw = pointer.root_widget.toys.FindOrNull(*board);
+    if (mw) {
+      return std::make_unique<DragLocationAction>(pointer, mw->DragStack(location), mw);
+    }
+  }
+  return nullptr;
+}
 
 struct CopyOption : TextOption {
   WeakPtr<Location> location_weak;
@@ -162,10 +165,8 @@ struct CopyOption : TextOption {
 
   CopyOption(WeakPtr<Location> location_weak, WeakPtr<Object> object_weak)
       : TextOption("Copy"), location_weak(location_weak), object_weak(object_weak) {}
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<CopyOption>(location_weak, object_weak);
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(CopyOption, location_weak, object_weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     auto location = location_weak.lock();
     if (location == nullptr) {
       return nullptr;
@@ -198,10 +199,8 @@ struct CloneOption : TextOption {
 
   CloneOption(WeakPtr<Location> location_weak, WeakPtr<Object> object_weak)
       : TextOption("Clone"), location_weak(location_weak), object_weak(object_weak) {}
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<CloneOption>(location_weak, object_weak);
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(CloneOption, location_weak, object_weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     auto location = location_weak.lock();
     auto object = object_weak.lock();
     if (location == nullptr || object == nullptr) {
@@ -228,13 +227,9 @@ struct NewOption : TextOption, OptionsProvider {
 
   NewOption(WeakPtr<Location> location_weak, WeakPtr<Object> object_weak)
       : TextOption("New..."), location_weak(location_weak), object_weak(object_weak) {}
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<NewOption>(location_weak, object_weak);
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    return OpenMenu(pointer);
-  }
-  void VisitOptions(const OptionsVisitor& visitor) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(NewOption, location_weak, object_weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override { return OpenMenu(pointer); }
+  void Options(ui::Pointer&, OptionVisitor& visitor) override {
     CopyOption copy{location_weak, object_weak};
     visitor(copy);
     CloneOption clone{location_weak, object_weak};
@@ -245,12 +240,12 @@ struct NewOption : TextOption, OptionsProvider {
 struct IconifyOption : TextOption {
   WeakPtr<Location> weak;
   IconifyOption(WeakPtr<Location> weak) : TextOption("Iconify"), weak(weak) {}
-  std::unique_ptr<Option> Clone() const override { return std::make_unique<IconifyOption>(weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(IconifyOption, weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     if (auto loc = weak.lock()) {
       loc->Iconify();
     }
-    return nullptr;
+    return std::make_unique<EmptyAction>(pointer);
   }
   Dir PreferredDir() const override { return NE; }
 };
@@ -258,12 +253,12 @@ struct IconifyOption : TextOption {
 struct DeiconifyOption : TextOption {
   WeakPtr<Location> weak;
   DeiconifyOption(WeakPtr<Location> weak) : TextOption("Deiconify"), weak(weak) {}
-  std::unique_ptr<Option> Clone() const override { return std::make_unique<DeiconifyOption>(weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(DeiconifyOption, weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     if (auto loc = weak.lock()) {
       loc->Deiconify();
     }
-    return nullptr;
+    return std::make_unique<EmptyAction>(pointer);
   }
   Dir PreferredDir() const override { return NE; }
 };
@@ -278,32 +273,32 @@ static Str SyncableName(NestedWeakPtr<Syncable::Table>& weak) {
 struct TurnOnOption : TextOption {
   NestedWeakPtr<OnOff::Table> weak;
   TurnOnOption(NestedWeakPtr<OnOff::Table> weak) : TextOption("Turn on"), weak(weak) {}
-  std::unique_ptr<Option> Clone() const override { return std::make_unique<TurnOnOption>(weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(TurnOnOption, weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     if (auto ptr = weak.Lock()) {
       OnOff(ptr.Owner<Object>(), ptr.Get()).TurnOn();
     }
-    return nullptr;
+    return std::make_unique<EmptyAction>(pointer);
   }
 };
 
 struct TurnOffOption : TextOption {
   NestedWeakPtr<OnOff::Table> weak;
   TurnOffOption(NestedWeakPtr<OnOff::Table> weak) : TextOption("Turn off"), weak(weak) {}
-  std::unique_ptr<Option> Clone() const override { return std::make_unique<TurnOffOption>(weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(TurnOffOption, weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     if (auto ptr = weak.Lock()) {
       OnOff(ptr.Owner<Object>(), ptr.Get()).TurnOff();
     }
-    return nullptr;
+    return std::make_unique<EmptyAction>(pointer);
   }
 };
 
 struct SyncOption : TextOption {
   NestedWeakPtr<Syncable::Table> weak;
   SyncOption(NestedWeakPtr<Syncable::Table> weak) : TextOption("Sync"), weak(weak) {}
-  std::unique_ptr<Option> Clone() const override { return std::make_unique<SyncOption>(weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(SyncOption, weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     if (auto syncable_ptr = weak.Lock()) {
       Syncable syncable(syncable_ptr.Owner<Object>(), syncable_ptr.Get());
       return std::make_unique<SyncAction>(pointer, syncable);
@@ -315,12 +310,12 @@ struct SyncOption : TextOption {
 struct UnsyncOption : TextOption {
   NestedWeakPtr<Syncable::Table> weak;
   UnsyncOption(NestedWeakPtr<Syncable::Table> weak) : TextOption("Unsync"), weak(weak) {}
-  std::unique_ptr<Option> Clone() const override { return std::make_unique<UnsyncOption>(weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(UnsyncOption, weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     if (auto syncable = weak.Lock()) {
       Syncable(syncable.Owner<Object>(), syncable.Get()).Unsync();
     }
-    return nullptr;
+    return std::make_unique<EmptyAction>(pointer);
   }
 };
 
@@ -328,16 +323,14 @@ struct FieldOption : TextOption, OptionsProvider {
   NestedWeakPtr<Syncable::Table> syncable_weak;
   FieldOption(NestedWeakPtr<Syncable::Table> weak)
       : TextOption(SyncableName(weak)), syncable_weak(weak) {}
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<FieldOption>(syncable_weak);
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(FieldOption, syncable_weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     if (auto ptr = syncable_weak.Lock()) {
       return OpenMenu(pointer);
     }
     return nullptr;
   }
-  void VisitOptions(const OptionsVisitor& visitor) const override {
+  void Options(ui::Pointer&, OptionVisitor& visitor) override {
     if (auto syncable = syncable_weak.Lock()) {
       auto* obj = syncable.Owner<Object>();
       if (auto* on_off = dyn_cast<OnOff::Table>(syncable.Get())) {
@@ -362,8 +355,8 @@ struct FieldOption : TextOption, OptionsProvider {
   }
 };
 
-void ObjectToy::VisitOptions(const OptionsVisitor& visitor) const {
-  if (auto* lw = ui::Closest<LocationWidget>(const_cast<ObjectToy&>(*this))) {
+void ObjectToy::Options(ui::Pointer&, OptionVisitor& visitor) {
+  if (auto* lw = ui::Closest<LocationWidget>(*this)) {
     if (auto loc = lw->LockLocation()) {
       auto loc_weak = loc->AcquireWeakPtr();
       DeleteOption del{loc_weak};
@@ -398,22 +391,6 @@ void ObjectToy::VisitOptions(const OptionsVisitor& visitor) const {
       }
     }
   }
-}
-
-std::unique_ptr<Action> ObjectToy::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
-  if (btn == ui::PointerButton::Left) {
-    if (auto* lw = Closest<LocationWidget>(*p.hover)) {
-      if (auto loc = lw->LockLocation()) {
-        MoveLocationOption move{loc->AcquireWeakPtr(), owner.Copy<Object>()};
-        return move.Activate(p);
-      }
-    } else {
-      LOG << "No parent location";
-    }
-  } else if (btn == ui::PointerButton::Right) {
-    return OpenMenu(p);
-  }
-  return Widget::FindAction(p, btn);
 }
 
 void Object::Updated(WeakPtr<Object>& updated) {

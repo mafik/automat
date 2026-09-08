@@ -28,9 +28,7 @@ struct TypeButton : ShapeWidget {
   void PointerHover(Pointer& p) override { clickable.PointerHover(p); }
   void PointerUnhover(Pointer& p) override { clickable.PointerUnhover(p); }
   Tock Tick(time::Timer& t) override { return clickable.Tick(t); }
-  std::unique_ptr<Action> FindAction(Pointer& p, ActionTrigger a) override {
-    return clickable.FindAction(p, a);
-  }
+  void Options(Pointer& p, OptionVisitor& visit) override { clickable.Options(p, visit); }
 };
 
 SmallBufferWidget::SmallBufferWidget(ui::Widget* parent, NestedWeakPtr<Buffer> buffer)

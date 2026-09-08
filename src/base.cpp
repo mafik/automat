@@ -38,10 +38,8 @@ void LongRunning::Done() const {
 
 RunOption::RunOption(WeakPtr<Object> object, Runnable::Table& runnable)
     : TextOption("Run"), weak(std::move(object)), runnable(&runnable) {}
-std::unique_ptr<Option> RunOption::Clone() const {
-  return std::make_unique<RunOption>(weak, *runnable);
-}
-std::unique_ptr<Action> RunOption::Activate(ui::Pointer& pointer) const {
+Ptr<Option> RunOption::Clone() const { return MAKE_PTR(RunOption, weak, *runnable); }
+std::unique_ptr<Action> RunOption::Activate(ui::Pointer& pointer) {
   if (auto object = weak.lock()) {
     if (auto lr = object->As<LongRunning>(); lr && lr.IsRunning()) {
       lr.Cancel();
@@ -49,16 +47,14 @@ std::unique_ptr<Action> RunOption::Activate(ui::Pointer& pointer) const {
       Runnable(*object, *runnable).ScheduleRun();
     }
   }
-  return nullptr;
+  return std::make_unique<EmptyAction>(pointer);
 }
 
 ThisIsFineOption::ThisIsFineOption(WeakPtr<Object> object)
     : TextOption("This Is Fine"), weak(std::move(object)) {}
-std::unique_ptr<Option> ThisIsFineOption::Clone() const {
-  return std::make_unique<ThisIsFineOption>(weak);
-}
-std::unique_ptr<Action> ThisIsFineOption::Activate(ui::Pointer& pointer) const {
+Ptr<Option> ThisIsFineOption::Clone() const { return MAKE_PTR(ThisIsFineOption, weak); }
+std::unique_ptr<Action> ThisIsFineOption::Activate(ui::Pointer& pointer) {
   ManipulateError(*weak.GetUnsafe(), [](Error& err) { err.Clear(); });
-  return nullptr;
+  return std::make_unique<EmptyAction>(pointer);
 }
 }  // namespace automat

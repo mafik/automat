@@ -8,6 +8,7 @@
 #include "automat.hpp"  // vm
 #include "drag_action.hpp"
 #include "location.hpp"
+#include "menu.hpp"
 #include "object.hpp"
 #include "root_widget.hpp"
 
@@ -25,17 +26,21 @@ SkPath ShelfButton::Shape() const { return proto_widget->Shape(); }
 
 RRect ShelfButton::CoarseBounds() const { return proto_widget->CoarseBounds(); }
 
-void ShelfButton::PointerEnter(Pointer& p) { hand_icon.emplace(p, Pointer::kIconHand); }
+struct ShelfButtonOption : TextOption {
+  ShelfButton& button;
+  ShelfButtonOption(ShelfButton& button) : TextOption("New"), button(button) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ShelfButtonOption, button); }
+  Span<const ActionTrigger> Triggers() const override { return kLeftButton; }
+  Pointer::Cursor Cursor() const override { return Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(Pointer& p) override {
+    auto obj = button.proto->Clone();
+    p.root_widget.toys.FindOrMake(*obj, &button);
+    auto loc = MAKE_PTR(Location);
+    loc->InsertHere(std::move(obj));
+    return std::make_unique<DragLocationAction>(p, std::move(loc));
+  }
+};
 
-void ShelfButton::PointerLeave(Pointer&) { hand_icon.reset(); }
-
-std::unique_ptr<Action> ShelfButton::FindAction(Pointer& p, ActionTrigger btn) {
-  if (btn != PointerButton::Left) return nullptr;
-  auto obj = proto->Clone();
-  p.root_widget.toys.FindOrMake(*obj, this);
-  auto loc = MAKE_PTR(Location);
-  loc->InsertHere(std::move(obj));
-  return std::make_unique<DragLocationAction>(p, std::move(loc));
-}
+void ShelfButton::Options(Pointer&, OptionVisitor& visit) { visit(ShelfButtonOption(*this)); }
 
 }  // namespace automat::ui

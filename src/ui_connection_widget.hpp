@@ -56,7 +56,7 @@ struct ConnectionWidget : ArgumentToy {
   SkPath Shape() const override;
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
-  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
+  void Options(Pointer&, OptionVisitor&) override;
   Optional<Rect> DrawBounds() const override;
 };
 

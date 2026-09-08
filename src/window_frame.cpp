@@ -32,16 +32,14 @@ struct DecorationOption : TextOption {
   DecorationOption(Str label, WeakPtr<Object> window, DecoratedWindow::DecorationPreference pref,
                    Option::Dir dir)
       : TextOption(std::move(label)), window(window), pref(pref), dir(dir) {}
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<DecorationOption>(text, window, pref, dir);
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer&) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(DecorationOption, text, window, pref, dir); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
     if (auto obj = window.Lock())
       if (auto* w = dynamic_cast<DecoratedWindow*>(obj.get())) {
         w->decoration_preference.store(pref, std::memory_order_relaxed);
         w->DecorationPreferenceChanged();
       }
-    return nullptr;
+    return std::make_unique<EmptyAction>(pointer);
   }
   Option::Dir PreferredDir() const override { return dir; }
 };
@@ -49,13 +47,9 @@ struct DecorationOption : TextOption {
 struct DecorationMenuOption : TextOption, OptionsProvider {
   WeakPtr<Object> window;
   DecorationMenuOption(WeakPtr<Object> window) : TextOption("Decoration..."), window(window) {}
-  std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<DecorationMenuOption>(window);
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    return OpenMenu(pointer);
-  }
-  void VisitOptions(const OptionsVisitor& visitor) const override {
+  Ptr<Option> Clone() const override { return MAKE_PTR(DecorationMenuOption, window); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override { return OpenMenu(pointer); }
+  void Options(ui::Pointer&, OptionVisitor& visitor) override {
     using P = DecoratedWindow::DecorationPreference;
     DecorationOption automat_auto("Auto", window, P::Auto, Option::S);
     visitor(automat_auto);
@@ -67,9 +61,17 @@ struct DecorationMenuOption : TextOption, OptionsProvider {
   Option::Dir PreferredDir() const override { return Option::S; }
 };
 
+struct ClientPressOption : TextOption {
+  ClientWindowToy& toy;
+  ClientPressOption(ClientWindowToy& toy) : TextOption("Press"), toy(toy) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(ClientPressOption, toy); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& p) override { return toy.BeginClientPress(p); }
+};
+
 }  // namespace
 
-void VisitDecorationOptions(const WeakPtr<Object>& window, const OptionsVisitor& visitor) {
+void VisitDecorationOptions(const WeakPtr<Object>& window, OptionVisitor& visitor) {
   DecorationMenuOption deco(window);
   visitor(deco);
 }
@@ -218,8 +220,11 @@ void ClientWindowToy::Draw(SkCanvas& canvas) const {
   if (Decorated()) Chrome().Draw(canvas);
 }
 
-void ClientWindowToy::VisitOptions(const OptionsVisitor& visitor) const {
-  ObjectToy::VisitOptions(visitor);
+void ClientWindowToy::Options(ui::Pointer& pointer, OptionVisitor& visitor) {
+  if (ContentRect().Contains(pointer.PositionWithin(*this)) && AllowClientPress(pointer)) {
+    visitor(ClientPressOption(*this));
+  }
+  ObjectToy::Options(pointer, visitor);
   VisitDecorationOptions(owner, visitor);
 }
 
@@ -255,14 +260,6 @@ void ClientWindowToy::PointerLeave(ui::Pointer& p) {
 void ClientWindowToy::KeyDown(ui::Caret&, ui::Key key) { SendKey(key, true); }
 
 void ClientWindowToy::KeyUp(ui::Caret&, ui::Key key) { SendKey(key, false); }
-
-std::unique_ptr<Action> ClientWindowToy::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
-  if ((ui::PointerButton)btn == ui::PointerButton::Left &&
-      ContentRect().Contains(p.PositionWithin(*this)) && AllowClientPress(p)) {
-    return BeginClientPress(p);
-  }
-  return ObjectToy::FindAction(p, btn);
-}
 
 ClientArrivals::ClientArrivals() = default;
 

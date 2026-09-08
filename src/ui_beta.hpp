@@ -289,9 +289,8 @@ struct RunButton : Widget {
   Optional<Rect> DrawBounds() const override { return Shape().getBounds().makeOutset(4_mm, 4_mm); }
   void PointerHover(Pointer& p) override { clickable.PointerHover(p); }
   void PointerUnhover(Pointer& p) override { clickable.PointerUnhover(p); }
-  std::unique_ptr<Action> FindAction(Pointer& p, ActionTrigger a) override {
-    if (!enabled) return nullptr;
-    return clickable.FindAction(p, a);
+  void Options(Pointer& p, OptionVisitor& visit) override {
+    if (enabled) clickable.Options(p, visit);
   }
   Tock Tick(time::Timer& t) override;
   void Draw(SkCanvas& canvas) const override;

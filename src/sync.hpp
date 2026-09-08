@@ -261,7 +261,7 @@ struct SyncBelt : ArgumentToy {
 
   bool DrawnUnderEndpoints() const override { return true; }
   SkPath Shape() const override;
-  std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
+  void Options(ui::Pointer&, OptionVisitor&) override;
   Tock Tick(time::Timer& t) override;
   void Draw(SkCanvas& canvas) const override;
   Optional<Rect> DrawBounds() const override;

@@ -296,7 +296,7 @@ the chrome. The toy hands the compositor the surface plus surface-local
 coordinates; the compositor resolves the surface handle and relays the event.
 The title bar and frame fall through to the standard object behaviors (drag, menu).
 The object menu opened over client content is the window's: a surface toy forwards
-`VisitOptions` to the toy at the base of its tree (`BaseToy`), because a surface is
+`Options` to the toy at the base of its tree (`BaseToy`), because a surface is
 window content rather than a board object of its own — a menu built for the surface
 object would target Move, Copy and New at the surface instead of the window.
 

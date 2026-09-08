@@ -15,6 +15,7 @@
 #include <cmath>
 
 #include "color.hpp"
+#include "menu.hpp"
 
 namespace automat::ui {
 
@@ -193,7 +194,7 @@ EnumKnobWidget::ChangeEnumKnobAction::ChangeEnumKnobAction(ui::Pointer& pointer,
                                                            EnumKnobWidget& enum_knob_widget)
     : Action(pointer),
       widget(&enum_knob_widget),
-      scroll_icon(pointer, ui::Pointer::kIconAllScroll) {
+      scroll_cursor(pointer, ui::Pointer::Cursor::AllScroll) {
   if (widget) {
     widget->is_dragging = true;
     auto& history = widget->knob.history;
@@ -235,12 +236,19 @@ EnumKnobWidget::ChangeEnumKnobAction::~ChangeEnumKnobAction() {
   widget->WakeAnimation();
 }
 
-std::unique_ptr<Action> EnumKnobWidget::FindAction(ui::Pointer& pointer,
-                                                   ui::ActionTrigger trigger) {
-  if (trigger == ui::PointerButton::Left) {
-    return std::make_unique<ChangeEnumKnobAction>(pointer, *this);
+struct TurnEnumKnobOption : TextOption {
+  EnumKnobWidget& knob;
+  TurnEnumKnobOption(EnumKnobWidget& knob) : TextOption("Turn"), knob(knob) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(TurnEnumKnobOption, knob); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::AllScroll; }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
+    return std::make_unique<EnumKnobWidget::ChangeEnumKnobAction>(pointer, knob);
   }
-  return nullptr;
+};
+
+void EnumKnobWidget::Options(ui::Pointer&, OptionVisitor& visit) {
+  visit(TurnEnumKnobOption(*this));
 }
 
 }  // namespace automat::ui

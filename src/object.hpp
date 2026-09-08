@@ -136,6 +136,8 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   Interface::Table* GetInterface() { return nullptr; }
 };
 
+std::unique_ptr<Action> PickUp(ui::Pointer&, Location&, Object&);
+
 // Provides sensible defaults for most object widgets. Designed to be inherited and tweaked.
 //
 // It's rendered as a green box with the name of the object.
@@ -146,8 +148,7 @@ struct ObjectToy : Toy {
   virtual std::string Text() const { return std::string(Name()); }
   SkPath Shape() const override;
   void Draw(SkCanvas&) const override;
-  void VisitOptions(const OptionsVisitor&) const override;
-  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
+  void Options(ui::Pointer&, OptionVisitor&) override;
 
   // Reports 1 but if the object is iconified, it checks the CoarseBounds()
   // and returns a scale that would fit in a 1x1cm square.

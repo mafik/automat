@@ -23,6 +23,7 @@
 #include "drag_action.hpp"
 #include "font.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "number_text_field.hpp"
 #include "pointer.hpp"
 #include "status.hpp"
@@ -675,7 +676,7 @@ struct TimerWidget : ObjectToy {
 
   bool CenteredAtZero() const override { return true; }
 
-  std::unique_ptr<Action> FindAction(ui::Pointer& pointer, ui::ActionTrigger btn) override;
+  void Options(ui::Pointer&, OptionVisitor&) override;
 };
 
 static float HandBaseDegrees(const TimerWidget& w) {
@@ -775,61 +776,87 @@ struct DragHandAction : Action {
   }
 };
 
-std::unique_ptr<Action> TimerWidget::FindAction(ui::Pointer& pointer, ui::ActionTrigger btn) {
-  if (btn == ui::PointerButton::Left) {
-    auto pos = pointer.PositionWithin(*this);
-    auto duration_handle_path = DurationHandlePath(*this);
-    if (duration_handle_path.contains(pos.x, pos.y)) {
-      return std::make_unique<DragDurationHandleAction>(pointer, *this);
-    }
-    if (kStartPusherBox.contains(pos.x, pos.y)) {
-      start_pusher_depression = 1;
-      WakeAnimation();
-      if (auto timer = LockTimer()) {
-        if (timer->running->IsRunning()) {
-          timer->running->Cancel();
-        } else {
-          timer->run->ScheduleRun();
-        }
-      }
-      return nullptr;
-    }
-    auto left_rot = SkMatrix::RotateDeg(-45).mapPoint(pos.sk);
-    auto right_rot = SkMatrix::RotateDeg(45).mapPoint(pos.sk);
-    if (kSmallPusherBox.contains(left_rot.x(), left_rot.y())) {
-      left_pusher_depression = 1;
-      if (auto timer = LockTimer()) {
-        timer->range = Timer::Range(((int)timer->range + (int)Timer::Range::EndGuard - 1) %
-                                    (int)Timer::Range::EndGuard);
-        range = timer->range;
-        duration_value = timer->duration_value;
-        UpdateTextField();
-        PropagateDurationOutwards(*timer);
-      }
-      WakeAnimation();
-      return nullptr;
-    }
-    if (kSmallPusherBox.contains(right_rot.x(), right_rot.y())) {
-      right_pusher_depression = 1;
-      if (auto timer = LockTimer()) {
-        timer->range = Timer::Range(((int)timer->range + 1) % (int)Timer::Range::EndGuard);
-        range = timer->range;
-        duration_value = timer->duration_value;
-        UpdateTextField();
-        PropagateDurationOutwards(*timer);
-      }
-      WakeAnimation();
-      return nullptr;
-    }
-
-    SkPath hand_path = HandPath(*this);
-    // Hand is just a straight line so we have to "widen" it
-    SkPath hand_outline = skpathutils::FillPathWithPaint(hand_path, kHandPaint);
-    if (hand_outline.contains(pos.x, pos.y)) {
-      return std::make_unique<DragHandAction>(pointer, *this);
-    }
+struct DragDurationHandleOption : TextOption {
+  TimerWidget& widget;
+  DragDurationHandleOption(TimerWidget& widget) : TextOption("Duration"), widget(widget) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragDurationHandleOption, widget); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
+    return std::make_unique<DragDurationHandleAction>(pointer, widget);
   }
-  return ObjectToy::FindAction(pointer, btn);
+};
+
+struct PushStartOption : TextOption {
+  TimerWidget& widget;
+  bool running;
+  PushStartOption(TimerWidget& widget, bool running)
+      : TextOption(running ? "Stop" : "Start"), widget(widget), running(running) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(PushStartOption, widget, running); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
+    widget.start_pusher_depression = 1;
+    widget.WakeAnimation();
+    if (auto timer = widget.LockTimer()) {
+      if (timer->running->IsRunning()) {
+        timer->running->Cancel();
+      } else {
+        timer->run->ScheduleRun();
+      }
+    }
+    return std::make_unique<EmptyAction>(pointer);
+  }
+};
+
+struct PushRangeOption : TextOption {
+  TimerWidget& widget;
+  int delta;
+  PushRangeOption(TimerWidget& widget, int delta)
+      : TextOption(delta < 0 ? "Previous range" : "Next range"), widget(widget), delta(delta) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(PushRangeOption, widget, delta); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
+    float& depression = delta < 0 ? widget.left_pusher_depression : widget.right_pusher_depression;
+    depression = 1;
+    if (auto timer = widget.LockTimer()) {
+      constexpr int kRangeCount = (int)Timer::Range::EndGuard;
+      timer->range = Timer::Range(((int)timer->range + kRangeCount + delta) % kRangeCount);
+      widget.range = timer->range;
+      widget.duration_value = timer->duration_value;
+      widget.UpdateTextField();
+      PropagateDurationOutwards(*timer);
+    }
+    widget.WakeAnimation();
+    return std::make_unique<EmptyAction>(pointer);
+  }
+};
+
+struct DragHandOption : TextOption {
+  TimerWidget& widget;
+  DragHandOption(TimerWidget& widget) : TextOption("Hand"), widget(widget) {}
+  Ptr<Option> Clone() const override { return MAKE_PTR(DragHandOption, widget); }
+  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
+    return std::make_unique<DragHandAction>(pointer, widget);
+  }
+};
+
+void TimerWidget::Options(ui::Pointer& pointer, OptionVisitor& visit) {
+  auto pos = pointer.PositionWithin(*this);
+  if (DurationHandlePath(*this).contains(pos.x, pos.y)) visit(DragDurationHandleOption(*this));
+  if (kStartPusherBox.contains(pos.x, pos.y)) {
+    bool running = false;
+    if (auto timer = LockTimer()) running = timer->running->IsRunning();
+    visit(PushStartOption(*this, running));
+  }
+  auto left_rot = SkMatrix::RotateDeg(-45).mapPoint(pos.sk);
+  auto right_rot = SkMatrix::RotateDeg(45).mapPoint(pos.sk);
+  if (kSmallPusherBox.contains(left_rot.x(), left_rot.y())) visit(PushRangeOption(*this, -1));
+  if (kSmallPusherBox.contains(right_rot.x(), right_rot.y())) visit(PushRangeOption(*this, 1));
+  SkPath hand_outline = skpathutils::FillPathWithPaint(HandPath(*this), kHandPaint);
+  if (hand_outline.contains(pos.x, pos.y)) visit(DragHandOption(*this));
+  ObjectToy::Options(pointer, visit);
 }
 
 std::unique_ptr<ObjectToy> Timer::MakeToy(ui::Widget* parent) {

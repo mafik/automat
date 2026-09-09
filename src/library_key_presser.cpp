@@ -116,7 +116,7 @@ struct UseObjectOption : TextOption {
   UseObjectOption(ui::Widget* widget) : TextOption("Use"), widget(widget) {}
   Ptr<Option> Clone() const override { return MAKE_PTR(UseObjectOption, widget); }
   std::unique_ptr<Action> Activate(ui::Pointer& p) override {
-    return widget->TriggerAction(p, ui::PointerButton::Left);
+    return widget->TriggerActivate(p, ui::PointerButton::Left);
   }
 };
 

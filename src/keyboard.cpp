@@ -598,7 +598,7 @@ void KeyboardWidget::KeyDown(Key key) {
     if (actions[i] == nullptr && pointer && pointer->hover) {
       Widget* current = pointer->hover;
       do {
-        actions[i] = current->TriggerAction(*pointer, key.physical);
+        actions[i] = current->TriggerActivate(*pointer, key.physical);
         current = current->parent;
       } while (actions[i] == nullptr && current);
       if (actions[i]) {

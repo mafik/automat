@@ -220,7 +220,7 @@ void Pointer::ButtonDown(PointerButton btn) {
 
   if (action == nullptr && hover) {
     for (Widget* w = hover; w && !action; w = w->parent) {
-      action = w->TriggerAction(*this, btn);
+      action = w->TriggerActivate(*this, btn);
     }
     if (action == nullptr && btn == PointerButton::Right) {
       for (Widget* w = hover; w && !action; w = w->parent) {

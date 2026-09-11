@@ -22,9 +22,7 @@
 #include "drag_action.hpp"
 #include "error.hpp"
 #include "format.hpp"
-#include "location.hpp"
 #include "log.hpp"
-#include "menu.hpp"
 #include "on_off.hpp"
 #include "pointer.hpp"
 #include "prototypes.hpp"
@@ -62,14 +60,20 @@ struct Signal : Interface {
     void (*on_run)(Signal, std::unique_ptr<RunTask>&) = nullptr;
 
     WhileLongRunning while_long_running;
+    bool schedules_next = true;
+
+    static std::unique_ptr<Action> DefaultActivate(Interface, ui::Pointer&, Toy*);
 
     constexpr Table(StrView name, WhileLongRunning while_long_running = kDeliver)
-        : Interface::Table(Interface::kSignal, name), while_long_running(while_long_running) {}
+        : Interface::Table(Interface::kSignal, name), while_long_running(while_long_running) {
+      activate = &DefaultActivate;
+    }
 
     template <typename ImplT>
     constexpr void FillFrom() {
       Interface::Table::FillFrom<ImplT>();
       on_run = [](Signal self, std::unique_ptr<RunTask>& t) { static_cast<ImplT&>(self).OnRun(t); };
+      if constexpr (requires { ImplT::kSchedulesNext; }) schedules_next = ImplT::kSchedulesNext;
     }
   };
 
@@ -217,21 +221,93 @@ struct LongRunning : OnOff {
 
 using NextArg = InterfaceArgument<Signal, Interface::kNextArg>;
 
-struct RunOption : TextOption {
-  WeakPtr<Object> weak;
-  Runnable::Table* runnable;
-  RunOption(WeakPtr<Object> object, Runnable::Table& runnable);
-  Ptr<Option> Clone() const override;
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override;
-  Dir PreferredDir() const override { return S; }
+extern Signal::Table kThisIsFine;
+
+struct Scalar : Interface {
+  struct Table : Interface::Table {
+    static bool classof(const Interface::Table* i) { return i->kind == Interface::kScalar; }
+
+    double (*get)(Scalar) = nullptr;
+    void (*set)(Scalar, double) = nullptr;
+
+    constexpr Table(StrView name) : Interface::Table(Interface::kScalar, name) {}
+
+    template <typename ImplT>
+    constexpr void FillFrom() {
+      Interface::Table::FillFrom<ImplT>();
+      get = [](Scalar self) { return static_cast<ImplT&>(self).OnGet(); };
+      set = [](Scalar self, double value) { static_cast<ImplT&>(self).OnSet(value); };
+    }
+  };
+
+  struct State {};
+
+  INTERFACE_BOUND(Scalar, Interface)
+
+  double Get() const { return table->get(*this); }
+  void Set(double value) const { table->set(*this, value); }
+
+  template <typename ImplT>
+  struct Def : Interface::DefBase {
+    using Impl = ImplT;
+    using Bound = Scalar;
+
+    static constexpr Table MakeTable() {
+      Table t(ImplT::kName);
+      t.FillFrom<ImplT>();
+      return t;
+    }
+
+    inline constinit static Table tbl = MakeTable();
+
+    ~Def() {}
+  };
 };
 
-struct ThisIsFineOption : TextOption {
-  WeakPtr<Object> weak;
-  ThisIsFineOption(WeakPtr<Object> object);
-  Ptr<Option> Clone() const override;
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override;
-  Dir PreferredDir() const override { return S; }
+struct Text : Interface {
+  struct Table : Interface::Table {
+    static bool classof(const Interface::Table* i) { return i->kind == Interface::kText; }
+
+    Str (*get)(Text) = nullptr;
+    void (*set)(Text, StrView) = nullptr;
+
+    static std::unique_ptr<Action> DefaultActivate(Interface, ui::Pointer&, Toy*);
+
+    constexpr Table(StrView name) : Interface::Table(Interface::kText, name) {
+      cursor = ui::Cursor::IBeam;
+      activate = &DefaultActivate;
+    }
+
+    template <typename ImplT>
+    constexpr void FillFrom() {
+      Interface::Table::FillFrom<ImplT>();
+      get = [](Text self) { return static_cast<ImplT&>(self).OnGet(); };
+      set = [](Text self, StrView value) { static_cast<ImplT&>(self).OnSet(value); };
+    }
+  };
+
+  struct State {};
+
+  INTERFACE_BOUND(Text, Interface)
+
+  Str Get() const { return table->get(*this); }
+  void Set(StrView value) const { table->set(*this, value); }
+
+  template <typename ImplT>
+  struct Def : Interface::DefBase {
+    using Impl = ImplT;
+    using Bound = Text;
+
+    static constexpr Table MakeTable() {
+      Table t(ImplT::kName);
+      t.FillFrom<ImplT>();
+      return t;
+    }
+
+    inline constinit static Table tbl = MakeTable();
+
+    ~Def() {}
+  };
 };
 
 // Interface for objects that can hold other objects within.
@@ -243,4 +319,4 @@ struct Container {
 
 }  // namespace automat
 
-#include "board.hpp"
+#include "location.hpp"

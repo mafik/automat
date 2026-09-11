@@ -25,7 +25,6 @@
 #include "global_resources.hpp"
 #include "loading_animation.hpp"
 #include "math.hpp"
-#include "menu.hpp"
 #include "object.hpp"
 #include "pointer.hpp"
 #include "prototypes.hpp"
@@ -453,6 +452,19 @@ void RootWidget::Poll() {
   for (Action& action : active_actions) {
     action.Poll(timer);
   }
+  uint32_t camera_wake = camera->wake_counter.load(std::memory_order_relaxed);
+  if (camera_wake != camera_observed) {
+    camera_observed = camera_wake;
+    Vec2 delta;
+    {
+      auto lock = std::lock_guard(camera->mutex);
+      delta = camera->nudge;
+      camera->nudge = Vec2(0, 0);
+    }
+    camera_target += delta;
+    inertia = false;
+    WakeAnimation();
+  }
 }
 
 void RootWidget::Draw(SkCanvas& canvas) const {
@@ -529,43 +541,48 @@ struct DragCameraAction : Action {
   }
 };
 
-struct CameraDirOption : TextOption {
-  RootWidget& root;
-  ActionTrigger trigger;
-  Vec2 delta;
-  Dir dir;
-  CameraDirOption(RootWidget& root, Str text, AnsiKey key, Vec2 delta, Dir dir)
-      : TextOption(text), root(root), trigger(key), delta(delta), dir(dir) {}
-  Ptr<Option> Clone() const override {
-    return MAKE_PTR(CameraDirOption, root, text, trigger, delta, dir);
-  }
-  Span<const ActionTrigger> Triggers() const override {
-    return Span<const ActionTrigger>(&trigger, 1);
-  }
-  Dir PreferredDir() const override { return dir; }
-  std::unique_ptr<Action> Activate(Pointer& pointer) override {
-    return std::make_unique<MoveCameraAction>(pointer, root, delta);
-  }
-};
+static std::unique_ptr<Action> MoveCamera(Pointer& pointer, Vec2 delta) {
+  return std::make_unique<MoveCameraAction>(pointer, pointer.root_widget, delta);
+}
 
-constexpr ActionTrigger kMiddleButton[] = {PointerButton::Middle};
+std::unique_ptr<Action> Camera::up_Impl::OnActivate(Pointer& p, automat::Toy*) {
+  return MoveCamera(p, kDelta);
+}
 
-struct DragCameraOption : TextOption {
-  RootWidget& root;
-  DragCameraOption(RootWidget& root) : TextOption("Drag camera"), root(root) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(DragCameraOption, root); }
-  Span<const ActionTrigger> Triggers() const override { return kMiddleButton; }
-  std::unique_ptr<Action> Activate(Pointer& pointer) override {
-    return std::make_unique<DragCameraAction>(pointer, root);
-  }
-};
+std::unique_ptr<Action> Camera::down_Impl::OnActivate(Pointer& p, automat::Toy*) {
+  return MoveCamera(p, kDelta);
+}
 
-void RootWidget::Options(Pointer&, OptionVisitor& visit) {
-  visit(CameraDirOption(*this, "Camera up", AnsiKey::W, Vec2(0, 0.1), Option::N));
-  visit(CameraDirOption(*this, "Camera down", AnsiKey::S, Vec2(0, -0.1), Option::S));
-  visit(CameraDirOption(*this, "Camera left", AnsiKey::A, Vec2(-0.1, 0), Option::W));
-  visit(CameraDirOption(*this, "Camera right", AnsiKey::D, Vec2(0.1, 0), Option::E));
-  visit(DragCameraOption(*this));
+std::unique_ptr<Action> Camera::left_Impl::OnActivate(Pointer& p, automat::Toy*) {
+  return MoveCamera(p, kDelta);
+}
+
+std::unique_ptr<Action> Camera::right_Impl::OnActivate(Pointer& p, automat::Toy*) {
+  return MoveCamera(p, kDelta);
+}
+
+constinit Signal::Table kDragCamera = [] {
+  Signal::Table t("Drag camera");
+  t.activate = [](Interface, Pointer& pointer, Toy*) -> std::unique_ptr<Action> {
+    return std::make_unique<DragCameraAction>(pointer, pointer.root_widget);
+  };
+  return t;
+}();
+
+constinit Signal::Table kCameraMenu = MenuTable<Signal::Table>(
+    "Camera",
+    [](Interface, Pointer& pointer, Toy*) { return pointer.root_widget.OpenMenu(pointer); });
+
+Interface RootWidget::FindOption(Pointer&, ActionTrigger trigger) {
+  using enum Dir;
+  if (trigger == PointerButton::Middle) return Interface(*camera, kDragCamera);
+  AnsiKey key = trigger;
+  Dir dir = trigger;
+  if (key == AnsiKey::W || dir == N) return Interface(*camera, Camera::up_tbl);
+  if (key == AnsiKey::S || dir == S) return Interface(*camera, Camera::down_tbl);
+  if (key == AnsiKey::A || dir == W) return Interface(*camera, Camera::left_tbl);
+  if (key == AnsiKey::D || dir == E) return Interface(*camera, Camera::right_tbl);
+  return {};
 }
 
 void RootWidget::Zoom(float delta) {

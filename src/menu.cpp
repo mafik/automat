@@ -6,7 +6,6 @@
 #include <include/core/SkBlurTypes.h>
 #include <include/effects/SkImageFilters.h>
 
-#include <algorithm>
 #include <memory>
 #include <utility>
 
@@ -14,344 +13,224 @@
 #include "color.hpp"
 #include "embedded.hpp"
 #include "global_resources.hpp"
-#include "log.hpp"
 #include "math.hpp"
 #include "mortal.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
 #include "sincos.hpp"
 #include "str.hpp"
-#include "text_widget.hpp"
 #include "textures.hpp"
 #include "units.hpp"
-#include "vla.hpp"
 #include "widget.hpp"
 
 namespace automat {
-
-Option::~Option() = default;
 
 PersistentImage kSkyBox = PersistentImage::MakeFromAsset(embedded::assets_skybox_webp);
 
 constexpr float kMenuSize = 2_cm;
 
+using ui::kDirCount;
+using enum OptionsProvider::MiniMenuMode;
+
+constexpr bool kValidSlots[5][kDirCount] = {
+    [MODE_8_DIR] = {true, true, true, true, true, true, true, true},
+    [MODE_6_DIR] = {false, true, true, true, false, true, true, true},
+    [MODE_4_DIR] = {true, false, true, false, true, false, true, false},
+    [MODE_2_DIR] = {false, false, true, false, false, false, true, false},
+    [MODE_1_DIR] = {false, false, false, false, false, false, true, false},
+};
+
+static ui::Dir SinCosToDir(OptionsProvider::MiniMenuMode mode, SinCos sc) {
+  using enum ui::Dir;
+  float angle = sc.ToDegreesPositive();
+  switch (mode) {
+    case MODE_1_DIR:
+      return S;
+    case MODE_2_DIR:
+      return sc.sin >= 0 ? N : S;
+    case MODE_4_DIR:
+      if (sc.cos > Fixed1(0.7071)) {
+        return E;
+      } else if (sc.cos < Fixed1(-0.7071)) {
+        return W;
+      } else if (sc.sin > 0) {
+        return N;
+      } else {
+        return S;
+      }
+    case MODE_6_DIR: {
+      if (angle < 60) {
+        return NE;
+      } else if (angle < 120) {
+        return N;
+      } else if (angle < 180) {
+        return NW;
+      } else if (angle < 240) {
+        return SW;
+      } else if (angle < 300) {
+        return S;
+      } else {
+        return SE;
+      }
+    }
+    case MODE_8_DIR: {
+      int dir8 = std::round(angle / 45.f);
+      return static_cast<ui::Dir>(dir8 >= 8 ? 0 : dir8);
+    }
+  }
+}
+
+static SinCos DirToSinCos(OptionsProvider::MiniMenuMode mode, ui::Dir dir) {
+  using enum ui::Dir;
+  if (mode == MODE_6_DIR) {
+    switch (dir) {
+      case N:
+        return 90_deg;
+      case NE:
+        return 30_deg;
+      case SE:
+        return 330_deg;
+      case S:
+        return 270_deg;
+      case SW:
+        return 210_deg;
+      case NW:
+        return 150_deg;
+      default:
+        return 0_deg;
+    }
+  }
+  return SinCos::FromDegrees(static_cast<int>(dir) * 45.f);
+}
+
+static int SlotCount(OptionsProvider::MiniMenuMode mode) {
+  switch (mode) {
+    case MODE_8_DIR:
+      return 8;
+    case MODE_6_DIR:
+      return 6;
+    case MODE_4_DIR:
+      return 4;
+    case MODE_2_DIR:
+      return 2;
+    case MODE_1_DIR:
+      return 1;
+  }
+}
+
 struct MenuAction;
 
 // See: `docs/Bubble Menu, Options & Actions.md`
 struct Menu : ui::Widget {
-  using enum Option::Dir;  // E, NE, N, NW, W, SW, S, SE, DIR_COUNT, DIR_NONE
-
-  Ptr<Option> options[DIR_COUNT] = {};
-  std::unique_ptr<ui::Widget> icons[DIR_COUNT] = {};
-  animation::SpringV2<Vec2> offsets[DIR_COUNT] = {};
-
-  // If some menu option wanted to be placed at position X but had to be moved around, we record
-  // that here.
-  Option::Dir moved_to_dir[DIR_COUNT] = {DIR_NONE, DIR_NONE, DIR_NONE, DIR_NONE,
-                                         DIR_NONE, DIR_NONE, DIR_NONE, DIR_NONE};
-
+  MiniMenuMode mode = MODE_8_DIR;
+  NestedWeakPtr<Interface::Table> slots[kDirCount];
+  std::unique_ptr<ui::Widget> icons[kDirCount];
+  animation::SpringV2<Vec2> offsets[kDirCount];
   animation::SpringV2<float> size = 0;
   MortalPtr<MenuAction> action;
   bool first_tick = true;
 
-  // Menus with fewer than 8 options may use a compressed display format where only some slots are
-  // shown. The options are moved around to fit the reduced number of slots.
-  enum MiniMenuMode {
-    MODE_8_DIR,  // stardard mode
-    MODE_6_DIR,  // N > NE > SE > S > SW > NW (no W & E)
-    MODE_4_DIR,  // N > E > S > W
-    MODE_2_DIR,  // N > S
-    MODE_1_DIR,  // X
-  } mode = MODE_8_DIR;
+  Menu(ui::Widget* parent, MenuAction* action);
+  Menu(ui::Widget* parent, MiniMenuMode mode, const Interface (&options)[kDirCount],
+       MenuAction* action);
 
-  constexpr static bool kValidSlots[5][DIR_COUNT] = {
-      [MODE_8_DIR] = {true, true, true, true, true, true, true, true},
-      [MODE_6_DIR] = {false, true, true, true, false, true, true, true},
-      [MODE_4_DIR] = {true, false, true, false, true, false, true, false},
-      [MODE_2_DIR] = {false, false, true, false, false, false, true, false},
-      [MODE_1_DIR] = {false, false, false, false, false, false, true, false},
-  };
+  ui::Dir PointerDir(SinCos sc) const { return SinCosToDir(mode, sc); }
+  std::unique_ptr<Action> Activate(int dir, ui::Pointer&);
 
-  Menu(ui::Widget* parent, Vec<Ptr<Option>>&& options_vec, MenuAction* action)
-      : ui::Widget(parent), action(action) {
-    int n_opts = options_vec.size();
-
-    // Preferred mode is used to shift some options around and try to compress the menu a little
-    MiniMenuMode preferred_mode;
-    if (n_opts <= 1) {
-      preferred_mode = MODE_1_DIR;
-    } else if (n_opts <= 2) {
-      preferred_mode = MODE_2_DIR;
-    } else if (n_opts <= 4) {
-      preferred_mode = MODE_4_DIR;
-    } else if (n_opts <= 6) {
-      preferred_mode = MODE_6_DIR;
-    } else {
-      preferred_mode = MODE_8_DIR;
-    }
-
-    // place options at their preferred positions
-    VLA_STACK(anywhere, int, n_opts);
-    VLA_STACK(taken, int, n_opts);
-
-    // how many options prefer a given direction?
-    int prefers_dir_cnt[DIR_COUNT] = {};
-
-    for (int i = 0; i < n_opts; ++i) {
-      auto preferred_dir = options_vec[i]->PreferredDir();
-      if (preferred_dir >= Option::DIR_COUNT) {
-        anywhere.Push(i);
-        continue;  // can be placed anywhere
-      }
-      prefers_dir_cnt[preferred_dir]++;
-      if (!kValidSlots[preferred_mode][preferred_dir]) {
-        taken.Push(i);
-        continue;  // desired dir doesn't exist in the preferred mode - put it nearby
-      }
-      if (options[preferred_dir] != nullptr) {
-        ERROR_ONCE << "Note to maf: found a menu where two options want the same spot!";
-        taken.Push(i);
-        continue;  // desired dir is taken - continue
-      }
-      options[preferred_dir] = std::move(options_vec[i]);
-    }
-
-    // TODO: use this list to create a sub-menu
-    VLA_STACK(unallocated, int, n_opts);
-
-    for (int i : taken) {
-      auto preferred_dir = options_vec[i]->PreferredDir();
-      Optional<Option::Dir> spot = std::nullopt;
-      for (int dist = 1; dist < 5; ++dist) {
-        Option::Dir a = Option::ShiftDir(preferred_dir, dist);
-        if (kValidSlots[preferred_mode][a] && options[a] == nullptr) {
-          spot = a;
-          break;
-        }
-        Option::Dir b = Option::ShiftDir(preferred_dir, -dist);
-        if (kValidSlots[preferred_mode][b] && options[b] == nullptr) {
-          spot = b;
-          break;
-        }
-      }
-      if (spot.has_value()) {
-        if (prefers_dir_cnt[preferred_dir] == 1) {
-          // If this is the only option that preferred a given direction, place a "redirect" here.
-          // This makes this whole space redirect its events to the original option
-          moved_to_dir[preferred_dir] = *spot;
-        }
-        options[*spot] = std::move(options_vec[i]);
-      } else {
-        unallocated.Push(i);
-      }
-    }
-
-    for (int i : anywhere) {
-      bool found_spot = false;
-      for (int dir = 0; dir < DIR_COUNT; ++dir) {
-        if (kValidSlots[preferred_mode][dir] && options[dir] == nullptr) {
-          options[dir] = std::move(options_vec[i]);
-          found_spot = true;
-          break;
-        }
-      }
-      if (!found_spot) {
-        unallocated.Push(i);
-      }
-    }
-
-    if (unallocated) {
-      // TODO(maf)
-      ERROR_ONCE << "Attempted to display a menu with too many options. " << unallocated.Size()
-                 << " options have been dropped. Time to implement sub-menus!";
-    }
-
-    if (options[NE] == nullptr && options[E] == nullptr && options[SE] == nullptr &&
-        options[NW] == nullptr && options[W] == nullptr && options[SW] == nullptr &&
-        options[N] == nullptr) {
-      mode = MODE_1_DIR;
-    } else if (options[NE] == nullptr && options[E] == nullptr && options[SE] == nullptr &&
-               options[NW] == nullptr && options[W] == nullptr && options[SW] == nullptr) {
-      mode = MODE_2_DIR;
-    } else if (options[NE] == nullptr && options[SE] == nullptr && options[NW] == nullptr &&
-               options[NE] == nullptr) {
-      mode = MODE_4_DIR;
-    } else if (options[E] == nullptr && options[W] == nullptr) {
-      mode = MODE_6_DIR;
-    }
-
-    for (int i = 0; i < Option::DIR_COUNT; ++i) {
-      if (options[i] == nullptr) continue;
-      icons[i] = options[i]->MakeIcon(this);
-      if (icons[i] == nullptr) {
-        ERROR_ONCE << CleanTypeName(typeid(*options[i]).name())
-                   << "::MakeIcon returned null. Every option shown in a menu must create an icon "
-                      "widget (TextOption gives a text label); this option gets an empty slot.";
-        continue;
-      }
-      layers.OrderInside(icons[i].get());
-    }
-  }
-  Option::Dir SinCosToDir(SinCos sc) {
-    float angle = sc.ToDegreesPositive();
-    float dir8_float = angle / 45.f;
-    int dir8_int = std::round(dir8_float);
-    if (dir8_int >= 8) {
-      dir8_int = 0;
-    }
-    if (options[dir8_int] == nullptr && moved_to_dir[dir8_int] != DIR_NONE) {
-      return moved_to_dir[dir8_int];
-    }
-    switch (mode) {
-      case MODE_1_DIR:
-        return S;
-      case MODE_2_DIR:
-        return sc.sin >= 0 ? N : S;
-      case MODE_4_DIR:
-        if (sc.cos > Fixed1(0.7071)) {
-          return E;
-        } else if (sc.cos < Fixed1(-0.7071)) {
-          return W;
-        } else if (sc.sin > 0) {
-          return N;
-        } else {
-          return S;
-        }
-      case MODE_6_DIR: {
-        if (angle < 60) {
-          return NE;
-        } else if (angle < 120) {
-          return N;
-        } else if (angle < 180) {
-          return NW;
-        } else if (angle < 240) {
-          return SW;
-        } else if (angle < 300) {
-          return S;
-        } else {
-          return SE;
-        }
-      }
-      case MODE_8_DIR: {
-        return (Option::Dir)dir8_int;
-      }
-    }
-  }
-  SinCos DirToSinCos(Option::Dir dir) {
-    if (mode == MODE_6_DIR) {
-      switch (dir) {
-        case Option::N:
-          return 90_deg;
-        case Option::NE:
-          return 30_deg;
-        case Option::SE:
-          return 330_deg;
-        case Option::S:
-          return 270_deg;
-        case Option::SW:
-          return 210_deg;
-        case Option::NW:
-          return 150_deg;
-        default:
-          return 0_deg;
-      }
-    }
-    return SinCos::FromDegrees((float)dir * 45.f);
-  }
-  int SlotCount() {
-    switch (mode) {
-      case MODE_8_DIR:
-        return 8;
-      case MODE_6_DIR:
-        return 6;
-      case MODE_4_DIR:
-        return 4;
-      case MODE_2_DIR:
-        return 2;
-      case MODE_1_DIR:
-        return 1;
-    }
-  }
   Optional<Rect> DrawBounds() const override {
     return Rect::MakeAtZero(kMenuSize * 3, kMenuSize * 3);
   }
   Tock Tick(time::Timer& timer) override;
-  void Draw(SkCanvas& canvas) const override {
-    auto shape = Shape();
-
-    SkPaint paint = [&]() {
-      Status status;
-      static auto effect = resources::CompileShader(embedded::assets_bubble_menu_rt_sksl, status);
-      assert(effect);
-
-      auto& image = *kSkyBox.image;
-      auto dimensions = image->dimensions();
-
-      SkRuntimeEffectBuilder builder(effect);
-      builder.uniform("time") = (float)fmod(time::SecondsSinceEpoch(), 1000.0);
-      builder.uniform("bubble_radius") = size.value;
-      builder.child("environment") = image->makeShader(kDefaultSamplingOptions);
-      builder.uniform("environment_size") = SkPoint(dimensions.width(), dimensions.height());
-
-      auto shader = builder.makeShader();
-      SkPaint paint;
-      paint.setShader(shader);
-      return paint;
-    }();
-    canvas.drawCircle(0, 0, size.value, paint);
-
-    SkPaint shadow_paint;
-    shadow_paint.setImageFilter(
-        SkImageFilters::DropShadowOnly(0, 0, 0.5_mm, 0.5_mm, "#000000"_color, nullptr));
-    auto saved = canvas.getLocalToDevice();
-    canvas.saveLayer(nullptr, &shadow_paint);
-    for (auto& icon : icons) {
-      if (icon == nullptr) continue;
-      canvas.setMatrix(saved);
-      canvas.concat(icon->local_to_parent);
-      canvas.drawDrawable(icon->sk_drawable.get());
-    }
-    canvas.restore();
-    BakeChildren(canvas);
-  }
+  void Draw(SkCanvas& canvas) const override;
   SkPath Shape() const override { return SkPath::Circle(0, 0, size.value); }
 };
 
 struct MenuAction : Action {
-  unique_ptr<Menu> menu_widget;
-  Option::Dir last_dir = Option::DIR_NONE;
+  std::unique_ptr<Menu> menu_widget;
+  MortalPtr<Toy> toy;
+  int last_dir = -1;
   Vec2 last_pos;
-  MenuAction(ui::Pointer& pointer, Vec<Ptr<Option>>&& options)
-      : Action(pointer), menu_widget(new Menu(pointer.GetWidget(), std::move(options), this)) {
-    auto pos = pointer.PositionWithin(*pointer.GetWidget());
-    menu_widget->local_to_parent = SkM44::Translate(pos.x, pos.y);
-    menu_widget->WakeAnimation();
-  }
+  MenuAction(ui::Pointer& pointer) : Action(pointer) {}
   void Update() override {
     auto pos = pointer.PositionWithin(*menu_widget);
     float length = Length(pos);
-    auto sin_cos = SinCos::FromVec2(pos, length);
-    Option::Dir dir = menu_widget->SinCosToDir(sin_cos);
-    if (last_dir != Option::DIR_NONE) {
-      if (dir == last_dir &&
-          ((menu_widget->mode == Menu::MODE_1_DIR) || (length > kMenuSize * 2 / 3))) {
-        auto delta = pos - last_pos;
-        if (menu_widget->options[dir] != nullptr) {
-          menu_widget->offsets[dir].value += delta;
-        }
-      }
+    int dir = static_cast<int>(menu_widget->PointerDir(SinCos::FromVec2(pos, length)));
+    if (dir == last_dir && (menu_widget->mode == MODE_1_DIR || length > kMenuSize * 2 / 3) &&
+        menu_widget->icons[dir]) {
+      menu_widget->offsets[dir].value += pos - last_pos;
     }
     last_dir = dir;
     last_pos = pos;
     if (length > kMenuSize) {
-      auto new_action = menu_widget->options[dir] == nullptr
-                            ? nullptr
-                            : menu_widget->options[dir]->Activate(pointer);
-      pointer.ReplaceAction(*this, std::move(new_action));
+      pointer.ReplaceAction(*this, menu_widget->Activate(dir, pointer));
     }
   }
   ui::Widget* Widget() override { return menu_widget.get(); }
 };
+
+Menu::Menu(ui::Widget* parent, MenuAction* action) : ui::Widget(parent), action(action) {
+  auto pos = action->pointer.PositionWithin(*parent);
+  local_to_parent = SkM44::Translate(pos.x, pos.y);
+  WakeAnimation();
+}
+
+Menu::Menu(ui::Widget* parent, MiniMenuMode mode, const Interface (&options)[kDirCount],
+           MenuAction* action)
+    : Menu(parent, action) {
+  this->mode = mode;
+  for (int i = 0; i < kDirCount; ++i) {
+    if (!options[i].has_object()) continue;
+    slots[i] = options[i];
+    icons[i] = options[i].MakeIcon(this);
+    if (icons[i]) layers.OrderInside(icons[i].get());
+  }
+}
+
+std::unique_ptr<Action> Menu::Activate(int dir, ui::Pointer& pointer) {
+  auto locked = slots[dir].Lock();
+  auto* object = locked.Owner<Object>();
+  if (object == nullptr) return nullptr;
+  Toy* source = dynamic_cast<Toy*>(icons[dir].get());
+  if (source == nullptr && action) source = action->toy.Get();
+  return Interface(object, locked.Get()).Activate(pointer, source);
+}
+
+void Menu::Draw(SkCanvas& canvas) const {
+  SkPaint paint = [&]() {
+    Status status;
+    static auto effect = resources::CompileShader(embedded::assets_bubble_menu_rt_sksl, status);
+    assert(effect);
+
+    auto& image = *kSkyBox.image;
+    auto dimensions = image->dimensions();
+
+    SkRuntimeEffectBuilder builder(effect);
+    builder.uniform("time") = (float)fmod(time::SecondsSinceEpoch(), 1000.0);
+    builder.uniform("bubble_radius") = size.value;
+    builder.child("environment") = image->makeShader(kDefaultSamplingOptions);
+    builder.uniform("environment_size") = SkPoint(dimensions.width(), dimensions.height());
+
+    auto shader = builder.makeShader();
+    SkPaint paint;
+    paint.setShader(shader);
+    return paint;
+  }();
+  canvas.drawCircle(0, 0, size.value, paint);
+
+  SkPaint shadow_paint;
+  shadow_paint.setImageFilter(
+      SkImageFilters::DropShadowOnly(0, 0, 0.5_mm, 0.5_mm, "#000000"_color, nullptr));
+  auto saved = canvas.getLocalToDevice();
+  canvas.saveLayer(nullptr, &shadow_paint);
+  for (auto& icon : icons) {
+    if (icon == nullptr) continue;
+    canvas.setMatrix(saved);
+    canvas.concat(icon->local_to_parent);
+    canvas.drawDrawable(icon->sk_drawable.get());
+  }
+  canvas.restore();
+  BakeChildren(canvas);
+}
 
 ui::Tock Menu::Tick(time::Timer& timer) {
   size.SpringTowards(kMenuSize, timer.d, 0.2, 0.05);
@@ -359,14 +238,14 @@ ui::Tock Menu::Tick(time::Timer& timer) {
     Vec2 pos = action->pointer.PositionWithin(*this);
     float length = Length(pos);
     auto pointer_dir = SinCos::FromVec2(pos, length);
-    int pointer_i = SinCosToDir(pointer_dir);
-    for (int i = 0; i < DIR_COUNT; ++i) {
-      if (options[i] == nullptr) continue;
-      auto option_sc = DirToSinCos((Option::Dir)i);
+    int pointer_i = static_cast<int>(PointerDir(pointer_dir));
+    for (int i = 0; i < kDirCount; ++i) {
+      if (icons[i] == nullptr) continue;
+      auto option_sc = DirToSinCos(mode, static_cast<ui::Dir>(i));
       float r = kMenuSize * 2 / 3;
       auto center = Vec2::Polar(option_sc, r);
       Vec2 target;
-      if (i == pointer_i && ((mode == Menu::MODE_1_DIR) || length > kMenuSize * 2 / 3)) {
+      if (i == pointer_i && ((mode == MODE_1_DIR) || length > kMenuSize * 2 / 3)) {
         target = pos - center;
       } else {
         target = {0, 0};
@@ -389,8 +268,8 @@ ui::Tock Menu::Tick(time::Timer& timer) {
   //  - scale options to fit an arc segment (makes it easier to control overlap)
   //  - force-directed layout (prevents overlap using physics)
   float bubble_area = kMenuSize * kMenuSize * M_PI;
-  float area_per_option = bubble_area / SlotCount() / 2;
-  for (int i = 0; i < DIR_COUNT; ++i) {
+  float area_per_option = bubble_area / SlotCount(mode) / 2;
+  for (int i = 0; i < kDirCount; ++i) {
     if (icons[i] == nullptr) continue;
     auto& opt = icons[i];
     Rect bounds = opt->CoarseBounds().rect;
@@ -399,7 +278,7 @@ ui::Tock Menu::Tick(time::Timer& timer) {
     float scale_to_fit =
         required_area <= area_per_option ? 1 : sqrt(area_per_option / required_area);
 
-    auto angle = DirToSinCos((Option::Dir)i);
+    auto angle = DirToSinCos(mode, static_cast<ui::Dir>(i));
     float r = kMenuSize * 2 / 3;
     auto center = Vec2::Polar(angle, r) + offsets[i].value;
 
@@ -413,32 +292,36 @@ ui::Tock Menu::Tick(time::Timer& timer) {
 
 std::unique_ptr<Action> OptionsProvider::TriggerActivate(ui::Pointer& pointer,
                                                          ui::ActionTrigger trigger) {
-  std::unique_ptr<Action> action;
-  auto callback = [&](Option& option) {
-    if (std::ranges::contains(option.Triggers(), trigger)) action = option.Activate(pointer);
-    return action ? LoopControl::Break : LoopControl::Continue;
-  };
-  OptionVisitor visit{callback};
-  Options(pointer, visit);
+  // TODO: Closest<Toy> is very strange here. OptionsProvider shouldn't have to depend on its
+  // parents!
+  Toy* toy = ui::Closest<Toy>(static_cast<ui::Widget&>(*this));
+  Interface option = FindOption(pointer, trigger);
+  if (!option.has_object()) return nullptr;
+  return option.Activate(pointer, toy);
+}
+
+std::unique_ptr<Action> MakeMenuAction(ui::Pointer& pointer, OptionsProvider::MiniMenuMode mode,
+                                       const Interface (&options)[kDirCount], Toy* toy) {
+  auto action = std::make_unique<MenuAction>(pointer);
+  action->toy = toy;
+  action->menu_widget = std::make_unique<Menu>(pointer.GetWidget(), mode, options, action.get());
   return action;
 }
 
 std::unique_ptr<Action> OptionsProvider::OpenMenu(ui::Pointer& pointer) {
-  Vec<Ptr<Option>> options;
-  auto callback = [&](Option& option) {
-    if (auto clone = option.Clone()) options.push_back(std::move(clone));
-    return LoopControl::Continue;
-  };
-  OptionVisitor visit{callback};
-  Options(pointer, visit);
-  if (options.empty()) return nullptr;
-  return std::make_unique<MenuAction>(pointer, std::move(options));
-}
-
-TextOption::TextOption(Str text) : text(text) {}
-
-std::unique_ptr<ui::Widget> TextOption::MakeIcon(ui::Widget* parent) {
-  return std::make_unique<TextWidget>(parent, text);
+  // TODO: Closest<Toy> is very strange here. OptionsProvider shouldn't have to depend on its
+  // parents!
+  Toy* toy = ui::Closest<Toy>(static_cast<ui::Widget&>(*this));
+  auto mode = MenuMode();
+  Interface options[kDirCount];
+  bool found = false;
+  for (int i = 0; i < kDirCount; ++i) {
+    if (!kValidSlots[mode][i]) continue;
+    options[i] = FindOption(pointer, static_cast<ui::Dir>(i));
+    found |= options[i].has_object();
+  }
+  if (!found) return nullptr;
+  return MakeMenuAction(pointer, mode, options, toy);
 }
 
 }  // namespace automat

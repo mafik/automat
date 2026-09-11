@@ -16,7 +16,6 @@
 #include <thread>
 
 #include "format.hpp"
-#include "menu.hpp"
 #include "prototypes.hpp"
 #include "ui_beta.hpp"
 #include "ui_shelf_button.hpp"
@@ -1365,6 +1364,23 @@ struct PropSliderDrag : Action {
   void Update() override;
 };
 
+struct GStreamerPropZone : ui::ActionZone {
+  int index;
+  GStreamerPropZone(ui::Widget* parent, int index) : ActionZone(parent), index(index) {}
+  GStreamerToy& Face() const;
+  SkPath Shape() const override;
+  Tock Tick(time::Timer&) override { return Tock::Shape; }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
+};
+
+static Str PropValue(GStreamerElement& element, const PropInfo& info) {
+  Str value = element.GetProp(info.name);
+  return value.empty() ? info.def : value;
+}
+
+static Vec<std::unique_ptr<Interface::Table>>& PropTables(StrView factory,
+                                                          const Vec<PropInfo>& infos);
+
 struct GStreamerToy : ui::beta::ObjectToy {
   std::unique_ptr<ui::beta::RunButton> button;
 
@@ -1375,6 +1391,8 @@ struct GStreamerToy : ui::beta::ObjectToy {
   Vec<PropInfo> prop_infos_;
   Vec<Str> prop_values_;  // recipe override or the element default
   Vec<Rect> prop_rects_;  // instrument hit areas, in face coordinates
+  Vec<std::unique_ptr<Interface::Table>>* prop_tables_ = nullptr;
+  Vec<std::unique_ptr<GStreamerPropZone>> prop_zones_;
   float plate_h_;
   bool running_ = false;
   bool preview_tail_ = false;
@@ -1397,7 +1415,11 @@ struct GStreamerToy : ui::beta::ObjectToy {
   float fps_now_ = 0;
 
   GStreamerToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
-    button = std::make_unique<ui::beta::RunButton>(this, [this] { OnButton(); }, Seed(0x31));
+    button = std::make_unique<ui::beta::RunButton>(
+        this, NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(), &GStreamerElement::run_tbl),
+        NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(),
+                                        &GStreamerElement::running_tbl.turn_off),
+        Seed(0x31));
     if (auto elem = LockObject<GStreamerElement>()) {
       factory_ = elem->factory;
       credit_ = FactoryKlass(factory_);
@@ -1405,6 +1427,10 @@ struct GStreamerToy : ui::beta::ObjectToy {
       prop_infos_ = IntrospectProps(factory_);
       prop_values_.resize(prop_infos_.size());
       prop_rects_.resize(prop_infos_.size());
+      prop_tables_ = &PropTables(factory_, prop_infos_);
+      for (int i = 0; i < (int)prop_infos_.size(); ++i) {
+        prop_zones_.push_back(std::make_unique<GStreamerPropZone>(this, i));
+      }
       has_src_ = !elem->out_pad_names.empty();
       has_sink_ = !elem->in_pad_names.empty();
       out_mode_ = elem->out_mode;
@@ -1503,15 +1529,10 @@ struct GStreamerToy : ui::beta::ObjectToy {
     return Tock::Draw;
   }
 
-  void OnButton() {
-    if (auto elem = LockObject<GStreamerElement>()) {
-      if (elem->running->IsRunning()) {
-        elem->running->Cancel();
-      } else {
-        elem->run->ScheduleRun();
-      }
-    }
-    WakeAnimation();
+  void SetPropRect(int index, Rect rect) {
+    if (prop_rects_[index].sk == rect.sk) return;
+    prop_rects_[index] = rect;
+    prop_zones_[index]->WakeAnimation();
   }
 
   void SetPropValue(int index, Str value) {
@@ -1530,7 +1551,6 @@ struct GStreamerToy : ui::beta::ObjectToy {
     }
     SetPropValue(index, nicks[(at + 1) % nicks.size()]);
   }
-  void Options(ui::Pointer&, OptionVisitor&) override;
 
   void Draw(SkCanvas& canvas) const override {
     ui::beta::Panel(canvas, Rect::MakeCenterZero(kPlateW, plate_h_), factory_, ui::beta::kPurple,
@@ -1640,14 +1660,14 @@ struct GStreamerToy : ui::beta::ObjectToy {
       const PropInfo& info = prop_infos_[i];
       const Str& value = prop_values_[i];
       uint32_t cs = Seed(Hash2(kSeed, 0x71 + (uint32_t)i));
-      auto* rects = const_cast<Vec<Rect>*>(&prop_rects_);
+      auto* self = const_cast<GStreamerToy*>(this);
       switch (info.kind) {
         case PropInfo::kEnum: {
           Str label = f("{}: {}", info.name, value);
           float w = ui::beta::TextWidth(label, ui::beta::kMicroSize + 0.3_mm) + 3.2_mm;
           Rect chip{-kPlateW / 2 + kSide, row_top - 4.3_mm, -kPlateW / 2 + kSide + w,
                     row_top - 0.7_mm};
-          (*rects)[i] = chip;
+          self->SetPropRect(i, chip);
           SkPath path = ui::beta::WonkyRoundRect(chip, 1.2_mm, ui::beta::kWonk * 0.8f, cs);
           ui::beta::HandShadow(canvas, path, {0.3_mm, -0.3_mm}, ui::beta::kShadow, cs);
           ui::beta::MisregFill(canvas, path, ui::beta::kPaper, cs);
@@ -1663,7 +1683,7 @@ struct GStreamerToy : ui::beta::ObjectToy {
           ui::beta::DrawText(canvas, info.name, {box.right + 1.5_mm, box.bottom + 0.9_mm},
                              ui::beta::kMicroSize, ui::beta::kInk, false, cs);
           float w = ui::beta::TextWidth(info.name, ui::beta::kMicroSize);
-          (*rects)[i] = Rect{box.left, box.bottom, box.right + 1.5_mm + w, box.top};
+          self->SetPropRect(i, Rect{box.left, box.bottom, box.right + 1.5_mm + w, box.top});
           break;
         }
         case PropInfo::kNumber: {
@@ -1680,7 +1700,7 @@ struct GStreamerToy : ui::beta::ObjectToy {
                         ? std::clamp((float)((v - info.min) / (info.max - info.min)), 0.f, 1.f)
                         : 0.f;
           ui::beta::Slider(canvas, band, t, ui::beta::State::Default, cs);
-          (*rects)[i] = band;
+          self->SetPropRect(i, band);
           break;
         }
       }
@@ -1711,38 +1731,77 @@ struct GStreamerToy : ui::beta::ObjectToy {
   }
 };
 
-struct GStreamerPropOption : TextOption {
-  GStreamerToy& toy;
+struct PropScalarTable : Scalar::Table {
+  PropInfo info;
   int index;
-  GStreamerPropOption(GStreamerToy& toy, int index)
-      : TextOption(toy.prop_infos_[index].name), toy(toy), index(index) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(GStreamerPropOption, toy, index); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  ui::Pointer::Cursor Cursor() const override {
-    return toy.prop_infos_[index].kind == PropInfo::kNumber ? ui::Pointer::Cursor::None
-                                                            : ui::Pointer::Cursor::Hand;
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
-    switch (toy.prop_infos_[index].kind) {
-      case PropInfo::kEnum:
-        toy.CycleProp(index);
-        return std::make_unique<EmptyAction>(p);
-      case PropInfo::kBool:
-        toy.SetPropValue(index, toy.prop_values_[index] == "true" ? "false" : "true");
-        return std::make_unique<EmptyAction>(p);
-      case PropInfo::kNumber:
-        return std::make_unique<PropSliderDrag>(p, toy, index);
-    }
-    return nullptr;
+  PropScalarTable(const PropInfo& info, int index) : Scalar::Table(""), info(info), index(index) {
+    name = this->info.name;
+    get = [](Scalar self) {
+      auto& table = static_cast<PropScalarTable&>(*self.table_ptr);
+      return atof(PropValue(static_cast<GStreamerElement&>(*self.object_ptr), table.info).c_str());
+    };
+    set = [](Scalar self, double value) {
+      auto& table = static_cast<PropScalarTable&>(*self.table_ptr);
+      static_cast<GStreamerElement&>(*self.object_ptr)
+          .SetProp(table.info.name, FormatPropNumber(value, table.info.integer));
+    };
+    activate = [](Interface self, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
+      auto* widget = dynamic_cast<GStreamerToy*>(toy);
+      if (!widget) return nullptr;
+      int index = static_cast<PropScalarTable&>(*self.table_ptr).index;
+      return std::make_unique<PropSliderDrag>(pointer, *widget, index);
+    };
   }
 };
 
-void GStreamerToy::Options(ui::Pointer& p, OptionVisitor& visit) {
-  Vec2 pos = p.PositionWithin(*this);
-  for (int i = 0; i < (int)prop_infos_.size(); ++i) {
-    if (prop_rects_[i].Contains(pos)) visit(GStreamerPropOption(*this, i));
+struct PropSignalTable : Signal::Table {
+  PropInfo info;
+  PropSignalTable(const PropInfo& info) : Signal::Table(""), info(info) {
+    name = this->info.name;
+    cursor = ui::Cursor::Hand;
+    schedules_next = false;
+    on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+      auto& table = static_cast<PropSignalTable&>(*self.table_ptr);
+      auto& element = static_cast<GStreamerElement&>(*self.object_ptr);
+      Str value = PropValue(element, table.info);
+      if (table.info.kind == PropInfo::kBool) {
+        element.SetProp(table.info.name, value == "true" ? "false" : "true");
+        return;
+      }
+      auto& nicks = table.info.nicks;
+      int at = 0;
+      for (int i = 0; i < (int)nicks.size(); ++i) {
+        if (nicks[i] == value) at = i;
+      }
+      element.SetProp(table.info.name, nicks[(at + 1) % nicks.size()]);
+    };
   }
-  ObjectToy::Options(p, visit);
+};
+
+static Vec<std::unique_ptr<Interface::Table>>& PropTables(StrView factory,
+                                                          const Vec<PropInfo>& infos) {
+  static std::unordered_map<Str, Vec<std::unique_ptr<Interface::Table>>> cache;
+  auto [it, inserted] = cache.try_emplace(Str(factory));
+  if (inserted) {
+    for (int i = 0; i < (int)infos.size(); ++i) {
+      if (infos[i].kind == PropInfo::kNumber) {
+        it->second.push_back(std::make_unique<PropScalarTable>(infos[i], i));
+      } else {
+        it->second.push_back(std::make_unique<PropSignalTable>(infos[i]));
+      }
+    }
+  }
+  return it->second;
+}
+
+GStreamerToy& GStreamerPropZone::Face() const { return static_cast<GStreamerToy&>(*parent); }
+
+SkPath GStreamerPropZone::Shape() const { return SkPath::Rect(Face().prop_rects_[index]); }
+
+Interface GStreamerPropZone::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
+  if (trigger != ui::PointerButton::Left) return {};
+  auto element = Face().LockObject<GStreamerElement>();
+  return element ? Interface(*element, *(*Face().prop_tables_)[index]) : Interface();
 }
 
 PropSliderDrag::PropSliderDrag(ui::Pointer& p, GStreamerToy& w, int index)
@@ -1783,6 +1842,18 @@ constexpr uint32_t kBSeed = 0x9A2;
 }  // namespace
 
 struct BoundaryToy : ui::beta::ObjectToy {
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    using enum ui::Dir;
+    auto object = LockObject<Object>();
+    if (!object) return {};
+    switch (static_cast<ui::Dir>(trigger)) {
+      case NE:
+        return Interface(*object, is_sink ? AppSinkBoundary::step_tbl : AppSrcBoundary::step_tbl);
+      default:
+        return ui::beta::ObjectToy::FindOption(pointer, trigger);
+    }
+  }
+  MiniMenuMode MenuMode() override { return MODE_6_DIR; }
   bool is_sink;  // appsink pulls; appsrc pushes
   std::unique_ptr<ui::beta::RunButton> button;
 
@@ -1797,16 +1868,9 @@ struct BoundaryToy : ui::beta::ObjectToy {
   uint64_t steps_ = 0;
   sk_sp<SkImage> image_;
   Rect step_rect_ = {};
+  std::unique_ptr<ui::ActionZone> step_zone;
 
-  BoundaryToy(ui::Widget* parent, Object& obj, bool is_sink)
-      : ui::beta::ObjectToy(parent, obj), is_sink(is_sink) {
-    button = std::make_unique<ui::beta::RunButton>(this, [this] { OnButton(); }, Seed(0x77));
-    if (auto elem = LockObject<GStreamerElement>()) {
-      factory_ = elem->factory;
-      credit_ = FactoryKlass(factory_);
-    }
-    UpdateFromObject();
-  }
+  BoundaryToy(ui::Widget* parent, Object& obj, bool is_sink);
 
   bool CenteredAtZero() const override { return true; }
   SkPath Shape() const override {
@@ -1865,17 +1929,11 @@ struct BoundaryToy : ui::beta::ObjectToy {
     return Tock::Draw;
   }
 
-  void OnButton() {
-    if (auto elem = LockObject<GStreamerElement>()) {
-      if (elem->running->IsRunning()) {
-        elem->running->Cancel();
-      } else {
-        elem->run->ScheduleRun();
-      }
-    }
-    WakeAnimation();
+  void SetStepRect(Rect rect) {
+    if (step_rect_.sk == rect.sk) return;
+    step_rect_ = rect;
+    step_zone->WakeAnimation();
   }
-  void Options(ui::Pointer&, OptionVisitor&) override;
 
   void Draw(SkCanvas& canvas) const override {
     ui::beta::Panel(canvas, Rect::MakeCenterZero(kPlateW, kBPlateH), factory_, ui::beta::kPurple,
@@ -1956,7 +2014,7 @@ struct BoundaryToy : ui::beta::ObjectToy {
       StrView step_label = is_sink ? StrView("pull one") : StrView("push one");
       float sw = ui::beta::TextWidth(step_label, ui::beta::kMicroSize + 0.3_mm) + 3.2_mm;
       Rect step_chip{chip.right + 2_mm, chip_bottom, chip.right + 2_mm + sw, chip_bottom + 3.6_mm};
-      const_cast<BoundaryToy*>(this)->step_rect_ = step_chip;
+      const_cast<BoundaryToy*>(this)->SetStepRect(step_chip);
       uint32_t ss = Seed(Hash2(kBSeed, 0x71));
       SkPath step_path = ui::beta::WonkyRoundRect(step_chip, 1.2_mm, ui::beta::kWonk * 0.8f, ss);
       ui::beta::HandShadow(canvas, step_path, {0.3_mm, -0.3_mm}, ui::beta::kShadow, ss);
@@ -1987,26 +2045,33 @@ struct BoundaryToy : ui::beta::ObjectToy {
   }
 };
 
-struct StepOption : TextOption {
-  BoundaryToy& toy;
-  StepOption(BoundaryToy& toy) : TextOption("Step"), toy(toy) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(StepOption, toy); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
-    if (toy.is_sink) {
-      if (auto sink = toy.LockObject<AppSinkBoundary>()) sink->step->ScheduleRun();
-    } else {
-      if (auto src = toy.LockObject<AppSrcBoundary>()) src->step->ScheduleRun();
-    }
-    toy.WakeAnimation();
-    return std::make_unique<EmptyAction>(p);
+struct StepZone : ui::ActionZone {
+  using ActionZone::ActionZone;
+  BoundaryToy& Face() const { return static_cast<BoundaryToy&>(*parent); }
+  SkPath Shape() const override { return SkPath::Rect(Face().step_rect_); }
+  Tock Tick(time::Timer&) override { return Tock::Shape; }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    if (trigger != ui::PointerButton::Left) return {};
+    auto& face = Face();
+    auto element = face.LockObject<GStreamerElement>();
+    if (!element) return {};
+    if (face.is_sink) return Interface(*element, AppSinkBoundary::step_tbl);
+    return Interface(*element, AppSrcBoundary::step_tbl);
   }
 };
 
-void BoundaryToy::Options(ui::Pointer& p, OptionVisitor& visit) {
-  if (step_rect_.Contains(p.PositionWithin(*this))) visit(StepOption(*this));
-  ObjectToy::Options(p, visit);
+BoundaryToy::BoundaryToy(ui::Widget* parent, Object& obj, bool is_sink)
+    : ui::beta::ObjectToy(parent, obj), is_sink(is_sink), step_zone(new StepZone(this)) {
+  button = std::make_unique<ui::beta::RunButton>(
+      this, NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(), &GStreamerElement::run_tbl),
+      NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(),
+                                      &GStreamerElement::running_tbl.turn_off),
+      Seed(0x77));
+  if (auto elem = LockObject<GStreamerElement>()) {
+    factory_ = elem->factory;
+    credit_ = FactoryKlass(factory_);
+  }
+  UpdateFromObject();
 }
 
 std::unique_ptr<ObjectToy> AppSinkBoundary::MakeToy(ui::Widget* parent) {

@@ -15,7 +15,7 @@ struct PowerButton : ToggleButton {
   PowerButton(Widget* parent, NestedWeakPtr<OnOff::Table> target, SkColor4f fg = "#fa2305"_color4f,
               SkColor4f bg = SkColors::kWhite);
 
-  void Activate(ui::Pointer& p);
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
   bool Filled() const override;
 };
 

@@ -1123,11 +1123,17 @@ void Highlight(SkCanvas& canvas, const Rect& r, SkColor color, uint32_t seed) {
 
 // ----------------------------------------------------------------- widgets ---
 
-RunButton::RunButton(Widget* parent, std::function<void()> on_click, uint32_t seed)
-    : Widget(parent), clickable(*this), on_click(std::move(on_click)), seed(seed) {
-  clickable.activate = [this](Pointer&) {
-    if (enabled && this->on_click) this->on_click();
-  };
+RunButton::RunButton(Widget* parent, NestedWeakPtr<Interface::Table> start,
+                     NestedWeakPtr<Interface::Table> stop, uint32_t seed)
+    : Widget(parent),
+      clickable(*this),
+      start(std::move(start)),
+      stop(std::move(stop)),
+      seed(seed) {}
+
+Interface RunButton::FindOption(Pointer&, ActionTrigger trigger) {
+  if (!enabled || trigger != PointerButton::Left) return {};
+  return Interface((running ? stop : start).Lock());
 }
 
 ui::Tock RunButton::Tick(time::Timer& t) {
@@ -1143,7 +1149,7 @@ ui::Tock RunButton::Tick(time::Timer& t) {
     drawn_enabled = enabled;
     tock.draw = true;
   }
-  if (enabled && clickable.pointers_over > 0 && clickable.pointers_pressing == 0) {
+  if (enabled && clickable.pointers_over > 0) {
     wiggle = static_cast<uint32_t>(t.NowSeconds() * 5.0);
     tock.draw = true;
     tock.next_tick = min(tock.next_tick, t.now + 200ms);
@@ -1152,18 +1158,14 @@ ui::Tock RunButton::Tick(time::Timer& t) {
 }
 
 void RunButton::Draw(SkCanvas& canvas) const {
-  bool pressed = clickable.pointers_pressing > 0;
   bool hover = clickable.pointers_over > 0;
 
-  bool shimmer = enabled && hover && !pressed;
+  bool shimmer = enabled && hover;
   const uint32_t kSeed = shimmer ? Hash3(0x60D, seed, wiggle) : Hash2(0x60D, seed);
   float r = kRadius;
 
   SkColor base = !enabled ? kGray : running ? kRed : kGreen;
-  SkColor fill = !enabled  ? base
-                 : pressed ? MixColor(base, kInk, 0.12f)
-                 : hover   ? MixColor(base, kPaper, 0.25f)
-                           : base;
+  SkColor fill = !enabled ? base : hover ? MixColor(base, kPaper, 0.25f) : base;
   SkPath body = WobbleEllipse({0, 0}, r, r * 0.97f, kWonk, kSeed, 56);
 
   MisregFill(canvas, body, fill, kSeed);
@@ -1193,7 +1195,7 @@ void RunButton::Draw(SkCanvas& canvas) const {
   FillPath(canvas, symbol, !enabled ? kGray : kPaper);
   SketchyStroke(canvas, symbol, !enabled ? kInkSoft : kInk, kStroke, Hash2(kSeed, 0x38u), 1);
 
-  if (enabled && !pressed) {
+  if (enabled) {
     // +Y up: the shine arcs across the top of the disc, at larger Y.
     SkPath shine = SkPathBuilder()
                        .moveTo(-r * 0.45f, r * 0.60f)

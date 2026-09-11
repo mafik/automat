@@ -13,8 +13,9 @@
 
 namespace automat::ui {
 
-NumberTextField::NumberTextField(Widget* parent, float width)
-    : ui::TextField(parent, &text, width), text("0") {}
+NumberTextField::NumberTextField(Widget* parent, Object& owner, automat::Text::Table& table,
+                                 float width)
+    : ui::TextField(parent, owner, table, width) {}
 
 SkRRect NumberTextField::ShapeRRect() const {
   return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, width, kHeight), kHeight / 2, kHeight / 2);
@@ -96,7 +97,7 @@ Vec2 NumberTextField::GetTextPos() const {
   return Vec2(width - text_width - margin, margin);
 }
 
-static Str FormatNumber(double x, int max_digits = 5) {
+Str FormatNumber(double x, int max_digits) {
   Str ret;
   if (x < 0) {
     return "-" + FormatNumber(-x, max_digits - 1);
@@ -148,11 +149,6 @@ static Str FormatNumber(double x, int max_digits = 5) {
     ret.insert(dot_index, ".");
   }
   return ret;
-}
-
-void NumberTextField::SetNumber(double x) {
-  text = FormatNumber(x, 5);
-  WakeAnimation();
 }
 
 }  // namespace automat::ui

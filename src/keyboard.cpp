@@ -65,11 +65,11 @@ static SkPath PointerIBeam(const KeyboardWidget& keyboard) {
     Vec2 pos = keyboard.pointer->PositionOnCanvas();
     SkRect bounds = SkRect::MakeXYWH(pos.x, pos.y, 0, 0);
     switch (keyboard.pointer->cursor) {
-      case Pointer::Cursor::Arrow:
+      case Cursor::Arrow:
         bounds.fRight += 2 * px;
         bounds.fTop -= 16 * px;
         break;
-      case Pointer::Cursor::IBeam:
+      case Cursor::IBeam:
         bounds.fRight += px;
         bounds.fTop -= 9 * px;
         bounds.fBottom += 8 * px;

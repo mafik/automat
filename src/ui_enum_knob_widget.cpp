@@ -15,12 +15,13 @@
 #include <cmath>
 
 #include "color.hpp"
-#include "menu.hpp"
+#include "object.hpp"
 
 namespace automat::ui {
 
-EnumKnobWidget::EnumKnobWidget(ui::Widget* parent, int n_options)
-    : ui::Widget(parent), n_options(n_options) {
+EnumKnobWidget::EnumKnobWidget(ui::Widget* parent, Object& owner, Scalar::Table& table,
+                               int n_options)
+    : Toy(parent, owner, &table, owner.wake_counter), n_options(n_options) {
   knob.unit_angle = 60_deg;
   knob.unit_distance = kGaugeRadius * 2;
 
@@ -41,7 +42,9 @@ SkPath EnumKnobWidget::Shape() const { return SkPath::Circle(0, 0, kGaugeRadius)
 
 ui::Tock EnumKnobWidget::Tick(time::Timer& timer) {
   Tock tock;
-  value = KnobGet();
+  auto scalar = LockBind<Scalar>();
+  if (!scalar) return tock;
+  value = std::lround(scalar.Get());
   auto old_value = value;
   if (std::isnan(knob.value) || std::isinf(knob.value)) {
     knob.value = 0;
@@ -63,7 +66,7 @@ ui::Tock EnumKnobWidget::Tick(time::Timer& timer) {
     }
   }
   if (value != old_value) {
-    KnobSet(value);
+    scalar.Set(value);
   }
   tock.drawing |= click_wiggle.SpringTowards(0, timer.d, time::ToSeconds(kClickWigglePeriod),
                                              time::ToSeconds(kClickWiggleHalfTime));
@@ -192,9 +195,7 @@ Optional<Rect> EnumKnobWidget::DrawBounds() const {
 
 EnumKnobWidget::ChangeEnumKnobAction::ChangeEnumKnobAction(ui::Pointer& pointer,
                                                            EnumKnobWidget& enum_knob_widget)
-    : Action(pointer),
-      widget(&enum_knob_widget),
-      scroll_cursor(pointer, ui::Pointer::Cursor::AllScroll) {
+    : Action(pointer), widget(&enum_knob_widget), scroll_cursor(pointer, ui::Cursor::AllScroll) {
   if (widget) {
     widget->is_dragging = true;
     auto& history = widget->knob.history;
@@ -236,19 +237,17 @@ EnumKnobWidget::ChangeEnumKnobAction::~ChangeEnumKnobAction() {
   widget->WakeAnimation();
 }
 
-struct TurnEnumKnobOption : TextOption {
-  EnumKnobWidget& knob;
-  TurnEnumKnobOption(EnumKnobWidget& knob) : TextOption("Turn"), knob(knob) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(TurnEnumKnobOption, knob); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::AllScroll; }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    return std::make_unique<EnumKnobWidget::ChangeEnumKnobAction>(pointer, knob);
-  }
-};
+Interface EnumKnobWidget::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
+  if (trigger != ui::PointerButton::Left) return {};
+  auto object = LockOwner();
+  if (!object) return {};
+  return Interface(*object, *iface);
+}
 
-void EnumKnobWidget::Options(ui::Pointer&, OptionVisitor& visit) {
-  visit(TurnEnumKnobOption(*this));
+std::unique_ptr<Action> TurnEnumKnob(ui::Pointer& pointer, Toy* toy) {
+  auto* knob = dynamic_cast<EnumKnobWidget*>(toy);
+  if (!knob) return nullptr;
+  return std::make_unique<EnumKnobWidget::ChangeEnumKnobAction>(pointer, *knob);
 }
 
 }  // namespace automat::ui

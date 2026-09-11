@@ -53,6 +53,18 @@ bool FlipFlop::DeserializeKey(ObjectDeserializer& d, StrView key) {
 }
 
 struct FlipFlopWidget : ObjectToy {
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    using enum ui::Dir;
+    auto object = LockObject<FlipFlop>();
+    if (!object) return {};
+    switch (static_cast<ui::Dir>(trigger)) {
+      case E:
+        return Interface(*object, FlipFlop::enabled_tbl);
+      default:
+        return ObjectToy::FindOption(pointer, trigger);
+    }
+  }
+  MiniMenuMode MenuMode() override { return MODE_4_DIR; }
   float light = 0;
   bool current_state = false;
   std::unique_ptr<ui::Rocker> rocker;
@@ -70,11 +82,7 @@ struct FlipFlopWidget : ObjectToy {
 
   FlipFlopWidget(ui::Widget* parent, Object& object) : ObjectToy(parent, object) {
     rocker = std::make_unique<ui::Rocker>(this);
-    rocker->clickable.activate = [this](ui::Pointer&) {
-      if (auto ptr = LockObject<FlipFlop>()) {
-        ptr->enabled->Toggle();
-      }
-    };
+    rocker->target = NestedWeakPtr<OnOff::Table>(object.AcquireWeakPtr(), &FlipFlop::enabled_tbl);
   }
 
   RRect CoarseBounds() const override { return kBounds; }
@@ -87,8 +95,8 @@ struct FlipFlopWidget : ObjectToy {
   Tock Tick(time::Timer& timer) override {
     if (auto ptr = LockObject<FlipFlop>()) {
       current_state = ptr->current_state;
+      rocker->SetOn(current_state);
     }
-    rocker->SetOn(current_state);
     Tock tock;
     tock.drawing |= animation::LinearApproach(current_state, timer.d, 10, light);
     return tock;

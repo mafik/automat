@@ -54,12 +54,20 @@ Str ToStr(PointerButton btn) {
   }
 }
 
+StrView ToStr(Dir dir) {
+  constexpr StrView kNames[] = {"E", "NE", "N", "NW", "W", "SW", "S", "SE"};
+  if (dir >= Dir::DIR_COUNT) return "DIR_NONE";
+  return kNames[static_cast<int>(dir)];
+}
+
 Str ToStr(ActionTrigger trigger) {
   if (trigger.repr >= ActionTrigger::kPointerStart && trigger.repr < ActionTrigger::kPointerEnd) {
     return "PointerButton::" + ToStr(static_cast<PointerButton>(trigger));
   } else if (trigger.repr >= ActionTrigger::kAnsiKeyStart &&
              trigger.repr < ActionTrigger::kAnsiKeyEnd) {
     return Str("AnsiKey::") + Str(ToStr(static_cast<AnsiKey>(trigger)));
+  } else if (trigger.repr >= ActionTrigger::kDirStart && trigger.repr < ActionTrigger::kDirEnd) {
+    return Str("Dir::") + Str(ToStr(static_cast<Dir>(trigger)));
   } else {
     return "Invalid ActionTrigger";
   }

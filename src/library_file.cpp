@@ -15,7 +15,6 @@
 #include "deserializer.hpp"
 #include "file_import.hpp"
 #include "font.hpp"
-#include "menu.hpp"
 #include "object.hpp"
 #include "root_widget.hpp"
 #include "textures.hpp"
@@ -171,9 +170,8 @@ File::~File() {
 }
 
 void File::Interfaces(const std::function<LoopControl(Interface)>& cb) {
-  if (IsImage()) {
-    cb(image_provider.Bind());
-  }
+  if (IsImage() && cb(image_provider.Bind()) == LoopControl::Break) return;
+  cb(toggle_filename.Bind());
 }
 
 void File::SerializeState(ObjectSerializer& writer) const {
@@ -296,20 +294,18 @@ Vec2 File::Size() const {
   return size;
 }
 
-struct ToggleFilenameOption : TextOption {
-  WeakPtr<File> weak;
-
-  ToggleFilenameOption(WeakPtr<File> weak) : TextOption("Toggle filename"), weak(weak) {}
-
-  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleFilenameOption, weak); }
-
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    if (auto file = weak.lock()) file->ToggleFilename();
-    return std::make_unique<EmptyAction>(pointer);
-  }
-};
-
 struct FileToy : automat::ObjectToy {
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    using enum ui::Dir;
+    auto object = LockObject<File>();
+    if (!object) return {};
+    switch (static_cast<ui::Dir>(trigger)) {
+      case N:
+        return Interface(*object, File::toggle_filename_tbl);
+      default:
+        return automat::ObjectToy::FindOption(pointer, trigger);
+    }
+  }
   sk_sp<SkImage> image;
   sk_sp<SkPicture> icon;
   Vec2 size;
@@ -384,14 +380,6 @@ struct FileToy : automat::ObjectToy {
       label.DrawOutline(canvas);
       label.DrawFill(canvas);
       canvas.restore();
-    }
-  }
-
-  void Options(ui::Pointer& pointer, OptionVisitor& visitor) override {
-    ObjectToy::Options(pointer, visitor);
-    if (auto file = LockObject<File>()) {
-      ToggleFilenameOption toggle(file);
-      visitor(toggle);
     }
   }
 };

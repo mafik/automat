@@ -80,7 +80,8 @@ struct AssemblerWidget : ObjectToy {
   void OnPoll(time::Timer&) override;
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
-  void Options(ui::Pointer&, OptionVisitor&) override;
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
+  MiniMenuMode MenuMode() override { return MODE_6_DIR; }
 };
 
 struct Register : Object, Buffer {
@@ -95,6 +96,16 @@ struct Register : Object, Buffer {
   static constexpr float kAutoconnectRadius = INFINITY;
   static constexpr SkColor4f kTint = "#ff0000"_color4f;
   DEF_END(assembler_arg);
+
+  DEF_INTERFACE(Register, Scalar, index, "Index")
+  static constexpr ui::Cursor kCursor = ui::Cursor::AllScroll;
+  double OnGet() { return obj->register_index; }
+  void OnSet(double value) {
+    obj->register_index = value;
+    obj->WakeToys();
+  }
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(index);
 
   Register(WeakPtr<Assembler> assembler_weak, int register_index);
 
@@ -112,7 +123,7 @@ struct Register : Object, Buffer {
     WakeToys();
   }
 
-  INTERFACES(assembler_arg)
+  INTERFACES(assembler_arg, index)
   void SetText(std::string_view text) override;
 
   void SerializeState(ObjectSerializer& writer) const override;

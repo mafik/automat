@@ -53,10 +53,10 @@ individual block that caused them, using the existing beta state grammar
 (red outline plus exclamation chip for errors; state words like PLAYING
 printed on the block).
 
-**Existing vocabulary is reused.** Parameters are instruments, shared with
-Leptonica (GStreamer GParamSpec, FFmpeg AVOption, PipeWire SPA Props, and
-GEGL param specs all describe name, type, range, and default, so one
-instrument set serves all of them). Prototypes present as clone piles.
+**Existing vocabulary is reused.** Parameters are instruments (GStreamer
+GParamSpec, FFmpeg AVOption, PipeWire SPA Props, and GEGL param specs all
+describe name, type, range, and default, so one instrument set serves all of
+them). Prototypes present as clone piles.
 Shelves group blocks. The radar points to nearby objects where a
 connection may auto-connect, exactly as it does today. The run button
 keeps its one meaning.
@@ -95,7 +95,7 @@ the pipeline. Each domain has a standard preview:
   Automat's window objects, so "how large must it be" is the user's
   choice; the minimum useful size shows one line of text or one level
   bar.
-- Images: the Leptonica paper, unchanged.
+- Images: the image itself, unchanged.
 - Tensors: dtype, shape, device, and min/mean/max, with a small heat
   strip for two-dimensional slices.
 - Compressed media: stream description (codec, resolution, bit rate) and
@@ -159,8 +159,7 @@ on the library; each library has a real mechanism for it.
   ports can link (the pad template caps intersect, checked with
   gst_element_factory_get_static_pad_templates and
   gst_caps_can_intersect - see GStreamerElement::CanFeedStream), and
-  dropping it in radius auto-connects it, exactly like dropping a
-  Leptonica tool near the paper.
+  dropping it in radius auto-connects it.
 - **A GEGL operation** alone renders its own demonstration: the operation
   applied to a standard generated input (gegl:checkerboard), rendered as
   the block's face. Turning an instrument re-renders it live. GEGL's
@@ -222,8 +221,8 @@ PipeWire shelf exists too (src/library_pipewire.cpp, PipeWireShelfToy),
 with its groups ordered the same producer-to-consumer way, and so does the
 GEGL shelf (src/library_gegl.cpp, GeglShelfToy), grouped by the categories
 key with render sources first and programming operations last. All are
-reached through the beta stamp's bubble menu, like the Leptonica shelf,
-and all shelves place their entries with the shared ui::ShelfButton.
+reached through the beta stamp's bubble menu, and all shelves place their
+entries with the shared ui::ShelfButton.
 
 A shelf entry answers "what is this" before it is touched:
 

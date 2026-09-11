@@ -7,6 +7,7 @@
 #include "mortal.hpp"
 #include "pointer.hpp"
 #include "ptr.hpp"
+#include "toy.hpp"
 #include "widget.hpp"
 
 namespace automat {
@@ -17,7 +18,7 @@ namespace automat::ui {
 
 // A shelf entry: hosts a prototype's own widget and mints a draggable clone
 // when touched, per docs/parrots/Clone Pile.md.
-struct ShelfButton : Widget {
+struct ShelfButton : Toy {
   Ptr<Object> proto;
   MortalPtr<Widget> proto_widget;
 
@@ -32,7 +33,7 @@ struct ShelfButton : Widget {
   Optional<Rect> DrawBounds() const override { return std::nullopt; }
   bool AllowChildPointerEvents(Widget&) const override { return false; }
 
-  void Options(Pointer&, OptionVisitor&) override;
+  Interface FindOption(Pointer&, ActionTrigger) override;
 };
 
 }  // namespace automat::ui

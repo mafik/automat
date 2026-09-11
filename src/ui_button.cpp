@@ -15,10 +15,8 @@
 #include <cmath>
 
 #include "animation.hpp"
-#include "audio.hpp"
 #include "color.hpp"
-#include "embedded.hpp"
-#include "menu.hpp"
+#include "object.hpp"
 #include "pointer.hpp"
 #include "ui_constants.hpp"
 #include "ui_shadow.hpp"
@@ -61,37 +59,10 @@ static float ShadowOffset(SkRRect& bounds) {
   return -Button::kPressOffset - (bounds.height() - kMinimalTouchableSize) / 4;
 }
 
-struct ClickAction : public Action {
-  Clickable& clickable;
-  ClickAction(Pointer& pointer, Clickable& clickable) : Action(pointer), clickable(clickable) {
-    audio::Play(embedded::assets_SFX_button_down_wav);
-    clickable.pointers_pressing++;
-    if (clickable.activate) {
-      clickable.activate(pointer);  // This may immediately end the action.
-    }
-  }
-
-  void Update() override {}
-
-  ~ClickAction() override {
-    clickable.pointers_pressing--;
-    clickable.widget.WakeAnimation();
-    audio::Play(embedded::assets_SFX_button_up_wav);
-  }
-};
-
-struct ClickOption : TextOption {
-  Clickable& clickable;
-  ClickOption(Clickable& clickable) : TextOption("Press"), clickable(clickable) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(ClickOption, clickable); }
-  Span<const ActionTrigger> Triggers() const override { return kLeftButton; }
-  Pointer::Cursor Cursor() const override { return Pointer::Cursor::Hand; }
-  std::unique_ptr<Action> Activate(Pointer& pointer) override {
-    return std::make_unique<ClickAction>(pointer, clickable);
-  }
-};
-
-void Clickable::Options(Pointer&, OptionVisitor& visit) { visit(ClickOption(*this)); }
+Interface Button::FindOption(Pointer&, ActionTrigger trigger) {
+  if (trigger != PointerButton::Left) return {};
+  return Interface(target);
+}
 
 SkRRect Button::RRect() const {
   SkRect child_bounds = ChildBounds();
@@ -240,9 +211,7 @@ void ToggleButton::Draw(SkCanvas& canvas) const {
   }
 }
 
-Button::Button(ui::Widget* parent) : Widget(parent), clickable(*this) {
-  clickable.activate = [this](Pointer& pointer) { Activate(pointer); };
-}
+Button::Button(ui::Widget* parent) : Widget(parent), clickable(*this) {}
 
 void Button::UpdateChildTransform() {
   Vec2 offset = RRect().rect().center();

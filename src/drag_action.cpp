@@ -56,7 +56,8 @@ static void SettleAnchor(Location& location) {
 }
 
 DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&& locations_arg,
-                                       BoardWidget* board, Optional<Vec2> grab)
+                                       BoardWidget* board, Optional<Vec2> grab,
+                                       std::unique_ptr<Toy>&& toy)
     : Action(pointer), locations(std::move(locations_arg)), board_widget(board) {
   assert(!locations.empty());
   size_t n = locations.size();
@@ -67,7 +68,8 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
     }
   } else {
     for (size_t i = 0; i < n; ++i) {
-      auto widget = LocationWidget::MakePointerOwned(pointer.GetWidget(), *locations[i]);
+      auto widget =
+          LocationWidget::MakePointerOwned(pointer.GetWidget(), *locations[i], std::move(toy));
       widgets[i] = widget.get();
       held_widgets.push_back(std::move(widget));
     }
@@ -99,6 +101,11 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
 DragLocationAction::DragLocationAction(ui::Pointer& pointer, Ptr<Location>&& location,
                                        BoardWidget* board, Optional<Vec2> grab)
     : DragLocationAction(pointer, MakeVec(std::move(location)), board, grab) {}
+
+DragLocationAction::DragLocationAction(ui::Pointer& pointer, Ptr<Location>&& location,
+                                       std::unique_ptr<Toy>&& toy)
+    : DragLocationAction(pointer, MakeVec(std::move(location)), nullptr, std::nullopt,
+                         std::move(toy)) {}
 
 DragLocationAction::~DragLocationAction() {
   if (!locations.empty()) {

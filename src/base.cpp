@@ -34,27 +34,17 @@ void LongRunning::Done() const {
   NotifyTurnedOff();
 }
 
-// --- RunOption ---
-
-RunOption::RunOption(WeakPtr<Object> object, Runnable::Table& runnable)
-    : TextOption("Run"), weak(std::move(object)), runnable(&runnable) {}
-Ptr<Option> RunOption::Clone() const { return MAKE_PTR(RunOption, weak, *runnable); }
-std::unique_ptr<Action> RunOption::Activate(ui::Pointer& pointer) {
-  if (auto object = weak.lock()) {
-    if (auto lr = object->As<LongRunning>(); lr && lr.IsRunning()) {
-      lr.Cancel();
-    } else {
-      Runnable(*object, *runnable).ScheduleRun();
-    }
-  }
+std::unique_ptr<Action> Signal::Table::DefaultActivate(Interface self, ui::Pointer& pointer, Toy*) {
+  cast<Signal>(self).ScheduleRun();
   return std::make_unique<EmptyAction>(pointer);
 }
 
-ThisIsFineOption::ThisIsFineOption(WeakPtr<Object> object)
-    : TextOption("This Is Fine"), weak(std::move(object)) {}
-Ptr<Option> ThisIsFineOption::Clone() const { return MAKE_PTR(ThisIsFineOption, weak); }
-std::unique_ptr<Action> ThisIsFineOption::Activate(ui::Pointer& pointer) {
-  ManipulateError(*weak.GetUnsafe(), [](Error& err) { err.Clear(); });
-  return std::make_unique<EmptyAction>(pointer);
-}
+constinit Signal::Table kThisIsFine = [] {
+  Signal::Table t("This Is Fine");
+  t.schedules_next = false;
+  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+    ManipulateError(*self.object_ptr, [](Error& err) { err.Clear(); });
+  };
+  return t;
+}();
 }  // namespace automat

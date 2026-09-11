@@ -16,7 +16,6 @@
 #include "format.hpp"
 #include "location.hpp"
 #include "log.hpp"
-#include "menu.hpp"
 #include "text_field.hpp"
 #include "ui_beta.hpp"
 #include "ui_shelf_button.hpp"
@@ -882,8 +881,8 @@ constexpr float kVuTop = kMuteTop - kMuteRow;
 }  // namespace
 
 struct PwNameField : ui::TextField {
-  PwNameField(ui::Widget* parent, std::string* text, float width)
-      : ui::TextField(parent, text, width) {}
+  PwNameField(ui::Widget* parent, Object& owner, automat::Text::Table& table, float width)
+      : ui::TextField(parent, owner, table, width) {}
   StrView Name() const override { return "PwNameField"; }
 };
 
@@ -897,11 +896,26 @@ struct VolumeDrag : Action {
 };
 
 struct PipeWireNodeToy : ui::beta::ObjectToy {
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    using enum ui::Dir;
+    auto object = LockObject<PipeWireNode>();
+    if (!object) return {};
+    switch (static_cast<ui::Dir>(trigger)) {
+      case W:
+        return Interface(*object, PipeWireNode::muted_tbl);
+      case E:
+        return Interface(*object, PipeWireNode::level_tbl);
+      default:
+        return ui::beta::ObjectToy::FindOption(pointer, trigger);
+    }
+  }
+  MiniMenuMode MenuMode() override { return MODE_4_DIR; }
   std::unique_ptr<PwNameField> field;
-  std::string name_edit_;
+  std::unique_ptr<ui::ActionZone> mute_zone;
+  std::unique_ptr<ui::ActionZone> volume_zone;
 
   // Tick-cached object state (UI thread only):
-  Str name_applied_;
+  Str name_;
   Str media_class_;
   Str state_word_;
   Str format_;
@@ -914,17 +928,7 @@ struct PipeWireNodeToy : ui::beta::ObjectToy {
   bool mute_ = false;
   float vu_ = 0;
 
-  PipeWireNodeToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
-    if (auto node = LockObject<PipeWireNode>()) {
-      auto lock = std::lock_guard(node->mutex);
-      name_edit_ = node->node_name;
-      name_applied_ = node->node_name;
-    }
-    field = std::make_unique<PwNameField>(this, &name_edit_, kPlateW - 2 * kSide);
-    field->local_to_parent =
-        SkM44::Translate(-kPlateW / 2 + kSide, kNameTop - kNameRow) * SkM44::Scale(0.55f, 0.55f, 1);
-    UpdateFromObject();
-  }
+  PipeWireNodeToy(ui::Widget* parent, Object& obj);
 
   bool CenteredAtZero() const override { return true; }
   SkPath Shape() const override {
@@ -951,10 +955,6 @@ struct PipeWireNodeToy : ui::beta::ObjectToy {
   bool UpdateFromObject() {
     bool changed = false;
     if (auto node = LockObject<PipeWireNode>()) {
-      if (Str(name_edit_) != name_applied_) {
-        name_applied_ = name_edit_;
-        node->SetNodeName(name_applied_);
-      }
       node->RefreshFromMirror();
       node->SyncBoardLinks();
       auto lock = std::lock_guard(node->mutex);
@@ -962,6 +962,7 @@ struct PipeWireNodeToy : ui::beta::ObjectToy {
         changed |= (cached != fresh);
         cached = fresh;
       };
+      pull(name_, node->node_name);
       pull(media_class_, node->media_class);
       pull(state_word_, node->state_word);
       pull(format_, node->format);
@@ -984,13 +985,15 @@ struct PipeWireNodeToy : ui::beta::ObjectToy {
     // The proxy mirrors a live external graph, so it keeps observing; it
     // repaints only when a mirrored fact moved.
     Tock tock = Tock::Ing;
-    if (UpdateFromObject()) tock |= Tock::Draw;
+    if (UpdateFromObject()) {
+      tock |= Tock::Draw;
+      field->WakeAnimation();
+    }
     return tock;
   }
-  void Options(ui::Pointer&, OptionVisitor&) override;
 
   void Draw(SkCanvas& canvas) const override {
-    Str title = name_applied_.empty() ? Str("pipewire node") : name_applied_;
+    Str title = name_.empty() ? Str("pipewire node") : name_;
     ui::beta::Panel(canvas, Rect::MakeCenterZero(kPlateW, kPlateH), title, ui::beta::kRose,
                     ui::beta::State::Default, Seed(kSeed), true);
 
@@ -1092,36 +1095,6 @@ struct PipeWireNodeToy : ui::beta::ObjectToy {
   }
 };
 
-struct ToggleMuteOption : TextOption {
-  PipeWireNodeToy& toy;
-  ToggleMuteOption(PipeWireNodeToy& toy) : TextOption(toy.mute_ ? "Unmute" : "Mute"), toy(toy) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleMuteOption, toy); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
-    if (auto node = toy.LockObject<PipeWireNode>()) node->SetMute(!toy.mute_);
-    toy.WakeAnimation();
-    return std::make_unique<EmptyAction>(p);
-  }
-};
-
-struct DragVolumeOption : TextOption {
-  PipeWireNodeToy& toy;
-  DragVolumeOption(PipeWireNodeToy& toy) : TextOption("Volume"), toy(toy) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(DragVolumeOption, toy); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
-    return std::make_unique<VolumeDrag>(p, toy);
-  }
-};
-
-void PipeWireNodeToy::Options(ui::Pointer& p, OptionVisitor& visit) {
-  Vec2 pos = p.PositionWithin(*this);
-  if (has_mute_ && MuteBox().Contains(pos)) visit(ToggleMuteOption(*this));
-  if (has_volume_ && VolumeBand().Contains(pos)) visit(DragVolumeOption(*this));
-  ObjectToy::Options(p, visit);
-}
-
 VolumeDrag::VolumeDrag(ui::Pointer& p, PipeWireNodeToy& w) : Action(p), widget(&w) { Update(); }
 
 void VolumeDrag::Update() {
@@ -1132,6 +1105,49 @@ void VolumeDrag::Update() {
   widget->volume_ = t;
   if (auto node = widget->LockObject<PipeWireNode>()) node->SetVolume(t);
   widget->WakeAnimation();
+}
+
+std::unique_ptr<Action> PipeWireNode::level_Impl::OnActivate(ui::Pointer& pointer,
+                                                             automat::Toy* toy) {
+  auto* widget = dynamic_cast<PipeWireNodeToy*>(toy);
+  return widget ? std::make_unique<VolumeDrag>(pointer, *widget) : nullptr;
+}
+
+struct MuteZone : ui::ActionZone {
+  using ActionZone::ActionZone;
+  PipeWireNodeToy& Face() const { return static_cast<PipeWireNodeToy&>(*parent); }
+  SkPath Shape() const override { return SkPath::Rect(Face().MuteBox()); }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    auto& face = Face();
+    if (trigger != ui::PointerButton::Left || !face.has_mute_) return {};
+    auto node = face.LockObject<PipeWireNode>();
+    if (!node) return {};
+    auto& muted = PipeWireNode::muted_tbl;
+    return Interface(*node, face.mute_ ? muted.turn_off : muted.turn_on);
+  }
+};
+
+struct VolumeZone : ui::ActionZone {
+  using ActionZone::ActionZone;
+  PipeWireNodeToy& Face() const { return static_cast<PipeWireNodeToy&>(*parent); }
+  SkPath Shape() const override { return SkPath::Rect(Face().VolumeBand()); }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    auto& face = Face();
+    if (trigger != ui::PointerButton::Left || !face.has_volume_) return {};
+    auto node = face.LockObject<PipeWireNode>();
+    return node ? Interface(*node, PipeWireNode::level_tbl) : Interface();
+  }
+};
+
+PipeWireNodeToy::PipeWireNodeToy(ui::Widget* parent, Object& obj)
+    : ui::beta::ObjectToy(parent, obj),
+      mute_zone(new MuteZone(this)),
+      volume_zone(new VolumeZone(this)) {
+  field =
+      std::make_unique<PwNameField>(this, obj, PipeWireNode::name_text_tbl, kPlateW - 2 * kSide);
+  field->local_to_parent =
+      SkM44::Translate(-kPlateW / 2 + kSide, kNameTop - kNameRow) * SkM44::Scale(0.55f, 0.55f, 1);
+  UpdateFromObject();
 }
 
 std::unique_ptr<ObjectToy> PipeWireNode::MakeToy(ui::Widget* parent) {

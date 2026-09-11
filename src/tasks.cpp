@@ -251,9 +251,9 @@ void RunTask::OnExecute(std::unique_ptr<Task>& self) {
 }
 
 void RunTask::DoneRunning(Object& object) {
-  if (!HasError(object)) {
-    ScheduleNext(object);
-  }
+  if (!static_cast<Signal::Table*>(signal)->schedules_next) return;
+  if (HasError(object)) return;
+  ScheduleNext(object);
 }
 
 std::string CancelTask::Format() { return f("CancelTask({})", Name(target)); }

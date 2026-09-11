@@ -8,8 +8,10 @@
 #include <variant>
 
 #include "animation.hpp"
+#include "base.hpp"
 #include "interface.hpp"
 #include "object.hpp"
+#include "object_source.hpp"
 #include "ptr.hpp"
 #include "tasks.hpp"
 #include "time.hpp"
@@ -95,7 +97,7 @@ struct Location : Object {
   // ToyMaker concept
   Object& GetOwner() { return *this; }
   Interface::Table* GetInterface() { return nullptr; }
-  std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent);
+  std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 
   // Obtain a matrix representation of the given transform.
   static SkMatrix ToMatrix(Vec2 position, float scale, Vec2 anchor);
@@ -105,6 +107,38 @@ struct Location : Object {
 
   void Iconify();
   void Deiconify();
+
+  DEF_INTERFACE(Location, ObjectSource, move, "Move")
+  Ptr<Object> OnTake();
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(move);
+
+  DEF_INTERFACE(Location, ObjectSource, copy, "Copy")
+  Ptr<Object> OnTake();
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(copy);
+
+  DEF_INTERFACE(Location, ObjectSource, clone, "Clone")
+  Ptr<Object> OnTake();
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(clone);
+
+  DEF_INTERFACE(Location, Signal, remove, "Delete")
+  static constexpr bool kSchedulesNext = false;
+  void OnRun(std::unique_ptr<RunTask>&);
+  DEF_END(remove);
+
+  DEF_INTERFACE(Location, Signal, iconify, "Iconify")
+  static constexpr bool kSchedulesNext = false;
+  void OnRun(std::unique_ptr<RunTask>&) { obj->Iconify(); }
+  DEF_END(iconify);
+
+  DEF_INTERFACE(Location, Signal, deiconify, "Deiconify")
+  static constexpr bool kSchedulesNext = false;
+  void OnRun(std::unique_ptr<RunTask>&) { obj->Deiconify(); }
+  DEF_END(deiconify);
+
+  INTERFACES(move, copy, clone, remove, iconify, deiconify)
 
   explicit Location(WeakPtr<Board> board = {});
   ~Location();
@@ -166,7 +200,7 @@ struct Location : Object {
   ////////////////////////////
 
   // Immediately execute this object's Updated function.
-  void Updated(WeakPtr<Object>& updated) { object->Updated(updated); }
+  void Updated(WeakPtr<Object>& updated) override { object->Updated(updated); }
 
   // Call this function when the value of the object has changed.
   //
@@ -209,7 +243,7 @@ struct Location : Object {
     return dynamic_cast<T*>(Follow());
   }
 
-  void SetText(std::string_view text) {
+  void SetText(std::string_view text) override {
     std::string current_text = GetText();
     if (current_text == text) {
       return;
@@ -219,7 +253,7 @@ struct Location : Object {
   }
   void SetNumber(double number);
 
-  Ptr<Object> Clone() const;
+  Ptr<Object> Clone() const override;
 };
 
 struct LocationWidget : ObjectToy {
@@ -240,6 +274,7 @@ struct LocationWidget : ObjectToy {
   bool merging = false;
 
   float local_to_parent_weight_target = 1;
+  bool iconified = false;
 
   MortalList<LocationWidget> overlapping_above;
   MortalList<LocationWidget> overlapping_below;
@@ -252,7 +287,8 @@ struct LocationWidget : ObjectToy {
   // Keep Toy in the board's ToyStore.
   static std::unique_ptr<LocationWidget> MakeBoardOwned(ui::Widget* parent, Location& loc);
   // Keep Toy owned locally.
-  static std::unique_ptr<LocationWidget> MakePointerOwned(ui::Widget* parent, Location& loc);
+  static std::unique_ptr<LocationWidget> MakePointerOwned(ui::Widget* parent, Location& loc,
+                                                          std::unique_ptr<Toy>&& toy = nullptr);
 
   Ptr<Location> LockLocation() const { return LockObject<Location>(); }
 
@@ -268,6 +304,8 @@ struct LocationWidget : ObjectToy {
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   Optional<Rect> DrawBounds() const override;
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
+  MiniMenuMode MenuMode() override { return MODE_8_DIR; }
 
   void OnPoll(time::Timer& timer) override {
     if (owned_toy) owned_toy->Poll(timer);
@@ -309,3 +347,5 @@ Vec2 PositionBeside(Location& origin, Location& target, const ObjectToy& target_
 void AnimateGrowFrom(Location& source, Location& grown);
 
 }  // namespace automat
+
+#include "board.hpp"

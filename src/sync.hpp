@@ -25,16 +25,27 @@ struct Syncable : Argument {
     void (*on_sync)(Syncable) = nullptr;
     void (*on_unsync)(Syncable) = nullptr;
 
+    Interface::Table sync;
+    Interface::Table unsync;
+
     static void DefaultCanConnect(Argument self, Interface end, Status& status);
     static void DefaultOnConnect(Argument self, Interface end);
     static NestedPtr<Interface::Table> DefaultFind(Argument self);
+    static std::unique_ptr<Action> MenuActivate(Interface, ui::Pointer&, automat::Toy*);
+    static std::unique_ptr<Action> SyncActivate(Interface, ui::Pointer&, automat::Toy*);
+    static std::unique_ptr<Action> UnsyncActivate(Interface, ui::Pointer&, automat::Toy*);
 
-    constexpr Table(StrView name, Kind kind = Interface::kSyncable) : Argument::Table(name, kind) {
+    constexpr Table(StrView name, Kind kind = Interface::kSyncable)
+        : Argument::Table(name, kind), sync(kind, "Sync"), unsync(kind, "Unsync") {
       style = Style::Belt;
       visible_when_disconnected = false;
       can_connect = &DefaultCanConnect;
       on_connect = &DefaultOnConnect;
       find = &DefaultFind;
+      make_icon = &Interface::Table::DefaultMakeIcon;
+      activate = &MenuActivate;
+      sync.activate = &SyncActivate;
+      unsync.activate = &UnsyncActivate;
     }
 
     template <typename ImplT>
@@ -46,6 +57,7 @@ struct Syncable : Argument {
         on_sync = [](Syncable self) { static_cast<ImplT&>(self).OnSync(); };
       if constexpr (requires(ImplT& i) { i.OnUnsync(); })
         on_unsync = [](Syncable self) { static_cast<ImplT&>(self).OnUnsync(); };
+      sync.cursor = unsync.cursor = cursor;
     }
   };
 
@@ -261,7 +273,7 @@ struct SyncBelt : ArgumentToy {
 
   bool DrawnUnderEndpoints() const override { return true; }
   SkPath Shape() const override;
-  void Options(ui::Pointer&, OptionVisitor&) override;
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
   Tock Tick(time::Timer& t) override;
   void Draw(SkCanvas& canvas) const override;
   Optional<Rect> DrawBounds() const override;
@@ -273,7 +285,7 @@ struct SyncAction : Action {
   NestedWeakPtr<Syncable::Table> weak;
   // TODO: syncing across the Boards
   MortalPtr<BoardWidget> board_widget;
-  SyncAction(ui::Pointer& pointer, Syncable syncable);
+  SyncAction(ui::Pointer& pointer, Syncable syncable, Toy* toy);
   ~SyncAction();
   void Update() override;
   bool Highlight(Interface end) const override;

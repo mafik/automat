@@ -20,7 +20,8 @@ state (src/board.hpp, src/location.hpp). Most other objects must not track the 2
 
 The VM provides hints so that the 2D world can function. Data of fixed size per type — O(1),
 not growing with the number of objects — is fine in VM-side tables: `Argument::Table` carries
-the connection style, tint, and autoconnect radius (src/argument.hpp).
+the connection style, tint, and autoconnect radius (src/argument.hpp), and every
+`Interface::Table` carries its activation, its menu icon and its cursor (src/interface.hpp).
 
 ## Placement rules
 
@@ -40,6 +41,14 @@ Interfaces within an object can be mapped to 2D shapes or widgets. `Toy::FindWid
 (src/toy.hpp) maps an interface of the toy's owner to the child widget that displays it; the
 default is the whole toy. Connections use their endpoint interfaces' widgets as covers, which
 is how a sync belt disappears under a FlipFlop's rocker (docs/parrots/Split Widgets.md).
+
+The 2D modality activates interfaces through the widget that displays them.
+`Interface::Activate(Pointer&, Toy*)` (src/interface.hpp) receives that Toy, and each widget's
+`FindOption` (src/widget.hpp) maps buttons, keys and menu directions to the interfaces of its
+owner (docs/parrots/Options.md). Objects expose commands as interfaces and never learn which
+widget activated them. State that exists only for the 2D modality but must outlive an activation
+(the twist of the timer hand) lives in a small Object owned by the widget through a `Ptr`
+(`TimerHand`, src/library_timer.cpp), not on the displayed object.
 
 ## Notifications
 

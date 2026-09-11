@@ -504,11 +504,10 @@ struct CommandToy;
 // or future paste - stay literal and render as a gray midline dot.
 struct ArgvField : ui::TextFieldBase {
   CommandToy& toy;
-  ArgvField(ui::Widget* parent, CommandToy& toy);
+  ArgvField(ui::Widget* parent, Object& command, CommandToy& toy);
   StrView Name() const override { return "ArgvField"; }
   SkPath Shape() const override;
   void Draw(SkCanvas&) const override;
-  void TextVisit(const ui::TextVisitor&) override;
   int IndexFromPosition(float x) const override;
   Vec2 PositionFromIndex(int index) const override;
   void KeyDown(ui::Caret&, ui::Key) override;
@@ -516,6 +515,18 @@ struct ArgvField : ui::TextFieldBase {
 };
 
 struct CommandToy : ui::beta::ObjectToy {
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    using enum ui::Dir;
+    auto object = LockObject<Command>();
+    if (!object) return {};
+    switch (static_cast<ui::Dir>(trigger)) {
+      case NE:
+        return Interface(*object, Command::running_tbl);
+      default:
+        return ui::beta::ObjectToy::FindOption(pointer, trigger);
+    }
+  }
+  MiniMenuMode MenuMode() override { return MODE_6_DIR; }
   std::unique_ptr<ArgvField> field;
   std::unique_ptr<ui::beta::RunButton> button;
   std::unique_ptr<LaunchWidget> launch_widget;
@@ -539,8 +550,10 @@ struct CommandToy : ui::beta::ObjectToy {
   bool resolve_answer_ = false;
 
   CommandToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
-    field = std::make_unique<ArgvField>(this, *this);
-    button = std::make_unique<ui::beta::RunButton>(this, [this] { OnButton(); }, Seed(0x12B));
+    field = std::make_unique<ArgvField>(this, obj, *this);
+    button = std::make_unique<ui::beta::RunButton>(
+        this, NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(), &Command::run_tbl),
+        NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(), &Command::stop_tbl), Seed(0x12B));
   }
 
   Ptr<Command> LockCommand() const { return LockObject<Command>(); }
@@ -631,18 +644,6 @@ struct CommandToy : ui::beta::ObjectToy {
   void ScheduleRunIfReady() {
     if (auto cmd = LockCommand()) {
       if (!cmd->running->IsRunning() && program_resolves_) cmd->run->ScheduleRun();
-    }
-    WakeAnimation();
-  }
-
-  void OnButton() {
-    if (auto cmd = LockCommand()) {
-      if (cmd->running->IsRunning()) {
-        cmd->Terminate();
-        cmd->running->Cancel();
-      } else if (program_resolves_) {
-        cmd->run->ScheduleRun();
-      }
     }
     WakeAnimation();
   }
@@ -756,7 +757,8 @@ struct CommandToy : ui::beta::ObjectToy {
 
 // ---------------------------------------------------------------- ArgvField --
 
-ArgvField::ArgvField(ui::Widget* parent, CommandToy& toy) : TextFieldBase(parent), toy(toy) {}
+ArgvField::ArgvField(ui::Widget* parent, Object& command, CommandToy& toy)
+    : TextFieldBase(parent, command, Command::text_tbl), toy(toy) {}
 
 Vec<Str> ArgvField::Snapshot() const {
   if (auto cmd = toy.LockCommand()) {
@@ -769,17 +771,6 @@ Vec<Str> ArgvField::Snapshot() const {
 SkPath ArgvField::Shape() const {
   float w = std::max(LayoutArgv(Snapshot()).total, kEmptyTile);
   return SkPath::Rect(Rect{0, 0, w, kFieldH});
-}
-
-void ArgvField::TextVisit(const ui::TextVisitor& visitor) {
-  // Base-class compatibility only; the editor manipulates argv directly.
-  Str joined;
-  if (auto cmd = toy.LockCommand()) joined = cmd->GetText();
-  if (visitor(joined)) {
-    if (auto cmd = toy.LockCommand()) cmd->SetText(joined);
-    WakeAnimation();
-    toy.WakeAnimation();
-  }
 }
 
 int ArgvField::IndexFromPosition(float x) const {

@@ -15,6 +15,7 @@
 #include "animation.hpp"
 #include "argument.hpp"
 #include "audio.hpp"
+#include "board.hpp"
 #include "color.hpp"
 #include "embedded.hpp"
 #include "keyboard.hpp"
@@ -407,6 +408,18 @@ struct GlassRunButton : ui::PowerButton {
 // MacroRecorderWidget
 
 struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    using enum ui::Dir;
+    auto object = LockObject<MacroRecorder>();
+    if (!object) return {};
+    switch (static_cast<ui::Dir>(trigger)) {
+      case NE:
+        return Interface(*object, MacroRecorder::long_running_tbl);
+      default:
+        return ObjectToy::FindOption(pointer, trigger);
+    }
+  }
+  MiniMenuMode MenuMode() override { return MODE_6_DIR; }
   struct AnimationState {
     animation::SpringV2<Vec2> googly_left;
     animation::SpringV2<Vec2> googly_right;

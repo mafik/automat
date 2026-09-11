@@ -65,6 +65,17 @@ struct PointerGrab {
 
 struct PointerWidget;
 
+enum class Cursor {
+  None = 0,
+  Arrow,
+  Hand,
+  IBeam,
+  AllScroll,
+  ResizeHorizontal,
+  ResizeVertical,
+  Crosshair,
+};
+
 struct Pointer {
   MortalCoil mortal_coil;
   Pointer(RootWidget&, Vec2 position);
@@ -77,17 +88,6 @@ struct Pointer {
   void ButtonUp(PointerButton);
 
   PointerWidget* GetWidget();
-
-  enum class Cursor {
-    None = 0,
-    Arrow,
-    Hand,
-    IBeam,
-    AllScroll,
-    ResizeHorizontal,
-    ResizeVertical,
-    Crosshair,
-  };
 
   // RAII wrapper for icon lifetime management
   struct CursorOverride {
@@ -132,7 +132,7 @@ struct Pointer {
   MortalPtr<KeyboardWidget> keyboard;
 
   Vec2 pointer_position;
-  std::list<Pointer::Cursor> cursors;
+  std::list<Cursor> cursors;
 
   Vec2 button_down_position[static_cast<int>(PointerButton::Count)];
   time::SteadyPoint button_down_time[static_cast<int>(PointerButton::Count)];

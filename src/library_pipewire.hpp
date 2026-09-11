@@ -64,7 +64,31 @@ struct PipeWireNode : Object {
   void OnConnect(Interface end) { obj->OnOutConnect(*this, end); }
   DEF_END(out_stream);
 
-  INTERFACES(in_stream, out_stream);
+  DEF_INTERFACE(PipeWireNode, OnOff, muted, "Mute")
+  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  bool IsOn() const {
+    auto lock = std::lock_guard(obj->mutex);
+    return obj->mute;
+  }
+  void OnTurnOn() { obj->SetMute(true); }
+  void OnTurnOff() { obj->SetMute(false); }
+  DEF_END(muted);
+
+  DEF_INTERFACE(PipeWireNode, Scalar, level, "Volume")
+  double OnGet() {
+    auto lock = std::lock_guard(obj->mutex);
+    return obj->volume;
+  }
+  void OnSet(double value) { obj->SetVolume(value); }
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(level);
+
+  DEF_INTERFACE(PipeWireNode, Text, name_text, "Name")
+  Str OnGet() { return obj->NodeName(); }
+  void OnSet(StrView name) { obj->SetNodeName(name); }
+  DEF_END(name_text);
+
+  INTERFACES(in_stream, out_stream, muted, level, name_text);
 
   PipeWireNode() = default;
   PipeWireNode(const PipeWireNode& o)

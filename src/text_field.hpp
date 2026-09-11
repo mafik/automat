@@ -4,9 +4,10 @@
 
 #include <include/core/SkRRect.h>
 
-#include "argument.hpp"
+#include "base.hpp"
 #include "keyboard.hpp"
 #include "pointer.hpp"
+#include "toy.hpp"
 #include "ui_constants.hpp"
 #include "widget.hpp"
 
@@ -21,27 +22,24 @@ struct CaretPosition {
   int index;  // byte offset within UTF-8 string
 };
 
-// Returns true if the value has been modified
-using TextVisitor = std::function<bool(std::string&)>;
-
-struct TextFieldBase : Widget {
+struct TextFieldBase : Toy {
   std::unordered_map<Caret*, CaretPosition> caret_positions;
-  NestedWeakPtr<Argument::Table> argument;
+  Str text;
 
-  TextFieldBase(ui::Widget* parent) : Widget(parent) {}
+  TextFieldBase(ui::Widget* parent, Object& owner, automat::Text::Table& table);
 
-  void Options(Pointer&, OptionVisitor&) override;
+  Interface FindOption(Pointer&, ActionTrigger) override;
+  Tock Tick(time::Timer&) override;
 
   // Update the given caret to its current position from `caret_positions`.
   void UpdateCaret(Caret& caret);
+  void MoveCaret(Caret& caret, int index);
 
   void ReleaseCaret(Caret&) override;
   void KeyDown(Caret&, Key) override;
   void KeyUp(Caret&, Key) override;
 
-  Tock Tick(time::Timer&) override { return Tock::Draw; }
-
-  virtual void TextVisit(const TextVisitor&) = 0;
+  void SetText(StrView edited);
   virtual int IndexFromPosition(float x) const = 0;
   virtual Vec2 PositionFromIndex(int index) const = 0;
 };
@@ -50,16 +48,15 @@ struct TextField : TextFieldBase {
   static constexpr float kHeight =
       std::max(kLetterSize + 2 * kMargin + 2 * kBorderWidth, kMinimalTouchableSize);
 
-  std::string* text;
   float width;
 
-  TextField(ui::Widget* parent, std::string* text, float width)
-      : TextFieldBase(parent), text(text), width(width) {}
+  // TODO: just pass automat::Text (rather than separate owner + table)
+  TextField(ui::Widget* parent, Object& owner, automat::Text::Table& table, float width)
+      : TextFieldBase(parent, owner, table), width(width) {}
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
 
   virtual Vec2 GetTextPos() const;
-  void TextVisit(const TextVisitor&) override;
   int IndexFromPosition(float x) const override;
   Vec2 PositionFromIndex(int index) const override;
 

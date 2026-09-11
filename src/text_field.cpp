@@ -13,9 +13,8 @@
 #include "animation.hpp"
 #include "base.hpp"
 #include "font.hpp"
-#include "menu.hpp"
+#include "object.hpp"
 #include "root_widget.hpp"
-#include "ui_connection_widget.hpp"
 
 namespace automat::ui {
 
@@ -92,18 +91,14 @@ void TextField::DrawText(SkCanvas& canvas) const {
                                            width - 2 * kTextMargin, font.line_thickness);
   canvas.drawRect(underline_rect, GetTextPaint());
   canvas.translate(text_pos.x, text_pos.y);
-  if (text) {
-    font.DrawText(canvas, *text, GetTextPaint());
-    // DrawDebugTextOutlines(canvas, text);
-  }
+  font.DrawText(canvas, text, GetTextPaint());
 }
-void TextField::TextVisit(const TextVisitor& visitor) { visitor(*text); }
 int TextField::IndexFromPosition(float local_x) const {
   Vec2 text_pos = GetTextPos();
-  return GetFont().IndexFromPosition(*text, local_x - text_pos.x);
+  return GetFont().IndexFromPosition(text, local_x - text_pos.x);
 }
 Vec2 TextField::PositionFromIndex(int index) const {
-  return GetTextPos() + Vec2(GetFont().PositionFromIndex(*text, index), 0);
+  return GetTextPos() + Vec2(GetFont().PositionFromIndex(text, index), 0);
 }
 Vec2 TextField::GetTextPos() const {
   return Vec2(kTextMargin, (kTextFieldHeight - kLetterSize) / 2);
@@ -111,31 +106,51 @@ Vec2 TextField::GetTextPos() const {
 
 SkPath TextField::Shape() const { return SkPath::RRect(ShapeRRect()); }
 
+TextFieldBase::TextFieldBase(ui::Widget* parent, Object& owner, automat::Text::Table& table)
+    : Toy(parent, owner, &table, owner.wake_counter) {}
+
+Interface TextFieldBase::FindOption(Pointer&, ActionTrigger trigger) {
+  if (trigger != PointerButton::Left) return {};
+  auto object = LockOwner();
+  if (!object) return {};
+  return Interface(*object, *iface);
+}
+
+Widget::Tock TextFieldBase::Tick(time::Timer&) {
+  auto bound = LockBind<automat::Text>();
+  Str fresh = bound ? bound.Get() : Str();
+  if (fresh == text) return {};
+  size_t old_size = text.size();
+  text = std::move(fresh);
+  for (auto& [caret, pos] : caret_positions) {
+    if (pos.index > text.size() || pos.index == old_size) pos.index = text.size();
+    UpdateCaret(*caret);
+  }
+  return Tock::Draw;
+}
+
+void TextFieldBase::SetText(StrView edited) {
+  if (auto bound = LockBind<automat::Text>()) bound.Set(edited);
+  WakeAnimation();
+}
+
 void TextFieldBase::UpdateCaret(Caret& caret) {
   int index = caret_positions[&caret].index;
   Vec2 caret_pos = PositionFromIndex(index);
   caret.PlaceIBeam(caret_pos);
 }
 
+void TextFieldBase::MoveCaret(Caret& caret, int index) {
+  caret_positions[&caret].index = std::min<int>(index, text.size());
+  UpdateCaret(caret);
+}
+
 struct TextSelectAction : Action {
-  TextFieldBase& text_field;
+  MortalPtr<TextFieldBase> field;
   MortalPtr<ui::Caret> caret;
 
-  // TextSelectionAction can be used to drag connections. In order to do this, make sure to set the
-  // `argument` of the TextField.
-  bool selecting_text = true;
-  std::optional<DragConnectionAction> drag;
-
   TextSelectAction(Pointer& pointer, TextFieldBase& text_field)
-      : Action(pointer), text_field(text_field) {
-    if (text_field.argument) {
-      Argument arg(text_field.argument.OwnerUnsafe<Object>(), text_field.argument.GetUnsafe());
-      if (auto* connection_widget =
-              dynamic_cast<ConnectionWidget*>(text_field.ToyStore().FindOrNull(arg))) {
-        drag.emplace(pointer, *connection_widget);
-      }
-    }
-
+      : Action(pointer), field(&text_field) {
     if (pointer.keyboard) {
       Vec2 local = pointer.PositionWithin(text_field);
       int index = text_field.IndexFromPosition(local.x);
@@ -145,46 +160,19 @@ struct TextSelectAction : Action {
     }
   }
 
-  void UpdateCaretFromPointer(Pointer& pointer) {
-    auto it = text_field.caret_positions.find(caret);
+  void Update() override {
+    if (!field) return;
+    auto it = field->caret_positions.find(caret);
     // The caret might have been released.
-    if (it == text_field.caret_positions.end()) {
-      return;
-    }
-    Vec2 local = pointer.PositionWithin(text_field);
-    if (drag.has_value()) {
-      bool new_inside = text_field.Shape().contains(local.x, local.y);
-      if (new_inside != selecting_text) {
-        selecting_text = new_inside;
-      }
-    }
-
-    if (selecting_text) {
-      int index = text_field.IndexFromPosition(local.x);
-      if (index != it->second.index) {
-        it->second.index = index;
-        text_field.UpdateCaret(*caret);
-      }
-    } else {
-      drag->Update();
+    if (it == field->caret_positions.end()) return;
+    Vec2 local = pointer.PositionWithin(*field);
+    int index = field->IndexFromPosition(local.x);
+    if (index != it->second.index) {
+      it->second.index = index;
+      field->UpdateCaret(*caret);
     }
   }
-
-  void Update() override { UpdateCaretFromPointer(pointer); }
 };
-
-struct TextSelectOption : TextOption {
-  TextFieldBase& field;
-  TextSelectOption(TextFieldBase& field) : TextOption("Select text"), field(field) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(TextSelectOption, field); }
-  Span<const ActionTrigger> Triggers() const override { return kLeftButton; }
-  Pointer::Cursor Cursor() const override { return Pointer::Cursor::IBeam; }
-  std::unique_ptr<Action> Activate(Pointer& pointer) override {
-    return std::make_unique<TextSelectAction>(pointer, field);
-  }
-};
-
-void TextFieldBase::Options(Pointer&, OptionVisitor& visit) { visit(TextSelectOption(*this)); }
 
 void TextFieldBase::ReleaseCaret(Caret& caret) { caret_positions.erase(&caret); }
 
@@ -204,90 +192,51 @@ std::string FilterControlCharacters(const std::string& text) {
 }
 
 void TextFieldBase::KeyDown(Caret& caret, Key k) {
+  int index = caret_positions[&caret].index;
+  Font& font = GetFont();
   switch (k.physical) {
     case AnsiKey::Delete: {
-      int begin = caret_positions[&caret].index;
-      TextVisit([&](std::string& text) {
-        int end = GetFont().NextIndex(text, begin);
-        if (end != begin) {
-          text.erase(begin, end - begin);
-          return true;
-        }
-        return false;
-      });
+      int end = font.NextIndex(text, index);
+      if (end != index) {
+        Str edited = text;
+        edited.erase(index, end - index);
+        SetText(edited);
+      }
       break;
     }
     case AnsiKey::Backspace: {
-      int end = caret_positions[&caret].index;
-      if (end > 0) {
-        I64 old_size;
-        TextVisit([&](std::string& text) {
-          old_size = text.size();
-          int start = GetFont().PrevIndex(text, end);
-          text.erase(start, end - start);
-          return true;
-        });
-        I64 new_size = old_size;
-        TextVisit([&](std::string& text) {
-          new_size = text.size();
-          return false;
-        });
-        caret_positions[&caret].index += new_size - old_size;
-        UpdateCaret(caret);
+      if (index > 0) {
+        int start = font.PrevIndex(text, index);
+        Str edited = text;
+        edited.erase(start, index - start);
+        SetText(edited);
+        MoveCaret(caret, start);
       }
       break;
     }
     case AnsiKey::Left: {
-      int& i_ref = caret_positions[&caret].index;
-      if (i_ref > 0) {
-        TextVisit([&](std::string& text) {
-          i_ref = GetFont().PrevIndex(text, i_ref);
-          return false;
-        });
-        UpdateCaret(caret);
-      }
+      if (index > 0) MoveCaret(caret, font.PrevIndex(text, index));
       break;
     }
     case AnsiKey::Right: {
-      int& i_ref = caret_positions[&caret].index;
-      TextVisit([&](std::string& text) {
-        if (i_ref < text.size()) {
-          i_ref = GetFont().NextIndex(text, i_ref);
-          UpdateCaret(caret);
-        }
-        return false;
-      });
+      if (index < text.size()) MoveCaret(caret, font.NextIndex(text, index));
       break;
     }
     case AnsiKey::Home: {
-      caret_positions[&caret].index = 0;
-      UpdateCaret(caret);
+      MoveCaret(caret, 0);
       break;
     }
     case AnsiKey::End: {
-      TextVisit([&](std::string& text) {
-        caret_positions[&caret].index = text.size();
-        return false;
-      });
-      UpdateCaret(caret);
+      MoveCaret(caret, text.size());
       break;
     }
     default: {
       std::string clean = FilterControlCharacters(k.text);
       if (!clean.empty()) {
-        I64 old_size;
-        TextVisit([&](std::string& text) {
-          old_size = text.size();
-          text.insert(caret_positions[&caret].index, clean);
-          return true;  // because text is changed
-        });
-        I64 new_size = old_size;
-        TextVisit([&](std::string& text) {
-          new_size = text.size();
-          return false;  // because text is not changed
-        });
-        caret_positions[&caret].index += new_size - old_size;
-        UpdateCaret(caret);
+        Str edited = text;
+        edited.insert(index, clean);
+        SetText(edited);
+        MoveCaret(caret, index + clean.size());
       }
     }
   }
@@ -296,3 +245,14 @@ void TextFieldBase::KeyDown(Caret& caret, Key k) {
 void TextFieldBase::KeyUp(Caret&, Key) {}
 
 }  // namespace automat::ui
+
+namespace automat {
+
+std::unique_ptr<Action> Text::Table::DefaultActivate(Interface self, ui::Pointer& pointer,
+                                                     Toy* toy) {
+  auto* field = toy ? dynamic_cast<ui::TextFieldBase*>(toy->FindWidget(self.table_ptr)) : nullptr;
+  if (!field) return nullptr;
+  return std::make_unique<ui::TextSelectAction>(pointer, *field);
+}
+
+}  // namespace automat

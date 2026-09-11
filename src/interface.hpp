@@ -4,6 +4,7 @@
 
 #include <concepts>
 #include <functional>
+#include <memory>
 #include <type_traits>
 
 #include "casting.hpp"
@@ -13,7 +14,15 @@
 
 namespace automat {
 
+struct Action;
 struct Object;
+struct Toy;
+
+namespace ui {
+struct Pointer;
+struct Widget;
+enum class Cursor;
+}  // namespace ui
 
 // Interface is the base class for parts of Objects that can be exposed to other Objects.
 //
@@ -64,17 +73,24 @@ struct Interface {
     kResizable,
     kStreamInput,
     kFdProvider,
+    kObjectSource,
+    kScalar,
+    kText,
   };
 
   struct Table {
     Kind kind;
     int state_off = 0;  // byte offset from Object* to Interface::State
     StrView name;
+    ui::Cursor cursor = {};
+    std::unique_ptr<Action> (*activate)(Interface, ui::Pointer&, Toy*) = nullptr;
+    std::unique_ptr<ui::Widget> (*make_icon)(Interface, ui::Widget* parent) = &DefaultMakeIcon;
 
     constexpr Table(Kind kind, StrView name, int state_off = 0)
         : kind(kind), state_off(state_off), name(name) {}
 
     static bool classof(const Table*) { return true; }
+    static std::unique_ptr<ui::Widget> DefaultMakeIcon(Interface, ui::Widget* parent);
 
     // FillFrom<ImplT>() — canonical compile-time ImplT-driven initialization.
     // Subtype Tables chain to this via their own FillFrom<ImplT>().
@@ -82,6 +98,19 @@ struct Interface {
     template <typename ImplT>
     constexpr void FillFrom() {
       state_off = ImplT::Offset();
+      if constexpr (requires { ImplT::kCursor; }) cursor = ImplT::kCursor;
+      if constexpr (requires { &ImplT::OnActivate; })
+        static_assert(
+            requires(ImplT& i, ui::Pointer& p, Toy* t) { i.OnActivate(p, t); },
+            "OnActivate must take (ui::Pointer&, automat::Toy*)");
+      if constexpr (requires(ImplT& i, ui::Pointer& p, Toy* t) { i.OnActivate(p, t); })
+        activate = [](Interface self, ui::Pointer& p, Toy* t) -> std::unique_ptr<Action> {
+          return static_cast<ImplT&>(self).OnActivate(p, t);
+        };
+      if constexpr (requires(ImplT& i, ui::Widget* p) { i.OnMakeIcon(p); })
+        make_icon = [](Interface self, ui::Widget* p) -> std::unique_ptr<ui::Widget> {
+          return static_cast<ImplT&>(self).OnMakeIcon(p);
+        };
     }
   };
 
@@ -136,17 +165,22 @@ struct Interface {
   Interface(Object& obj) : object_ptr(&obj) {}
   Interface(Object& obj, Table& table) : object_ptr(&obj), table_ptr(&table) {}
   Interface(Object* obj, Table* table) : object_ptr(obj), table_ptr(table) {}
+  explicit Interface(const NestedPtr<Table>&);
+  explicit Interface(const NestedWeakPtr<Table>&);
 
   auto operator<=>(const Interface&) const = default;
 
-  operator NestedPtr<Table>();
-  operator NestedWeakPtr<Table>();
+  operator NestedPtr<Table>() const;
+  operator NestedWeakPtr<Table>() const;
 
   bool has_object() const { return object_ptr != nullptr; }
   bool has_table() const { return table_ptr != nullptr; }
   explicit operator bool() const { return has_object() && has_table(); }
 
   StrView Name() const { return table_ptr->name; }
+
+  std::unique_ptr<Action> Activate(ui::Pointer&, Toy* toy = nullptr) const;
+  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) const;
 };
 
 // Ref-counted wrapper for bound interface types. Keeps the owner Object alive.
@@ -175,6 +209,14 @@ struct Locked : T {
 template <typename T>
 Locked<T> AdoptLocked(T bound) {
   return Locked<T>(bound, {});
+}
+
+template <typename Table>
+constexpr Table MenuTable(StrView name,
+                          std::unique_ptr<Action> (*open)(Interface, ui::Pointer&, Toy*)) {
+  Table t(name);
+  t.activate = open;
+  return t;
 }
 
 Str ToStr(Interface iface);

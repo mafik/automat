@@ -37,7 +37,6 @@
 #include "global_resources.hpp"
 #include "location.hpp"
 #include "math.hpp"
-#include "menu.hpp"
 #include "object.hpp"
 #include "object_iconified.hpp"
 #include "root_widget.hpp"
@@ -1221,18 +1220,10 @@ void ConnectionWidget::ShowRefusal(Str text) {
   WakeAnimation();
 }
 
-struct DragConnectionOption : TextOption {
-  ConnectionWidget& widget;
-  DragConnectionOption(ConnectionWidget& widget) : TextOption("Drag"), widget(widget) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(DragConnectionOption, widget); }
-  Span<const ActionTrigger> Triggers() const override { return kLeftButton; }
-  std::unique_ptr<Action> Activate(Pointer& pointer) override {
-    return std::make_unique<DragConnectionAction>(pointer, widget);
-  }
-};
-
-void ConnectionWidget::Options(Pointer&, OptionVisitor& visit) {
-  visit(DragConnectionOption(*this));
+Interface ConnectionWidget::FindOption(Pointer&, ActionTrigger trigger) {
+  if (trigger != PointerButton::Left) return {};
+  auto owner = LockOwner();
+  return owner ? Interface(*owner, *iface) : Interface();
 }
 
 DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& connection_widget)

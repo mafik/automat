@@ -51,6 +51,22 @@ void HotKey::Disable() {
   }
 }
 
+void HotKey::ToggleModifier(bool& modifier) {
+  bool on = enabled->IsOn();
+  if (on) enabled->TurnOff();
+  modifier = !modifier;
+  if (on) enabled->TurnOn();
+  WakeToys();
+}
+
+static std::unique_ptr<Action> SelectHotKeyActivate(Interface, ui::Pointer&, Toy*);
+
+constinit Signal::Table kSelectHotKey = [] {
+  Signal::Table t("Select key");
+  t.activate = &SelectHotKeyActivate;
+  return t;
+}();
+
 static constexpr float kCtrlKeyWidth = kBaseKeyWidth * 1.5;
 static constexpr float kSuperKeyWidth = kCtrlKeyWidth;
 static constexpr float kAltKeyWidth = kCtrlKeyWidth;
@@ -168,6 +184,17 @@ bool HotKey::DeserializeKey(ObjectDeserializer& d, StrView keyName) {
 // HotKeyWidget
 
 struct HotKeyWidget : ObjectToy {
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    using enum ui::Dir;
+    auto object = LockObject<HotKey>();
+    if (!object) return {};
+    switch (static_cast<ui::Dir>(trigger)) {
+      case N:
+        return Interface(*object, HotKey::enabled_tbl);
+      default:
+        return ObjectToy::FindOption(pointer, trigger);
+    }
+  }
   unique_ptr<ui::PowerButton> power_button;
   unique_ptr<KeyButton> ctrl_button;
   unique_ptr<KeyButton> alt_button;
@@ -214,76 +241,26 @@ struct HotKeyWidget : ObjectToy {
         SkM44::Translate(-kWidth / 2 + kFrameWidth + kKeySpacing * 2 + kShiftKeyWidth,
                          kShapeRect.bottom + kFrameWidth + kKeySpacing * 2 + kKeyHeight);
 
-    ctrl_button->activate = [this](ui::Pointer&) {
-      if (auto hk = LockHotKey()) {
-        bool on = hk->enabled->IsOn();
-        if (on) {
-          hk->enabled->TurnOff();
-        }
-        hk->ctrl = !hk->ctrl;
-        if (on) {
-          hk->enabled->TurnOn();
-        }
-        ctrl_button->fg = KeyColor(hk->ctrl);
-      }
-      ctrl_button->WakeAnimation();
-    };
-    alt_button->activate = [this](ui::Pointer&) {
-      if (auto hk = LockHotKey()) {
-        bool on = hk->enabled->IsOn();
-        if (on) {
-          hk->enabled->TurnOff();
-        }
-        hk->alt = !hk->alt;
-        if (on) {
-          hk->enabled->TurnOn();
-        }
-        alt_button->fg = KeyColor(hk->alt);
-      }
-      alt_button->WakeAnimation();
-    };
-    shift_button->activate = [this](ui::Pointer&) {
-      if (auto hk = LockHotKey()) {
-        bool on = hk->enabled->IsOn();
-        if (on) {
-          hk->enabled->TurnOff();
-        }
-        hk->shift = !hk->shift;
-        if (on) {
-          hk->enabled->TurnOn();
-        }
-        shift_button->fg = KeyColor(hk->shift);
-      }
-      shift_button->WakeAnimation();
-    };
-    windows_button->activate = [this](ui::Pointer&) {
-      if (auto hk = LockHotKey()) {
-        bool on = hk->enabled->IsOn();
-        if (on) {
-          hk->enabled->TurnOff();
-        }
-        hk->windows = !hk->windows;
-        if (on) {
-          hk->enabled->TurnOn();
-        }
-        windows_button->fg = KeyColor(hk->windows);
-      }
-      windows_button->WakeAnimation();
-    };
-    shortcut_button->activate = [this](ui::Pointer& pointer) {
-      if (hotkey_selector) {
-        // Cancel HotKey selection.
-        hotkey_selector->Release();  // This will also set itself to nullptr
-      } else if (pointer.keyboard) {
-        ui::Widget* label = shortcut_button->child.get();
-        auto bounds = *label->DrawBounds();
-        Vec2 caret_position = shortcut_button->RRect().rect().center();
-        caret_position.x += bounds.left;
-        hotkey_selector = &pointer.keyboard->RequestCaret(*this, caret_position);
-      }
-      WakeAnimation();
-      shortcut_button->WakeAnimation();
-    };
+    auto weak = hk->AcquireWeakPtr();
+    ctrl_button->target = NestedWeakPtr<Interface::Table>(weak, &HotKey::toggle_ctrl_tbl);
+    alt_button->target = NestedWeakPtr<Interface::Table>(weak, &HotKey::toggle_alt_tbl);
+    shift_button->target = NestedWeakPtr<Interface::Table>(weak, &HotKey::toggle_shift_tbl);
+    windows_button->target = NestedWeakPtr<Interface::Table>(weak, &HotKey::toggle_super_tbl);
+    shortcut_button->target = NestedWeakPtr<Interface::Table>(weak, &kSelectHotKey);
+  }
+
+  void SelectHotKey(ui::Pointer& pointer) {
+    if (hotkey_selector) {
+      hotkey_selector->Release();
+    } else if (pointer.keyboard) {
+      ui::Widget* label = shortcut_button->child.get();
+      auto bounds = *label->DrawBounds();
+      Vec2 caret_position = shortcut_button->RRect().rect().center();
+      caret_position.x += bounds.left;
+      hotkey_selector = &pointer.keyboard->RequestCaret(*this, caret_position);
+    }
+    WakeAnimation();
+    shortcut_button->WakeAnimation();
   }
 
   Tock Tick(time::Timer& t) override {
@@ -415,6 +392,11 @@ struct HotKeyWidget : ObjectToy {
     shortcut_button->WakeAnimation();
   }
 };
+
+static std::unique_ptr<Action> SelectHotKeyActivate(Interface, ui::Pointer& pointer, Toy* toy) {
+  if (auto* widget = dynamic_cast<HotKeyWidget*>(toy)) widget->SelectHotKey(pointer);
+  return std::make_unique<EmptyAction>(pointer);
+}
 
 std::unique_ptr<ObjectToy> HotKey::MakeToy(ui::Widget* parent) {
   return std::make_unique<HotKeyWidget>(parent, *this);

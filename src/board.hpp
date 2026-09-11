@@ -5,6 +5,7 @@
 #include "animation.hpp"
 #include "base.hpp"
 #include "image_provider.hpp"
+#include "object_source.hpp"
 #include "ptr.hpp"
 #include "resizable.hpp"
 #include "vm.hpp"
@@ -112,7 +113,20 @@ struct Board : Object {
   bool ResizeM(Rect grow);
   DEF_END(resizable);
 
-  INTERFACES(resizable);
+  DEF_INTERFACE(Board, ObjectSource, move, "Move")
+  Ptr<Object> OnTake() { return obj->AcquirePtr(); }
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(move);
+
+  DEF_INTERFACE(Board, Signal, toggle_frame, "Toggle Frame")
+  static constexpr bool kSchedulesNext = false;
+  void OnRun(std::unique_ptr<RunTask>&) {
+    obj->frame_visible = !obj->frame_visible;
+    obj->WakeToys();
+  }
+  DEF_END(toggle_frame);
+
+  INTERFACES(move, toggle_frame, resizable);
 };
 
 // UI widget for Board. Handles drawing, drop target, and spatial queries.
@@ -142,7 +156,8 @@ struct BoardWidget : ObjectToy, ui::DropTarget {
   SkPath Shape() const override;
   SkPath SubtreeShape() const override;
   Compositor GetCompositor() const override { return Compositor::QUANTUM_REALM; }
-  void Options(ui::Pointer&, OptionVisitor&) override;
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
+  MiniMenuMode MenuMode() override { return MODE_6_DIR; }
 
   // DropTarget overrides
   ui::DropTarget* AsDropTarget() override { return this; }

@@ -13,6 +13,7 @@
 #include <include/core/SkRRect.h>
 #include <include/core/SkShader.h>
 #include <include/effects/SkGradient.h>
+#include <include/pathops/SkPathOps.h>
 
 #include <algorithm>
 #include <cmath>
@@ -31,7 +32,6 @@
 #include "font.hpp"
 #include "library_mouse.hpp"
 #include "math.hpp"
-#include "menu.hpp"
 #include "number_text_field.hpp"
 #include "pointer.hpp"
 #include "random.hpp"
@@ -306,7 +306,7 @@ TrackBase::TrackBase(Str name_arg) : name_str(std::move(name_arg)), arg_table(na
     auto& track = static_cast<const TrackBase&>(*self.object_ptr);
     return track.arg_state.target.Lock();
   };
-  arg_table.make_icon = [](Argument self, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
+  arg_table.make_icon = [](Interface self, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
     return std::make_unique<TextWidget>(parent, Str(self.Name()));
   };
   arg_table.state_off = offsetof(TrackBase, arg_state);
@@ -330,7 +330,7 @@ bool OnOffTrack::on_off_Impl::IsOn() const {
 }
 
 Timeline::Timeline()
-    : state(kPaused), timeline_length(0), paused{.playback_offset = 0s}, zoom(10) {}
+    : state(kPaused), timeline_length(0), paused{.playback_offset = 0s}, zoom_seconds(10) {}
 
 OnOffTrack& Timeline::AddOnOffTrack(Str name) {
   auto track_ptr = MAKE_PTR(OnOffTrack, std::move(name));
@@ -366,7 +366,7 @@ Timeline::Timeline(const Timeline& other)
     : Object(other),
       run(other.run),
       next(other.next),
-      zoom(other.zoom),
+      zoom_seconds(other.zoom_seconds),
       state(other.state),
       timeline_length(other.timeline_length) {
   switch (state) {
@@ -671,7 +671,6 @@ struct PrevButton : SideButton {
     layers.OrderInside(child.get());
     UpdateChildTransform();
   }
-  void Activate(ui::Pointer&) override;
   StrView Name() const override { return "Prev Button"; }
 };
 
@@ -681,7 +680,6 @@ struct NextButton : SideButton {
     layers.OrderInside(child.get());
     UpdateChildTransform();
   }
-  void Activate(ui::Pointer&) override;
   StrView Name() const override { return "Next Button"; }
 };
 
@@ -695,22 +693,16 @@ struct TimelineRunButton : ui::ToggleButton {
       : ui::ToggleButton(parent), timeline_weak(std::move(timeline)) {
     on = std::make_unique<ColoredButton>(
         this, GetPausedPath(),
-        ColoredButtonArgs{.fg = kTimelineButtonBackground,
-                          .bg = kOrange,
-                          .radius = kPlayButtonRadius,
-                          .on_click = [this](ui::Pointer& p) { Activate(p); }});
+        ColoredButtonArgs{
+            .fg = kTimelineButtonBackground, .bg = kOrange, .radius = kPlayButtonRadius});
     off = std::make_unique<ColoredButton>(
         this, PathFromSVG(kPlayShape),
-        ColoredButtonArgs{.fg = kOrange,
-                          .bg = kTimelineButtonBackground,
-                          .radius = kPlayButtonRadius,
-                          .on_click = [this](ui::Pointer& p) { Activate(p); }});
+        ColoredButtonArgs{
+            .fg = kOrange, .bg = kTimelineButtonBackground, .radius = kPlayButtonRadius});
     rec_button = std::make_unique<ColoredButton>(
         this, GetRecPath(),
-        ColoredButtonArgs{.fg = kTimelineButtonBackground,
-                          .bg = color::kParrotRed,
-                          .radius = kPlayButtonRadius,
-                          .on_click = [this](ui::Pointer& p) { Activate(p); }});
+        ColoredButtonArgs{
+            .fg = kTimelineButtonBackground, .bg = color::kParrotRed, .radius = kPlayButtonRadius});
     layers.OrderInside(on.get());
     layers.OrderInside(off.get());
     layers.OrderInside(rec_button.get());
@@ -718,23 +710,7 @@ struct TimelineRunButton : ui::ToggleButton {
   TimelineWidget* GetTimelineWidget() const;
   ui::Button* OnWidget() override;
   bool Filled() const override;
-  void Activate(ui::Pointer&) {
-    auto timeline = timeline_weak.Lock();
-    if (!timeline) return;
-    auto lock = std::lock_guard(timeline->mutex);
-    switch (timeline->state) {
-      case Timeline::kPlaying:
-        timeline->running->Cancel();
-        break;
-      case Timeline::kPaused:
-        timeline->run->ScheduleRun();
-        break;
-      case Timeline::kRecording:
-        timeline->StopRecording();
-        break;
-    }
-    WakeAnimation();
-  }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
   StrView Name() const override { return "Timeline Run Button"; }
 };
 
@@ -766,7 +742,35 @@ time::Duration Timeline::CurrentOffset(time::SteadyPoint now) const {
   }
 }
 
+void Timeline::SetOffset(time::Duration offset, time::SteadyPoint now) {
+  offset = clamp<time::Duration>(offset, 0s, MaxTrackLength());
+  if (state == kPlaying) {
+    TimelineCancelScheduled(*this);
+    playing.started_at = now - offset;
+    TimelineUpdateOutputs(*this, playing.started_at, now);
+    TimelineScheduleNextAfter(*this, now);
+  } else if (state == kPaused) {
+    paused.playback_offset = offset;
+  }
+}
+
 struct TimelineWidget : ObjectToy {
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    using enum ui::Dir;
+    auto object = LockObject<Timeline>();
+    if (!object) return {};
+    switch (static_cast<ui::Dir>(trigger)) {
+      case NE:
+        return Interface(*object, Timeline::running_tbl);
+      case W:
+        return Interface(*object, Timeline::position_tbl);
+      case E:
+        return Interface(*object, Timeline::zoom_tbl);
+      default:
+        return ObjectToy::FindOption(pointer, trigger);
+    }
+  }
+  MiniMenuMode MenuMode() override { return MODE_8_DIR; }
   std::unique_ptr<TimelineRunButton> run_button;
   std::unique_ptr<PrevButton> prev_button;
   std::unique_ptr<NextButton> next_button;
@@ -775,6 +779,11 @@ struct TimelineWidget : ObjectToy {
   MortalPtr<DragZoomAction> drag_zoom_action;
 
   Vec<MortalPtr<ui::Widget>> track_widgets;
+
+  std::unique_ptr<ui::ActionZone> window_zone;
+  std::unique_ptr<ui::ActionZone> bridge_zone;
+  std::unique_ptr<ui::ActionZone> splicer_zone;
+  std::unique_ptr<ui::ActionZone> zoom_zone;
 
   float zoom = 10;
   float splice_x = 0;
@@ -789,21 +798,7 @@ struct TimelineWidget : ObjectToy {
   float current_pos_ratio;             // populated on Tick
   time::Duration distance_to_seconds;  // populated on Tick
 
-  TimelineWidget(ui::Widget* parent, Object& object)
-      : ObjectToy(parent, object),
-        run_button(new TimelineRunButton(this, static_cast<Timeline&>(object).AcquireWeakPtr())),
-        prev_button(new PrevButton(*this)),
-        next_button(new NextButton(*this)) {
-    run_button->local_to_parent = SkM44::Translate(-kPlayButtonRadius, kDisplayMargin);
-    prev_button->local_to_parent =
-        SkM44::Translate(-kPlasticWidth / 2 + kSideButtonMargin, -kSideButtonRadius);
-    next_button->local_to_parent = SkM44::Translate(
-        kPlasticWidth / 2 - kSideButtonMargin - kSideButtonDiameter, -kSideButtonRadius);
-    if (auto timeline = this->LockObject<Timeline>()) {
-      auto lock = std::lock_guard(timeline->mutex);
-      zoom = timeline->zoom;
-    }
-  }
+  TimelineWidget(ui::Widget* parent, Object& object);
 
   Optional<time::Duration> SnapToTrack(Timeline& timeline_locked, Vec2 pos,
                                        time::Duration time_at_x = time::kDurationGuard) const {
@@ -881,28 +876,11 @@ struct TimelineWidget : ObjectToy {
 
   void SetPosRatio(Timeline& timeline_locked, float pos_ratio, time::SteadyPoint now) {
     pos_ratio = clamp(pos_ratio, 0.0f, 1.0f);
-    auto max_track_length = timeline_locked.MaxTrackLength();
-    if (timeline_locked.state == Timeline::kPlaying) {
-      TimelineCancelScheduled(timeline_locked);
-      timeline_locked.playing.started_at = now - time::Defloat(pos_ratio * max_track_length);
-      TimelineUpdateOutputs(timeline_locked, timeline_locked.playing.started_at, now);
-      TimelineScheduleNextAfter(timeline_locked, now);
-    } else if (timeline_locked.state == Timeline::kPaused) {
-      timeline_locked.paused.playback_offset = time::Defloat(pos_ratio * max_track_length);
-    }
-    WakeAnimationResponsively(timeline_locked, now);
+    SetOffset(timeline_locked, time::Defloat(pos_ratio * timeline_locked.MaxTrackLength()), now);
   }
 
   void SetOffset(Timeline& timeline_locked, time::Duration offset, time::SteadyPoint now) {
-    offset = clamp<time::Duration>(offset, 0s, timeline_locked.MaxTrackLength());
-    if (timeline_locked.state == Timeline::kPlaying) {
-      TimelineCancelScheduled(timeline_locked);
-      timeline_locked.playing.started_at = now - time::Duration(offset);
-      TimelineUpdateOutputs(timeline_locked, timeline_locked.playing.started_at, now);
-      TimelineScheduleNextAfter(timeline_locked, now);
-    } else if (timeline_locked.state == Timeline::kPaused) {
-      timeline_locked.paused.playback_offset = offset;
-    }
+    timeline_locked.SetOffset(offset, now);
     WakeAnimationResponsively(timeline_locked, now);
   }
 
@@ -987,7 +965,7 @@ struct TimelineWidget : ObjectToy {
     if ((state == Timeline::kPlaying) || (state == Timeline::kRecording)) {
       tock |= Tock::Drawing;
     }
-    tock.drawing |= animation::ExponentialApproach(timeline->zoom, timer.d, 0.1, zoom);
+    tock.drawing |= animation::ExponentialApproach(timeline->zoom_seconds, timer.d, 0.1, zoom);
     tock.drawing |= splice_wiggle.SpringTowards(0, timer.d, 0.3, 0.1);
     if (splice_action) {
       tock |= Tock::Drawing;
@@ -999,6 +977,12 @@ struct TimelineWidget : ObjectToy {
       WakeAnimationResponsively(*timeline, timer.now);
     } else {
       PullTimelineState(*timeline, timer.now);
+    }
+    if (tock.draw || shape_invalid) {
+      for (auto* zone :
+           {window_zone.get(), bridge_zone.get(), splicer_zone.get(), zoom_zone.get()}) {
+        zone->WakeAnimation();
+      }
     }
     return tock;
   }
@@ -1547,7 +1531,6 @@ struct TimelineWidget : ObjectToy {
     return SkPath::RRect(r);
   }
   bool CenteredAtZero() const override { return true; }
-  void Options(ui::Pointer&, OptionVisitor&) override;
   using ObjectToy::ArgStart;
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     auto timeline = LockObject<Timeline>();
@@ -1593,24 +1576,20 @@ ui::Button* TimelineRunButton::OnWidget() {
   return last_on_widget;
 }
 
-void PrevButton::Activate(ui::Pointer& ptr) {
-  Button::Activate(ptr);
-  if (auto* timeline_widget = GetTimelineWidget()) {
-    if (auto timeline = timeline_widget->LockObject<Timeline>()) {
-      auto lock = std::lock_guard(timeline->mutex);
-      timeline_widget->SetPosRatio(*timeline, 0, ptr.root_widget.timer.now);
-    }
+Interface TimelineRunButton::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
+  if (trigger != ui::PointerButton::Left) return {};
+  auto* tw = GetTimelineWidget();
+  auto timeline = timeline_weak.Lock();
+  if (!tw || !timeline) return {};
+  switch (tw->state) {
+    case Timeline::kPlaying:
+      return Interface(*timeline, Timeline::running_tbl.turn_off);
+    case Timeline::kPaused:
+      return Interface(*timeline, Timeline::run_tbl);
+    case Timeline::kRecording:
+      return Interface(*timeline, Timeline::stop_recording_tbl);
   }
-}
-
-void NextButton::Activate(ui::Pointer& ptr) {
-  Button::Activate(ptr);
-  if (auto* timeline_widget = GetTimelineWidget()) {
-    if (auto timeline = timeline_widget->LockObject<Timeline>()) {
-      auto lock = std::lock_guard(timeline->mutex);
-      timeline_widget->SetPosRatio(*timeline, 1, ptr.root_widget.timer.now);
-    }
-  }
+  return {};
 }
 
 struct DragBridgeAction : Action {
@@ -1725,7 +1704,7 @@ struct DragZoomAction : Action {
       auto timeline = timeline_widget->LockObject<Timeline>();
       if (timeline) {
         auto lock = std::lock_guard(timeline->mutex);
-        timeline->zoom = NearestZoomTick(timeline->zoom);
+        timeline->zoom_seconds = NearestZoomTick(timeline->zoom_seconds);
         timeline_widget->WakeAnimationResponsively(*timeline, time::SteadyNow());
       }
     }
@@ -1738,9 +1717,9 @@ struct DragZoomAction : Action {
     float factor = expf(delta_y * 60);
     auto timeline = timeline_widget->LockObject<Timeline>();
     if (timeline) {
-      timeline->zoom *= factor;
+      timeline->zoom_seconds *= factor;
       timeline_widget->zoom *= factor;
-      timeline->zoom = clamp(timeline->zoom, 0.001f, 3600.0f);
+      timeline->zoom_seconds = clamp(timeline->zoom_seconds, 0.001f, 3600.0f);
       timeline_widget->zoom = clamp(timeline_widget->zoom, 0.001f, 3600.0f);
       timeline_widget->WakeAnimationResponsively(*timeline, pointer.root_widget.timer.now);
     }
@@ -1750,7 +1729,7 @@ struct DragZoomAction : Action {
 SpliceAction::SpliceAction(ui::Pointer& pointer, TimelineWidget& timeline_widget_ref)
     : Action(pointer),
       timeline_widget(&timeline_widget_ref),
-      resize_cursor(pointer, ui::Pointer::Cursor::ResizeHorizontal) {
+      resize_cursor(pointer, ui::Cursor::ResizeHorizontal) {
   assert(timeline_widget_ref.splice_action == nullptr);
   timeline_widget_ref.splice_action = this;
   splice_to = timeline_widget_ref.current_offset;
@@ -1818,84 +1797,123 @@ void SpliceAction::Update() {
   timeline_widget->WakeAnimation();
 }
 
-struct SpliceOption : TextOption {
-  TimelineWidget& widget;
-  SpliceOption(TimelineWidget& widget) : TextOption("Splice"), widget(widget) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(SpliceOption, widget); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  std::unique_ptr<Action> Activate(ui::Pointer& ptr) override {
-    if (widget.splice_action) return nullptr;
-    return make_unique<SpliceAction>(ptr, widget);
+std::unique_ptr<Action> Timeline::position_Impl::OnActivate(ui::Pointer& pointer,
+                                                            automat::Toy* toy) {
+  auto* widget = toy ? ui::Closest<TimelineWidget>(*toy) : nullptr;
+  if (!widget) return nullptr;
+  Vec2 pos = pointer.PositionWithin(*widget);
+  int n = widget->track_widgets.size();
+  if (BridgeShape(n, widget->current_pos_ratio).contains(pos.x, pos.y)) {
+    return make_unique<DragBridgeAction>(pointer, *widget);
+  }
+  if (WindowShape(n).contains(pos.x, pos.y) && pos.y >= -kRulerHeight) {
+    auto lock = std::lock_guard(obj->mutex);
+    widget->SetPosRatio(*obj, PosRatioFromBridgeOffsetX(pos.x), pointer.root_widget.timer.now);
+    return make_unique<DragBridgeAction>(pointer, *widget);
+  }
+  return make_unique<DragTimelineAction>(pointer, *widget);
+}
+
+std::unique_ptr<Action> Timeline::zoom_Impl::OnActivate(ui::Pointer& pointer, automat::Toy* toy) {
+  auto* widget = toy ? ui::Closest<TimelineWidget>(*toy) : nullptr;
+  return widget ? make_unique<DragZoomAction>(pointer, *widget) : nullptr;
+}
+
+constinit Signal::Table kSplice = [] {
+  Signal::Table t("Splice");
+  t.cursor = ui::Cursor::ResizeHorizontal;
+  t.activate = [](Interface, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
+    auto* widget = toy ? ui::Closest<TimelineWidget>(*toy) : nullptr;
+    if (!widget || widget->splice_action) return nullptr;
+    return make_unique<SpliceAction>(pointer, *widget);
+  };
+  return t;
+}();
+
+struct TimelineZone : ui::ActionZone {
+  using ActionZone::ActionZone;
+  TimelineWidget& Face() const { return static_cast<TimelineWidget&>(*parent); }
+  Tock Tick(time::Timer&) override { return Tock::Shape; }
+  Interface Position(ui::ActionTrigger trigger) const {
+    if (trigger != ui::PointerButton::Left) return {};
+    auto timeline = Face().LockObject<Timeline>();
+    return timeline ? Interface(*timeline, Timeline::position_tbl) : Interface();
   }
 };
 
-struct DragBridgeOption : TextOption {
-  TimelineWidget& widget;
-  DragBridgeOption(TimelineWidget& widget) : TextOption("Bridge"), widget(widget) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(DragBridgeOption, widget); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  std::unique_ptr<Action> Activate(ui::Pointer& ptr) override {
-    return make_unique<DragBridgeAction>(ptr, widget);
+struct WindowZone : TimelineZone {
+  using TimelineZone::TimelineZone;
+  SkPath Shape() const override { return WindowShape(Face().track_widgets.size()); }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    return Position(trigger);
   }
 };
 
-struct DragZoomOption : TextOption {
-  TimelineWidget& widget;
-  DragZoomOption(TimelineWidget& widget) : TextOption("Zoom"), widget(widget) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(DragZoomOption, widget); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  std::unique_ptr<Action> Activate(ui::Pointer& ptr) override {
-    return make_unique<DragZoomAction>(ptr, widget);
+struct BridgeZone : TimelineZone {
+  using TimelineZone::TimelineZone;
+  SkPath Shape() const override {
+    auto& face = Face();
+    return BridgeShape(face.track_widgets.size(), face.current_pos_ratio);
+  }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    return Position(trigger);
   }
 };
 
-struct DragTimelineOption : TextOption {
-  TimelineWidget& widget;
-  DragTimelineOption(TimelineWidget& widget) : TextOption("Scroll"), widget(widget) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(DragTimelineOption, widget); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  std::unique_ptr<Action> Activate(ui::Pointer& ptr) override {
-    return make_unique<DragTimelineAction>(ptr, widget);
+struct SplicerZone : TimelineZone {
+  using TimelineZone::TimelineZone;
+  SkPath Shape() const override {
+    auto& face = Face();
+    return SplicerShape(face.track_widgets.size(), face.current_pos_ratio);
+  }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    auto& face = Face();
+    if (trigger != ui::PointerButton::Left || face.splice_action) return {};
+    auto timeline = face.LockObject<Timeline>();
+    return timeline ? Interface(*timeline, kSplice) : Interface();
   }
 };
 
-struct SeekOption : TextOption {
-  TimelineWidget& widget;
-  float pos_ratio;
-  SeekOption(TimelineWidget& widget, float pos_ratio)
-      : TextOption("Seek"), widget(widget), pos_ratio(pos_ratio) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(SeekOption, widget, pos_ratio); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  std::unique_ptr<Action> Activate(ui::Pointer& ptr) override {
-    auto timeline = widget.LockObject<Timeline>();
-    if (!timeline) return nullptr;
+struct ZoomZone : TimelineZone {
+  using TimelineZone::TimelineZone;
+  SkPath Shape() const override {
+    int n = Face().track_widgets.size();
+    Vec2 center = ZoomDialCenter(WindowHeight(n));
+    SkPath dial;
+    Op(SkPath::Circle(center.x, center.y, kZoomRadius), WindowShape(n), kIntersect_SkPathOp, &dial);
+    return dial;
+  }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    if (trigger != ui::PointerButton::Left) return {};
+    auto timeline = Face().LockObject<Timeline>();
+    return timeline ? Interface(*timeline, Timeline::zoom_tbl) : Interface();
+  }
+};
+
+TimelineWidget::TimelineWidget(ui::Widget* parent, Object& object)
+    : ObjectToy(parent, object),
+      run_button(new TimelineRunButton(this, static_cast<Timeline&>(object).AcquireWeakPtr())),
+      prev_button(new PrevButton(*this)),
+      next_button(new NextButton(*this)),
+      window_zone(new WindowZone(this)),
+      bridge_zone(new BridgeZone(this)),
+      splicer_zone(new SplicerZone(this)),
+      zoom_zone(new ZoomZone(this)) {
+  run_button->local_to_parent = SkM44::Translate(-kPlayButtonRadius, kDisplayMargin);
+  prev_button->local_to_parent =
+      SkM44::Translate(-kPlasticWidth / 2 + kSideButtonMargin, -kSideButtonRadius);
+  next_button->local_to_parent = SkM44::Translate(
+      kPlasticWidth / 2 - kSideButtonMargin - kSideButtonDiameter, -kSideButtonRadius);
+  auto weak = static_cast<Timeline&>(object).AcquireWeakPtr();
+  prev_button->target = NestedWeakPtr<Interface::Table>(weak, &Timeline::jump_to_start_tbl);
+  next_button->target = NestedWeakPtr<Interface::Table>(weak, &Timeline::jump_to_end_tbl);
+  for (auto* zone : {window_zone.get(), bridge_zone.get(), splicer_zone.get(), zoom_zone.get()}) {
+    layers.OrderBelow(zone);
+  }
+  if (auto timeline = LockObject<Timeline>()) {
     auto lock = std::lock_guard(timeline->mutex);
-    widget.SetPosRatio(*timeline, pos_ratio, ptr.root_widget.timer.now);
-    return make_unique<DragBridgeAction>(ptr, widget);
+    zoom = timeline->zoom_seconds;
   }
-};
-
-void TimelineWidget::Options(ui::Pointer& ptr, OptionVisitor& visit) {
-  if (!IsIconified()) {
-    int n = track_widgets.size();
-    auto pos = ptr.PositionWithin(*this);
-    if (SplicerShape(n, current_pos_ratio).contains(pos.x, pos.y) && splice_action == nullptr) {
-      visit(SpliceOption(*this));
-    } else if (BridgeShape(n, current_pos_ratio).contains(pos.x, pos.y)) {
-      visit(DragBridgeOption(*this));
-    } else if (WindowShape(n).contains(pos.x, pos.y)) {
-      if (pos.y < -kRulerHeight) {
-        if (LengthSquared(pos - ZoomDialCenter(WindowHeight(n))) < kZoomRadius * kZoomRadius) {
-          visit(DragZoomOption(*this));
-        } else {
-          visit(DragTimelineOption(*this));
-        }
-      } else {
-        visit(SeekOption(*this, PosRatioFromBridgeOffsetX(pos.x)));
-      }
-    }
-  }
-  ObjectToy::Options(ptr, visit);
 }
 
 std::unique_ptr<ObjectToy> Timeline::MakeToy(ui::Widget* parent) {
@@ -1909,6 +1927,11 @@ void Timeline::Interfaces(const function<LoopControl(Interface)>& cb) {
   if (LoopControl::Break == cb(next.Bind())) return;
   if (LoopControl::Break == cb(run.Bind())) return;
   if (LoopControl::Break == cb(running.Bind())) return;
+  if (LoopControl::Break == cb(position.Bind())) return;
+  if (LoopControl::Break == cb(zoom.Bind())) return;
+  if (LoopControl::Break == cb(jump_to_start.Bind())) return;
+  if (LoopControl::Break == cb(jump_to_end.Bind())) return;
+  if (LoopControl::Break == cb(stop_recording.Bind())) return;
 }
 
 struct TrackBaseWidget : ObjectToy {
@@ -1987,13 +2010,17 @@ struct TrackBaseWidget : ObjectToy {
     return nullopt;
   }
   void Draw(SkCanvas& canvas) const override { canvas.drawRect(shape.sk, kTrackPaint); }
-  void Options(ui::Pointer& ptr, OptionVisitor& visit) override {
+  MiniMenuMode MenuMode() override {
     Context ctx(*this);
-    if (ctx.timeline_widget) {
-      ctx.timeline_widget->Options(ptr, visit);
-    } else {
-      ObjectToy::Options(ptr, visit);
+    return ctx.timeline_widget ? ctx.timeline_widget->MenuMode() : ObjectToy::MenuMode();
+  }
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    Context ctx(*this);
+    if (!ctx.timeline_widget) return ObjectToy::FindOption(pointer, trigger);
+    if (trigger == ui::PointerButton::Left) {
+      return ctx.timeline ? Interface(*ctx.timeline, Timeline::position_tbl) : Interface();
     }
+    return ctx.timeline_widget->FindOption(pointer, trigger);
   }
 };
 
@@ -2607,6 +2634,23 @@ void Timeline::StopRecording() {
   WakeToys();
 }
 
+void Timeline::jump_to_start_Impl::OnRun(std::unique_ptr<RunTask>&) {
+  auto lock = std::lock_guard(obj->mutex);
+  obj->SetOffset(0s, time::SteadyNow());
+  obj->WakeToys();
+}
+
+void Timeline::jump_to_end_Impl::OnRun(std::unique_ptr<RunTask>&) {
+  auto lock = std::lock_guard(obj->mutex);
+  obj->SetOffset(obj->MaxTrackLength(), time::SteadyNow());
+  obj->WakeToys();
+}
+
+void Timeline::stop_recording_Impl::OnRun(std::unique_ptr<RunTask>&) {
+  auto lock = std::lock_guard(obj->mutex);
+  obj->StopRecording();
+}
+
 void OnOffTrack::Splice(time::Duration current_offset, time::Duration splice_to) {
   auto delta = splice_to - current_offset;
   auto [current_offset_ge, current_offset_g] =
@@ -2728,7 +2772,7 @@ void Timeline::SerializeState(ObjectSerializer& writer) const {
   }
   writer.EndObject();
   writer.Key("zoom");
-  writer.Double(zoom);
+  writer.Double(zoom_seconds);
   writer.Key("length");
   writer.Double(time::ToSeconds(timeline_length));
 
@@ -2855,7 +2899,7 @@ bool Timeline::DeserializeKey(ObjectDeserializer& d, StrView key) {
       }
     }
   } else if (key == "zoom") {
-    d.Get(zoom, status);
+    d.Get(zoom_seconds, status);
   } else if (key == "length") {
     double t;
     d.Get(t, status);

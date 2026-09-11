@@ -37,6 +37,52 @@ struct Pointer;
 extern std::vector<RootWidget*> root_widgets;
 extern unique_ptr<RootWidget> root_widget;
 
+struct Camera : Object {
+  std::mutex mutex;
+  Vec2 nudge;
+
+  StrView Name() const override { return "Camera"; }
+  Ptr<Object> Clone() const override { return MAKE_PTR(Camera); }
+
+  void Move(Vec2 delta) {
+    {
+      auto lock = std::lock_guard(mutex);
+      nudge += delta;
+    }
+    WakeToys();
+  }
+
+  DEF_INTERFACE(Camera, Signal, up, "Camera up")
+  static constexpr bool kSchedulesNext = false;
+  static constexpr Vec2 kDelta = Vec2(0, 10_cm);
+  void OnRun(std::unique_ptr<RunTask>&) { obj->Move(kDelta); }
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(up);
+  DEF_INTERFACE(Camera, Signal, down, "Camera down")
+  static constexpr bool kSchedulesNext = false;
+  static constexpr Vec2 kDelta = Vec2(0, -10_cm);
+  void OnRun(std::unique_ptr<RunTask>&) { obj->Move(kDelta); }
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(down);
+  DEF_INTERFACE(Camera, Signal, left, "Camera left")
+  static constexpr bool kSchedulesNext = false;
+  static constexpr Vec2 kDelta = Vec2(-10_cm, 0);
+  void OnRun(std::unique_ptr<RunTask>&) { obj->Move(kDelta); }
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(left);
+  DEF_INTERFACE(Camera, Signal, right, "Camera right")
+  static constexpr bool kSchedulesNext = false;
+  static constexpr Vec2 kDelta = Vec2(10_cm, 0);
+  void OnRun(std::unique_ptr<RunTask>&) { obj->Move(kDelta); }
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(right);
+
+  INTERFACES(up, down, left, right)
+};
+
+extern Signal::Table kDragCamera;
+extern Signal::Table kCameraMenu;
+
 struct RootWidget final : Widget {
   RootWidget();
   ~RootWidget();
@@ -132,7 +178,10 @@ struct RootWidget final : Widget {
   Compositor GetCompositor() const override { return Compositor::WARP; }
 
   Vec2 move_velocity = Vec2(0, 0);
-  void Options(Pointer&, OptionVisitor&) override;
+  Ptr<Camera> camera = MAKE_PTR(Camera);
+  uint32_t camera_observed = 0;
+  Interface FindOption(Pointer&, ActionTrigger) override;
+  MiniMenuMode MenuMode() override { return MODE_4_DIR; }
 
   void Zoom(float delta);
   std::unique_ptr<Pointer> MakePointer(Vec2 position);

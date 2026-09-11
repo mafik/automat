@@ -5,10 +5,8 @@
 #include <include/core/SkCanvas.h>
 #include <include/core/SkPaint.h>
 
-#include "action.hpp"
 #include "embedded.hpp"
 #include "log.hpp"
-#include "menu.hpp"
 #include "path.hpp"
 #include "textures.hpp"
 #include "virtual_fs.hpp"
@@ -34,45 +32,45 @@ std::string_view Sources::Name() const { return "Sources"; }
 
 Ptr<Object> Sources::Clone() const { return MAKE_PTR(Sources); }
 
-struct ExtractFilesOption : TextOption {
-  WeakPtr<Sources> weak;
-
-  ExtractFilesOption(WeakPtr<Sources> weak) : TextOption("Extract Files"), weak(weak) {}
-
-  Ptr<Option> Clone() const override { return MAKE_PTR(ExtractFilesOption, weak); }
-
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    // Extract all embedded files to the current directory
-    Status status;
-    int file_count = 0;
-    for (auto& [path, vfile] : embedded::index) {
-      Path out_path(path);
-      // Create parent directories if needed
-      auto parent = out_path.Parent();
-      if (!parent.str.empty()) {
-        parent.MakeDirs(status);
-        if (!OK(status)) {
-          LOG << "Failed to create directory for " << path << ": " << status;
-          status = Status();
-          continue;
-        }
-      }
-      fs::real.Write(out_path, vfile->content, status);
+void Sources::extract_files_Impl::OnRun(std::unique_ptr<RunTask>&) {
+  // Extract all embedded files to the current directory
+  Status status;
+  int file_count = 0;
+  for (auto& [path, vfile] : embedded::index) {
+    Path out_path(path);
+    // Create parent directories if needed
+    auto parent = out_path.Parent();
+    if (!parent.str.empty()) {
+      parent.MakeDirs(status);
       if (!OK(status)) {
-        LOG << "Failed to extract " << path << ": " << status;
+        LOG << "Failed to create directory for " << path << ": " << status;
         status = Status();
         continue;
       }
-      ++file_count;
     }
-    LOG << "Extracted " << file_count << " files";
-    return std::make_unique<EmptyAction>(pointer);
+    fs::real.Write(out_path, vfile->content, status);
+    if (!OK(status)) {
+      LOG << "Failed to extract " << path << ": " << status;
+      status = Status();
+      continue;
+    }
+    ++file_count;
   }
-
-  Dir PreferredDir() const override { return SW; }
-};
+  LOG << "Extracted " << file_count << " files";
+}
 
 struct SourcesWidget : ObjectToy {
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    using enum ui::Dir;
+    auto object = LockObject<Sources>();
+    if (!object) return {};
+    switch (static_cast<ui::Dir>(trigger)) {
+      case N:
+        return Interface(*object, Sources::extract_files_tbl);
+      default:
+        return ObjectToy::FindOption(pointer, trigger);
+    }
+  }
   SourcesWidget(ui::Widget* parent, Object& sources) : ObjectToy(parent, sources) {}
 
   Ptr<Sources> LockSources() const { return LockObject<Sources>(); }
@@ -84,14 +82,6 @@ struct SourcesWidget : ObjectToy {
   RRect CoarseBounds() const override { return RRect::MakeSimple(GetRect(), 0); }
 
   void Draw(SkCanvas& canvas) const override { SourcesImage().draw(canvas); }
-
-  void Options(ui::Pointer& pointer, OptionVisitor& visitor) override {
-    ObjectToy::Options(pointer, visitor);
-    if (auto sources = LockSources()) {
-      ExtractFilesOption extract(sources);
-      visitor(extract);
-    }
-  }
 };
 
 std::unique_ptr<ObjectToy> Sources::MakeToy(ui::Widget* parent) {

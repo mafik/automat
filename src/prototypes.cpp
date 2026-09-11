@@ -5,8 +5,8 @@
 #include "library_assembler.hpp"
 #include "library_beta_shelf.hpp"
 #include "library_command.hpp"
-#include "library_ffmpeg.hpp"
 #include "library_data_offer.hpp"
+#include "library_ffmpeg.hpp"
 #include "library_file.hpp"
 #include "library_flip_flop.hpp"
 #include "library_gegl.hpp"
@@ -14,7 +14,6 @@
 #include "library_hotkey.hpp"
 #include "library_instruction_library.hpp"
 #include "library_key_presser.hpp"
-#include "library_leptonica.hpp"
 #include "library_macro_recorder.hpp"
 #include "library_mouse.hpp"
 #include "library_number.hpp"
@@ -125,33 +124,6 @@ PrototypeLibrary::PrototypeLibrary() {
 #if defined(_WIN32)
   index.Register<AppWindow, HideInToolbar>();
 #endif
-  {  // The Leptonica tools are reached through the shelf, not the toolbar.
-    index.Register<LeptonicaShelf, HideInToolbar>();
-    index.Register<LeptonicaImage, HideInToolbar>();
-    index.Register<Generate, HideInToolbar>();
-    index.Register<Threshold, HideInToolbar>();
-    index.Register<Morphology, HideInToolbar>();
-    index.Register<Tone, HideInToolbar>();
-    index.Register<Geometry, HideInToolbar>();
-    index.Register<Channel, HideInToolbar>();
-    index.Register<Convolve, HideInToolbar>();
-    index.Register<Blend, HideInToolbar>();
-    index.Register<Quantize, HideInToolbar>();
-    index.Register<Flatten, HideInToolbar>();
-    index.Register<Posterize, HideInToolbar>();
-    index.Register<Dither, HideInToolbar>();
-    index.Register<Deskew, HideInToolbar>();
-    index.Register<Seedfill, HideInToolbar>();
-    index.Register<CropRegion, HideInToolbar>();
-    index.Register<FindLevel, HideInToolbar>();
-    index.Register<Count, HideInToolbar>();
-    index.Register<Color, HideInToolbar>();
-    index.Register<Warp, HideInToolbar>();
-    index.Register<Measure, HideInToolbar>();
-    index.Register<Select, HideInToolbar>();
-    index.Register<Fade, HideInToolbar>();
-    index.Register<Reduce, HideInToolbar>();
-  }
 }
 
 Object* PrototypeLibrary::Find(const std::type_info& type) {

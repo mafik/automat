@@ -7,7 +7,8 @@
 
 #include <include/core/SkCanvas.h>
 
-#include "make_object_option.hpp"
+#include "menu.hpp"
+#include "object_source.hpp"
 #include "prototypes.hpp"
 #include "ui_beta.hpp"
 #include "units.hpp"
@@ -18,54 +19,46 @@ namespace {
 
 constexpr float kStampRadius = 1.1_cm;
 
-void VisitProto(OptionVisitor& visitor, StrView name, Option::Dir dir) {
-  if (auto* proto = prototypes ? prototypes->Find(name) : nullptr) {
-    MakeObjectOption opt(proto->AcquirePtr(), dir);
-    visitor(opt);
-  }
+Interface Proto(StrView name) {
+  auto* proto = prototypes ? prototypes->Find(name) : nullptr;
+  return proto ? Interface(*proto, kMakeObject) : Interface();
 }
 
-// A named sub-menu; activating it opens a ring with the visited options.
-struct GroupOption : TextOption, OptionsProvider {
-  GroupOption(Str label) : TextOption(label) {}
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override { return OpenMenu(pointer); }
-};
+std::unique_ptr<Action> OpenFfmpegMenu(Interface, ui::Pointer& pointer, Toy* toy) {
+  using enum ui::Dir;
+  Interface options[ui::kDirCount];
+  options[static_cast<int>(N)] = Proto("avformat");
+  options[static_cast<int>(S)] = Proto("avcodec");
+  return MakeMenuAction(pointer, OptionsProvider::MODE_2_DIR, options, toy);
+}
 
-struct FfmpegOption : GroupOption {
-  FfmpegOption() : GroupOption("FFmpeg") {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(FfmpegOption); }
-  void Options(ui::Pointer&, OptionVisitor& visitor) override {
-    VisitProto(visitor, "avformat", Option::N);
-    VisitProto(visitor, "avcodec", Option::S);
-  }
-  Dir PreferredDir() const override { return N; }
-};
+std::unique_ptr<Action> OpenTensorFlowMenu(Interface, ui::Pointer& pointer, Toy* toy) {
+  using enum ui::Dir;
+  Interface options[ui::kDirCount];
+  options[static_cast<int>(N)] = Proto("tf:tensor");
+  options[static_cast<int>(S)] = Proto("Square");
+  return MakeMenuAction(pointer, OptionsProvider::MODE_2_DIR, options, toy);
+}
 
-struct TensorFlowOption : GroupOption {
-  TensorFlowOption() : GroupOption("TensorFlow") {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(TensorFlowOption); }
-  void Options(ui::Pointer&, OptionVisitor& visitor) override {
-    VisitProto(visitor, "tf:tensor", Option::N);
-    VisitProto(visitor, "Square", Option::S);
-  }
-  Dir PreferredDir() const override { return NE; }
-};
+constinit ObjectSource::Table kFfmpegMenu =
+    MenuTable<ObjectSource::Table>("FFmpeg", &OpenFfmpegMenu);
+constinit ObjectSource::Table kTensorFlowMenu =
+    MenuTable<ObjectSource::Table>("TensorFlow", &OpenTensorFlowMenu);
 
-struct PipelinesOption : GroupOption {
-  PipelinesOption() : GroupOption("Pipelines") {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(PipelinesOption); }
-  void Options(ui::Pointer&, OptionVisitor& visitor) override {
-    VisitProto(visitor, "GStreamer", Option::NW);
-    static FfmpegOption ffmpeg;
-    visitor(ffmpeg);
-    VisitProto(visitor, "GEGL", Option::SW);
-    VisitProto(visitor, "PipeWire", Option::SE);
-    VisitProto(visitor, "pipewire:node", Option::S);
-    static TensorFlowOption tensorflow;
-    visitor(tensorflow);
-  }
-  Dir PreferredDir() const override { return N; }
-};
+std::unique_ptr<Action> OpenPipelinesMenu(Interface self, ui::Pointer& pointer, Toy* toy) {
+  using enum ui::Dir;
+  Interface options[ui::kDirCount];
+  options[static_cast<int>(NW)] = Proto("GStreamer");
+  options[static_cast<int>(N)] = Interface(self.object_ptr, &kFfmpegMenu);
+  options[static_cast<int>(NE)] = Interface(self.object_ptr, &kTensorFlowMenu);
+  options[static_cast<int>(SW)] = Proto("GEGL");
+  options[static_cast<int>(SE)] = Proto("PipeWire");
+  options[static_cast<int>(S)] = Proto("pipewire:node");
+  return MakeMenuAction(pointer, OptionsProvider::MODE_8_DIR, options, toy);
+}
+
+constinit ObjectSource::Table kPipelinesMenu =
+    MenuTable<ObjectSource::Table>("Pipelines", &OpenPipelinesMenu);
 
 struct BetaShelfToy : ObjectToy {
   BetaShelfToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {}
@@ -80,13 +73,21 @@ struct BetaShelfToy : ObjectToy {
     ui::beta::DrawBetaStamp(canvas, {0, 0}, kStampRadius - 1_mm, -12, ID());
   }
 
-  void Options(ui::Pointer& pointer, OptionVisitor& visitor) override {
-    ObjectToy::Options(pointer, visitor);
-    VisitProto(visitor, "Command", Option::W);
-    VisitProto(visitor, "File", Option::SW);
-    VisitProto(visitor, "Leptonica", Option::E);
-    static PipelinesOption pipelines;
-    visitor(pipelines);
+  MiniMenuMode MenuMode() override { return MODE_8_DIR; }
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    using enum ui::Dir;
+    auto shelf = LockOwner();
+    if (!shelf) return {};
+    switch (static_cast<ui::Dir>(trigger)) {
+      case W:
+        return Proto("Command");
+      case SW:
+        return Proto("File");
+      case N:
+        return Interface(*shelf, kPipelinesMenu);
+      default:
+        return ObjectToy::FindOption(pointer, trigger);
+    }
   }
 };
 

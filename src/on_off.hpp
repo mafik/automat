@@ -16,12 +16,24 @@ struct OnOff : Syncable {
     void (*on_turn_on)(OnOff) = nullptr;
     void (*on_turn_off)(OnOff) = nullptr;
 
-    static bool DefaultCanSync(Syncable, Syncable other);
-    static std::unique_ptr<ui::Widget> DefaultMakeIcon(Argument, ui::Widget* parent);
+    Interface::Table turn_on;
+    Interface::Table turn_off;
 
-    constexpr Table(StrView name, Kind kind = Interface::kOnOff) : Syncable::Table(name, kind) {
+    static bool DefaultCanSync(Syncable, Syncable other);
+
+    constexpr Table(StrView name, Kind kind = Interface::kOnOff)
+        : Syncable::Table(name, kind), turn_on(kind, "Turn on"), turn_off(kind, "Turn off") {
       can_sync = &DefaultCanSync;
-      make_icon = &DefaultMakeIcon;
+      turn_on.activate = [](Interface self, ui::Pointer& pointer,
+                            automat::Toy*) -> std::unique_ptr<Action> {
+        OnOff(self.object_ptr, OUTER_PTR(Table, turn_on, self.table_ptr)).TurnOn();
+        return std::make_unique<EmptyAction>(pointer);
+      };
+      turn_off.activate = [](Interface self, ui::Pointer& pointer,
+                             automat::Toy*) -> std::unique_ptr<Action> {
+        OnOff(self.object_ptr, OUTER_PTR(Table, turn_off, self.table_ptr)).TurnOff();
+        return std::make_unique<EmptyAction>(pointer);
+      };
     }
 
     template <typename ImplT>
@@ -30,6 +42,7 @@ struct OnOff : Syncable {
       is_on = [](OnOff self) { return static_cast<const ImplT&>(self).IsOn(); };
       on_turn_on = [](OnOff self) { static_cast<ImplT&>(self).OnTurnOn(); };
       on_turn_off = [](OnOff self) { static_cast<ImplT&>(self).OnTurnOff(); };
+      turn_on.cursor = turn_off.cursor = cursor;
     }
   };
 

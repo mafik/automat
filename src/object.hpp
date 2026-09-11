@@ -148,7 +148,9 @@ struct ObjectToy : Toy {
   virtual std::string Text() const { return std::string(Name()); }
   SkPath Shape() const override;
   void Draw(SkCanvas&) const override;
-  void Options(ui::Pointer&, OptionVisitor&) override;
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
+  MiniMenuMode MenuMode() override { return MODE_2_DIR; }
+  Interface ParentLocation();
 
   // Reports 1 but if the object is iconified, it checks the CoarseBounds()
   // and returns a scale that would fit in a 1x1cm square.

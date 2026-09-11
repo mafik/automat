@@ -42,9 +42,10 @@ struct DragLocationAction : Action {
   Vec<std::unique_ptr<Toy>> held_widgets;  // owns the LocationWidgets while pointer-owned
 
   DragLocationAction(ui::Pointer&, Vec<Ptr<Location>>&&, BoardWidget* board = nullptr,
-                     Optional<Vec2> grab = std::nullopt);
+                     Optional<Vec2> grab = std::nullopt, std::unique_ptr<Toy>&& toy = nullptr);
   DragLocationAction(ui::Pointer&, Ptr<Location>&&, BoardWidget* board = nullptr,
                      Optional<Vec2> grab = std::nullopt);
+  DragLocationAction(ui::Pointer&, Ptr<Location>&&, std::unique_ptr<Toy>&& toy);
   ~DragLocationAction() override;
 
   void Update() override;

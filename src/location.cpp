@@ -18,11 +18,13 @@
 #include <cmath>
 
 #include "animation.hpp"
+#include "audio.hpp"
 #include "automat.hpp"
 #include "base.hpp"
 #include "color.hpp"
 #include "control_flow.hpp"
 #include "drag_action.hpp"
+#include "embedded.hpp"
 #include "format.hpp"
 #include "interface.hpp"
 #include "math.hpp"
@@ -107,20 +109,21 @@ void Location::SetNumber(double number) { SetText(f("{:g}", number)); }
 
 void Location::Iconify() {
   automat::Iconify(*object);
-  if (widget && widget->toy) {
-    Scale(*widget) = widget->toy->GetBaseScale();
-    widget->toy->WakeAnimation();
-  }
+  object->WakeToys();
   WakeToys();
 }
 
 void Location::Deiconify() {
   automat::Deiconify(*object);
-  if (widget && widget->toy) {
-    Scale(*widget) = widget->toy->GetBaseScale();
-    widget->toy->WakeAnimation();
-  }
+  object->WakeToys();
   WakeToys();
+}
+
+void Location::remove_Impl::OnRun(std::unique_ptr<RunTask>&) {
+  if (auto board = obj->LockBoard()) {
+    board->Extract(*obj);
+    audio::Play(embedded::assets_SFX_canvas_pick_wav);
+  }
 }
 
 void Location::FillPosition(LocationWidget& w) {
@@ -131,10 +134,9 @@ void Location::FillPosition(LocationWidget& w) {
       SkMatrix m =
           Location::ToMatrix(origin->Position(*origin->widget), origin->Scale(*origin->widget),
                              origin->widget->LocalAnchor());
-      std::get_if<Direct>(&placement)->position =
-          Vec2(m.mapPoint(PositionAhead(origin->widget->ToyForObject(),
-                                        *static_cast<Argument::Table*>(ahead->arg),
-                                        w.ToyForObject())));
+      std::get_if<Direct>(&placement)->position = Vec2(
+          m.mapPoint(PositionAhead(origin->widget->ToyForObject(),
+                                   *static_cast<Argument::Table*>(ahead->arg), w.ToyForObject())));
       PositionBelow(*this, *origin);
     }
   } else if (auto* between = std::get_if<PlaceBetween>(&request)) {
@@ -186,14 +188,15 @@ std::unique_ptr<LocationWidget> LocationWidget::MakeBoardOwned(ui::Widget* paren
   return widget;
 }
 
-std::unique_ptr<LocationWidget> LocationWidget::MakePointerOwned(ui::Widget* parent,
-                                                                 Location& loc) {
+std::unique_ptr<LocationWidget> LocationWidget::MakePointerOwned(ui::Widget* parent, Location& loc,
+                                                                 std::unique_ptr<Toy>&& toy) {
   auto widget = std::unique_ptr<LocationWidget>(new LocationWidget(parent, loc));
-  if (auto premade = widget->FindRootWidget().toys.Extract(*loc.object)) {
-    widget->toy = static_cast<ObjectToy*>(premade.get());
+  if (!toy) toy = widget->FindRootWidget().toys.Extract(*loc.object);
+  if (toy) {
+    widget->toy = static_cast<ObjectToy*>(toy.get());
     widget->toy->Reparent(*widget);
     widget->layers.OrderInside(widget->toy.Get());
-    widget->owned_toy = std::move(premade);
+    widget->owned_toy = std::move(toy);
   }
   return widget;
 }
@@ -286,6 +289,12 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
   }
 
   if (toy) {
+    bool now_iconified = automat::IsIconified(loc->object.get());
+    if (now_iconified != iconified) {
+      iconified = now_iconified;
+      loc->Scale(*this) = toy->GetBaseScale();
+      toy->WakeAnimation();
+    }
     toy->shadow_elevation = 1_mm + elevation * 8_mm;
     Vec2 local_pivot = LocalAnchor();
     Vec2 snap_position;
@@ -699,4 +708,29 @@ void LocationWidget::OnChildReparentedAway(ui::Widget& child) {
     toy = nullptr;
   }
 }
+Interface LocationWidget::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
+  using enum ui::Dir;
+  auto loc = LockLocation();
+  if (!loc) return {};
+  if (trigger == ui::PointerButton::Left) return Interface(*loc, Location::move_tbl);
+  switch (static_cast<ui::Dir>(trigger)) {
+    case N:
+      return Interface(*loc, Location::move_tbl);
+    case NW:
+      return Interface(*loc, Location::remove_tbl);
+    case NE:
+      if (automat::IsIconified(loc->object.get())) return Interface(*loc, Location::deiconify_tbl);
+      return Interface(*loc, Location::iconify_tbl);
+    case E:
+      return Interface(*loc, Location::copy_tbl);
+    case W:
+      return Interface(*loc, Location::clone_tbl);
+    case S:
+      if (auto board = loc->LockBoard()) return Interface(*board);
+      return {};
+    default:
+      return {};
+  }
+}
+
 }  // namespace automat

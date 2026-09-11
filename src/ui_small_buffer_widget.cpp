@@ -4,7 +4,11 @@
 
 #include <include/core/SkPath.h>
 
+#include <charconv>
+
+#include "base.hpp"
 #include "log.hpp"
+#include "object.hpp"
 #include "svg.hpp"
 #include "ui_button.hpp"
 #include "ui_constants.hpp"
@@ -17,6 +21,124 @@ static const SkPath kTypeSignedPath = PathFromSVG(kTypeSignedSVG, SVGUnit_Millim
 static const SkPath kTypeHexPath = PathFromSVG(kTypeHexSVG, SVGUnit_Millimeters);
 static const SkPath kTypeTextPath = PathFromSVG(kTypeTextSVG, SVGUnit_Millimeters);
 
+constinit automat::Text::Table kBufferText = [] {
+  automat::Text::Table t("Buffer");
+  t.get = [](automat::Text self) {
+    auto& buf = dynamic_cast<Buffer&>(*self.object_ptr);
+
+    auto type = buf.GetBufferType();
+    auto bytes = buf.BufferRead();
+    Str text;
+    if (type == Buffer::Type::Text) {
+      text = bytes;
+      while (text.ends_with('\0')) {
+        text.pop_back();
+      }
+    } else if (type == Buffer::Type::Signed) {
+      if (bytes.size() == 1) {
+        text = f("{}", *(int8_t*)&bytes[0]);
+      } else if (bytes.size() == 2) {
+        text = f("{}", *(int16_t*)&bytes[0]);
+      } else if (bytes.size() == 4) {
+        text = f("{}", *(int32_t*)&bytes[0]);
+      } else if (bytes.size() == 8) {
+        text = f("{}", *(int64_t*)&bytes[0]);
+      } else {
+        text = f("{} (size={})", *(int64_t*)&bytes[0], (int)bytes.size());
+      }
+    } else if (type == Buffer::Type::Unsigned) {
+      if (bytes.size() == 1) {
+        text = f("{}", *(uint8_t*)&bytes[0]);
+      } else if (bytes.size() == 2) {
+        text = f("{}", *(uint16_t*)&bytes[0]);
+      } else if (bytes.size() == 4) {
+        text = f("{}", *(uint32_t*)&bytes[0]);
+      } else if (bytes.size() == 8) {
+        text = f("{}", *(uint64_t*)&bytes[0]);
+      } else {
+        text = f("{} (size={})", *(uint64_t*)&bytes[0], (int)bytes.size());
+      }
+    } else if (type == Buffer::Type::Hexadecimal) {
+      if (bytes.size() == 1) {
+        text = f("{:x}", (uint8_t)bytes[0]);
+      } else if (bytes.size() == 2) {
+        text = f("{:x}", *(uint16_t*)&bytes[0]);
+      } else if (bytes.size() == 4) {
+        text = f("{:x}", *(uint32_t*)&bytes[0]);
+      } else if (bytes.size() == 8) {
+        text = f("{:x}", *(uint64_t*)&bytes[0]);
+      } else {
+        text = f("{:x} (size={})", *(uint64_t*)&bytes[0], (int)bytes.size());
+      }
+    } else {
+      text = f("(type={}?)", (int)type);
+    }
+    return text;
+  };
+  t.set = [](automat::Text self, StrView text) {
+    auto& buf = dynamic_cast<Buffer&>(*self.object_ptr);
+    auto type = buf.GetBufferType();
+    buf.BufferVisit([&](std::span<char> span) {
+      if (type == Buffer::Type::Text) {
+        size_t n = std::min(span.size(), text.size());
+        memcpy(span.data(), text.data(), n);
+        if (n < span.size()) {
+          memset(span.data() + n, 0, span.size() - n);
+        }
+      } else if (type == Buffer::Type::Signed) {
+        int64_t value = 0;
+        std::from_chars(text.data(), text.data() + text.size(), value);
+        if (span.size() == 1 && value > 0x7f) {
+          value = 0x7f;
+        } else if (span.size() == 2 && value > 0x7fff) {
+          value = 0x7fff;
+        } else if (span.size() == 4 && value > 0x7fffffff) {
+          value = 0x7fffffff;
+        } else if (span.size() == 1 && value < -0x80) {
+          value = -0x80;
+        } else if (span.size() == 2 && value < -0x8000) {
+          value = -0x8000;
+        } else if (span.size() == 4 && value < -0x80000000) {
+          value = -0x80000000;
+        }
+        memcpy(span.data(), &value, span.size());
+      } else if (type == Buffer::Type::Unsigned) {
+        int64_t value = 0;
+        std::from_chars(text.data(), text.data() + text.size(), value);
+        if (span.size() == 1 && value > 0xff) {
+          value = 0xff;
+        } else if (span.size() == 2 && value > 0xffff) {
+          value = 0xffff;
+        } else if (span.size() == 4 && value > 0xffffffff) {
+          value = 0xffffffff;
+        }
+        memcpy(span.data(), &value, span.size());
+      } else if (type == Buffer::Type::Hexadecimal) {
+        uint64_t value = 0;
+        std::from_chars(text.data(), text.data() + text.size(), value, 16);
+        memcpy(span.data(), &value, span.size());
+      } else {
+        ERROR << "Unsupported buffer type " << (int)type;
+      }
+      return true;
+    });
+    self.object_ptr->WakeToys();
+  };
+  return t;
+}();
+
+constinit Signal::Table kCycleBufferType = [] {
+  Signal::Table t("Cycle type");
+  t.schedules_next = false;
+  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+    auto& buffer = dynamic_cast<Buffer&>(*self.object_ptr);
+    auto next = (Buffer::Type)(((int)buffer.GetBufferType() + 1) % (int)Buffer::Type::TypeCount);
+    buffer.SetBufferType(next);
+    self.object_ptr->WakeToys();
+  };
+  return t;
+}();
+
 struct TypeButton : ShapeWidget {
   Clickable clickable;
   // SkRRect RRect() const override {
@@ -28,25 +150,28 @@ struct TypeButton : ShapeWidget {
   void PointerHover(Pointer& p) override { clickable.PointerHover(p); }
   void PointerUnhover(Pointer& p) override { clickable.PointerUnhover(p); }
   Tock Tick(time::Timer& t) override { return clickable.Tick(t); }
-  void Options(Pointer& p, OptionVisitor& visit) override { clickable.Options(p, visit); }
+  Interface FindOption(Pointer&, ActionTrigger trigger) override {
+    if (trigger != PointerButton::Left) return {};
+    auto object = static_cast<SmallBufferWidget&>(*parent).LockOwner();
+    return object ? Interface(*object, kCycleBufferType) : Interface();
+  }
 };
 
-SmallBufferWidget::SmallBufferWidget(ui::Widget* parent, NestedWeakPtr<Buffer> buffer)
-    : TextFieldBase(parent), buffer_weak(buffer), type_button(new TypeButton(this, kTypeTextPath)) {
+SmallBufferWidget::SmallBufferWidget(ui::Widget* parent, Object& owner)
+    : TextFieldBase(parent, owner, kBufferText), type_button(new TypeButton(this, kTypeTextPath)) {
   layers.OrderInside(type_button.get());
-  auto tb = static_cast<TypeButton*>(type_button.get());
-  tb->clickable.activate = [this](Pointer&) {
-    auto buffer = buffer_weak.Lock();
-    auto old_type = buffer->GetBufferType();
-    auto new_type = (Buffer::Type)(((int)old_type + 1) % (int)Buffer::Type::TypeCount);
-    buffer->SetBufferType(new_type);
-    WakeAnimation();
-  };
+}
+
+// TODO: proper Interface for Buffer
+static Buffer* BufferOf(const Ptr<Object>& object) {
+  return object ? dynamic_cast<Buffer*>(object.Get()) : nullptr;
 }
 
 void SmallBufferWidget::Measure() {
   width = kMinimalTouchableSize;
-  auto buf = buffer_weak.Lock();
+  auto object = LockOwner();
+  auto* buf = BufferOf(object);
+  if (!buf) return;
   int bytes = buf->BufferSize();
 
   float max_text_height = 0;
@@ -123,94 +248,35 @@ Font& SmallBufferWidget::GetFont(Buffer::Type type) const {
   }
 }
 
-static void RefreshText(SmallBufferWidget& widget) {
-  auto buf = widget.buffer_weak.Lock();
-  if (!buf) {
-    return;
-  }
-  auto old_type = widget.type;
-  auto new_type = buf->GetBufferType();
-  bool type_changed = old_type != new_type;
-  auto& text = widget.text;
-  auto old_size = text.size();
-  auto bytes = buf->BufferRead();
-  if (new_type == Buffer::Type::Text) {
-    text = bytes;
-    while (text.ends_with('\0')) {
-      text.pop_back();
-    }
-  } else {
-    if (new_type == Buffer::Type::Signed) {
-      if (bytes.size() == 1) {
-        text = f("{}", *(int8_t*)&bytes[0]);
-      } else if (bytes.size() == 2) {
-        text = f("{}", *(int16_t*)&bytes[0]);
-      } else if (bytes.size() == 4) {
-        text = f("{}", *(int32_t*)&bytes[0]);
-      } else if (bytes.size() == 8) {
-        text = f("{}", *(int64_t*)&bytes[0]);
-      } else {
-        text = f("{} (size={})", *(int64_t*)&bytes[0], (int)bytes.size());
+ui::Tock SmallBufferWidget::Tick(time::Timer& timer) {
+  auto object = LockOwner();
+  auto* buf = BufferOf(object);
+  if (buf) {
+    auto new_type = buf->GetBufferType();
+    if (type != new_type) {
+      type = new_type;
+      auto& shape_widget = static_cast<TypeButton&>(*type_button);
+      switch (new_type) {
+        case Buffer::Type::Unsigned:
+          shape_widget.path = kTypeUnsignedPath;
+          break;
+        case Buffer::Type::Signed:
+          shape_widget.path = kTypeSignedPath;
+          break;
+        case Buffer::Type::Hexadecimal:
+          shape_widget.path = kTypeHexPath;
+          break;
+        case Buffer::Type::Text:
+          shape_widget.path = kTypeTextPath;
+          break;
+        default:
+          break;
       }
-    } else if (new_type == Buffer::Type::Unsigned) {
-      if (bytes.size() == 1) {
-        text = f("{}", *(uint8_t*)&bytes[0]);
-      } else if (bytes.size() == 2) {
-        text = f("{}", *(uint16_t*)&bytes[0]);
-      } else if (bytes.size() == 4) {
-        text = f("{}", *(uint32_t*)&bytes[0]);
-      } else if (bytes.size() == 8) {
-        text = f("{}", *(uint64_t*)&bytes[0]);
-      } else {
-        text = f("{} (size={})", *(uint64_t*)&bytes[0], (int)bytes.size());
-      }
-    } else if (new_type == Buffer::Type::Hexadecimal) {
-      if (bytes.size() == 1) {
-        text = f("{:x}", (uint8_t)bytes[0]);
-      } else if (bytes.size() == 2) {
-        text = f("{:x}", *(uint16_t*)&bytes[0]);
-      } else if (bytes.size() == 4) {
-        text = f("{:x}", *(uint32_t*)&bytes[0]);
-      } else if (bytes.size() == 8) {
-        text = f("{:x}", *(uint64_t*)&bytes[0]);
-      } else {
-        text = f("{:x} (size={})", *(uint64_t*)&bytes[0], (int)bytes.size());
-      }
-    } else {
-      text = f("(type={}?)", (int)new_type);
+      shape_widget.WakeAnimation();
     }
   }
-  if (type_changed) {
-    widget.type = new_type;
-    auto& shape_widget = static_cast<TypeButton&>(*widget.type_button);
-    switch (new_type) {
-      case Buffer::Type::Unsigned:
-        shape_widget.path = kTypeUnsignedPath;
-        break;
-      case Buffer::Type::Signed:
-        shape_widget.path = kTypeSignedPath;
-        break;
-      case Buffer::Type::Hexadecimal:
-        shape_widget.path = kTypeHexPath;
-        break;
-      case Buffer::Type::Text:
-        shape_widget.path = kTypeTextPath;
-        break;
-      default:
-        break;
-    }
-    shape_widget.WakeAnimation();
-    for (auto& [caret, pos] : widget.caret_positions) {
-      if (pos.index > text.size() || pos.index == old_size) {
-        pos.index = text.size();
-      }
-      widget.UpdateCaret(*caret);
-    }
-  }
-}
 
-ui::Tock SmallBufferWidget::Tick(time::Timer&) {
-  RefreshText(*this);
+  TextFieldBase::Tick(timer);
   auto shape = Shape();
   auto bounds = shape.getBounds();
 
@@ -249,59 +315,6 @@ int SmallBufferWidget::IndexFromPosition(float local_x) const {
 }
 Vec2 SmallBufferWidget::PositionFromIndex(int index) const {
   return kTextPos + Vec2(GetFont(type).PositionFromIndex(text, index), 0);
-}
-
-void SmallBufferWidget::TextVisit(const TextVisitor& visitor) {
-  if (visitor(text)) {
-    // text has been modified - update the buffer
-    auto buf = buffer_weak.Lock();
-    buf->BufferVisit([&](std::span<char> span) {
-      if (type == Buffer::Type::Text) {
-        size_t n = std::min(span.size(), text.size());
-        memcpy(span.data(), text.data(), n);
-        if (n < span.size()) {
-          memset(span.data() + n, 0, span.size() - n);
-        }
-      } else if (type == Buffer::Type::Signed) {
-        int64_t value = 0;
-        std::from_chars(text.data(), text.data() + text.size(), value);
-        if (span.size() == 1 && value > 0x7f) {
-          value = 0x7f;
-        } else if (span.size() == 2 && value > 0x7fff) {
-          value = 0x7fff;
-        } else if (span.size() == 4 && value > 0x7fffffff) {
-          value = 0x7fffffff;
-        } else if (span.size() == 1 && value < -0x80) {
-          value = -0x80;
-        } else if (span.size() == 2 && value < -0x8000) {
-          value = -0x8000;
-        } else if (span.size() == 4 && value < -0x80000000) {
-          value = -0x80000000;
-        }
-        memcpy(span.data(), &value, span.size());
-      } else if (type == Buffer::Type::Unsigned) {
-        int64_t value = 0;
-        std::from_chars(text.data(), text.data() + text.size(), value);
-        if (span.size() == 1 && value > 0xff) {
-          value = 0xff;
-        } else if (span.size() == 2 && value > 0xffff) {
-          value = 0xffff;
-        } else if (span.size() == 4 && value > 0xffffffff) {
-          value = 0xffffffff;
-        }
-        memcpy(span.data(), &value, span.size());
-      } else if (type == Buffer::Type::Hexadecimal) {
-        uint64_t value = 0;
-        std::from_chars(text.data(), text.data() + text.size(), value, 16);
-        memcpy(span.data(), &value, span.size());
-      } else {
-        ERROR << "Unsupported buffer type " << (int)type;
-      }
-      return true;
-    });
-    RefreshText(*this);
-    WakeAnimation();
-  }
 }
 
 }  // namespace automat::ui

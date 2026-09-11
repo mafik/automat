@@ -696,7 +696,7 @@ struct AppWindowToy : ClientWindowToy {
   bool AllowClientPress(ui::Pointer& p) override;
   std::unique_ptr<Action> BeginClientPress(ui::Pointer& p) override;
 
-  void Options(ui::Pointer&, OptionVisitor&) override;
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
 };
 
 // Held while a button pressed over the window is down: routes the press and
@@ -757,31 +757,37 @@ static void PostApplyMode(const WeakPtr<AppWindow>& weak) {
   PostMessageW(main_window->hwnd, WM_USER, 0, (LPARAM)apply);
 }
 
-struct ModeOption : TextOption {
-  WeakPtr<AppWindow> window;
-  AppWindow::Mode target;
-  ModeOption(WeakPtr<AppWindow>&& window, AppWindow::Mode target)
-      : TextOption(target == AppWindow::Mode::Connected ? "Pop Out" : "Embed"),
-        window(std::move(window)),
-        target(target) {}
+static void SetMode(Signal self, AppWindow::Mode mode) {
+  auto& window = static_cast<AppWindow&>(*self.object_ptr);
+  window.mode.store(mode, std::memory_order_relaxed);
+  PostApplyMode(window.AcquireWeakPtr());
+}
 
-  Ptr<Option> Clone() const override { return MAKE_PTR(ModeOption, window.Copy(), target); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    if (auto w = window.Lock()) {
-      w->mode.store(target, std::memory_order_relaxed);
-      PostApplyMode(w->AcquireWeakPtr());
+constinit Signal::Table kPopOut = [] {
+  Signal::Table t("Pop Out");
+  t.schedules_next = false;
+  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+    SetMode(self, AppWindow::Mode::Connected);
+  };
+  return t;
+}();
+
+constinit Signal::Table kEmbed = [] {
+  Signal::Table t("Embed");
+  t.schedules_next = false;
+  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+    SetMode(self, AppWindow::Mode::Embedded);
+  };
+  return t;
+}();
+
+Interface AppWindowToy::FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) {
+  if (trigger == ui::Dir::E) {
+    if (auto window = LockOwner()) {
+      return Interface(*window, mode_ == AppWindow::Mode::Embedded ? kPopOut : kEmbed);
     }
-    return std::make_unique<EmptyAction>(pointer);
   }
-  Option::Dir PreferredDir() const override { return Option::S; }
-};
-
-void AppWindowToy::Options(ui::Pointer& pointer, OptionVisitor& visitor) {
-  ClientWindowToy::Options(pointer, visitor);
-  ModeOption toggle(owner.Copy<AppWindow>(), mode_ == AppWindow::Mode::Embedded
-                                                 ? AppWindow::Mode::Connected
-                                                 : AppWindow::Mode::Embedded);
-  visitor(toggle);
+  return ClientWindowToy::FindOption(pointer, trigger);
 }
 
 // ============================================================================

@@ -63,7 +63,6 @@ namespace automat::ui {
 // Can be used to edit a short string of bytes as a decimal number / hexadecimal number / short
 // UTF-8 string.
 struct SmallBufferWidget : TextFieldBase {
-  NestedWeakPtr<Buffer> buffer_weak;
   std::unique_ptr<Widget> type_button;
 
   ui::Font* fonts[(int)Buffer::Type::TypeCount] = {};
@@ -72,9 +71,8 @@ struct SmallBufferWidget : TextFieldBase {
   float width;
   float height;
   Buffer::Type type = Buffer::Type::TypeCount;  // guard value, forces redraw
-  std::string text;
 
-  SmallBufferWidget(ui::Widget* parent, NestedWeakPtr<Buffer> buffer);
+  SmallBufferWidget(ui::Widget* parent, Object& owner);
 
   // Should call this (after setting the fonts, if any) to calculate the size of the widget.
   void Measure();
@@ -86,7 +84,6 @@ struct SmallBufferWidget : TextFieldBase {
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
 
-  void TextVisit(const TextVisitor&) override;
   int IndexFromPosition(float x) const override;
   Vec2 PositionFromIndex(int index) const override;
 };

@@ -18,9 +18,9 @@
 #include "format.hpp"
 #include "image_provider.hpp"
 #include "location.hpp"
-#include "menu.hpp"
 #include "object_iconified.hpp"
 #include "object_lifetime.hpp"
+#include "object_source.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
 #include "sync.hpp"
@@ -93,47 +93,6 @@ SkPath ObjectToy::Shape() const {
   return it->second;
 }
 
-struct DeleteOption : TextOption {
-  WeakPtr<Location> weak;
-  DeleteOption(WeakPtr<Location> weak) : TextOption("Delete"), weak(weak) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(DeleteOption, weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    if (Ptr<Location> loc = weak.lock()) {
-      if (auto parent_board = loc->LockBoard()) {
-        parent_board->Extract(*loc);
-        audio::Play(embedded::assets_SFX_canvas_pick_wav);
-      }
-    }
-    return std::make_unique<EmptyAction>(pointer);
-  }
-  Dir PreferredDir() const override { return NW; }
-};
-
-struct MoveLocationOption : TextOption {
-  WeakPtr<Location> location_weak;
-  WeakPtr<Object> object_weak;
-
-  MoveLocationOption(WeakPtr<Location> location_weak, WeakPtr<Object> object_weak)
-      : TextOption("Move"), location_weak(location_weak), object_weak(object_weak) {}
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  Ptr<Option> Clone() const override {
-    return MAKE_PTR(MoveLocationOption, location_weak, object_weak);
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    auto location = location_weak.lock();
-    if (location == nullptr) {
-      return nullptr;
-    }
-    auto object = object_weak.lock();
-    if (object == nullptr) {
-      return nullptr;
-    }
-    return PickUp(pointer, *location, *object);
-  }
-
-  Dir PreferredDir() const override { return N; }
-};
-
 std::unique_ptr<Action> PickUp(ui::Pointer& pointer, Location& location, Object& object) {
   if (location.object.Get() != &object) {
     Object& container_object = *location.object;
@@ -159,238 +118,84 @@ std::unique_ptr<Action> PickUp(ui::Pointer& pointer, Location& location, Object&
   return nullptr;
 }
 
-struct CopyOption : TextOption {
-  WeakPtr<Location> location_weak;
-  WeakPtr<Object> object_weak;
-
-  CopyOption(WeakPtr<Location> location_weak, WeakPtr<Object> object_weak)
-      : TextOption("Copy"), location_weak(location_weak), object_weak(object_weak) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(CopyOption, location_weak, object_weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    auto location = location_weak.lock();
-    if (location == nullptr) {
-      return nullptr;
-    }
-    auto object = object_weak.lock();
-    if (object == nullptr) {
-      return nullptr;
-    }
-    if (location->object != object) {
-      auto new_loc = MAKE_PTR(Location);
-      new_loc->InsertHere(object->Clone());
-      audio::Play(embedded::assets_SFX_canvas_pick_wav);
-      return std::make_unique<DragLocationAction>(pointer, std::move(new_loc));
-    }
-    auto board = location->LockBoard();
-    if (board && location->object) {
-      auto* mw = pointer.root_widget.toys.FindOrNull(*board);
-      if (mw) {
-        audio::Play(embedded::assets_SFX_canvas_pick_wav);
-        return std::make_unique<DragLocationAction>(pointer, mw->CloneStack(*location));
-      }
-    }
-    return nullptr;
-  }
-};
-
-struct CloneOption : TextOption {
-  WeakPtr<Location> location_weak;
-  WeakPtr<Object> object_weak;
-
-  CloneOption(WeakPtr<Location> location_weak, WeakPtr<Object> object_weak)
-      : TextOption("Clone"), location_weak(location_weak), object_weak(object_weak) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(CloneOption, location_weak, object_weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    auto location = location_weak.lock();
-    auto object = object_weak.lock();
-    if (location == nullptr || object == nullptr) {
-      return nullptr;
-    }
-    auto new_loc = MAKE_PTR(Location);
-    new_loc->InsertHere(Ptr<Object>(object));
-    Vec2 position = location->PeekPosition();
-    if (auto board = location->LockBoard()) {
-      position += board->position;
-    }
-    new_loc->placement = Location::Direct{position, location->PeekScale()};
-    if (auto* orig_lw = location->widget.Get(); orig_lw && orig_lw->toy) {
-      pointer.root_widget.toys.FindOrMake(*new_loc->object, orig_lw->toy.Get());
-    }
-    audio::Play(embedded::assets_SFX_canvas_pick_wav);
-    return std::make_unique<DragLocationAction>(pointer, std::move(new_loc));
-  }
-};
-
-struct NewOption : TextOption, OptionsProvider {
-  WeakPtr<Location> location_weak;
-  WeakPtr<Object> object_weak;
-
-  NewOption(WeakPtr<Location> location_weak, WeakPtr<Object> object_weak)
-      : TextOption("New..."), location_weak(location_weak), object_weak(object_weak) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(NewOption, location_weak, object_weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override { return OpenMenu(pointer); }
-  void Options(ui::Pointer&, OptionVisitor& visitor) override {
-    CopyOption copy{location_weak, object_weak};
-    visitor(copy);
-    CloneOption clone{location_weak, object_weak};
-    visitor(clone);
-  }
-};
-
-struct IconifyOption : TextOption {
-  WeakPtr<Location> weak;
-  IconifyOption(WeakPtr<Location> weak) : TextOption("Iconify"), weak(weak) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(IconifyOption, weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    if (auto loc = weak.lock()) {
-      loc->Iconify();
-    }
-    return std::make_unique<EmptyAction>(pointer);
-  }
-  Dir PreferredDir() const override { return NE; }
-};
-
-struct DeiconifyOption : TextOption {
-  WeakPtr<Location> weak;
-  DeiconifyOption(WeakPtr<Location> weak) : TextOption("Deiconify"), weak(weak) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(DeiconifyOption, weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    if (auto loc = weak.lock()) {
-      loc->Deiconify();
-    }
-    return std::make_unique<EmptyAction>(pointer);
-  }
-  Dir PreferredDir() const override { return NE; }
-};
-
-static Str SyncableName(NestedWeakPtr<Syncable::Table>& weak) {
-  if (auto ptr = weak.Lock()) {
-    return Str(ptr->name);
-  }
-  return "Field of a deleted object";
+std::unique_ptr<Action> DragNew(ui::Pointer& pointer, Ptr<Object>&& object,
+                                std::unique_ptr<Toy>&& toy) {
+  auto loc = MAKE_PTR(Location);
+  loc->InsertHere(std::move(object));
+  audio::Play(embedded::assets_SFX_toolbar_pick_wav);
+  return std::make_unique<DragLocationAction>(pointer, std::move(loc), std::move(toy));
 }
 
-struct TurnOnOption : TextOption {
-  NestedWeakPtr<OnOff::Table> weak;
-  TurnOnOption(NestedWeakPtr<OnOff::Table> weak) : TextOption("Turn on"), weak(weak) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(TurnOnOption, weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    if (auto ptr = weak.Lock()) {
-      OnOff(ptr.Owner<Object>(), ptr.Get()).TurnOn();
-    }
-    return std::make_unique<EmptyAction>(pointer);
-  }
-};
+Ptr<Object> Location::move_Impl::OnTake() {
+  Ptr<Object> taken;
+  obj->object.Swap(taken);
+  obj->WakeToys();
+  vm.WakeToys();
+  return taken;
+}
 
-struct TurnOffOption : TextOption {
-  NestedWeakPtr<OnOff::Table> weak;
-  TurnOffOption(NestedWeakPtr<OnOff::Table> weak) : TextOption("Turn off"), weak(weak) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(TurnOffOption, weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    if (auto ptr = weak.Lock()) {
-      OnOff(ptr.Owner<Object>(), ptr.Get()).TurnOff();
-    }
-    return std::make_unique<EmptyAction>(pointer);
-  }
-};
+std::unique_ptr<Action> Location::move_Impl::OnActivate(ui::Pointer& pointer, automat::Toy*) {
+  return PickUp(pointer, *obj, *obj->object);
+}
 
-struct SyncOption : TextOption {
-  NestedWeakPtr<Syncable::Table> weak;
-  SyncOption(NestedWeakPtr<Syncable::Table> weak) : TextOption("Sync"), weak(weak) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(SyncOption, weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    if (auto syncable_ptr = weak.Lock()) {
-      Syncable syncable(syncable_ptr.Owner<Object>(), syncable_ptr.Get());
-      return std::make_unique<SyncAction>(pointer, syncable);
-    }
-    return nullptr;
-  }
-};
+Ptr<Object> Location::copy_Impl::OnTake() { return obj->object->Clone(); }
 
-struct UnsyncOption : TextOption {
-  NestedWeakPtr<Syncable::Table> weak;
-  UnsyncOption(NestedWeakPtr<Syncable::Table> weak) : TextOption("Unsync"), weak(weak) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(UnsyncOption, weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    if (auto syncable = weak.Lock()) {
-      Syncable(syncable.Owner<Object>(), syncable.Get()).Unsync();
-    }
-    return std::make_unique<EmptyAction>(pointer);
-  }
-};
+std::unique_ptr<Action> Location::copy_Impl::OnActivate(ui::Pointer& pointer, automat::Toy*) {
+  auto board = obj->LockBoard();
+  auto* board_widget = board ? pointer.root_widget.toys.FindOrNull(*board) : nullptr;
+  if (board_widget == nullptr) return nullptr;
+  audio::Play(embedded::assets_SFX_canvas_pick_wav);
+  return std::make_unique<DragLocationAction>(pointer, board_widget->CloneStack(*obj));
+}
 
-struct FieldOption : TextOption, OptionsProvider {
-  NestedWeakPtr<Syncable::Table> syncable_weak;
-  FieldOption(NestedWeakPtr<Syncable::Table> weak)
-      : TextOption(SyncableName(weak)), syncable_weak(weak) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(FieldOption, syncable_weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    if (auto ptr = syncable_weak.Lock()) {
-      return OpenMenu(pointer);
-    }
-    return nullptr;
-  }
-  void Options(ui::Pointer&, OptionVisitor& visitor) override {
-    if (auto syncable = syncable_weak.Lock()) {
-      auto* obj = syncable.Owner<Object>();
-      if (auto* on_off = dyn_cast<OnOff::Table>(syncable.Get())) {
-        if (OnOff(*obj, *on_off).IsOn()) {
-          TurnOffOption turn_off(NestedWeakPtr<OnOff::Table>(syncable_weak.GetOwnerWeak(),
-                                                             static_cast<OnOff::Table*>(on_off)));
-          visitor(turn_off);
-        } else {
-          TurnOnOption turn_on(NestedWeakPtr<OnOff::Table>(syncable_weak.GetOwnerWeak(),
-                                                           static_cast<OnOff::Table*>(on_off)));
-          visitor(turn_on);
-        }
-      }
-      SyncOption sync(syncable);
-      visitor(sync);
-      auto& state = *Syncable(*obj, *syncable.Get()).state;
-      if (!state.gear_weak.IsExpired()) {
-        UnsyncOption unsync(syncable);
-        visitor(unsync);
-      }
-    }
-  }
-};
+Ptr<Object> Location::clone_Impl::OnTake() { return obj->object; }
 
-void ObjectToy::Options(ui::Pointer&, OptionVisitor& visitor) {
-  if (auto* lw = ui::Closest<LocationWidget>(*this)) {
-    if (auto loc = lw->LockLocation()) {
-      auto loc_weak = loc->AcquireWeakPtr();
-      DeleteOption del{loc_weak};
-      visitor(del);
-      MoveLocationOption move{loc_weak, owner.Copy<Object>()};
-      visitor(move);
-      NewOption make_new{loc_weak, owner.Copy<Object>()};
-      visitor(make_new);
-      if (auto runnable = loc->object->As<Runnable>()) {
-        if (HasError(*loc->object)) {
-          ThisIsFineOption this_is_fine{owner.Copy<Object>()};
-          visitor(this_is_fine);
-        } else {
-          RunOption run{owner.Copy<Object>(), *runnable.table};
-          visitor(run);
-        }
-      }
-      if (IsIconified()) {
-        DeiconifyOption deiconify{loc_weak};
-        visitor(deiconify);
-      } else {
-        IconifyOption iconify{loc_weak};
-        visitor(iconify);
-      }
-      if (auto obj = LockOwner<Object>()) {
-        obj->Each<Syncable>([&](Syncable syncable) {
-          FieldOption field_option{
-              NestedWeakPtr<Syncable::Table>(owner.Copy<Object>(), syncable.table)};
-          visitor(field_option);
-          return LoopControl::Continue;
-        });
-      }
-    }
+std::unique_ptr<Action> Location::clone_Impl::OnActivate(ui::Pointer& pointer, automat::Toy* toy) {
+  auto new_loc = MAKE_PTR(Location);
+  new_loc->InsertHere(Ptr<Object>(obj->object));
+  Vec2 position = obj->PeekPosition();
+  if (auto board = obj->LockBoard()) position += board->position;
+  new_loc->placement = Location::Direct{position, obj->PeekScale()};
+  if (auto* lw = toy ? ui::Closest<LocationWidget>(*toy) : nullptr; lw && lw->toy) {
+    pointer.root_widget.toys.FindOrMake(*new_loc->object, lw->toy.Get());
   }
+  audio::Play(embedded::assets_SFX_canvas_pick_wav);
+  return std::make_unique<DragLocationAction>(pointer, std::move(new_loc));
+}
+
+constinit ObjectSource::Table kMakeObject = [] {
+  ObjectSource::Table t("New");
+  t.cursor = ui::Cursor::Hand;
+  t.take = [](ObjectSource self) { return self.object_ptr->Clone(); };
+  t.activate = [](Interface self, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
+    if (toy == nullptr) return nullptr;
+    auto object = cast<ObjectSource>(self).Take();
+    auto new_toy = object->MakeToy(toy);
+    return DragNew(pointer, std::move(object), std::move(new_toy));
+  };
+  t.make_icon = [](Interface self, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
+    return self.object_ptr->MakeToy(parent);
+  };
+  return t;
+}();
+
+Interface ObjectToy::ParentLocation() {
+  auto* lw = ui::Closest<LocationWidget>(*this);
+  auto loc = lw ? lw->LockLocation() : nullptr;
+  return loc ? Interface(*loc) : Interface();
+}
+
+Interface ObjectToy::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
+  using enum ui::Dir;
+  auto object = LockOwner();
+  if (!object) return {};
+  ui::Dir dir = trigger;
+  if (dir == S) return ParentLocation();
+  if (dir == N) {
+    if (HasError(*object)) return Interface(*object, kThisIsFine);
+    return object->As<Runnable>();
+  }
+  return {};
 }
 
 void Object::Updated(WeakPtr<Object>& updated) {

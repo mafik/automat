@@ -508,6 +508,12 @@ struct [[clang::trivial_abi]] NestedWeakPtr {
 using std::make_unique;
 using std::unique_ptr;
 
+#define OUTER_REF(OuterType, member_name, ref) \
+  *reinterpret_cast<OuterType*>(reinterpret_cast<intptr_t>(&ref) - offsetof(OuterType, member_name))
+
+#define OUTER_PTR(OuterType, member_name, ptr) \
+  reinterpret_cast<OuterType*>(reinterpret_cast<intptr_t>(ptr) - offsetof(OuterType, member_name))
+
 }  // namespace automat
 
 // Add std::hash specialization for Ptr

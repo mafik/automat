@@ -49,7 +49,7 @@ struct Resizable : Interface {
 
     static constexpr Table MakeTable() {
       Table t(ImplT::kName);
-      t.state_off = ImplT::Offset();
+      t.FillFrom<ImplT>();
       t.resize_px = &InvokeResizePx<ImplT>;
       t.resize_m = &InvokeResizeM<ImplT>;
       return t;

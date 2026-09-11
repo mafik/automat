@@ -23,7 +23,6 @@
 #include "global_resources.hpp"
 #include "location.hpp"
 #include "math.hpp"
-#include "menu.hpp"
 #include "root_widget.hpp"
 #include "status.hpp"
 #include "textures.hpp"
@@ -654,39 +653,23 @@ struct MoveBoardAction : Action {
   }
 };
 
-struct MoveBoardOption : TextOption {
-  WeakPtr<Board> weak;
-  MoveBoardOption(WeakPtr<Board> weak) : TextOption("Move"), weak(weak) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(MoveBoardOption, weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    if (auto board = weak.Lock()) {
-      return std::make_unique<MoveBoardAction>(pointer, std::move(board));
-    }
-    return nullptr;
-  }
-  Dir PreferredDir() const override { return N; }
-};
+std::unique_ptr<Action> Board::move_Impl::OnActivate(ui::Pointer& pointer, automat::Toy*) {
+  return std::make_unique<MoveBoardAction>(pointer, obj->AcquirePtr());
+}
 
-struct ToggleFrameOption : TextOption {
-  WeakPtr<Board> weak;
-  ToggleFrameOption(WeakPtr<Board> weak) : TextOption("Toggle Frame"), weak(weak) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleFrameOption, weak); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    if (auto board = weak.Lock()) {
-      board->frame_visible = !board->frame_visible;
-      board->WakeToys();
-    }
-    return std::make_unique<EmptyAction>(pointer);
-  }
-  Dir PreferredDir() const override { return S; }
-};
-
-void BoardWidget::Options(ui::Pointer&, OptionVisitor& visitor) {
-  if (auto board = LockBoard()) {
-    MoveBoardOption move{board->AcquireWeakPtr()};
-    visitor(move);
-    ToggleFrameOption toggle_frame{board->AcquireWeakPtr()};
-    visitor(toggle_frame);
+Interface BoardWidget::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
+  using enum ui::Dir;
+  auto board = LockBoard();
+  if (!board) return {};
+  switch (static_cast<ui::Dir>(trigger)) {
+    case N:
+      return Interface(*board, Board::move_tbl);
+    case NE:
+      return Interface(*board, Board::toggle_frame_tbl);
+    case S:
+      return Interface(*FindRootWidget().camera, ui::kCameraMenu);
+    default:
+      return {};
   }
 }
 

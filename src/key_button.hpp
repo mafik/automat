@@ -29,10 +29,8 @@ ui::Font& KeyFont();
 
 struct KeyButton : ui::Button {
   float width;
-  std::function<void(ui::Pointer&)> activate;
   SkColor4f fg;
   KeyButton(Widget* parent, StrView label, SkColor4f color, float width);
-  void Activate(ui::Pointer&) override;
   Tock Tick(time::Timer&) override;
   SkRRect RRect() const override;
   SkColor4f ForegroundColor() const override { return fg; }

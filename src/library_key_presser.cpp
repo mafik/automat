@@ -12,7 +12,6 @@
 #include "audio.hpp"
 #include "key_button.hpp"
 #include "keyboard.hpp"
-#include "menu.hpp"
 #include "root_widget.hpp"
 #include "sincos.hpp"
 #include "status.hpp"
@@ -77,19 +76,20 @@ static SkPath GetHandShape() {
 struct DragAndClickAction : Action {
   ui::PointerButton btn;
   std::unique_ptr<Action> drag_action;
-  Ptr<Option> click_option;
+  std::function<void(ui::Pointer&)> on_click;
   time::SteadyPoint press_time;
   DragAndClickAction(ui::Pointer& pointer, ui::PointerButton btn,
-                     std::unique_ptr<Action>&& drag_action, Ptr<Option>&& click_option)
+                     std::unique_ptr<Action>&& drag_action,
+                     std::function<void(ui::Pointer&)> on_click)
       : Action(pointer),
         btn(btn),
         drag_action(std::move(drag_action)),
-        click_option(std::move(click_option)) {
+        on_click(std::move(on_click)) {
     press_time = pointer.button_down_time[static_cast<int>(btn)];
   }
   ~DragAndClickAction() override {
-    if (click_option && (time::SteadyNow() - press_time < 0.2s)) {
-      auto click_action = click_option->Activate(pointer);
+    if (on_click && (time::SteadyNow() - press_time < 0.2s)) {
+      on_click(pointer);
     }
   }
   void Update() override {
@@ -110,16 +110,6 @@ struct DragAndClickAction : Action {
   }
 };
 
-struct UseObjectOption : TextOption {
-  ui::Widget* widget;
-
-  UseObjectOption(ui::Widget* widget) : TextOption("Use"), widget(widget) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(UseObjectOption, widget); }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
-    return widget->TriggerActivate(p, ui::PointerButton::Left);
-  }
-};
-
 struct KeyPresserButton : KeyButton {
   bool is_pressed = false;
   using KeyButton::KeyButton;
@@ -131,24 +121,9 @@ struct KeyPresserWidget : ObjectToy {
 
   // This is used to select the pressed key
   MortalPtr<ui::Caret> key_selector;
+  std::unique_ptr<ui::ActionZone> hand_zone;
 
-  KeyPresserWidget(Widget* parent, Object& key_presser)
-      : ObjectToy(parent, key_presser),
-        shortcut_button(new KeyPresserButton(this, "?", KeyColor(false), kBaseKeyWidth)) {
-    layers.OrderInside(shortcut_button.get());
-    shortcut_button->activate = [this](ui::Pointer& pointer) {
-      if (key_selector) {
-        key_selector->Release();
-      } else if (pointer.keyboard) {
-        auto* child = shortcut_button->child.get();
-        Vec2 caret_position =
-            TransformBetween(*child, *this).mapPoint(child->DrawBounds()->TopLeftCorner());
-        key_selector = &pointer.keyboard->RequestCaret(*this, caret_position);
-      }
-      WakeAnimation();
-      shortcut_button->WakeAnimation();
-    };
-  }
+  KeyPresserWidget(Widget* parent, Object& key_presser);
 
   Tock Tick(time::Timer& timer) override {
     shortcut_button->fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
@@ -192,7 +167,8 @@ struct KeyPresserWidget : ObjectToy {
     }
   }
 
-  void Options(ui::Pointer&, OptionVisitor&) override;
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
+  MiniMenuMode MenuMode() override { return MODE_6_DIR; }
 
   void KeyDown(ui::Caret&, ui::Key k) override {
     key_selector->Release();
@@ -206,7 +182,7 @@ struct KeyPresserWidget : ObjectToy {
     shortcut_button->WakeAnimation();
   }
 
-  bool AllowChildPointerEvents(Widget& child) const override { return false; }
+  bool AllowChildPointerEvents(Widget& child) const override { return &child == hand_zone.get(); }
 };
 
 static std::unique_ptr<Action> DragKeyPresser(ui::Pointer& p, KeyPresserWidget& widget) {
@@ -217,40 +193,79 @@ static std::unique_ptr<Action> DragKeyPresser(ui::Pointer& p, KeyPresserWidget& 
   return PickUp(p, *loc, *key_presser);
 }
 
-struct PressKeyOption : TextOption {
-  KeyPresserWidget& widget;
-  PressKeyOption(KeyPresserWidget& widget) : TextOption("Press key"), widget(widget) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(PressKeyOption, widget); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
-    auto key_presser = widget.LockObject<KeyPresser>();
-    if (!key_presser) return nullptr;
-    return std::make_unique<DragAndClickAction>(
-        p, ui::PointerButton::Left, DragKeyPresser(p, widget),
-        MAKE_PTR(RunOption, key_presser->AcquireWeakPtr(), KeyPresser::run_tbl));
+static std::unique_ptr<Action> PressKeyActivate(Interface self, ui::Pointer& pointer, Toy* toy) {
+  auto* widget = dynamic_cast<KeyPresserWidget*>(toy);
+  if (!widget) return nullptr;
+  WeakPtr<Object> weak = self.object_ptr->AcquireWeakPtr();
+  return std::make_unique<DragAndClickAction>(
+      pointer, ui::PointerButton::Left, DragKeyPresser(pointer, *widget), [weak](ui::Pointer&) {
+        if (auto object = weak.Lock()) Runnable(*object, KeyPresser::run_tbl).ScheduleRun();
+      });
+}
+
+static std::unique_ptr<Action> SetKeyActivate(Interface, ui::Pointer& pointer, Toy* toy) {
+  auto* widget = dynamic_cast<KeyPresserWidget*>(toy);
+  if (!widget) return nullptr;
+  MortalPtr<KeyPresserWidget> target = widget;
+  return std::make_unique<DragAndClickAction>(
+      pointer, ui::PointerButton::Left, DragKeyPresser(pointer, *widget), [target](ui::Pointer& p) {
+        if (target) {
+          if (target->key_selector) {
+            target->key_selector->Release();
+          } else if (p.keyboard) {
+            auto* child = target->shortcut_button->child.get();
+            Vec2 caret_position =
+                TransformBetween(*child, *target).mapPoint(child->DrawBounds()->TopLeftCorner());
+            target->key_selector = &p.keyboard->RequestCaret(*target, caret_position);
+          }
+          target->WakeAnimation();
+          target->shortcut_button->WakeAnimation();
+        }
+      });
+}
+
+constinit Signal::Table kPressKey = [] {
+  Signal::Table t("Press key");
+  t.activate = &PressKeyActivate;
+  return t;
+}();
+
+constinit Signal::Table kSetKey = [] {
+  Signal::Table t("Set key");
+  t.activate = &SetKeyActivate;
+  return t;
+}();
+
+struct KeyPresserHandZone : ui::ActionZone {
+  using ActionZone::ActionZone;
+  SkPath Shape() const override { return GetHandShape(); }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    if (trigger != ui::PointerButton::Left) return {};
+    auto key_presser = static_cast<KeyPresserWidget&>(*parent).LockObject<KeyPresser>();
+    return key_presser ? Interface(*key_presser, kPressKey) : Interface();
   }
 };
 
-struct SetKeyOption : TextOption {
-  KeyPresserWidget& widget;
-  SetKeyOption(KeyPresserWidget& widget) : TextOption("Set key"), widget(widget) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(SetKeyOption, widget); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
-    return std::make_unique<DragAndClickAction>(
-        p, ui::PointerButton::Left, DragKeyPresser(p, widget),
-        MAKE_PTR(UseObjectOption, widget.shortcut_button.get()));
-  }
-};
+KeyPresserWidget::KeyPresserWidget(Widget* parent, Object& key_presser)
+    : ObjectToy(parent, key_presser),
+      shortcut_button(new KeyPresserButton(this, "?", KeyColor(false), kBaseKeyWidth)),
+      hand_zone(new KeyPresserHandZone(this)) {
+  layers.OrderInside(shortcut_button.get());
+}
 
-void KeyPresserWidget::Options(ui::Pointer& p, OptionVisitor& visit) {
-  auto local_pos = p.PositionWithin(*this);
-  if (GetHandShape().contains(local_pos.x, local_pos.y)) {
-    visit(PressKeyOption(*this));
-  } else {
-    visit(SetKeyOption(*this));
+Interface KeyPresserWidget::FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) {
+  using enum ui::Dir;
+  auto key_presser = LockObject<KeyPresser>();
+  if (!key_presser) return {};
+  if (trigger == ui::PointerButton::Left) return Interface(*key_presser, kSetKey);
+  switch (static_cast<ui::Dir>(trigger)) {
+    case NE:
+      return Interface(*key_presser, KeyPresser::state_tbl);
+    case NW:
+      return Interface(*key_presser, KeyPresser::monitoring_tbl);
+    default:
+      return ObjectToy::FindOption(pointer, trigger);
   }
-  ObjectToy::Options(p, visit);
 }
 
 KeyPresser::KeyPresser(ui::AnsiKey key) : key(key) {}

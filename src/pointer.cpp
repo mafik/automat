@@ -12,7 +12,6 @@
 #include "arcline.hpp"
 #include "automat.hpp"
 #include "control_flow.hpp"
-#include "menu.hpp"
 #include "object.hpp"
 #include "root_widget.hpp"
 #include "time.hpp"
@@ -73,19 +72,14 @@ static void CheckCursorChanged(Pointer& pointer) {
     if (!pointer.cursors.empty()) {
       return pointer.cursors.back();
     }
-    Pointer::Cursor cursor = Pointer::Cursor::None;
-    auto callback = [&](Option& option) {
-      if (!std::ranges::contains(option.Triggers(), ActionTrigger(PointerButton::Left)))
-        return LoopControl::Continue;
-      cursor = option.Cursor();
-      return LoopControl::Break;
-    };
+    Cursor cursor = Cursor::None;
     for (Widget* w = pointer.hover; w; w = w->parent) {
-      OptionVisitor visit{callback};
-      w->Options(pointer, visit);
-      if (visit.done) break;
+      if (Interface option = w->FindOption(pointer, PointerButton::Left); option.has_table()) {
+        cursor = option.table_ptr->cursor;
+        break;
+      }
     }
-    return cursor == Pointer::Cursor::None ? Pointer::Cursor::Arrow : cursor;
+    return cursor == Cursor::None ? Cursor::Arrow : cursor;
   }();
   if (pointer.cursor != new_cursor) {
     pointer.OnCursorChanged(pointer.cursor, new_cursor);

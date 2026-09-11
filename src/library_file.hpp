@@ -28,6 +28,11 @@ struct File : Object {
   sk_sp<SkImage> GetImage() { return obj->Image(); }
   DEF_END(image_provider);
 
+  DEF_INTERFACE(File, Signal, toggle_filename, "Toggle filename")
+  static constexpr bool kSchedulesNext = false;
+  void OnRun(std::unique_ptr<RunTask>&) { obj->ToggleFilename(); }
+  DEF_END(toggle_filename);
+
   File() = default;
   File(const File&);
   ~File() override;

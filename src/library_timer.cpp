@@ -13,6 +13,7 @@
 #include <include/effects/SkGradient.h>
 #include <include/pathops/SkPathOps.h>
 
+#include <charconv>
 #include <cmath>
 #include <memory>
 #include <tracy/Tracy.hpp>
@@ -23,7 +24,6 @@
 #include "drag_action.hpp"
 #include "font.hpp"
 #include "math.hpp"
-#include "menu.hpp"
 #include "number_text_field.hpp"
 #include "pointer.hpp"
 #include "status.hpp"
@@ -165,6 +165,16 @@ void Timer::CancelTimer() {
   if (auto* location = MyLocation()) {
     CancelScheduledAt(*location, start_time + duration_value);
   }
+  WakeToys();
+}
+
+void Timer::ShiftRange(int delta) {
+  {
+    auto lock = std::lock_guard(mtx);
+    constexpr int kRangeCount = (int)Range::EndGuard;
+    range = Range(((int)range + kRangeCount + delta) % kRangeCount);
+  }
+  PropagateDurationOutwards(*this);
   WakeToys();
 }
 
@@ -465,16 +475,55 @@ const static SkPaint kHandPaint = [] {
   return paint;
 }();
 
+struct TimerHand : Object {
+  std::atomic<float> degrees = 90;
+  std::atomic<int> draggers = 0;
+
+  StrView Name() const override { return "Timer hand"; }
+  Ptr<Object> Clone() const override { return MAKE_PTR(TimerHand); }
+
+  DEF_INTERFACE(TimerHand, Scalar, angle, "Hand")
+  double OnGet() { return obj->degrees.load(std::memory_order_relaxed); }
+  void OnSet(double value) { obj->degrees.store(value, std::memory_order_relaxed); }
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(angle);
+
+  INTERFACES(angle)
+};
+
 struct TimerWidget : ObjectToy {
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    using enum ui::Dir;
+    auto object = LockTimer();
+    if (!object) return {};
+    switch (static_cast<ui::Dir>(trigger)) {
+      case NW:
+        return Interface(*object, Timer::duration_tbl);
+      case NE:
+        return Interface(*object, Timer::running_tbl);
+      case E:
+        return Interface(*object, Timer::next_range_tbl);
+      case W:
+        return Interface(*object, Timer::prev_range_tbl);
+      default:
+        return ObjectToy::FindOption(pointer, trigger);
+    }
+  }
+  MiniMenuMode MenuMode() override { return MODE_8_DIR; }
   // Animation state
   float start_pusher_depression = 0;
   float left_pusher_depression = 0;
   float right_pusher_depression = 0;
   animation::SpringV2<float> hand_degrees;
-  int hand_draggers = 0;
+  Ptr<TimerHand> hand = MAKE_PTR(TimerHand);
   animation::SpringV2<float> range_dial;
   float duration_handle_rotation = 0;
   std::unique_ptr<ui::NumberTextField> text_field;
+  std::unique_ptr<ui::ActionZone> duration_zone;
+  std::unique_ptr<ui::ActionZone> start_zone;
+  std::unique_ptr<ui::ActionZone> prev_range_zone;
+  std::unique_ptr<ui::ActionZone> next_range_zone;
+  std::unique_ptr<ui::ActionZone> hand_zone;
 
   // Cached copies of Object state (refreshed in Tick)
   Timer::Range range = Timer::Range::Seconds;
@@ -484,33 +533,14 @@ struct TimerWidget : ObjectToy {
 
   Ptr<Timer> LockTimer() const { return LockObject<Timer>(); }
 
-  TimerWidget(ui::Widget* parent, Object& timer_obj)
-      : ObjectToy(parent, timer_obj), text_field(new ui::NumberTextField(this, kTextWidth)) {
-    text_field->local_to_parent = SkM44::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
-    layers.OrderInside(text_field.get());
-    range_dial.velocity = 0;
-    range_dial.value = 1;
-    hand_degrees.value = 90;
-
-    if (auto timer = LockTimer()) {
-      // text_field->argument =
-      //     NestedWeakPtr<Argument::Table>(timer->AcquireWeakPtr(), &Timer::duration_tbl);
-      range = timer->range;
-      duration_value = timer->duration_value;
-      is_running = timer->running->IsRunning();
-      start_time = timer->start_time;
-      UpdateTextField();
-    }
-  }
-
-  void UpdateTextField() {
-    auto n = TickCount(range) * duration_value / time::FloatDuration(RangeDuration(range));
-    text_field->SetNumber(n);
-  }
+  TimerWidget(ui::Widget* parent, Object& timer_obj);
 
   Tock Tick(time::Timer& timer) override {
     auto tock = ObjectToy::Tick(timer);
 
+    bool old_running = is_running;
+    auto old_range = range;
+    auto old_duration = duration_value;
     // Refresh cached Object state
     if (auto t = LockTimer()) {
       auto lock = std::lock_guard(t->mtx);
@@ -519,13 +549,18 @@ struct TimerWidget : ObjectToy {
       is_running = t->running->IsRunning();
       start_time = t->start_time;
     }
-    UpdateTextField();
+    if (old_duration != duration_value || range != old_range) text_field->WakeAnimation();
+    if (is_running != old_running) start_pusher_depression = 1;
+    int range_end = (int)Timer::Range::EndGuard;
+    if (range != old_range) {
+      bool forward = ((int)range - (int)old_range + range_end) % range_end == 1;
+      (forward ? right_pusher_depression : left_pusher_depression) = 1;
+    }
 
     tock |= is_running ? Tock::Drawing : Tock{};
     tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.2, start_pusher_depression);
     tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.2, left_pusher_depression);
     tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.2, right_pusher_depression);
-    int range_end = (int)Timer::Range::EndGuard;
     animation::WrapModulo(range_dial.value, (float)range, range_end);
     tock.drawing |= range_dial.SpringTowards((float)range, timer.d, 0.4, 0.05);
     double circles;
@@ -538,8 +573,9 @@ struct TimerWidget : ObjectToy {
     tock.drawing |= animation::ExponentialApproach(duration_handle_rotation_target, timer.d, 0.05,
                                                    duration_handle_rotation);
 
-    if (hand_draggers) {
-      // do nothing...
+    if (hand->draggers.load(std::memory_order_relaxed) > 0) {
+      hand_degrees.value = hand->degrees.load(std::memory_order_relaxed);
+      tock.drawing |= true;
     } else {
       float hand_target;
       if (is_running) {
@@ -550,6 +586,10 @@ struct TimerWidget : ObjectToy {
       animation::WrapModulo(hand_degrees.value, hand_target, 360);
       tock.drawing |=
           hand_degrees.SpringTowards(hand_target, timer.d, time::ToSeconds(kHandPeriod), 0.05);
+    }
+    if (tock.draw) {
+      hand_zone->WakeAnimation();
+      duration_zone->WakeAnimation();
     }
     return tock;
   }
@@ -675,8 +715,6 @@ struct TimerWidget : ObjectToy {
   }
 
   bool CenteredAtZero() const override { return true; }
-
-  void Options(ui::Pointer&, OptionVisitor&) override;
 };
 
 static float HandBaseDegrees(const TimerWidget& w) {
@@ -728,12 +766,16 @@ static SkPath DurationHandlePath(const TimerWidget& w) {
 }
 
 struct DragDurationHandleAction : Action {
-  TimerWidget& widget;
+  MortalPtr<TimerWidget> widget;
   DragDurationHandleAction(ui::Pointer& pointer, TimerWidget& widget)
       : Action(pointer), widget(widget) {}
   void Update() override {
-    auto pos = pointer.PositionWithin(widget);
-    if (auto timer = widget.LockTimer()) {
+    if (!widget) {
+      pointer.ReplaceAction(*this, nullptr);
+      return;
+    }
+    auto pos = pointer.PositionWithin(*widget);
+    if (auto timer = widget->LockTimer()) {
       auto tick_count = TickCount(timer->range);
       double angle = atan2(pos.sk.y(), pos.sk.x());
 
@@ -761,102 +803,128 @@ struct DragDurationHandleAction : Action {
 };
 
 struct DragHandAction : Action {
-  TimerWidget* widget;
-  DragHandAction(ui::Pointer& pointer, TimerWidget& w) : Action(pointer), widget(&w) {
-    ++widget->hand_draggers;
+  Ptr<TimerHand> hand;
+  MortalPtr<TimerWidget> widget;
+  DragHandAction(ui::Pointer& pointer, TimerWidget& w) : Action(pointer), hand(w.hand), widget(w) {
+    hand->draggers.fetch_add(1, std::memory_order_relaxed);
+    w.WakeAnimation();
   }
   void Update() override {
+    if (!widget) {
+      pointer.ReplaceAction(*this, nullptr);
+      return;
+    }
     Vec2 pos = ui::TransformDown(*widget).mapPoint(pointer.pointer_position);
-    widget->hand_degrees.value = atan(pos) * 180 / M_PI;
+    hand->degrees.store(atan(pos) * 180 / M_PI, std::memory_order_relaxed);
     widget->WakeAnimation();
   }
   ~DragHandAction() {
-    --widget->hand_draggers;
-    widget->WakeAnimation();
+    hand->draggers.fetch_sub(1, std::memory_order_relaxed);
+    if (widget) widget->WakeAnimation();
   }
 };
 
-struct DragDurationHandleOption : TextOption {
-  TimerWidget& widget;
-  DragDurationHandleOption(TimerWidget& widget) : TextOption("Duration"), widget(widget) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(DragDurationHandleOption, widget); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    return std::make_unique<DragDurationHandleAction>(pointer, widget);
+double Timer::duration_Impl::OnGet() { return time::ToSeconds(obj->duration_value); }
+
+void Timer::duration_Impl::OnSet(double seconds) { SetDuration(*obj, time::FromSeconds(seconds)); }
+
+Str Timer::readout_Impl::OnGet() {
+  auto lock = std::lock_guard(obj->mtx);
+  auto n =
+      TickCount(obj->range) * obj->duration_value / time::FloatDuration(RangeDuration(obj->range));
+  return ui::FormatNumber(n);
+}
+
+void Timer::readout_Impl::OnSet(StrView text) {
+  double n;
+  if (std::from_chars(text.data(), text.data() + text.size(), n).ec != std::errc()) return;
+  SetDuration(*obj, time::Defloat(RangeDuration(obj->range) * n / TickCount(obj->range)));
+}
+
+std::unique_ptr<Action> Timer::duration_Impl::OnActivate(ui::Pointer& pointer, automat::Toy* toy) {
+  auto* widget = dynamic_cast<TimerWidget*>(toy);
+  return widget ? std::make_unique<DragDurationHandleAction>(pointer, *widget) : nullptr;
+}
+
+std::unique_ptr<Action> TimerHand::angle_Impl::OnActivate(ui::Pointer& pointer, automat::Toy* toy) {
+  auto* widget = dynamic_cast<TimerWidget*>(toy);
+  return widget ? std::make_unique<DragHandAction>(pointer, *widget) : nullptr;
+}
+
+struct TimerZone : ui::ActionZone {
+  using ActionZone::ActionZone;
+  TimerWidget& Face() const { return static_cast<TimerWidget&>(*parent); }
+};
+
+struct DurationHandleZone : TimerZone {
+  using TimerZone::TimerZone;
+  SkPath Shape() const override { return DurationHandlePath(Face()); }
+  Tock Tick(time::Timer&) override { return Tock::Shape; }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    if (trigger != ui::PointerButton::Left) return {};
+    auto timer = Face().LockTimer();
+    return timer ? Interface(*timer, Timer::duration_tbl) : Interface();
   }
 };
 
-struct PushStartOption : TextOption {
-  TimerWidget& widget;
-  bool running;
-  PushStartOption(TimerWidget& widget, bool running)
-      : TextOption(running ? "Stop" : "Start"), widget(widget), running(running) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(PushStartOption, widget, running); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    widget.start_pusher_depression = 1;
-    widget.WakeAnimation();
-    if (auto timer = widget.LockTimer()) {
-      if (timer->running->IsRunning()) {
-        timer->running->Cancel();
-      } else {
-        timer->run->ScheduleRun();
-      }
-    }
-    return std::make_unique<EmptyAction>(pointer);
+struct StartPusherZone : TimerZone {
+  using TimerZone::TimerZone;
+  SkPath Shape() const override { return SkPath::Rect(kStartPusherBox); }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    if (trigger != ui::PointerButton::Left) return {};
+    auto timer = Face().LockTimer();
+    if (!timer) return {};
+    if (Face().is_running) return Interface(*timer, Timer::running_tbl.turn_off);
+    return Interface(*timer, Timer::run_tbl);
   }
 };
 
-struct PushRangeOption : TextOption {
-  TimerWidget& widget;
+struct RangePusherZone : TimerZone {
   int delta;
-  PushRangeOption(TimerWidget& widget, int delta)
-      : TextOption(delta < 0 ? "Previous range" : "Next range"), widget(widget), delta(delta) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(PushRangeOption, widget, delta); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    float& depression = delta < 0 ? widget.left_pusher_depression : widget.right_pusher_depression;
-    depression = 1;
-    if (auto timer = widget.LockTimer()) {
-      constexpr int kRangeCount = (int)Timer::Range::EndGuard;
-      timer->range = Timer::Range(((int)timer->range + kRangeCount + delta) % kRangeCount);
-      widget.range = timer->range;
-      widget.duration_value = timer->duration_value;
-      widget.UpdateTextField();
-      PropagateDurationOutwards(*timer);
-    }
-    widget.WakeAnimation();
-    return std::make_unique<EmptyAction>(pointer);
+  RangePusherZone(ui::Widget* parent, int delta) : TimerZone(parent), delta(delta) {}
+  SkPath Shape() const override {
+    return SkPath::Rect(kSmallPusherBox).makeTransform(SkMatrix::RotateDeg(delta < 0 ? 45 : -45));
+  }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    if (trigger != ui::PointerButton::Left) return {};
+    auto timer = Face().LockTimer();
+    if (!timer) return {};
+    return Interface(*timer, delta < 0 ? Timer::prev_range_tbl : Timer::next_range_tbl);
   }
 };
 
-struct DragHandOption : TextOption {
-  TimerWidget& widget;
-  DragHandOption(TimerWidget& widget) : TextOption("Hand"), widget(widget) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(DragHandOption, widget); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    return std::make_unique<DragHandAction>(pointer, widget);
+struct HandZone : TimerZone {
+  using TimerZone::TimerZone;
+  SkPath Shape() const override {
+    return skpathutils::FillPathWithPaint(HandPath(Face()), kHandPaint);
+  }
+  Tock Tick(time::Timer&) override { return Tock::Shape; }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    if (trigger != ui::PointerButton::Left) return {};
+    return Interface(*Face().hand, TimerHand::angle_tbl);
   }
 };
 
-void TimerWidget::Options(ui::Pointer& pointer, OptionVisitor& visit) {
-  auto pos = pointer.PositionWithin(*this);
-  if (DurationHandlePath(*this).contains(pos.x, pos.y)) visit(DragDurationHandleOption(*this));
-  if (kStartPusherBox.contains(pos.x, pos.y)) {
-    bool running = false;
-    if (auto timer = LockTimer()) running = timer->running->IsRunning();
-    visit(PushStartOption(*this, running));
+TimerWidget::TimerWidget(ui::Widget* parent, Object& timer_obj)
+    : ObjectToy(parent, timer_obj),
+      text_field(new ui::NumberTextField(this, timer_obj, Timer::readout_tbl, kTextWidth)),
+      duration_zone(new DurationHandleZone(this)),
+      start_zone(new StartPusherZone(this)),
+      prev_range_zone(new RangePusherZone(this, -1)),
+      next_range_zone(new RangePusherZone(this, 1)),
+      hand_zone(new HandZone(this)) {
+  text_field->local_to_parent = SkM44::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
+  layers.OrderInside(text_field.get());
+  range_dial.velocity = 0;
+  range_dial.value = 1;
+  hand_degrees.value = 90;
+
+  if (auto timer = LockTimer()) {
+    range = timer->range;
+    duration_value = timer->duration_value;
+    is_running = timer->running->IsRunning();
+    start_time = timer->start_time;
   }
-  auto left_rot = SkMatrix::RotateDeg(-45).mapPoint(pos.sk);
-  auto right_rot = SkMatrix::RotateDeg(45).mapPoint(pos.sk);
-  if (kSmallPusherBox.contains(left_rot.x(), left_rot.y())) visit(PushRangeOption(*this, -1));
-  if (kSmallPusherBox.contains(right_rot.x(), right_rot.y())) visit(PushRangeOption(*this, 1));
-  SkPath hand_outline = skpathutils::FillPathWithPaint(HandPath(*this), kHandPaint);
-  if (hand_outline.contains(pos.x, pos.y)) visit(DragHandOption(*this));
-  ObjectToy::Options(pointer, visit);
 }
 
 std::unique_ptr<ObjectToy> Timer::MakeToy(ui::Widget* parent) {

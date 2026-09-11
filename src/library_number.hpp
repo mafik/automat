@@ -16,6 +16,12 @@ struct Number : Object {
   string GetText() const override;
   void SetText(string_view text) override;
 
+  DEF_INTERFACE(Number, Text, text, "Value")
+  Str OnGet() { return obj->GetText(); }
+  void OnSet(StrView);
+  DEF_END(text);
+  INTERFACES(text)
+
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };

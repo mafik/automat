@@ -50,12 +50,6 @@ KeyButton::KeyButton(Widget* parent, StrView label, SkColor4f color, float width
   SetLabel(label);
 }
 
-void KeyButton::Activate(ui::Pointer& pointer) {
-  if (activate) {
-    activate(pointer);
-  }
-}
-
 Tock KeyButton::Tick(time::Timer& t) {
   auto tock = ui::Button::Tick(t);
   return tock | Tock::Draw;

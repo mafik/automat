@@ -5,6 +5,7 @@
 #include <cmath>
 
 #include "base.hpp"
+#include "board.hpp"
 #include "drag_action.hpp"
 #include "svg.hpp"
 #include "sync.hpp"
@@ -13,10 +14,6 @@
 #include "widget.hpp"
 
 namespace automat {
-
-std::unique_ptr<ui::Widget> Argument::MakeIcon(ui::Widget* parent) const {
-  return table->make_icon(*this, parent);
-}
 
 Object* Argument::ObjectOrNull() const {
   auto found = Find();
@@ -66,7 +63,13 @@ std::unique_ptr<Argument::Toy> Argument::MakeToy(ui::Widget* parent) {
   return nullptr;
 }
 
-std::unique_ptr<ui::Widget> Argument::Table::DefaultMakeIcon(Argument, ui::Widget* parent) {
+std::unique_ptr<Action> Argument::Table::DefaultActivate(Interface, ui::Pointer& pointer,
+                                                         automat::Toy* toy) {
+  auto* widget = dynamic_cast<ui::ConnectionWidget*>(toy);
+  return widget ? std::make_unique<ui::DragConnectionAction>(pointer, *widget) : nullptr;
+}
+
+std::unique_ptr<ui::Widget> Argument::Table::DefaultMakeIcon(Interface, ui::Widget* parent) {
   return ui::MakeShapeWidget(parent, PathFromSVG(kNextShape), "#ffffff"_color);
 }
 

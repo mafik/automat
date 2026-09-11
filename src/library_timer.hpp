@@ -25,15 +25,40 @@ struct Timer : Object, TimerNotificationReceiver {
   // DEF_END(duration);
 
   DEF_INTERFACE(Timer, Runnable, run, "Run")
+  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
   void OnRun(std::unique_ptr<RunTask>& run_task) { obj->StartTimer(run_task); }
   DEF_END(run);
 
   DEF_INTERFACE(Timer, LongRunning, running, "Running")
+  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
   void OnCancel() { obj->CancelTimer(); }
   DEF_END(running);
 
   DEF_INTERFACE(Timer, NextArg, next, "Next")
   DEF_END(next);
+
+  DEF_INTERFACE(Timer, Scalar, duration, "Duration")
+  double OnGet();
+  void OnSet(double seconds);
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(duration);
+
+  DEF_INTERFACE(Timer, Text, readout, "Readout")
+  Str OnGet();
+  void OnSet(StrView);
+  DEF_END(readout);
+
+  DEF_INTERFACE(Timer, Signal, next_range, "Next range")
+  static constexpr bool kSchedulesNext = false;
+  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  void OnRun(std::unique_ptr<RunTask>&) { obj->ShiftRange(1); }
+  DEF_END(next_range);
+
+  DEF_INTERFACE(Timer, Signal, prev_range, "Previous range")
+  static constexpr bool kSchedulesNext = false;
+  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  void OnRun(std::unique_ptr<RunTask>&) { obj->ShiftRange(-1); }
+  DEF_END(prev_range);
 
   enum class Range : char {
     Milliseconds,  // 0 - 1000 ms
@@ -48,10 +73,11 @@ struct Timer : Object, TimerNotificationReceiver {
   Timer(const Timer&);
   void StartTimer(std::unique_ptr<RunTask>&);
   void CancelTimer();
+  void ShiftRange(int delta);
   StrView Name() const override { return "Timer"; }
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  INTERFACES(run, next, running)
+  INTERFACES(run, next, running, duration, next_range, prev_range, readout)
   void Updated(WeakPtr<Object>& updated) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
 

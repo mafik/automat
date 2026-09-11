@@ -8,6 +8,7 @@
 #include "animation.hpp"
 #include "base.hpp"
 #include "library_instruction.hpp"
+#include "object_source.hpp"
 #include "random.hpp"
 
 namespace automat::library {
@@ -39,6 +40,18 @@ struct InstructionLibrary : Object {
   // Potential instructions (after filtering)
   std::deque<llvm::MCInst> instructions;  // "deck", lol
 
+  DEF_INTERFACE(InstructionLibrary, Signal, scroll, "Scroll")
+  static constexpr bool kSchedulesNext = false;
+  void OnRun(std::unique_ptr<RunTask>&);
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(scroll);
+
+  DEF_INTERFACE(InstructionLibrary, ObjectSource, pick, "Take instruction")
+  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  Ptr<Object> OnTake();
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(pick);
+
   InstructionLibrary();
 
   // Updates the `instructions` deque.
@@ -47,8 +60,23 @@ struct InstructionLibrary : Object {
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
+  INTERFACES(scroll, pick)
 
   struct Widget : Toy, ui::PointerMoveCallback {
+    Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+      using enum ui::Dir;
+      auto object = LockObject<InstructionLibrary>();
+      if (!object) return {};
+      switch (static_cast<ui::Dir>(trigger)) {
+        case E:
+          return Interface(*object, InstructionLibrary::scroll_tbl);
+        case N:
+          return Interface(*object, InstructionLibrary::pick_tbl);
+        default:
+          return automat::ObjectToy::FindOption(pointer, trigger);
+      }
+    }
+    MiniMenuMode MenuMode() override { return MODE_4_DIR; }
     using Toy::mortal_coil;  // disambiguate from PointerMoveCallback's coil for MortalPtr<Widget>
     struct InstructionCard {
       std::unique_ptr<Instruction::Widget> widget;
@@ -105,15 +133,30 @@ struct InstructionLibrary : Object {
 
     std::vector<CategoryState> category_states;
 
+    struct Filters {
+      std::vector<unsigned> read_from;
+      std::vector<unsigned> write_to;
+      int category = -1;
+      int group = -1;
+      bool operator==(const Filters&) const = default;
+    };
+    Filters counted_filters;
+
+    std::unique_ptr<ui::ActionZone> deck_zone;
+    std::unique_ptr<ui::ActionZone> front_card_zone;
+    std::unique_ptr<ui::ActionZone> register_zone;
+    std::unique_ptr<ui::ActionZone> rose_zone;
+
     Widget(ui::Widget* parent, Object&);
 
     std::string_view Name() const override { return "Instruction Library Widget"; }
     SkPath Shape() const override;
     Tock Tick(time::Timer&) override;
     void Draw(SkCanvas&) const override;
-    void Options(ui::Pointer&, OptionVisitor&) override;
 
-    bool AllowChildPointerEvents(ui::Widget& child) const override { return false; }
+    bool AllowChildPointerEvents(ui::Widget& child) const override {
+      return dynamic_cast<const ui::ActionZone*>(&child) != nullptr;
+    }
 
     void PointerMove(ui::Pointer&, Vec2 position) override;
     void PointerEnter(ui::Pointer&) override;

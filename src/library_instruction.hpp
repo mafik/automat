@@ -133,7 +133,6 @@ struct Instruction : Object, Buffer {
         unsigned imm;
         unsigned fixed_reg;
         Flag flag;
-        unsigned cond_code;  // token_i of the condition immediate
         llvm::X86::CondCode fixed_cond;
       };
     };

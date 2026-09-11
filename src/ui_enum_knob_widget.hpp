@@ -6,12 +6,14 @@
 
 #include "action.hpp"
 #include "animation.hpp"
+#include "base.hpp"
 #include "knob.hpp"
 #include "math.hpp"
 #include "optional.hpp"
 #include "pointer.hpp"
 #include "ptr.hpp"
 #include "time.hpp"
+#include "toy.hpp"
 #include "units.hpp"
 #include "widget.hpp"
 
@@ -19,7 +21,7 @@ class SkCanvas;
 
 namespace automat::ui {
 
-struct EnumKnobWidget : ui::Widget {
+struct EnumKnobWidget : Toy {
   float last_vx = 0;
   Knob knob;
 
@@ -32,7 +34,7 @@ struct EnumKnobWidget : ui::Widget {
 
   int value = 0;  // ground-truth value, obtained from the getter in Tick
 
-  EnumKnobWidget(ui::Widget* parent, int n_options);
+  EnumKnobWidget(ui::Widget* parent, Object& owner, Scalar::Table& table, int n_options);
 
   SkPath Shape() const override;
   void TransformUpdated(time::Timer& t) override { WakeAnimationAt(t.now); }
@@ -63,9 +65,6 @@ struct EnumKnobWidget : ui::Widget {
       Rect::MakeAtZero(2 * kRegionStartRadius, 2 * kRegionStartRadius);
   constexpr static float kRegionMargin = kBorderWidth / 2;
 
-  virtual int KnobGet() const = 0;
-  virtual void KnobSet(int value) = 0;
-
   Tock Tick(time::Timer& timer) override;
 
   virtual void DrawKnobBackground(SkCanvas& canvas, int value) const;
@@ -91,7 +90,9 @@ struct EnumKnobWidget : ui::Widget {
     ~ChangeEnumKnobAction();
   };
 
-  void Options(ui::Pointer&, OptionVisitor&) override;
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
 };
+
+std::unique_ptr<Action> TurnEnumKnob(ui::Pointer&, Toy*);
 
 }  // namespace automat::ui

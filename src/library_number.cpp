@@ -8,9 +8,9 @@
 #include <include/effects/SkGradient.h>
 #include <rapidjson/rapidjson.h>
 
+#include <array>
 #include <charconv>
 
-#include "drag_action.hpp"
 #include "number_text_field.hpp"
 #include "svg.hpp"
 #include "ui_button.hpp"
@@ -131,8 +131,63 @@ bool Number::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 // NumberButton
 
+static void EditText(Object& object, Str text) {
+  object.SetText(text);
+  if (auto* location = object.MyLocation()) location->ScheduleUpdate();
+}
+
+void Number::text_Impl::OnSet(StrView value) { EditText(*obj, Str(value)); }
+
+constinit std::array<Signal::Table, 10> kDigits = [] {
+  std::array<Signal::Table, 10> tables = {
+      Signal::Table("0"), Signal::Table("1"), Signal::Table("2"), Signal::Table("3"),
+      Signal::Table("4"), Signal::Table("5"), Signal::Table("6"), Signal::Table("7"),
+      Signal::Table("8"), Signal::Table("9")};
+  for (auto& t : tables) {
+    t.schedules_next = false;
+    t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+      int digit = static_cast<Signal::Table*>(self.table_ptr) - kDigits.data();
+      Str text = self.object_ptr->GetText();
+      if (text == "0") text.clear();
+      text += '0' + digit;
+      EditText(*self.object_ptr, text);
+    };
+  }
+  return tables;
+}();
+
+constinit Signal::Table kDot = [] {
+  Signal::Table t(".");
+  t.schedules_next = false;
+  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+    Str text = self.object_ptr->GetText();
+    if (text.empty()) {
+      text = "0";
+    } else if (auto it = text.find('.'); it != Str::npos) {
+      text.erase(it, 1);
+    }
+    text += ".";
+    while (text.size() > 1 && text[0] == '0' && text[1] != '.') {
+      text.erase(0, 1);
+    }
+    EditText(*self.object_ptr, text);
+  };
+  return t;
+}();
+
+constinit Signal::Table kBackspace = [] {
+  Signal::Table t("Backspace");
+  t.schedules_next = false;
+  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+    Str text = self.object_ptr->GetText();
+    if (!text.empty()) text.pop_back();
+    if (text.empty()) text = "0";
+    EditText(*self.object_ptr, text);
+  };
+  return t;
+}();
+
 struct NumberButton : ui::Button {
-  std::function<void(Location&)> activate;
   NumberButton(ui::Widget* parent, SkPath shape) : Button(parent) {
     child = std::make_unique<ShapeWidget>(this, shape);
     layers.OrderInside(child.get());
@@ -142,16 +197,6 @@ struct NumberButton : ui::Button {
     child = std::make_unique<Text>(this, text);
     layers.OrderInside(child.get());
     UpdateChildTransform();
-  }
-  void Activate(ui::Pointer& pointer) override {
-    Button::Activate(pointer);
-    if (activate) {
-      if (auto* lw = Closest<LocationWidget>(*pointer.hover)) {
-        if (auto l = lw->LockLocation()) {
-          activate(*l);
-        }
-      }
-    }
   }
   StrView Name() const override { return "NumberButton"; }
   SkColor4f BackgroundColor() const override { return "#c8c4b7"_color4f; }
@@ -169,23 +214,15 @@ struct NumberWidget : ObjectToy {
 
   NumberWidget(ui::Widget* parent, Object& number_obj) : ObjectToy(parent, number_obj) {
     text_field = std::make_unique<ui::NumberTextField>(
-        this, kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth);
+        this, number_obj, Number::text_tbl, kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth);
     dot = std::make_unique<NumberButton>(this, ".");
     backspace = std::make_unique<NumberButton>(this, PathFromSVG(kBackspaceShape));
+    auto weak = number_obj.AcquireWeakPtr();
+    dot->target = NestedWeakPtr<Interface::Table>(weak, &kDot);
+    backspace->target = NestedWeakPtr<Interface::Table>(weak, &kBackspace);
     for (int i = 0; i < 10; ++i) {
       digits[i] = std::make_unique<NumberButton>(this, std::to_string(i));
-      digits[i]->activate = [this, i](Location& l) {
-        if (text_field->text.empty() || text_field->text == "0") {
-          text_field->text = std::to_string(i);
-        } else {
-          text_field->text += std::to_string(i);
-        }
-        if (auto num = LockNumber()) {
-          num->value = std::stod(text_field->text);
-        }
-        text_field->WakeAnimation();
-        l.ScheduleUpdate();
-      };
+      digits[i]->target = NestedWeakPtr<Interface::Table>(weak, &kDigits[i]);
     }
 
     auto cell = [](int row, int col) {
@@ -207,52 +244,10 @@ struct NumberWidget : ObjectToy {
         digits[digit]->local_to_parent = cell(row + 1, col);
       }
     }
-
-    dot->activate = [this](Location& l) {
-      if (text_field->text.empty()) {
-        text_field->text = "0";
-      } else if (auto it = text_field->text.find('.'); it != std::string::npos) {
-        text_field->text.erase(it, 1);
-      }
-      text_field->text += ".";
-      while (text_field->text.size() > 1 && text_field->text[0] == '0' &&
-             text_field->text[1] != '.') {
-        text_field->text.erase(0, 1);
-      }
-      if (auto num = LockNumber()) {
-        num->value = std::stod(text_field->text);
-      }
-      text_field->WakeAnimation();
-      l.ScheduleUpdate();
-    };
-    backspace->activate = [this](Location& l) {
-      if (!text_field->text.empty()) {
-        text_field->text.pop_back();
-      }
-      if (text_field->text.empty()) {
-        text_field->text = "0";
-      }
-      if (auto num = LockNumber()) {
-        num->value = std::stod(text_field->text);
-      }
-      text_field->WakeAnimation();
-      l.ScheduleUpdate();
-    };
-
-    // Initialize text_field from Object state
-    if (auto num = LockNumber()) {
-      text_field->text = num->GetText();
-    }
   }
 
   Tock Tick(time::Timer&) override {
-    if (auto num = LockNumber()) {
-      auto text = num->GetText();
-      if (text_field->text != text) {
-        text_field->text = text;
-        text_field->WakeAnimation();
-      }
-    }
+    text_field->WakeAnimation();
     return Tock::Draw;
   }
 

@@ -85,9 +85,30 @@ MediaFile::~MediaFile() {
 
 void MediaFile::Interfaces(const std::function<LoopControl(Interface)>& cb) {
   if (cb(out_stream.Bind()) == LoopControl::Break) return;
+  if (cb(path_text.Bind()) == LoopControl::Break) return;
   for (int i = 0; i < n_streams; ++i) {
     if (cb(Interface(*this, stream_ports[i].table)) == LoopControl::Break) return;
   }
+}
+
+Str MediaFile::path_text_Impl::OnGet() {
+  auto lock = std::lock_guard(obj->mutex);
+  return obj->typed_path;
+}
+
+void MediaFile::path_text_Impl::OnSet(StrView text) {
+  Str typed(text);
+  {
+    auto lock = std::lock_guard(obj->mutex);
+    obj->typed_path = typed;
+  }
+#if defined(_WIN32)
+  bool exists = !typed.empty() && _access(typed.c_str(), 4) == 0;
+#else
+  bool exists = !typed.empty() && access(typed.c_str(), R_OK) == 0;
+#endif
+  if (exists || typed.empty()) obj->SetPath(typed);
+  obj->WakeToys();
 }
 
 void MediaFile::CloseLocked() {
@@ -134,6 +155,7 @@ void MediaFile::SetPath(StrView new_path) {
     auto lock = std::lock_guard(mutex);
     CloseLocked();
     path = new_path;
+    typed_path = path;
     if (!path.empty()) {
       AVFormatContext* ctx = nullptr;
       int err = avformat_open_input(&ctx, path.c_str(), nullptr, nullptr);
@@ -473,20 +495,17 @@ constexpr uint32_t kDecoderSeed = 0xF4B;
 
 struct MediaFileToy;
 
-// A plain one-line path editor writing straight into the toy's edit buffer;
-// the toy opens the file once the path names one.
 struct PathField : ui::TextField {
-  PathField(ui::Widget* parent, std::string* text, float width)
-      : ui::TextField(parent, text, width) {}
+  PathField(ui::Widget* parent, Object& owner, automat::Text::Table& table, float width)
+      : ui::TextField(parent, owner, table, width) {}
   StrView Name() const override { return "PathField"; }
 };
 
 struct MediaFileToy : ui::beta::ObjectToy {
   std::unique_ptr<PathField> field;
-  std::string path_edit_;
 
   // Tick-cached object state (UI thread only):
-  Str path_applied_;
+  Str path_;
   Str container_;
   double duration_s_ = 0;
   Vec<Str> rows_;
@@ -499,17 +518,12 @@ struct MediaFileToy : ui::beta::ObjectToy {
 
   MediaFileToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     if (auto file = LockObject<MediaFile>()) {
-      {
-        auto lock = std::lock_guard(file->mutex);
-        path_edit_ = file->path;
-        path_applied_ = file->path;
-      }
       for (int i = 0; i < MediaFile::kMaxStreams; ++i) {
         port_tables_.push_back(&file->stream_ports[i].table);
       }
       port_connected_.resize(MediaFile::kMaxStreams);
     }
-    field = std::make_unique<PathField>(this, &path_edit_, kPlateW - 2 * kSide);
+    field = std::make_unique<PathField>(this, obj, MediaFile::path_text_tbl, kPlateW - 2 * kSide);
     float field_bottom = kFilePlateH / 2 - (kBand + kCreditRow + kPathRow);
     field->local_to_parent =
         SkM44::Translate(-kPlateW / 2 + kSide, field_bottom) * SkM44::Scale(0.55f, 0.55f, 1);
@@ -537,22 +551,11 @@ struct MediaFileToy : ui::beta::ObjectToy {
 
   void UpdateFromObject() {
     if (auto file = LockObject<MediaFile>()) {
-      // The file opens the moment its path names a readable file.
-      if (Str(path_edit_) != path_applied_) {
-#if defined(_WIN32)
-        bool exists = !path_edit_.empty() && _access(path_edit_.c_str(), 4) == 0;
-#else
-        bool exists = !path_edit_.empty() && access(path_edit_.c_str(), R_OK) == 0;
-#endif
-        if (exists || path_edit_.empty()) {
-          path_applied_ = path_edit_;
-          file->SetPath(path_applied_);
-        }
-      }
       for (int i = 0; i < MediaFile::kMaxStreams; ++i) {
         port_connected_[i] = !file->stream_ports[i].state.target.IsExpired();
       }
       auto lock = std::lock_guard(file->mutex);
+      path_ = file->path;
       open_ = file->fmt != nullptr;
       container_ = file->container;
       duration_s_ = file->duration_s;
@@ -565,6 +568,7 @@ struct MediaFileToy : ui::beta::ObjectToy {
 
   Tock Tick(time::Timer&) override {
     UpdateFromObject();
+    field->WakeAnimation();
     return Tock::Draw;
   }
 
@@ -600,8 +604,7 @@ struct MediaFileToy : ui::beta::ObjectToy {
           y -= kInfoRow;
         }
       } else {
-        StrView hint =
-            path_applied_.empty() ? StrView("type a media file path") : StrView("no such file");
+        StrView hint = path_.empty() ? StrView("type a media file path") : StrView("no such file");
         ui::beta::DrawText(canvas, hint, {-kPlateW / 2 + kSide, y}, ui::beta::kMicroSize,
                            ui::beta::kGray, false, Seed(kFileSeed));
       }
@@ -663,7 +666,9 @@ struct FfmpegDecoderToy : ui::beta::ObjectToy {
   sk_sp<SkImage> held_;
 
   FfmpegDecoderToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
-    button = std::make_unique<ui::beta::RunButton>(this, [this] { OnButton(); }, Seed(0x5D));
+    button = std::make_unique<ui::beta::RunButton>(
+        this, NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(), &FfmpegDecoder::run_tbl),
+        NestedWeakPtr<Interface::Table>(), Seed(0x5D));
     button->running = false;
     button->enabled = true;
     UpdateFromObject();
@@ -696,11 +701,6 @@ struct FfmpegDecoderToy : ui::beta::ObjectToy {
   Tock Tick(time::Timer&) override {
     UpdateFromObject();
     return Tock::Draw;
-  }
-
-  void OnButton() {
-    if (auto decoder = LockObject<FfmpegDecoder>()) decoder->run->ScheduleRun();
-    WakeAnimation();
   }
 
   void Draw(SkCanvas& canvas) const override {

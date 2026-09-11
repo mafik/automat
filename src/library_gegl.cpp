@@ -13,7 +13,6 @@
 #include <thread>
 
 #include "format.hpp"
-#include "menu.hpp"
 #include "mortal.hpp"
 #include "prototypes.hpp"
 #include "ui_beta.hpp"
@@ -675,12 +674,32 @@ struct GeglPropDrag : Action {
   void Update() override;
 };
 
+struct GeglOperationToy;
+
+struct GeglPropZone : ui::ActionZone {
+  int index;
+  GeglPropZone(ui::Widget* parent, int index) : ActionZone(parent), index(index) {}
+  GeglOperationToy& Face() const;
+  SkPath Shape() const override;
+  Tock Tick(time::Timer&) override { return Tock::Shape; }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
+};
+
+static Str PropValue(GeglOperation& gegl, const PropInfo& info) {
+  Str value = gegl.GetProp(info.name);
+  return value.empty() ? info.def : value;
+}
+
+static Vec<std::unique_ptr<Interface::Table>>& PropTables(StrView op, const Vec<PropInfo>& infos);
+
 struct GeglOperationToy : ui::beta::ObjectToy {
   Str op_;
   Str credit_;
   Vec<PropInfo> prop_infos_;
   Vec<Str> prop_values_;  // recipe override or the operation default
   Vec<Rect> prop_rects_;  // instrument hit areas, in face coordinates
+  Vec<std::unique_ptr<Interface::Table>>* prop_tables_ = nullptr;
+  Vec<std::unique_ptr<GeglPropZone>> prop_zones_;
   float plate_h_ = 0;
 
   // Tick-cached object state (UI thread only):
@@ -705,6 +724,10 @@ struct GeglOperationToy : ui::beta::ObjectToy {
     prop_values_.resize(prop_infos_.size());
     prop_rects_.resize(prop_infos_.size());
     drawn_values_.resize(prop_infos_.size());
+    prop_tables_ = &PropTables(op_, prop_infos_);
+    for (int i = 0; i < (int)prop_infos_.size(); ++i) {
+      prop_zones_.push_back(std::make_unique<GeglPropZone>(this, i));
+    }
     plate_h_ = kBand + kCreditRow + kPreviewH + 1_mm + prop_infos_.size() * kPropRow + kBottomPad;
     UpdateFromObject();
   }
@@ -758,6 +781,12 @@ struct GeglOperationToy : ui::beta::ObjectToy {
     return tock;
   }
 
+  void SetPropRect(int index, Rect rect) {
+    if (prop_rects_[index].sk == rect.sk) return;
+    prop_rects_[index] = rect;
+    prop_zones_[index]->WakeAnimation();
+  }
+
   void SetPropValue(int index, Str value) {
     prop_values_[index] = value;
     if (auto gegl = LockObject<GeglOperation>()) {
@@ -774,7 +803,6 @@ struct GeglOperationToy : ui::beta::ObjectToy {
     }
     SetPropValue(index, nicks[(at + 1) % nicks.size()]);
   }
-  void Options(ui::Pointer&, OptionVisitor&) override;
 
   void Draw(SkCanvas& canvas) const override {
     ui::beta::Panel(canvas, Rect::MakeCenterZero(kPlateW, plate_h_), op_, ui::beta::kCyan,
@@ -835,14 +863,14 @@ struct GeglOperationToy : ui::beta::ObjectToy {
       const PropInfo& info = prop_infos_[i];
       const Str& value = prop_values_[i];
       uint32_t cs = Seed(Hash2(kSeed, 0x71 + (uint32_t)i));
-      auto* rects = const_cast<Vec<Rect>*>(&prop_rects_);
+      auto* self = const_cast<GeglOperationToy*>(this);
       switch (info.kind) {
         case PropInfo::kEnum: {
           Str label = f("{}: {}", info.name, value);
           float w = ui::beta::TextWidth(label, ui::beta::kMicroSize + 0.3_mm) + 3.2_mm;
           Rect chip{-kPlateW / 2 + kSide, row_top - 4.3_mm, -kPlateW / 2 + kSide + w,
                     row_top - 0.7_mm};
-          (*rects)[i] = chip;
+          self->SetPropRect(i, chip);
           SkPath path = ui::beta::WonkyRoundRect(chip, 1.2_mm, ui::beta::kWonk * 0.8f, cs);
           ui::beta::HandShadow(canvas, path, {0.3_mm, -0.3_mm}, ui::beta::kShadow, cs);
           ui::beta::MisregFill(canvas, path, ui::beta::kPaper, cs);
@@ -858,7 +886,7 @@ struct GeglOperationToy : ui::beta::ObjectToy {
           ui::beta::DrawText(canvas, info.name, {box.right + 1.5_mm, box.bottom + 0.9_mm},
                              ui::beta::kMicroSize, ui::beta::kInk, false, cs);
           float w = ui::beta::TextWidth(info.name, ui::beta::kMicroSize);
-          (*rects)[i] = Rect{box.left, box.bottom, box.right + 1.5_mm + w, box.top};
+          self->SetPropRect(i, Rect{box.left, box.bottom, box.right + 1.5_mm + w, box.top});
           break;
         }
         case PropInfo::kNumber: {
@@ -875,7 +903,7 @@ struct GeglOperationToy : ui::beta::ObjectToy {
                         ? std::clamp((float)((v - info.min) / (info.max - info.min)), 0.f, 1.f)
                         : 0.f;
           ui::beta::Slider(canvas, band, t, ui::beta::State::Default, cs);
-          (*rects)[i] = band;
+          self->SetPropRect(i, band);
           break;
         }
       }
@@ -885,38 +913,76 @@ struct GeglOperationToy : ui::beta::ObjectToy {
   }
 };
 
-struct GeglPropOption : TextOption {
-  GeglOperationToy& toy;
+struct PropScalarTable : Scalar::Table {
+  PropInfo info;
   int index;
-  GeglPropOption(GeglOperationToy& toy, int index)
-      : TextOption(toy.prop_infos_[index].name), toy(toy), index(index) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(GeglPropOption, toy, index); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  ui::Pointer::Cursor Cursor() const override {
-    return toy.prop_infos_[index].kind == PropInfo::kNumber ? ui::Pointer::Cursor::None
-                                                            : ui::Pointer::Cursor::Hand;
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
-    switch (toy.prop_infos_[index].kind) {
-      case PropInfo::kEnum:
-        toy.CycleProp(index);
-        return std::make_unique<EmptyAction>(p);
-      case PropInfo::kBool:
-        toy.SetPropValue(index, toy.prop_values_[index] == "true" ? "false" : "true");
-        return std::make_unique<EmptyAction>(p);
-      case PropInfo::kNumber:
-        return std::make_unique<GeglPropDrag>(p, toy, index);
-    }
-    return nullptr;
+  PropScalarTable(const PropInfo& info, int index) : Scalar::Table(""), info(info), index(index) {
+    name = this->info.name;
+    get = [](Scalar self) {
+      auto& table = static_cast<PropScalarTable&>(*self.table_ptr);
+      return atof(PropValue(static_cast<GeglOperation&>(*self.object_ptr), table.info).c_str());
+    };
+    set = [](Scalar self, double value) {
+      auto& table = static_cast<PropScalarTable&>(*self.table_ptr);
+      static_cast<GeglOperation&>(*self.object_ptr)
+          .SetProp(table.info.name, FormatPropNumber(value, table.info.integer));
+    };
+    activate = [](Interface self, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
+      auto* widget = dynamic_cast<GeglOperationToy*>(toy);
+      if (!widget) return nullptr;
+      int index = static_cast<PropScalarTable&>(*self.table_ptr).index;
+      return std::make_unique<GeglPropDrag>(pointer, *widget, index);
+    };
   }
 };
 
-void GeglOperationToy::Options(ui::Pointer& p, OptionVisitor& visit) {
-  Vec2 pos = p.PositionWithin(*this);
-  for (int i = 0; i < (int)prop_infos_.size(); ++i) {
-    if (prop_rects_[i].Contains(pos)) visit(GeglPropOption(*this, i));
+struct PropSignalTable : Signal::Table {
+  PropInfo info;
+  PropSignalTable(const PropInfo& info) : Signal::Table(""), info(info) {
+    name = this->info.name;
+    cursor = ui::Cursor::Hand;
+    schedules_next = false;
+    on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+      auto& table = static_cast<PropSignalTable&>(*self.table_ptr);
+      auto& gegl = static_cast<GeglOperation&>(*self.object_ptr);
+      Str value = PropValue(gegl, table.info);
+      if (table.info.kind == PropInfo::kBool) {
+        gegl.SetProp(table.info.name, value == "true" ? "false" : "true");
+        return;
+      }
+      auto& nicks = table.info.nicks;
+      int at = 0;
+      for (int i = 0; i < (int)nicks.size(); ++i) {
+        if (nicks[i] == value) at = i;
+      }
+      gegl.SetProp(table.info.name, nicks[(at + 1) % nicks.size()]);
+    };
   }
-  ObjectToy::Options(p, visit);
+};
+
+static Vec<std::unique_ptr<Interface::Table>>& PropTables(StrView op, const Vec<PropInfo>& infos) {
+  static std::unordered_map<Str, Vec<std::unique_ptr<Interface::Table>>> cache;
+  auto [it, inserted] = cache.try_emplace(Str(op));
+  if (inserted) {
+    for (int i = 0; i < (int)infos.size(); ++i) {
+      if (infos[i].kind == PropInfo::kNumber) {
+        it->second.push_back(std::make_unique<PropScalarTable>(infos[i], i));
+      } else {
+        it->second.push_back(std::make_unique<PropSignalTable>(infos[i]));
+      }
+    }
+  }
+  return it->second;
+}
+
+GeglOperationToy& GeglPropZone::Face() const { return static_cast<GeglOperationToy&>(*parent); }
+
+SkPath GeglPropZone::Shape() const { return SkPath::Rect(Face().prop_rects_[index]); }
+
+Interface GeglPropZone::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
+  if (trigger != ui::PointerButton::Left) return {};
+  auto gegl = Face().LockObject<GeglOperation>();
+  return gegl ? Interface(*gegl, *(*Face().prop_tables_)[index]) : Interface();
 }
 
 GeglPropDrag::GeglPropDrag(ui::Pointer& p, GeglOperationToy& w, int index)

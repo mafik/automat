@@ -93,13 +93,13 @@ struct Argument : Interface {
     // is used through one of the *OrMake functions.
     Ptr<Object> (*prototype)() = []() { return Ptr<Object>(nullptr); };
 
-    static std::unique_ptr<ui::Widget> DefaultMakeIcon(Argument, ui::Widget* parent);
+    static std::unique_ptr<ui::Widget> DefaultMakeIcon(Interface, ui::Widget* parent);
+    static std::unique_ptr<Action> DefaultActivate(Interface, ui::Pointer&, automat::Toy*);
 
-    // Creates a small icon used as a symbol (or label) for this connection. Should be ~1x1cm.
-    std::unique_ptr<ui::Widget> (*make_icon)(Argument, ui::Widget* parent) = DefaultMakeIcon;
-
-    constexpr Table(StrView name, Kind kind = Interface::kArgument)
-        : Interface::Table(kind, name) {}
+    constexpr Table(StrView name, Kind kind = Interface::kArgument) : Interface::Table(kind, name) {
+      make_icon = &DefaultMakeIcon;
+      activate = &DefaultActivate;
+    }
 
     template <typename ImplT>
     constexpr void FillFrom() {
@@ -120,10 +120,6 @@ struct Argument : Interface {
                       { i.OnFind() } -> std::same_as<NestedPtr<Interface::Table>>;
                     })
         find = [](Argument self) { return static_cast<ImplT&>(self).OnFind(); };
-      if constexpr (requires(ImplT& i, ui::Widget* p) { i.OnMakeIcon(p); })
-        make_icon = [](Argument self, ui::Widget* p) {
-          return static_cast<ImplT&>(self).OnMakeIcon(p);
-        };
       if constexpr (requires(ImplT& i) {
                       { i.OnIsConnected() } -> std::same_as<bool>;
                     })
@@ -195,8 +191,6 @@ struct Argument : Interface {
   NestedPtr<Interface::Table> Find() const { return table->find(*this); }
 
   bool IsConnected() const { return table->is_connected(*this); }
-
-  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) const;
 
   Object* ObjectOrNull() const;
 

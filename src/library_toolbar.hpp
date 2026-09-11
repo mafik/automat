@@ -11,13 +11,14 @@ namespace automat::ui {
 
 constexpr float kToolbarIconSize = ui::kMinimalTouchableSize * 2;
 
-struct PrototypeButton : Widget {
+struct PrototypeButton : Toy {
   Ptr<Object> proto;
   MortalPtr<Widget> proto_widget;
   float natural_width;
   mutable animation::SpringV2<float> width{kToolbarIconSize};
 
-  PrototypeButton(Widget* parent, Ptr<Object>& proto) : ui::Widget(parent), proto(proto) {}
+  PrototypeButton(Widget* parent, Ptr<Object>& proto)
+      : Toy(parent, *proto, nullptr, proto->wake_counter), proto(proto) {}
 
   void Init();
 
@@ -29,7 +30,7 @@ struct PrototypeButton : Widget {
 
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
 
-  void Options(Pointer&, OptionVisitor&) override;
+  Interface FindOption(Pointer&, ActionTrigger) override;
 
   StrView Name() const override { return "PrototypeButton"; }
 };

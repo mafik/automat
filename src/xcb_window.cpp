@@ -468,21 +468,21 @@ struct XCBPointerGrab : automat::ui::PointerGrab {
 struct XCBPointer : automat::ui::Pointer {
   XCBWindow& xcb_window;
 
-  static const char* GetCursorName(automat::ui::Pointer::Cursor icon) {
+  static const char* GetCursorName(automat::ui::Cursor icon) {
     switch (icon) {
-      case automat::ui::Pointer::Cursor::Arrow:
+      case automat::ui::Cursor::Arrow:
         return "left_ptr";
-      case automat::ui::Pointer::Cursor::Hand:
+      case automat::ui::Cursor::Hand:
         return "hand1";
-      case automat::ui::Pointer::Cursor::IBeam:
+      case automat::ui::Cursor::IBeam:
         return "xterm";
-      case automat::ui::Pointer::Cursor::AllScroll:
+      case automat::ui::Cursor::AllScroll:
         return "all-scroll";
-      case automat::ui::Pointer::Cursor::ResizeHorizontal:
+      case automat::ui::Cursor::ResizeHorizontal:
         return "size_hor";
-      case automat::ui::Pointer::Cursor::ResizeVertical:
+      case automat::ui::Cursor::ResizeVertical:
         return "size_ver";
-      case automat::ui::Pointer::Cursor::Crosshair:
+      case automat::ui::Cursor::Crosshair:
         return "crosshair";
       default:
         return "left_ptr";
@@ -492,12 +492,11 @@ struct XCBPointer : automat::ui::Pointer {
   XCBPointer(automat::ui::RootWidget& root, Vec2 position, XCBWindow& xcb_window)
       : automat::ui::Pointer(root, position), xcb_window(xcb_window) {}
 
-  void OnCursorChanged(automat::ui::Pointer::Cursor old_cursor,
-                       automat::ui::Pointer::Cursor new_cursor) override {
+  void OnCursorChanged(automat::ui::Cursor old_cursor, automat::ui::Cursor new_cursor) override {
     UpdateCursor(new_cursor);
   }
 
-  void UpdateCursor(automat::ui::Pointer::Cursor icon) {
+  void UpdateCursor(automat::ui::Cursor icon) {
     xcb_cursor_t cursor =
         xcb_cursor_load_cursor(xcb_window.cursor_context.get(), GetCursorName(icon));
     if (cursor != XCB_NONE) {

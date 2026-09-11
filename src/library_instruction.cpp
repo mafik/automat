@@ -20,8 +20,10 @@
 #include <llvm/MC/MCInstPrinter.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Target/TargetMachine.h>
+#include <llvm/lib/Target/X86/X86InstrInfo.h>
 #include <llvm/lib/Target/X86/X86Subtarget.h>
 
+#include <array>
 #include <cmath>
 #include <memory>
 #include <tracy/Tracy.hpp>
@@ -1556,7 +1558,7 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
     case X86::CMOV32rr:
     case X86::CMOV16rr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "If "},   {.tag = Token::ConditionCode, .cond_code = 3},
+          {.tag = Token::String, .str = "If "},   {.tag = Token::ConditionCode},
           {.tag = Token::String, .str = " then"}, {.tag = Token::BreakLine},
           {.tag = Token::String, .str = "Set"},   {.tag = Token::RegisterOperand, .reg = 0},
           {.tag = Token::String, .str = "to"},    {.tag = Token::RegisterOperand, .reg = 2},
@@ -1774,7 +1776,7 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
     case X86::JCC_1:
     case X86::JCC_4: {
       constexpr static Token tokens[] = {{.tag = Token::String, .str = "If "},
-                                         {.tag = Token::ConditionCode, .cond_code = 1},
+                                         {.tag = Token::ConditionCode},
                                          {.tag = Token::BreakLine},
                                          {.tag = Token::String, .str = "Then jump"}};
       return tokens;
@@ -1782,7 +1784,7 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
 
     case X86::SETCCr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "If "},   {.tag = Token::ConditionCode, .cond_code = 1},
+          {.tag = Token::String, .str = "If "},   {.tag = Token::ConditionCode},
           {.tag = Token::String, .str = " then"}, {.tag = Token::BreakLine},
           {.tag = Token::String, .str = "Set"},   {.tag = Token::RegisterOperand, .reg = 0},
           {.tag = Token::String, .str = "to 1"},
@@ -2738,33 +2740,69 @@ static void DrawConditionCodeSymbol(SkCanvas& canvas, X86::CondCode cond_code) {
   canvas.drawPath(symbol, symbol_fill);
 }
 
-struct ConditionCodeWidget : public EnumKnobWidget {
-  WeakPtr<Instruction> instruction_weak;
-  int token_i;
+static int ConditionOperand(const mc::Inst& inst) {
+  auto& desc = LLVM_Assembler::Get().mc_instr_info->get(inst.getOpcode());
+  int src_no = X86::getCondSrcNoFromDesc(desc);
+  return src_no < 0 ? -1 : src_no + desc.getNumDefs();
+}
 
+constinit Scalar::Table kConditionCode = [] {
+  Scalar::Table t("Condition");
+  t.cursor = ui::Cursor::AllScroll;
+  t.activate = [](Interface, ui::Pointer& pointer, Toy* toy) {
+    return ui::TurnEnumKnob(pointer, toy);
+  };
+  t.get = [](Scalar self) -> double {
+    auto& inst = static_cast<Instruction&>(*self.object_ptr).mc_inst;
+    return inst.getOperand(ConditionOperand(inst)).getImm();
+  };
+  t.set = [](Scalar self, double value) {
+    auto& instruction = static_cast<Instruction&>(*self.object_ptr);
+    instruction.mc_inst.getOperand(ConditionOperand(instruction.mc_inst)).setImm(value);
+    instruction.WakeToys();
+    if (auto assembler = FindAssembler(instruction)) {
+      assembler->UpdateMachineCode();
+    }
+  };
+  return t;
+}();
+
+constinit Scalar::Table kLoopCondition = [] {
+  Scalar::Table t("Condition");
+  t.cursor = ui::Cursor::AllScroll;
+  t.activate = [](Interface, ui::Pointer& pointer, Toy* toy) {
+    return ui::TurnEnumKnob(pointer, toy);
+  };
+  t.get = [](Scalar self) -> double {
+    auto& instruction = static_cast<Instruction&>(*self.object_ptr);
+    return instruction.mc_inst.getOpcode() == X86::LOOPE ? 0 : 1;
+  };
+  t.set = [](Scalar self, double value) {
+    auto& instruction = static_cast<Instruction&>(*self.object_ptr);
+    auto opcode = instruction.mc_inst.getOpcode();
+    if (value == 1 && opcode == X86::LOOPE) {
+      instruction.mc_inst.setOpcode(X86::LOOPNE);
+    } else if (value == 0 && opcode == X86::LOOPNE) {
+      instruction.mc_inst.setOpcode(X86::LOOPE);
+    } else {
+      LOG << "Can't set condition code for loop instruction";
+    }
+    instruction.WakeToys();
+    if (auto assembler = FindAssembler(instruction)) {
+      assembler->UpdateMachineCode();
+    }
+  };
+  return t;
+}();
+
+struct ConditionCodeWidget : public EnumKnobWidget {
   std::optional<Wave1D> wave;
   animation::SpringV2<float> water_level;
   animation::SpringV2<float> spill_tween;
   std::optional<Vec2> root_position;
 
-  ConditionCodeWidget(ui::Widget* parent, WeakPtr<Instruction> instruction_weak, int token_i)
-      : EnumKnobWidget(parent, X86::CondCode::LAST_VALID_COND + 1),
-        instruction_weak(instruction_weak),
-        token_i(token_i) {}
-
-  int KnobGet() const override {
-    auto instruction = instruction_weak.Lock().Cast<Instruction>();
-    return (X86::CondCode)instruction->mc_inst.getOperand(token_i).getImm();
-  }
-
-  void KnobSet(int new_value) override {
-    auto instruction = instruction_weak.Lock().Cast<Instruction>();
-    instruction->mc_inst.getOperand(token_i).setImm(new_value);
-    instruction->WakeToys();
-    if (auto assembler = FindAssembler(*instruction)) {
-      assembler->UpdateMachineCode();
-    }
-  }
+  ConditionCodeWidget(ui::Widget* parent, Object& instruction)
+      : EnumKnobWidget(parent, instruction, kConditionCode, X86::CondCode::LAST_VALID_COND + 1) {}
 
   Tock Tick(time::Timer& timer) override {
     Tock tock = EnumKnobWidget::Tick(timer);
@@ -2966,36 +3004,8 @@ struct ConditionCodeWidget : public EnumKnobWidget {
 };
 
 struct LoopConditionCodeWidget : public EnumKnobWidget {
-  WeakPtr<Instruction> instruction_weak;
-
-  LoopConditionCodeWidget(Widget* parent, WeakPtr<Instruction> instruction_weak)
-      : EnumKnobWidget(parent, 2), instruction_weak(instruction_weak) {}
-
-  int KnobGet() const override {
-    auto instruction = instruction_weak.Lock().Cast<Instruction>();
-    auto opcode = instruction->mc_inst.getOpcode();
-    if (opcode == X86::LOOPE) {
-      return 0;
-    } else {
-      return 1;
-    }
-  }
-
-  void KnobSet(int new_value) override {
-    auto instruction = instruction_weak.Lock().Cast<Instruction>();
-    auto opcode = instruction->mc_inst.getOpcode();
-    if (new_value == 1 && opcode == X86::LOOPE) {
-      instruction->mc_inst.setOpcode(X86::LOOPNE);
-    } else if (new_value == 0 && opcode == X86::LOOPNE) {
-      instruction->mc_inst.setOpcode(X86::LOOPE);
-    } else {
-      LOG << "Can't set condition code for loop instruction";
-    }
-    instruction->WakeToys();
-    if (auto assembler = FindAssembler(*instruction)) {
-      assembler->UpdateMachineCode();
-    }
-  }
+  LoopConditionCodeWidget(Widget* parent, Object& instruction)
+      : EnumKnobWidget(parent, instruction, kLoopCondition, 2) {}
 
   void DrawKnobBackground(SkCanvas& canvas, int val) const override {
     EnumKnobWidget::DrawKnobBackground(canvas, val);
@@ -3011,9 +3021,7 @@ struct LoopConditionCodeWidget : public EnumKnobWidget {
 Instruction::Widget::Widget(ui::Widget* parent, Object& object) : ObjectToy(parent, object) {
   auto instruction = LockObject<Instruction>();
   if (instruction->BufferSize() > 0) {
-    auto buffer_ptr =
-        NestedWeakPtr<Buffer>(instruction->AcquireWeakPtr<ReferenceCounted>(), instruction.Get());
-    imm_widget = std::make_unique<ui::SmallBufferWidget>(this, std::move(buffer_ptr));
+    imm_widget = std::make_unique<ui::SmallBufferWidget>(this, *instruction);
     imm_widget->local_to_parent.setIdentity();
     imm_widget->Measure();
   }
@@ -3024,10 +3032,9 @@ Instruction::Widget::Widget(ui::Widget* parent, Object& object) : ObjectToy(pare
       auto opcode = instruction->mc_inst.getOpcode();
       unique_ptr<EnumKnobWidget> cond_widget;
       if (opcode == X86::LOOPE || opcode == X86::LOOPNE) {
-        cond_widget = make_unique<LoopConditionCodeWidget>(this, instruction->AcquireWeakPtr());
+        cond_widget = make_unique<LoopConditionCodeWidget>(this, *instruction);
       } else {
-        cond_widget =
-            make_unique<ConditionCodeWidget>(this, instruction->AcquireWeakPtr(), token.cond_code);
+        cond_widget = make_unique<ConditionCodeWidget>(this, *instruction);
       }
       cond_widget->local_to_parent.setIdentity();
       condition_code_widget = std::move(cond_widget);
@@ -3041,6 +3048,7 @@ PersistentImage reverse = PersistentImage::MakeFromAsset(
                                        Instruction::Widget::kBorderMargin * 2});
 
 ui::Tock Instruction::Widget::Tick(time::Timer& timer) {
+  if (imm_widget) imm_widget->WakeAnimation();
   auto instruction = this->LockObject<Instruction>();
   if (!instruction) {
     return Tock::Draw;

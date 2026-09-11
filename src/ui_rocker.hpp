@@ -9,6 +9,7 @@
 #include "animation.hpp"
 #include "key_button.hpp"
 #include "math.hpp"
+#include "on_off.hpp"
 #include "ui_button.hpp"
 #include "units.hpp"
 #include "widget.hpp"
@@ -43,6 +44,7 @@ struct Rocker : Widget {
   bool on = false;
   animation::SpringV2<float> state = 0;
   Clickable clickable;
+  NestedWeakPtr<OnOff::Table> target;
   std::unique_ptr<Widget> on_icon;
   std::unique_ptr<Widget> off_icon;
 
@@ -55,7 +57,7 @@ struct Rocker : Widget {
   SkPath Shape() const override;
   void PointerHover(Pointer& p) override { clickable.PointerHover(p); }
   void PointerUnhover(Pointer& p) override { clickable.PointerUnhover(p); }
-  void Options(Pointer& p, OptionVisitor& visit) override { clickable.Options(p, visit); }
+  Interface FindOption(Pointer&, ActionTrigger) override;
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
   RRect CoarseBounds() const override { return kBounds; }
   Optional<Rect> DrawBounds() const override {

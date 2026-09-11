@@ -28,8 +28,9 @@
 #include "global_resources.hpp"
 #include "library_instruction.hpp"
 #include "machine_code.hpp"
-#include "make_object_option.hpp"
 #include "math.hpp"
+#include "menu.hpp"
+#include "object_source.hpp"
 #include "root_widget.hpp"
 #include "status.hpp"
 #include "svg.hpp"
@@ -59,26 +60,43 @@ struct ImageWidget : ui::Widget {
   void Draw(SkCanvas& canvas) const override { image.draw(canvas); }
 };
 
-struct RegistersMenuOption : TextOption, OptionsProvider {
-  WeakPtr<Assembler> weak;
-  RegistersMenuOption(WeakPtr<Assembler> weak) : TextOption("Registers"), weak(weak) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(RegistersMenuOption, weak); }
-  void Options(ui::Pointer&, OptionVisitor& visitor) override {
-    auto assembler = weak.Lock();
-    if (!assembler) return;
-    for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-      MakeObjectOption opt(assembler->regs[i]);
-      visitor(opt);
-    }
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override { return OpenMenu(pointer); }
-  Dir PreferredDir() const override { return S; }
-};
+static std::unique_ptr<Action> OpenRegistersPage(Interface, ui::Pointer&, Toy*);
 
-void AssemblerWidget::Options(ui::Pointer& pointer, OptionVisitor& visitor) {
-  ObjectToy::Options(pointer, visitor);
-  RegistersMenuOption registers_option{owner.Copy<Assembler>()};
-  visitor(registers_option);
+constinit std::array<ObjectSource::Table, 3> kRegistersMenu = {
+    MenuTable<ObjectSource::Table>("Registers", &OpenRegistersPage),
+    MenuTable<ObjectSource::Table>("More registers", &OpenRegistersPage),
+    MenuTable<ObjectSource::Table>("More registers", &OpenRegistersPage)};
+
+static std::unique_ptr<Action> OpenRegistersPage(Interface self, ui::Pointer& pointer, Toy* toy) {
+  using enum ui::Dir;
+  constexpr ui::Dir kSlots[] = {N, NE, E, SE, SW, W, NW};
+  constexpr int kPerPage = std::size(kSlots);
+  int page = static_cast<ObjectSource::Table*>(self.table_ptr) - kRegistersMenu.data();
+  auto& assembler = static_cast<Assembler&>(*self.object_ptr);
+  Interface options[ui::kDirCount];
+  for (int i = 0; i < kPerPage; ++i) {
+    int reg = page * kPerPage + i;
+    if (reg >= kGeneralPurposeRegisterCount) break;
+    options[static_cast<int>(kSlots[i])] = Interface(*assembler.regs[reg], kMakeObject);
+  }
+  if ((page + 1) * kPerPage < kGeneralPurposeRegisterCount) {
+    options[static_cast<int>(S)] = Interface(assembler, kRegistersMenu[page + 1]);
+  }
+  return MakeMenuAction(pointer, OptionsProvider::MODE_8_DIR, options, toy);
+}
+
+Interface AssemblerWidget::FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) {
+  using enum ui::Dir;
+  auto assembler = LockObject<Assembler>();
+  if (!assembler) return {};
+  switch (static_cast<ui::Dir>(trigger)) {
+    case NW:
+      return Interface(*assembler, kRegistersMenu[0]);
+    case NE:
+      return Interface(*assembler, Assembler::running_tbl);
+    default:
+      return ObjectToy::FindOption(pointer, trigger);
+  }
 }
 
 Assembler::Assembler() {
@@ -338,28 +356,13 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
   BakeChildren(canvas);
 }
 
+std::unique_ptr<Action> Register::index_Impl::OnActivate(ui::Pointer& pointer, automat::Toy* toy) {
+  return ui::TurnEnumKnob(pointer, toy);
+}
+
 struct RegisterIndexKnobWidget : public ui::EnumKnobWidget {
-  WeakPtr<Register> register_weak;
-
-  RegisterIndexKnobWidget(ui::Widget* parent, WeakPtr<Register> register_weak)
-      : ui::EnumKnobWidget(parent, kGeneralPurposeRegisterCount),
-        register_weak(std::move(register_weak)) {}
-
-  int KnobGet() const override {
-    if (auto reg = register_weak.Lock()) {
-      return reg->register_index;
-    }
-    return 0;
-  }
-
-  void KnobSet(int new_value) override {
-    auto reg = register_weak.Lock();
-    if (!reg) return;
-    int old_value = reg->register_index;
-    if (new_value == old_value) return;
-    reg->register_index = new_value;
-    reg->WakeToys();
-  }
+  RegisterIndexKnobWidget(ui::Widget* parent, Object& reg)
+      : ui::EnumKnobWidget(parent, reg, Register::index_tbl, kGeneralPurposeRegisterCount) {}
 
   void DrawKnobSymbol(SkCanvas& canvas, int val) const override {
     canvas.save();
@@ -373,10 +376,8 @@ struct RegisterIndexKnobWidget : public ui::EnumKnobWidget {
 
 RegisterWidget::RegisterWidget(Widget* parent, Object& reg)
     : ObjectToy(parent, reg),
-      small_buffer_widget(
-          this, NestedWeakPtr<Buffer>(reg.AcquireWeakPtr(), &static_cast<Register&>(reg))),
-      register_index_knob(std::make_unique<RegisterIndexKnobWidget>(
-          this, static_cast<Register&>(reg).AcquireWeakPtr())) {
+      small_buffer_widget(this, reg),
+      register_index_knob(std::make_unique<RegisterIndexKnobWidget>(this, reg)) {
   small_buffer_widget.Measure();
   small_buffer_widget.local_to_parent.setIdentity();
   small_buffer_widget.local_to_parent.preTranslate(

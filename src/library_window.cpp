@@ -126,8 +126,15 @@ constexpr static float kTitleButtonSize = kTitleHeight - 2 * kContentMargin;
 
 struct WindowWidget;
 
+static std::unique_ptr<Action> PickWindowActivate(Interface, ui::Pointer&, Toy*);
+
+constinit Signal::Table kPickWindow = [] {
+  Signal::Table t("Pick window");
+  t.activate = &PickWindowActivate;
+  return t;
+}();
+
 struct PickButton : theme::xp::TitleButton {
-  std::function<void(ui::Pointer&)> on_activate;
   PickButton(ui::Widget* parent) : theme::xp::TitleButton(parent) {
     child = ui::MakeShapeWidget(this, PathFromSVG(kPickSVG), "#000000"_color);
     layers.OrderInside(child.get());
@@ -139,11 +146,6 @@ struct PickButton : theme::xp::TitleButton {
     return RRect::MakeSimple(
                Rect::MakeAtZero<::LeftX, ::BottomY>({kTitleButtonSize, kTitleButtonSize}), 2_mm)
         .sk;
-  }
-
-  void Activate(ui::Pointer& p) override {
-    WakeAnimation();
-    on_activate(p);
   }
 };
 
@@ -179,6 +181,18 @@ static void SearchWindows(xcb_window_t start, WindowVisitor visitor) {
 #endif
 
 struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    using enum ui::Dir;
+    auto object = LockObject<Window>();
+    if (!object) return {};
+    switch (static_cast<ui::Dir>(trigger)) {
+      case NE:
+        return Interface(*object, Window::on_off_tbl);
+      default:
+        return ObjectToy::FindOption(pointer, trigger);
+    }
+  }
+  MiniMenuMode MenuMode() override { return MODE_6_DIR; }
   constexpr static float kWidth = 5_cm;
   constexpr static float kCornerRadius = 1_mm;
   constexpr static float kHeight = 5_cm;
@@ -198,17 +212,7 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
   WindowWidget(ui::Widget* parent, Object& window) : ObjectToy(parent, window) {
     pick_button = std::make_unique<PickButton>(this);
     layers.OrderInside(pick_button.get());
-    pick_button->on_activate = [this](ui::Pointer& p) {
-      p.EndAllActions();
-      pointer_grab = &p.RequestGlobalGrab(*this);
-      key_grab = &ui::Keyboard::RequestKeyGrab(*this, ui::AnsiKey::Escape, false, false, false,
-                                               false, [this](Status& status) {
-                                                 if (!OK(status)) {
-                                                   LOG << "Couldn't grab the escape key:" << status;
-                                                   ReleaseGrabs();
-                                                 }
-                                               });
-    };
+    pick_button->target = NestedWeakPtr<Interface::Table>(window.AcquireWeakPtr(), &kPickWindow);
     auto content_bounds = kCoarseBounds.Outset(-kBorderWidth - kContentMargin);
     auto title_bounds = Rect(kCoarseBounds.rect.left, kCoarseBounds.rect.top - kTitleHeight,
                              kCoarseBounds.rect.right, kCoarseBounds.rect.top);
@@ -408,6 +412,21 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
 #endif
   }
 };
+
+static std::unique_ptr<Action> PickWindowActivate(Interface, ui::Pointer& pointer, Toy* toy) {
+  auto* widget = dynamic_cast<WindowWidget*>(toy);
+  if (!widget) return nullptr;
+  pointer.EndAllActions();
+  widget->pointer_grab = &pointer.RequestGlobalGrab(*widget);
+  widget->key_grab = &ui::Keyboard::RequestKeyGrab(
+      *widget, ui::AnsiKey::Escape, false, false, false, false, [widget](Status& status) {
+        if (!OK(status)) {
+          LOG << "Couldn't grab the escape key:" << status;
+          widget->ReleaseGrabs();
+        }
+      });
+  return std::make_unique<EmptyAction>(pointer);
+}
 
 std::unique_ptr<ObjectToy> Window::MakeToy(ui::Widget* parent) {
   return std::make_unique<WindowWidget>(parent, *this);

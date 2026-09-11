@@ -11,6 +11,13 @@ namespace automat::library {
 struct Sources : Object {
   Sources();
 
+  DEF_INTERFACE(Sources, Signal, extract_files, "Extract Files")
+  static constexpr bool kSchedulesNext = false;
+  void OnRun(std::unique_ptr<RunTask>&);
+  DEF_END(extract_files);
+
+  INTERFACES(extract_files)
+
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;

@@ -27,14 +27,13 @@
 #include "animation.hpp"
 #include "argument.hpp"
 #include "automat.hpp"
-#include "casting.hpp"
+#include "board.hpp"
 #include "color.hpp"
 #include "connector_optical.hpp"
 #include "embedded.hpp"
 #include "font.hpp"
 #include "image_provider.hpp"
 #include "log.hpp"
-#include "menu.hpp"
 #include "str.hpp"
 #include "svg.hpp"
 #include "text_widget.hpp"
@@ -91,6 +90,19 @@ std::string_view TesseractOCR::Name() const { return "Tesseract OCR"; }
 Ptr<Object> TesseractOCR::Clone() const { return MAKE_PTR(TesseractOCR, *this); }
 
 struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    using enum ui::Dir;
+    auto object = LockTesseract();
+    if (!object) return {};
+    switch (static_cast<ui::Dir>(trigger)) {
+      case E:
+        return Interface(*object, TesseractOCR::region_tbl);
+      default:
+        return ObjectToy::FindOption(pointer, trigger);
+    }
+  }
+  MiniMenuMode MenuMode() override { return MODE_4_DIR; }
+  using ui::Widget::mortal_coil;
   constexpr static float kSize = 5_cm;
   constexpr static float kRegionStrokeWidth = 1_mm;
   constexpr static float kHandleSize = 3_mm;
@@ -101,11 +113,13 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
 
   sk_sp<SkImage> source_image;  // Local copy of the source image
 
-  enum class DragMode { None, Top, Bottom, Left, Right, Move };
+  enum class DragMode { Top, Bottom, Left, Right, Move };
 
-  DragMode drag_mode = DragMode::None;
-  Vec2 drag_start_pos;
-  float drag_start_x_min, drag_start_x_max, drag_start_y_min, drag_start_y_max;
+  std::unique_ptr<ui::ActionZone> top_zone;
+  std::unique_ptr<ui::ActionZone> bottom_zone;
+  std::unique_ptr<ui::ActionZone> left_zone;
+  std::unique_ptr<ui::ActionZone> right_zone;
+  std::unique_ptr<ui::ActionZone> move_zone;
   Rect region_rect;
   Optional<Vec2> iris_target;  // Where the eye is pointing (board coords)
   animation::SpringV2<Vec2> iris_dir;
@@ -189,7 +203,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
 
   Ptr<TesseractOCR> LockTesseract() const { return LockObject<TesseractOCR>(); }
 
-  TesseractWidget(ui::Widget* parent, Object& tesseract) : ObjectToy(parent, tesseract) {}
+  TesseractWidget(ui::Widget* parent, Object& tesseract);
 
   constexpr static RRect kBounds = RRect::MakeSimple(Rect::MakeAtZero({kSize, kSize}), 0);
 
@@ -307,30 +321,6 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
 
   SkPath Shape() const override { return layout.shape; }
 
-  DragMode GetDragModeAt(Vec2 pos) const {
-    if (layout.Wall(Top, Inner).Contains(pos)) return DragMode::Top;
-    if (layout.Wall(Bottom, Inner).Contains(pos)) return DragMode::Bottom;
-    if (layout.Wall(Left, Inner).Contains(pos)) return DragMode::Left;
-    if (layout.Wall(Right, Inner).Contains(pos)) return DragMode::Right;
-    if (layout.Wall(Back, Inner).Contains(pos)) return DragMode::Move;
-    return DragMode::None;
-  }
-
-  ui::Pointer::Cursor GetCursorForMode(DragMode mode) const {
-    switch (mode) {
-      case DragMode::Top:
-      case DragMode::Bottom:
-        return ui::Pointer::Cursor::ResizeVertical;
-      case DragMode::Left:
-      case DragMode::Right:
-        return ui::Pointer::Cursor::ResizeHorizontal;
-      case DragMode::Move:
-        return ui::Pointer::Cursor::AllScroll;
-      default:
-        return ui::Pointer::Cursor::Arrow;
-    }
-  }
-
   void TransformUpdated(time::Timer& t) override { WakeAnimationAt(t.now); }
 
   Tock Tick(time::Timer& timer) override {
@@ -423,6 +413,12 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
 
         Vec2 iris_dir_target = Vec2(eye_dir.x * dist, eye_dir.y * dist);
         tock.drawing |= iris_dir.SineTowards(iris_dir_target, timer.d, 1);
+      }
+    }
+    if (tock.draw) {
+      for (auto* zone : {top_zone.get(), bottom_zone.get(), left_zone.get(), right_zone.get(),
+                         move_zone.get()}) {
+        zone->WakeAnimation();
       }
     }
     return tock;
@@ -900,7 +896,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
 
   // Forward declaration for drag action
   struct RegionDragAction : Action {
-    TesseractWidget& widget;
+    MortalPtr<TesseractWidget> widget;
     DragMode mode;
     Vec2 last_pos;
     Vec2 delta_remainder;
@@ -910,15 +906,16 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
       last_pos = pointer.pointer_position;
     }
     void Update() override {
-      auto min_corner = widget.layout[Left, Bottom, Back, Outer];
-      auto max_corner = widget.layout[Right, Top, Back, Outer];
+      if (!widget) return;
+      auto min_corner = widget->layout[Left, Bottom, Back, Outer];
+      auto max_corner = widget->layout[Right, Top, Back, Outer];
       Vec2 size = max_corner - min_corner;
-      auto transform = TransformDown(widget);
+      auto transform = TransformDown(*widget);
       Vec2 old_pos = transform.mapPoint(last_pos);
       Vec2 new_pos = transform.mapPoint(pointer.pointer_position);
       last_pos = pointer.pointer_position;
       Vec2 delta = (new_pos - old_pos) / size + delta_remainder;
-      if (auto tesseract = widget.LockTesseract()) {
+      if (auto tesseract = widget->LockTesseract()) {
         {
           auto Round = [](float& value, float steps, float* remainder) {
             float rounded = roundf(value * steps) / steps;
@@ -931,8 +928,8 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
           switch (mode) {
             case DragMode::Top: {
               tesseract->y_max_ratio += delta.y;
-              if (widget.source_image) {
-                Round(tesseract->y_max_ratio, widget.source_image->height(), &delta_remainder.y);
+              if (widget->source_image) {
+                Round(tesseract->y_max_ratio, widget->source_image->height(), &delta_remainder.y);
               }
               tesseract->y_max_ratio =
                   std::clamp(tesseract->y_max_ratio, tesseract->y_min_ratio, 1.0f);
@@ -940,32 +937,32 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
             }
             case DragMode::Bottom:
               tesseract->y_min_ratio += delta.y;
-              if (widget.source_image) {
-                Round(tesseract->y_min_ratio, widget.source_image->height(), &delta_remainder.y);
+              if (widget->source_image) {
+                Round(tesseract->y_min_ratio, widget->source_image->height(), &delta_remainder.y);
               }
               tesseract->y_min_ratio =
                   std::clamp(tesseract->y_min_ratio, 0.0f, tesseract->y_max_ratio);
               break;
             case DragMode::Left:
               tesseract->x_min_ratio += delta.x;
-              if (widget.source_image) {
-                Round(tesseract->x_min_ratio, widget.source_image->width(), &delta_remainder.x);
+              if (widget->source_image) {
+                Round(tesseract->x_min_ratio, widget->source_image->width(), &delta_remainder.x);
               }
               tesseract->x_min_ratio =
                   std::clamp(tesseract->x_min_ratio, 0.0f, tesseract->x_max_ratio);
               break;
             case DragMode::Right:
               tesseract->x_max_ratio += delta.x;
-              if (widget.source_image) {
-                Round(tesseract->x_max_ratio, widget.source_image->width(), &delta_remainder.x);
+              if (widget->source_image) {
+                Round(tesseract->x_max_ratio, widget->source_image->width(), &delta_remainder.x);
               }
               tesseract->x_max_ratio =
                   std::clamp(tesseract->x_max_ratio, tesseract->x_min_ratio, 1.0f);
               break;
             case DragMode::Move:
-              if (widget.source_image) {
+              if (widget->source_image) {
                 delta_remainder = delta;
-                auto scale = Vec2(widget.source_image->width(), widget.source_image->height());
+                auto scale = Vec2(widget->source_image->width(), widget->source_image->height());
                 delta = delta * scale;
                 delta.x = truncf(delta.x);
                 delta.y = truncf(delta.y);
@@ -993,8 +990,6 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
                 tesseract->x_min_ratio = 0.0f;
               }
               break;
-            default:
-              return;
           }
         }
         tesseract->ForEachToy([](ui::RootWidget&, ui::Widget& w) {
@@ -1004,8 +999,6 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
       }
     }
   };
-
-  void Options(ui::Pointer&, OptionVisitor&) override;
 
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
     Vec2AndDir pos_dir;
@@ -1026,28 +1019,137 @@ const SkPath TesseractWidget::kEyeShape = PathFromSVG(
     "2.3929 9.8245 3.2222 7.6101 4.6757 5.3956 5.4623 3.5744 5.8813 1.2659 6.0694-2.5645 "
     "6.001-4.5481 5.7701-7.3867 5.1033-9.3703 4.0431-11.5847 2.4955-13.0382 1.2985-13.3888.9308Z");
 
-struct TesseractRegionOption : TextOption {
-  TesseractWidget& widget;
-  TesseractWidget::DragMode mode;
-  TesseractRegionOption(TesseractWidget& widget, TesseractWidget::DragMode mode)
-      : TextOption(mode == TesseractWidget::DragMode::Move ? "Move region" : "Resize region"),
-        widget(widget),
-        mode(mode) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(TesseractRegionOption, widget, mode); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  ui::Pointer::Cursor Cursor() const override { return widget.GetCursorForMode(mode); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    return std::make_unique<TesseractWidget::RegionDragAction>(pointer, widget, mode);
+using DragMode = TesseractWidget::DragMode;
+
+void TesseractOCR::left_Impl::OnSet(double value) {
+  auto lock = std::lock_guard(obj->mutex);
+  obj->x_min_ratio = std::clamp<float>(value, 0, obj->x_max_ratio);
+  obj->WakeToys();
+}
+
+void TesseractOCR::right_Impl::OnSet(double value) {
+  auto lock = std::lock_guard(obj->mutex);
+  obj->x_max_ratio = std::clamp<float>(value, obj->x_min_ratio, 1);
+  obj->WakeToys();
+}
+
+void TesseractOCR::bottom_Impl::OnSet(double value) {
+  auto lock = std::lock_guard(obj->mutex);
+  obj->y_min_ratio = std::clamp<float>(value, 0, obj->y_max_ratio);
+  obj->WakeToys();
+}
+
+void TesseractOCR::top_Impl::OnSet(double value) {
+  auto lock = std::lock_guard(obj->mutex);
+  obj->y_max_ratio = std::clamp<float>(value, obj->y_min_ratio, 1);
+  obj->WakeToys();
+}
+
+bool TesseractOCR::region_Impl::ResizePx(int top, int right, int bottom, int left) {
+  auto image_ptr = obj->image->FindInterface();
+  if (!image_ptr) return false;
+  auto image = ImageProvider(image_ptr.Owner<Object>(), image_ptr.Get()).GetImage();
+  if (!image) return false;
+  float dx = 1.0f / image->width();
+  float dy = 1.0f / image->height();
+  auto lock = std::lock_guard(obj->mutex);
+  obj->y_max_ratio = std::clamp(obj->y_max_ratio + top * dy, obj->y_min_ratio, 1.0f);
+  obj->x_max_ratio = std::clamp(obj->x_max_ratio + right * dx, obj->x_min_ratio, 1.0f);
+  obj->y_min_ratio = std::clamp(obj->y_min_ratio - bottom * dy, 0.0f, obj->y_max_ratio);
+  obj->x_min_ratio = std::clamp(obj->x_min_ratio - left * dx, 0.0f, obj->x_max_ratio);
+  obj->WakeToys();
+  return true;
+}
+
+static std::unique_ptr<Action> DragRegion(ui::Pointer& pointer, Toy* toy, DragMode mode) {
+  auto* widget = dynamic_cast<TesseractWidget*>(toy);
+  return widget ? std::make_unique<TesseractWidget::RegionDragAction>(pointer, *widget, mode)
+                : nullptr;
+}
+
+std::unique_ptr<Action> TesseractOCR::left_Impl::OnActivate(ui::Pointer& p, automat::Toy* toy) {
+  return DragRegion(p, toy, DragMode::Left);
+}
+
+std::unique_ptr<Action> TesseractOCR::right_Impl::OnActivate(ui::Pointer& p, automat::Toy* toy) {
+  return DragRegion(p, toy, DragMode::Right);
+}
+
+std::unique_ptr<Action> TesseractOCR::bottom_Impl::OnActivate(ui::Pointer& p, automat::Toy* toy) {
+  return DragRegion(p, toy, DragMode::Bottom);
+}
+
+std::unique_ptr<Action> TesseractOCR::top_Impl::OnActivate(ui::Pointer& p, automat::Toy* toy) {
+  return DragRegion(p, toy, DragMode::Top);
+}
+
+std::unique_ptr<Action> TesseractOCR::region_Impl::OnActivate(ui::Pointer& p, automat::Toy* toy) {
+  return DragRegion(p, toy, DragMode::Move);
+}
+
+struct RegionZone : ui::ActionZone {
+  DragMode mode;
+  RegionZone(ui::Widget* parent, DragMode mode) : ActionZone(parent), mode(mode) {}
+  TesseractWidget& Face() const { return static_cast<TesseractWidget&>(*parent); }
+  Tock Tick(time::Timer&) override { return Tock::Shape; }
+
+  template <typename Wall>
+  static SkPath WallPath(const Wall& wall) {
+    return SkPathBuilder()
+        .moveTo(wall[0])
+        .lineTo(wall[1])
+        .lineTo(wall[2])
+        .lineTo(wall[3])
+        .close()
+        .detach();
+  }
+
+  SkPath Shape() const override {
+    using enum TesseractWidget::AxisX;
+    using enum TesseractWidget::AxisY;
+    using enum TesseractWidget::AxisZ;
+    using enum TesseractWidget::AxisW;
+    auto& layout = Face().layout;
+    switch (mode) {
+      case DragMode::Top:
+        return WallPath(layout.Wall(Top, Inner));
+      case DragMode::Bottom:
+        return WallPath(layout.Wall(Bottom, Inner));
+      case DragMode::Left:
+        return WallPath(layout.Wall(Left, Inner));
+      case DragMode::Right:
+        return WallPath(layout.Wall(Right, Inner));
+      case DragMode::Move:
+        return WallPath(layout.Wall(Back, Inner));
+    }
+  }
+
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    if (trigger != ui::PointerButton::Left) return {};
+    auto tesseract = Face().LockTesseract();
+    if (!tesseract) return {};
+    switch (mode) {
+      case DragMode::Top:
+        return Interface(*tesseract, TesseractOCR::top_tbl);
+      case DragMode::Bottom:
+        return Interface(*tesseract, TesseractOCR::bottom_tbl);
+      case DragMode::Left:
+        return Interface(*tesseract, TesseractOCR::left_tbl);
+      case DragMode::Right:
+        return Interface(*tesseract, TesseractOCR::right_tbl);
+      case DragMode::Move:
+        return Interface(*tesseract, TesseractOCR::region_tbl);
+    }
   }
 };
 
-void TesseractWidget::Options(ui::Pointer& pointer, OptionVisitor& visit) {
-  if (!IsIconified()) {
-    DragMode mode = GetDragModeAt(pointer.PositionWithin(*this));
-    if (mode != DragMode::None) visit(TesseractRegionOption(*this, mode));
-  }
-  ObjectToy::Options(pointer, visit);
-}
+TesseractWidget::TesseractWidget(ui::Widget* parent, Object& tesseract)
+    : ObjectToy(parent, tesseract),
+      top_zone(new RegionZone(this, DragMode::Top)),
+      bottom_zone(new RegionZone(this, DragMode::Bottom)),
+      left_zone(new RegionZone(this, DragMode::Left)),
+      right_zone(new RegionZone(this, DragMode::Right)),
+      move_zone(new RegionZone(this, DragMode::Move)) {}
 
 std::unique_ptr<ObjectToy> TesseractOCR::MakeToy(ui::Widget* parent) {
   return std::make_unique<TesseractWidget>(parent, *this);

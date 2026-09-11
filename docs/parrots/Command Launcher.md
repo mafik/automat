@@ -40,7 +40,7 @@ commits the current tile and begins the next one; Backspace at a tile's
 start joins it with the previous one (deleting the gap — literal spaces are
 never created by edits). `*`, `$HOME` and quotes stay literal because
 nothing interprets them. The gray `posix_spawnp()` credit near the title
-states the contract the way Leptonica objects credit their library function.
+states the contract.
 
 The editor reuses `ui::TextFieldBase` for caret plumbing, clicks and
 selection, with caret positions expressed as flat byte offsets into the

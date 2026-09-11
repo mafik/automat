@@ -38,7 +38,6 @@
 #include "location.hpp"
 #include "log.hpp"
 #include "math.hpp"
-#include "menu.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
 #include "toy.hpp"
@@ -1738,33 +1737,33 @@ constexpr float kMinContentW = 3_cm;
 constexpr float kMinContentH = 3_cm;
 
 // wp_cursor_shape_device_v1 shape (stable protocol values) to the nearest icon.
-ui::Pointer::Cursor ShapeToCursor(uint32_t shape) {
+ui::Cursor ShapeToCursor(uint32_t shape) {
   switch (shape) {
     case 4:  // pointer
-      return ui::Pointer::Cursor::Hand;
+      return ui::Cursor::Hand;
     case 9:   // text
     case 10:  // vertical_text
-      return ui::Pointer::Cursor::IBeam;
+      return ui::Cursor::IBeam;
     case 8:  // crosshair
-      return ui::Pointer::Cursor::Crosshair;
+      return ui::Cursor::Crosshair;
     case 13:  // move
     case 16:  // grab
     case 17:  // grabbing
     case 32:  // all_scroll
     case 36:  // all_resize
-      return ui::Pointer::Cursor::AllScroll;
+      return ui::Cursor::AllScroll;
     case 18:  // e_resize
     case 25:  // w_resize
     case 26:  // ew_resize
     case 30:  // col_resize
-      return ui::Pointer::Cursor::ResizeHorizontal;
+      return ui::Cursor::ResizeHorizontal;
     case 19:  // n_resize
     case 22:  // s_resize
     case 27:  // ns_resize
     case 31:  // row_resize
-      return ui::Pointer::Cursor::ResizeVertical;
+      return ui::Cursor::ResizeVertical;
     default:  // default and the long tail (help, wait, copy, ...)
-      return ui::Pointer::Cursor::Arrow;
+      return ui::Cursor::Arrow;
   }
 }
 
@@ -1968,8 +1967,7 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
     }
     if (auto surf = LockSurface()) {
       if (auto client_obj = surf->client_object.Lock()) {
-        ui::Pointer::Cursor want =
-            ShapeToCursor(client_obj->cursor_shape.load(std::memory_order_relaxed));
+        ui::Cursor want = ShapeToCursor(client_obj->cursor_shape.load(std::memory_order_relaxed));
         if (cursor_override_ && cursor_override_->GetCursor() == want) return;
         cursor_override_.emplace(p, want);
       }
@@ -2010,7 +2008,7 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
     PostSurface([delta](wayland::Surface& h) { h.PointerAxis(delta); });
     return true;
   }
-  void Options(ui::Pointer&, OptionVisitor&) override;
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
 
   void Draw(SkCanvas& canvas) const override {
     DrawSurfaceImage(canvas, image_, src_crop_, dst_size_, TopLeft());
@@ -2151,9 +2149,11 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
   void KeyDown(ui::Caret&, ui::Key key) override { ForwardKey(key, true); }
   void KeyUp(ui::Caret&, ui::Key key) override { ForwardKey(key, false); }
 
-  void Options(ui::Pointer& pointer, OptionVisitor& visitor) override {
-    ObjectToy::Options(pointer, visitor);
-    VisitDecorationOptions(owner, visitor);
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    if (trigger == ui::Dir::W) {
+      if (auto window = LockOwner()) return DecorationMenu(*window);
+    }
+    return ObjectToy::FindOption(pointer, trigger);
   }
 
   SkPath Shape() const override {
@@ -2216,30 +2216,35 @@ static bool ForwardsToClient(ui::ActionTrigger btn) {
   return ui::RootWidget::kWaylandLock || (ui::PointerButton)btn == ui::PointerButton::Left;
 }
 
-struct ClientButtonOption : TextOption {
-  WaylandSurfaceToy& toy;
-  ui::ActionTrigger trigger;
-  uint32_t code;
-  ClientButtonOption(WaylandSurfaceToy& toy, ui::PointerButton button, uint32_t code)
-      : TextOption("Press " + ToStr(button)), toy(toy), trigger(button), code(code) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(ClientButtonOption, toy, trigger, code); }
-  Span<const ui::ActionTrigger> Triggers() const override {
-    return Span<const ui::ActionTrigger>(&trigger, 1);
-  }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
-    return std::make_unique<ClientInputAction>(p, toy, code);
+struct ClientButtonTable : Signal::Table {
+  ui::PointerButton button;
+  constexpr ClientButtonTable(StrView name, ui::PointerButton button)
+      : Signal::Table(name), button(button) {
+    activate = [](Interface self, ui::Pointer& p, Toy* toy) -> std::unique_ptr<Action> {
+      auto* surface = dynamic_cast<WaylandSurfaceToy*>(toy);
+      auto& table = static_cast<ClientButtonTable&>(*self.table_ptr);
+      if (surface == nullptr) return nullptr;
+      return std::make_unique<ClientInputAction>(p, *surface, EvdevButtonCode(table.button));
+    };
   }
 };
 
-void WaylandSurfaceToy::Options(ui::Pointer& p, OptionVisitor& visit) {
-  using enum ui::PointerButton;
-  for (ui::PointerButton button : {Left, Middle, Right, Back, Forward}) {
-    if (!ForwardsToClient(button)) continue;
-    if (uint32_t code = EvdevButtonCode(button)) visit(ClientButtonOption(*this, button, code));
+constinit ClientButtonTable kClientButtons[] = {{"Press left", ui::PointerButton::Left},
+                                                {"Press middle", ui::PointerButton::Middle},
+                                                {"Press right", ui::PointerButton::Right},
+                                                {"Press back", ui::PointerButton::Back},
+                                                {"Press forward", ui::PointerButton::Forward}};
+
+Interface WaylandSurfaceToy::FindOption(ui::Pointer& p, ui::ActionTrigger trigger) {
+  ui::PointerButton button = trigger;
+  for (auto& table : kClientButtons) {
+    if (table.button != button || !ForwardsToClient(button) || !EvdevButtonCode(button)) continue;
+    auto surface = LockOwner();
+    return surface ? Interface(*surface, table) : Interface();
   }
   Toy* base = BaseToy();
-  if (base != this) return base->Options(p, visit);
-  ObjectToy::Options(p, visit);
+  if (base != this) return base->FindOption(p, trigger);
+  return ObjectToy::FindOption(p, trigger);
 }
 
 std::unique_ptr<ObjectToy> WaylandSurface::MakeToy(ui::Widget* parent) {

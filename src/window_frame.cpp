@@ -9,6 +9,7 @@
 #include <include/pathops/SkPathOps.h>
 #include <include/utils/SkTextUtils.h>
 
+#include "base.hpp"
 #include "board.hpp"
 #include "color.hpp"
 #include "drag_action.hpp"
@@ -25,56 +26,66 @@ namespace automat {
 
 namespace {
 
-struct DecorationOption : TextOption {
-  WeakPtr<Object> window;
-  DecoratedWindow::DecorationPreference pref;
-  Option::Dir dir;
-  DecorationOption(Str label, WeakPtr<Object> window, DecoratedWindow::DecorationPreference pref,
-                   Option::Dir dir)
-      : TextOption(std::move(label)), window(window), pref(pref), dir(dir) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(DecorationOption, text, window, pref, dir); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    if (auto obj = window.Lock())
-      if (auto* w = dynamic_cast<DecoratedWindow*>(obj.get())) {
-        w->decoration_preference.store(pref, std::memory_order_relaxed);
-        w->DecorationPreferenceChanged();
-      }
-    return std::make_unique<EmptyAction>(pointer);
-  }
-  Option::Dir PreferredDir() const override { return dir; }
-};
+using DecorationPreference = DecoratedWindow::DecorationPreference;
 
-struct DecorationMenuOption : TextOption, OptionsProvider {
-  WeakPtr<Object> window;
-  DecorationMenuOption(WeakPtr<Object> window) : TextOption("Decoration..."), window(window) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(DecorationMenuOption, window); }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override { return OpenMenu(pointer); }
-  void Options(ui::Pointer&, OptionVisitor& visitor) override {
-    using P = DecoratedWindow::DecorationPreference;
-    DecorationOption automat_auto("Auto", window, P::Auto, Option::S);
-    visitor(automat_auto);
-    DecorationOption server_side("Automat", window, P::ServerSide, Option::W);
-    visitor(server_side);
-    DecorationOption client_side("App", window, P::ClientSide, Option::E);
-    visitor(client_side);
+void SetDecoration(Signal self, DecorationPreference pref) {
+  if (auto* w = dynamic_cast<DecoratedWindow*>(self.object_ptr)) {
+    w->decoration_preference.store(pref, std::memory_order_relaxed);
+    w->DecorationPreferenceChanged();
   }
-  Option::Dir PreferredDir() const override { return Option::S; }
-};
+}
 
-struct ClientPressOption : TextOption {
-  ClientWindowToy& toy;
-  ClientPressOption(ClientWindowToy& toy) : TextOption("Press"), toy(toy) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(ClientPressOption, toy); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) override { return toy.BeginClientPress(p); }
-};
+constinit Signal::Table kDecorationAuto = [] {
+  Signal::Table t("Auto");
+  t.schedules_next = false;
+  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+    SetDecoration(self, DecorationPreference::Auto);
+  };
+  return t;
+}();
+
+constinit Signal::Table kDecorationServerSide = [] {
+  Signal::Table t("Automat");
+  t.schedules_next = false;
+  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+    SetDecoration(self, DecorationPreference::ServerSide);
+  };
+  return t;
+}();
+
+constinit Signal::Table kDecorationClientSide = [] {
+  Signal::Table t("App");
+  t.schedules_next = false;
+  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+    SetDecoration(self, DecorationPreference::ClientSide);
+  };
+  return t;
+}();
+
+std::unique_ptr<Action> OpenDecorationMenu(Interface self, ui::Pointer& pointer, Toy* toy) {
+  using enum ui::Dir;
+  Interface options[ui::kDirCount];
+  options[static_cast<int>(S)] = Interface(self.object_ptr, &kDecorationAuto);
+  options[static_cast<int>(W)] = Interface(self.object_ptr, &kDecorationServerSide);
+  options[static_cast<int>(E)] = Interface(self.object_ptr, &kDecorationClientSide);
+  return MakeMenuAction(pointer, OptionsProvider::MODE_4_DIR, options, toy);
+}
+
+constinit Signal::Table kDecorationMenu =
+    MenuTable<Signal::Table>("Decoration...", &OpenDecorationMenu);
+
+constinit Signal::Table kClientPress = [] {
+  Signal::Table t("Press");
+  t.activate = [](Interface, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
+    auto* window = dynamic_cast<ClientWindowToy*>(toy);
+    return window ? window->BeginClientPress(pointer) : nullptr;
+  };
+  return t;
+}();
 
 }  // namespace
 
-void VisitDecorationOptions(const WeakPtr<Object>& window, OptionVisitor& visitor) {
-  DecorationMenuOption deco(window);
-  visitor(deco);
-}
+Interface DecorationMenu(Object& window) { return Interface(window, kDecorationMenu); }
 
 void DecoratedWindow::SerializeDecoration(ObjectSerializer& writer) const {
   auto pref = decoration_preference.load(std::memory_order_relaxed);
@@ -220,12 +231,18 @@ void ClientWindowToy::Draw(SkCanvas& canvas) const {
   if (Decorated()) Chrome().Draw(canvas);
 }
 
-void ClientWindowToy::Options(ui::Pointer& pointer, OptionVisitor& visitor) {
-  if (ContentRect().Contains(pointer.PositionWithin(*this)) && AllowClientPress(pointer)) {
-    visitor(ClientPressOption(*this));
+Interface ClientWindowToy::FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) {
+  if (trigger == ui::PointerButton::Left) {
+    if (!ContentRect().Contains(pointer.PositionWithin(*this)) || !AllowClientPress(pointer)) {
+      return {};
+    }
+    auto window = LockOwner();
+    return window ? Interface(*window, kClientPress) : Interface();
   }
-  ObjectToy::Options(pointer, visitor);
-  VisitDecorationOptions(owner, visitor);
+  if (trigger == ui::Dir::W) {
+    if (auto window = LockOwner()) return DecorationMenu(*window);
+  }
+  return ObjectToy::FindOption(pointer, trigger);
 }
 
 void ClientWindowToy::FocusClient(ui::Pointer& p) {

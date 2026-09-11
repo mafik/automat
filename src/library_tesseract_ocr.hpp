@@ -7,6 +7,7 @@
 
 #include "base.hpp"
 #include "image_provider.hpp"
+#include "resizable.hpp"
 #include "str.hpp"
 
 namespace automat::library {
@@ -43,6 +44,41 @@ struct TesseractOCR : public Object {
   float y_min_ratio = 0.25f;
   float y_max_ratio = 0.75f;
 
+  DEF_INTERFACE(TesseractOCR, Scalar, left, "Left edge")
+  static constexpr ui::Cursor kCursor = ui::Cursor::ResizeHorizontal;
+  double OnGet() { return obj->x_min_ratio; }
+  void OnSet(double value);
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(left);
+
+  DEF_INTERFACE(TesseractOCR, Scalar, right, "Right edge")
+  static constexpr ui::Cursor kCursor = ui::Cursor::ResizeHorizontal;
+  double OnGet() { return obj->x_max_ratio; }
+  void OnSet(double value);
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(right);
+
+  DEF_INTERFACE(TesseractOCR, Scalar, bottom, "Bottom edge")
+  static constexpr ui::Cursor kCursor = ui::Cursor::ResizeVertical;
+  double OnGet() { return obj->y_min_ratio; }
+  void OnSet(double value);
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(bottom);
+
+  DEF_INTERFACE(TesseractOCR, Scalar, top, "Top edge")
+  static constexpr ui::Cursor kCursor = ui::Cursor::ResizeVertical;
+  double OnGet() { return obj->y_max_ratio; }
+  void OnSet(double value);
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(top);
+
+  DEF_INTERFACE(TesseractOCR, Resizable, region, "Region")
+  static constexpr ui::Cursor kCursor = ui::Cursor::AllScroll;
+  bool ResizePx(int top, int right, int bottom, int left);
+  bool ResizeM(Rect) { return false; }
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(region);
+
   DEF_INTERFACE(TesseractOCR, InterfaceArgument<ImageProvider>, image, "Image")
   static constexpr auto kStyle = Argument::Style::Invisible;
   static constexpr float kAutoconnectRadius = INFINITY;
@@ -61,7 +97,7 @@ struct TesseractOCR : public Object {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  INTERFACES(image, text, next, run)
+  INTERFACES(image, text, next, run, left, right, bottom, top, region)
   void Updated(WeakPtr<Object>& updated) override;
 
   void SerializeState(ObjectSerializer& writer) const override;

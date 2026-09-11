@@ -9,7 +9,7 @@
 #include "../build/generated/embedded.hpp"
 #include "audio.hpp"
 #include "automat.hpp"
-#include "menu.hpp"
+#include "object_source.hpp"
 #include "random.hpp"
 #include "root_widget.hpp"
 #include "textures.hpp"
@@ -27,25 +27,9 @@ void PrototypeButton::Init() {
   width.value = natural_width;
 }
 
-struct PrototypeButtonOption : TextOption {
-  PrototypeButton& button;
-  PrototypeButtonOption(PrototypeButton& button) : TextOption("New"), button(button) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(PrototypeButtonOption, button); }
-  Span<const ActionTrigger> Triggers() const override { return kLeftButton; }
-  Pointer::Cursor Cursor() const override { return Pointer::Cursor::Hand; }
-  std::unique_ptr<Action> Activate(Pointer& pointer) override {
-    auto obj = button.proto->Clone();
-    pointer.root_widget.toys.FindOrMake(*obj, &button);
-    auto loc = MAKE_PTR(Location);
-    loc->InsertHere(std::move(obj));
-    audio::Play(embedded::assets_SFX_toolbar_pick_wav);
-    return std::make_unique<DragLocationAction>(pointer, std::move(loc));
-  }
-};
-
-void PrototypeButton::Options(Pointer& pointer, OptionVisitor& visit) {
-  visit(PrototypeButtonOption(*this));
-  proto_widget->Options(pointer, visit);
+Interface PrototypeButton::FindOption(Pointer& pointer, ActionTrigger trigger) {
+  if (trigger == PointerButton::Left) return Interface(*proto, kMakeObject);
+  return proto_widget->FindOption(pointer, trigger);
 }
 
 constexpr float kMarginBetweenIcons = 1_mm;

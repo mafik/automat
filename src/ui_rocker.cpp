@@ -32,6 +32,14 @@ Rocker::Rocker(Widget* parent) : Widget(parent), clickable(*this) {
   layers.OrderInside(off_icon.get());
 }
 
+Interface Rocker::FindOption(Pointer&, ActionTrigger trigger) {
+  if (trigger != PointerButton::Left) return {};
+  auto locked = target.Lock();
+  if (!locked) return {};
+  OnOff on_off(locked.Owner<Object>(), locked.Get());
+  return Interface(on_off.object_ptr, on_off.IsOn() ? &locked->turn_off : &locked->turn_on);
+}
+
 void Rocker::SetOn(bool value) {
   if (on == value) {
     return;

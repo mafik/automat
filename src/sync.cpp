@@ -18,7 +18,6 @@
 #include "casting.hpp"
 #include "embedded.hpp"
 #include "font.hpp"
-#include "format.hpp"
 #include "global_resources.hpp"
 #include "log.hpp"
 #include "math.hpp"
@@ -102,6 +101,37 @@ NestedPtr<Interface::Table> Syncable::Table::DefaultFind(Argument self) {
 // --- Syncable::Unsync ---
 
 void Syncable::Unsync() { state->Unsync(*object_ptr, *table); }
+
+std::unique_ptr<Action> Syncable::Table::MenuActivate(Interface self, ui::Pointer& pointer,
+                                                      automat::Toy* toy) {
+  using enum ui::Dir;
+  auto* table = static_cast<Table*>(self.table_ptr);
+  Syncable syncable(self.object_ptr, table);
+  Interface options[ui::kDirCount];
+  if (auto* on_off = dyn_cast<OnOff::Table>(table)) {
+    bool on = OnOff(self.object_ptr, on_off).IsOn();
+    options[static_cast<int>(N)] =
+        Interface(self.object_ptr, on ? &on_off->turn_off : &on_off->turn_on);
+  }
+  options[static_cast<int>(E)] = Interface(self.object_ptr, &table->sync);
+  if (!syncable.state->gear_weak.IsExpired()) {
+    options[static_cast<int>(W)] = Interface(self.object_ptr, &table->unsync);
+  }
+  return MakeMenuAction(pointer, OptionsProvider::MODE_4_DIR, options, toy);
+}
+
+std::unique_ptr<Action> Syncable::Table::SyncActivate(Interface self, ui::Pointer& pointer,
+                                                      automat::Toy* toy) {
+  auto& table = OUTER_REF(Table, sync, *self.table_ptr);
+  return std::make_unique<SyncAction>(pointer, Syncable(self.object_ptr, &table), toy);
+}
+
+std::unique_ptr<Action> Syncable::Table::UnsyncActivate(Interface self, ui::Pointer& pointer,
+                                                        automat::Toy*) {
+  auto& table = OUTER_REF(Table, unsync, *self.table_ptr);
+  Syncable(self.object_ptr, &table).Unsync();
+  return std::make_unique<EmptyAction>(pointer);
+}
 
 void Syncable::State::Unsync(Object& self, Syncable::Table& table) {
   auto gear = gear_weak.Lock();
@@ -332,19 +362,11 @@ SkPath SyncBelt::Shape() const {
   return SkPath::Circle(pinion.x, pinion.y, kSecondaryGearRadius + kTeethAmplitude);
 }
 
-struct SyncBeltOption : TextOption {
-  SyncBelt& belt;
-  SyncBeltOption(SyncBelt& belt) : TextOption("Sync"), belt(belt) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(SyncBeltOption, belt); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  std::unique_ptr<Action> Activate(ui::Pointer& pointer) override {
-    auto owner = belt.LockOwner<Object>();
-    if (!owner) return nullptr;
-    return std::make_unique<SyncAction>(pointer, belt.Bind<Syncable>(*owner));
-  }
-};
-
-void SyncBelt::Options(ui::Pointer&, OptionVisitor& visit) { visit(SyncBeltOption(*this)); }
+Interface SyncBelt::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
+  if (trigger != ui::PointerButton::Left) return {};
+  auto owner = LockOwner<Object>();
+  return owner ? Interface(*owner, static_cast<Syncable::Table*>(iface)->sync) : Interface();
+}
 
 ui::Tock SyncBelt::Tick(time::Timer& t) {
   Tock tock;
@@ -598,12 +620,10 @@ bool Gear::DeserializeKey(ObjectDeserializer& d, StrView key) {
   return false;
 }
 
-SyncAction::SyncAction(ui::Pointer& pointer, Syncable syncable) : Action(pointer) {
+SyncAction::SyncAction(ui::Pointer& pointer, Syncable syncable, Toy* toy) : Action(pointer) {
   syncable.Unsync();
   weak = NestedWeakPtr<Syncable::Table>(syncable.GetOwner().AcquireWeakPtr(), syncable.table);
-  if (pointer.hover) {
-    board_widget = BoardOrNull(*pointer.hover);
-  }
+  if (toy) board_widget = BoardOrNull(*toy);
   if (auto* bw = board_widget.Get()) {
     if (bw->toys.FindOrNull(*syncable.object_ptr)) {
       auto& sync_widget = bw->toys.FindOrMake(syncable, bw);

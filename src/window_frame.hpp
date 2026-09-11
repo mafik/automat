@@ -63,7 +63,7 @@ struct DecoratedWindow {
 
 // Adds the "Decoration..." submenu (Auto / Automat / App) to an object menu; `window` is
 // the menu's window object, which implements DecoratedWindow.
-void VisitDecorationOptions(const WeakPtr<Object>& window, OptionVisitor&);
+Interface DecorationMenu(Object& window);
 
 struct ClientInputActionBase : Action {
   WeakPtr<Object> window;
@@ -112,7 +112,8 @@ struct ClientWindowToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
   SkPath Shape() const override;
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
-  void Options(ui::Pointer&, OptionVisitor&) override;
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
+  MiniMenuMode MenuMode() override { return MODE_4_DIR; }
 
   void FocusClient(ui::Pointer&);
   void ReleaseCaret(ui::Caret&) override;

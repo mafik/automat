@@ -511,9 +511,7 @@ struct Posterize : PhotoTool {
   Ptr<Object> Clone() const override { return MAKE_PTR(Posterize, *this); }
   StrView Label() const override { return "POSTERIZE"; }
   StrView LeptonicaFn() const override { return "pixTRCMap"; }
-  StrView Explanation() const override {
-    return "Reduces the photo to just a few flat colours.";
-  }
+  StrView Explanation() const override { return "Reduces the photo to just a few flat colours."; }
   Pix* ApplyOp(Pix* in, const float* p) const override;
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
   void SerializeState(ObjectSerializer&) const override;

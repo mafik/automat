@@ -66,8 +66,7 @@ terminal. The ghost must be visibly dead (desaturated, hatched, or marked
 with a "frozen" sign) or users will type into a window that no longer
 exists. Automat currently draws
 recipe-less ghosts with a gray hatch instead of content; adding the frozen
-frame would be a small extension (serialize `pixels` as a sidecar image, the
-way `LeptonicaImage` persists its bitmap).
+frame would be a small extension (serialize `pixels` as a sidecar image).
 
 ## Option 3: CRIU — checkpoint the real process
 

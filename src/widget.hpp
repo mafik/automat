@@ -18,8 +18,6 @@
 
 #include "action.hpp"
 #include "animation.hpp"
-#include "control_flow.hpp"
-#include "fn_ref.hpp"
 #include "key.hpp"
 #include "mortal.hpp"
 #include "optional.hpp"
@@ -40,36 +38,10 @@ namespace automat {
 struct Object;
 struct Argument;
 struct Location;
-struct Option;
 struct Syncable;
 struct ToyStore;
 
 namespace ui {
-struct ActionTrigger;
-}
-
-struct OptionVisitor {
-  FnRef<LoopControl(Option&)> callback;
-  bool done = false;
-  void operator()(Option& option) {
-    // TODO: early return shouldn't be handled with a boolean - but an actual early return
-    if (done) return;
-    if (callback(option) == LoopControl::Break) {
-      done = true;
-    }
-  }
-  void operator()(Option&& option) { (*this)(option); }
-};
-
-struct OptionsProvider {
-  virtual void Options(ui::Pointer&, OptionVisitor&) = 0;
-  std::unique_ptr<Action> TriggerActivate(ui::Pointer&, ui::ActionTrigger);
-  std::unique_ptr<Action> OpenMenu(ui::Pointer&);
-};
-}  // namespace automat
-
-namespace automat::ui {
-
 struct Widget;
 struct RootWidget;
 struct Caret;
@@ -89,6 +61,11 @@ enum class PointerButton { Unknown, Left, Middle, Right, Back, Forward, Count };
 
 Str ToStr(PointerButton);
 
+enum class Dir : uint8_t { E, NE, N, NW, W, SW, S, SE, DIR_COUNT, DIR_NONE = 255 };
+constexpr int kDirCount = static_cast<int>(Dir::DIR_COUNT);
+
+StrView ToStr(Dir);
+
 struct ActionTrigger {
   int repr;
 
@@ -96,9 +73,12 @@ struct ActionTrigger {
   constexpr static int kAnsiKeyEnd = static_cast<int>(AnsiKey::Count);
   constexpr static int kPointerStart = kAnsiKeyEnd;
   constexpr static int kPointerEnd = kPointerStart + static_cast<int>(PointerButton::Count);
+  constexpr static int kDirStart = kPointerEnd;
+  constexpr static int kDirEnd = kDirStart + static_cast<int>(Dir::DIR_COUNT);
 
   constexpr ActionTrigger(PointerButton button) : repr(kPointerStart + static_cast<int>(button)) {}
   constexpr ActionTrigger(AnsiKey key) : repr(kAnsiKeyStart + static_cast<int>(key)) {}
+  constexpr ActionTrigger(Dir dir) : repr(kDirStart + static_cast<int>(dir)) {}
 
   constexpr operator PointerButton() const {
     if (repr < kPointerStart || repr >= kPointerEnd) {
@@ -114,14 +94,35 @@ struct ActionTrigger {
     return static_cast<AnsiKey>(repr - kAnsiKeyStart);
   }
 
+  constexpr operator Dir() const {
+    if (repr < kDirStart || repr >= kDirEnd) {
+      return Dir::DIR_NONE;
+    }
+    return static_cast<Dir>(repr - kDirStart);
+  }
+
   constexpr auto operator<=>(const ActionTrigger&) const = default;
   constexpr bool operator==(const ActionTrigger&) const = default;
   constexpr bool operator==(PointerButton button) const {
     return ActionTrigger(button).repr == repr;
   }
+  constexpr bool operator==(Dir dir) const { return ActionTrigger(dir).repr == repr; }
 };
 
 Str ToStr(ActionTrigger);
+
+}  // namespace ui
+
+struct OptionsProvider {
+  enum MiniMenuMode { MODE_8_DIR, MODE_6_DIR, MODE_4_DIR, MODE_2_DIR, MODE_1_DIR };
+  virtual MiniMenuMode MenuMode() { return MODE_8_DIR; }
+  virtual Interface FindOption(ui::Pointer&, ui::ActionTrigger) { return {}; }
+  std::unique_ptr<Action> TriggerActivate(ui::Pointer&, ui::ActionTrigger);
+  std::unique_ptr<Action> OpenMenu(ui::Pointer&);
+};
+}  // namespace automat
+
+namespace automat::ui {
 
 // Widgets are things that can be drawn to the SkCanvas. They're sometimes produced by Objects
 // which can't draw themselves otherwise.
@@ -394,8 +395,6 @@ struct Widget : OptionsProvider {
     return CoarseBounds().Center();
   }
 
-  void Options(Pointer&, OptionVisitor&) override {}
-
   // Return true if the widget should be highlighted as draggable.
   virtual bool CanDrag() { return false; }
 
@@ -622,6 +621,12 @@ inline const Tock Tock::Drawing{.next_tick = time::SteadyPoint::min(), .draw = t
 inline const Tock Tock::Shape{.draw = true, .shape = true};
 inline const Tock Tock::Shaping{.next_tick = time::SteadyPoint::min(), .draw = true, .shape = true};
 inline const Tock Tock::Ing{.next_tick = time::SteadyPoint::min()};
+
+struct ActionZone : Widget {
+  using Widget::Widget;
+  Optional<Rect> DrawBounds() const override { return std::nullopt; }
+  void Draw(SkCanvas&) const override {}
+};
 
 template <typename T>
 T* Closest(Widget& widget) {

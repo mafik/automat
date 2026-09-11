@@ -109,9 +109,50 @@ struct Timeline : Object, TimerNotificationReceiver {
   DEF_INTERFACE(Timeline, NextArg, next, "Next")
   DEF_END(next);
 
+  DEF_INTERFACE(Timeline, Scalar, position, "Position")
+  double OnGet() {
+    auto lock = std::lock_guard(obj->mutex);
+    return time::ToSeconds(obj->CurrentOffset(time::SteadyNow()));
+  }
+  void OnSet(double seconds) {
+    auto lock = std::lock_guard(obj->mutex);
+    obj->SetOffset(time::FromSeconds(seconds), time::SteadyNow());
+    obj->WakeToys();
+  }
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(position);
+
+  DEF_INTERFACE(Timeline, Scalar, zoom, "Zoom")
+  double OnGet() {
+    auto lock = std::lock_guard(obj->mutex);
+    return obj->zoom_seconds;
+  }
+  void OnSet(double seconds) {
+    auto lock = std::lock_guard(obj->mutex);
+    obj->zoom_seconds = std::clamp<float>(seconds, 0.001f, 3600.0f);
+    obj->WakeToys();
+  }
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(zoom);
+
+  DEF_INTERFACE(Timeline, Signal, jump_to_start, "Jump to start")
+  static constexpr bool kSchedulesNext = false;
+  void OnRun(std::unique_ptr<RunTask>&);
+  DEF_END(jump_to_start);
+
+  DEF_INTERFACE(Timeline, Signal, jump_to_end, "Jump to end")
+  static constexpr bool kSchedulesNext = false;
+  void OnRun(std::unique_ptr<RunTask>&);
+  DEF_END(jump_to_end);
+
+  DEF_INTERFACE(Timeline, Signal, stop_recording, "Stop recording")
+  static constexpr bool kSchedulesNext = false;
+  void OnRun(std::unique_ptr<RunTask>&);
+  DEF_END(stop_recording);
+
   Vec<Ptr<TrackBase>> tracks;
 
-  float zoom;  // stores the time in seconds
+  float zoom_seconds;
 
   enum State { kPaused, kPlaying, kRecording } state;
   time::Duration timeline_length;
@@ -155,6 +196,7 @@ struct Timeline : Object, TimerNotificationReceiver {
   void StopRecording();
 
   time::Duration CurrentOffset(time::SteadyPoint now) const;
+  void SetOffset(time::Duration offset, time::SteadyPoint now);
   time::Duration MaxTrackLength() const;
 
   void SerializeState(ObjectSerializer& writer) const override;

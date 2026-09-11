@@ -55,7 +55,7 @@ struct Win32PointerGrab : automat::ui::PointerGrab {
         ERROR << "Failed to install global mouse hook: " << GetLastError();
         return;
       }
-      crosshair_cursor.emplace(pointer, ui::Pointer::Cursor::Crosshair);
+      crosshair_cursor.emplace(pointer, ui::Cursor::Crosshair);
     }
 
     if (global_mouse_hook) {
@@ -82,33 +82,32 @@ struct Win32Pointer : automat::ui::Pointer {
   Win32Pointer(automat::ui::RootWidget& root, Vec2 position, Win32Window& win32_window)
       : automat::ui::Pointer(root, position), win32_window(win32_window) {}
 
-  void OnCursorChanged(automat::ui::Pointer::Cursor old_cursor,
-                       automat::ui::Pointer::Cursor new_cursor) override {
+  void OnCursorChanged(automat::ui::Cursor old_cursor, automat::ui::Cursor new_cursor) override {
     UpdateCursor(new_cursor);
   }
 
-  void UpdateCursor(automat::ui::Pointer::Cursor icon) {
+  void UpdateCursor(automat::ui::Cursor icon) {
     HCURSOR cursor;
     switch (icon) {
-      case automat::ui::Pointer::Cursor::Arrow:
+      case automat::ui::Cursor::Arrow:
         cursor = LoadCursor(nullptr, IDC_ARROW);
         break;
-      case automat::ui::Pointer::Cursor::Hand:
+      case automat::ui::Cursor::Hand:
         cursor = LoadCursor(nullptr, IDC_HAND);
         break;
-      case automat::ui::Pointer::Cursor::IBeam:
+      case automat::ui::Cursor::IBeam:
         cursor = LoadCursor(nullptr, IDC_IBEAM);
         break;
-      case automat::ui::Pointer::Cursor::AllScroll:
+      case automat::ui::Cursor::AllScroll:
         cursor = LoadCursor(nullptr, IDC_SIZEALL);
         break;
-      case automat::ui::Pointer::Cursor::ResizeHorizontal:
+      case automat::ui::Cursor::ResizeHorizontal:
         cursor = LoadCursor(nullptr, IDC_SIZEWE);
         break;
-      case automat::ui::Pointer::Cursor::ResizeVertical:
+      case automat::ui::Cursor::ResizeVertical:
         cursor = LoadCursor(nullptr, IDC_SIZENS);
         break;
-      case automat::ui::Pointer::Cursor::Crosshair:
+      case automat::ui::Cursor::Crosshair:
         cursor = LoadCursor(nullptr, IDC_CROSS);
         break;
       default:
@@ -304,7 +303,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       // Intercept this message to prevent Windows from changing the cursor back
       // to an arrow.
       if (LOWORD(lParam) == HTCLIENT) {
-        ui::Pointer::Cursor cursor;
+        ui::Cursor cursor;
         {
           auto lock = window.Lock();
           auto& mouse = static_cast<Win32Pointer&>(window.GetMouse());

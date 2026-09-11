@@ -261,7 +261,8 @@ struct ObjectToy : automat::ObjectToy {
 // square on red; while not `enabled` it grays out and ignores clicks.
 struct RunButton : Widget {
   Clickable clickable;
-  std::function<void()> on_click;
+  NestedWeakPtr<Interface::Table> start;
+  NestedWeakPtr<Interface::Table> stop;
   uint32_t seed;        // per-object wobble; owners pass their Seed(site)
   uint32_t wiggle = 0;  // hover shimmer phase
   bool running = false;
@@ -280,7 +281,8 @@ struct RunButton : Widget {
     return start;
   }
 
-  RunButton(Widget* parent, std::function<void()> on_click, uint32_t seed = 0);
+  RunButton(Widget* parent, NestedWeakPtr<Interface::Table> start,
+            NestedWeakPtr<Interface::Table> stop, uint32_t seed = 0);
 
   StrView Name() const override { return "RunButton"; }
   bool CenteredAtZero() const override { return true; }
@@ -289,9 +291,7 @@ struct RunButton : Widget {
   Optional<Rect> DrawBounds() const override { return Shape().getBounds().makeOutset(4_mm, 4_mm); }
   void PointerHover(Pointer& p) override { clickable.PointerHover(p); }
   void PointerUnhover(Pointer& p) override { clickable.PointerUnhover(p); }
-  void Options(Pointer& p, OptionVisitor& visit) override {
-    if (enabled) clickable.Options(p, visit);
-  }
+  Interface FindOption(Pointer&, ActionTrigger) override;
   Tock Tick(time::Timer& t) override;
   void Draw(SkCanvas& canvas) const override;
 };

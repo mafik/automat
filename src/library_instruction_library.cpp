@@ -23,7 +23,7 @@
 #include "library_instruction.hpp"
 #include "llvm_asm.hpp"
 #include "math.hpp"
-#include "menu.hpp"
+#include "object_source.hpp"
 #include "root_widget.hpp"
 #include "textures.hpp"
 #include "time.hpp"
@@ -165,20 +165,6 @@ string_view InstructionLibrary::Name() const { return "Instruction Library"; }
 
 Ptr<Object> InstructionLibrary::Clone() const { return MAKE_PTR(InstructionLibrary); }
 
-InstructionLibrary::Widget::Widget(ui::Widget* parent, Object& object) : ObjectToy(parent, object) {
-  for (int i = 0; i < std::size(x86::kCategories); ++i) {
-    if (category_states.size() <= i) {
-      category_states.push_back(CategoryState{
-          .growth = 0,
-      });
-      for (int j = 0; j < x86::kCategories[i].groups.size(); ++j) {
-        category_states.back().leaves.push_back(CategoryState::LeafState{
-            .growth = 0,
-        });
-      }
-    }
-  }
-}
 SkPath InstructionLibrary::Widget::Shape() const { return SkPath::Circle(0, 0, 10_cm); }
 
 constexpr float kRoseFanDegrees = 180;
@@ -272,6 +258,12 @@ static float CardAngleDeg(float i, int visible_instructions, float helix_tween) 
   return lerp(ret, ret2, helix_tween * 0.7f);           // blend between the two curves
 }
 
+static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary::Widget& widget);
+
+static InstructionLibrary::Widget::Filters LibraryFilters(const InstructionLibrary& library) {
+  return {library.read_from, library.write_to, library.selected_category, library.selected_group};
+}
+
 ui::Tock InstructionLibrary::Widget::Tick(time::Timer& timer) {
   Tock tock;
 
@@ -294,6 +286,14 @@ ui::Tock InstructionLibrary::Widget::Tick(time::Timer& timer) {
   if (!library) return Tock::Draw;
 
   lock_guard lock(library->mutex);
+  auto filters = LibraryFilters(*library);
+  if (filters != counted_filters) {
+    UpdateFilterCounters(*library, *this);
+    if (filters.group >= 0 && filters.group != counted_filters.group) {
+      category_states[filters.category].leaves[filters.group].shake.velocity = 150;
+    }
+    counted_filters = std::move(filters);
+  }
   auto& instructions = library->instructions;
 
   // Animate everything to match the state of `library`.
@@ -490,6 +490,7 @@ ui::Tock InstructionLibrary::Widget::Tick(time::Timer& timer) {
     if (card.throw_t >= 0.5) layers.OrderAbove(card.widget.get());
   }
 
+  if (tock.draw) rose_zone->WakeAnimation();
   return tock;
 }
 
@@ -1086,134 +1087,205 @@ static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary
   library.Filter();
 }
 
-struct PickInstructionOption : TextOption {
-  InstructionLibrary::Widget& widget;
-  PickInstructionOption(InstructionLibrary::Widget& widget)
-      : TextOption("Pick instruction"), widget(widget) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(PickInstructionOption, widget); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
-    auto obj = widget.instruction_helix.front().instruction->Clone();
-    auto& toy = p.root_widget.toys.FindOrMake(*obj, &widget);
-    toy.local_to_parent.setTranslate(kFrontInstructionRect.left, kFrontInstructionRect.bottom);
-    auto loc = MAKE_PTR(Location);
-    loc->InsertHere(std::move(obj));
-    audio::Play(embedded::assets_SFX_toolbar_pick_wav);
-    return std::make_unique<DragLocationAction>(p, std::move(loc));
-  }
-};
+void InstructionLibrary::scroll_Impl::OnRun(std::unique_ptr<RunTask>&) {
+  auto lock = std::lock_guard(obj->mutex);
+  if (obj->instructions.empty()) return;
+  obj->instructions.push_back(obj->instructions.front());
+  obj->instructions.pop_front();
+  obj->WakeToys();
+}
 
-struct ScrollDeckOption : TextOption {
-  InstructionLibrary::Widget& widget;
-  ScrollDeckOption(InstructionLibrary::Widget& widget) : TextOption("Scroll"), widget(widget) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(ScrollDeckOption, widget); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
-    return std::make_unique<ScrollDeckAction>(p, widget, widget.LockOwner<Object>());
-  }
-};
+std::unique_ptr<Action> InstructionLibrary::scroll_Impl::OnActivate(ui::Pointer& pointer,
+                                                                    automat::Toy* toy) {
+  auto* widget = dynamic_cast<InstructionLibrary::Widget*>(toy);
+  return widget ? std::make_unique<ScrollDeckAction>(pointer, *widget, obj->AcquirePtr()) : nullptr;
+}
 
-struct ToggleRegisterFilterOption : TextOption {
-  InstructionLibrary::Widget& widget;
-  RegisterFilterButton button;
-  ToggleRegisterFilterOption(InstructionLibrary::Widget& widget, RegisterFilterButton button)
-      : TextOption(button.read ? "Read filter" : "Write filter"), widget(widget), button(button) {}
-  Ptr<Option> Clone() const override {
-    return MAKE_PTR(ToggleRegisterFilterOption, widget, button);
-  }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
-    auto library = widget.LockObject<InstructionLibrary>();
-    if (!library) return nullptr;
-    lock_guard lock(library->mutex);
-    vector<unsigned>* queue = button.read ? &library->read_from : &library->write_to;
-    if (auto it = std::find(queue->begin(), queue->end(), button.reg); it != queue->end()) {
-      queue->erase(it);
-    } else {
-      queue->push_back(button.reg);
-    }
-    UpdateFilterCounters(*library, widget);
-    widget.WakeAnimation();
-    return std::make_unique<EmptyAction>(p);
-  }
-};
+Ptr<Object> InstructionLibrary::pick_Impl::OnTake() {
+  auto lock = std::lock_guard(obj->mutex);
+  if (obj->instructions.empty()) return nullptr;
+  auto instruction = MAKE_PTR(Instruction);
+  instruction->mc_inst = obj->instructions.front();
+  return instruction;
+}
 
-struct ToggleCategoryOption : TextOption {
-  InstructionLibrary::Widget& widget;
-  int category;
-  ToggleCategoryOption(InstructionLibrary::Widget& widget, int category)
-      : TextOption("Select"), widget(widget), category(category) {}
-  Ptr<Option> Clone() const override { return MAKE_PTR(ToggleCategoryOption, widget, category); }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
-    auto library = widget.LockObject<InstructionLibrary>();
-    if (!library) return nullptr;
-    lock_guard lock(library->mutex);
-    if (library->selected_category != category) {
-      library->selected_category = category;
-    } else {
-      library->selected_category = -1;
-    }
-    library->selected_group = -1;
-    UpdateFilterCounters(*library, widget);
-    widget.WakeAnimation();
-    return std::make_unique<EmptyAction>(p);
-  }
-};
+std::unique_ptr<Action> InstructionLibrary::pick_Impl::OnActivate(ui::Pointer& pointer,
+                                                                  automat::Toy* toy) {
+  auto* widget = dynamic_cast<InstructionLibrary::Widget*>(toy);
+  if (widget == nullptr) return nullptr;
+  auto object = OnTake();
+  if (object == nullptr) return nullptr;
+  auto card = object->MakeToy(widget);
+  card->local_to_parent.setTranslate(kFrontInstructionRect.left, kFrontInstructionRect.bottom);
+  return DragNew(pointer, std::move(object), std::move(card));
+}
 
-struct ToggleGroupOption : TextOption {
-  InstructionLibrary::Widget& widget;
-  int category;
-  int group;
-  ToggleGroupOption(InstructionLibrary::Widget& widget, int category, int group)
-      : TextOption("Select"), widget(widget), category(category), group(group) {}
-  Ptr<Option> Clone() const override {
-    return MAKE_PTR(ToggleGroupOption, widget, category, group);
-  }
-  Span<const ui::ActionTrigger> Triggers() const override { return kLeftButton; }
-  ui::Pointer::Cursor Cursor() const override { return ui::Pointer::Cursor::Hand; }
-  std::unique_ptr<Action> Activate(ui::Pointer& p) override {
-    auto library = widget.LockObject<InstructionLibrary>();
-    if (!library) return nullptr;
-    lock_guard lock(library->mutex);
-    library->selected_category = category;
-    if (library->selected_group == group) {
-      library->selected_group = -1;
-    } else {
-      library->selected_group = group;
-    }
-    widget.category_states[category].leaves[group].shake.velocity = 150;
-    UpdateFilterCounters(*library, widget);
-    widget.WakeAnimation();
-    return std::make_unique<EmptyAction>(p);
-  }
-};
-
-void InstructionLibrary::Widget::Options(ui::Pointer& p, OptionVisitor& visit) {
-  if (!IsIconified()) {
-    auto contact_point = p.PositionWithin(*this);
-    if (kFrontInstructionRect.Contains(contact_point)) visit(PickInstructionOption(*this));
-    if (Length(contact_point) < kCornerDist) visit(ScrollDeckOption(*this));
-    if (auto reg_btn = FindRegisterFilterButton(contact_point)) {
-      visit(ToggleRegisterFilterOption(*this, *reg_btn));
-    }
-    for (int i = 0; i < category_states.size(); ++i) {
-      auto& category_state = category_states[i];
-      if (Length(category_state.position - contact_point) < category_state.radius) {
-        visit(ToggleCategoryOption(*this, i));
+struct RegisterFilterTable : Signal::Table {
+  int reg;
+  bool read;
+  Str label;
+  RegisterFilterTable(int reg, bool read)
+      : Signal::Table(""),
+        reg(reg),
+        read(read),
+        label((read ? "Read " : "Write ") + kRegisters[reg].name) {
+    name = label;
+    cursor = ui::Cursor::Hand;
+    schedules_next = false;
+    on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+      auto& table = static_cast<RegisterFilterTable&>(*self.table_ptr);
+      auto& library = static_cast<InstructionLibrary&>(*self.object_ptr);
+      auto lock = std::lock_guard(library.mutex);
+      auto& queue = table.read ? library.read_from : library.write_to;
+      if (auto it = std::find(queue.begin(), queue.end(), table.reg); it != queue.end()) {
+        queue.erase(it);
+      } else {
+        queue.push_back(table.reg);
       }
-      for (int j = 0; j < category_state.leaves.size(); ++j) {
-        auto& leaf_state = category_state.leaves[j];
-        if (Length(leaf_state.position - contact_point) < leaf_state.radius) {
-          visit(ToggleGroupOption(*this, i, j));
-        }
+      library.Filter();
+      library.WakeToys();
+    };
+  }
+};
+
+static RegisterFilterTable& RegisterFilter(int reg, bool read) {
+  static std::unique_ptr<RegisterFilterTable> tables[2][kGeneralPurposeRegisterCount];
+  auto& table = tables[read][reg];
+  if (!table) table = std::make_unique<RegisterFilterTable>(reg, read);
+  return *table;
+}
+
+struct CategoryTable : Signal::Table {
+  int category;
+  int group;  // -1 selects the whole category
+  CategoryTable(int category, int group)
+      : Signal::Table(group < 0 ? x86::kCategories[category].name
+                                : x86::kCategories[category].groups[group].name),
+        category(category),
+        group(group) {
+    cursor = ui::Cursor::Hand;
+    schedules_next = false;
+    on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+      auto& table = static_cast<CategoryTable&>(*self.table_ptr);
+      auto& library = static_cast<InstructionLibrary&>(*self.object_ptr);
+      auto lock = std::lock_guard(library.mutex);
+      if (table.group < 0) {
+        library.selected_category =
+            library.selected_category == table.category ? -1 : table.category;
+        library.selected_group = -1;
+      } else {
+        library.selected_category = table.category;
+        library.selected_group = library.selected_group == table.group ? -1 : table.group;
+      }
+      library.Filter();
+      library.WakeToys();
+    };
+  }
+};
+
+static CategoryTable& CategoryFilter(int category, int group) {
+  static std::vector<std::vector<std::unique_ptr<CategoryTable>>> tables(
+      std::size(x86::kCategories));
+  auto& row = tables[category];
+  if (row.empty()) row.resize(x86::kCategories[category].groups.size() + 1);
+  auto& table = row[group + 1];
+  if (!table) table = std::make_unique<CategoryTable>(category, group);
+  return *table;
+}
+
+struct LibraryZone : ui::ActionZone {
+  using ActionZone::ActionZone;
+  InstructionLibrary::Widget& Face() const {
+    return static_cast<InstructionLibrary::Widget&>(*parent);
+  }
+  Ptr<InstructionLibrary> LockLibrary() const { return Face().LockObject<InstructionLibrary>(); }
+};
+
+struct DeckZone : LibraryZone {
+  using LibraryZone::LibraryZone;
+  SkPath Shape() const override { return SkPath::Circle(0, 0, kCornerDist); }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    if (trigger != ui::PointerButton::Left) return {};
+    auto library = LockLibrary();
+    return library ? Interface(*library, InstructionLibrary::scroll_tbl) : Interface();
+  }
+};
+
+struct FrontCardZone : LibraryZone {
+  using LibraryZone::LibraryZone;
+  SkPath Shape() const override { return SkPath::Rect(kFrontInstructionRect); }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    if (trigger != ui::PointerButton::Left || Face().instruction_helix.empty()) return {};
+    auto library = LockLibrary();
+    return library ? Interface(*library, InstructionLibrary::pick_tbl) : Interface();
+  }
+};
+
+struct RegisterZone : LibraryZone {
+  using LibraryZone::LibraryZone;
+  SkPath Shape() const override {
+    Rect rect = kRegisterTableRect;
+    rect.left += kTableCellSize;
+    return SkPath::Rect(rect);
+  }
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    if (trigger != ui::PointerButton::Left) return {};
+    auto button = FindRegisterFilterButton(pointer.PositionWithin(*this));
+    if (!button) return {};
+    auto library = LockLibrary();
+    return library ? Interface(*library, RegisterFilter(button->reg, button->read)) : Interface();
+  }
+};
+
+struct RoseZone : LibraryZone {
+  using LibraryZone::LibraryZone;
+  Tock Tick(time::Timer&) override { return Tock::Shape; }
+  SkPath Shape() const override {
+    SkPathBuilder builder;
+    for (auto& category : Face().category_states) {
+      builder.addCircle(category.position.x, category.position.y, category.radius);
+      for (auto& leaf : category.leaves) {
+        builder.addCircle(leaf.position.x, leaf.position.y, leaf.radius);
       }
     }
+    return builder.detach();
   }
-  ObjectToy::Options(p, visit);
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    if (trigger != ui::PointerButton::Left) return {};
+    Vec2 pos = pointer.PositionWithin(*this);
+    auto& categories = Face().category_states;
+    for (int i = 0; i < categories.size(); ++i) {
+      auto& category = categories[i];
+      int group = -2;
+      if (Length(category.position - pos) < category.radius) group = -1;
+      for (int j = 0; group < -1 && j < category.leaves.size(); ++j) {
+        if (Length(category.leaves[j].position - pos) < category.leaves[j].radius) group = j;
+      }
+      if (group < -1) continue;
+      auto library = LockLibrary();
+      return library ? Interface(*library, CategoryFilter(i, group)) : Interface();
+    }
+    return {};
+  }
+};
+
+InstructionLibrary::Widget::Widget(ui::Widget* parent, Object& object)
+    : ObjectToy(parent, object),
+      deck_zone(new DeckZone(this)),
+      front_card_zone(new FrontCardZone(this)),
+      register_zone(new RegisterZone(this)),
+      rose_zone(new RoseZone(this)) {
+  for (int i = 0; i < std::size(x86::kCategories); ++i) {
+    category_states.push_back(CategoryState{.growth = 0});
+    for (int j = 0; j < x86::kCategories[i].groups.size(); ++j) {
+      category_states.back().leaves.push_back(CategoryState::LeafState{.growth = 0});
+    }
+  }
+  if (auto library = LockObject<InstructionLibrary>()) {
+    auto lock = std::lock_guard(library->mutex);
+    UpdateFilterCounters(*library, *this);
+    counted_filters = LibraryFilters(*library);
+  }
 }
 
 }  // namespace automat::library

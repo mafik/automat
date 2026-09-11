@@ -210,6 +210,7 @@ struct AppSinkBoundary : GStreamerElement {
   DEF_END(image_provider);
 
   DEF_INTERFACE(AppSinkBoundary, Signal, step, "Pull")
+  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
   void OnRun(std::unique_ptr<RunTask>& t) { obj->StepOne(); }
   DEF_END(step);
 
@@ -245,6 +246,7 @@ struct AppSrcBoundary : GStreamerElement {
   DEF_END(image);
 
   DEF_INTERFACE(AppSrcBoundary, Signal, step, "Push")
+  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
   void OnRun(std::unique_ptr<RunTask>& t) { obj->StepOne(); }
   DEF_END(step);
 

@@ -37,6 +37,19 @@ struct Command : Object, Container {
   void OnCancel() { obj->Terminate(true); }
   DEF_END(running);
 
+  DEF_INTERFACE(Command, Signal, stop, "Stop")
+  static constexpr bool kSchedulesNext = false;
+  void OnRun(std::unique_ptr<RunTask>&) {
+    obj->Terminate();
+    obj->running->Cancel();
+  }
+  DEF_END(stop);
+
+  DEF_INTERFACE(Command, Text, text, "Command line")
+  Str OnGet() { return obj->GetText(); }
+  void OnSet(StrView value) { obj->SetText(value); }
+  DEF_END(text);
+
   DEF_INTERFACE(Command, NextArg, next, "Next")
   DEF_END(next);
 
@@ -49,7 +62,7 @@ struct Command : Object, Container {
   Str OnFormat() { return "bytes"; }
   DEF_END(in_stream);
 
-  INTERFACES(run, running, next, out_stream, in_stream);
+  INTERFACES(run, running, next, out_stream, in_stream, stop, text);
 
   Command() = default;
   Command(const Command& o)

@@ -38,6 +38,7 @@ struct MediaFile : Object {
   mutable std::mutex mutex;  // guards path and the runtime state below
 
   Str path;  // recipe data; empty = closed
+  Str typed_path;
 
   // Per-stream ports, named "#0".."#5" at construction; the open file sets
   // how many are active.
@@ -62,6 +63,11 @@ struct MediaFile : Object {
   StreamStats OnStats() { return obj->PacketStats(obj->BestVideoStream()); }
   void OnConnect(Interface end) { obj->OnOutStreamConnect(*this, end); }
   DEF_END(out_stream);
+
+  DEF_INTERFACE(MediaFile, Text, path_text, "Path")
+  Str OnGet();
+  void OnSet(StrView);
+  DEF_END(path_text);
 
   void Interfaces(const std::function<LoopControl(Interface)>& cb) override;
 

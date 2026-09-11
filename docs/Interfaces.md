@@ -58,3 +58,11 @@ Defining interface tables & constructing bound types is quite a bit of boilerpla
 2. A zero-cost member with a `->` operator that can be used as if it were the main interface itself (it acts on whatever object it was invoked from).
 
 The implementation of the interface (called Impl) should be located between the macros. All of the methods on Impl should follow the `On*` naming convention - to distinguish them from the main interface methods, which may go through dynamic dispatch. All of the Impl methods may access the interface's state (through `state`), parent object (through `obj`) and table (through `table`).
+
+## Options
+
+Interfaces are exposed to the user as "Options":
+
+- `Widget::FindOption` - which allows a Widget to map keyboard keys, mouse buttons & menu directions to different interfaces
+- `Interface::Table::{activate,cursor,make_icon}` - which an interface can customize to control its menu appearance & behavior when activated by a user
+- TODO: Option Objects - the idea is to create a distinct object that will be able to control a given interface (for example FlipFlop will be able to connect to OnOff interfaces)

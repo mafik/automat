@@ -561,7 +561,7 @@ Vec<Ptr<Location>> BoardWidget::DragStack(Location& base) {
   return result;
 }
 
-Vec<Ptr<Location>> BoardWidget::CloneStack(Location& base) {
+Vec<Ptr<Location>> BoardWidget::CloneStack(Location& base, Vec<std::unique_ptr<Toy>>& toys) {
   auto board = LockBoard();
   if (!board) return {};
   Vec<Location*> originals;
@@ -597,11 +597,11 @@ Vec<Ptr<Location>> BoardWidget::CloneStack(Location& base) {
 
   // Prevent default toy appearance animation by pre-creating toys for the clones.
   // Anchoring to the original toys makes the new toys appear in the same place as the originals.
-  auto& root = FindRootWidget();
+  toys.resize(result.size());
   for (size_t i = 0; i < originals.size(); ++i) {
     auto* orig_lw = originals[i]->widget.Get();
     if (!orig_lw || !orig_lw->toy || !result[i]->object) continue;
-    root.toys.FindOrMake(*result[i]->object, orig_lw->toy.Get());
+    toys[i] = result[i]->object->MakeToy(orig_lw->toy.Get());
   }
 
   WakeAnimation();

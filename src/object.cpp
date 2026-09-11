@@ -144,8 +144,11 @@ std::unique_ptr<Action> Location::copy_Impl::OnActivate(ui::Pointer& pointer, au
   auto board = obj->LockBoard();
   auto* board_widget = board ? pointer.root_widget.toys.FindOrNull(*board) : nullptr;
   if (board_widget == nullptr) return nullptr;
+  Vec<std::unique_ptr<automat::Toy>> toys;
+  auto clones = board_widget->CloneStack(*obj, toys);
   audio::Play(embedded::assets_SFX_canvas_pick_wav);
-  return std::make_unique<DragLocationAction>(pointer, board_widget->CloneStack(*obj));
+  return std::make_unique<DragLocationAction>(pointer, std::move(clones), nullptr, std::nullopt,
+                                              std::move(toys));
 }
 
 Ptr<Object> Location::clone_Impl::OnTake() { return obj->object; }
@@ -156,11 +159,12 @@ std::unique_ptr<Action> Location::clone_Impl::OnActivate(ui::Pointer& pointer, a
   Vec2 position = obj->PeekPosition();
   if (auto board = obj->LockBoard()) position += board->position;
   new_loc->placement = Location::Direct{position, obj->PeekScale()};
+  std::unique_ptr<automat::Toy> new_toy;
   if (auto* lw = toy ? ui::Closest<LocationWidget>(*toy) : nullptr; lw && lw->toy) {
-    pointer.root_widget.toys.FindOrMake(*new_loc->object, lw->toy.Get());
+    new_toy = new_loc->object->MakeToy(lw->toy.Get());
   }
   audio::Play(embedded::assets_SFX_canvas_pick_wav);
-  return std::make_unique<DragLocationAction>(pointer, std::move(new_loc));
+  return std::make_unique<DragLocationAction>(pointer, std::move(new_loc), std::move(new_toy));
 }
 
 constinit ObjectSource::Table kMakeObject = [] {

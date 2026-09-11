@@ -177,7 +177,7 @@ struct BoardWidget : ObjectToy, ui::DropTarget {
   void ForStack(Location& base, std::function<void(Location&, int index)> callback);
   SkPath StackShape(Location& base);
   Vec<Ptr<Location>> DragStack(Location& base);
-  Vec<Ptr<Location>> CloneStack(Location& base);
+  Vec<Ptr<Location>> CloneStack(Location& base, Vec<std::unique_ptr<Toy>>& toys);
   void RaiseStack(Location& base);
 };
 

@@ -191,7 +191,6 @@ std::unique_ptr<LocationWidget> LocationWidget::MakeBoardOwned(ui::Widget* paren
 std::unique_ptr<LocationWidget> LocationWidget::MakePointerOwned(ui::Widget* parent, Location& loc,
                                                                  std::unique_ptr<Toy>&& toy) {
   auto widget = std::unique_ptr<LocationWidget>(new LocationWidget(parent, loc));
-  if (!toy) toy = widget->FindRootWidget().toys.Extract(*loc.object);
   if (toy) {
     widget->toy = static_cast<ObjectToy*>(toy.get());
     widget->toy->Reparent(*widget);

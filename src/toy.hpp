@@ -46,7 +46,16 @@ struct Toy : ui::Widget {
   //
   // Iconification is controlled by the parent Widget but affects how a Toy draws itself. Toy will
   // be woken whenever the iconification changes.
-  float iconified = false;
+  //
+  // # Design of icons
+  //
+  // Icons should capture:
+  //
+  // 1. What makes this object different from other, nearby objects (most important - foreground)
+  // 2. The current state of the object (less important - background)
+  //
+  // Icons may kind of include text - if nothing better is available.
+  bool iconified = false;
 
   // wake_counter must be readable even after owner expires
   Toy(ui::Widget* parent, Object& owner, Interface::Table* iface,

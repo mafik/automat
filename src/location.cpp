@@ -53,6 +53,7 @@ Ptr<Board> Location::LockBoard() const { return board.Lock(); }
 Ptr<Object> Location::Clone() const {
   auto clone = MAKE_PTR(Location);
   clone->placement = placement;
+  clone->iconified = iconified;
   return clone;
 }
 
@@ -284,9 +285,8 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
   }
 
   if (toy) {
-    float iconified_target = loc->iconified ? 1.0f : 0.0f;
-
-    if (animation::LinearApproach(iconified_target, timer.d, 4, toy->iconified).value_changed) {
+    if (toy->iconified != loc->iconified) {
+      toy->iconified = loc->iconified;
       loc->Scale(*this) = toy->GetBaseScale();
       toy->WakeAnimation();
     }

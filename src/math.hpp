@@ -585,3 +585,25 @@ inline SkMatrix MatrixMix(const SkMatrix& a, const SkMatrix& b, float t) {
   }
   return SkMatrix().set9(a_arr);
 }
+
+inline Vec2 Lerp(Vec2 a, Vec2 b, float t) {
+  return Vec2(std::lerp(a.x, b.x, t), std::lerp(a.y, b.y, t));
+}
+
+inline Rect Lerp(Rect a, Rect b, float t) {
+  return Rect(std::lerp(a.left, b.left, t), std::lerp(a.bottom, b.bottom, t),
+              std::lerp(a.right, b.right, t), std::lerp(a.top, b.top, t));
+}
+
+inline RRect Lerp(const RRect& a, const RRect& b, float t) {
+  if (t == 0) return a;
+  if (t == 1) return b;
+  RRect ret = a;
+  ret.rect = Lerp(a.rect, b.rect, t);
+  ret.radii[0] = Lerp(a.radii[0], b.radii[0], t);
+  ret.radii[1] = Lerp(a.radii[1], b.radii[1], t);
+  ret.radii[2] = Lerp(a.radii[2], b.radii[2], t);
+  ret.radii[3] = Lerp(a.radii[3], b.radii[3], t);
+  ret.type = a.type == b.type ? a.type : SkRRect::kComplex_Type;
+  return ret;
+}

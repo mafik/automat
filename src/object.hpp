@@ -154,6 +154,8 @@ struct ObjectToy : Toy {
 
   // Reports 1 but if the object is iconified, it checks the CoarseBounds()
   // and returns a scale that would fit in a 1x1cm square.
+  //
+  // Subclasses that do proper iconification may disable this and always return 1.
   virtual float GetBaseScale() const;
 
   // Places where the connections to this widget may terminate.

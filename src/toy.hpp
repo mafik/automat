@@ -34,6 +34,7 @@ struct Toy : ui::Widget {
   Interface::Table* iface;
   const std::atomic<uint32_t>& wake_counter;
   uint32_t observed_wake_counter = 0;  // UI-thread only
+  bool toy_iconified = false;
 
   // wake_counter must be readable even after owner expires
   Toy(ui::Widget* parent, Object& owner, Interface::Table* iface,

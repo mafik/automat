@@ -883,7 +883,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
   }
 
   void PointerEnter(ui::Pointer& pointer) override {
-    if (IsIconified()) return;
+    if (toy_iconified) return;
     StartWatching(pointer);  // Start watching pointer movement
   }
 

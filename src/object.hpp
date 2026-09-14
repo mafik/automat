@@ -170,9 +170,6 @@ struct ObjectToy : Toy {
   // When iconified, prevent children from receiving pointer events.
   bool AllowChildPointerEvents(ui::Widget&) const override;
 
-  // Shortcut for automat::IsIconified(Object*).
-  bool IsIconified() const;
-
   std::unique_ptr<ErrorFlames> error_flames;
   void UpdateErrorFlames();
 

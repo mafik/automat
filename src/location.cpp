@@ -28,9 +28,7 @@
 #include "format.hpp"
 #include "interface.hpp"
 #include "math.hpp"
-#include "object_iconified.hpp"
 #include "raycast.hpp"
-#include "render_shadows.hpp"
 #include "root_widget.hpp"
 #include "time.hpp"
 #include "timer_thread.hpp"
@@ -108,14 +106,12 @@ Ptr<Object> Location::Create(const Object& prototype) { return InsertHere(protot
 void Location::SetNumber(double number) { SetText(f("{:g}", number)); }
 
 void Location::Iconify() {
-  automat::Iconify(*object);
-  object->WakeToys();
+  iconified = true;
   WakeToys();
 }
 
 void Location::Deiconify() {
-  automat::Deiconify(*object);
-  object->WakeToys();
+  iconified = false;
   WakeToys();
 }
 
@@ -288,9 +284,9 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
   }
 
   if (toy) {
-    bool now_iconified = automat::IsIconified(loc->object.get());
-    if (now_iconified != iconified) {
-      iconified = now_iconified;
+    bool now_iconified = loc->iconified;
+    if (now_iconified != toy->toy_iconified) {
+      toy->toy_iconified = now_iconified;
       loc->Scale(*this) = toy->GetBaseScale();
       toy->WakeAnimation();
     }
@@ -718,7 +714,7 @@ Interface LocationWidget::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
     case NW:
       return Interface(*loc, Location::remove_tbl);
     case NE:
-      if (automat::IsIconified(loc->object.get())) return Interface(*loc, Location::deiconify_tbl);
+      if (loc->iconified) return Interface(*loc, Location::deiconify_tbl);
       return Interface(*loc, Location::iconify_tbl);
     case E:
       return Interface(*loc, Location::copy_tbl);

@@ -38,7 +38,6 @@
 #include "location.hpp"
 #include "math.hpp"
 #include "object.hpp"
-#include "object_iconified.hpp"
 #include "root_widget.hpp"
 #include "widget.hpp"
 
@@ -290,7 +289,9 @@ struct PrototypeGhost : Widget {
   std::unique_ptr<ObjectToy> prototype_widget;
 
   PrototypeGhost(ObjectToy& parent, ArgumentToy& connection, Argument::Table& table)
-      : Widget(&parent), connection(connection), prototype_widget(table.prototype()->MakeToy(this)) {
+      : Widget(&parent),
+        connection(connection),
+        prototype_widget(table.prototype()->MakeToy(this)) {
     alpha = 0;
     layers.OrderInside(prototype_widget.get());
     Vec2 pos = PositionAhead(parent, table, *prototype_widget);
@@ -482,7 +483,8 @@ static Tock TickVisibility(ConnectionWidget& w, ConnectionWidgetLocker& a, time:
     w.hidden = true;
   }
 
-  if (IsIconified(a.StartObj()) && !a.end_iface) {
+  // Hide disconnected connections when source is iconified
+  if (a.start_widget->toy_iconified && !a.end_iface) {
     w.hidden = true;
   }
 

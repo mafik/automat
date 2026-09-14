@@ -18,7 +18,6 @@
 #include "format.hpp"
 #include "image_provider.hpp"
 #include "location.hpp"
-#include "object_iconified.hpp"
 #include "object_lifetime.hpp"
 #include "object_source.hpp"
 #include "pointer.hpp"
@@ -240,7 +239,7 @@ void Object::ReportError(std::string_view message, std::source_location location
 void Object::ClearOwnError() { automat::ClearError(*this, *this); }
 
 float ObjectToy::GetBaseScale() const {
-  if (automat::IsIconified(static_cast<Object*>(owner.GetUnsafe()))) {
+  if (toy_iconified) {
     auto bounds = CoarseBounds().rect;
     return std::min<float>(1_cm / bounds.Width(), 1_cm / bounds.Height());
   }
@@ -284,7 +283,7 @@ Vec2AndDir ObjectToy::ArgStart(const Interface::Table& arg, ui::Widget* coordina
 
 Object::~Object() { LifetimeObserver::CheckDestroyNotified(*this); }
 
-bool ObjectToy::AllowChildPointerEvents(ui::Widget&) const { return !IsIconified(); }
+bool ObjectToy::AllowChildPointerEvents(ui::Widget&) const { return !toy_iconified; }
 
 void ObjectToy::UpdateErrorFlames() {
   auto obj = LockOwner();
@@ -298,10 +297,6 @@ void ObjectToy::UpdateErrorFlames() {
     error_flames = std::make_unique<ErrorFlames>(*this);
   }
   error_flames->SetText(text);
-}
-
-bool ObjectToy::IsIconified() const {
-  return automat::IsIconified(static_cast<Object*>(owner.GetUnsafe()));
 }
 
 void Object::Interfaces(const std::function<LoopControl(Interface)>& cb) {}

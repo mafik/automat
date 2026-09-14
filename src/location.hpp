@@ -105,9 +105,7 @@ struct Location : Object {
   static void FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_position,
                          float& out_scale);
 
-  // Objects in Automat can be fairly large. Iconification is a mechanism that allows players to
-  // shrink them so that they fit in a 1x1cm square. Iconification is then propagated to Toys so
-  // they can adjust their rendering.
+  // Controls iconification of the stored ObjectToy (not LocationWdiget!)
   bool iconified = false;
 
   void Iconify();

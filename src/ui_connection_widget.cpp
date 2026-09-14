@@ -484,7 +484,7 @@ static Tock TickVisibility(ConnectionWidget& w, ConnectionWidgetLocker& a, time:
   }
 
   // Hide disconnected connections when source is iconified
-  if (a.start_widget->toy_iconified && !a.end_iface) {
+  if (a.start_widget->iconified > 0.5f && !a.end_iface) {
     w.hidden = true;
   }
 

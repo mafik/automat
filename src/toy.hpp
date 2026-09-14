@@ -34,7 +34,19 @@ struct Toy : ui::Widget {
   Interface::Table* iface;
   const std::atomic<uint32_t>& wake_counter;
   uint32_t observed_wake_counter = 0;  // UI-thread only
-  bool toy_iconified = false;
+
+  // The point of iconification is to allow Toys to vary the number of options that are presented to
+  // the user. Full iconification assumes that the Widget is contained to a 1x1cm square and should
+  // only show a minimal number of details - just enough to make the toy recognizable.
+  //
+  // When iconification is at zero - the toy should show all of its options.
+  //
+  // Iconification is meant for menus, toolbars & can also be user-controlled: user may want to
+  // shrink some objects.
+  //
+  // Iconification is controlled by the parent Widget but affects how a Toy draws itself. Toy will
+  // be woken whenever the iconification changes.
+  float iconified = false;
 
   // wake_counter must be readable even after owner expires
   Toy(ui::Widget* parent, Object& owner, Interface::Table* iface,

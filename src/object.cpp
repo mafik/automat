@@ -8,6 +8,8 @@
 #include <include/core/SkShader.h>
 #include <include/effects/SkGradient.h>
 
+#include <cmath>
+
 #include "../build/generated/embedded.hpp"
 #include "automat.hpp"
 #include "base.hpp"
@@ -239,9 +241,11 @@ void Object::ReportError(std::string_view message, std::source_location location
 void Object::ClearOwnError() { automat::ClearError(*this, *this); }
 
 float ObjectToy::GetBaseScale() const {
-  if (toy_iconified) {
+  if (iconified) {
     auto bounds = CoarseBounds().rect;
-    return std::min<float>(1_cm / bounds.Width(), 1_cm / bounds.Height());
+    float fully_iconified_scale = std::min<float>(1_cm / bounds.Width(), 1_cm / bounds.Height());
+    // TODO: interpolate between 1 and fully_iconified_scale using 'float_iconified'
+    return std::lerp(1, fully_iconified_scale, iconified);
   }
   return 1;
 }
@@ -283,7 +287,7 @@ Vec2AndDir ObjectToy::ArgStart(const Interface::Table& arg, ui::Widget* coordina
 
 Object::~Object() { LifetimeObserver::CheckDestroyNotified(*this); }
 
-bool ObjectToy::AllowChildPointerEvents(ui::Widget&) const { return !toy_iconified; }
+bool ObjectToy::AllowChildPointerEvents(ui::Widget&) const { return iconified <= 0.5f; }
 
 void ObjectToy::UpdateErrorFlames() {
   auto obj = LockOwner();

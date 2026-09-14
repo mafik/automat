@@ -941,7 +941,7 @@ void InstructionLibrary::Widget::PointerMove(ui::Pointer& p, Vec2 position) {
 }
 
 void InstructionLibrary::Widget::PointerEnter(ui::Pointer& p) {
-  if (toy_iconified) return;
+  if (iconified > 0.5f) return;
   StartWatching(p);
 }
 

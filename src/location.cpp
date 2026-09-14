@@ -284,9 +284,9 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
   }
 
   if (toy) {
-    bool now_iconified = loc->iconified;
-    if (now_iconified != toy->toy_iconified) {
-      toy->toy_iconified = now_iconified;
+    float iconified_target = loc->iconified ? 1.0f : 0.0f;
+
+    if (animation::LinearApproach(iconified_target, timer.d, 4, toy->iconified).value_changed) {
       loc->Scale(*this) = toy->GetBaseScale();
       toy->WakeAnimation();
     }

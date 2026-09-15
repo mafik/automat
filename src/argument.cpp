@@ -22,7 +22,7 @@ Object& Argument::ObjectOrMake() const {
     return *o;
   }
   auto proto = table->prototype();
-  auto start_loc = object_ptr->MyLocation();
+  auto start_loc = object_ptr->HomeLocation();
   Ptr<Board> board = start_loc ? start_loc->LockBoard() : nullptr;
   if (!board) {
     board = DefaultBoard().AcquirePtr();

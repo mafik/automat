@@ -720,6 +720,11 @@ Interface LocationWidget::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
       return Interface(*loc, Location::copy_tbl);
     case W:
       return Interface(*loc, Location::clone_tbl);
+    case SE:
+      if (loc->object && loc->object->HomeLocation() != loc) {
+        return Interface(*loc, Location::make_home_tbl);
+      }
+      return {};
     case S:
       if (auto board = loc->LockBoard()) return Interface(*board);
       return {};

@@ -589,7 +589,7 @@ void Window::Capture() {
 #endif
   WakeToys();
 
-  if (auto location = MyLocation()) {
+  if (auto location = HomeLocation()) {
     location->ScheduleUpdate();
   }
 }
@@ -674,7 +674,7 @@ bool Window::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 void Window::on_off_Impl::OnSync() {
   if (obj->window_watching) return;  // Already watching
-  if (obj->MyLocation()) {
+  if (obj->HomeLocation()) {
     ui::root_widget->window->BeginWindowWatching(&*obj, &obj->window_watching);
   }
 }

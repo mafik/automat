@@ -290,7 +290,7 @@ void ClientArrivals::Process() {
   for (auto& [w, launch] : appeared) {
     auto& win = *w;
     Ptr<Object> source = launch ? launch->source.Lock() : nullptr;
-    Ptr<Location> source_location = source ? source->MyLocation() : nullptr;
+    Ptr<Location> source_location = source ? source->HomeLocation() : nullptr;
     if (source && !win.launcher->IsConnected()) {
       win.launcher->Connect(Interface(source.get(), nullptr));
     }

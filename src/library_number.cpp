@@ -133,7 +133,7 @@ bool Number::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 static void EditText(Object& object, Str text) {
   object.SetText(text);
-  if (auto location = object.MyLocation()) location->ScheduleUpdate();
+  if (auto location = object.HomeLocation()) location->ScheduleUpdate();
 }
 
 void Number::text_Impl::OnSet(StrView value) { EditText(*obj, Str(value)); }

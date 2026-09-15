@@ -138,7 +138,12 @@ struct Location : Object {
   void OnRun(std::unique_ptr<RunTask>&) { obj->Deiconify(); }
   DEF_END(deiconify);
 
-  INTERFACES(move, copy, clone, remove, iconify, deiconify)
+  DEF_INTERFACE(Location, Command, make_home, "Make Home")
+  static constexpr bool kSchedulesNext = false;
+  void OnRun(std::unique_ptr<RunTask>&) { obj->object->MakeHome(*obj); }
+  DEF_END(make_home);
+
+  INTERFACES(move, copy, clone, remove, iconify, deiconify, make_home)
 
   explicit Location(WeakPtr<Board> board = {});
   ~Location();

@@ -131,7 +131,7 @@ static const char* RangeName(Timer::Range range) {
 static void SetDuration(Timer& timer, Duration new_duration) {
   auto lock = std::lock_guard(timer.mtx);
   if (timer.running->IsRunning()) {
-    if (auto h = timer.MyLocation()) {
+    if (auto h = timer.HomeLocation()) {
       RescheduleAt(*h, timer.start_time + timer.duration_value, timer.start_time + new_duration);
     }
   }
@@ -141,7 +141,7 @@ static void SetDuration(Timer& timer, Duration new_duration) {
 }
 
 static void PropagateDurationOutwards(Timer& timer) {
-  if (auto h = timer.MyLocation()) {
+  if (auto h = timer.HomeLocation()) {
     // auto duration_obj = timer.duration_arg.GetLocation(*h);
     // if (duration_obj.ok && duration_obj.location) {
     //   duration_obj.location->SetNumber(timer.duration_value * TickCount(timer.range) /
@@ -154,7 +154,7 @@ void Timer::StartTimer(std::unique_ptr<RunTask>& run_task) {
   auto lock = std::lock_guard(mtx);
   ZoneScopedN("Timer");
   start_time = time::SteadyClock::now();
-  if (auto location = MyLocation()) {
+  if (auto location = HomeLocation()) {
     ScheduleAt(*location, start_time + duration_value);
   }
   WakeToys();
@@ -162,7 +162,7 @@ void Timer::StartTimer(std::unique_ptr<RunTask>& run_task) {
 }
 
 void Timer::CancelTimer() {
-  if (auto location = MyLocation()) {
+  if (auto location = HomeLocation()) {
     CancelScheduledAt(*location, start_time + duration_value);
   }
   WakeToys();
@@ -249,7 +249,7 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
     d.Get(value, status);
     running->BeginLongRunning(make_unique<RunTask>(AcquireWeakPtr(), &Timer::run_tbl));
     start_time = time::SteadyNow() - time::FromSeconds(value);
-    if (auto location = MyLocation()) {
+    if (auto location = HomeLocation()) {
       ScheduleAt(*location, start_time + duration_value);
     }
   } else if (key == "duration_seconds") {
@@ -258,7 +258,7 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
     if (OK(status)) {
       duration_value = time::FromSeconds(value);
       if (running->IsRunning()) {
-        if (auto location = MyLocation()) {
+        if (auto location = HomeLocation()) {
           ScheduleAt(*location, start_time + duration_value);
         }
       }

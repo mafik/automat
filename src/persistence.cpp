@@ -108,6 +108,8 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
     }
   }
 
+  Vec<std::pair<Object*, Str>> homes;
+
   // Second pass: Deserialize object states and connections
   for (auto& key : ObjectView(d, status)) {
     if (key == "version") {
@@ -121,6 +123,10 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
         for (auto& field : ObjectView(d, status)) {
           if (field == "type") {
             d.Skip();  // Already handled during object creation in first pass
+          } else if (field == "home") {
+            Str home_name;
+            d.Get(home_name, status);
+            homes.emplace_back(object, home_name);
           } else if (field == "links") {
             // Deserialize argument connections
             for (auto& arg_name : ObjectView(d, status)) {
@@ -143,6 +149,15 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
       } else {
         d.Skip();
       }
+    }
+  }
+
+  for (auto& [object, home_name] : homes) {
+    auto* home = d.LookupObject(home_name);
+    if (auto* board = dynamic_cast<Board*>(home)) {
+      if (auto location = board->LocationOrNull(*object)) object->MakeHome(*location);
+    } else if (home) {
+      object->MakeHome(*home);
     }
   }
 

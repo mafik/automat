@@ -340,7 +340,7 @@ Ptr<Location> ProgramLauncher::Extract(Object& descendant) {
   auto extracted = ExtractLaunch();
   if (!extracted) return nullptr;
   Vec2 position = {};
-  if (auto my_location = MyLocation()) {
+  if (auto my_location = HomeLocation()) {
     position = my_location->PeekPosition();
     if (auto board = my_location->LockBoard()) position += board->position;
   }

@@ -73,7 +73,7 @@ static void TimerFinished(Object& object, SteadyPoint scheduled_time) {
     ERROR << "Timer notification sent to an object which cannot receive it";
     return;
   }
-  if (auto location = object.MyLocation()) {
+  if (auto location = object.HomeLocation()) {
     timer->OnTimerNotification(*location, scheduled_time);
   }
 }

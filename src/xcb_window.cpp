@@ -742,7 +742,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
       if (offer_loc && &offer == current_offer.get()) {
         if (auto* drag = Drag()) drag->RemoveFromGroup(*offer_loc);
         offer_loc.reset();
-      } else if (auto L = offer.MyLocation()) {
+      } else if (auto L = offer.HomeLocation()) {
         if (auto board = L->LockBoard()) board->Extract(*L);
       }
     }
@@ -790,7 +790,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
       DragLocationAction* drag = offer.get() == current_offer.get() ? Drag() : nullptr;
       if (drag) {
         drag->AddToGroup(std::move(loc));
-      } else if (auto offer_location = offer->MyLocation()) {
+      } else if (auto offer_location = offer->HomeLocation()) {
         if (auto board = offer_location->LockBoard()) {
           Vec2 pos = offer_location->PeekPosition() + Vec2(6_mm, -6_mm);
           loc->board = board->AcquireWeakPtr();

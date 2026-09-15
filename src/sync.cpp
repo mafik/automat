@@ -65,7 +65,7 @@ void Syncable::Table::DefaultOnConnect(Argument self, Interface end) {
     auto gear = FindGearOrNull(end_syncable);
     if (gear == nullptr) {
       gear = FindGearOrMake(Syncable(self_obj, self_tab));
-      auto self_loc = self_obj->MyLocation();
+      auto self_loc = self_obj->HomeLocation();
       board = self_loc ? self_loc->LockBoard().get() : nullptr;
       if (!board) board = &DefaultBoard();
       auto& loc = board->Insert(gear);
@@ -82,7 +82,7 @@ void Syncable::Table::DefaultOnConnect(Argument self, Interface end) {
     gear->FullSync(Syncable(self_obj, self_tab));
   }
   if (!board) {
-    if (auto self_loc = self_obj->MyLocation()) {
+    if (auto self_loc = self_obj->HomeLocation()) {
       board = self_loc->LockBoard().get();
     }
   }

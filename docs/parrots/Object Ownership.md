@@ -20,9 +20,25 @@ place when it is moved, so links can live in a `deque` or a `Vec` whose elements
 not copyable, because a copy would register the same owner twice. Unlike `Ptr`, a link is not
 trivially relocatable.
 
-Owners are listed in the order in which they took the object. `Object::MyLocation()` returns the
-first owner that is a Location on a board, and `Board::LocationOrNull` returns the owner Location
-that belongs to the given board. Both replace scans of `engine.boards`.
+Owners are listed in the order in which they took the object, and the first owner is the object's
+home (`Object::HomeOwner()`). `Object::HomeLocation()` follows first owners until it reaches a
+Location: an object on boards answers with the Location on its home board, a nested object with the
+home Location of its container. `Board::LocationOrNull` returns the owner Location that belongs to
+the given board. Both replace scans of `engine.boards`.
+
+The home is where the object's consequences appear: a missing argument target, a Gear, a window
+opened by a launch. One object has exactly one home, so a creation lands on one board, the way one
+line of source belongs to one file, whether the user is looking at that board or the engine runs
+without a window. By default the home is the first board the object was placed on. `Make Home` in
+a Location's menu (`Location::make_home`, src/location.hpp) is offered on every Location that is
+not the home and moves the home there by rotating the owner list (`Object::MakeHome`), so links of
+the other owners keep their relative order.
+
+Link order does not survive a reload on its own, because boards and their locations are stored in
+z-order. Every serialized object therefore records its home after its type: the name of the home
+board, or of the containing object when the first owner is not a Location. After all objects and
+boards are loaded, `LoadState` (src/persistence.cpp) rotates each owner list back to the recorded
+home.
 
 The structural holders are `Location::object`, `Board::locations`, `Timeline::tracks` and
 `ProgramLauncher::launch`. Every other reference to an Object stays a `Ptr`: locals, task

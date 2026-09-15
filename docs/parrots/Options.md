@@ -124,7 +124,8 @@ The generic layer provides only the slots that mean the same on every object. `O
 (src/object.cpp) answers N with the object's Runnable, or with `kThisIsFine` while the object shows
 an error, and S with its Location; its `MenuMode` is two directions. The left button is not answered
 by the object toy and falls through to `LocationWidget::FindOption` (src/location.cpp): Left and N
-move, NW delete, NE iconify or deiconify, E copy, W clone, S the Board. `BoardWidget::FindOption`
+move, NW delete, NE iconify or deiconify, E copy, W clone, SE make home when the Location is not the
+object's home, S the Board. `BoardWidget::FindOption`
 (src/board.cpp): N move, NE toggle frame, S the camera menu. `RootWidget::FindOption`
 (src/root_widget.cpp) maps the W, A, S and D keys and the N, S, W and E directions to the `Camera`
 object's nudge commands and the middle button to the camera drag. An object with more commands

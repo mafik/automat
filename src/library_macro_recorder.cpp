@@ -148,7 +148,7 @@ Ptr<Object> MacroRecorder::Clone() const { return MAKE_PTR(MacroRecorder, *this)
 
 static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, PointerButton ptr_btn,
                              bool down) {
-  auto macro_recorder_loc = macro_recorder.MyLocation();
+  auto macro_recorder_loc = macro_recorder.HomeLocation();
   auto board = macro_recorder_loc ? macro_recorder_loc->LockBoard() : nullptr;
   if (board == nullptr) {
     FATAL << "MacroRecorder must be placed on a Board";
@@ -204,7 +204,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
     Location& on_off_loc = make_fn();
     on_off_loc.Iconify();
     Argument::Table& track_arg = timeline->tracks.back()->arg_table;
-    if (auto timeline_loc = timeline->MyLocation()) {
+    if (auto timeline_loc = timeline->HomeLocation()) {
       on_off_loc.placement = Location::PlaceAhead{timeline_loc->AcquireWeakPtr(), &track_arg};
     }
     AnimateGrowFrom(*macro_recorder_loc, on_off_loc);
@@ -312,7 +312,7 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
     auto track_ptr = MAKE_PTR(TrackT, track_name);
     timeline->AddTrack(std::move(track_ptr));
     track_index = timeline->tracks.size() - 1;
-    auto recorder_loc = recorder.MyLocation();
+    auto recorder_loc = recorder.HomeLocation();
     auto board = recorder_loc ? recorder_loc->LockBoard() : nullptr;
     if (board == nullptr) {
       FATAL << "MacroRecorder must be placed on a Board";
@@ -322,7 +322,7 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
     receiver_loc.Iconify();
     Argument::Table& track_arg = timeline->tracks.back()->arg_table;
 
-    if (auto timeline_loc = timeline->MyLocation()) {
+    if (auto timeline_loc = timeline->HomeLocation()) {
       receiver_loc.placement = Location::PlaceAhead{timeline_loc->AcquireWeakPtr(), &track_arg};
     }
     AnimateGrowFrom(*recorder_loc, receiver_loc);

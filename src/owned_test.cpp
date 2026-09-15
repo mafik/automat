@@ -95,21 +95,49 @@ TEST(OwnedTest, LocationAndBoardLookups) {
   auto thing = MAKE_PTR(Thing);
   Location& loc = board->Insert(Ptr<Object>(thing));
   EXPECT_EQ(OwnersOf(*thing), (Vec<Object*>{&loc}));
-  EXPECT_EQ(thing->MyLocation(), &loc);
+  EXPECT_EQ(thing->HomeLocation(), &loc);
   EXPECT_EQ(board->LocationOrNull(*thing), &loc);
 
   auto other = MAKE_PTR(Board);
   EXPECT_EQ(other->LocationOrNull(*thing), nullptr);
   Location& second = other->Insert(Ptr<Object>(thing));
-  EXPECT_EQ(thing->MyLocation(), &loc);
+  EXPECT_EQ(thing->HomeLocation(), &loc);
   EXPECT_EQ(other->LocationOrNull(*thing), &second);
 
   Ptr<Location> extracted = board->Extract(loc);
   EXPECT_EQ(OwnersOf(*thing), (Vec<Object*>{&loc, &second}));
   EXPECT_EQ(board->LocationOrNull(*thing), nullptr);
-  EXPECT_EQ(thing->MyLocation(), &second);
+  EXPECT_EQ(thing->HomeLocation(), &loc);
   extracted = nullptr;
   EXPECT_EQ(OwnersOf(*thing), (Vec<Object*>{&second}));
+  EXPECT_EQ(thing->HomeLocation(), &second);
+}
+
+TEST(OwnedTest, MakeHomeRotatesOwners) {
+  auto thing = MAKE_PTR(Thing);
+  auto a = MAKE_PTR(Board);
+  auto b = MAKE_PTR(Board);
+  auto c = MAKE_PTR(Board);
+  Location& in_a = a->Insert(Ptr<Object>(thing));
+  Location& in_b = b->Insert(Ptr<Object>(thing));
+  Location& in_c = c->Insert(Ptr<Object>(thing));
+  EXPECT_EQ(thing->HomeLocation(), &in_a);
+  thing->MakeHome(in_c);
+  EXPECT_EQ(thing->HomeLocation(), &in_c);
+  EXPECT_EQ(OwnersOf(*thing), (Vec<Object*>{&in_c, &in_a, &in_b}));
+  thing->MakeHome(*a);
+  EXPECT_EQ(thing->HomeLocation(), &in_c);
+}
+
+TEST(OwnedTest, HomeLocationResolvesThroughContainers) {
+  auto board = MAKE_PTR(Board);
+  auto holder = MAKE_PTR(Holder);
+  auto thing = MAKE_PTR(Thing);
+  EXPECT_EQ(thing->HomeLocation(), nullptr);
+  holder->held.emplace_back(*holder, thing);
+  EXPECT_EQ(thing->HomeLocation(), nullptr);
+  Location& holder_loc = board->Insert(Ptr<Object>(holder));
+  EXPECT_EQ(thing->HomeLocation(), &holder_loc);
 }
 
 }  // namespace

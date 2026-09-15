@@ -193,8 +193,11 @@ struct Object : public ReferenceCounted {
 
   SmallVec<Ptr<Object>, 4> Owners();
 
-  // DEPRECATED: Object can have more than one Location. Users of this API should be re-designed.
-  Ptr<Location> MyLocation();
+  Ptr<Object> HomeOwner();
+
+  void MakeHome(Object& owner);
+
+  Ptr<Location> HomeLocation();
 };
 
 std::unique_ptr<Action> PickUp(ui::Pointer&, Location&, Object&);

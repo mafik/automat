@@ -361,12 +361,35 @@ SmallVec<Ptr<Object>, 4> Object::Owners() {
   return result;
 }
 
-Ptr<Location> Object::MyLocation() {
-  for (auto& owner : Owners()) {
-    auto location = dyn_cast<Location>(owner);
-    if (location && !location->board.IsExpired()) return location;
-  }
+void Object::MakeHome(Object& owner) {
+  auto lock = std::lock_guard(owners_lock);
+  if (owners == nullptr) return;
+  OwnerLink* link = owners;
+  do {
+    if (link->owner == &owner) {
+      owners = link;
+      return;
+    }
+    link = link->next;
+  } while (link != owners);
+}
+
+Ptr<Object> Object::HomeOwner() {
+  auto lock = std::lock_guard(owners_lock);
+  if (owners == nullptr) return nullptr;
+  OwnerLink* link = owners;
+  do {
+    if (link->owner->IncrementOwningRefsNonZero()) return Ptr<Object>(link->owner);
+    link = link->next;
+  } while (link != owners);
   return nullptr;
+}
+
+Ptr<Location> Object::HomeLocation() {
+  auto owner = HomeOwner();
+  if (owner == nullptr) return nullptr;
+  if (auto location = dyn_cast<Location>(owner)) return location;
+  return owner->HomeLocation();
 }
 
 Interface Object::InterfaceFromName(StrView needle) {
@@ -420,6 +443,13 @@ void ObjectSerializer::Serialize(Object& start) {
     StartObject();
     Key("type");
     String(type_name.data(), type_name.length());
+    if (auto home = o->HomeOwner()) {
+      if (auto location = dyn_cast<Location>(home)) home = location->LockBoard();
+      if (home) {
+        Key("home");
+        String(ResolveName(*home));
+      }
+    }
     o->SerializeState(*this);
 
     {  // Serialize object parts

@@ -700,7 +700,7 @@ void PipeWireNode::RefreshFromMirror() {
   Str name = NodeName();
   // The capture stream follows board membership: only a proxy on a board
   // opens a stream targeting its node.
-  bool want_stream = host.connected && MyLocation() != nullptr && !name.empty();
+  bool want_stream = host.connected && HomeLocation() != nullptr && !name.empty();
   if (want_stream != (stream != nullptr)) {
     pw_thread_loop_lock(host.loop);
     DestroyVuStreamLocked(*this);

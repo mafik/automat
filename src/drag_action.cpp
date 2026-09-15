@@ -365,11 +365,10 @@ void DragLocationAction::SetRadar(float target) {
     if (!connection_widget) continue;
     float value = 0;
     if (target > 0) {
-      auto start = connection_widget->LockOwner<Object>();
-      if (!start || !connection_widget->iface) continue;
-      Argument arg = connection_widget->Bind<Argument>(*start);
+      auto arg = connection_widget->LockBind<Argument>();
+      if (!arg) continue;
       for (auto& location : locations) {
-        if (start.Get() == location->object.Get()) {
+        if (arg.object_ptr == location->object.Get()) {
           // We grabbed the start object of this connection widget
           value = target;
         } else if (arg.CanConnect(*location->object)) {

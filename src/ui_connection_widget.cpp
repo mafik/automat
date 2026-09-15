@@ -328,8 +328,7 @@ struct ConnectionWidgetLocker {
   ToyScope& toy_store;
   BoardWidget* board_widget;
 
-  Ptr<Object> start_obj;
-  Argument start_arg;
+  Locked<Argument> start_arg;
   ObjectToy* start_widget;
 
   NestedPtr<Interface::Table> end_iface;
@@ -340,15 +339,14 @@ struct ConnectionWidgetLocker {
   ConnectionWidgetLocker(ArgumentToy& w)
       : toy_store(w.ToyScope()),
         board_widget(BoardOrNull(w)),
-        start_obj(w.LockOwner<Object>()),
-        start_arg(start_obj ? w.Bind<Argument>(*start_obj) : nullptr),
-        start_widget(start_obj ? toy_store.FindOrNull(*start_obj) : nullptr),
+        start_arg(w.LockBind<Argument>()),
+        start_widget(start_arg ? toy_store.FindOrNull(*start_arg.object_ptr) : nullptr),
         end_iface(start_arg ? start_arg.Find() : NestedPtr<Interface::Table>()),
         end_widget(EndObj() ? toy_store.FindOrNull(*EndObj()) : nullptr),
         end_transform(end_widget && board_widget ? TransformBetween(*end_widget, *board_widget)
                                                  : SkMatrix()) {}
 
-  Object* StartObj() const { return start_obj.Get(); }
+  Object* StartObj() const { return start_arg.object_ptr; }
   Object* EndObj() const { return end_iface.Owner<Object>(); }
 };
 

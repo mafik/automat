@@ -131,7 +131,7 @@ struct Board : Object {
 
 // UI widget for Board. Handles drawing, drop target, and spatial queries.
 struct BoardWidget : ObjectToy, ui::DropTarget {
-  struct ToyStore toys;
+  struct ToyScope toys;
 
   animation::SpringV2<Vec2> size;
   animation::SpringV2<float> frame_width;

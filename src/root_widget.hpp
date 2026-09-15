@@ -113,7 +113,7 @@ struct RootWidget final : Widget {
 
   void Init();
 
-  struct ToyStore toys;
+  struct ToyScope toys;
   MortalList<Action> active_actions;
 
   std::string_view Name() const override { return "RootWidget"; }

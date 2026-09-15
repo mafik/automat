@@ -204,7 +204,7 @@ parent surface owns its subsurfaces as `Ptr<WaylandSurface>` children; at every
 commit that changes the visible tree the compositor updates this object tree to
 match the Wayland tree (`UpdateSurfaceNode`). Each surface's toy draws only its own
 texture and owns a child toy per child surface (`WaylandSurfaceToy::child_toys_` —
-never a ToyStore entry, see docs/parrots/Boards.md), so Automat's renderer composites
+never a ToyScope entry, see docs/parrots/Boards.md), so Automat's renderer composites
 the subtree the way it composites any widget tree, each surface a node with its
 own cached texture. A parent with a transparent centre (a client that draws its
 own decorations) shows its child's content through it. The window extent and board

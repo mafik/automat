@@ -435,7 +435,7 @@ RootWidget& Widget::FindRootWidget() const {
   return *root;
 }
 
-ToyStore& Widget::ToyStore() const {
+ToyScope& Widget::ToyScope() const {
   if (auto* board_widget = BoardOrNull(*this)) {
     return board_widget->toys;
   }

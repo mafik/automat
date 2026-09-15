@@ -128,7 +128,7 @@ struct ToyMakerMixin {
 // ToyMakers can create many toys to display themselves simultaneously in multiple contexts.
 // Each context which can display widgets must maintain their lifetime. This class helps with that.
 // TODO: delete widgets after some time
-struct ToyStore {
+struct ToyScope {
   using Key = std::pair<Object*, Interface::Table*>;
   using Map = ankerl::unordered_dense::map<Key, std::unique_ptr<Toy>>;
   Map container;

@@ -15,7 +15,7 @@ to be woken up.
 ### Zombie Toys
 
 From the perspective of Toys (living in UI threads), object deletion may only
-be observed as nullptr coming from `LockOwner()`. ToyStore periodically scans
+be observed as nullptr coming from `LockOwner()`. ToyScope periodically scans
 all of the WeakPtrs of visible toys & wakes them. When a toy is woken up and
 during its `Tick()` detects that its owner is gone, the Toy may choose to
 animate its deletion, which should eventually lead to `MarkDead()` call.
@@ -30,7 +30,7 @@ children in `TrackedPtr`.
 
 (Note that `OnChildDead` callback happens during child's drawing phase)
 
-Cleanup of a dead toy is the responsibility of the `ToyStore` and is based on
+Cleanup of a dead toy is the responsibility of the `ToyScope` and is based on
 the Toy's `dead` flag.
 
 ## Visual design

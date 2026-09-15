@@ -370,7 +370,7 @@ Interface SyncBelt::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
 
 ui::Tock SyncBelt::Tick(time::Timer& t) {
   Tock tock;
-  auto& toy_store = ToyStore();
+  auto& toy_store = ToyScope();
 
   // Check if the object of this connection still exists.
   auto syncable = LockBind<Syncable>();

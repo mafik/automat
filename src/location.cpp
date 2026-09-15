@@ -176,7 +176,7 @@ LocationWidget::LocationWidget(ui::Widget* parent, Location& loc)
 
 std::unique_ptr<LocationWidget> LocationWidget::MakeBoardOwned(ui::Widget* parent, Location& loc) {
   auto widget = std::unique_ptr<LocationWidget>(new LocationWidget(parent, loc));
-  if (auto* obj_toy = widget->ToyStore().FindOrNull(*loc.object)) {
+  if (auto* obj_toy = widget->ToyScope().FindOrNull(*loc.object)) {
     // If the object already has a toy, reparent it to keep transform
     widget->toy = obj_toy;
     obj_toy->Reparent(*widget);
@@ -205,7 +205,7 @@ ObjectToy& LocationWidget::ToyForObject() {
           owned_toy = loc->object->MakeToy(this);
           toy = static_cast<ObjectToy*>(owned_toy.get());
         } else {
-          toy = &ToyStore().FindOrMake(*loc->object, this);
+          toy = &ToyScope().FindOrMake(*loc->object, this);
         }
         float& scale = loc->Scale(*this);
         scale = toy->GetBaseScale();
@@ -409,7 +409,7 @@ void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const
     return LoopControl::Continue;
   });
 
-  // Incoming: iterate all ToyStore entries to find ConnectionWidgets pointing to this location
+  // Incoming: iterate all ToyScope entries to find ConnectionWidgets pointing to this location
   if (auto board = LockBoard()) {
     auto lock = std::lock_guard(vm.mutex);
     for (auto& other_loc : board->locations) {

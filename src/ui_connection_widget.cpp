@@ -325,7 +325,7 @@ struct PrototypeGhost : Widget {
 
 // Locks the connection's weak pointers and finds the connected objects' widgets.
 struct ConnectionWidgetLocker {
-  ToyStore& toy_store;
+  ToyScope& toy_store;
   BoardWidget* board_widget;
 
   Ptr<Object> start_obj;
@@ -338,7 +338,7 @@ struct ConnectionWidgetLocker {
 
   // Computing everything in initializer avoids zero-initialization
   ConnectionWidgetLocker(ArgumentToy& w)
-      : toy_store(w.ToyStore()),
+      : toy_store(w.ToyScope()),
         board_widget(BoardOrNull(w)),
         start_obj(w.LockOwner<Object>()),
         start_arg(start_obj ? w.Bind<Argument>(*start_obj) : nullptr),
@@ -1411,7 +1411,7 @@ void ArgumentToy::TickAutoconnectUI(time::Timer& timer) {
     layers.OrderBelow(radar.get());
   }
   if (!prototype_ghost && prototype_alpha_target > 0 && !arg.IsConnected()) {
-    if (auto* toy = ToyStore().FindOrNull(*arg.object_ptr)) {
+    if (auto* toy = ToyScope().FindOrNull(*arg.object_ptr)) {
       prototype_ghost = std::make_unique<ui::PrototypeGhost>(*toy, *this, *arg.table);
       toy->layers.OrderBelow(prototype_ghost.get());
     }

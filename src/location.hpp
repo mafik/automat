@@ -91,7 +91,7 @@ struct Location : Object {
   std::unordered_set<Location*> observing_updates;
 
   // DEPRECATED: a VM-space object must not reference UI-space widgets. Widgets are not
-  // thread-aware and may vanish between two VM reads. Look them up through a ToyStore instead.
+  // thread-aware and may vanish between two VM reads.
   MortalPtr<LocationWidget> widget;
 
   // ToyMaker concept
@@ -286,7 +286,7 @@ struct LocationWidget : ObjectToy {
 
   Rect CoverBounds() const override { return stack_draw_bounds; }
 
-  // Keep Toy in the board's ToyStore.
+  // Keep Toy in the board's ToyScope.
   static std::unique_ptr<LocationWidget> MakeBoardOwned(ui::Widget* parent, Location& loc);
   // Keep Toy owned locally.
   static std::unique_ptr<LocationWidget> MakePointerOwned(ui::Widget* parent, Location& loc,

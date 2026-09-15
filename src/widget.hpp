@@ -39,7 +39,7 @@ struct Object;
 struct Argument;
 struct Location;
 struct Syncable;
-struct ToyStore;
+struct ToyScope;
 
 namespace ui {
 struct Widget;
@@ -225,7 +225,7 @@ struct Widget : OptionsProvider {
   int index;
 
   RootWidget& FindRootWidget() const;
-  ToyStore& ToyStore() const;
+  ToyScope& ToyScope() const;
 
   // Validates that the parent/children hierarchy is correctly maintained (in non-release builds).
   void ValidateHierarchy(std::source_location location = std::source_location::current());

@@ -900,7 +900,7 @@ struct TimelineWidget : ObjectToy {
 
   void AddMissingTrackWidgets(Timeline& timeline_locked) {
     auto& tracks = timeline_locked.tracks;
-    auto& toy_store = ToyStore();
+    auto& toy_store = ToyScope();
     for (size_t i = track_widgets.size(); i < tracks.size(); ++i) {
       LOG << "Adding track widget for track " << i;
       auto& track_widget = toy_store.FindOrMake(*tracks[i], this);

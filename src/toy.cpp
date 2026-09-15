@@ -24,7 +24,7 @@ Toy* Toy::BaseToy() const {
 
 void ToyMakerMixin::ForEachToyImpl(Object& owner, Interface::Table* iface,
                                    std::function<void(ui::RootWidget&, Toy&)> cb) {
-  auto key = ToyStore::Key(&owner, iface);
+  auto key = ToyScope::Key(&owner, iface);
   for (auto* root_widget : ui::root_widgets) {
     auto it = root_widget->toys.container.find(key);
     if (it != root_widget->toys.container.end()) {
@@ -51,7 +51,7 @@ void Toy::Poll(time::Timer& timer) {
   OnPoll(timer);
 }
 
-void ToyStore::Poll(time::Timer& timer) {
+void ToyScope::Poll(time::Timer& timer) {
   // Remove dead toys
   std::erase_if(container, [](auto& entry) { return entry.second->dead; });
 

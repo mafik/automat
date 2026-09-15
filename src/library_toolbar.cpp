@@ -20,7 +20,7 @@ using namespace std::literals;
 namespace automat::ui {
 
 void PrototypeButton::Init() {
-  proto_widget = &ToyStore().FindOrMake(*proto, this);
+  proto_widget = &ToyScope().FindOrMake(*proto, this);
   auto rect = proto_widget->CoarseBounds().rect;
   natural_width =
       std::min<float>(kToolbarIconSize, rect.Width() * kToolbarIconSize / rect.Height());

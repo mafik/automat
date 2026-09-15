@@ -36,13 +36,13 @@ position and scale on that board. When several boards own one object, each board
 Location for it and the Locations share the object. Boards are moved with the Move option in
 their menu and never enter drop targets (`MoveBoardAction`, src/board.cpp).
 
-Each board widget has its own ToyStore, which guarantees one widget per object on that board;
-`Widget::ToyStore()` resolves to the store of the nearest enclosing board widget
+Each board widget has its own ToyScope, which guarantees one widget per object on that board;
+`Widget::ToyScope()` resolves to the scope of the nearest enclosing board widget
 (src/widget.cpp). The pointer needs no uniqueness guarantee, so it holds the dragged widget
-directly through a unique_ptr, together with an owning Ptr to the object. ToyStore is one way
+directly through a unique_ptr, together with an owning Ptr to the object. ToyScope is one way
 of managing widget lifetimes and is used only where the one-widget constraint must be
 enforced. Toys that a widget creates for its own subtree — a Wayland window's client surface
-toys, for example — are owned by the parent toy directly and never enter a store, so they
+toys, for example — are owned by the parent toy directly and never enter a scope, so they
 move between boards together with the widget tree.
 
 One resident widget per object per board is a deliberate limit:
@@ -190,5 +190,5 @@ stretch: the merge animation is the plain snap of the same widget, plus a fade.
 
 A connection is drawn on a board only when that board owns both of its endpoint objects. Every
 board that owns both ends draws the connection, each with its own connection widget from its
-own ToyStore. A board that owns only one end draws nothing for the connection, even though the
+own ToyScope. A board that owns only one end draws nothing for the connection, even though the
 connection still exists in the VM.

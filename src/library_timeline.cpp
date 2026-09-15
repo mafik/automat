@@ -1819,8 +1819,8 @@ std::unique_ptr<Action> Timeline::zoom_Impl::OnActivate(ui::Pointer& pointer, au
   return widget ? make_unique<DragZoomAction>(pointer, *widget) : nullptr;
 }
 
-constinit Signal::Table kSplice = [] {
-  Signal::Table t("Splice");
+constinit Command::Table kSplice = [] {
+  Command::Table t("Splice");
   t.cursor = ui::Cursor::ResizeHorizontal;
   t.activate = [](Interface, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
     auto* widget = toy ? ui::Closest<TimelineWidget>(*toy) : nullptr;

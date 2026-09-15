@@ -48,13 +48,13 @@ struct Timer : Object, TimerNotificationReceiver {
   void OnSet(StrView);
   DEF_END(readout);
 
-  DEF_INTERFACE(Timer, Signal, next_range, "Next range")
+  DEF_INTERFACE(Timer, Command, next_range, "Next range")
   static constexpr bool kSchedulesNext = false;
   static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
   void OnRun(std::unique_ptr<RunTask>&) { obj->ShiftRange(1); }
   DEF_END(next_range);
 
-  DEF_INTERFACE(Timer, Signal, prev_range, "Previous range")
+  DEF_INTERFACE(Timer, Command, prev_range, "Previous range")
   static constexpr bool kSchedulesNext = false;
   static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
   void OnRun(std::unique_ptr<RunTask>&) { obj->ShiftRange(-1); }

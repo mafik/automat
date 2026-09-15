@@ -1754,14 +1754,14 @@ struct PropScalarTable : Scalar::Table {
   }
 };
 
-struct PropSignalTable : Signal::Table {
+struct PropCommandTable : Command::Table {
   PropInfo info;
-  PropSignalTable(const PropInfo& info) : Signal::Table(""), info(info) {
+  PropCommandTable(const PropInfo& info) : Command::Table(""), info(info) {
     name = this->info.name;
     cursor = ui::Cursor::Hand;
     schedules_next = false;
-    on_run = [](Signal self, std::unique_ptr<RunTask>&) {
-      auto& table = static_cast<PropSignalTable&>(*self.table_ptr);
+    on_run = [](Command self, std::unique_ptr<RunTask>&) {
+      auto& table = static_cast<PropCommandTable&>(*self.table_ptr);
       auto& element = static_cast<GStreamerElement&>(*self.object_ptr);
       Str value = PropValue(element, table.info);
       if (table.info.kind == PropInfo::kBool) {
@@ -1787,7 +1787,7 @@ static Vec<std::unique_ptr<Interface::Table>>& PropTables(StrView factory,
       if (infos[i].kind == PropInfo::kNumber) {
         it->second.push_back(std::make_unique<PropScalarTable>(infos[i], i));
       } else {
-        it->second.push_back(std::make_unique<PropSignalTable>(infos[i]));
+        it->second.push_back(std::make_unique<PropCommandTable>(infos[i]));
       }
     }
   }

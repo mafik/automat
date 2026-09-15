@@ -37,7 +37,7 @@ struct ProgramLauncher : Object, Container {
   void OnCancel() { obj->Terminate(true); }
   DEF_END(running);
 
-  DEF_INTERFACE(ProgramLauncher, Signal, stop, "Stop")
+  DEF_INTERFACE(ProgramLauncher, Command, stop, "Stop")
   static constexpr bool kSchedulesNext = false;
   void OnRun(std::unique_ptr<RunTask>&) {
     obj->Terminate();

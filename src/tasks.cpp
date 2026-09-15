@@ -213,15 +213,15 @@ void ScheduleArgumentTargets(Argument arg) {
   arg.state->last_activity.fetch_add(1, std::memory_order_relaxed);
 
   if (auto next = arg.Find()) {
-    // The target may be a Signal sub-interface or the Object itself (its first Signal).
-    Signal signal;
-    if (auto* s = dyn_cast_if_present<Signal::Table>(next.Get())) {
-      signal = Signal(next.Owner<Object>(), s);
+    // The target may be a Command sub-interface or the Object itself (its first Command).
+    Command command;
+    if (auto* s = dyn_cast_if_present<Command::Table>(next.Get())) {
+      command = Command(next.Owner<Object>(), s);
     } else if (auto* obj = next.Owner<Object>()) {
-      signal = obj->As<Signal>();
+      command = obj->As<Command>();
     }
-    if (signal) {
-      signal.ScheduleRun();
+    if (command) {
+      command.ScheduleRun();
     }
   }
   arg.WakeToys();
@@ -230,16 +230,16 @@ void ScheduleArgumentTargets(Argument arg) {
 void RunTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("RunTask");
   if (auto s = target.lock()) {
-    auto* sig = static_cast<Signal::Table*>(signal);
+    auto* sig = static_cast<Command::Table*>(command);
     if (auto lr = s->As<LongRunning>();
-        lr && lr.IsRunning() && sig->while_long_running == Signal::kInhibit) {
+        lr && lr.IsRunning() && sig->while_long_running == Command::kInhibit) {
       return;
     }
     s->ClearOwnError();
     // Cast the `self` to RunTask for the OnRun invocation
     std::unique_ptr<RunTask> self_as_run_task((RunTask*)self.release());
     if (sig->on_run) {
-      sig->on_run(Signal(*s, *sig), self_as_run_task);
+      sig->on_run(Command(*s, *sig), self_as_run_task);
     }
     // If OnRun didn't "steal" the ownership then we have to return it back.
     self.reset(self_as_run_task.release());
@@ -251,7 +251,7 @@ void RunTask::OnExecute(std::unique_ptr<Task>& self) {
 }
 
 void RunTask::DoneRunning(Object& object) {
-  if (!static_cast<Signal::Table*>(signal)->schedules_next) return;
+  if (!static_cast<Command::Table*>(command)->schedules_next) return;
   if (HasError(object)) return;
   ScheduleNext(object);
 }

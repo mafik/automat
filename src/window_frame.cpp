@@ -28,35 +28,35 @@ namespace {
 
 using DecorationPreference = DecoratedWindow::DecorationPreference;
 
-void SetDecoration(Signal self, DecorationPreference pref) {
+void SetDecoration(Command self, DecorationPreference pref) {
   if (auto* w = dynamic_cast<DecoratedWindow*>(self.object_ptr)) {
     w->decoration_preference.store(pref, std::memory_order_relaxed);
     w->DecorationPreferenceChanged();
   }
 }
 
-constinit Signal::Table kDecorationAuto = [] {
-  Signal::Table t("Auto");
+constinit Command::Table kDecorationAuto = [] {
+  Command::Table t("Auto");
   t.schedules_next = false;
-  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+  t.on_run = [](Command self, std::unique_ptr<RunTask>&) {
     SetDecoration(self, DecorationPreference::Auto);
   };
   return t;
 }();
 
-constinit Signal::Table kDecorationServerSide = [] {
-  Signal::Table t("Automat");
+constinit Command::Table kDecorationServerSide = [] {
+  Command::Table t("Automat");
   t.schedules_next = false;
-  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+  t.on_run = [](Command self, std::unique_ptr<RunTask>&) {
     SetDecoration(self, DecorationPreference::ServerSide);
   };
   return t;
 }();
 
-constinit Signal::Table kDecorationClientSide = [] {
-  Signal::Table t("App");
+constinit Command::Table kDecorationClientSide = [] {
+  Command::Table t("App");
   t.schedules_next = false;
-  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+  t.on_run = [](Command self, std::unique_ptr<RunTask>&) {
     SetDecoration(self, DecorationPreference::ClientSide);
   };
   return t;
@@ -71,11 +71,11 @@ std::unique_ptr<Action> OpenDecorationMenu(Interface self, ui::Pointer& pointer,
   return MakeMenuAction(pointer, OptionsProvider::MODE_4_DIR, options, toy);
 }
 
-constinit Signal::Table kDecorationMenu =
-    MenuTable<Signal::Table>("Decoration...", &OpenDecorationMenu);
+constinit Command::Table kDecorationMenu =
+    MenuTable<Command::Table>("Decoration...", &OpenDecorationMenu);
 
-constinit Signal::Table kClientPress = [] {
-  Signal::Table t("Press");
+constinit Command::Table kClientPress = [] {
+  Command::Table t("Press");
   t.activate = [](Interface, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
     auto* window = dynamic_cast<ClientWindowToy*>(toy);
     return window ? window->BeginClientPress(pointer) : nullptr;

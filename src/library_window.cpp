@@ -128,8 +128,8 @@ struct WindowWidget;
 
 static std::unique_ptr<Action> PickWindowActivate(Interface, ui::Pointer&, Toy*);
 
-constinit Signal::Table kPickWindow = [] {
-  Signal::Table t("Pick window");
+constinit Command::Table kPickWindow = [] {
+  Command::Table t("Pick window");
   t.activate = &PickWindowActivate;
   return t;
 }();

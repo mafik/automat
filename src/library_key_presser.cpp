@@ -224,14 +224,14 @@ static std::unique_ptr<Action> SetKeyActivate(Interface, ui::Pointer& pointer, T
       });
 }
 
-constinit Signal::Table kPressKey = [] {
-  Signal::Table t("Press key");
+constinit Command::Table kPressKey = [] {
+  Command::Table t("Press key");
   t.activate = &PressKeyActivate;
   return t;
 }();
 
-constinit Signal::Table kSetKey = [] {
-  Signal::Table t("Set key");
+constinit Command::Table kSetKey = [] {
+  Command::Table t("Set key");
   t.activate = &SetKeyActivate;
   return t;
 }();

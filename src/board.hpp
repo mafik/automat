@@ -118,7 +118,7 @@ struct Board : Object {
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(move);
 
-  DEF_INTERFACE(Board, Signal, toggle_frame, "Toggle Frame")
+  DEF_INTERFACE(Board, Command, toggle_frame, "Toggle Frame")
   static constexpr bool kSchedulesNext = false;
   void OnRun(std::unique_ptr<RunTask>&) {
     obj->frame_visible = !obj->frame_visible;

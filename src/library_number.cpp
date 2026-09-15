@@ -138,15 +138,15 @@ static void EditText(Object& object, Str text) {
 
 void Number::text_Impl::OnSet(StrView value) { EditText(*obj, Str(value)); }
 
-constinit std::array<Signal::Table, 10> kDigits = [] {
-  std::array<Signal::Table, 10> tables = {
-      Signal::Table("0"), Signal::Table("1"), Signal::Table("2"), Signal::Table("3"),
-      Signal::Table("4"), Signal::Table("5"), Signal::Table("6"), Signal::Table("7"),
-      Signal::Table("8"), Signal::Table("9")};
+constinit std::array<Command::Table, 10> kDigits = [] {
+  std::array<Command::Table, 10> tables = {
+      Command::Table("0"), Command::Table("1"), Command::Table("2"), Command::Table("3"),
+      Command::Table("4"), Command::Table("5"), Command::Table("6"), Command::Table("7"),
+      Command::Table("8"), Command::Table("9")};
   for (auto& t : tables) {
     t.schedules_next = false;
-    t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
-      int digit = static_cast<Signal::Table*>(self.table_ptr) - kDigits.data();
+    t.on_run = [](Command self, std::unique_ptr<RunTask>&) {
+      int digit = static_cast<Command::Table*>(self.table_ptr) - kDigits.data();
       Str text = self.object_ptr->GetText();
       if (text == "0") text.clear();
       text += '0' + digit;
@@ -156,10 +156,10 @@ constinit std::array<Signal::Table, 10> kDigits = [] {
   return tables;
 }();
 
-constinit Signal::Table kDot = [] {
-  Signal::Table t(".");
+constinit Command::Table kDot = [] {
+  Command::Table t(".");
   t.schedules_next = false;
-  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+  t.on_run = [](Command self, std::unique_ptr<RunTask>&) {
     Str text = self.object_ptr->GetText();
     if (text.empty()) {
       text = "0";
@@ -175,10 +175,10 @@ constinit Signal::Table kDot = [] {
   return t;
 }();
 
-constinit Signal::Table kBackspace = [] {
-  Signal::Table t("Backspace");
+constinit Command::Table kBackspace = [] {
+  Command::Table t("Backspace");
   t.schedules_next = false;
-  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+  t.on_run = [](Command self, std::unique_ptr<RunTask>&) {
     Str text = self.object_ptr->GetText();
     if (!text.empty()) text.pop_back();
     if (text.empty()) text = "0";

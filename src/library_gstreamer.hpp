@@ -209,7 +209,7 @@ struct AppSinkBoundary : GStreamerElement {
   sk_sp<SkImage> GetImage() { return obj->Held(); }
   DEF_END(image_provider);
 
-  DEF_INTERFACE(AppSinkBoundary, Signal, step, "Pull")
+  DEF_INTERFACE(AppSinkBoundary, Command, step, "Pull")
   static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
   void OnRun(std::unique_ptr<RunTask>& t) { obj->StepOne(); }
   DEF_END(step);
@@ -245,7 +245,7 @@ struct AppSrcBoundary : GStreamerElement {
   DEF_INTERFACE(AppSrcBoundary, InterfaceArgument<ImageProvider>, image, "Image")
   DEF_END(image);
 
-  DEF_INTERFACE(AppSrcBoundary, Signal, step, "Push")
+  DEF_INTERFACE(AppSrcBoundary, Command, step, "Push")
   static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
   void OnRun(std::unique_ptr<RunTask>& t) { obj->StepOne(); }
   DEF_END(step);

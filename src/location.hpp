@@ -126,17 +126,17 @@ struct Location : Object {
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(clone);
 
-  DEF_INTERFACE(Location, Signal, remove, "Delete")
+  DEF_INTERFACE(Location, Command, remove, "Delete")
   static constexpr bool kSchedulesNext = false;
   void OnRun(std::unique_ptr<RunTask>&);
   DEF_END(remove);
 
-  DEF_INTERFACE(Location, Signal, iconify, "Iconify")
+  DEF_INTERFACE(Location, Command, iconify, "Iconify")
   static constexpr bool kSchedulesNext = false;
   void OnRun(std::unique_ptr<RunTask>&) { obj->Iconify(); }
   DEF_END(iconify);
 
-  DEF_INTERFACE(Location, Signal, deiconify, "Deiconify")
+  DEF_INTERFACE(Location, Command, deiconify, "Deiconify")
   static constexpr bool kSchedulesNext = false;
   void OnRun(std::unique_ptr<RunTask>&) { obj->Deiconify(); }
   DEF_END(deiconify);

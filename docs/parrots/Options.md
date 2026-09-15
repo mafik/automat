@@ -16,12 +16,12 @@ Every interface is an option (`docs/Interfaces.md`, section "Activation"). `Inte
 Toy*)` returns the `Action` that the activation becomes. Objects expose their commands as
 interfaces, and the widgets only map triggers to those interfaces:
 
-- A command that runs to completion is a Signal: `DEF_INTERFACE(X, Signal, name, "Label")` with
-  `OnRun`. Command Signals set `static constexpr bool kSchedulesNext = false`, so
+- A command that runs to completion is a `Command` interface: `DEF_INTERFACE(X, Command, name,
+  "Label")` with `OnRun`. Such commands set `static constexpr bool kSchedulesNext = false`, so
   `RunTask::DoneRunning` (src/tasks.cpp) does not fire the object's `next` argument. A command
-  exposed as a Signal is also connectable and schedulable by other objects, which is why commands
-  are not a separate kind. The default activation schedules the run (`Signal::Table::
-  DefaultActivate`, src/base.cpp); a Signal whose activation is a gesture overrides it with
+  exposed this way is also connectable and schedulable by other objects, which is why commands
+  are not a separate kind. The default activation schedules the run (`Command::Table::
+  DefaultActivate`, src/base.cpp); a command whose activation is a gesture overrides it with
   `OnActivate` and has no `OnRun` (`kSplice` in src/library_timeline.cpp).
 - A continuous value is a `Scalar` (src/base.hpp): `OnGet`, `OnSet` and an `OnActivate` that starts
   the drag of its handle (Timer `duration`, src/library_timer.hpp).
@@ -127,7 +127,7 @@ by the object toy and falls through to `LocationWidget::FindOption` (src/locatio
 move, NW delete, NE iconify or deiconify, E copy, W clone, S the Board. `BoardWidget::FindOption`
 (src/board.cpp): N move, NE toggle frame, S the camera menu. `RootWidget::FindOption`
 (src/root_widget.cpp) maps the W, A, S and D keys and the N, S, W and E directions to the `Camera`
-object's nudge Signals and the middle button to the camera drag. An object with more commands
+object's nudge commands and the middle button to the camera drag. An object with more commands
 overrides `FindOption` and `MenuMode` and places each command by hand (`TimerWidget` in
 src/library_timer.cpp); nothing is placed by enumeration order, because adding an interface would
 then shift every direction after it.

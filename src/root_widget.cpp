@@ -561,15 +561,15 @@ std::unique_ptr<Action> Camera::right_Impl::OnActivate(Pointer& p, automat::Toy*
   return MoveCamera(p, kDelta);
 }
 
-constinit Signal::Table kDragCamera = [] {
-  Signal::Table t("Drag camera");
+constinit Command::Table kDragCamera = [] {
+  Command::Table t("Drag camera");
   t.activate = [](Interface, Pointer& pointer, Toy*) -> std::unique_ptr<Action> {
     return std::make_unique<DragCameraAction>(pointer, pointer.root_widget);
   };
   return t;
 }();
 
-constinit Signal::Table kCameraMenu = MenuTable<Signal::Table>(
+constinit Command::Table kCameraMenu = MenuTable<Command::Table>(
     "Camera",
     [](Interface, Pointer& pointer, Toy*) { return pointer.root_widget.OpenMenu(pointer); });
 

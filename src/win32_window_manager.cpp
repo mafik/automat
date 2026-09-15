@@ -757,25 +757,25 @@ static void PostApplyMode(const WeakPtr<AppWindow>& weak) {
   PostMessageW(main_window->hwnd, WM_USER, 0, (LPARAM)apply);
 }
 
-static void SetMode(Signal self, AppWindow::Mode mode) {
+static void SetMode(Command self, AppWindow::Mode mode) {
   auto& window = static_cast<AppWindow&>(*self.object_ptr);
   window.mode.store(mode, std::memory_order_relaxed);
   PostApplyMode(window.AcquireWeakPtr());
 }
 
-constinit Signal::Table kPopOut = [] {
-  Signal::Table t("Pop Out");
+constinit Command::Table kPopOut = [] {
+  Command::Table t("Pop Out");
   t.schedules_next = false;
-  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+  t.on_run = [](Command self, std::unique_ptr<RunTask>&) {
     SetMode(self, AppWindow::Mode::Connected);
   };
   return t;
 }();
 
-constinit Signal::Table kEmbed = [] {
-  Signal::Table t("Embed");
+constinit Command::Table kEmbed = [] {
+  Command::Table t("Embed");
   t.schedules_next = false;
-  t.on_run = [](Signal self, std::unique_ptr<RunTask>&) {
+  t.on_run = [](Command self, std::unique_ptr<RunTask>&) {
     SetMode(self, AppWindow::Mode::Embedded);
   };
   return t;

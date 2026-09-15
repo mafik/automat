@@ -376,7 +376,7 @@ instead of hiding it:
   (gst_event_new_step), exposed as a step signal on the sink while
   paused. Automat-driven blocks step by definition. Live PipeWire
   devices cannot be stepped, so no step control appears on them.
-  Automat's control flow drives blocks through Signal interfaces
+  Automat's control flow drives blocks through Command interfaces
   (src/base.hpp). Each signal declares what happens when it arrives
   while the block's LongRunning is active: the starting signal
   (Runnable) is inhibited, because a running thing is not started

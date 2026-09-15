@@ -68,7 +68,7 @@ struct Interface {
     kLastSyncable = kLastOnOff,
     kLastArgument = kLastSyncable,
     // Standalone interfaces
-    kSignal,
+    kCommand,
     kImageProvider,
     kResizable,
     kStreamInput,

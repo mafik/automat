@@ -212,7 +212,7 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
   WindowWidget(ui::Widget* parent, Object& window) : ObjectToy(parent, window) {
     pick_button = std::make_unique<PickButton>(this);
     layers.OrderInside(pick_button.get());
-    pick_button->target = Stored<>(window.AcquireWeakPtr(), &kPickWindow);
+    pick_button->target = Linked<>(window.AcquireWeakPtr(), &kPickWindow);
     auto content_bounds = kCoarseBounds.Outset(-kBorderWidth - kContentMargin);
     auto title_bounds = Rect(kCoarseBounds.rect.left, kCoarseBounds.rect.top - kTitleHeight,
                              kCoarseBounds.rect.right, kCoarseBounds.rect.top);

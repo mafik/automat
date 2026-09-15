@@ -1123,7 +1123,7 @@ void Highlight(SkCanvas& canvas, const Rect& r, SkColor color, uint32_t seed) {
 
 // ----------------------------------------------------------------- widgets ---
 
-RunButton::RunButton(Widget* parent, Stored<> start, Stored<> stop, uint32_t seed)
+RunButton::RunButton(Widget* parent, Linked<> start, Linked<> stop, uint32_t seed)
     : Widget(parent),
       clickable(*this),
       start(std::move(start)),

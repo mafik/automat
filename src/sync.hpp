@@ -124,7 +124,7 @@ struct Gear : Object {
   std::shared_mutex mutex;
 
   struct Member {
-    Stored<Syncable> weak;
+    Linked<Syncable> weak;
     bool sink;
   };
 
@@ -276,7 +276,7 @@ struct SyncBelt : ArgumentToy {
 static_assert(ToyMaker<Syncable>);
 
 struct SyncAction : Action {
-  Stored<Syncable> weak;
+  Linked<Syncable> weak;
   // TODO: syncing across the Boards
   MortalPtr<BoardWidget> board_widget;
   SyncAction(ui::Pointer& pointer, Syncable syncable, Toy* toy);

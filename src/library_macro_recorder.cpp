@@ -378,7 +378,7 @@ bool MacroRecorder::DeserializeKey(ObjectDeserializer& d, StrView key) {
 // GlassRunButton
 
 struct GlassRunButton : ui::PowerButton {
-  GlassRunButton(ui::Widget* parent, Stored<OnOff> on_off)
+  GlassRunButton(ui::Widget* parent, Linked<OnOff> on_off)
       : ui::PowerButton(parent, std::move(on_off), color::kParrotRed, "#eeeeee"_color4f) {}
   void PointerEnter(ui::Pointer& p) override {
     ToggleButton::PointerEnter(p);
@@ -438,7 +438,7 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
   MacroRecorderWidget(ui::Widget* parent, Object& mr_obj) : ObjectToy(parent, mr_obj) {
     if (auto mr = LockMacroRecorder()) {
       record_button.reset(new GlassRunButton(
-          this, Stored<OnOff>(mr->AcquireWeakPtr(), &MacroRecorder::long_running_tbl)));
+          this, Linked<OnOff>(mr->AcquireWeakPtr(), &MacroRecorder::long_running_tbl)));
       record_button->local_to_parent = SkM44::Translate(17.5_mm, 3.2_mm);
       is_recording = mr->keylogging != nullptr;
     }

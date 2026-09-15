@@ -77,7 +77,7 @@ struct Argument : Interface {
 
     // Establishes or breaks a connection. A null end means disconnect.
     // If end.object_ptr is non-null, it's guaranteed to be alive during this call but not
-    // afterwards. Use WeakPtr/Stored to store the reference.
+    // afterwards. Use WeakPtr/Linked to store the reference.
     void (*on_connect)(Argument, Interface end) = nullptr;
 
     // Looks up the destination of this Argument. This should match the last `on_connect`.
@@ -312,7 +312,7 @@ struct ObjectArgument : Argument {
 template <typename T, Interface::Kind kKind = Interface::kInterfaceArgument>
 struct InterfaceArgument : Argument {
   struct State : Argument::State {
-    Stored<T> target;
+    Linked<T> target;
   };
 
   INTERFACE_BOUND(InterfaceArgument, Argument)

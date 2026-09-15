@@ -33,7 +33,7 @@ struct Button : Widget {
   std::unique_ptr<Widget> child;
   constexpr static float kPressOffset = 0.2_mm;
   Clickable clickable;
-  Stored<> target;
+  Linked<> target;
 
   Button(ui::Widget* parent);
   Tock Tick(time::Timer&) override;

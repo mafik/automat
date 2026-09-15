@@ -218,11 +218,11 @@ struct NumberWidget : ObjectToy {
     dot = std::make_unique<NumberButton>(this, ".");
     backspace = std::make_unique<NumberButton>(this, PathFromSVG(kBackspaceShape));
     auto weak = number_obj.AcquireWeakPtr();
-    dot->target = Stored<>(weak, &kDot);
-    backspace->target = Stored<>(weak, &kBackspace);
+    dot->target = Linked<>(weak, &kDot);
+    backspace->target = Linked<>(weak, &kBackspace);
     for (int i = 0; i < 10; ++i) {
       digits[i] = std::make_unique<NumberButton>(this, std::to_string(i));
-      digits[i]->target = Stored<>(weak, &kDigits[i]);
+      digits[i]->target = Linked<>(weak, &kDigits[i]);
     }
 
     auto cell = [](int row, int col) {

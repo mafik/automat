@@ -667,7 +667,7 @@ struct FfmpegDecoderToy : ui::beta::ObjectToy {
 
   FfmpegDecoderToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     button = std::make_unique<ui::beta::RunButton>(
-        this, Stored<>(obj.AcquireWeakPtr(), &FfmpegDecoder::run_tbl), Stored<>(), Seed(0x5D));
+        this, Linked<>(obj.AcquireWeakPtr(), &FfmpegDecoder::run_tbl), Linked<>(), Seed(0x5D));
     button->running = false;
     button->enabled = true;
     UpdateFromObject();

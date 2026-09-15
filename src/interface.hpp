@@ -36,7 +36,7 @@ enum class Cursor;
 // Interface itself is a lightweight bound type (Object* + Table*) used for typed access
 // to an object's interface. It is constructed on-the-fly when needed.
 //
-// Long-term storage of interface pointers relies on Stored<T> & Locked<T>.
+// Long-term storage of interface pointers relies on Linked<T> & Locked<T>.
 // This allows concurrent lifetime management.
 //
 // # Notable interfaces
@@ -237,30 +237,30 @@ template <typename To, typename From>
 }
 
 template <typename T = Interface>
-struct Stored : private T {
-  Stored() = default;
-  ~Stored() { SafeDecrementWeakRefs(this->object_ptr); }
-  Stored(std::nullptr_t) {}
-  Stored(T bound) : T(bound) { SafeIncrementWeakRefs(this->object_ptr); }
+struct Linked : private T {
+  Linked() = default;
+  ~Linked() { SafeDecrementWeakRefs(this->object_ptr); }
+  Linked(std::nullptr_t) {}
+  Linked(T bound) : T(bound) { SafeIncrementWeakRefs(this->object_ptr); }
 
   template <typename U>
-  Stored(const WeakPtr<U>& owner, typename T::Table* table) : T(owner.GetUnsafe(), table) {
+  Linked(const WeakPtr<U>& owner, typename T::Table* table) : T(owner.GetUnsafe(), table) {
     SafeIncrementWeakRefs(this->object_ptr);
   }
 
-  Stored(const Stored& o) : T(o) { SafeIncrementWeakRefs(this->object_ptr); }
-  Stored(Stored&& o) : T(o) {
+  Linked(const Linked& o) : T(o) { SafeIncrementWeakRefs(this->object_ptr); }
+  Linked(Linked&& o) : T(o) {
     o.object_ptr = nullptr;
     o.table_ptr = nullptr;
   }
-  Stored& operator=(const Stored& o) {
+  Linked& operator=(const Linked& o) {
     SafeIncrementWeakRefs(o.object_ptr);
     SafeDecrementWeakRefs(this->object_ptr);
     this->object_ptr = o.object_ptr;
     this->table_ptr = o.table_ptr;
     return *this;
   }
-  Stored& operator=(Stored&& o) {
+  Linked& operator=(Linked&& o) {
     if (this != &o) {
       SafeDecrementWeakRefs(this->object_ptr);
       this->object_ptr = o.object_ptr;
@@ -291,7 +291,7 @@ struct Stored : private T {
   }
 
   explicit operator bool() const { return this->object_ptr && this->table_ptr; }
-  bool operator==(const Stored&) const = default;
+  bool operator==(const Linked&) const = default;
 };
 
 template <typename Table>

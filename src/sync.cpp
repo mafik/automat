@@ -197,7 +197,7 @@ Gear::~Gear() {
 
 void Gear::AddSink(Syncable syncable) {
   auto guard = std::unique_lock(mutex);
-  Stored<Syncable> weak(syncable);
+  Linked<Syncable> weak(syncable);
   for (int i = 0; i < (int)members.size(); ++i) {
     if (members[i].weak == weak) {
       members[i].sink = true;
@@ -225,7 +225,7 @@ void Gear::AddSource(Syncable syncable) {
         }
       }
     } else {
-      Stored<Syncable> weak(syncable);
+      Linked<Syncable> weak(syncable);
       bool found = false;
       for (int i = 0; i < (int)members.size(); ++i) {
         if (members[i].weak == weak) {
@@ -614,7 +614,7 @@ bool Gear::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 SyncAction::SyncAction(ui::Pointer& pointer, Syncable syncable, Toy* toy) : Action(pointer) {
   syncable.Unsync();
-  weak = Stored<Syncable>(syncable);
+  weak = Linked<Syncable>(syncable);
   if (toy) board_widget = BoardOrNull(*toy);
   if (auto* bw = board_widget.Get()) {
     if (bw->toys.FindOrNull(*syncable.object_ptr)) {

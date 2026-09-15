@@ -1904,8 +1904,8 @@ TimelineWidget::TimelineWidget(ui::Widget* parent, Object& object)
   next_button->local_to_parent = SkM44::Translate(
       kPlasticWidth / 2 - kSideButtonMargin - kSideButtonDiameter, -kSideButtonRadius);
   auto weak = static_cast<Timeline&>(object).AcquireWeakPtr();
-  prev_button->target = Stored<>(weak, &Timeline::jump_to_start_tbl);
-  next_button->target = Stored<>(weak, &Timeline::jump_to_end_tbl);
+  prev_button->target = Linked<>(weak, &Timeline::jump_to_start_tbl);
+  next_button->target = Linked<>(weak, &Timeline::jump_to_end_tbl);
   for (auto* zone : {window_zone.get(), bridge_zone.get(), splicer_zone.get(), zoom_zone.get()}) {
     layers.OrderBelow(zone);
   }

@@ -551,8 +551,8 @@ struct ProgramLauncherToy : ui::beta::ObjectToy {
   ProgramLauncherToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     field = std::make_unique<ArgvField>(this, obj, *this);
     button = std::make_unique<ui::beta::RunButton>(
-        this, Stored<>(obj.AcquireWeakPtr(), &ProgramLauncher::run_tbl),
-        Stored<>(obj.AcquireWeakPtr(), &ProgramLauncher::stop_tbl), Seed(0x12B));
+        this, Linked<>(obj.AcquireWeakPtr(), &ProgramLauncher::run_tbl),
+        Linked<>(obj.AcquireWeakPtr(), &ProgramLauncher::stop_tbl), Seed(0x12B));
   }
 
   Ptr<ProgramLauncher> LockProgramLauncher() const { return LockObject<ProgramLauncher>(); }

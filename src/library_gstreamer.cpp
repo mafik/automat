@@ -1415,8 +1415,8 @@ struct GStreamerToy : ui::beta::ObjectToy {
 
   GStreamerToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     button = std::make_unique<ui::beta::RunButton>(
-        this, Stored<>(obj.AcquireWeakPtr(), &GStreamerElement::run_tbl),
-        Stored<>(obj.AcquireWeakPtr(), &GStreamerElement::running_tbl.turn_off), Seed(0x31));
+        this, Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::run_tbl),
+        Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::running_tbl.turn_off), Seed(0x31));
     if (auto elem = LockObject<GStreamerElement>()) {
       factory_ = elem->factory;
       credit_ = FactoryKlass(factory_);
@@ -2059,8 +2059,8 @@ struct StepZone : ui::ActionZone {
 BoundaryToy::BoundaryToy(ui::Widget* parent, Object& obj, bool is_sink)
     : ui::beta::ObjectToy(parent, obj), is_sink(is_sink), step_zone(new StepZone(this)) {
   button = std::make_unique<ui::beta::RunButton>(
-      this, Stored<>(obj.AcquireWeakPtr(), &GStreamerElement::run_tbl),
-      Stored<>(obj.AcquireWeakPtr(), &GStreamerElement::running_tbl.turn_off), Seed(0x77));
+      this, Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::run_tbl),
+      Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::running_tbl.turn_off), Seed(0x77));
   if (auto elem = LockObject<GStreamerElement>()) {
     factory_ = elem->factory;
     credit_ = FactoryKlass(factory_);

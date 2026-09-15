@@ -123,7 +123,7 @@ struct MenuAction;
 // See: `docs/Bubble Menu, Options & Actions.md`
 struct Menu : ui::Widget {
   MiniMenuMode mode = MODE_8_DIR;
-  Stored<> slots[kDirCount];
+  Linked<> slots[kDirCount];
   std::unique_ptr<ui::Widget> icons[kDirCount];
   animation::SpringV2<Vec2> offsets[kDirCount];
   animation::SpringV2<float> size = 0;

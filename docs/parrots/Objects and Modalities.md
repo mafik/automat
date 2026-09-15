@@ -9,7 +9,7 @@ Other modalities may be built later around the same objects: text, 3D objects, R
 Everything specific to one medium belongs to that modality's layer, not to the objects.
 
 For the 2D modality this means: instance geometry (shapes, connector positions, anchors) and
-placement decisions belong to Widgets and Toys. VM code must not create, look up, or measure
+placement decisions belong to Widgets and Toys. Engine code must not create, look up, or measure
 widgets.
 
 ## Where data belongs
@@ -18,15 +18,15 @@ An object may carry modality-specific data when that is its core function. Board
 exist precisely to place objects on a 2D plane, so board membership and positions are core
 state (src/board.hpp, src/location.hpp). Most other objects must not track the 2D modality.
 
-The VM provides hints so that the 2D world can function. Data of fixed size per type — O(1),
-not growing with the number of objects — is fine in VM-side tables: `Argument::Table` carries
+The Engine provides hints so that the 2D world can function. Data of fixed size per type — O(1),
+not growing with the number of objects — is fine in Engine-side tables: `Argument::Table` carries
 the connection style, tint, and autoconnect radius (src/argument.hpp), and every
 `Interface::Table` carries its activation, its menu icon and its cursor (src/interface.hpp).
 
 ## Placement rules
 
 `Location::placement` (src/location.hpp) holds either concrete coordinates (`Direct`) or a
-placement rule (`PlaceAhead`, `PlaceBetween`) — never both. When VM code creates an object
+placement rule (`PlaceAhead`, `PlaceBetween`) — never both. When Engine code creates an object
 whose position depends on other widgets (an argument creating its missing target, a sync
 connection creating its Gear), it does not compute coordinates; it stores a rule. Coordinates
 are observable only through `Location::Position(LocationWidget&)` and `Scale(LocationWidget&)`,

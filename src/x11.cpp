@@ -56,6 +56,7 @@
 #endif
 
 #include "color.hpp"
+#include "engine.hpp"
 #include "format.hpp"
 #include "keyboard.hpp"
 #include "keymap.hpp"
@@ -68,7 +69,6 @@
 #include "ui_beta.hpp"
 #include "units.hpp"
 #include "vk.hpp"
-#include "vm.hpp"
 #include "window_frame.hpp"
 #include "x11_keys.hpp"
 #include "x11_protocol.hpp"
@@ -386,7 +386,7 @@ void Server::PublishWindow(Window& w) {
     obj.input_region = SkPath::Rect(SkRect::MakeIWH(w.width, w.height));
   }
   obj.WakeToys();
-  vm.WakeToys();
+  engine.WakeToys();
 }
 
 }  // namespace automat::x11
@@ -1654,7 +1654,7 @@ void SendEvent::Handle(Client& client) {
           auto lock = std::lock_guard(server->ui_mutex);
           server->ui_arrivals.move_requests.push_back(tw->object);
         }
-        vm.WakeToys();
+        engine.WakeToys();
       }
     }
     return;
@@ -2534,7 +2534,7 @@ void Pixmap::Handle(Client& client) {
         obj.input_region = SkPath::Rect(SkRect::MakeIWH(p->width, p->height));
       }
       obj.WakeToys();
-      vm.WakeToys();
+      engine.WakeToys();
     } else if (p->surface && w->surface) {
       w->surface->getCanvas()->drawImage(p->surface->makeImageSnapshot(), 0, 0);
       MarkDirty(w);
@@ -2777,7 +2777,7 @@ void UnmapAndForgetToplevel(x11::Window& w) {
     auto lock = std::lock_guard(server->ui_mutex);
     server->ui_arrivals.disappeared.push_back(obj);
   }
-  vm.WakeToys();
+  engine.WakeToys();
 }
 
 }  // namespace automat::x11

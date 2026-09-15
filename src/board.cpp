@@ -20,6 +20,7 @@
 #include "drag_action.hpp"
 #include "drawing.hpp"
 #include "embedded.hpp"
+#include "engine.hpp"
 #include "global_resources.hpp"
 #include "location.hpp"
 #include "math.hpp"
@@ -27,7 +28,6 @@
 #include "status.hpp"
 #include "textures.hpp"
 #include "ui_connection_widget.hpp"
-#include "vm.hpp"
 
 using namespace std;
 
@@ -152,7 +152,7 @@ bool Board::resizable_Impl::ResizeM(Rect grow) {
 }
 
 Ptr<Location> Board::Extract(Location& location) {
-  auto lock = std::lock_guard(vm.mutex);
+  auto lock = std::lock_guard(engine.mutex);
   auto it = std::find_if(locations.begin(), locations.end(),
                          [&location](const auto& l) { return l.get() == &location; });
   if (it != locations.end()) {
@@ -166,7 +166,7 @@ Ptr<Location> Board::Extract(Location& location) {
 }
 
 void Board::MoveToTop(Location& location) {
-  auto lock = std::lock_guard(vm.mutex);
+  auto lock = std::lock_guard(engine.mutex);
   auto it = std::find_if(locations.begin(), locations.end(),
                          [&location](const auto& l) { return l.get() == &location; });
   if (it == locations.end() || it == locations.begin()) return;
@@ -177,7 +177,7 @@ void Board::MoveToTop(Location& location) {
 }
 
 Location* Board::LocationOrNull(Object& object) {
-  auto lock = std::lock_guard(vm.mutex);
+  auto lock = std::lock_guard(engine.mutex);
   for (auto& loc : locations) {
     if (loc->object.get() == &object) {
       return loc.get();
@@ -187,7 +187,7 @@ Location* Board::LocationOrNull(Object& object) {
 }
 
 Location& Board::CreateEmpty() {
-  auto lock = std::lock_guard(vm.mutex);
+  auto lock = std::lock_guard(engine.mutex);
   auto& it = locations.emplace_front(new Location(AcquireWeakPtr()));
   Location* h = it.get();
   WakeToys();
@@ -249,7 +249,7 @@ SkPaint& GetBackgroundPaint(float px_per_m) {
 ui::Tock BoardWidget::Tick(time::Timer& timer) {
   auto board = LockBoard();
   if (!board) return {};
-  auto lock = std::lock_guard(vm.mutex);
+  auto lock = std::lock_guard(engine.mutex);
 
   ui::Tock tock;
   tock.shaping |= frame_width.SineTowards(board->frame_visible ? 1_cm : 0, timer.d, 0.4);
@@ -409,7 +409,7 @@ void BoardWidget::DropLocation(Ptr<Location>&& l) {
   l->board = board->AcquireWeakPtr();
   Location* dropped;
   {
-    auto lock = std::lock_guard(vm.mutex);
+    auto lock = std::lock_guard(engine.mutex);
     board->locations.insert(board->locations.begin(), std::move(l));
     dropped = board->locations.front().get();
   }
@@ -426,7 +426,7 @@ void BoardWidget::DropLocation(Ptr<Location>&& l) {
 void BoardWidget::ConnectAtPoint(Argument arg, Vec2 point) {
   auto board = LockBoard();
   if (!board) return;
-  auto lock = std::lock_guard(vm.mutex);
+  auto lock = std::lock_guard(engine.mutex);
   bool connected = false;
   Str refusal;  // the refusal reason for the first end that matched in kind but refused
   auto TryConnect = [&](Interface end) {
@@ -469,7 +469,7 @@ void BoardWidget::ConnectAtPoint(Argument arg, Vec2 point) {
 void* BoardWidget::Nearby(Vec2 start, float radius, std::function<void*(Location&)> callback) {
   auto board = LockBoard();
   if (!board) return nullptr;
-  auto lock = std::lock_guard(vm.mutex);
+  auto lock = std::lock_guard(engine.mutex);
   float radius2 = radius * radius;
   for (auto& loc : board->locations) {
     auto& lw = toys.FindOrMake(*loc, this);
@@ -510,7 +510,7 @@ void BoardWidget::NearbyCandidates(
 void BoardWidget::ForStack(Location& base, std::function<void(Location&, int index)> callback) {
   auto board = LockBoard();
   if (!board) return;
-  auto lock = std::lock_guard(vm.mutex);
+  auto lock = std::lock_guard(engine.mutex);
   std::unordered_map<LocationWidget*, std::pair<Location*, int>> index_of;
   int index = 0;
   for (auto& loc : board->locations) {
@@ -611,7 +611,7 @@ Vec<Ptr<Location>> BoardWidget::CloneStack(Location& base, Vec<std::unique_ptr<T
 void BoardWidget::RaiseStack(Location& base) {
   auto board = LockBoard();
   if (!board) return;
-  auto lock = std::lock_guard(vm.mutex);
+  auto lock = std::lock_guard(engine.mutex);
   Vec<int> stack_indices;
   ForStack(base, [&](Location&, int index) { stack_indices.push_back(index); });
   if (stack_indices.empty()) return;
@@ -636,10 +636,10 @@ struct MoveBoardAction : Action {
   MoveBoardAction(ui::Pointer& pointer, Ptr<Board>&& board_arg)
       : Action(pointer), board(std::move(board_arg)) {
     grab_offset = board->position - pointer.PositionOnCanvas();
-    auto lock = std::lock_guard(vm.mutex);
-    auto it = std::find(vm.boards.begin(), vm.boards.end(), board);
-    if (it != vm.boards.end()) {
-      std::rotate(vm.boards.begin(), it, it + 1);
+    auto lock = std::lock_guard(engine.mutex);
+    auto it = std::find(engine.boards.begin(), engine.boards.end(), board);
+    if (it != engine.boards.end()) {
+      std::rotate(engine.boards.begin(), it, it + 1);
     }
     audio::Play(embedded::assets_SFX_canvas_pick_wav);
   }

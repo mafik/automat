@@ -218,13 +218,13 @@ int Main() {
   }
 
   {
-    auto lock = std::lock_guard(vm.mutex);
-    for (auto& board : vm.boards) {
+    auto lock = std::lock_guard(engine.mutex);
+    for (auto& board : engine.boards) {
       for (auto& location : board->locations) {
         location->object->suspended = true;
       }
     }
-    for (auto& board : vm.boards) {
+    for (auto& board : engine.boards) {
       board->locations.clear();
     }
   }
@@ -240,8 +240,8 @@ int Main() {
 #endif
 
   {
-    auto lock = std::lock_guard(vm.mutex);
-    vm.boards.clear();
+    auto lock = std::lock_guard(engine.mutex);
+    engine.boards.clear();
   }
 
   prototypes.reset();

@@ -356,8 +356,8 @@ ui::Tock PointerWidget::Tick(time::Timer& timer) {
   };
   // Note: this could only iterate over visible locations
   {
-    auto lock = std::lock_guard(vm.mutex);
-    for (auto& board : vm.boards) {
+    auto lock = std::lock_guard(engine.mutex);
+    for (auto& board : engine.boards) {
       for (auto& loc : board->locations) {
         auto& obj = *loc->object;
         if (!loc->widget || !loc->widget->toy) continue;

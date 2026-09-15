@@ -82,7 +82,7 @@ dropped by the compositor, off the board.
 One renderer fact matters to anyone extending this: an idle Automat does not
 tick the root widget. Every path that needs `Tick` to run (window
 appeared, window disappeared, the compositor itself starting while restored
-windows wait for their launches) must call `vm.WakeToys()`, which `PackFrame`
+windows wait for their launches) must call `engine.WakeToys()`, which `PackFrame`
 watches. The wake has to come after the item is in the queue the UI thread
 drains, never before: the compositor runs on the epoll thread, so a wake sent
 first can be serviced while the queue is still empty, and the item then waits

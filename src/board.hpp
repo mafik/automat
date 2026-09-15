@@ -4,11 +4,11 @@
 
 #include "animation.hpp"
 #include "base.hpp"
+#include "engine.hpp"
 #include "image_provider.hpp"
 #include "object_source.hpp"
 #include "ptr.hpp"
 #include "resizable.hpp"
-#include "vm.hpp"
 
 namespace automat {
 
@@ -76,7 +76,7 @@ struct Board : Object {
   // Adds the given object to the Board. Returns a pointer to the Location that stores the object.
   // Existing Location is returned, if the object was already part of the Board.
   Location& Insert(Ptr<Object>&& obj) {
-    auto lock = std::lock_guard(vm.mutex);
+    auto lock = std::lock_guard(engine.mutex);
     if (auto* loc = LocationOrNull(*obj)) {
       return *loc;
     }

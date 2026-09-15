@@ -16,13 +16,13 @@
 #include <unordered_map>
 
 #include "board.hpp"
+#include "engine.hpp"
 #include "keyboard.hpp"
 #include "log.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
 #include "time.hpp"
 #include "unique_ptr.hpp"
-#include "vm.hpp"
 #include "win32.hpp"
 #include "win32_capture.hpp"
 #include "win32_window.hpp"
@@ -215,7 +215,7 @@ static void MirrorPopup(HWND hwnd) {
           }
         }
         win->WakeToys();
-        vm.WakeToys();
+        engine.WakeToys();
       },
       status);
   if (!capture) {
@@ -231,7 +231,7 @@ static void MirrorPopup(HWND hwnd) {
   }
   popup_index[hwnd] = window->AcquireWeakPtr();
   window->WakeToys();
-  vm.WakeToys();
+  engine.WakeToys();
 }
 
 static void PopupMoved(HWND hwnd) {
@@ -253,7 +253,7 @@ static void PopupMoved(HWND hwnd) {
     }
   }
   window->WakeToys();
-  vm.WakeToys();
+  engine.WakeToys();
 }
 
 static void DropPopup(HWND hwnd) {
@@ -274,7 +274,7 @@ static void DropPopup(HWND hwnd) {
     }
   }
   window->WakeToys();
-  vm.WakeToys();
+  engine.WakeToys();
 }
 
 static void StartCaptureFor(AppWindow& window) {
@@ -290,7 +290,7 @@ static void StartCaptureFor(AppWindow& window) {
           win->content_size = size;
         }
         win->WakeToys();
-        vm.WakeToys();
+        engine.WakeToys();
       },
       status);
   if (!capture) {
@@ -340,8 +340,8 @@ static void RecoverOrphans() {
   if (orphans.empty()) return;
   std::unordered_map<HWND, Ptr<AppWindow>> saved;
   {
-    auto lock = std::lock_guard(vm.mutex);
-    for (auto& board : vm.boards) {
+    auto lock = std::lock_guard(engine.mutex);
+    for (auto& board : engine.boards) {
       for (auto& loc : board->locations) {
         if (auto* window = dynamic_cast<AppWindow*>(loc->object.get())) {
           if (window->prev_hwnd) saved[window->prev_hwnd] = window->AcquirePtr();
@@ -389,7 +389,7 @@ static void Adopt(HWND hwnd) {
     ui_arrivals.appeared.emplace_back(window, launch);
   }
   window->WakeToys();
-  vm.WakeToys();
+  engine.WakeToys();
 }
 
 static void Drop(HWND hwnd) {
@@ -410,7 +410,7 @@ static void Drop(HWND hwnd) {
     auto lock = std::lock_guard(ui_mutex);
     ui_arrivals.disappeared.push_back(window);
   }
-  vm.WakeToys();
+  engine.WakeToys();
 }
 
 static void TitleChanged(HWND hwnd) {

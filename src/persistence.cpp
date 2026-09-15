@@ -33,8 +33,8 @@ void SaveState(ui::RootWidget& root_widget, Status& status) {
   writer.assigned_names.emplace("version");
   writer.assigned_names.emplace("window");
   {
-    auto lock = std::lock_guard(vm.mutex);
-    for (auto& board : vm.boards) {
+    auto lock = std::lock_guard(engine.mutex);
+    for (auto& board : engine.boards) {
       writer.Serialize(*board);
     }
   }
@@ -84,8 +84,8 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
               if (type == "Board") {
                 auto board = MAKE_PTR(Board);
                 d.RegisterObject(key, *board);
-                auto lock = std::lock_guard(vm.mutex);
-                vm.boards.push_back(std::move(board));
+                auto lock = std::lock_guard(engine.mutex);
+                engine.boards.push_back(std::move(board));
               } else if (type == "Launch") {
                 auto launch = MAKE_PTR(Launch);
                 d.RegisterObject(key, *launch);
@@ -152,8 +152,8 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
 
   // Objects may have been rendered in their incomplete state - re-render them all.
   {
-    auto lock = std::lock_guard(vm.mutex);
-    for (auto& board : vm.boards) {
+    auto lock = std::lock_guard(engine.mutex);
+    for (auto& board : engine.boards) {
       for (auto& loc : board->locations) {
         loc->WakeToys();
       }

@@ -14,13 +14,13 @@
 #include "color.hpp"
 #include "drag_action.hpp"
 #include "drawing.hpp"
+#include "engine.hpp"
 #include "font.hpp"
 #include "launcher.hpp"
 #include "location.hpp"
 #include "object.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
-#include "vm.hpp"
 
 namespace automat {
 
@@ -305,18 +305,18 @@ void ClientArrivals::Process() {
     }
     loc.InsertHere(std::move(w));
     board->WakeToys();
-    vm.WakeToys();
+    engine.WakeToys();
   }
   appeared.clear();
   for (auto& w : disappeared) {
-    auto vm_lock = std::lock_guard(vm.mutex);
-    for (auto& board : vm.boards) {
+    auto vm_lock = std::lock_guard(engine.mutex);
+    for (auto& board : engine.boards) {
       if (auto* here = board->LocationOrNull(*w)) {
         board->Extract(*here);
         board->WakeToys();
       }
     }
-    vm.WakeToys();
+    engine.WakeToys();
   }
   disappeared.clear();
   move_requests.clear();

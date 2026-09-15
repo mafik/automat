@@ -376,8 +376,8 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
 
   SkRect work_area = SkRect::MakeXYWH(-0.5, -0.5, 1, 1);
   {
-    auto lock = std::lock_guard(vm.mutex);
-    for (auto& board : vm.boards) {
+    auto lock = std::lock_guard(engine.mutex);
+    for (auto& board : engine.boards) {
       Rect board_rect = Rect::MakeCenterZero(100_cm, 100_cm).MoveBy(board->position);
       work_area.join(board_rect.sk);
     }
@@ -428,9 +428,9 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
     }
   }
   {
-    auto lock = std::lock_guard(vm.mutex);
+    auto lock = std::lock_guard(engine.mutex);
     Widget* below = nullptr;
-    for (auto& board : std::ranges::reverse_view(vm.boards)) {
+    for (auto& board : std::ranges::reverse_view(engine.boards)) {
       auto& board_widget = toys.FindOrMake(*board, this);
       SkM44 board_transform = canvas_to_window44;
       board_transform.preTranslate(board->position.x, board->position.y);

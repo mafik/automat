@@ -129,7 +129,7 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   void ClearOwnError();
 
   // The first Location storing this object, scanning boards top to bottom. Null when no board
-  // owns it. Thread-safe (takes vm.mutex); the returned pointer is only stable while the
+  // owns it. Thread-safe (takes engine.mutex); the returned pointer is only stable while the
   // object stays on its board.
   Location* MyLocation();
 

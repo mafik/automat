@@ -801,8 +801,8 @@ void PipeWireNode::OnOutConnect(StreamArgument self, Interface end) {
 }
 
 static bool SameBoard(Object& a, Object& b) {
-  auto lock = std::lock_guard(vm.mutex);
-  for (auto& board : vm.boards) {
+  auto lock = std::lock_guard(engine.mutex);
+  for (auto& board : engine.boards) {
     if (board->LocationOrNull(a) && board->LocationOrNull(b)) return true;
   }
   return false;

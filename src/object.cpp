@@ -131,7 +131,7 @@ Ptr<Object> Location::move_Impl::OnTake() {
   Ptr<Object> taken;
   obj->object.Swap(taken);
   obj->WakeToys();
-  vm.WakeToys();
+  engine.WakeToys();
   return taken;
 }
 
@@ -306,8 +306,8 @@ void ObjectToy::UpdateErrorFlames() {
 void Object::Interfaces(const std::function<LoopControl(Interface)>& cb) {}
 
 Location* Object::MyLocation() {
-  auto lock = std::lock_guard(vm.mutex);
-  for (auto& board : vm.boards) {
+  auto lock = std::lock_guard(engine.mutex);
+  for (auto& board : engine.boards) {
     for (auto& loc : board->locations) {
       if (loc->object == this) {
         return loc.Get();

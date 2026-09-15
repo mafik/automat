@@ -52,7 +52,7 @@ Automat also has a timer thread - a dedicated thread that ensures that events ar
 There are three different categories of objects in Automat:
 - Wayland state, managed from a single epoll thread (one day may be split into more)
 - UI state, owned & managed by UI threads (one per Window / RootWidget)
-- VM objects, owned cuncurrently from arbitrary threads through ref-counted Ptr/WeakPtr
+- Engine objects, owned cuncurrently from arbitrary threads through ref-counted Ptr/WeakPtr
 
 Wayland & UI are both single-threaded and use MortalPtr-based pointers.
 

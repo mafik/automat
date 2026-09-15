@@ -32,6 +32,7 @@
 
 #include "animation.hpp"
 #include "dmabuf.hpp"
+#include "engine.hpp"
 #include "format.hpp"
 #include "keyboard.hpp"
 #include "keymap.hpp"
@@ -45,7 +46,6 @@
 #include "unique_ptr.hpp"
 #include "units.hpp"
 #include "vk.hpp"
-#include "vm.hpp"
 #include "wayland_protocol.hpp"
 #include "window_frame.hpp"
 
@@ -460,7 +460,7 @@ void UnmapToplevel(XdgToplevel& t) {
       auto lock = std::lock_guard(s.ui_mutex);
       s.ui_disappeared.push_back(win);
     }
-    vm.WakeToys();
+    engine.WakeToys();
   }
   t.window = {};
 }
@@ -543,7 +543,7 @@ void ApplyAndPublish(Surface& surf) {
       s.ui_appeared.emplace_back(std::move(win_obj), std::move(launch));
     }
   }
-  vm.WakeToys();
+  engine.WakeToys();
 }
 
 // Derives the displayed surface size and the buffer rectangle to sample from the wp_viewport (if
@@ -1237,7 +1237,7 @@ void XdgActivationV1::OnActivate(StrView token, Surface& surface) {
   t->window = restoring->AcquireWeakPtr();
   UpdateDecoration(*t);
   restoring->WakeToys();
-  vm.WakeToys();
+  engine.WakeToys();
 }
 
 void Subcompositor::OnGetSubsurface(Subsurface& id, Surface& surface, Surface& parent) {
@@ -1606,17 +1606,17 @@ void Tick() {
     }
     loc.InsertHere(std::move(w));
     board->WakeToys();
-    vm.WakeToys();
+    engine.WakeToys();
   }
   for (auto& w : disappeared) {
-    auto vm_lock = std::lock_guard(vm.mutex);
-    for (auto& board : vm.boards) {
+    auto vm_lock = std::lock_guard(engine.mutex);
+    for (auto& board : engine.boards) {
       if (auto* here = board->LocationOrNull(*w)) {
         board->Extract(*here);
         board->WakeToys();
       }
     }
-    vm.WakeToys();
+    engine.WakeToys();
   }
 }
 
@@ -1636,7 +1636,7 @@ void XdgToplevel::OnMove(Seat& seat, U32 serial) {
     auto lock = std::lock_guard(server->ui_mutex);
     server->ui_move_requests.push_back(window);
   }
-  vm.WakeToys();
+  engine.WakeToys();
 }
 void XdgToplevel::OnResize(Seat& seat, U32 serial, enum ResizeEdge edges) {}
 void XdgToplevel::OnSetMaxSize(I32 width, I32 height) {}

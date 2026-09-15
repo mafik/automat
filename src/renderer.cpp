@@ -36,6 +36,7 @@
 #include "blockingconcurrentqueue.hpp"
 #include "color.hpp"
 #include "drawable_rtti.hpp"
+#include "engine.hpp"
 #include "font.hpp"
 #include "global_resources.hpp"
 #include "log.hpp"
@@ -46,7 +47,6 @@
 #include "thread_name.hpp"
 #include "time.hpp"
 #include "vk.hpp"
-#include "vm.hpp"
 #include "widget.hpp"
 
 // TODO: move render_cost_model.txt into a more appropriate location
@@ -878,7 +878,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
           .Outset(kCanvasMargin);
   rw.ValidateHierarchy();
   {
-    uint32_t current = vm.wake_counter.load(std::memory_order_relaxed);
+    uint32_t current = engine.wake_counter.load(std::memory_order_relaxed);
     if (current != rw.observed_vm_wake_counter) {
       rw.observed_vm_wake_counter = current;
       rw.WakeAnimationAt(now);

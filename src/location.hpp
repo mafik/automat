@@ -90,8 +90,8 @@ struct Location : Object {
   std::unordered_set<Location*> update_observers;
   std::unordered_set<Location*> observing_updates;
 
-  // DEPRECATED: a VM-space object must not reference UI-space widgets. Widgets are not
-  // thread-aware and may vanish between two VM reads.
+  // DEPRECATED: an Engine-space object must not reference UI-space widgets. Widgets are not
+  // thread-aware and may vanish between two Engine reads.
   MortalPtr<LocationWidget> widget;
 
   // ToyMaker concept
@@ -343,7 +343,7 @@ Vec2 PositionAhead(ObjectToy& origin_toy, const Argument::Table& arg,
 // This is a UI function.
 Vec2 PositionBeside(Location& origin, Location& target, const ObjectToy& target_widget);
 
-// VM function for animating location appearance.
+// Engine function for animating location appearance.
 //
 // Not implemented ATM
 void AnimateGrowFrom(Location& source, Location& grown);

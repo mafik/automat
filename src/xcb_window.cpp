@@ -11,6 +11,7 @@
 
 #include "board.hpp"
 #include "drag_action.hpp"
+#include "engine.hpp"
 #include "file_import.hpp"
 #include "fn.hpp"
 #include "format.hpp"
@@ -20,7 +21,6 @@
 #include "log.hpp"
 #include "root_widget.hpp"
 #include "vec.hpp"
-#include "vm.hpp"
 #include "x11_keys.hpp"
 #include "xcb.hpp"
 
@@ -795,7 +795,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
           Vec2 pos = offer_location->PeekPosition() + Vec2(6_mm, -6_mm);
           loc->board = board->AcquireWeakPtr();
           {
-            auto vm_lock = std::lock_guard(vm.mutex);
+            auto vm_lock = std::lock_guard(engine.mutex);
             board->locations.insert(board->locations.begin(), loc);
           }
           if (auto* direct = std::get_if<Location::Direct>(&loc->placement)) direct->position = pos;

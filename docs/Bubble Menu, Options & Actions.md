@@ -42,16 +42,16 @@ How could Options work in such model (Skeleton & Frankenstein Objects) ?
 - Option Index - very doable - both of these custom objects could hold some Options internally and expose them through the customization points...
 - Options Visitor - also doable - as a wrapper around Option Index or by constructing Options ad-hoc (like Widgets currently do)
 
-### [TODO] VM-space Options
+### [TODO] Engine-space Options
 
-Currently Options are a semi-VM-space entity. They are constructed by a Widget but generally work on Objects. They're also already managed through Ptr. Would it be possible to turn them into entirely VM-space entity?
+Currently Options are a semi-Engine-space entity. They are constructed by a Widget but generally work on Objects. They're also already managed through Ptr. Would it be possible to turn them into entirely Engine-space entity?
 
 Consequences:
 - Options are produced by Objects rather than Widgets
 - Options can be converted into first-class Objects and used as parts to build various contraptions
 
 Requirements:
-- Options would have to drop all Widget references (VM=>UI is forbidden). Open Question: Is it even possible to only keep WeakPtrs into VM?
+- Options would have to drop all Widget references (Engine=>UI is forbidden). Open Question: Is it even possible to only keep WeakPtrs into Engine?
 
 [IDEA: Maybe Options could have different activators depending on the region? This would make it possible to access remote options (do we want it?). This forces regions & activators to be a part of Widgets]
 

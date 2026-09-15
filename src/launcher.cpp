@@ -33,6 +33,7 @@
 #include "board.hpp"
 #include "color.hpp"
 #include "deserializer.hpp"
+#include "engine.hpp"
 #include "fd.hpp"
 #include "format.hpp"
 #include "hex.hpp"
@@ -42,7 +43,6 @@
 #include "random.hpp"
 #include "sincos.hpp"
 #include "ui_beta.hpp"
-#include "vm.hpp"
 #include "x11.hpp"
 
 #if !defined(_WIN32)
@@ -841,8 +841,8 @@ void LaunchRestoredWindows() {
   Vec<Ptr<ClientWindow>> pending;
   Vec<std::pair<Ptr<Board>, Location*>> dead_launches;
   {
-    auto lock = std::lock_guard(vm.mutex);
-    for (auto& board : vm.boards) {
+    auto lock = std::lock_guard(engine.mutex);
+    for (auto& board : engine.boards) {
       for (auto& loc : board->locations) {
         if (auto* launch = dynamic_cast<Launch*>(loc->object.get())) {
           auto launch_lock = std::lock_guard(launch->mutex);

@@ -98,7 +98,7 @@ Ptr<Object> Location::Take() {
 Ptr<Object> Location::InsertHere(Ptr<Object>&& object) {
   this->object.Swap(object);
   this->object->WakeToys();
-  vm.WakeToys();
+  engine.WakeToys();
   return object;
 }
 
@@ -411,7 +411,7 @@ void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const
 
   // Incoming: iterate all ToyScope entries to find ConnectionWidgets pointing to this location
   if (auto board = LockBoard()) {
-    auto lock = std::lock_guard(vm.mutex);
+    auto lock = std::lock_guard(engine.mutex);
     for (auto& other_loc : board->locations) {
       if (other_loc.get() == this) continue;
       other_loc->object->Each<Argument>([&](Argument arg) {
@@ -503,7 +503,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
     to.pos = here_up.mapPoint(to.pos);
   }
 
-  auto lock = std::lock_guard(vm.mutex);
+  auto lock = std::lock_guard(engine.mutex);
   for (auto& other : board->locations) {
     if (other.get() == loc.get()) {
       continue;
@@ -593,7 +593,7 @@ void AppendObscurers(Location* loc, Location* other_end, Vec<ui::Widget*>& wante
 void PositionBelow(Location& origin, Location& below) {
   auto m = origin.LockBoard();
   if (!m) return;
-  auto lock = std::lock_guard(vm.mutex);
+  auto lock = std::lock_guard(engine.mutex);
   Size origin_index = SIZE_MAX;
   Size below_index = SIZE_MAX;
   for (Size i = 0; i < m->locations.size(); i++) {
@@ -663,7 +663,7 @@ Vec2 PositionBeside(Location& origin, Location& target, const ObjectToy& target_
   Vec2 pos =
       Vec2(origin_bounds.right + kGap - target_bounds.left, origin_bounds.top - target_bounds.top);
   if (auto board = origin.LockBoard()) {
-    auto lock = std::lock_guard(vm.mutex);
+    auto lock = std::lock_guard(engine.mutex);
     for (int tries = 0; tries < 16; ++tries) {
       bool occupied = false;
       for (auto& loc : board->locations) {

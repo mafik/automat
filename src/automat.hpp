@@ -5,7 +5,7 @@
 #include <thread>
 
 #include "base.hpp"  // IWYU pragma: export
-#include "vm.hpp"    // IWYU pragma: export
+#include "engine.hpp"  // IWYU pragma: export
 
 // High-level automat code.
 

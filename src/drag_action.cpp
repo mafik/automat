@@ -278,7 +278,7 @@ void DragLocationAction::GiveToBoard(BoardWidget& bw, Board& board, size_t i) {
   location->board = board.AcquireWeakPtr();
   location->Position(lw) -= board.position;
   {
-    auto lock = std::lock_guard(vm.mutex);
+    auto lock = std::lock_guard(engine.mutex);
     board.locations.insert(board.locations.begin(), location);
   }
   lw.Reparent(bw);
@@ -333,15 +333,15 @@ void DragLocationAction::Drop() {
       auto new_board = MAKE_PTR(Board);
       new_board->position = RoundToMilimeters(current_position);
       {
-        auto lock = std::lock_guard(vm.mutex);
-        vm.boards.insert(vm.boards.begin(), new_board);
+        auto lock = std::lock_guard(engine.mutex);
+        engine.boards.insert(engine.boards.begin(), new_board);
       }
       auto& new_bw = root.toys.FindOrMake(*new_board, &root);
       SkM44 board_transform(root.CanvasToWindow());
       board_transform.preTranslate(new_board->position.x, new_board->position.y);
       new_bw.local_to_parent = board_transform;
       Enter(new_bw, *new_board);
-      vm.WakeToys();
+      engine.WakeToys();
     }
   }
   if (board_widget) {
@@ -410,7 +410,7 @@ void DragLocationAction::AddToGroup(Ptr<Location>&& loc_arg) {
     auto board = board_widget->LockBoard();
     loc->board = board->AcquireWeakPtr();
     {
-      auto lock = std::lock_guard(vm.mutex);
+      auto lock = std::lock_guard(engine.mutex);
       auto& list = board->locations;
       auto it = std::find_if(list.begin(), list.end(), [&](auto& l) { return l.get() == above; });
       list.insert(it == list.end() ? list.begin() : std::next(it), locations.back());

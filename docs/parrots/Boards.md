@@ -27,8 +27,8 @@ objects, so each board shows only the connections that belong to its aspect.
 
 ## Ownership
 
-The list of boards and each board's position on the starfield are stored in `vm.boards` and
-`Board::position` (src/vm.hpp, src/board.hpp). `vm.mutex` guards the list and every board's
+The list of boards and each board's position on the starfield are stored in `engine.boards` and
+`Board::position` (src/engine.hpp, src/board.hpp). `engine.mutex` guards the list and every board's
 `locations`, because worker threads look objects up while the UI thread moves them.
 
 A board owns an object through its Location (src/location.hpp), which stores the object's
@@ -191,4 +191,4 @@ stretch: the merge animation is the plain snap of the same widget, plus a fade.
 A connection is drawn on a board only when that board owns both of its endpoint objects. Every
 board that owns both ends draws the connection, each with its own connection widget from its
 own ToyScope. A board that owns only one end draws nothing for the connection, even though the
-connection still exists in the VM.
+connection still exists in the Engine.

@@ -21,9 +21,9 @@ struct Object;
 
 # Design
 
-Errors can be attached to VM Objects. Each Object can have up to one Error. Attaching (reporting) an
-error makes the Object enter a "failed" state. Objects can enter this state explicitly (by calling
-ReportError) or due to signal being delivered.
+Errors can be attached to Engine Objects. Each Object can have up to one Error. Attaching
+(reporting) an error makes the Object enter a "failed" state. Objects can enter this state
+explicitly (by calling ReportError) or due to signal being delivered.
 
 Objects that do work should check for the failed state and not do anything until it's cleared.
 
@@ -36,7 +36,7 @@ Objects in the "failed" state burn and display a human-readable error message.
 Errors are not propagated by default (everything else keeps running) but may be propagated if user
 makes it explicit. This default makes the system more robust.
 
-Error information is stored by the VM Object and triggers a regular Wakeup when it's changed.
+Error information is stored by the Engine Object and triggers a regular Wakeup when it's changed.
 Default implementation stores errors out of band but Objects should be able to store them in-line as
 well.
 

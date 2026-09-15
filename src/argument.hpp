@@ -137,9 +137,9 @@ struct Argument : Interface {
 
   struct State {
     std::atomic<uint32_t> last_activity;
-    std::atomic<uint32_t> wake_counter;
-    State() : last_activity(0), wake_counter(0) {}
-    State(const State& other) : last_activity(0), wake_counter(0) {}
+    std::atomic<uint32_t> monitor;
+    State() : last_activity(0), monitor(0) {}
+    State(const State& other) : last_activity(0), monitor(0) {}
   };
   INTERFACE_BOUND(Argument, Interface)
   Argument(Object& obj) : Interface(obj) {}
@@ -182,7 +182,7 @@ struct Argument : Interface {
 
   void Connect(Interface end) const {
     if (table->on_connect) table->on_connect(*this, end);
-    state->wake_counter.fetch_add(1, std::memory_order_relaxed);
+    state->monitor.fetch_add(1, std::memory_order_relaxed);
     object_ptr->WakeToys();
   }
 
@@ -196,7 +196,7 @@ struct Argument : Interface {
 
   Object& ObjectOrMake() const;
 
-  void WakeToys() { state->wake_counter.fetch_add(1, std::memory_order_relaxed); }
+  void WakeToys() { state->monitor.fetch_add(1, std::memory_order_relaxed); }
 
   // ImplT may optionally provide:
   //   static constexpr Style kStyle = ...;
@@ -230,7 +230,7 @@ struct ArgumentToy : Toy {
   std::unique_ptr<ui::Widget> prototype_ghost;
 
   ArgumentToy(ui::Widget* parent, Object& owner, Argument::Table& table)
-      : Toy(parent, owner, &table, Argument(owner, table).state->wake_counter) {}
+      : Toy(parent, owner, &table, Argument(owner, table).state->monitor) {}
 
   Location* StartLocation() const;
   Location* EndLocation() const;

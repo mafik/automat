@@ -32,8 +32,8 @@ struct Object;
 struct Toy : ui::Widget {
   WeakPtr<Object> owner;
   Interface::Table* iface;
-  const std::atomic<uint32_t>& wake_counter;
-  uint32_t observed_wake_counter = 0;  // UI-thread only
+  const std::atomic<uint32_t>& monitor;
+  uint32_t observed_monitor = 0;  // UI-thread only
 
   // The point of iconification is to allow Toys to vary the number of options that are presented to
   // the user. Full iconification assumes that the Widget is contained to a 1x1cm square and should
@@ -57,9 +57,9 @@ struct Toy : ui::Widget {
   // Icons may kind of include text - if nothing better is available.
   bool iconified = false;
 
-  // wake_counter must be readable even after owner expires
+  // monitor must be readable even after owner expires
   Toy(ui::Widget* parent, Object& owner, Interface::Table* iface,
-      const std::atomic<uint32_t>& wake_counter);
+      const std::atomic<uint32_t>& monitor);
 
   template <typename T = Object>
   Ptr<T> LockOwner() const {

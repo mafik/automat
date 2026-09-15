@@ -173,7 +173,7 @@ Spawning happens on UI and Engine threads; matching and window filling on the
 epoll thread; toys read on the UI thread. The registry mutex is a leaf —
 nothing else is acquired under it, and posix_spawnp runs outside it. Each
 Launch has its own mutex following the standard object pattern, with
-`wake_counter` notifying toys. Capture listeners live on the epoll thread
+`monitor` notifying toys. Capture listeners live on the epoll thread
 and remove themselves on EOF or when their launch dies. The established
 lock order `engine.mutex` → window/command mutex → launch mutex → registry mutex
 is never reversed.

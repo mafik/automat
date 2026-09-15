@@ -29,7 +29,7 @@ Error attached to that Object.
   `ErrorFlames` (`src/error_flames.hpp`) draws fire around the outline of the Object and the
   Error text in red beneath it. It is a detached child of the Object's toy, created, refreshed
   and destroyed by `ObjectToy::UpdateErrorFlames`, which `ObjectToy::OnPoll` calls whenever
-  `Toy::Poll` (`src/toy.cpp`) observes a change of the Object's wake counter; `ManipulateError`
+  `Toy::Poll` (`src/toy.cpp`) observes a change of the Object's monitor; `ManipulateError`
   bumps that counter after every change, so the flames follow the Error without polling the
   error list and without involving the Location. It has no shape of its own, so it never
   reacts to the pointer; its draw bounds are the bounds of the toy's shape extended by the

@@ -8,7 +8,7 @@ Objects are tracked through thread-safe Ptr & WeakPtr.
 
 ### Object deletion
 
-An Object can be deleted at any point in time. If this happens, `wake_counter`
+An Object can be deleted at any point in time. If this happens, `monitor`
 is incremented, which causes all of the Toys that reference the deleted object
 to be woken up.
 

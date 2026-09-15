@@ -452,7 +452,7 @@ void RootWidget::Poll() {
   for (Action& action : active_actions) {
     action.Poll(timer);
   }
-  uint32_t camera_wake = camera->wake_counter.load(std::memory_order_relaxed);
+  uint32_t camera_wake = camera->monitor.load(std::memory_order_relaxed);
   if (camera_wake != camera_observed) {
     camera_observed = camera_wake;
     Vec2 delta;

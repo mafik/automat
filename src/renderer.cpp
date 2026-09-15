@@ -878,9 +878,9 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
           .Outset(kCanvasMargin);
   rw.ValidateHierarchy();
   {
-    uint32_t current = engine.wake_counter.load(std::memory_order_relaxed);
-    if (current != rw.observed_vm_wake_counter) {
-      rw.observed_vm_wake_counter = current;
+    uint32_t current = engine.monitor.load(std::memory_order_relaxed);
+    if (current != rw.observed_engine_monitor) {
+      rw.observed_engine_monitor = current;
       rw.WakeAnimationAt(now);
     }
   }

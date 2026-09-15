@@ -11,7 +11,7 @@
 namespace automat::ui {
 
 ShelfButton::ShelfButton(Widget* parent, Ptr<Object> proto)
-    : Toy(parent, *proto, nullptr, proto->wake_counter), proto(std::move(proto)) {}
+    : Toy(parent, *proto, nullptr, proto->monitor), proto(std::move(proto)) {}
 
 void ShelfButton::Init() {
   proto_widget = &ToyScope().FindOrMake(*proto, this);

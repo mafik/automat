@@ -24,7 +24,7 @@ struct Board;
 // However the memory managment story is completely different - so it's not treated as a regular
 // Object.
 struct Engine {
-  std::atomic<uint32_t> wake_counter = 0;
+  std::atomic<uint32_t> monitor = 0;
 
   // Guards `boards` and every Board::locations. Recursive because board mutations can happen
   // inside argument connection callbacks that run under an outer lock (ConnectAtPoint).
@@ -33,7 +33,7 @@ struct Engine {
   // Boards in front-to-back order.
   Vec<Ptr<Board>> boards;
 
-  void WakeToys() { wake_counter.fetch_add(1, std::memory_order_relaxed); }
+  void WakeToys() { monitor.fetch_add(1, std::memory_order_relaxed); }
 };
 
 extern Engine engine;

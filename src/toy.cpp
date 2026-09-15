@@ -10,8 +10,8 @@
 namespace automat {
 
 Toy::Toy(ui::Widget* parent, Object& owner, Interface::Table* iface,
-         const std::atomic<uint32_t>& wake_counter)
-    : Widget(parent), owner(owner.AcquireWeakPtr()), iface(iface), wake_counter(wake_counter) {}
+         const std::atomic<uint32_t>& monitor)
+    : Widget(parent), owner(owner.AcquireWeakPtr()), iface(iface), monitor(monitor) {}
 
 Toy* Toy::BaseToy() const {
   Widget* base = const_cast<Widget*>((const Widget*)this);
@@ -42,9 +42,9 @@ void ToyMakerMixin::ForEachToyImpl(Object& owner, Interface::Table* iface,
 }
 
 void Toy::Poll(time::Timer& timer) {
-  uint32_t current = wake_counter.load(std::memory_order_relaxed);
-  if (current != observed_wake_counter || owner.IsExpired()) {
-    observed_wake_counter = current;
+  uint32_t current = monitor.load(std::memory_order_relaxed);
+  if (current != observed_monitor || owner.IsExpired()) {
+    observed_monitor = current;
     WakeAnimationAt(timer.last);
     OnWake();
   }

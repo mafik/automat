@@ -21,7 +21,7 @@ namespace automat::ui {
 
 EnumKnobWidget::EnumKnobWidget(ui::Widget* parent, Object& owner, Scalar::Table& table,
                                int n_options)
-    : Toy(parent, owner, &table, owner.wake_counter), n_options(n_options) {
+    : Toy(parent, owner, &table, owner.monitor), n_options(n_options) {
   knob.unit_angle = 60_deg;
   knob.unit_distance = kGaugeRadius * 2;
 

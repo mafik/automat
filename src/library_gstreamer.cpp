@@ -521,7 +521,7 @@ struct PreviewBox {
 
 // A preview appsink calls this on a streaming thread; the frame is copied
 // under the chain's preview mutex and the member's toys are woken through
-// wake_counter.
+// monitor.
 static GstFlowReturn OnPreviewSample(GstAppSink* sink, gpointer user_data) {
   auto& box = *(PreviewBox*)user_data;
   auto& chain = *box.chain;

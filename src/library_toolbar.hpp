@@ -18,7 +18,7 @@ struct PrototypeButton : Toy {
   mutable animation::SpringV2<float> width{kToolbarIconSize};
 
   PrototypeButton(Widget* parent, Ptr<Object>& proto)
-      : Toy(parent, *proto, nullptr, proto->wake_counter), proto(proto) {}
+      : Toy(parent, *proto, nullptr, proto->monitor), proto(proto) {}
 
   void Init();
 

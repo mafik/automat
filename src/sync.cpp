@@ -302,16 +302,16 @@ struct GearWidget : ObjectToy {
 
   bool CenteredAtZero() const override { return true; }
 
-  uint32_t last_wake_counter = 0;
+  uint32_t last_monitor = 0;
   float angular_velocity = 0;
   float angle = 0;
   float target_angle = 0;
 
   Tock Tick(time::Timer& t) override {
     if (auto gear = LockOwner<Gear>()) {
-      auto wake_counter = gear->wake_counter.load(std::memory_order_relaxed);
-      if (wake_counter != last_wake_counter) {
-        last_wake_counter = wake_counter;
+      auto monitor = gear->monitor.load(std::memory_order_relaxed);
+      if (monitor != last_monitor) {
+        last_monitor = monitor;
         target_angle += M_PI / kPrimaryGearCount;  // half tooth
       }
       if (angle >= 2 * M_PI) {

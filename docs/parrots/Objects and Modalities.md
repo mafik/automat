@@ -52,7 +52,7 @@ widget activated them. State that exists only for the 2D modality but must outli
 
 ## Notifications
 
-`Object::wake_counter` is the modality-independent notification channel: an object bumps its
+`Object::monitor` is the modality-independent notification channel: an object bumps its
 counter on every state change and never calls into a modality. Each modality polls the
 counters of the objects it displays. For the 2D UI that is `RootWidget::Poll` (src/root_widget.hpp),
 which runs once per frame; other modalities bring their own polling.

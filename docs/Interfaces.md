@@ -71,11 +71,11 @@ Interfaces are exposed to the user as "Options":
 
 ## UI update granularity
 
-Most interfaces notify UI of updates by bumping the `wake_counter` of their owning Object. But interfaces are also allowed to introduce their own `wake_counter`. When they do so, then they should also make sure to pass it when constructing the `Toy`.
+Most interfaces notify UI of updates by bumping the `monitor` of their owning Object. But interfaces are also allowed to introduce their own `monitor`. When they do so, then they should also make sure to pass it when constructing the `Toy`.
 
 TODO: This aspect of the design seems kind of weird. Maybe it would be better to forbid it and instead force nested objects instead? The two mechanisms seem redundant and the latter seem strictly more flexible.
 
-An alternative to separate `wake_counter` is a nested object:
+An alternative to separate `monitor` is a nested object:
 
 ## Interfaces From Nested Objects
 

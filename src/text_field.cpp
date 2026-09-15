@@ -107,7 +107,7 @@ Vec2 TextField::GetTextPos() const {
 SkPath TextField::Shape() const { return SkPath::RRect(ShapeRRect()); }
 
 TextFieldBase::TextFieldBase(ui::Widget* parent, Object& owner, automat::Text::Table& table)
-    : Toy(parent, owner, &table, owner.wake_counter) {}
+    : Toy(parent, owner, &table, owner.monitor) {}
 
 Interface TextFieldBase::FindOption(Pointer&, ActionTrigger trigger) {
   if (trigger != PointerButton::Left) return {};

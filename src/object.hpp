@@ -35,7 +35,7 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   // Incremented when object state changes. UI-side Toys observe this to know when
   // to wake up and pull fresh state. Readable through WeakPtr without locking
   // because memory survives until weak_refs hits 0.
-  AtomicCounter wake_counter = 0;
+  AtomicCounter monitor = 0;
 
   // Used during initialization & to prevent feedback loops in synchronization.
   bool suspended = false;
@@ -43,13 +43,13 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   // Note: 3 bytes of padding here
 
   // Bump the counter to notify Toys that state has changed.
-  void WakeToys() { wake_counter.fetch_add(1, std::memory_order_relaxed); }
+  void WakeToys() { monitor.fetch_add(1, std::memory_order_relaxed); }
 
   Object& GetOwner() { return *this; }
 
   Object() = default;
 
-  Object(const Object&) : ReferenceCounted(), wake_counter(0) {}
+  Object(const Object&) : ReferenceCounted(), monitor(0) {}
 
   // Create a copy of this object.
   //
@@ -142,7 +142,7 @@ std::unique_ptr<Action> PickUp(ui::Pointer&, Location&, Object&);
 //
 // It's rendered as a green box with the name of the object.
 struct ObjectToy : Toy {
-  ObjectToy(Widget* parent, Object& obj) : Toy(parent, obj, nullptr, obj.wake_counter) {}
+  ObjectToy(Widget* parent, Object& obj) : Toy(parent, obj, nullptr, obj.monitor) {}
 
   virtual float Width() const;
   virtual std::string Text() const { return std::string(Name()); }

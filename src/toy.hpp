@@ -74,12 +74,9 @@ struct Toy : ui::Widget {
   // Alternative to Bind that keeps the owner locked.
   template <typename T = Interface>
   Locked<T> LockBind() const {
+    if (iface == nullptr) return {};
     if (auto obj = LockOwner<Object>()) {
-      if (iface) {
-        // transfer ownership into Locked
-        T bound(*obj.Release(), *static_cast<typename T::Table*>(iface));
-        return AdoptLocked(bound);
-      }
+      return cast<T>(AdoptLocked(Interface(obj.Release(), iface)));
     }
     return {};
   }

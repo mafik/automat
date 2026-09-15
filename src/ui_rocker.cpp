@@ -34,10 +34,10 @@ Rocker::Rocker(Widget* parent) : Widget(parent), clickable(*this) {
 
 Interface Rocker::FindOption(Pointer&, ActionTrigger trigger) {
   if (trigger != PointerButton::Left) return {};
-  auto locked = target.Lock();
-  if (!locked) return {};
-  OnOff on_off(cast<Object>(locked.Owner()), locked.Get());
-  return Interface(on_off.object_ptr, on_off.IsOn() ? &locked->turn_off : &locked->turn_on);
+  auto on_off = target.Lock();
+  if (!on_off) return {};
+  return Interface(on_off.object_ptr,
+                   on_off.IsOn() ? &on_off.table->turn_off : &on_off.table->turn_on);
 }
 
 void Rocker::SetOn(bool value) {

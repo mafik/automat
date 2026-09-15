@@ -261,8 +261,8 @@ struct ObjectToy : automat::ObjectToy {
 // square on red; while not `enabled` it grays out and ignores clicks.
 struct RunButton : Widget {
   Clickable clickable;
-  NestedWeakPtr<Interface::Table> start;
-  NestedWeakPtr<Interface::Table> stop;
+  Stored<> start;
+  Stored<> stop;
   uint32_t seed;        // per-object wobble; owners pass their Seed(site)
   uint32_t wiggle = 0;  // hover shimmer phase
   bool running = false;
@@ -281,8 +281,7 @@ struct RunButton : Widget {
     return start;
   }
 
-  RunButton(Widget* parent, NestedWeakPtr<Interface::Table> start,
-            NestedWeakPtr<Interface::Table> stop, uint32_t seed = 0);
+  RunButton(Widget* parent, Stored<> start, Stored<> stop, uint32_t seed = 0);
 
   StrView Name() const override { return "RunButton"; }
   bool CenteredAtZero() const override { return true; }

@@ -121,9 +121,8 @@ struct StreamArgument : InterfaceArgument<StreamInput, Interface::kStreamArg> {
     // Impls that override OnConnect should call this first.
     static void StreamOnConnect(Argument self, Interface end) {
       auto stream_self = cast<StreamArgument>(self);
-      if (auto old = stream_self.state->target.Lock()) {
-        StreamInput old_input(cast<Object>(old.Owner()), old.Get());
-        if (old_input && old_input.Producer().get() == self.object_ptr) {
+      if (auto old_input = stream_self.state->target.Lock()) {
+        if (old_input.Producer().get() == self.object_ptr) {
           old_input.SetProducer({});
         }
       }

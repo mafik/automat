@@ -303,10 +303,7 @@ TrackBase::TrackBase(Str name_arg) : name_str(std::move(name_arg)), arg_table(na
     track.arg_state.target = end;
   };
   arg_table.find = [](Argument self) -> Locked<Interface> {
-    auto locked = static_cast<const TrackBase&>(*self.object_ptr).arg_state.target.Lock();
-    if (!locked) return {};
-    auto* table = locked.Get();
-    return AdoptLocked(Interface(cast<Object>(locked.ReleaseOwner().Release()), table));
+    return static_cast<const TrackBase&>(*self.object_ptr).arg_state.target.Lock();
   };
   arg_table.make_icon = [](Interface self, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
     return std::make_unique<TextWidget>(parent, Str(self.Name()));
@@ -1907,8 +1904,8 @@ TimelineWidget::TimelineWidget(ui::Widget* parent, Object& object)
   next_button->local_to_parent = SkM44::Translate(
       kPlasticWidth / 2 - kSideButtonMargin - kSideButtonDiameter, -kSideButtonRadius);
   auto weak = static_cast<Timeline&>(object).AcquireWeakPtr();
-  prev_button->target = NestedWeakPtr<Interface::Table>(weak, &Timeline::jump_to_start_tbl);
-  next_button->target = NestedWeakPtr<Interface::Table>(weak, &Timeline::jump_to_end_tbl);
+  prev_button->target = Stored<>(weak, &Timeline::jump_to_start_tbl);
+  next_button->target = Stored<>(weak, &Timeline::jump_to_end_tbl);
   for (auto* zone : {window_zone.get(), bridge_zone.get(), splicer_zone.get(), zoom_zone.get()}) {
     layers.OrderBelow(zone);
   }

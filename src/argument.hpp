@@ -77,7 +77,7 @@ struct Argument : Interface {
 
     // Establishes or breaks a connection. A null end means disconnect.
     // If end.object_ptr is non-null, it's guaranteed to be alive during this call but not
-    // afterwards. Use WeakPtr/NestedWeakPtr to store the reference.
+    // afterwards. Use WeakPtr/Stored to store the reference.
     void (*on_connect)(Argument, Interface end) = nullptr;
 
     // Looks up the destination of this Argument. This should match the last `on_connect`.
@@ -307,12 +307,12 @@ struct ObjectArgument : Argument {
 };
 
 // InterfaceArgument<T, kKind> — connects to a specific interface of type T.
-// Stores NestedWeakPtr<T::Table> as State::target. Provides defaults for
+// Stores the target as State::target. Provides defaults for
 // CanConnect/OnConnect/Find. Set kKind = kNextArg to get the NextArg specialization.
 template <typename T, Interface::Kind kKind = Interface::kInterfaceArgument>
 struct InterfaceArgument : Argument {
   struct State : Argument::State {
-    NestedWeakPtr<typename T::Table> target;
+    Stored<T> target;
   };
 
   INTERFACE_BOUND(InterfaceArgument, Argument)
@@ -337,10 +337,7 @@ struct InterfaceArgument : Argument {
     }
 
     static Locked<Interface> DefaultFind(Argument self) {
-      auto locked = cast<InterfaceArgument>(self).state->target.Lock();
-      if (!locked) return {};
-      auto* table = locked.Get();
-      return AdoptLocked(Interface(cast<Object>(locked.ReleaseOwner().Release()), table));
+      return cast<Interface>(cast<InterfaceArgument>(self).state->target.Lock());
     }
 
     constexpr Table(StrView name) : Argument::Table(name, kKind) {

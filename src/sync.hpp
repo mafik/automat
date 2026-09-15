@@ -124,7 +124,7 @@ struct Gear : Object {
   std::shared_mutex mutex;
 
   struct Member {
-    NestedWeakPtr<Syncable::Table> weak;
+    Stored<Syncable> weak;
     bool sink;
   };
 
@@ -135,14 +135,14 @@ struct Gear : Object {
   Ptr<Object> Clone() const override { return MAKE_PTR(Gear); }
 
   // Make sure that this member will receive sync notifications from the Sources in this SyncGroup.
-  void AddSink(Object& obj, Syncable::Table& syncable);
+  void AddSink(Syncable);
 
   // Make sure that the sync notifications from this Syncable will be propagated to Sinks of this
   // Gear.
-  void AddSource(Object& obj, Syncable::Table& syncable);
+  void AddSource(Syncable);
 
   // AddSink & AddSource together.
-  void FullSync(Object& obj, Syncable::Table& syncable);
+  void FullSync(Syncable);
 
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
@@ -225,14 +225,10 @@ void Syncable::ForwardNotify(this T self, F&& lambda) {
         if (!member.sink) continue;
         auto locked = member.weak.Lock();
         if (!locked) continue;
-        T other(*cast<Object>(locked.Owner()), *static_cast<typename T::Table*>(locked.Get()));
-        // Skip self
-        if (self == other) {
-          continue;
-        }
-        lambda(other);
-        ++other.state->sync_balance;
-        other.WakeToys();
+        if (self == locked) continue;  // Skip self
+        lambda(cast<T>(locked));
+        ++locked.state->sync_balance;
+        locked.WakeToys();
       }
     }
   }
@@ -240,8 +236,8 @@ void Syncable::ForwardNotify(this T self, F&& lambda) {
 }
 
 // Returns a reference to the existing or a new Gear.
-Ptr<Gear> FindGearOrMake(Object& source_obj, Syncable::Table& source);
-Ptr<Gear> FindGearOrNull(Object& source_obj, Syncable::Table& source);
+Ptr<Gear> FindGearOrMake(Syncable source);
+Ptr<Gear> FindGearOrNull(Syncable source);
 
 // Widget that draws one belt connection from a Gear to a synced member.
 struct SyncBelt : ArgumentToy {
@@ -280,7 +276,7 @@ struct SyncBelt : ArgumentToy {
 static_assert(ToyMaker<Syncable>);
 
 struct SyncAction : Action {
-  NestedWeakPtr<Syncable::Table> weak;
+  Stored<Syncable> weak;
   // TODO: syncing across the Boards
   MortalPtr<BoardWidget> board_widget;
   SyncAction(ui::Pointer& pointer, Syncable syncable, Toy* toy);

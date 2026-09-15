@@ -1123,8 +1123,7 @@ void Highlight(SkCanvas& canvas, const Rect& r, SkColor color, uint32_t seed) {
 
 // ----------------------------------------------------------------- widgets ---
 
-RunButton::RunButton(Widget* parent, NestedWeakPtr<Interface::Table> start,
-                     NestedWeakPtr<Interface::Table> stop, uint32_t seed)
+RunButton::RunButton(Widget* parent, Stored<> start, Stored<> stop, uint32_t seed)
     : Widget(parent),
       clickable(*this),
       start(std::move(start)),
@@ -1133,7 +1132,7 @@ RunButton::RunButton(Widget* parent, NestedWeakPtr<Interface::Table> start,
 
 Interface RunButton::FindOption(Pointer&, ActionTrigger trigger) {
   if (!enabled || trigger != PointerButton::Left) return {};
-  return Interface((running ? stop : start).Lock());
+  return (running ? stop : start).Unsafe();
 }
 
 ui::Tock RunButton::Tick(time::Timer& t) {

@@ -13,8 +13,7 @@ using namespace std;
 
 namespace automat::ui {
 
-PowerButton::PowerButton(Widget* parent, NestedWeakPtr<OnOff::Table> target, SkColor4f fg,
-                         SkColor4f bg)
+PowerButton::PowerButton(Widget* parent, Stored<OnOff> target, SkColor4f fg, SkColor4f bg)
     : ToggleButton(parent), target(std::move(target)) {
   on = make_unique<ColoredButton>(this, PathFromSVG(kPowerSVG),
                                   ColoredButtonArgs{.fg = bg, .bg = fg});
@@ -26,14 +25,14 @@ PowerButton::PowerButton(Widget* parent, NestedWeakPtr<OnOff::Table> target, SkC
 
 Interface PowerButton::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
   if (trigger != PointerButton::Left) return {};
-  auto locked = target.Lock();
-  if (!locked) return {};
-  OnOff on_off(cast<Object>(locked.Owner()), locked.Get());
-  return Interface(on_off.object_ptr, on_off.IsOn() ? &locked->turn_off : &locked->turn_on);
+  auto on_off = target.Lock();
+  if (!on_off) return {};
+  return Interface(on_off.object_ptr,
+                   on_off.IsOn() ? &on_off.table->turn_off : &on_off.table->turn_on);
 }
 bool PowerButton::Filled() const {
-  if (auto locked = target.Lock()) {
-    return OnOff(cast<Object>(locked.Owner()), locked.Get()).IsOn();
+  if (auto on_off = target.Lock()) {
+    return on_off.IsOn();
   }
   return false;
 }

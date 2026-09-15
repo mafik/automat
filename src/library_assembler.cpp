@@ -71,7 +71,7 @@ static std::unique_ptr<Action> OpenRegistersPage(Interface self, ui::Pointer& po
   using enum ui::Dir;
   constexpr ui::Dir kSlots[] = {N, NE, E, SE, SW, W, NW};
   constexpr int kPerPage = std::size(kSlots);
-  int page = static_cast<ObjectSource::Table*>(self.table_ptr) - kRegistersMenu.data();
+  int page = cast<ObjectSource::Table>(self.table_ptr) - kRegistersMenu.data();
   auto& assembler = static_cast<Assembler&>(*self.object_ptr);
   Interface options[ui::kDirCount];
   for (int i = 0; i < kPerPage; ++i) {

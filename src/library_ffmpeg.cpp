@@ -204,13 +204,13 @@ int MediaFile::BestVideoStream() {
 
 int MediaFile::StreamIndexFeeding(const Object* consumer) {
   auto video_target = out_stream.target.Lock();
-  if (video_target.Owner() == consumer) {
+  if (video_target.object_ptr == consumer) {
     auto lock = std::lock_guard(mutex);
     return video_stream;
   }
   for (int i = 0; i < kMaxStreams; ++i) {
     auto target = stream_ports[i].state.target.Lock();
-    if (target.Owner() == consumer) return i;
+    if (target.object_ptr == consumer) return i;
   }
   return -1;
 }
@@ -318,7 +318,7 @@ StreamStats MediaFile::PacketStats(int index) {
 void MediaFile::OnOutStreamConnect(StreamArgument self, Interface end) {
   Ptr<FfmpegDecoder> old_decoder;
   if (auto old = self.state->target.Lock()) {
-    if (auto* o = dynamic_cast<FfmpegDecoder*>(old.Owner())) old_decoder = o->AcquirePtr();
+    if (auto* o = dynamic_cast<FfmpegDecoder*>(old.object_ptr)) old_decoder = o->AcquirePtr();
   }
   StreamArgument::Table::StreamOnConnect(self, end);
   if (old_decoder) old_decoder->ResetCodec();
@@ -667,8 +667,7 @@ struct FfmpegDecoderToy : ui::beta::ObjectToy {
 
   FfmpegDecoderToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     button = std::make_unique<ui::beta::RunButton>(
-        this, NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(), &FfmpegDecoder::run_tbl),
-        NestedWeakPtr<Interface::Table>(), Seed(0x5D));
+        this, Stored<>(obj.AcquireWeakPtr(), &FfmpegDecoder::run_tbl), Stored<>(), Seed(0x5D));
     button->running = false;
     button->enabled = true;
     UpdateFromObject();

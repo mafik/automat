@@ -61,7 +61,7 @@ static float ShadowOffset(SkRRect& bounds) {
 
 Interface Button::FindOption(Pointer&, ActionTrigger trigger) {
   if (trigger != PointerButton::Left) return {};
-  return Interface(target);
+  return target.Unsafe();
 }
 
 SkRRect Button::RRect() const {

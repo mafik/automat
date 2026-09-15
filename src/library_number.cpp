@@ -146,7 +146,7 @@ constinit std::array<Command::Table, 10> kDigits = [] {
   for (auto& t : tables) {
     t.schedules_next = false;
     t.on_run = [](Command self, std::unique_ptr<RunTask>&) {
-      int digit = static_cast<Command::Table*>(self.table_ptr) - kDigits.data();
+      int digit = cast<Command::Table>(self.table_ptr) - kDigits.data();
       Str text = self.object_ptr->GetText();
       if (text == "0") text.clear();
       text += '0' + digit;
@@ -218,11 +218,11 @@ struct NumberWidget : ObjectToy {
     dot = std::make_unique<NumberButton>(this, ".");
     backspace = std::make_unique<NumberButton>(this, PathFromSVG(kBackspaceShape));
     auto weak = number_obj.AcquireWeakPtr();
-    dot->target = NestedWeakPtr<Interface::Table>(weak, &kDot);
-    backspace->target = NestedWeakPtr<Interface::Table>(weak, &kBackspace);
+    dot->target = Stored<>(weak, &kDot);
+    backspace->target = Stored<>(weak, &kBackspace);
     for (int i = 0; i < 10; ++i) {
       digits[i] = std::make_unique<NumberButton>(this, std::to_string(i));
-      digits[i]->target = NestedWeakPtr<Interface::Table>(weak, &kDigits[i]);
+      digits[i]->target = Stored<>(weak, &kDigits[i]);
     }
 
     auto cell = [](int row, int col) {

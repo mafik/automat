@@ -36,7 +36,7 @@ enum class Cursor;
 // Interface itself is a lightweight bound type (Object* + Table*) used for typed access
 // to an object's interface. It is constructed on-the-fly when needed.
 //
-// Long-term storage of interface pointers relies on Locked<T> & NestedWeakPtr<Interface::Table>.
+// Long-term storage of interface pointers relies on Stored<T> & Locked<T>.
 // This allows concurrent lifetime management.
 //
 // # Notable interfaces
@@ -165,11 +165,8 @@ struct Interface {
   Interface(Object& obj) : object_ptr(&obj) {}
   Interface(Object& obj, Table& table) : object_ptr(&obj), table_ptr(&table) {}
   Interface(Object* obj, Table* table) : object_ptr(obj), table_ptr(table) {}
-  explicit Interface(const NestedWeakPtr<Table>&);
 
   auto operator<=>(const Interface&) const = default;
-
-  operator NestedWeakPtr<Table>() const;
 
   bool has_object() const { return object_ptr != nullptr; }
   bool has_table() const { return table_ptr != nullptr; }
@@ -239,6 +236,64 @@ template <typename To, typename From>
   return cast<To>(std::move(from));
 }
 
+template <typename T = Interface>
+struct Stored : private T {
+  Stored() = default;
+  ~Stored() { SafeDecrementWeakRefs(this->object_ptr); }
+  Stored(std::nullptr_t) {}
+  Stored(T bound) : T(bound) { SafeIncrementWeakRefs(this->object_ptr); }
+
+  template <typename U>
+  Stored(const WeakPtr<U>& owner, typename T::Table* table) : T(owner.GetUnsafe(), table) {
+    SafeIncrementWeakRefs(this->object_ptr);
+  }
+
+  Stored(const Stored& o) : T(o) { SafeIncrementWeakRefs(this->object_ptr); }
+  Stored(Stored&& o) : T(o) {
+    o.object_ptr = nullptr;
+    o.table_ptr = nullptr;
+  }
+  Stored& operator=(const Stored& o) {
+    SafeIncrementWeakRefs(o.object_ptr);
+    SafeDecrementWeakRefs(this->object_ptr);
+    this->object_ptr = o.object_ptr;
+    this->table_ptr = o.table_ptr;
+    return *this;
+  }
+  Stored& operator=(Stored&& o) {
+    if (this != &o) {
+      SafeDecrementWeakRefs(this->object_ptr);
+      this->object_ptr = o.object_ptr;
+      this->table_ptr = o.table_ptr;
+      o.object_ptr = nullptr;
+      o.table_ptr = nullptr;
+    }
+    return *this;
+  }
+
+  Locked<T> Lock() const {
+    if (this->object_ptr == nullptr) return {};
+    if (!this->object_ptr->IncrementOwningRefsNonZero()) return {};
+    return AdoptLocked(static_cast<const T&>(*this));
+  }
+
+  Interface Unsafe() const { return static_cast<const Interface&>(*this); }
+
+  bool IsExpired() const {
+    return this->object_ptr == nullptr ||
+           this->object_ptr->owning_refs.load(std::memory_order_relaxed) == 0;
+  }
+
+  void Reset() {
+    SafeDecrementWeakRefs(this->object_ptr);
+    this->object_ptr = nullptr;
+    this->table_ptr = nullptr;
+  }
+
+  explicit operator bool() const { return this->object_ptr && this->table_ptr; }
+  bool operator==(const Stored&) const = default;
+};
+
 template <typename Table>
 constexpr Table MenuTable(StrView name,
                           std::unique_ptr<Action> (*open)(Interface, ui::Pointer&, Toy*)) {
@@ -274,10 +329,6 @@ Str ToStr(Interface iface);
     Table& operator*() const { return *operator->(); }                                             \
     operator Table*() const { return operator->(); }                                               \
   } table NO_UNIQUE_ADDRESS;                                                                       \
-  operator NestedWeakPtr<Table>() {                                                                \
-    NestedWeakPtr<Interface::Table> base = *this;                                                  \
-    return NestedWeakPtr<Table>(base.GetOwnerWeak(), static_cast<Table*>(base.GetUnsafe()));       \
-  }                                                                                                \
   struct StateRef {                                                                                \
     State* operator->() const {                                                                    \
       auto* p =                                                                                    \

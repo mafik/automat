@@ -10,14 +10,6 @@
 
 namespace automat {
 
-Interface::Interface(const NestedWeakPtr<Table>& weak)
-    : object_ptr(static_cast<Object*>(weak.OwnerUnsafe())), table_ptr(weak.GetUnsafe()) {}
-
-Interface::operator NestedWeakPtr<Table>() const {
-  if (!object_ptr) return {};
-  return {object_ptr->AcquireWeakPtr(), table_ptr};
-}
-
 std::unique_ptr<Action> Interface::Activate(ui::Pointer& pointer, Toy* toy) const {
   if (table_ptr == nullptr) {
     for (ui::Widget* widget = toy; widget; widget = widget->parent) {

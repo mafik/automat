@@ -485,7 +485,7 @@ StreamStats GStreamerElement::PortStats(int port) {
 void GStreamerElement::OnOutStreamConnect(StreamArgument self, Interface end) {
   Ptr<GStreamerElement> old_peer;
   if (auto old = self.state->target.Lock()) {
-    if (auto* o = dynamic_cast<GStreamerElement*>(old.Owner())) old_peer = o->AcquirePtr();
+    if (auto* o = dynamic_cast<GStreamerElement*>(old.object_ptr)) old_peer = o->AcquirePtr();
   }
   StreamArgument::Table::StreamOnConnect(self, end);
   GStreamerElement* new_peer = nullptr;
@@ -1415,10 +1415,8 @@ struct GStreamerToy : ui::beta::ObjectToy {
 
   GStreamerToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     button = std::make_unique<ui::beta::RunButton>(
-        this, NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(), &GStreamerElement::run_tbl),
-        NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(),
-                                        &GStreamerElement::running_tbl.turn_off),
-        Seed(0x31));
+        this, Stored<>(obj.AcquireWeakPtr(), &GStreamerElement::run_tbl),
+        Stored<>(obj.AcquireWeakPtr(), &GStreamerElement::running_tbl.turn_off), Seed(0x31));
     if (auto elem = LockObject<GStreamerElement>()) {
       factory_ = elem->factory;
       credit_ = FactoryKlass(factory_);
@@ -2061,10 +2059,8 @@ struct StepZone : ui::ActionZone {
 BoundaryToy::BoundaryToy(ui::Widget* parent, Object& obj, bool is_sink)
     : ui::beta::ObjectToy(parent, obj), is_sink(is_sink), step_zone(new StepZone(this)) {
   button = std::make_unique<ui::beta::RunButton>(
-      this, NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(), &GStreamerElement::run_tbl),
-      NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(),
-                                      &GStreamerElement::running_tbl.turn_off),
-      Seed(0x77));
+      this, Stored<>(obj.AcquireWeakPtr(), &GStreamerElement::run_tbl),
+      Stored<>(obj.AcquireWeakPtr(), &GStreamerElement::running_tbl.turn_off), Seed(0x77));
   if (auto elem = LockObject<GStreamerElement>()) {
     factory_ = elem->factory;
     credit_ = FactoryKlass(factory_);

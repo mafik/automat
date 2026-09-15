@@ -131,9 +131,8 @@ void Location::FillPosition(LocationWidget& w) {
       SkMatrix m =
           Location::ToMatrix(origin->Position(*origin->widget), origin->Scale(*origin->widget),
                              origin->widget->LocalAnchor());
-      std::get_if<Direct>(&placement)->position = Vec2(
-          m.mapPoint(PositionAhead(origin->widget->ToyForObject(),
-                                   *static_cast<Argument::Table*>(ahead->arg), w.ToyForObject())));
+      std::get_if<Direct>(&placement)->position = Vec2(m.mapPoint(PositionAhead(
+          origin->widget->ToyForObject(), *cast<Argument::Table>(ahead->arg), w.ToyForObject())));
       PositionBelow(*this, *origin);
     }
   } else if (auto* between = std::get_if<PlaceBetween>(&request)) {

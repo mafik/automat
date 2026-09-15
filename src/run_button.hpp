@@ -10,9 +10,9 @@
 namespace automat::ui {
 
 struct PowerButton : ToggleButton {
-  NestedWeakPtr<OnOff::Table> target;
+  Stored<OnOff> target;
 
-  PowerButton(Widget* parent, NestedWeakPtr<OnOff::Table> target, SkColor4f fg = "#fa2305"_color4f,
+  PowerButton(Widget* parent, Stored<OnOff> target, SkColor4f fg = "#fa2305"_color4f,
               SkColor4f bg = SkColors::kWhite);
 
   Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;

@@ -230,7 +230,7 @@ void ScheduleArgumentTargets(Argument arg) {
 void RunTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("RunTask");
   if (auto s = target.lock()) {
-    auto* sig = static_cast<Command::Table*>(command);
+    auto* sig = cast<Command::Table>(command);
     if (auto lr = s->Find<LongRunning>();
         lr && lr.IsRunning() && sig->while_long_running == Command::kInhibit) {
       return;
@@ -251,7 +251,7 @@ void RunTask::OnExecute(std::unique_ptr<Task>& self) {
 }
 
 void RunTask::DoneRunning(Object& object) {
-  if (!static_cast<Command::Table*>(command)->schedules_next) return;
+  if (!cast<Command::Table>(command)->schedules_next) return;
   if (HasError(object)) return;
   ScheduleNext(object);
 }

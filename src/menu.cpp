@@ -123,7 +123,7 @@ struct MenuAction;
 // See: `docs/Bubble Menu, Options & Actions.md`
 struct Menu : ui::Widget {
   MiniMenuMode mode = MODE_8_DIR;
-  NestedWeakPtr<Interface::Table> slots[kDirCount];
+  Stored<> slots[kDirCount];
   std::unique_ptr<ui::Widget> icons[kDirCount];
   animation::SpringV2<Vec2> offsets[kDirCount];
   animation::SpringV2<float> size = 0;
@@ -187,12 +187,11 @@ Menu::Menu(ui::Widget* parent, MiniMenuMode mode, const Interface (&options)[kDi
 }
 
 std::unique_ptr<Action> Menu::Activate(int dir, ui::Pointer& pointer) {
-  auto locked = slots[dir].Lock();
-  auto* object = static_cast<Object*>(locked.Owner());
-  if (object == nullptr) return nullptr;
+  auto option = slots[dir].Lock();
+  if (!option.has_object()) return nullptr;
   Toy* source = dynamic_cast<Toy*>(icons[dir].get());
   if (source == nullptr && action) source = action->toy.Get();
-  return Interface(object, locked.Get()).Activate(pointer, source);
+  return option.Activate(pointer, source);
 }
 
 void Menu::Draw(SkCanvas& canvas) const {

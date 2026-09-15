@@ -210,8 +210,8 @@ struct HotKeyWidget : ObjectToy {
   HotKeyWidget(ui::Widget* parent, Object& hotkey_obj) : ObjectToy(parent, hotkey_obj) {
     auto hk = LockHotKey();
 
-    power_button.reset(new PowerButton(
-        this, NestedWeakPtr<OnOff::Table>(hk->AcquireWeakPtr(), &HotKey::enabled_tbl)));
+    power_button.reset(
+        new PowerButton(this, Stored<OnOff>(hk->AcquireWeakPtr(), &HotKey::enabled_tbl)));
     ctrl_button.reset(new KeyButton(this, "Ctrl", KeyColor(hk->ctrl), kCtrlKeyWidth));
     alt_button.reset(new KeyButton(this, "Alt", KeyColor(hk->alt), kAltKeyWidth));
     shift_button.reset(new KeyButton(this, "Shift", KeyColor(hk->shift), kShiftKeyWidth));
@@ -242,11 +242,11 @@ struct HotKeyWidget : ObjectToy {
                          kShapeRect.bottom + kFrameWidth + kKeySpacing * 2 + kKeyHeight);
 
     auto weak = hk->AcquireWeakPtr();
-    ctrl_button->target = NestedWeakPtr<Interface::Table>(weak, &HotKey::toggle_ctrl_tbl);
-    alt_button->target = NestedWeakPtr<Interface::Table>(weak, &HotKey::toggle_alt_tbl);
-    shift_button->target = NestedWeakPtr<Interface::Table>(weak, &HotKey::toggle_shift_tbl);
-    windows_button->target = NestedWeakPtr<Interface::Table>(weak, &HotKey::toggle_super_tbl);
-    shortcut_button->target = NestedWeakPtr<Interface::Table>(weak, &kSelectHotKey);
+    ctrl_button->target = Stored<>(weak, &HotKey::toggle_ctrl_tbl);
+    alt_button->target = Stored<>(weak, &HotKey::toggle_alt_tbl);
+    shift_button->target = Stored<>(weak, &HotKey::toggle_shift_tbl);
+    windows_button->target = Stored<>(weak, &HotKey::toggle_super_tbl);
+    shortcut_button->target = Stored<>(weak, &kSelectHotKey);
   }
 
   void SelectHotKey(ui::Pointer& pointer) {

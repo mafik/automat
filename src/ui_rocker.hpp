@@ -44,7 +44,7 @@ struct Rocker : Widget {
   bool on = false;
   animation::SpringV2<float> state = 0;
   Clickable clickable;
-  NestedWeakPtr<OnOff::Table> target;
+  Stored<OnOff> target;
   std::unique_ptr<Widget> on_icon;
   std::unique_ptr<Widget> off_icon;
 

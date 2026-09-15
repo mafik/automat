@@ -85,7 +85,7 @@ struct FlipFlopWidget : ObjectToy {
 
   FlipFlopWidget(ui::Widget* parent, Object& object) : ObjectToy(parent, object) {
     rocker = std::make_unique<ui::Rocker>(this);
-    rocker->target = NestedWeakPtr<OnOff::Table>(object.AcquireWeakPtr(), &FlipFlop::enabled_tbl);
+    rocker->target = Stored<OnOff>(object.AcquireWeakPtr(), &FlipFlop::enabled_tbl);
   }
 
   float GetBaseScale() const override { return 1.0f; }

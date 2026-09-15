@@ -622,7 +622,7 @@ bool Gear::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 SyncAction::SyncAction(ui::Pointer& pointer, Syncable syncable, Toy* toy) : Action(pointer) {
   syncable.Unsync();
-  weak = NestedWeakPtr<Syncable::Table>(syncable.GetOwner().AcquireWeakPtr(), syncable.table);
+  weak = NestedWeakPtr<Syncable::Table>(syncable.object_ptr->AcquireWeakPtr(), syncable.table);
   if (toy) board_widget = BoardOrNull(*toy);
   if (auto* bw = board_widget.Get()) {
     if (bw->toys.FindOrNull(*syncable.object_ptr)) {

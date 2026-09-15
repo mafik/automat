@@ -22,9 +22,8 @@ Toy* Toy::BaseToy() const {
   return static_cast<Toy*>(base);
 }
 
-void ToyMakerMixin::ForEachToyImpl(Object& owner, Interface::Table* iface,
-                                   std::function<void(ui::RootWidget&, Toy&)> cb) {
-  auto key = ToyScope::Key(&owner, iface);
+void ForEachToy(Interface iface, std::function<void(ui::RootWidget&, Toy&)> cb) {
+  auto key = ToyScope::MakeKey(iface);
   for (auto* root_widget : ui::root_widgets) {
     auto it = root_widget->toys.container.find(key);
     if (it != root_widget->toys.container.end()) {

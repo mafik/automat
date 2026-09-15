@@ -10,7 +10,6 @@
 #include <type_traits>
 
 #include "interface.hpp"
-#include "part.hpp"
 #include "ptr.hpp"
 #include "time.hpp"
 #include "widget.hpp"
@@ -100,10 +99,10 @@ struct Toy : ui::Widget {
   virtual ui::Widget* FindWidget(Interface::Table*) { return this; }
 };
 
-// ToyMaker is a Part that can make toys
+// ToyMaker is an Interface (or an Object) that can make toys
 template <typename T>
 concept ToyMaker = requires(T t) {
-  requires Part<T>;
+  { Interface(t) } -> std::same_as<Interface>;
   typename std::remove_reference_t<T>::Toy;
   requires std::derived_from<typename std::remove_reference_t<T>::Toy, Toy>;
   {
@@ -111,19 +110,8 @@ concept ToyMaker = requires(T t) {
   } -> std::convertible_to<std::unique_ptr<Toy>>;
 };
 
-// Mixin class for ToyMakers. Provides some utilities for working with Toys.
-struct ToyMakerMixin {
-  static void ForEachToyImpl(Object& owner, Interface::Table* iface,
-                             std::function<void(ui::RootWidget&, Toy&)> cb);
-
-  // DEPRECATED: This is not thread-safe. Update this Object's local state & call WakeToys instead.
-  template <ToyMaker Self>
-  void ForEachToy(this Self& self, std::function<void(ui::RootWidget&, typename Self::Toy&)> cb) {
-    ForEachToyImpl(
-        self.GetOwner(), self.GetInterface(),
-        [&](ui::RootWidget& root, automat::Toy& toy) { cb(root, static_cast<Self::Toy&>(toy)); });
-  }
-};
+// DEPRECATED: This is not thread-safe. Update the Object's local state & call WakeToys instead.
+void ForEachToy(Interface, std::function<void(ui::RootWidget&, Toy&)> cb);
 
 // ToyMakers can create many toys to display themselves simultaneously in multiple contexts.
 // Each context which can display widgets must maintain their lifetime. This class helps with that.
@@ -133,10 +121,7 @@ struct ToyScope {
   using Map = ankerl::unordered_dense::map<Key, std::unique_ptr<Toy>>;
   Map container;
 
-  template <Part T>
-  static Key MakeKey(T& part) {
-    return {&part.GetOwner(), part.GetInterface()};
-  }
+  static Key MakeKey(Interface iface) { return {iface.object_ptr, iface.table_ptr}; }
 
   template <ToyMaker T>
   std::remove_reference_t<T>::Toy* FindOrNull(T&& maker) const {
@@ -172,9 +157,8 @@ struct ToyScope {
 
   // Extract a toy out of this store (null if not found).
   // The widget keeps its parent.
-  template <Part T>
-  std::unique_ptr<Toy> Extract(T& part) {
-    auto it = container.find(MakeKey(part));
+  std::unique_ptr<Toy> Extract(Interface iface) {
+    auto it = container.find(MakeKey(iface));
     if (it == container.end()) {
       return nullptr;
     }
@@ -184,9 +168,8 @@ struct ToyScope {
   }
 
   // Insert an externally-owned toy into the store, replacing any existing entry.
-  template <Part T>
-  void Insert(T& part, std::unique_ptr<Toy>&& toy) {
-    container[MakeKey(part)] = std::move(toy);
+  void Insert(Interface iface, std::unique_ptr<Toy>&& toy) {
+    container[MakeKey(iface)] = std::move(toy);
   }
 };
 

@@ -420,7 +420,7 @@ void BoardWidget::DropLocation(Ptr<Location>&& l) {
   } else if (!dropped->widget) {
     toys.FindOrMake(*dropped, this);
   }
-  dropped->object->ForEachToy([](ui::RootWidget&, automat::Toy& w) { w.RedrawThisFrame(); });
+  ForEachToy(*dropped->object, [](ui::RootWidget&, automat::Toy& w) { w.RedrawThisFrame(); });
 }
 
 void BoardWidget::ConnectAtPoint(Argument arg, Vec2 point) {

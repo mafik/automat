@@ -992,7 +992,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
               break;
           }
         }
-        tesseract->ForEachToy([](ui::RootWidget&, ui::Widget& w) {
+        ForEachToy(*tesseract, [](ui::RootWidget&, automat::Toy& w) {
           w.WakeAnimation();
           w.RedrawThisFrame();
         });

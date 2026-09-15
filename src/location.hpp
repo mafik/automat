@@ -94,9 +94,6 @@ struct Location : Object {
   // thread-aware and may vanish between two Engine reads.
   MortalPtr<LocationWidget> widget;
 
-  // ToyMaker concept
-  Object& GetOwner() { return *this; }
-  Interface::Table* GetInterface() { return nullptr; }
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 
   // Obtain a matrix representation of the given transform.

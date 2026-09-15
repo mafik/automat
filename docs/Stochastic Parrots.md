@@ -54,14 +54,14 @@ Automat is a C++ application for semi-autonomous automation with a layered archi
 1. **Objects Layer** - Heart of Automat containing virtual devices that can connect to each other
    - Located in `src/library*.cpp/hpp`
    - Objects use typed connections defined by `Argument` class
-   - Objects inherit `ReferenceCounted` (thread-safe ref-counted via `Ptr<T>`) and `ToyMakerMixin`
+   - Objects inherit `ReferenceCounted` (thread-safe ref-counted via `Ptr<T>`)
    - Key files: `src/object.hpp`, `src/argument.hpp`, `src/base.hpp`
 
 2. **Toys Layer** - UI display widgets, separated from Object logic
    - **`automat::Toy`** (`src/toy.hpp`) — base for all display widgets, inherits `ui::Widget`
    - **`ObjectToy`** (`src/object.hpp`) — base for Object-specific widgets (Shape, Draw, ArgStart, etc.)
    - **`ToyScope`** (`src/toy.hpp`) — manages Toy lifetimes, keyed by `(WeakPtr<owner>, Atom*)`
-   - **`ToyMaker`** concept — any `Part` with a `Toy` type and `MakeToy(Widget*)` method
+   - **`ToyMaker`** concept — anything convertible to an `Interface` with a `Toy` type and a `MakeToy(Widget*)` method
    - Widget struct definitions typically live in .cpp files; headers only declare `MakeToy`
    - `ArgumentToy` (`src/argument.hpp`) — base for widgets displaying argument connections; holds opt-in utilities (endpoint locations, split maintenance, autoconnect radar & prototype ghost). `Argument::MakeToy` picks the subclass from the argument's `Style`
    - `ConnectionWidget` + `CableWidget`, `StreamPipeWidget`, `SpotlightWidget`, `InvisibleWidget` (`src/ui_connection_widget.hpp/cpp`) — the Arrow/Cable/Stream/Spotlight/Invisible connection styles

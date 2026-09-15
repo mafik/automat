@@ -144,8 +144,6 @@ struct Argument : Interface {
   INTERFACE_BOUND(Argument, Interface)
   Argument(Object& obj) : Interface(obj) {}
 
-  Object& GetOwner() { return *object_ptr; }
-  Interface::Table* GetInterface() { return table_ptr; }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent);
 
   // --- Public API (bound type methods) ---

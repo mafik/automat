@@ -2570,7 +2570,7 @@ void Float64Track::UpdateOutput(Location& target, time::SteadyPoint started_at,
 }
 
 static void WakeRunButton(Timeline& timeline) {
-  timeline.ForEachToy([](ui::RootWidget& root_widget, ui::Widget& widget) {
+  ForEachToy(timeline, [](ui::RootWidget& root_widget, automat::Toy& widget) {
     TimelineWidget& timeline_widget = static_cast<TimelineWidget&>(widget);
     timeline_widget.run_button->WakeAnimation();
   });

@@ -31,7 +31,7 @@ struct ObjectToy;
 //
 // Instances of this class provide their logic.
 // Appearance is delegated to Widgets.
-struct Object : public ReferenceCounted, public ToyMakerMixin {
+struct Object : public ReferenceCounted {
   // Incremented when object state changes. UI-side Toys observe this to know when
   // to wake up and pull fresh state. Readable through WeakPtr without locking
   // because memory survives until weak_refs hits 0.
@@ -44,8 +44,6 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
 
   // Bump the counter to notify Toys that state has changed.
   void WakeToys() { monitor.fetch_add(1, std::memory_order_relaxed); }
-
-  Object& GetOwner() { return *this; }
 
   Object() = default;
 
@@ -132,8 +130,6 @@ struct Object : public ReferenceCounted, public ToyMakerMixin {
   // owns it. Thread-safe (takes engine.mutex); the returned pointer is only stable while the
   // object stays on its board.
   Location* MyLocation();
-
-  Interface::Table* GetInterface() { return nullptr; }
 };
 
 std::unique_ptr<Action> PickUp(ui::Pointer&, Location&, Object&);

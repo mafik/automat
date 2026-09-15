@@ -45,7 +45,7 @@ using namespace automat;
 
 namespace automat::ui {
 
-static Location* FindOnSameBoard(const automat::ArgumentToy& w, Object& obj) {
+static Ptr<Location> FindOnSameBoard(const automat::ArgumentToy& w, Object& obj) {
   if (auto* bw = BoardOrNull(w)) {
     if (auto board = bw->LockBoard()) {
       return board->LocationOrNull(obj);
@@ -97,12 +97,12 @@ SkPath StreamPipeWidget::Shape() const {
 Optional<Rect> SpotlightWidget::DrawBounds() const {
   auto arg = LockBind<Argument>();
   if (!arg) return std::nullopt;
-  auto* from = FindOnSameBoard(*this, *arg.object_ptr);
+  auto from = FindOnSameBoard(*this, *arg.object_ptr);
   if (!from || !from->widget || !from->widget->toy) return std::nullopt;
   float radius = from->widget->toy->CoarseBounds().rect.Hypotenuse() / 2;
   Rect bounds = Rect::MakeCenter(from->Position(*from->widget), radius * 2, radius * 2);
   if (auto* source = arg.ObjectOrNull()) {
-    if (auto* source_loc = FindOnSameBoard(*this, *source)) {
+    if (auto source_loc = FindOnSameBoard(*this, *source)) {
       bounds.ExpandToInclude(source_loc->PeekPosition());
     }
   }
@@ -112,7 +112,7 @@ Optional<Rect> SpotlightWidget::DrawBounds() const {
 void SpotlightWidget::Draw(SkCanvas& canvas) const {
   auto arg = LockBind<Argument>();
   if (!arg) return;
-  auto* from_ptr = FindOnSameBoard(*this, *arg.object_ptr);
+  auto from_ptr = FindOnSameBoard(*this, *arg.object_ptr);
   if (!from_ptr || !from_ptr->widget || !from_ptr->widget->toy) return;
   Location& from = *from_ptr;
 
@@ -132,7 +132,7 @@ void SpotlightWidget::Draw(SkCanvas& canvas) const {
     canvas.drawCircle(target, radius, circle_paint);
   }
 
-  if (auto* source_loc =
+  if (auto source_loc =
           arg.ObjectOrNull() ? FindOnSameBoard(*this, *arg.ObjectOrNull()) : nullptr) {
     // Ray from the source to the target
     Vec2 source = source_loc->PeekPosition();
@@ -184,7 +184,7 @@ struct AutoconnectRadar : Widget {
   void Draw(SkCanvas& canvas) const override {
     auto arg = connection.LockBind<Argument>();
     if (!arg) return;
-    auto* from_ptr = FindOnSameBoard(connection, *arg.object_ptr);
+    auto from_ptr = FindOnSameBoard(connection, *arg.object_ptr);
     if (!from_ptr) return;
     Location& from = *from_ptr;
     if (activation < 0.01f) return;
@@ -494,7 +494,7 @@ static Tock TickVisibility(ConnectionWidget& w, ConnectionWidgetLocker& a, time:
   tock.shaping |= animation::LinearApproach(w.hidden ? 1 : 0, timer.d, 5, w.transparency);
 
   float loc_alpha = 1.f;
-  if (auto* start_loc = FindOnSameBoard(w, *a.StartObj())) {
+  if (auto start_loc = FindOnSameBoard(w, *a.StartObj())) {
     if (start_loc->widget) {
       loc_alpha = start_loc->widget->alpha;
     }
@@ -1343,14 +1343,14 @@ Optional<Rect> StreamPipeWidget::DrawBounds() const {
 
 namespace automat {
 
-Location* ArgumentToy::StartLocation() const {
+Ptr<Location> ArgumentToy::StartLocation() const {
   if (auto obj = LockOwner<Object>()) {
     return ui::FindOnSameBoard(*this, *obj);
   }
   return nullptr;
 }
 
-Location* ArgumentToy::EndLocation() const {
+Ptr<Location> ArgumentToy::EndLocation() const {
   if (auto arg = LockBind<Argument>()) {
     if (auto* end_obj = arg.Find().object_ptr) {
       return ui::FindOnSameBoard(*this, *end_obj);
@@ -1373,10 +1373,10 @@ void ArgumentToy::TickSplits() {
       }
     }
   }
-  Location* start_loc = StartLocation();
-  Location* end_loc = EndLocation();
-  AppendObscurers(start_loc, end_loc, wanted);
-  AppendObscurers(end_loc, start_loc, wanted);
+  Ptr<Location> start_loc = StartLocation();
+  Ptr<Location> end_loc = EndLocation();
+  AppendObscurers(start_loc.Get(), end_loc.Get(), wanted);
+  AppendObscurers(end_loc.Get(), start_loc.Get(), wanted);
   int matching = 0;
   bool foreign = false;
   for (ui::Widget& over : splits_over) {

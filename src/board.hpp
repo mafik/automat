@@ -53,7 +53,7 @@ struct Board : Object {
 
   float PxToMetric() const;
 
-  deque<Ptr<Location>> locations;
+  deque<Owned<Location>> locations;
 
   using Toy = BoardWidget;
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
@@ -62,7 +62,7 @@ struct Board : Object {
 
   void MoveToTop(Location& location);
 
-  Location* LocationOrNull(Object& object);
+  Ptr<Location> LocationOrNull(Object& object);
 
   // Create a new location on top of all the others.
   Location& CreateEmpty();
@@ -77,7 +77,7 @@ struct Board : Object {
   // Existing Location is returned, if the object was already part of the Board.
   Location& Insert(Ptr<Object>&& obj) {
     auto lock = std::lock_guard(engine.mutex);
-    if (auto* loc = LocationOrNull(*obj)) {
+    if (auto loc = LocationOrNull(*obj)) {
       return *loc;
     }
     auto& h = CreateEmpty();

@@ -180,7 +180,7 @@ void UpdateCode(automat::mc::Controller& controller,
   for (int i = 0; i < n; ++i) {
     automat::library::Instruction* obj_raw = instructions[i].get();
     const automat::mc::Inst* inst_raw = &obj_raw->mc_inst;
-    auto* loc = obj_raw->MyLocation();
+    auto loc = obj_raw->MyLocation();
     int next = -1;
     int jump = -1;
     if (loc) {
@@ -228,7 +228,7 @@ std::vector<Ptr<Instruction>> FindInstructions(Location& assembler_loc) {
 }
 
 void Assembler::UpdateMachineCode() {
-  auto* location = MyLocation();
+  auto location = MyLocation();
   if (!location) {
     return;
   }

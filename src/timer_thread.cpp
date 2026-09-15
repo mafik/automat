@@ -73,7 +73,7 @@ static void TimerFinished(Object& object, SteadyPoint scheduled_time) {
     ERROR << "Timer notification sent to an object which cannot receive it";
     return;
   }
-  if (auto* location = object.MyLocation()) {
+  if (auto location = object.MyLocation()) {
     timer->OnTimerNotification(*location, scheduled_time);
   }
 }
@@ -100,7 +100,7 @@ void ScheduleAt(Location& here, SteadyPoint time) {
 void CancelScheduledAt(Location& here) {
   std::unique_lock<std::mutex> lck(mtx);
   for (auto it = tasks.begin(); it != tasks.end();) {
-    if (it->second->target.lock().get() == here.object.get()) {
+    if (it->second->target.lock().get() == here.object.Get()) {
       it = tasks.erase(it);
     } else {
       ++it;
@@ -113,7 +113,7 @@ void CancelScheduledAt(Location& here, SteadyPoint time) {
   std::unique_lock<std::mutex> lck(mtx);
   auto [a, b] = tasks.equal_range(time);
   for (auto it = a; it != b; ++it) {
-    if (it->second->target.lock().get() == here.object.get()) {
+    if (it->second->target.lock().get() == here.object.Get()) {
       tasks.erase(it);
       break;
     }
@@ -125,7 +125,7 @@ StatusCode RescheduleAt(Location& here, SteadyPoint old_time, SteadyPoint new_ti
   std::unique_lock<std::mutex> lck(mtx);
   auto [a, b] = tasks.equal_range(old_time);
   for (auto it = a; it != b; ++it) {
-    if (it->second->target.lock().get() == here.object.get()) {
+    if (it->second->target.lock().get() == here.object.Get()) {
       static_cast<TimerFinishedTask*>(it->second.get())->scheduled_time = new_time;
       auto tmp = std::move(it->second);
       tasks.erase(it);

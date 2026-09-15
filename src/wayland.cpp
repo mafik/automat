@@ -1591,7 +1591,7 @@ void Tick() {
   for (auto& [w, launch] : appeared) {
     auto& win = *w;
     Ptr<Object> source = launch ? launch->source.Lock() : nullptr;
-    Location* source_location = source ? source->MyLocation() : nullptr;
+    Ptr<Location> source_location = source ? source->MyLocation() : nullptr;
     if (source && !win.launcher->IsConnected()) {
       win.launcher->Connect(Interface(source.get(), nullptr));
     }
@@ -1611,7 +1611,7 @@ void Tick() {
   for (auto& w : disappeared) {
     auto vm_lock = std::lock_guard(engine.mutex);
     for (auto& board : engine.boards) {
-      if (auto* here = board->LocationOrNull(*w)) {
+      if (auto here = board->LocationOrNull(*w)) {
         board->Extract(*here);
         board->WakeToys();
       }

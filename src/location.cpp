@@ -78,7 +78,7 @@ Object* Location::Follow() {
   if (object == nullptr) {
     return nullptr;
   }
-  return object.get();
+  return object.Get();
 }
 
 void Location::Put(Ptr<Object> obj) {
@@ -90,16 +90,17 @@ void Location::Put(Ptr<Object> obj) {
 }
 
 Ptr<Object> Location::Take() {
-  auto ptr = std::move(object);
+  auto ptr = object.Release();
   WakeToys();
-  return std::move(ptr);
+  return ptr;
 }
 
 Ptr<Object> Location::InsertHere(Ptr<Object>&& object) {
-  this->object.Swap(object);
+  Ptr<Object> previous = this->object.Release();
+  this->object = std::move(object);
   this->object->WakeToys();
   engine.WakeToys();
-  return object;
+  return previous;
 }
 
 Ptr<Object> Location::Create(const Object& prototype) { return InsertHere(prototype.Clone()); }
@@ -412,7 +413,7 @@ void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const
   if (auto board = LockBoard()) {
     auto lock = std::lock_guard(engine.mutex);
     for (auto& other_loc : board->locations) {
-      if (other_loc.get() == this) continue;
+      if (other_loc.Get() == this) continue;
       other_loc->object->Each<Argument>([&](Argument arg) {
         if (arg.ObjectOrNull() == object.Get()) {
           arg.WakeToys();
@@ -447,7 +448,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
     float old_dist2 = HUGE_VALF;
     if (auto end = arg.Find()) {
       old_iface = end.table_ptr;
-      if (auto* end_loc = board->LocationOrNull(*end.object_ptr)) {
+      if (auto end_loc = board->LocationOrNull(*end.object_ptr)) {
         Vec<Vec2AndDir> to_positions;
         auto& end_toy = toys.FindOrMake(*end_loc, parent_mw).ToyForObject();
         end_toy.ConnectionPositions(to_positions);
@@ -504,7 +505,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
 
   auto lock = std::lock_guard(engine.mutex);
   for (auto& other : board->locations) {
-    if (other.get() == loc.get()) {
+    if (other.Get() == loc.Get()) {
       continue;
     }
     auto& other_widget = toys.FindOrMake(*other, parent_mw).ToyForObject();
@@ -533,7 +534,7 @@ void LocationWidget::UpdateAutoconnectArgs() {
       float old_dist2 = HUGE_VALF;
       if (auto end = arg.Find()) {
         old_iface = end.table_ptr;
-        if (auto* end_loc = board->LocationOrNull(*end.object_ptr)) {
+        if (auto end_loc = board->LocationOrNull(*end.object_ptr)) {
           Vec<Vec2AndDir> to_positions;
           auto& end_toy = toys.FindOrMake(*end_loc, parent_mw).ToyForObject();
           end_toy.ConnectionPositions(to_positions);
@@ -596,13 +597,13 @@ void PositionBelow(Location& origin, Location& below) {
   Size origin_index = SIZE_MAX;
   Size below_index = SIZE_MAX;
   for (Size i = 0; i < m->locations.size(); i++) {
-    if (m->locations[i].get() == &origin) {
+    if (m->locations[i].Get() == &origin) {
       origin_index = i;
       if (below_index != SIZE_MAX) {
         break;
       }
     }
-    if (m->locations[i].get() == &below) {
+    if (m->locations[i].Get() == &below) {
       below_index = i;
       if (origin_index != SIZE_MAX) {
         break;
@@ -666,7 +667,7 @@ Vec2 PositionBeside(Location& origin, Location& target, const ObjectToy& target_
     for (int tries = 0; tries < 16; ++tries) {
       bool occupied = false;
       for (auto& loc : board->locations) {
-        if (loc.get() == &origin || loc.get() == &target) continue;
+        if (loc.Get() == &origin || loc.Get() == &target) continue;
         if (Length(loc->PeekPosition() - pos) < kStep / 2) {
           occupied = true;
           break;

@@ -85,7 +85,7 @@ application opening another window hours later still associates correctly.
 
 ## Program Launcher and the launch
 
-A Program Launcher holds a single `Ptr<Launch> launch` — the current run, or the last
+A Program Launcher holds a single `Owned<Launch> launch` — the current run, or the last
 one after it exits. Re-running replaces it, which is also what bounds the
 capture buffers: one run, one set of buffers, overwritten by the next run.
 The exit chip and the stdout meters read through this launch.

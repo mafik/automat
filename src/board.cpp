@@ -154,9 +154,9 @@ bool Board::resizable_Impl::ResizeM(Rect grow) {
 Ptr<Location> Board::Extract(Location& location) {
   auto lock = std::lock_guard(engine.mutex);
   auto it = std::find_if(locations.begin(), locations.end(),
-                         [&location](const auto& l) { return l.get() == &location; });
+                         [&location](const auto& l) { return l.Get() == &location; });
   if (it != locations.end()) {
-    auto result = std::move(*it);
+    auto result = it->Release();
     locations.erase(it);
     result->board = {};
     WakeToys();
@@ -168,28 +168,26 @@ Ptr<Location> Board::Extract(Location& location) {
 void Board::MoveToTop(Location& location) {
   auto lock = std::lock_guard(engine.mutex);
   auto it = std::find_if(locations.begin(), locations.end(),
-                         [&location](const auto& l) { return l.get() == &location; });
+                         [&location](const auto& l) { return l.Get() == &location; });
   if (it == locations.end() || it == locations.begin()) return;
-  auto ptr = std::move(*it);
+  auto ptr = it->Release();
   locations.erase(it);
-  locations.emplace_front(std::move(ptr));
+  locations.emplace_front(*this, std::move(ptr));
   WakeToys();
 }
 
-Location* Board::LocationOrNull(Object& object) {
-  auto lock = std::lock_guard(engine.mutex);
-  for (auto& loc : locations) {
-    if (loc->object.get() == &object) {
-      return loc.get();
-    }
+Ptr<Location> Board::LocationOrNull(Object& object) {
+  for (auto& owner : object.Owners()) {
+    auto location = dyn_cast<Location>(owner);
+    if (location && location->board == this) return location;
   }
   return nullptr;
 }
 
 Location& Board::CreateEmpty() {
   auto lock = std::lock_guard(engine.mutex);
-  auto& it = locations.emplace_front(new Location(AcquireWeakPtr()));
-  Location* h = it.get();
+  auto& it = locations.emplace_front(*this, Ptr<Location>(new Location(AcquireWeakPtr())));
+  Location* h = it.Get();
   WakeToys();
   return *h;
 }
@@ -263,7 +261,7 @@ ui::Tock BoardWidget::Tick(time::Timer& timer) {
       bool visible = arg.table->visible_when_disconnected;
       if (arg.IsConnected()) {
         auto* end_obj = arg.Find().object_ptr;
-        visible = end_obj && (end_obj == loc->object.get() || board->LocationOrNull(*end_obj));
+        visible = end_obj && (end_obj == loc->object.Get() || board->LocationOrNull(*end_obj));
       }
       if (visible) {
         toys.FindOrMake(arg, this).local_to_parent = SkM44();
@@ -281,7 +279,7 @@ ui::Tock BoardWidget::Tick(time::Timer& timer) {
       ui::Widget* higher = &lw;
       auto end = arg.Find();
       if (auto* end_obj = end.object_ptr) {
-        if (auto* end_loc = board->LocationOrNull(*end_obj)) {
+        if (auto end_loc = board->LocationOrNull(*end_obj)) {
           if (auto* end_lw = toys.FindOrNull(*end_loc)) {
             if (end_lw->IsAbove(*higher)) higher = end_lw;
           }
@@ -317,7 +315,7 @@ void BoardWidget::RebuildOverlaps(Board& board) {
   for (auto& loc : board.locations) {
     if (auto* lw = toys.FindOrNull(*loc)) {
       lws.push_back(lw);
-      locs.push_back(loc.get());
+      locs.push_back(loc.Get());
     }
   }
   int n = lws.size();
@@ -410,8 +408,8 @@ void BoardWidget::DropLocation(Ptr<Location>&& l) {
   Location* dropped;
   {
     auto lock = std::lock_guard(engine.mutex);
-    board->locations.insert(board->locations.begin(), std::move(l));
-    dropped = board->locations.front().get();
+    board->locations.emplace(board->locations.begin(), *board, std::move(l));
+    dropped = board->locations.front().Get();
   }
   WakeAnimation();
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
@@ -515,7 +513,7 @@ void BoardWidget::ForStack(Location& base, std::function<void(Location&, int ind
   int index = 0;
   for (auto& loc : board->locations) {
     if (auto* lw = toys.FindOrNull(*loc)) {
-      index_of[lw] = {loc.get(), index};
+      index_of[lw] = {loc.Get(), index};
     }
     ++index;
   }
@@ -575,7 +573,7 @@ Vec<Ptr<Location>> BoardWidget::CloneStack(Location& base, Vec<std::unique_ptr<T
     auto clone_loc = cast<Location>(orig->Clone());
     if (orig->object) {
       clone_loc->InsertHere(orig->object->Clone());
-      orig_to_clone[orig->object.get()] = clone_loc->object.get();
+      orig_to_clone[orig->object.Get()] = clone_loc->object.Get();
     }
     result.push_back(std::move(clone_loc));
   }
@@ -620,12 +618,12 @@ void BoardWidget::RaiseStack(Location& base) {
   Vec<Ptr<Location>> stack;
   // Indices are in decreasing order (highest first), so erasing in order is safe.
   for (int idx : stack_indices) {
-    stack.insert(stack.begin(), std::move(board->locations[idx]));
+    stack.insert(stack.begin(), board->locations[idx].Release());
     board->locations.erase(board->locations.begin() + idx);
   }
 
   for (int i = stack.size() - 1; i >= 0; --i) {
-    board->locations.insert(board->locations.begin(), std::move(stack[i]));
+    board->locations.emplace(board->locations.begin(), *board, std::move(stack[i]));
   }
 }
 

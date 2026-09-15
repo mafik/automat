@@ -228,8 +228,8 @@ struct ArgumentToy : Toy {
   ArgumentToy(ui::Widget* parent, Object& owner, Argument::Table& table)
       : Toy(parent, owner, &table, Argument(owner, table).state->monitor) {}
 
-  Location* StartLocation() const;
-  Location* EndLocation() const;
+  Ptr<Location> StartLocation() const;
+  Ptr<Location> EndLocation() const;
 
   virtual bool DrawnUnderEndpoints() const { return false; }
 

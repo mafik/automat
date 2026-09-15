@@ -150,7 +150,7 @@ struct Timeline : Object, TimerNotificationReceiver {
   void OnRun(std::unique_ptr<RunTask>&);
   DEF_END(stop_recording);
 
-  Vec<Ptr<TrackBase>> tracks;
+  Vec<Owned<TrackBase>> tracks;
 
   float zoom_seconds;
 

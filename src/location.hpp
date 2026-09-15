@@ -44,7 +44,7 @@ struct Location : Object {
 
   using Toy = LocationWidget;
 
-  Ptr<Object> object;
+  Owned<Object> object{*this};
 
   struct Direct {
     Vec2 position = {0, 0};
@@ -166,7 +166,7 @@ struct Location : Object {
   // Some containers may not allow empty locations so this function may also
   // delete the location. Check the return value.
   Location* Clear() {
-    object.reset();
+    object.Reset();
     return this;
   }
 

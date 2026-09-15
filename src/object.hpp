@@ -13,8 +13,10 @@
 #include "deserializer.hpp"
 #include "error_flames.hpp"
 #include "ptr.hpp"
+#include "spin_lock.hpp"
 #include "string_multimap.hpp"
 #include "toy.hpp"
+#include "vec.hpp"
 #include "widget.hpp"
 
 namespace automat {
@@ -26,6 +28,63 @@ struct Container;
 struct ObjectSerializer;
 struct ObjectDeserializer;
 struct ObjectToy;
+
+struct OwnerLink {
+  Object* owner;
+  OwnerLink* prev = nullptr;
+  OwnerLink* next = nullptr;
+
+  void Link(Object& target);
+  void Unlink(Object& target);
+  void TakeOver(OwnerLink& moved, Object& target);
+};
+
+template <typename T>
+struct Owned : OwnerLink {
+  Ptr<T> ptr;
+
+  explicit Owned(Object& owner) : OwnerLink{&owner} {}
+  Owned(Object& owner, Ptr<T> target) : OwnerLink{&owner}, ptr(std::move(target)) {
+    if (ptr) Link(*ptr);
+  }
+  Owned(Owned&& that) noexcept : OwnerLink{that.owner}, ptr(std::move(that.ptr)) {
+    if (ptr) TakeOver(that, *ptr);
+  }
+  Owned(const Owned&) = delete;
+  ~Owned() {
+    if (ptr) Unlink(*ptr);
+  }
+
+  Owned& operator=(Owned&& that) noexcept {
+    Reset();
+    ptr = std::move(that.ptr);
+    if (ptr) TakeOver(that, *ptr);
+    return *this;
+  }
+  Owned& operator=(Ptr<T> target) {
+    Reset();
+    ptr = std::move(target);
+    if (ptr) Link(*ptr);
+    return *this;
+  }
+  Owned& operator=(const Owned&) = delete;
+
+  void Reset() {
+    if (ptr) Unlink(*ptr);
+    ptr = nullptr;
+  }
+  [[nodiscard]] Ptr<T> Release() {
+    if (ptr) Unlink(*ptr);
+    return std::move(ptr);
+  }
+
+  T* Get() const { return ptr.Get(); }
+  T* operator->() const { return ptr.Get(); }
+  T& operator*() const { return *ptr; }
+  explicit operator bool() const { return ptr != nullptr; }
+  operator const Ptr<T>&() const { return ptr; }
+  bool operator==(const T* that) const { return ptr == that; }
+};
 
 // Objects are interactive pieces of data & behavior.
 //
@@ -43,7 +102,10 @@ struct Object : public ReferenceCounted {
   // Used during initialization & to prevent feedback loops in synchronization.
   bool suspended = false;
 
-  // Note: 3 bytes of padding here
+  SpinLock owners_lock;
+
+  // Note: 2 bytes of padding here
+  OwnerLink* owners = nullptr;
 
   // Bump the counter to notify Toys that state has changed.
   void WakeToys() { monitor.fetch_add(1, std::memory_order_relaxed); }
@@ -129,10 +191,10 @@ struct Object : public ReferenceCounted {
   // Clears the error reported by the object itself
   void ClearOwnError();
 
-  // The first Location storing this object, scanning boards top to bottom. Null when no board
-  // owns it. Thread-safe (takes engine.mutex); the returned pointer is only stable while the
-  // object stays on its board.
-  Location* MyLocation();
+  SmallVec<Ptr<Object>, 4> Owners();
+
+  // DEPRECATED: Object can have more than one Location. Users of this API should be re-designed.
+  Ptr<Location> MyLocation();
 };
 
 std::unique_ptr<Action> PickUp(ui::Pointer&, Location&, Object&);

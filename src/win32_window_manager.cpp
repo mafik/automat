@@ -343,7 +343,7 @@ static void RecoverOrphans() {
     auto lock = std::lock_guard(engine.mutex);
     for (auto& board : engine.boards) {
       for (auto& loc : board->locations) {
-        if (auto* window = dynamic_cast<AppWindow*>(loc->object.get())) {
+        if (auto* window = dynamic_cast<AppWindow*>(loc->object.Get())) {
           if (window->prev_hwnd) saved[window->prev_hwnd] = window->AcquirePtr();
         }
       }

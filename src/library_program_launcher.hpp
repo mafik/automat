@@ -26,7 +26,7 @@ Vec<Str> SplitWords(StrView line);
 struct ProgramLauncher : Object, Container {
   mutable std::mutex mutex;  // guards argv and the launch below
   Vec<Str> argv;             // argv[0] is the program
-  Ptr<Launch> launch;        // current or last run; replaced by the next run
+  Owned<Launch> launch{*this};  // current or last run; replaced by the next run
   bool ever_ran = false;
 
   DEF_INTERFACE(ProgramLauncher, Runnable, run, "Run")

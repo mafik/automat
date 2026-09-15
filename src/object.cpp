@@ -8,6 +8,7 @@
 #include <include/core/SkShader.h>
 #include <include/effects/SkGradient.h>
 
+#include <cassert>
 #include <cmath>
 
 #include "../build/generated/embedded.hpp"
@@ -128,8 +129,7 @@ std::unique_ptr<Action> DragNew(ui::Pointer& pointer, Ptr<Object>&& object,
 }
 
 Ptr<Object> Location::move_Impl::OnTake() {
-  Ptr<Object> taken;
-  obj->object.Swap(taken);
+  Ptr<Object> taken = obj->object.Release();
   obj->WakeToys();
   engine.WakeToys();
   return taken;
@@ -285,7 +285,10 @@ Vec2AndDir ObjectToy::ArgStart(const Interface::Table& arg, ui::Widget* coordina
   return pos_dir;
 }
 
-Object::~Object() { LifetimeObserver::CheckDestroyNotified(*this); }
+Object::~Object() {
+  assert(owners == nullptr);
+  LifetimeObserver::CheckDestroyNotified(*this);
+}
 
 bool ObjectToy::AllowChildPointerEvents(ui::Widget&) const { return iconified <= 0.5f; }
 
@@ -305,14 +308,63 @@ void ObjectToy::UpdateErrorFlames() {
 
 void Object::Interfaces(const std::function<LoopControl(Interface)>& cb) {}
 
-Location* Object::MyLocation() {
-  auto lock = std::lock_guard(engine.mutex);
-  for (auto& board : engine.boards) {
-    for (auto& loc : board->locations) {
-      if (loc->object == this) {
-        return loc.Get();
-      }
+void OwnerLink::Link(Object& target) {
+  auto lock = std::lock_guard(target.owners_lock);
+  if (target.owners == nullptr) {
+    prev = next = this;
+    target.owners = this;
+  } else {
+    prev = target.owners->prev;
+    next = target.owners;
+    prev->next = this;
+    next->prev = this;
+  }
+}
+
+void OwnerLink::Unlink(Object& target) {
+  auto lock = std::lock_guard(target.owners_lock);
+  if (next == this) {
+    target.owners = nullptr;
+  } else {
+    prev->next = next;
+    next->prev = prev;
+    if (target.owners == this) target.owners = next;
+  }
+  prev = next = nullptr;
+}
+
+void OwnerLink::TakeOver(OwnerLink& moved, Object& target) {
+  auto lock = std::lock_guard(target.owners_lock);
+  if (moved.next == &moved) {
+    prev = next = this;
+  } else {
+    prev = moved.prev;
+    next = moved.next;
+    prev->next = this;
+    next->prev = this;
+  }
+  if (target.owners == &moved) target.owners = this;
+  moved.prev = moved.next = nullptr;
+}
+
+SmallVec<Ptr<Object>, 4> Object::Owners() {
+  SmallVec<Ptr<Object>, 4> result;
+  auto lock = std::lock_guard(owners_lock);
+  if (owners == nullptr) return result;
+  OwnerLink* link = owners;
+  do {
+    if (link->owner->IncrementOwningRefsNonZero()) {
+      result.emplace_back(Ptr<Object>(link->owner));
     }
+    link = link->next;
+  } while (link != owners);
+  return result;
+}
+
+Ptr<Location> Object::MyLocation() {
+  for (auto& owner : Owners()) {
+    auto location = dyn_cast<Location>(owner);
+    if (location && !location->board.IsExpired()) return location;
   }
   return nullptr;
 }

@@ -589,7 +589,7 @@ void Window::Capture() {
 #endif
   WakeToys();
 
-  if (auto* location = MyLocation()) {
+  if (auto location = MyLocation()) {
     location->ScheduleUpdate();
   }
 }

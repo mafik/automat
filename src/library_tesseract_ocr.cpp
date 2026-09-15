@@ -354,13 +354,13 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
         auto ip = tesseract->image->FindInterface();
         if (ip) {
           new_image = ip.GetImage();
-          if (auto* ip_loc = board ? board->LocationOrNull(*ip.object_ptr) : nullptr) {
+          if (auto ip_loc = board ? board->LocationOrNull(*ip.object_ptr) : nullptr) {
             iris_target = ip_loc->PeekPosition();
           }
         }
 
         if (status_progress_ratio.has_value()) {
-          if (auto* self_loc = board ? board->LocationOrNull(*tesseract) : nullptr) {
+          if (auto self_loc = board ? board->LocationOrNull(*tesseract) : nullptr) {
             iris_target = self_loc->PeekPosition();
           }
         }

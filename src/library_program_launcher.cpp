@@ -275,8 +275,7 @@ Ptr<Launch> ProgramLauncher::ExtractLaunch() {
   Ptr<Launch> extracted;
   {
     auto lock = std::lock_guard(mutex);
-    extracted = std::move(launch);
-    launch = nullptr;
+    extracted = launch.Release();
     if (running->IsRunning()) running.task.reset();
   }
   WakeToys();
@@ -341,7 +340,7 @@ Ptr<Location> ProgramLauncher::Extract(Object& descendant) {
   auto extracted = ExtractLaunch();
   if (!extracted) return nullptr;
   Vec2 position = {};
-  if (Location* my_location = MyLocation()) {
+  if (auto my_location = MyLocation()) {
     position = my_location->PeekPosition();
     if (auto board = my_location->LockBoard()) position += board->position;
   }

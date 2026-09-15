@@ -16,7 +16,9 @@ widgets.
 
 An object may carry modality-specific data when that is its core function. Board and Location
 exist precisely to place objects on a 2D plane, so board membership and positions are core
-state (src/board.hpp, src/location.hpp). Most other objects must not track the 2D modality.
+state (src/board.hpp, src/location.hpp). Which owners hold an object is core state as well,
+recorded by owner links inside the object (docs/parrots/Object Ownership.md). Most other objects
+must not track the 2D modality.
 
 The Engine provides hints so that the 2D world can function. Data of fixed size per type — O(1),
 not growing with the number of objects — is fine in Engine-side tables: `Argument::Table` carries

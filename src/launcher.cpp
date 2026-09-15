@@ -844,12 +844,12 @@ void LaunchRestoredWindows() {
     auto lock = std::lock_guard(engine.mutex);
     for (auto& board : engine.boards) {
       for (auto& loc : board->locations) {
-        if (auto* launch = dynamic_cast<Launch*>(loc->object.get())) {
+        if (auto* launch = dynamic_cast<Launch*>(loc->object.Get())) {
           auto launch_lock = std::lock_guard(launch->mutex);
-          if (launch->pid == 0) dead_launches.emplace_back(board, loc.get());
+          if (launch->pid == 0) dead_launches.emplace_back(board, loc.Get());
           continue;
         }
-        auto* win = dynamic_cast<ClientWindow*>(loc->object.get());
+        auto* win = dynamic_cast<ClientWindow*>(loc->object.Get());
         if (!win) continue;
         auto win_lock = std::lock_guard(win->mutex);
         if (win->client_gone && !win->recipe.empty() && !win->launched_by) {

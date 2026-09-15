@@ -28,8 +28,9 @@ objects, so each board shows only the connections that belong to its aspect.
 ## Ownership
 
 The list of boards and each board's position on the starfield are stored in `engine.boards` and
-`Board::position` (src/engine.hpp, src/board.hpp). `engine.mutex` guards the list and every board's
-`locations`, because worker threads look objects up while the UI thread moves them.
+`Board::position` (src/engine.hpp, src/board.hpp). `engine.mutex` guards the list and the order of
+every board's `locations`. Which boards own an object is answered by the object's owner links
+(docs/parrots/Object Ownership.md), so no lookup scans the boards.
 
 A board owns an object through its Location (src/location.hpp), which stores the object's
 position and scale on that board. When several boards own one object, each board has its own

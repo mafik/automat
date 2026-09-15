@@ -141,8 +141,9 @@ void DragLocationAction::Update() {
   bool any_owned = false;
   Location* merge_targets[locations.size()];
   for (size_t i = 0; i < locations.size(); ++i) {
-    merge_targets[i] =
-        hovered && locations[i]->object ? hovered->LocationOrNull(*locations[i]->object) : nullptr;
+    merge_targets[i] = hovered && locations[i]->object
+                           ? hovered->LocationOrNull(*locations[i]->object).Get()
+                           : nullptr;
     any_owned |= merge_targets[i] != nullptr;
   }
   if (hovered && !any_owned) {
@@ -279,7 +280,7 @@ void DragLocationAction::GiveToBoard(BoardWidget& bw, Board& board, size_t i) {
   location->Position(lw) -= board.position;
   {
     auto lock = std::lock_guard(engine.mutex);
-    board.locations.insert(board.locations.begin(), location);
+    board.locations.emplace(board.locations.begin(), board, location);
   }
   lw.Reparent(bw);
   bw.toys.Insert(*location, std::move(held_widgets[i]));
@@ -294,7 +295,7 @@ void DragLocationAction::GiveToBoard(BoardWidget& bw, Board& board, size_t i) {
 void DragLocationAction::MergeIntoResidents(BoardWidget& bw, Board& board) {
   for (size_t i = locations.size(); i-- > 0;) {
     Location& dragged = *locations[i];
-    Location* resident = dragged.object ? board.LocationOrNull(*dragged.object) : nullptr;
+    Ptr<Location> resident = dragged.object ? board.LocationOrNull(*dragged.object) : nullptr;
     if (!resident || resident == &dragged) continue;
     auto& widget = static_cast<LocationWidget&>(*held_widgets[i]);
     if (widget.toy) {
@@ -411,8 +412,8 @@ void DragLocationAction::AddToGroup(Ptr<Location>&& loc_arg) {
     {
       auto lock = std::lock_guard(engine.mutex);
       auto& list = board->locations;
-      auto it = std::find_if(list.begin(), list.end(), [&](auto& l) { return l.get() == above; });
-      list.insert(it == list.end() ? list.begin() : std::next(it), locations.back());
+      auto it = std::find_if(list.begin(), list.end(), [&](auto& l) { return l.Get() == above; });
+      list.emplace(it == list.end() ? list.begin() : std::next(it), *board, locations.back());
     }
     lw = &board_widget->toys.FindOrMake(*loc, board_widget.Get());
     SetRadar(1);

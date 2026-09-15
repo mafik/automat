@@ -354,8 +354,8 @@ Float64Track& Timeline::AddFloat64Track(Str name) {
 
 void Timeline::AddTrack(Ptr<TrackBase>&& track) {
   track->timeline = this;
-  tracks.emplace_back(std::move(track));
-  if (auto* h = MyLocation()) {
+  tracks.emplace_back(*this, std::move(track));
+  if (auto h = MyLocation()) {
     h->InvalidateConnectionWidgets(true, true);
   }
   WakeToys();
@@ -412,7 +412,7 @@ time::Duration Timeline::MaxTrackLength() const {
 }
 
 void TimelineCancelScheduled(Timeline& t) {
-  if (auto* h = t.MyLocation()) {
+  if (auto h = t.MyLocation()) {
     CancelScheduledAt(*h);
   }
 }
@@ -437,7 +437,7 @@ void TimelineScheduleNextAfter(Timeline& t, time::SteadyPoint now) {
       next_update = min(next_update, next_update_point);
     }
   }
-  if (auto* h = t.MyLocation()) {
+  if (auto h = t.MyLocation()) {
     ScheduleAt(*h, next_update);
   }
 }
@@ -447,7 +447,7 @@ static void TimelineUpdateOutputs(Timeline& t, time::SteadyPoint started_at,
   for (auto& track : t.tracks) {
     auto* object = Argument(*track, track->arg_table).ObjectOrNull();
     if (object == nullptr) continue;
-    auto* location = object->MyLocation();
+    auto location = object->MyLocation();
     if (location == nullptr) continue;
     track->UpdateOutput(*location, started_at, now);
   }

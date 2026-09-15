@@ -47,8 +47,8 @@ void Syncable::Table::DefaultCanConnect(Argument self, Interface end, Status& st
       return;
     } else {
       auto member = gear->members.front().weak.Lock();
-      if (member &&
-          self_sync.table->can_sync(self_sync, Syncable(member.Owner<Object>(), member.Get()))) {
+      if (member && self_sync.table->can_sync(
+                        self_sync, Syncable(cast<Object>(member.Owner()), member.Get()))) {
         return;
       } else {
         AppendErrorMessage(status) += "Wrong type of Gear";
@@ -144,7 +144,7 @@ void Syncable::State::Unsync(Object& self, Syncable::Table& table) {
   for (int i = 0; i < (int)members.size(); ++i) {
     // Compare both the interface pointer and the owner
     auto* member_iface = members[i].weak.GetUnsafe();
-    auto* member_owner = members[i].weak.template OwnerUnsafe<Object>();
+    auto* member_owner = static_cast<Object*>(members[i].weak.OwnerUnsafe());
     if (member_iface == &table && member_owner == &self) {
       members.erase(members.begin() + i);
       break;
@@ -187,7 +187,7 @@ Gear::~Gear() {
     auto& back = members.back();
     if (auto locked = back.weak.Lock()) {
       auto* table = locked.Get();
-      auto* owner = locked.Owner<Object>();
+      auto* owner = cast<Object>(locked.Owner());
       auto syncable = Syncable(*owner, *table);
       auto& state = *syncable.state;
       if (state.source) {
@@ -228,7 +228,7 @@ void Gear::AddSource(Object& obj, Syncable::Table& syncable) {
         // redirecting the members' sync state to this gear
         if (auto locked = members.back().weak.Lock()) {
           auto* member_syncable = locked.Get();
-          auto* member_owner = locked.Owner<Object>();
+          auto* member_owner = cast<Object>(locked.Owner());
           auto& member_state = *Syncable(*member_owner, *member_syncable).state;
           member_state.gear_weak = AcquireWeakPtr();
         }
@@ -593,7 +593,7 @@ void Gear::SerializeState(ObjectSerializer& writer) const {
   for (auto& member : members) {
     auto ptr = member.weak.Lock();
     if (!ptr) continue;
-    writer.Key(writer.ResolveName(*ptr.Owner<Object>(), ptr.Get()));
+    writer.Key(writer.ResolveName(*cast<Object>(ptr.Owner()), ptr.Get()));
     writer.Bool(member.sink);
   }
   writer.EndObject();
@@ -641,7 +641,7 @@ SyncAction::~SyncAction() {
   auto* bw = board_widget.Get();
   if (!bw) return;
   if (auto syncable_ptr = weak.Lock()) {
-    Syncable syncable(syncable_ptr.Owner<Object>(), syncable_ptr.Get());
+    Syncable syncable(cast<Object>(syncable_ptr.Owner()), syncable_ptr.Get());
     auto* sync_widget = bw->toys.FindOrNull(syncable);
     if (sync_widget) {
       sync_widget->is_dragged = false;
@@ -654,7 +654,7 @@ SyncAction::~SyncAction() {
 }
 void SyncAction::Update() {
   if (auto syncable_ptr = weak.Lock()) {
-    Syncable syncable(syncable_ptr.Owner<Object>(), syncable_ptr.Get());
+    Syncable syncable(cast<Object>(syncable_ptr.Owner()), syncable_ptr.Get());
     auto* bw = board_widget.Get();
     if (!bw) return;
     auto* origin_widget = bw->toys.FindOrNull(*syncable.object_ptr);
@@ -679,7 +679,7 @@ void SyncAction::Update() {
 }
 bool SyncAction::Highlight(Interface end) const {
   auto ptr = weak.Lock();
-  Object& start = *ptr.Owner<Object>();
+  Object& start = *cast<Object>(ptr.Owner());
   return Argument(start, *ptr).CanConnect(end);
 }
 ui::Widget* SyncAction::Widget() { return nullptr; }

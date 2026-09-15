@@ -337,7 +337,10 @@ struct InterfaceArgument : Argument {
     }
 
     static Locked<Interface> DefaultFind(Argument self) {
-      return Locked<Interface>(cast<InterfaceArgument>(self).state->target.Lock());
+      auto locked = cast<InterfaceArgument>(self).state->target.Lock();
+      if (!locked) return {};
+      auto* table = locked.Get();
+      return AdoptLocked(Interface(cast<Object>(locked.ReleaseOwner().Release()), table));
     }
 
     constexpr Table(StrView name) : Argument::Table(name, kKind) {
@@ -352,7 +355,7 @@ struct InterfaceArgument : Argument {
     }
   };
 
-  Locked<T> FindInterface() const { return Find().template Cast<T>(); }
+  Locked<T> FindInterface() const { return cast<T>(Find()); }
 
   template <typename ImplT>
   struct Def : State, Interface::DefBase {

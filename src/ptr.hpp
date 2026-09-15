@@ -7,6 +7,7 @@
 #include <compare>
 #include <memory>  // IWYU pragma: keep
 
+#include "casting.hpp"
 #include "format.hpp"
 
 namespace automat {
@@ -212,10 +213,7 @@ struct [[clang::trivial_abi]] Ptr : PtrBase<T> {
 
   T* get() const { return Get(); }
 
-  template <typename U = T>
-  U* Get() const {
-    return static_cast<U*>(this->obj);
-  }
+  T* Get() const { return this->obj; }
 
   T* operator->() const { return this->obj; }
 
@@ -238,11 +236,6 @@ struct [[clang::trivial_abi]] Ptr : PtrBase<T> {
   void Swap(Ptr<T>& that) {
     using std::swap;
     swap(this->obj, that.obj);
-  }
-
-  template <typename U>
-  [[nodiscard]] Ptr<U> Cast(this auto&& self) {
-    return Ptr<U>(static_cast<U*>(self.Release()));
   }
 };
 
@@ -322,16 +315,6 @@ struct [[clang::trivial_abi]] WeakPtr : PtrBase<T> {
   }
   Ptr<T> lock() const { return Lock(); }  // alias for better compatibility with std::weak_ptr
 
-  template <typename U = T>
-  Ptr<U> LockAs() const {
-    auto t_ptr = Lock();
-    if (auto* u = dynamic_cast<U*>(t_ptr.Get())) {
-      auto* discard = t_ptr.Release();
-      return Ptr<U>(u);
-    }
-    return Ptr<U>();
-  }
-
   WeakPtr<T>& operator=(const WeakPtr<T>& that) {
     if (this != &that) {
       T* oldObj = this->obj;
@@ -349,13 +332,6 @@ struct [[clang::trivial_abi]] WeakPtr : PtrBase<T> {
     return *this;
   }
 
-  template <typename U>
-  [[nodiscard]] WeakPtr<U> Cast() && {
-    // TODO: there could be a bug here! investigate
-    // the weak reference count could be increased (it shouldn't)
-    return WeakPtr<U>(static_cast<U*>(this->Release()));
-  }
-
   template <typename U = T>
   [[nodiscard]] WeakPtr<U> Copy() const {
     return WeakPtr<U>(static_cast<U*>(this->obj));
@@ -369,10 +345,7 @@ struct [[clang::trivial_abi]] WeakPtr : PtrBase<T> {
     SafeDecrementWeakRefs(oldObj);
   }
 
-  template <typename U = T>
-  U* GetUnsafe() const {
-    return static_cast<U*>(this->obj);
-  }
+  T* GetUnsafe() const { return this->obj; }
 
   template <class U>
   friend class WeakPtr;
@@ -405,28 +378,19 @@ struct [[clang::trivial_abi]] NestedPtr {
   T* operator->() const { return obj; }
   explicit operator bool() const { return obj != nullptr; }
 
-  template <typename U = RC>
-  U* Owner() const {
-    return this->ptr.template Get<U>();
-  }
+  RC* Owner() const { return this->ptr.Get(); }
 
   Ptr<RC> GetOwnerPtr() const { return ptr->AcquirePtr(); }
 
+  Ptr<RC> ReleaseOwner() { return std::move(ptr); }
+
   WeakPtr<RC> GetOwnerWeak() const { return ptr->AcquireWeakPtr(); }
 
-  template <typename U = T>
-  U* Get() const {
-    return static_cast<U*>(obj);
-  }
+  T* Get() const { return obj; }
 
   void Reset() {
     ptr.Reset();
     obj = nullptr;
-  }
-
-  template <typename U>
-  [[nodiscard]] NestedPtr<U> Cast(this auto&& self) {
-    return NestedPtr<U>(std::move(self.ptr), static_cast<U*>(self.obj));
   }
 
  private:
@@ -470,35 +434,11 @@ struct [[clang::trivial_abi]] NestedWeakPtr {
     return NestedPtr<U>();
   }
 
-  template <typename U = T>
-  NestedPtr<U> LockAs() const {
-    if (auto new_ptr = weak_ptr.Lock()) {
-      return NestedPtr<U>{std::move(new_ptr), dynamic_cast<U*>(obj)};
-    }
-    return NestedPtr<U>();
-  }
-
   WeakPtr<RC> GetOwnerWeak() const { return weak_ptr; }
 
-  template <typename U = T>
-  U* GetUnsafe() const {
-    return static_cast<U*>(obj);
-  }
+  T* GetUnsafe() const { return obj; }
 
-  template <typename U>
-  U* OwnerUnsafe() const {
-    return this->weak_ptr.template GetUnsafe<U>();
-  }
-
-  template <typename U>
-  Ptr<U> OwnerLockAs() const {
-    return weak_ptr.template LockAs<U>();
-  }
-
-  template <typename U>
-  [[nodiscard]] NestedWeakPtr<U> Cast(this auto&& self) {
-    return NestedWeakPtr<U>(std::move(self.weak_ptr), static_cast<U*>(self.obj));
-  }
+  RC* OwnerUnsafe() const { return weak_ptr.GetUnsafe(); }
 
  private:
   WeakPtr<RC> weak_ptr;
@@ -513,6 +453,58 @@ using std::unique_ptr;
 
 #define OUTER_PTR(OuterType, member_name, ptr) \
   reinterpret_cast<OuterType*>(reinterpret_cast<intptr_t>(ptr) - offsetof(OuterType, member_name))
+
+}  // namespace automat
+
+// dyn_cast / cast for Ptr
+namespace llvm {
+template <typename To, typename From>
+struct CastInfo<To, automat::Ptr<From>> {
+  using CastResultType = automat::Ptr<To>;
+  static bool isPossible(const automat::Ptr<From>& f) {
+    return dynamic_cast<To*>(f.Get()) != nullptr;
+  }
+  static CastResultType doCast(const automat::Ptr<From>& f) {
+    return CastResultType(automat::SafeIncrementOwningRefs(static_cast<To*>(f.Get())));
+  }
+  static CastResultType castFailed() { return CastResultType(); }
+  static CastResultType doCastIfPossible(const automat::Ptr<From>& f) {
+    if (!isPossible(f)) return castFailed();
+    return doCast(f);
+  }
+};
+
+template <typename To, typename From>
+struct CastInfo<To, const automat::Ptr<From>> : CastInfo<To, automat::Ptr<From>> {};
+
+}  // namespace llvm
+
+namespace automat {
+
+template <typename To, typename From>
+[[nodiscard]] Ptr<To> dyn_cast(Ptr<From>&& from) {
+  auto* to = dynamic_cast<To*>(from.Get());
+  if (to == nullptr) return Ptr<To>();
+  from.Release();
+  return Ptr<To>(to);
+}
+
+template <typename To, typename From>
+[[nodiscard]] Ptr<To> dyn_cast_if_present(Ptr<From>&& from) {
+  return dyn_cast<To>(std::move(from));
+}
+
+template <typename To, typename From>
+[[nodiscard]] Ptr<To> cast(Ptr<From>&& from) {
+  assert(dynamic_cast<To*>(from.Get()) != nullptr);
+  return Ptr<To>(static_cast<To*>(from.Release()));
+}
+
+template <typename To, typename From>
+[[nodiscard]] Ptr<To> cast_if_present(Ptr<From>&& from) {
+  if (!from) return Ptr<To>();
+  return cast<To>(std::move(from));
+}
 
 }  // namespace automat
 

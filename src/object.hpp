@@ -32,6 +32,9 @@ struct ObjectToy;
 // Instances of this class provide their logic.
 // Appearance is delegated to Widgets.
 struct Object : public ReferenceCounted {
+  // Enables cast<Object> / dyn_cast<Object>
+  static bool classof(const ReferenceCounted* rc) { return dynamic_cast<const Object*>(rc); }
+
   // Incremented when object state changes. UI-side Toys observe this to know when
   // to wake up and pull fresh state. Readable through WeakPtr without locking
   // because memory survives until weak_refs hits 0.

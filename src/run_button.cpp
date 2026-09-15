@@ -28,12 +28,12 @@ Interface PowerButton::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
   if (trigger != PointerButton::Left) return {};
   auto locked = target.Lock();
   if (!locked) return {};
-  OnOff on_off(locked.Owner<Object>(), locked.Get());
+  OnOff on_off(cast<Object>(locked.Owner()), locked.Get());
   return Interface(on_off.object_ptr, on_off.IsOn() ? &locked->turn_off : &locked->turn_on);
 }
 bool PowerButton::Filled() const {
   if (auto locked = target.Lock()) {
-    return OnOff(locked.Owner<Object>(), locked.Get()).IsOn();
+    return OnOff(cast<Object>(locked.Owner()), locked.Get()).IsOn();
   }
   return false;
 }

@@ -225,7 +225,7 @@ void Syncable::ForwardNotify(this T self, F&& lambda) {
         if (!member.sink) continue;
         auto locked = member.weak.Lock();
         if (!locked) continue;
-        T other(*locked.template Owner<Object>(), *static_cast<typename T::Table*>(locked.Get()));
+        T other(*cast<Object>(locked.Owner()), *static_cast<typename T::Table*>(locked.Get()));
         // Skip self
         if (self == other) {
           continue;

@@ -11,7 +11,7 @@
 namespace automat {
 
 Interface::Interface(const NestedWeakPtr<Table>& weak)
-    : object_ptr(weak.OwnerUnsafe<Object>()), table_ptr(weak.GetUnsafe()) {}
+    : object_ptr(static_cast<Object*>(weak.OwnerUnsafe())), table_ptr(weak.GetUnsafe()) {}
 
 Interface::operator NestedWeakPtr<Table>() const {
   if (!object_ptr) return {};

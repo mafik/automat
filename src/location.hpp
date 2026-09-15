@@ -233,16 +233,6 @@ struct Location : Object {
   }
   double GetNumber() { return std::stod(GetText()); }
 
-  template <typename T>
-  T* ThisAs() {
-    return dynamic_cast<T*>(object.get());
-  }
-
-  template <typename T>
-  T* As() {
-    return dynamic_cast<T*>(Follow());
-  }
-
   void SetText(std::string_view text) override {
     std::string current_text = GetText();
     if (current_text == text) {

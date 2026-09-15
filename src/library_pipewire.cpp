@@ -786,7 +786,7 @@ void PipeWireNode::CanFeed(StreamArgument self, Interface end, Status& status) {
 void PipeWireNode::OnOutConnect(StreamArgument self, Interface end) {
   Str old_peer;
   if (auto old = self.state->target.Lock()) {
-    if (auto* o = dynamic_cast<PipeWireNode*>(old.Owner<Object>())) old_peer = o->NodeName();
+    if (auto* o = dynamic_cast<PipeWireNode*>(old.Owner())) old_peer = o->NodeName();
   }
   StreamArgument::Table::StreamOnConnect(self, end);
   auto* peer = dynamic_cast<PipeWireNode*>(end.object_ptr);
@@ -814,7 +814,7 @@ void PipeWireNode::SyncBoardLinks() {
   Str my = NodeName();
   if (my.empty()) return;
   if (auto target = out_stream.target.Lock()) {
-    if (auto* peer = dynamic_cast<PipeWireNode*>(target.Owner<Object>())) {
+    if (auto* peer = dynamic_cast<PipeWireNode*>(target.Owner())) {
       bool realized;
       {
         auto lock = std::lock_guard(mutex);

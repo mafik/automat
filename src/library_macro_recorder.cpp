@@ -165,7 +165,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
     track_name = ToStr(kb_key);
     make_fn = [&]() -> Location& {
       Location& l = board->Create<KeyPresser>();
-      auto* kp = l.As<KeyPresser>();
+      auto* kp = dynamic_cast<KeyPresser*>(l.Follow());
       kp->SetKey(kb_key);
       return l;
     };
@@ -173,7 +173,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
     track_name = ToStr(ptr_btn);
     make_fn = [&]() -> Location& {
       Location& l = board->Create<MouseButtonPresser>();
-      auto* mb = l.As<MouseButtonPresser>();
+      auto* mb = dynamic_cast<MouseButtonPresser*>(l.Follow());
       mb->button = ptr_btn;
       return l;
     };
@@ -383,7 +383,7 @@ struct GlassRunButton : ui::PowerButton {
   void PointerEnter(ui::Pointer& p) override {
     ToggleButton::PointerEnter(p);
     if (auto locked = target.Lock()) {
-      auto& mr = static_cast<MacroRecorder&>(*locked.Owner<Object>());
+      auto& mr = static_cast<MacroRecorder&>(*locked.Owner());
       auto& toys = parent->ToyScope();
       if (auto connection_widget = toys.FindOrNull(mr.timeline.Bind())) {
         connection_widget->prototype_alpha_target = 1;
@@ -394,7 +394,7 @@ struct GlassRunButton : ui::PowerButton {
   void PointerLeave(ui::Pointer& p) override {
     ToggleButton::PointerLeave(p);
     if (auto locked = target.Lock()) {
-      auto& mr = static_cast<MacroRecorder&>(*locked.Owner<Object>());
+      auto& mr = static_cast<MacroRecorder&>(*locked.Owner());
       auto& toys = parent->ToyScope();
       if (auto connection_widget = toys.FindOrNull(mr.timeline.Bind())) {
         connection_widget->prototype_alpha_target = 0;

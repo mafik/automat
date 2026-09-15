@@ -303,8 +303,10 @@ TrackBase::TrackBase(Str name_arg) : name_str(std::move(name_arg)), arg_table(na
     track.arg_state.target = end;
   };
   arg_table.find = [](Argument self) -> Locked<Interface> {
-    auto& track = static_cast<const TrackBase&>(*self.object_ptr);
-    return Locked<Interface>(track.arg_state.target.Lock());
+    auto locked = static_cast<const TrackBase&>(*self.object_ptr).arg_state.target.Lock();
+    if (!locked) return {};
+    auto* table = locked.Get();
+    return AdoptLocked(Interface(cast<Object>(locked.ReleaseOwner().Release()), table));
   };
   arg_table.make_icon = [](Interface self, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
     return std::make_unique<TextWidget>(parent, Str(self.Name()));
@@ -382,7 +384,7 @@ Timeline::Timeline(const Timeline& other)
   }
   tracks.reserve(other.tracks.size());
   for (const auto& track : other.tracks) {
-    AddTrack(track->Clone().Cast<TrackBase>());
+    AddTrack(cast<TrackBase>(track->Clone()));
   }
   WakeToys();
 }
@@ -1960,7 +1962,7 @@ struct TrackBaseWidget : ObjectToy {
 
     template <typename T>
     T* GetTrack() {
-      return track_ptr.Get<T>();
+      return dynamic_cast<T*>(track_ptr.get());
     }
   };
 
@@ -2544,7 +2546,7 @@ void Vec2Track::UpdateOutput(Location& target, time::SteadyPoint started_at,
   if (next_update_at != now) {
     return;
   }
-  auto* mouse_move = target.As<MouseMove>();
+  auto* mouse_move = dynamic_cast<MouseMove*>(target.Follow());
   if (mouse_move) {
     mouse_move->OnMouseMove(values[next_update_i]);
   }
@@ -2563,7 +2565,7 @@ void Float64Track::UpdateOutput(Location& target, time::SteadyPoint started_at,
   if (next_update_at != now) {
     return;
   }
-  auto* sink = target.As<SinkRelativeFloat64>();
+  auto* sink = dynamic_cast<SinkRelativeFloat64*>(target.Follow());
   if (sink) {
     sink->OnRelativeFloat64(values[next_update_i]);
   }

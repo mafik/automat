@@ -188,7 +188,7 @@ Menu::Menu(ui::Widget* parent, MiniMenuMode mode, const Interface (&options)[kDi
 
 std::unique_ptr<Action> Menu::Activate(int dir, ui::Pointer& pointer) {
   auto locked = slots[dir].Lock();
-  auto* object = locked.Owner<Object>();
+  auto* object = static_cast<Object*>(locked.Owner());
   if (object == nullptr) return nullptr;
   Toy* source = dynamic_cast<Toy*>(icons[dir].get());
   if (source == nullptr && action) source = action->toy.Get();

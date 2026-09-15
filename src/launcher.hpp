@@ -97,7 +97,7 @@ struct Launch : Object {
   template <typename WindowT>
   Ptr<WindowT> LockRestoring() {
     auto lock = std::lock_guard(mutex);
-    return restoring.template LockAs<WindowT>();
+    return dyn_cast_if_present<WindowT>(restoring.Lock());
   }
   void RestoredInto(library::ClientWindow&);
   void WindowAppeared();

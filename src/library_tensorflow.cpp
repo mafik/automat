@@ -41,8 +41,7 @@ static sk_sp<SkImage> ToImage(const tf::Value& v) {
 TfTensor::~TfTensor() = default;
 
 sk_sp<SkImage> TfTensor::InputImage() {
-  auto ip_ptr = image->FindInterface();
-  ImageProvider ip(ip_ptr.Owner<Object>(), ip_ptr.Get());
+  auto ip = image->FindInterface();
   return ip ? ip.GetImage() : nullptr;
 }
 

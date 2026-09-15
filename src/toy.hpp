@@ -62,7 +62,7 @@ struct Toy : ui::Widget {
 
   template <typename T = Object>
   Ptr<T> LockOwner() const {
-    return owner.Lock().template Cast<T>();
+    return cast_if_present<T>(owner.Lock());
   }
 
   template <typename T = Interface>

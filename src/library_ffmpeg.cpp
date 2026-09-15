@@ -204,13 +204,13 @@ int MediaFile::BestVideoStream() {
 
 int MediaFile::StreamIndexFeeding(const Object* consumer) {
   auto video_target = out_stream.target.Lock();
-  if (video_target.Owner<Object>() == consumer) {
+  if (video_target.Owner() == consumer) {
     auto lock = std::lock_guard(mutex);
     return video_stream;
   }
   for (int i = 0; i < kMaxStreams; ++i) {
     auto target = stream_ports[i].state.target.Lock();
-    if (target.Owner<Object>() == consumer) return i;
+    if (target.Owner() == consumer) return i;
   }
   return -1;
 }
@@ -318,7 +318,7 @@ StreamStats MediaFile::PacketStats(int index) {
 void MediaFile::OnOutStreamConnect(StreamArgument self, Interface end) {
   Ptr<FfmpegDecoder> old_decoder;
   if (auto old = self.state->target.Lock()) {
-    if (auto* o = dynamic_cast<FfmpegDecoder*>(old.Owner<Object>())) old_decoder = o->AcquirePtr();
+    if (auto* o = dynamic_cast<FfmpegDecoder*>(old.Owner())) old_decoder = o->AcquirePtr();
   }
   StreamArgument::Table::StreamOnConnect(self, end);
   if (old_decoder) old_decoder->ResetCodec();

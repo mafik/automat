@@ -206,8 +206,7 @@ void UpdateCode(automat::mc::Controller& controller,
   for (int i = 0; i < n; ++i) {
     Instruction* obj_raw = instructions[i].get();
     const mc::Inst* inst_raw = &obj_raw->mc_inst;
-    program[i].inst =
-        NestedPtr<const mc::Inst>(std::move(instructions[i]).Cast<ReferenceCounted>(), inst_raw);
+    program[i].inst = NestedPtr<const mc::Inst>(std::move(instructions[i]), inst_raw);
   }
 
   controller.UpdateCode(std::move(program), status);
@@ -218,7 +217,7 @@ std::vector<Ptr<Instruction>> FindInstructions(Location& assembler_loc) {
   std::vector<Ptr<Instruction>> instructions;
   // Find all Instructions that are connected to this Assembler via assembler_arg
   // We take advantage of instructions_weak, which is the reverse pointer of assembler_arg
-  auto* assembler = assembler_loc.As<Assembler>();
+  auto* assembler = dynamic_cast<Assembler*>(assembler_loc.Follow());
   for (auto& inst_weak : assembler->instructions_weak) {
     auto inst = inst_weak.Lock();
     if (inst) {

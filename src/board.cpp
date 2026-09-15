@@ -572,7 +572,7 @@ Vec<Ptr<Location>> BoardWidget::CloneStack(Location& base, Vec<std::unique_ptr<T
   result.reserve(originals.size());
   std::unordered_map<Object*, Object*> orig_to_clone;
   for (auto* orig : originals) {
-    auto clone_loc = orig->Clone().Cast<Location>();
+    auto clone_loc = cast<Location>(orig->Clone());
     if (orig->object) {
       clone_loc->InsertHere(orig->object->Clone());
       orig_to_clone[orig->object.get()] = clone_loc->object.get();

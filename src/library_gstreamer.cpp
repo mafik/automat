@@ -485,7 +485,7 @@ StreamStats GStreamerElement::PortStats(int port) {
 void GStreamerElement::OnOutStreamConnect(StreamArgument self, Interface end) {
   Ptr<GStreamerElement> old_peer;
   if (auto old = self.state->target.Lock()) {
-    if (auto* o = dynamic_cast<GStreamerElement*>(old.Owner<Object>())) old_peer = o->AcquirePtr();
+    if (auto* o = dynamic_cast<GStreamerElement*>(old.Owner())) old_peer = o->AcquirePtr();
   }
   StreamArgument::Table::StreamOnConnect(self, end);
   GStreamerElement* new_peer = nullptr;

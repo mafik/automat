@@ -786,7 +786,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
       auto file = MAKE_PTR(File);
       file->SetPath(e.dst.str);
       auto loc = MAKE_PTR(Location);
-      loc->InsertHere(file.Cast<Object>());
+      loc->InsertHere(std::move(file));
       DragLocationAction* drag = offer.get() == current_offer.get() ? Drag() : nullptr;
       if (drag) {
         drag->AddToGroup(std::move(loc));

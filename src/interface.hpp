@@ -210,20 +210,6 @@ struct Locked : T {
     return *this;
   }
 
-  // Takes an owning reference to the owner of `ptr`.
-  explicit Locked(const NestedPtr<Interface::Table>& ptr)
-      : T(ptr.template Owner<Object>(), static_cast<typename T::Table*>(ptr.Get())) {
-    SafeIncrementOwningRefs(this->object_ptr);
-  }
-
-  template <typename U>
-  [[nodiscard]] Locked<U> Cast() && {
-    U bound(this->object_ptr, static_cast<typename U::Table*>(this->table_ptr));
-    this->object_ptr = nullptr;
-    this->table_ptr = nullptr;
-    return AdoptLocked(bound);
-  }
-
  private:
   struct AdoptTag {};
   Locked(T bound, AdoptTag) : T(bound) {}
@@ -236,6 +222,21 @@ struct Locked : T {
 template <typename T>
 Locked<T> AdoptLocked(T bound) {
   return Locked<T>(bound, {});
+}
+
+template <typename To, typename From>
+[[nodiscard]] Locked<To> cast(Locked<From>&& from) {
+  assert(from.table_ptr == nullptr || isa<To>(static_cast<From&>(from)));
+  To bound(from.object_ptr, static_cast<typename To::Table*>(from.table_ptr));
+  from.object_ptr = nullptr;
+  from.table_ptr = nullptr;
+  return AdoptLocked(bound);
+}
+
+template <typename To, typename From>
+[[nodiscard]] Locked<To> dyn_cast(Locked<From>&& from) {
+  if (!isa<To>(static_cast<From&>(from))) return {};
+  return cast<To>(std::move(from));
 }
 
 template <typename Table>
@@ -274,7 +275,8 @@ Str ToStr(Interface iface);
     operator Table*() const { return operator->(); }                                               \
   } table NO_UNIQUE_ADDRESS;                                                                       \
   operator NestedWeakPtr<Table>() {                                                                \
-    return Interface::operator NestedWeakPtr<Interface::Table>().template Cast<Table>();           \
+    NestedWeakPtr<Interface::Table> base = *this;                                                  \
+    return NestedWeakPtr<Table>(base.GetOwnerWeak(), static_cast<Table*>(base.GetUnsafe()));       \
   }                                                                                                \
   struct StateRef {                                                                                \
     State* operator->() const {                                                                    \

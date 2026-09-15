@@ -637,7 +637,7 @@ void GeglOperation::CanFeedGegl(StreamArgument self, Interface end, Status& stat
 void GeglOperation::OnOutConnect(StreamArgument self, Interface end) {
   GeglOperation* old_peer = nullptr;
   if (auto old = self.state->target.Lock()) {
-    old_peer = dynamic_cast<GeglOperation*>(old.Owner<Object>());
+    old_peer = dynamic_cast<GeglOperation*>(old.Owner());
   }
   StreamArgument::Table::StreamOnConnect(self, end);
   if (old_peer && old_peer != end.object_ptr) old_peer->SyncSources();

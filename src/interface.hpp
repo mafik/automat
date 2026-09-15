@@ -36,8 +36,8 @@ enum class Cursor;
 // Interface itself is a lightweight bound type (Object* + Table*) used for typed access
 // to an object's interface. It is constructed on-the-fly when needed.
 //
-// Long-term storage of interface pointers relies on NestedPtr<Interface::Table> &
-// NestedWeakPtr<Interface::Table>. This allows concurrent lifetime management.
+// Long-term storage of interface pointers relies on Locked<T> & NestedWeakPtr<Interface::Table>.
+// This allows concurrent lifetime management.
 //
 // # Notable interfaces
 //
@@ -165,12 +165,10 @@ struct Interface {
   Interface(Object& obj) : object_ptr(&obj) {}
   Interface(Object& obj, Table& table) : object_ptr(&obj), table_ptr(&table) {}
   Interface(Object* obj, Table* table) : object_ptr(obj), table_ptr(table) {}
-  explicit Interface(const NestedPtr<Table>&);
   explicit Interface(const NestedWeakPtr<Table>&);
 
   auto operator<=>(const Interface&) const = default;
 
-  operator NestedPtr<Table>() const;
   operator NestedWeakPtr<Table>() const;
 
   bool has_object() const { return object_ptr != nullptr; }
@@ -194,8 +192,37 @@ struct Locked : T {
     o.object_ptr = nullptr;
     o.table_ptr = nullptr;
   }
-  Locked& operator=(const Locked&) = delete;
-  Locked& operator=(Locked&&) = delete;
+  Locked& operator=(const Locked& o) {
+    SafeIncrementOwningRefs(o.object_ptr);
+    SafeDecrementOwningRefs(this->object_ptr);
+    this->object_ptr = o.object_ptr;
+    this->table_ptr = o.table_ptr;
+    return *this;
+  }
+  Locked& operator=(Locked&& o) {
+    if (this != &o) {
+      SafeDecrementOwningRefs(this->object_ptr);
+      this->object_ptr = o.object_ptr;
+      this->table_ptr = o.table_ptr;
+      o.object_ptr = nullptr;
+      o.table_ptr = nullptr;
+    }
+    return *this;
+  }
+
+  // Takes an owning reference to the owner of `ptr`.
+  explicit Locked(const NestedPtr<Interface::Table>& ptr)
+      : T(ptr.template Owner<Object>(), static_cast<typename T::Table*>(ptr.Get())) {
+    SafeIncrementOwningRefs(this->object_ptr);
+  }
+
+  template <typename U>
+  [[nodiscard]] Locked<U> Cast() && {
+    U bound(this->object_ptr, static_cast<typename U::Table*>(this->table_ptr));
+    this->object_ptr = nullptr;
+    this->table_ptr = nullptr;
+    return AdoptLocked(bound);
+  }
 
  private:
   struct AdoptTag {};
@@ -246,9 +273,6 @@ Str ToStr(Interface iface);
     Table& operator*() const { return *operator->(); }                                             \
     operator Table*() const { return operator->(); }                                               \
   } table NO_UNIQUE_ADDRESS;                                                                       \
-  operator NestedPtr<Table>() {                                                                    \
-    return Interface::operator NestedPtr<Interface::Table>().template Cast<Table>();               \
-  }                                                                                                \
   operator NestedWeakPtr<Table>() {                                                                \
     return Interface::operator NestedWeakPtr<Interface::Table>().template Cast<Table>();           \
   }                                                                                                \

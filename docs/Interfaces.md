@@ -32,13 +32,13 @@ Internally, all of the Binding's methods use the included interface table to dyn
 
 Bindings are nullable. Both pointers default to `nullptr`. There are three valid states:
 
-- **Empty** (`obj == nullptr, table == nullptr`) — no interface. Evaluates to `false`. Returned by failed casts and empty `NestedPtr` conversions.
+- **Empty** (`obj == nullptr, table == nullptr`) — no interface. Evaluates to `false`. Returned by failed lookups and casts.
 - **Top-level object** (`obj != nullptr, table == nullptr`) — points to an object without a specific interface. Used by connection targets that connect to an object as a whole.
 - **Interface** (`obj != nullptr, table != nullptr`) — a proper interface binding. All bound type methods require this state.
 
-Bindings are constructible from `NestedPtr<Table>`, which makes it easy to go from a locked weak reference to a usable interface.
+Bindings are constructible from `Locked<I>`, which makes it easy to go from a locked reference to a usable interface.
 
-Bindings may also be constructed from `NestedWeakPtr<Table>` but care must be taken to ensure that some weak reference to the owning object is kept somewhere and that a proper locked Ptr exists while its methods are called.
+Bindings may also be constructed from `NestedWeakPtr<I::Table>` but care must be taken to ensure that some weak reference to the owning object is kept somewhere and that a proper locked Ptr exists while its methods are called.
 
 ## State
 

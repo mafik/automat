@@ -351,8 +351,7 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
       auto board = board_widget ? board_widget->LockBoard() : nullptr;
       {  // Update `source_image`
         sk_sp<SkImage> new_image = nullptr;
-        auto ip_ptr = tesseract->image->FindInterface();
-        ImageProvider ip(ip_ptr.Owner<Object>(), ip_ptr.Get());
+        auto ip = tesseract->image->FindInterface();
         if (ip) {
           new_image = ip.GetImage();
           if (auto* ip_loc = board ? board->LocationOrNull(*ip.object_ptr) : nullptr) {
@@ -1048,7 +1047,7 @@ void TesseractOCR::top_Impl::OnSet(double value) {
 bool TesseractOCR::region_Impl::ResizePx(int top, int right, int bottom, int left) {
   auto image_ptr = obj->image->FindInterface();
   if (!image_ptr) return false;
-  auto image = ImageProvider(image_ptr.Owner<Object>(), image_ptr.Get()).GetImage();
+  auto image = image_ptr.GetImage();
   if (!image) return false;
   float dx = 1.0f / image->width();
   float dy = 1.0f / image->height();
@@ -1165,8 +1164,7 @@ void TesseractOCR::Run() {
     return;
   }
 
-  ImageProvider ip(image_ptr.Owner<Object>(), image_ptr.Get());
-  auto image = ip.GetImage();
+  auto image = image_ptr.GetImage();
   if (!image) {
     ReportError("No image available from source");
     return;

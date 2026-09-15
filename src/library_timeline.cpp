@@ -302,9 +302,9 @@ TrackBase::TrackBase(Str name_arg) : name_str(std::move(name_arg)), arg_table(na
     auto& track = static_cast<TrackBase&>(*self.object_ptr);
     track.arg_state.target = end;
   };
-  arg_table.find = [](Argument self) -> NestedPtr<Interface::Table> {
+  arg_table.find = [](Argument self) -> Locked<Interface> {
     auto& track = static_cast<const TrackBase&>(*self.object_ptr);
-    return track.arg_state.target.Lock();
+    return Locked<Interface>(track.arg_state.target.Lock());
   };
   arg_table.make_icon = [](Interface self, ui::Widget* parent) -> std::unique_ptr<ui::Widget> {
     return std::make_unique<TextWidget>(parent, Str(self.Name()));

@@ -170,8 +170,11 @@ void Instruction::assembler_arg_Impl::OnConnect(Interface end) {
   }
 }
 
-NestedPtr<Interface::Table> Instruction::assembler_arg_Impl::OnFind() {
-  return NestedPtr<Interface::Table>(obj->assembler_weak.Lock(), nullptr);
+Locked<Interface> Instruction::assembler_arg_Impl::OnFind() {
+  if (auto assembler = obj->assembler_weak.Lock()) {
+    return AdoptLocked(Interface(*assembler.Release()));
+  }
+  return {};
 }
 
 bool Instruction::assembler_arg_Impl::OnIsConnected() { return !obj->assembler_weak.IsExpired(); }

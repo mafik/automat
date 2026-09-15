@@ -871,7 +871,7 @@ void LaunchRestoredWindows() {
     Ptr<Launch> launch;
     Status status;
     auto found = win->launcher->Find();
-    if (auto* program_launcher = dynamic_cast<library::ProgramLauncher*>(found.Owner<Object>())) {
+    if (auto* program_launcher = dynamic_cast<library::ProgramLauncher*>(found.object_ptr)) {
       launch = program_launcher->RunFor(*win, status);
       if (!launch) status.Reset();
     }

@@ -262,7 +262,7 @@ ui::Tock BoardWidget::Tick(time::Timer& timer) {
     loc->object->Each<Argument>([&](Argument arg) {
       bool visible = arg.table->visible_when_disconnected;
       if (arg.IsConnected()) {
-        auto* end_obj = arg.Find().Owner<Object>();
+        auto* end_obj = arg.Find().object_ptr;
         visible = end_obj && (end_obj == loc->object.get() || board->LocationOrNull(*end_obj));
       }
       if (visible) {
@@ -280,7 +280,7 @@ ui::Tock BoardWidget::Tick(time::Timer& timer) {
       if (!conn) return LoopControl::Continue;
       ui::Widget* higher = &lw;
       auto end = arg.Find();
-      if (auto* end_obj = end.Owner<Object>()) {
+      if (auto* end_obj = end.object_ptr) {
         if (auto* end_loc = board->LocationOrNull(*end_obj)) {
           if (auto* end_lw = toys.FindOrNull(*end_loc)) {
             if (end_lw->IsAbove(*higher)) higher = end_lw;
@@ -586,10 +586,10 @@ Vec<Ptr<Location>> BoardWidget::CloneStack(Location& base, Vec<std::unique_ptr<T
     clone_loc->object->Each<Argument>([&](Argument arg) {
       if (!arg.IsConnected()) return LoopControl::Continue;
       auto target = arg.Find();
-      auto* target_owner = target.Owner<Object>();
+      auto* target_owner = target.object_ptr;
       auto it = orig_to_clone.find(target_owner);
       if (it != orig_to_clone.end()) {
-        arg.Connect(Interface(it->second, target.Get()));
+        arg.Connect(Interface(it->second, target.table_ptr));
       }
       return LoopControl::Continue;
     });

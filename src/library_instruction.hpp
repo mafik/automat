@@ -55,7 +55,7 @@ struct Instruction : Object, Buffer {
   static Ptr<Object> MakePrototype();
   void OnCanConnect(Interface end, Status& status);
   void OnConnect(Interface end);
-  NestedPtr<Interface::Table> OnFind();
+  Locked<Interface> OnFind();
   bool OnIsConnected();
   DEF_END(assembler_arg);
 

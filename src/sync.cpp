@@ -92,10 +92,12 @@ void Syncable::Table::DefaultOnConnect(Argument self, Interface end) {
   }
 }
 
-NestedPtr<Interface::Table> Syncable::Table::DefaultFind(Argument self) {
+Locked<Interface> Syncable::Table::DefaultFind(Argument self) {
   auto& syncable = static_cast<Syncable::Table&>(*self.table);
-  return NestedPtr<Interface::Table>(Syncable(*self.object_ptr, syncable).state->gear_weak.Lock(),
-                                     nullptr);
+  if (auto gear = Syncable(*self.object_ptr, syncable).state->gear_weak.Lock()) {
+    return AdoptLocked(Interface(*gear.Release()));
+  }
+  return {};
 }
 
 // --- Syncable::Unsync ---
@@ -608,11 +610,10 @@ bool Gear::DeserializeKey(ObjectDeserializer& d, StrView key) {
         status.Reset();
       }
       if (!is_sink) continue;
-      NestedPtr<Interface::Table> target = d.LookupInterface(member_name);
-      if (auto* syncable = dyn_cast_if_present<Syncable::Table>(target.Get())) {
-        auto* owner = target.Owner<Object>();
-        AddSink(*owner, *syncable);
-        AddSource(*owner, *syncable);
+      auto target = d.LookupInterface(member_name);
+      if (auto* syncable = dyn_cast_if_present<Syncable::Table>(target.table_ptr)) {
+        AddSink(*target.object_ptr, *syncable);
+        AddSource(*target.object_ptr, *syncable);
       }
     }
     return true;

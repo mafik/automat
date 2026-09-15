@@ -215,9 +215,9 @@ void ScheduleArgumentTargets(Argument arg) {
   if (auto next = arg.Find()) {
     // The target may be a Command sub-interface or the Object itself (its first Command).
     Command command;
-    if (auto* s = dyn_cast_if_present<Command::Table>(next.Get())) {
-      command = Command(next.Owner<Object>(), s);
-    } else if (auto* obj = next.Owner<Object>()) {
+    if (auto* s = dyn_cast_if_present<Command::Table>(next.table_ptr)) {
+      command = Command(next.object_ptr, s);
+    } else if (auto* obj = next.object_ptr) {
       command = obj->As<Command>();
     }
     if (command) {

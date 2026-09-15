@@ -767,9 +767,9 @@ void GStreamerElement::Start(std::unique_ptr<RunTask>& task) {
     for (int i = 0; i < m->n_extra_in; ++i) {
       index_of(StreamInput(*m, m->extra_in[i].table).Producer().get());
     }
-    index_of(m->out_stream->FindInterface().Owner<Object>());
+    index_of(m->out_stream->FindInterface().object_ptr);
     for (int i = 0; i < m->n_extra_out; ++i) {
-      index_of(StreamArgument(*m, m->extra_out[i].table).FindInterface().Owner<Object>());
+      index_of(StreamArgument(*m, m->extra_out[i].table).FindInterface().object_ptr);
     }
   }
   int n = (int)order.size();
@@ -782,11 +782,11 @@ void GStreamerElement::Start(std::unique_ptr<RunTask>& task) {
   Vec<Edge> edges;
   for (int i = 0; i < n; ++i) {
     auto& m = order[i];
-    auto add_edge = [&](int port, NestedPtr<StreamInput::Table> target) {
-      auto* c = dynamic_cast<GStreamerElement*>(target.Owner<Object>());
+    auto add_edge = [&](int port, Locked<StreamInput> target) {
+      auto* c = dynamic_cast<GStreamerElement*>(target.object_ptr);
       if (!c) return;
       int ci = index_of(c);
-      int slot = c->InSlotOf(target.Get());
+      int slot = c->InSlotOf(target.table_ptr);
       edges.push_back({i, port, ci, slot >= 0 ? 1 + slot : 0});
     };
     add_edge(0, m->out_stream->FindInterface());
@@ -1124,8 +1124,7 @@ StreamStats AppSrcBoundary::OutStats() {
 void AppSrcBoundary::PushOne() {
   sk_sp<SkImage> img;
   {
-    auto ip_ptr = image->FindInterface();
-    ImageProvider ip(ip_ptr.Owner<Object>(), ip_ptr.Get());
+    auto ip = image->FindInterface();
     if (ip) img = ip.GetImage();
   }
   // An empty upstream is a normal transient in a step cycle (the producer
@@ -1911,8 +1910,7 @@ struct BoundaryToy : ui::beta::ObjectToy {
         fill_ = stats.fill;
         capacity_ = stats.capacity;
         meter_label_ = f("{} / {}", FormatBytes(fill_), FormatBytes(capacity_));
-        auto ip_ptr = src->image->FindInterface();
-        ImageProvider ip(ip_ptr.Owner<Object>(), ip_ptr.Get());
+        auto ip = src->image->FindInterface();
         image_ = ip ? ip.GetImage() : nullptr;
       }
     }

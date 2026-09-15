@@ -10,16 +10,9 @@
 
 namespace automat {
 
-Interface::Interface(const NestedPtr<Table>& locked)
-    : object_ptr(locked.Owner<Object>()), table_ptr(object_ptr ? locked.Get() : nullptr) {}
-
 Interface::Interface(const NestedWeakPtr<Table>& weak)
     : object_ptr(weak.OwnerUnsafe<Object>()), table_ptr(weak.GetUnsafe()) {}
 
-Interface::operator NestedPtr<Table>() const {
-  if (!object_ptr) return {};
-  return {object_ptr->AcquirePtr(), table_ptr};
-}
 Interface::operator NestedWeakPtr<Table>() const {
   if (!object_ptr) return {};
   return {object_ptr->AcquireWeakPtr(), table_ptr};

@@ -206,7 +206,7 @@ struct ObjectDeserializer : Deserializer {
   void RegisterObject(StrView name, Object& object);
 
   Object* LookupObject(StrView name);
-  NestedPtr<Interface::Table> LookupInterface(StrView name);
+  Locked<Interface> LookupInterface(StrView name);
 };
 
 }  // namespace automat

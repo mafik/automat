@@ -81,13 +81,11 @@ struct Argument : Interface {
     void (*on_connect)(Argument, Interface end) = nullptr;
 
     // Looks up the destination of this Argument. This should match the last `on_connect`.
-    NestedPtr<Interface::Table> (*find)(Argument) = [](Argument) {
-      return NestedPtr<Interface::Table>();
-    };
+    Locked<Interface> (*find)(Argument) = [](Argument) { return Locked<Interface>(); };
 
     // Checks whether this argument has an active connection. Cheaper than `find`
-    // because it avoids constructing the full NestedPtr / locking weak pointers.
-    bool (*is_connected)(Argument) = [](Argument self) { return self.Find().Owner<>() != nullptr; };
+    // if overridden because it may avoid locking weak pointers.
+    bool (*is_connected)(Argument) = [](Argument self) { return self.Find().has_object(); };
 
     // Prototype for automatically constructed value for this argument. It is used if this Argument
     // is used through one of the *OrMake functions.
@@ -117,7 +115,7 @@ struct Argument : Interface {
       if constexpr (requires(ImplT& i, Interface e) { i.OnConnect(e); })
         on_connect = [](Argument self, Interface end) { static_cast<ImplT&>(self).OnConnect(end); };
       if constexpr (requires(ImplT& i) {
-                      { i.OnFind() } -> std::same_as<NestedPtr<Interface::Table>>;
+                      { i.OnFind() } -> std::same_as<Locked<Interface>>;
                     })
         find = [](Argument self) { return static_cast<ImplT&>(self).OnFind(); };
       if constexpr (requires(ImplT& i) {
@@ -186,7 +184,7 @@ struct Argument : Interface {
 
   void Disconnect() const { Connect(Interface()); }
 
-  NestedPtr<Interface::Table> Find() const { return table->find(*this); }
+  Locked<Interface> Find() const { return table->find(*this); }
 
   bool IsConnected() const { return table->is_connected(*this); }
 
@@ -202,7 +200,7 @@ struct Argument : Interface {
   //   static constexpr SkColor4f kTint = ...;
   //   void OnCanConnect(Interface end, Status& status);
   //   void OnConnect(Interface end);
-  //   NestedPtr<Interface::Table> OnFind();
+  //   Locked<Interface> OnFind();
   //   std::unique_ptr<ui::Widget> OnMakeIcon(ui::Widget* parent);
   //   static Ptr<Object> MakePrototype();
   template <typename ImplT>
@@ -267,9 +265,10 @@ struct ObjectArgument : Argument {
       }
     }
 
-    static NestedPtr<Interface::Table> DefaultFind(Argument self) {
+    static Locked<Interface> DefaultFind(Argument self) {
       State& st = *cast<ObjectArgument>(self).state;
-      return NestedPtr<Interface::Table>(st.target.Lock(), nullptr);
+      if (auto target = st.target.Lock()) return AdoptLocked(Interface(*target.Release()));
+      return {};
     }
 
     constexpr Table(StrView name) : Argument::Table(name, Interface::kObjectArgument) {
@@ -300,8 +299,7 @@ struct ObjectArgument : Argument {
   };
 
   Ptr<T> FindObject() const {
-    auto nested_ptr = table->find(*this);
-    auto* owner = nested_ptr.template Owner<T>();
+    auto* owner = dynamic_cast<T*>(table->find(*this).object_ptr);
     return owner ? owner->AcquirePtr() : Ptr<T>();
   }
 
@@ -338,8 +336,8 @@ struct InterfaceArgument : Argument {
       cast<InterfaceArgument>(self).state->target = dyn_cast_if_present<T>(end);
     }
 
-    static NestedPtr<Interface::Table> DefaultFind(Argument self) {
-      return cast<InterfaceArgument>(self).state->target.Lock();
+    static Locked<Interface> DefaultFind(Argument self) {
+      return Locked<Interface>(cast<InterfaceArgument>(self).state->target.Lock());
     }
 
     constexpr Table(StrView name) : Argument::Table(name, kKind) {
@@ -354,9 +352,7 @@ struct InterfaceArgument : Argument {
     }
   };
 
-  NestedPtr<typename T::Table> FindInterface() const {
-    return Find().template Cast<typename T::Table>();
-  }
+  Locked<T> FindInterface() const { return Find().template Cast<T>(); }
 
   template <typename ImplT>
   struct Def : State, Interface::DefBase {

@@ -15,13 +15,7 @@
 
 namespace automat {
 
-Object* Argument::ObjectOrNull() const {
-  auto found = Find();
-  if (auto* o = found.Owner<Object>()) {
-    return o;
-  }
-  return nullptr;
-}
+Object* Argument::ObjectOrNull() const { return Find().object_ptr; }
 
 Object& Argument::ObjectOrMake() const {
   if (auto* o = ObjectOrNull()) {

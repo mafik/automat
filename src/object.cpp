@@ -376,7 +376,7 @@ void ObjectSerializer::Serialize(Object& start) {
       o->Each<Argument>([&](Argument arg) {
         if (!arg.IsConnected()) return LoopControl::Continue;
         auto end = arg.Find();
-        auto* end_owner = end.Owner<Object>();
+        auto* end_owner = end.object_ptr;
         if (end_owner == nullptr) return LoopControl::Continue;
         if (!args_opened) {
           args_opened = true;
@@ -385,7 +385,7 @@ void ObjectSerializer::Serialize(Object& start) {
         }
         Str arg_name(arg.Name());
         Key(arg_name);
-        auto to_name = ResolveName(*end_owner, end.Get());
+        auto to_name = ResolveName(*end_owner, end.table_ptr);
         String(to_name);
         return LoopControl::Continue;
       });
@@ -410,7 +410,7 @@ Object* ObjectDeserializer::LookupObject(StrView name) {
   return to_it->second.Get();
 }
 
-NestedPtr<Interface::Table> ObjectDeserializer::LookupInterface(StrView name) {
+Locked<Interface> ObjectDeserializer::LookupInterface(StrView name) {
   auto dot_pos = name.find('.');
   Str to_name, to_iface;
   if (dot_pos != Str::npos) {
@@ -425,13 +425,14 @@ NestedPtr<Interface::Table> ObjectDeserializer::LookupInterface(StrView name) {
     return {};
   }
   if (to_iface.empty()) {
-    return NestedPtr<Interface::Table>(to->AcquirePtr(), nullptr);
+    return AdoptLocked(Interface(*to->AcquirePtr().Release()));
   }
   Interface iface = to->InterfaceFromName(to_iface);
   if (iface.object_ptr == nullptr) {
     return {};
   }
-  return NestedPtr<Interface::Table>(iface.object_ptr->AcquirePtr(), iface.table_ptr);
+  iface.object_ptr->IncrementOwningRefs();
+  return AdoptLocked(iface);
 }
 
 }  // namespace automat

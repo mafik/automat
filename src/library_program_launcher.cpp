@@ -168,11 +168,11 @@ void ProgramLauncher::Run(std::unique_ptr<RunTask>& task) {
   // starts every stage of `a | b | c` before any of them runs. Stages that
   // are already running end the chain: their descriptors are fixed.
   Vec<ProgramLauncher*> chain;
-  Vec<NestedPtr<StreamInput::Table> > keep_alive;  // holds the chain owners
+  Vec<Locked<StreamInput>> keep_alive;  // holds the chain owners
   chain.push_back(this);
   for (ProgramLauncher* cur = this; chain.size() < 32;) {
     auto target = cur->out_stream->FindInterface();
-    auto* next = dynamic_cast<ProgramLauncher*>(target.Owner<Object>());
+    auto* next = dynamic_cast<ProgramLauncher*>(target.object_ptr);
     if (!next) break;
     bool seen = false;
     for (auto* c : chain) seen |= (c == next);
@@ -205,7 +205,7 @@ void ProgramLauncher::Run(std::unique_ptr<RunTask>& task) {
   }
   {
     auto target = chain.back()->out_stream->FindInterface();
-    if (auto* end_owner = target.Owner<Object>()) {
+    if (auto* end_owner = target.object_ptr) {
       if (auto fd_provider = FindFdProvider(*end_owner)) {
         Status status;
         int fd = fd_provider.Resolve(FdProvider::Dir::Write, status);

@@ -551,8 +551,7 @@ void GeglOperation::SyncSources() {
   // providing object).
   sk_sp<SkImage> img;
   {
-    auto ip_ptr = image->FindInterface();
-    ImageProvider ip(ip_ptr.Owner<Object>(), ip_ptr.Get());
+    auto ip = image->FindInterface();
     if (ip) img = ip.GetImage();
   }
   GeglNode* stream_source = nullptr;
@@ -631,7 +630,7 @@ void GeglOperation::CanFeedGegl(StreamArgument self, Interface end, Status& stat
       return;
     }
     auto target = cur->out_stream->FindInterface();
-    cur = dynamic_cast<GeglOperation*>(target.Owner<Object>());
+    cur = dynamic_cast<GeglOperation*>(target.object_ptr);
   }
 }
 

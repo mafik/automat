@@ -447,8 +447,8 @@ void LocationWidget::UpdateAutoconnectArgs() {
     std::optional<Interface::Table*> old_iface;
     float old_dist2 = HUGE_VALF;
     if (auto end = arg.Find()) {
-      old_iface = end.Get();
-      if (auto* end_loc = board->LocationOrNull(*end.Owner<Object>())) {
+      old_iface = end.table_ptr;
+      if (auto* end_loc = board->LocationOrNull(*end.object_ptr)) {
         Vec<Vec2AndDir> to_positions;
         auto& end_toy = toys.FindOrMake(*end_loc, parent_mw).ToyForObject();
         end_toy.ConnectionPositions(to_positions);
@@ -533,8 +533,8 @@ void LocationWidget::UpdateAutoconnectArgs() {
       std::optional<Interface::Table*> old_iface;
       float old_dist2 = HUGE_VALF;
       if (auto end = arg.Find()) {
-        old_iface = end.Get();
-        if (auto* end_loc = board->LocationOrNull(*end.Owner<Object>())) {
+        old_iface = end.table_ptr;
+        if (auto* end_loc = board->LocationOrNull(*end.object_ptr)) {
           Vec<Vec2AndDir> to_positions;
           auto& end_toy = toys.FindOrMake(*end_loc, parent_mw).ToyForObject();
           end_toy.ConnectionPositions(to_positions);

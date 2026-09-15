@@ -186,8 +186,7 @@ void UpdateCode(automat::mc::Controller& controller,
     if (loc) {
       auto FindInstruction = [obj_raw, &instructions, n](automat::Argument::Table& arg) -> int {
         if (auto target = automat::Argument(*obj_raw, arg).Find()) {
-          if (auto* to_inst =
-                  dynamic_cast<automat::library::Instruction*>(target.Owner<Object>())) {
+          if (auto* to_inst = dynamic_cast<automat::library::Instruction*>(target.object_ptr)) {
             // Find the instruction in our sorted list
             for (int j = 0; j < n; ++j) {
               if (instructions[j].get() == to_inst) {

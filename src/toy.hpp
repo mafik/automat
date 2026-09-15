@@ -137,7 +137,7 @@ struct ToyScope {
   void Poll(time::Timer&);
 
   template <ToyMaker T>
-  T::Toy& FindOrMake(T& maker, ui::Widget* parent) {
+  std::remove_reference_t<T>::Toy& FindOrMake(T&& maker, ui::Widget* parent) {
     auto key = MakeKey(maker);
     auto it = container.find(key);
     if (it == container.end()) {
@@ -152,7 +152,7 @@ struct ToyScope {
         toy.Reparent(*parent);
       }
     }
-    return static_cast<T::Toy&>(*it->second);
+    return static_cast<std::remove_reference_t<T>::Toy&>(*it->second);
   }
 
   // Extract a toy out of this store (null if not found).

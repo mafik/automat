@@ -30,7 +30,7 @@ struct Syncable : Argument {
 
     static void DefaultCanConnect(Argument self, Interface end, Status& status);
     static void DefaultOnConnect(Argument self, Interface end);
-    static NestedPtr<Interface::Table> DefaultFind(Argument self);
+    static Locked<Interface> DefaultFind(Argument self);
     static std::unique_ptr<Action> MenuActivate(Interface, ui::Pointer&, automat::Toy*);
     static std::unique_ptr<Action> SyncActivate(Interface, ui::Pointer&, automat::Toy*);
     static std::unique_ptr<Action> UnsyncActivate(Interface, ui::Pointer&, automat::Toy*);

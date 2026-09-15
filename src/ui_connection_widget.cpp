@@ -331,7 +331,7 @@ struct ConnectionWidgetLocker {
   Locked<Argument> start_arg;
   ObjectToy* start_widget;
 
-  NestedPtr<Interface::Table> end_iface;
+  Locked<Interface> end_iface;
   ObjectToy* end_widget;
   SkMatrix end_transform;
 
@@ -341,13 +341,13 @@ struct ConnectionWidgetLocker {
         board_widget(BoardOrNull(w)),
         start_arg(w.LockBind<Argument>()),
         start_widget(start_arg ? toy_store.FindOrNull(*start_arg.object_ptr) : nullptr),
-        end_iface(start_arg ? start_arg.Find() : NestedPtr<Interface::Table>()),
+        end_iface(start_arg ? start_arg.Find() : Locked<Interface>()),
         end_widget(EndObj() ? toy_store.FindOrNull(*EndObj()) : nullptr),
         end_transform(end_widget && board_widget ? TransformBetween(*end_widget, *board_widget)
                                                  : SkMatrix()) {}
 
   Object* StartObj() const { return start_arg.object_ptr; }
-  Object* EndObj() const { return end_iface.Owner<Object>(); }
+  Object* EndObj() const { return end_iface.object_ptr; }
 };
 
 // Recomputes pos_dir & to_points. Shared by Tick (animation) and TextureAnchors (texture stretch).
@@ -1352,7 +1352,7 @@ Location* ArgumentToy::StartLocation() const {
 
 Location* ArgumentToy::EndLocation() const {
   if (auto arg = LockBind<Argument>()) {
-    if (auto* end_obj = arg.Find().Owner<Object>()) {
+    if (auto* end_obj = arg.Find().object_ptr) {
       return ui::FindOnSameBoard(*this, *end_obj);
     }
   }
@@ -1367,7 +1367,7 @@ void ArgumentToy::TickSplits() {
       wanted.push_back(a.start_widget->FindWidget(iface));
     }
     if (a.end_widget) {
-      ui::Widget* end_cover = a.end_widget->FindWidget(a.end_iface.Get());
+      ui::Widget* end_cover = a.end_widget->FindWidget(a.end_iface.table_ptr);
       if (std::find(wanted.begin(), wanted.end(), end_cover) == wanted.end()) {
         wanted.push_back(end_cover);
       }

@@ -36,7 +36,7 @@
 #include "fd.hpp"
 #include "format.hpp"
 #include "hex.hpp"
-#include "library_command.hpp"
+#include "library_program_launcher.hpp"
 #include "log.hpp"
 #include "mux.hpp"
 #include "random.hpp"
@@ -871,8 +871,8 @@ void LaunchRestoredWindows() {
     Ptr<Launch> launch;
     Status status;
     auto found = win->launcher->Find();
-    if (auto* cmd = dynamic_cast<library::Command*>(found.Owner<Object>())) {
-      launch = cmd->RunFor(*win, status);
+    if (auto* program_launcher = dynamic_cast<library::ProgramLauncher*>(found.Owner<Object>())) {
+      launch = program_launcher->RunFor(*win, status);
       if (!launch) status.Reset();
     }
     if (!launch) launch = Launch::Spawn(recipe, nullptr, win.get(), status);

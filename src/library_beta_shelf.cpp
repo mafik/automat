@@ -80,7 +80,7 @@ struct BetaShelfToy : ObjectToy {
     if (!shelf) return {};
     switch (static_cast<ui::Dir>(trigger)) {
       case W:
-        return Proto("Command");
+        return Proto("Program Launcher");
       case SW:
         return Proto("File");
       case N:

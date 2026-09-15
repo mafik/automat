@@ -34,25 +34,25 @@ which is what makes single-instance applications restorable — their spawned
 process forwards the launch over D-Bus and exits, and only the token
 survives that handoff.
 
-The window also keeps a real `Launcher` connection to the Command whose
+The window also keeps a real `Launcher` connection to the Program Launcher whose
 child mapped it — a visible cable, serialized through the ordinary links
-mechanism. On restore, the launch goes *through* that Command
-(`Command::RunFor`): the Command spawns its own argv, synthesizes the
+mechanism. On restore, the launch goes *through* that Program Launcher
+(`ProgramLauncher::RunFor`): the Program Launcher spawns its own argv, synthesizes the
 running state the way Timer resumes from a save, and therefore keeps the
 launch icon and STOP control over the restored child. The window's own
-recipe is the fallback for windows whose Command is gone or already busy
+recipe is the fallback for windows whose Program Launcher is gone or already busy
 (a copied window whose original still runs, for example — the copy's launch
-spawns a second instance while the Command keeps owning the first).
+spawns a second instance while the Program Launcher keeps owning the first).
 
 Capturing the association for a *first* launch relies on the launch record
-of the spawning Command; a process that forks before connecting (a browser
+of the spawning Program Launcher; a process that forks before connecting (a browser
 launcher, a daemonizing application) can still defeat the pid hint, and if
 it also drops the activation token the window saves without a recipe or
 link, loading as a dead ghost.
 
 Why this option won: it is fully implementable with what a compositor
 legitimately knows, it does not misrepresent what survived, it composes with
-the Command object (the recipe is the Command's argv), and its failure mode
+the Program Launcher object (the recipe is the Program Launcher's argv), and its failure mode
 is visible (a ghost) rather than a half-restored process.
 
 ## Option 2: Ghost snapshot — recipe plus the last frame
@@ -108,7 +108,7 @@ This is the only option where cloning a running process is well-defined —
 fork the VM. The costs: a guest kernel per client (memory), display
 forwarding latency, a much larger dependency to maintain, and the loss of
 direct kernel-object composition (the client's pid is no longer a host pid a
-Command can wait on). It turns Automat from a compositor into a hypervisor
+Program Launcher can wait on). It turns Automat from a compositor into a hypervisor
 console — a different product. It becomes worth revisiting if Automat ever
 needs untrusted-code sandboxing, because the persistence then comes at no
 extra cost.

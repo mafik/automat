@@ -3,7 +3,7 @@
 
 // Warning: coded with a stochastic parrot
 
-#include "library_command.hpp"
+#include "library_program_launcher.hpp"
 
 #include <include/core/SkCanvas.h>
 
@@ -56,9 +56,9 @@ Vec<Str> SplitWords(StrView line) {
   return words;
 }
 
-Command::~Command() {}
+ProgramLauncher::~ProgramLauncher() {}
 
-std::string Command::GetText() const {
+std::string ProgramLauncher::GetText() const {
   auto lock = std::lock_guard(mutex);
   Str out;
   for (auto& w : argv) {
@@ -69,7 +69,7 @@ std::string Command::GetText() const {
   return out;
 }
 
-void Command::SetText(std::string_view text) {
+void ProgramLauncher::SetText(std::string_view text) {
   {
     auto lock = std::lock_guard(mutex);
     argv = SplitWords(text);
@@ -77,7 +77,7 @@ void Command::SetText(std::string_view text) {
   WakeToys();
 }
 
-void Command::SerializeState(ObjectSerializer& writer) const {
+void ProgramLauncher::SerializeState(ObjectSerializer& writer) const {
   auto lock = std::lock_guard(mutex);
   writer.Key("argv");
   writer.StartArray();
@@ -88,7 +88,7 @@ void Command::SerializeState(ObjectSerializer& writer) const {
   writer.EndArray();
 }
 
-bool Command::DeserializeKey(ObjectDeserializer& d, StrView key) {
+bool ProgramLauncher::DeserializeKey(ObjectDeserializer& d, StrView key) {
   Status status;
   if (key == "argv") {
     auto lock = std::lock_guard(mutex);
@@ -116,26 +116,26 @@ static bool LaunchAlive(const Ptr<Launch>& launch) {
   return !launch->exited;
 }
 
-static void WatchRun(Command& cmd, const Ptr<Launch>& launch) {
-  launch->NotifyOnExit([weak = cmd.AcquireWeakPtr(), launch_weak = launch->AcquireWeakPtr()] {
+static void WatchRun(ProgramLauncher& launcher, const Ptr<Launch>& launch) {
+  launch->NotifyOnExit([weak = launcher.AcquireWeakPtr(), launch_weak = launch->AcquireWeakPtr()] {
     if (auto obj = weak.Lock()) {
-      auto& cmd = static_cast<Command&>(*obj);
-      auto lock = std::lock_guard(cmd.mutex);
-      bool current = cmd.launch.Get() == launch_weak.GetUnsafe();
+      auto& launcher = static_cast<ProgramLauncher&>(*obj);
+      auto lock = std::lock_guard(launcher.mutex);
+      bool current = launcher.launch.Get() == launch_weak.GetUnsafe();
       // Cancel() may have already consumed the task; Done() requires one.
-      if (current && cmd.running->IsRunning()) cmd.running->Done();
-      cmd.WakeToys();
+      if (current && launcher.running->IsRunning()) launcher.running->Done();
+      launcher.WakeToys();
     }
   });
 }
 
-bool Command::Busy() {
+bool ProgramLauncher::Busy() {
   auto lock = std::lock_guard(mutex);
   return launch && LaunchAlive(launch);
 }
 
-bool Command::SpawnStage(const SpawnFds& fds, ClientWindow* restoring,
-                         std::unique_ptr<RunTask>& task, Status& status) {
+bool ProgramLauncher::SpawnStage(const SpawnFds& fds, ClientWindow* restoring,
+                                 std::unique_ptr<RunTask>& task, Status& status) {
   Vec<Str> argv_copy;
   {
     auto lock = std::lock_guard(mutex);
@@ -151,7 +151,7 @@ bool Command::SpawnStage(const SpawnFds& fds, ClientWindow* restoring,
     auto lock = std::lock_guard(mutex);
     launch = new_launch;
     ever_ran = true;
-    if (!task) task = std::make_unique<RunTask>(AcquireWeakPtr(), &Command::run_tbl);
+    if (!task) task = std::make_unique<RunTask>(AcquireWeakPtr(), &ProgramLauncher::run_tbl);
     running->BeginLongRunning(std::move(task));
   }
   ClearOwnError();
@@ -160,19 +160,19 @@ bool Command::SpawnStage(const SpawnFds& fds, ClientWindow* restoring,
   return true;
 }
 
-void Command::Run(std::unique_ptr<RunTask>& task) {
+void ProgramLauncher::Run(std::unique_ptr<RunTask>& task) {
   if (Busy()) return;  // already running; STOP is the way to a restart
 
   // The downstream chain connected through stdout -> stdin. An anonymous pipe
   // needs both ends at spawn, so the chain starts together, the way a shell
   // starts every stage of `a | b | c` before any of them runs. Stages that
   // are already running end the chain: their descriptors are fixed.
-  Vec<Command*> chain;
+  Vec<ProgramLauncher*> chain;
   Vec<NestedPtr<StreamInput::Table> > keep_alive;  // holds the chain owners
   chain.push_back(this);
-  for (Command* cur = this; chain.size() < 32;) {
+  for (ProgramLauncher* cur = this; chain.size() < 32;) {
     auto target = cur->out_stream->FindInterface();
-    auto* next = dynamic_cast<Command*>(target.Owner<Object>());
+    auto* next = dynamic_cast<ProgramLauncher*>(target.Owner<Object>());
     if (!next) break;
     bool seen = false;
     for (auto* c : chain) seen |= (c == next);
@@ -255,14 +255,14 @@ void Command::Run(std::unique_ptr<RunTask>& task) {
   for (StdioHandle held : to_close) CloseStdio(held);
 }
 
-Ptr<Launch> Command::RunFor(ClientWindow& window, Status& status) {
+Ptr<Launch> ProgramLauncher::RunFor(ClientWindow& window, Status& status) {
   std::unique_ptr<RunTask> task;
   if (!SpawnStage({}, &window, task, status)) return nullptr;
   auto lock = std::lock_guard(mutex);
   return launch;
 }
 
-void Command::Terminate(bool keep_connected) {
+void ProgramLauncher::Terminate(bool keep_connected) {
   Ptr<Launch> live;
   {
     auto lock = std::lock_guard(mutex);
@@ -271,7 +271,7 @@ void Command::Terminate(bool keep_connected) {
   if (live) live->Terminate(keep_connected);
 }
 
-Ptr<Launch> Command::ExtractLaunch() {
+Ptr<Launch> ProgramLauncher::ExtractLaunch() {
   Ptr<Launch> extracted;
   {
     auto lock = std::lock_guard(mutex);
@@ -283,7 +283,7 @@ Ptr<Launch> Command::ExtractLaunch() {
   return extracted;
 }
 
-StreamStats Command::StdoutStats() {
+StreamStats ProgramLauncher::StdoutStats() {
   Ptr<Launch> current;
   {
     auto lock = std::lock_guard(mutex);
@@ -333,7 +333,7 @@ static bool ResolvesOnPath(const Str& prog) {
 
 #endif  // !_WIN32
 
-Ptr<Location> Command::Extract(Object& descendant) {
+Ptr<Location> ProgramLauncher::Extract(Object& descendant) {
   {
     auto lock = std::lock_guard(mutex);
     if (launch.Get() != &descendant) return nullptr;
@@ -496,15 +496,15 @@ constexpr int kTailColumns = 60;
 constexpr float kTailLineH = 2.2_mm;
 constexpr float kTailPad = 1.0_mm;
 
-struct CommandToy;
+struct ProgramLauncherToy;
 
 // The argv editor. The backing model is the object's argv vector; one tile
 // per element. The space KEY always commits a tile (that is the teaching
 // gesture); spaces INSIDE an element - arriving via deserialization, links
 // or future paste - stay literal and render as a gray midline dot.
 struct ArgvField : ui::TextFieldBase {
-  CommandToy& toy;
-  ArgvField(ui::Widget* parent, Object& command, CommandToy& toy);
+  ProgramLauncherToy& toy;
+  ArgvField(ui::Widget* parent, Object& launcher, ProgramLauncherToy& toy);
   StrView Name() const override { return "ArgvField"; }
   SkPath Shape() const override;
   void Draw(SkCanvas&) const override;
@@ -514,14 +514,14 @@ struct ArgvField : ui::TextFieldBase {
   Vec<Str> Snapshot() const;
 };
 
-struct CommandToy : ui::beta::ObjectToy {
+struct ProgramLauncherToy : ui::beta::ObjectToy {
   Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
     using enum ui::Dir;
-    auto object = LockObject<Command>();
+    auto object = LockObject<ProgramLauncher>();
     if (!object) return {};
     switch (static_cast<ui::Dir>(trigger)) {
       case NE:
-        return Interface(*object, Command::running_tbl);
+        return Interface(*object, ProgramLauncher::running_tbl);
       default:
         return ui::beta::ObjectToy::FindOption(pointer, trigger);
     }
@@ -549,14 +549,15 @@ struct CommandToy : ui::beta::ObjectToy {
   Str resolve_query_;
   bool resolve_answer_ = false;
 
-  CommandToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
+  ProgramLauncherToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     field = std::make_unique<ArgvField>(this, obj, *this);
     button = std::make_unique<ui::beta::RunButton>(
-        this, NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(), &Command::run_tbl),
-        NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(), &Command::stop_tbl), Seed(0x12B));
+        this, NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(), &ProgramLauncher::run_tbl),
+        NestedWeakPtr<Interface::Table>(obj.AcquireWeakPtr(), &ProgramLauncher::stop_tbl),
+        Seed(0x12B));
   }
 
-  Ptr<Command> LockCommand() const { return LockObject<Command>(); }
+  Ptr<ProgramLauncher> LockProgramLauncher() const { return LockObject<ProgramLauncher>(); }
 
   bool CenteredAtZero() const override { return true; }
   SkPath Shape() const override {
@@ -568,7 +569,7 @@ struct CommandToy : ui::beta::ObjectToy {
     return bounds;
   }
   Vec2AndDir ArgStart(const Interface::Table& arg) override {
-    if (&arg == static_cast<const Interface::Table*>(&decltype(Command::out_stream)::tbl)) {
+    if (&arg == static_cast<const Interface::Table*>(&decltype(ProgramLauncher::out_stream)::tbl)) {
       // The stdout port exits at the lower left, clear of the run disc.
       return Vec2AndDir{.pos = Vec2(-kPlateW / 2 + 10_mm, -kPlateH / 2), .dir = -90_deg};
     }
@@ -578,11 +579,11 @@ struct CommandToy : ui::beta::ObjectToy {
   Tock Tick(time::Timer& t) override {
     Vec<Str> old_argv = argv_;
     Ptr<Launch> launch;
-    if (auto cmd = LockCommand()) {
-      auto lock = std::lock_guard(cmd->mutex);
-      argv_ = cmd->argv;
-      ever_ran_ = cmd->ever_ran;
-      launch = cmd->launch;
+    if (auto launcher = LockProgramLauncher()) {
+      auto lock = std::lock_guard(launcher->mutex);
+      argv_ = launcher->argv;
+      ever_ran_ = launcher->ever_ran;
+      launch = launcher->launch;
     }
     has_launch_ = launch != nullptr;
     running_ = false;
@@ -642,15 +643,15 @@ struct CommandToy : ui::beta::ObjectToy {
   }
 
   void ScheduleRunIfReady() {
-    if (auto cmd = LockCommand()) {
-      if (!cmd->running->IsRunning() && program_resolves_) cmd->run->ScheduleRun();
+    if (auto launcher = LockProgramLauncher()) {
+      if (!launcher->running->IsRunning() && program_resolves_) launcher->run->ScheduleRun();
     }
     WakeAnimation();
   }
 
   void Draw(SkCanvas& canvas) const override {
-    ui::beta::Panel(canvas, Rect::MakeCenterZero(kPlateW, kPlateH), "Command", ui::beta::kBlue,
-                    ui::beta::State::Default, Seed(kSeed), true);
+    ui::beta::Panel(canvas, Rect::MakeCenterZero(kPlateW, kPlateH), "Program Launcher",
+                    ui::beta::kBlue, ui::beta::State::Default, Seed(kSeed), true);
 
     {
 #if defined(_WIN32)
@@ -757,13 +758,13 @@ struct CommandToy : ui::beta::ObjectToy {
 
 // ---------------------------------------------------------------- ArgvField --
 
-ArgvField::ArgvField(ui::Widget* parent, Object& command, CommandToy& toy)
-    : TextFieldBase(parent, command, Command::text_tbl), toy(toy) {}
+ArgvField::ArgvField(ui::Widget* parent, Object& launcher, ProgramLauncherToy& toy)
+    : TextFieldBase(parent, launcher, ProgramLauncher::text_tbl), toy(toy) {}
 
 Vec<Str> ArgvField::Snapshot() const {
-  if (auto cmd = toy.LockCommand()) {
-    auto lock = std::lock_guard(cmd->mutex);
-    return cmd->argv;
+  if (auto launcher = toy.LockProgramLauncher()) {
+    auto lock = std::lock_guard(launcher->mutex);
+    return launcher->argv;
   }
   return {};
 }
@@ -805,13 +806,13 @@ void ArgvField::KeyDown(ui::Caret& caret, ui::Key k) {
     toy.ScheduleRunIfReady();
     return;
   }
-  auto cmd = toy.LockCommand();
-  if (!cmd) return;
+  auto launcher = toy.LockProgramLauncher();
+  if (!launcher) return;
   int& index = caret_positions[&caret].index;
   bool modified = false;
   {
-    auto lock = std::lock_guard(cmd->mutex);
-    auto& argv = cmd->argv;
+    auto lock = std::lock_guard(launcher->mutex);
+    auto& argv = launcher->argv;
     auto [t, off] = ResolveFlat(argv, index);
     switch (k.physical) {
       case Backspace:
@@ -895,7 +896,7 @@ void ArgvField::KeyDown(ui::Caret& caret, ui::Key k) {
     }
   }
   if (modified) {
-    cmd->WakeToys();
+    launcher->WakeToys();
     WakeAnimation();
     toy.WakeAnimation();
   }
@@ -950,8 +951,8 @@ void ArgvField::Draw(SkCanvas& canvas) const {
 
 // ----------------------------------------------------------------- MakeToy --
 
-std::unique_ptr<ObjectToy> Command::MakeToy(ui::Widget* parent) {
-  return std::make_unique<CommandToy>(parent, *this);
+std::unique_ptr<ObjectToy> ProgramLauncher::MakeToy(ui::Widget* parent) {
+  return std::make_unique<ProgramLauncherToy>(parent, *this);
 }
 
 }  // namespace automat::library

@@ -2,7 +2,7 @@
 
 ## What it is
 
-Automat is itself a Wayland compositor: processes started by the Command
+Automat is itself a Wayland compositor: processes started by the Program Launcher
 object connect to Automat's socket, and every window they map becomes a
 "Wayland Window" object on the board — draggable, deletable, persistable
 like any other object. External programs are thereby composed on the board
@@ -74,8 +74,8 @@ object's texture and child list under that object's mutex.
 
 Board structure is only mutated on the UI thread, in
 `wayland::Tick()` — called once per frame from `RootWidget::Tick` — which inserts
-newly mapped windows (placed next to the Command that spawned them, on that
-Command's board) and removes windows whose client went away from every board
+newly mapped windows (placed next to the Program Launcher that spawned them, on that
+Program Launcher's board) and removes windows whose client went away from every board
 that owns them; the child surface objects below a window are created and
 dropped by the compositor, off the board.
 

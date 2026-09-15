@@ -4,7 +4,6 @@
 
 #include "library_assembler.hpp"
 #include "library_beta_shelf.hpp"
-#include "library_command.hpp"
 #include "library_data_offer.hpp"
 #include "library_ffmpeg.hpp"
 #include "library_file.hpp"
@@ -17,6 +16,7 @@
 #include "library_macro_recorder.hpp"
 #include "library_mouse.hpp"
 #include "library_number.hpp"
+#include "library_program_launcher.hpp"
 #include "library_sources.hpp"
 // TODO: re-enable TensorFlow once the embedded library stops costing ~400 MB
 // #include "library_tensorflow.hpp"
@@ -69,7 +69,7 @@ PrototypeLibrary::PrototypeLibrary() {
   IndexHelper index(*this);
 
   index.Register<FlipFlop>();
-  index.Register<Command, HideInToolbar>();
+  index.Register<ProgramLauncher, HideInToolbar>();
   index.Register<MacroRecorder>();
   index.Register<Timer>();
   index.Register<HotKey>();

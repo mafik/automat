@@ -111,8 +111,8 @@ the profiler module (the numbers pw-top shows); the driver's quantum and
 rate from the graph clock; UNIX pipe fill and capacity from
 ioctl(FIONREAD) and fcntl(F_GETPIPE_SZ), sampled through a transient
 pidfd_getfd; the blocked side of a pipe from /proc/pid/syscall and
-/proc/pid/wchan; per-Command byte totals from /proc/pid/io (rchar and
-wchar), shown on the Command itself because they are process
+/proc/pid/wchan; per-Program Launcher byte totals from /proc/pid/io (rchar and
+wchar), shown on the Program Launcher itself because they are process
 properties; FFmpeg progress from packet pts against the stream duration;
 GEGL progress from GeglProcessor's progress value; tf.data throughput
 from element counts.
@@ -195,7 +195,7 @@ on the library; each library has a real mechanism for it.
   tensor object, it produces its output tensor immediately and keeps it
   current when the input changes. Alone, it shows its signature
   (input/output dtypes and shapes, parameter counts).
-- **A UNIX command** is the existing Command object with three new
+- **A UNIX command** is the existing Program Launcher object with three new
   ports: stdin on top, stdout at the bottom, stderr as a smaller
   separate output. While stdin is unconnected, the face offers a text
   input line; while stdout is unconnected, the face shows the scrolling
@@ -468,12 +468,12 @@ shows real data immediately; prefetch stages are queue blocks. Device
 placement is part of the tensor's printed facts, and a host-device copy
 is an adapter, the same as any other memory-domain crossing.
 
-**UNIX.** The Command object gains stdio ports. A Command has two
+**UNIX.** The Program Launcher object gains stdio ports. A Program Launcher has two
 states: offline (no process) and online (running). The ports describe
 the offline state — they are recipe data, like the argv tiles. Start
 resolves each port's binding to a concrete file descriptor, dup2s it
 onto the child's fd 0/1/2, and execs. Because an anonymous pipe needs
-both ends at creation, starting a Command starts the stages downstream
+both ends at creation, starting a Program Launcher starts the stages downstream
 of it — starting the first stage starts the pipeline, the same way a
 shell starts every stage of `a | b | c` before any of them runs.
 Stopping needs no such rule: killing one stage lets the kernel
@@ -503,9 +503,9 @@ Each stdio port has a binding, and the binding is printed on the port:
   reproduce.
 
 Because bindings are resolved at start, changing the binding of an
-online Command takes effect by restarting it, which is what a shell
+online Program Launcher takes effect by restarting it, which is what a shell
 requires too. When stdout is connected into a pipeline, stderr keeps
-its terminal binding, so every Command in a pipeline keeps its face
+its terminal binding, so every Program Launcher in a pipeline keeps its face
 terminal, now showing errors and accepting typed input — the same
 thing a shell window shows during `cmd | less`. Ports do not stop at
 fd 2: a request port adds fd 3, 4, and so on, bound to a pipe or a
@@ -514,7 +514,7 @@ LISTEN_FDS-style socket activation. The spec plate prints the
 equivalent shell line, because port bindings are exactly shell
 redirections.
 
-A pipe between two running Commands belongs entirely to the kernel;
+A pipe between two running Program Launchers belongs entirely to the kernel;
 Automat only inspects it, and everything on the pipe's face comes from
 these sources:
 
@@ -535,7 +535,7 @@ these sources:
 - Byte totals and rates are process properties, not pipe properties:
   /proc/pid/io rchar and wchar count the whole process's traffic across
   all descriptors, and the kernel keeps no per-descriptor counters. They
-  are therefore shown on the Command object itself, beside its pid and
+  are therefore shown on the Program Launcher object itself, beside its pid and
   exit readouts — never on the pipe, where the number would misattribute
   the process's other writes to this connection. The pipe's own display
   carries only what the kernel attributes to the pipe: fill, capacity,
@@ -552,7 +552,7 @@ There is no format negotiation because byte streams have no formats;
 the format label says bytes. Content is never visible on a direct
 pipe — the kernel offers no way to peek without consuming — so content
 appears only at endpoints Automat owns (the face terminal, a funnel, a
-tap) or through an explicitly inserted tee Command.
+tap) or through an explicitly inserted tee Program Launcher.
 
 ## Known costs and open problems
 

@@ -109,8 +109,8 @@ Documentation maintained using stochastic parrots should be placed in `docs/parr
 Parrot docs should not be treated as authoritative (same as parrot-written code). They are often entirely fabricated and can't be trusted. In particular they should never be used as a basis for established "coding patterns" or "architecture".
 
 - `docs/parrots/Clone Pile.md` - describes how elements that create a new object when touched present themselves
-- `docs/parrots/Command Launcher.md` - the Command object: argv tiles, no shell, run states, the launch icon and its extraction, stdio captures, composition points
-- `docs/parrots/Launches.md` - the launches system: the Command/Launch/window object model, one spawn path with activation tokens, token-and-pid window matching across both display servers, restore and copy flows, stream captures, pipe records, extraction
+- `docs/parrots/Program Launcher.md` - the Program Launcher object: argv tiles, no shell, run states, the launch icon and its extraction, stdio captures, composition points
+- `docs/parrots/Launches.md` - the launches system: the Program Launcher/Launch/window object model, one spawn path with activation tokens, token-and-pid window matching across both display servers, restore and copy flows, stream captures, pipe records, extraction
 - `docs/parrots/Pipeline Language.md` - the design for pipeline libraries (GStreamer, PipeWire, FFmpeg, GEGL, TensorFlow, UNIX pipes): blocks that work the moment they are dropped, previews and meters fed by real API counters, native format labels, visible adapters, and how self-running and Automat-driven blocks mix
 - `docs/parrots/Beta Brand.md` - describes the visual identification for Toys made with stochastic parrots
 - `docs/parrots/Objects and Modalities.md` - the layering model: Objects are modality-independent cores; the 2D board UI is one modality among possible others (text, 3D, RPC); which data may live VM-side (O(1) per-type hints, Board/Location placement), placement requests instead of VM-side coordinates, interface-to-widget mapping, and wake counters as the modality-agnostic notification channel

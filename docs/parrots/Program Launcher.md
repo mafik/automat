@@ -1,4 +1,4 @@
-# Command Launcher
+# Program Launcher
 
 ## The problem this object solves
 
@@ -6,11 +6,11 @@ Automat needs a way to start operating-system programs: directly useful on
 its own, and the source of clients for Automat's Wayland compositor. The
 error-prone part of every launcher is the shell between the user and the
 kernel: quoting rules, expansions, and the resulting gap between what was
-typed and what the program receives. The Command object removes the shell
+typed and what the program receives. The Program Launcher object removes the shell
 entirely and makes the one structure that matters — the argv array —
 directly visible.
 
-Implementation: `src/library_command.*`. The object follows Automat's
+Implementation: `src/library_program_launcher.*`. The object follows Automat's
 device-noun naming (Timer, Key Presser): the object is named after the
 command it holds, and the RUN button performs it.
 
@@ -47,7 +47,7 @@ selection, with caret positions expressed as flat byte offsets into the
 canonical single-separator join of the vector — a coordinate that stays
 well-defined and bijective with (tile, offset) pairs even when elements
 contain spaces. Key handling operates directly on the vector
-(`ArgvField::KeyDown` in `src/library_command.cpp`). When the row outgrows
+(`ArgvField::KeyDown` in `src/library_program_launcher.cpp`). When the row outgrows
 the plate it scales down uniformly rather than hiding anything.
 
 Layout follows the DRAKON grammar used across Automat: title and credit on
@@ -73,9 +73,9 @@ Every state change is shown on two channels (the Beta rule):
 - After exit, a chip in the lower-left corner reports the result: green
   `exit 0`, red `exit N`, or the signal name if the child died by signal.
 - Dragging the icon off the plate extracts the launch onto the board
-  (`Command::ExtractLaunch`): the Command is free to run again while the
+  (`ProgramLauncher::ExtractLaunch`): the Program Launcher is free to run again while the
   extracted instance keeps running as its own object — this is how one
-  Command runs several instances at once. The Command's chip and icon
+  Program Launcher runs several instances at once. The Program Launcher's chip and icon
   follow the launch, so both leave with it.
 
 Pressing Enter inside the tiles is equivalent to pressing RUN.
@@ -93,16 +93,16 @@ environment — `WAYLAND_DISPLAY` pointing at Automat's own compositor,
 `DISPLAY` at Automat's own X11 server, `GDK_BACKEND` removed so a toolkit
 picks its preferred backend — and records the Launch that display servers
 match new windows against. A window mapped by the child is placed next to
-the Command's plate, on the Command's board, and keeps a `Launcher`
+the Program Launcher's plate, on the Program Launcher's board, and keeps a `Launcher`
 connection back to it — the visible cable that also makes the relationship
 survive saves (see `Wayland Client Persistence.md`).
 
 ## stdio streams
 
-The Command exposes two stream ports (`src/stream.hpp`): `stdout` leaves at
+The Program Launcher exposes two stream ports (`src/stream.hpp`): `stdout` leaves at
 the plate's lower left and `stdin` accepts connections at the top edge.
-Connecting one Command's stdout to another's stdin is recipe data, like the
-argv tiles: nothing happens until start. Starting a Command starts the
+Connecting one Program Launcher's stdout to another's stdin is recipe data, like the
+argv tiles: nothing happens until start. Starting a Program Launcher starts the
 stages downstream of it, the way a shell starts every stage of `a | b | c`
 together, because an anonymous pipe needs both ends at spawn. The pipe is
 created with pipe2 and installed through posix_spawn_file_actions; Automat
@@ -113,9 +113,9 @@ SIGPIPE and the exit chips report it (a `SIGPIPE` chip is the normal way a
 pipeline ends early).
 
 A stream port may also connect to a File object (`src/library_file.*`)
-instead of another Command: the head's stdin reads it and the tail's stdout
+instead of another Program Launcher: the head's stdin reads it and the tail's stdout
 writes it, which is shell redirection made visible on the board. At start
-the Command resolves the file object to a concrete descriptor through the
+the Program Launcher resolves the file object to a concrete descriptor through the
 `FdProvider` interface (`src/fd_provider.hpp`) — a fresh open per run, so a
 rerun rebuilds the file the way `>` does, and the file object's append flag
 turns that into `>>`. A failed open aborts the whole launch, the way a shell
@@ -151,7 +151,7 @@ Throughput is deliberately NOT on the pipe. The kernel keeps no
 per-descriptor byte counters; /proc/pid/io wchar counts the whole
 process's writes, so a rate derived from it is a process property and a
 pipe label would misattribute the process's other traffic to this
-connection. Write totals and rates therefore belong on the Command object
+connection. Write totals and rates therefore belong on the Program Launcher object
 itself, beside its pid and exit readouts. Everything is sampled on every
 UI tick, so the meters move at the same rate as the rest of the
 interface.

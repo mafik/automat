@@ -3,7 +3,7 @@
 ## What it is
 
 Automat is an X11 display server as well as a Wayland compositor. Processes started by
-the Command object connect to Automat's X socket, and every top-level window they map
+the Program Launcher object connect to Automat's X socket, and every top-level window they map
 becomes an "X11 Window" object on the board, draggable and deletable like any other
 object. Programs that speak X11 rather than Wayland — which includes most applications
 that need more access than Wayland grants — are thereby composed on the board like
@@ -207,6 +207,6 @@ disconnects or unmaps has its window removed by `Tick`. Persistence reuses the l
 system (`Launches.md`): the argv that mapped a window is saved, and a restored or copied
 window gets a Launch whose client is matched back to it by process id.
 
-The Command object sets both `WAYLAND_DISPLAY` and `DISPLAY` in the environment of the
+The Program Launcher object sets both `WAYLAND_DISPLAY` and `DISPLAY` in the environment of the
 programs it launches, so a child picks whichever protocol it prefers and an X11-only
 program still finds Automat's X socket.

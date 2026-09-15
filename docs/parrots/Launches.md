@@ -2,11 +2,11 @@
 
 ## The problem
 
-Automat starts operating-system programs from several places: the Command
+Automat starts operating-system programs from several places: the Program Launcher
 object runs its argv, restoring a saved board revives the applications that
 were running, and copying a live window starts another instance of its
 program. Each of these produces a child process whose windows must land in
-the right place: next to the Command that started it, or inside the exact
+the right place: next to the Program Launcher that started it, or inside the exact
 window object that was saved or copied. Nothing in POSIX connects a spawned
 process to the windows it produces — and single-instance applications break
 even the obvious process-id association, because the spawned process forwards
@@ -21,9 +21,9 @@ implemented in `src/launcher.hpp` and `src/launcher.cpp`.
 
 Three kinds of objects divide the work:
 
-- **Command** (`src/library_command.*`) is the specification and the
+- **Program Launcher** (`src/library_program_launcher.*`) is the specification and the
   controls: the argv, RUN and STOP, the stdio ports, the exit chip. A
-  pending launch is a Command.
+  pending launch is a Program Launcher.
 - **Launch** (`src/launcher.hpp`) is one running instance: the POSIX child
   (pid, exit status, stream captures) combined with one XDG activation
   sequence (the token). A Launch is created only by actually spawning; an
@@ -37,7 +37,7 @@ Three kinds of objects divide the work:
 A fourth object is anticipated but not implemented: an Application object
 built from a .desktop entry, acting as another launch source with an icon and
 D-Bus activation. `Launch::source` is a generic `WeakPtr<Object>` so that
-source does not have to be a Command.
+source does not have to be a Program Launcher.
 
 ## The Launch record and matching
 
@@ -70,22 +70,22 @@ A launch either targets an existing window or produces new ones:
   every reference other objects hold to it.
 - With no `restoring`, each window the client maps becomes a new window
   object. It records `launch.argv` as its recipe (the argv actually spawned,
-  not the Command's possibly edited-since text), keeps `Ptr<Launch>
+  not the Program Launcher's possibly edited-since text), keeps `Ptr<Launch>
   launched_by`, is inserted into the source's Board with a
   `Location::PlaceBeside` request naming `launch.source`'s Location —
   resolved UI-side from the actual widget shapes, the servers computing no
   coordinates — and receives a Launcher cable to it. This replaced the
-  earlier board scan for a Command whose child pid matched; the launch
+  earlier board scan for a Program Launcher whose child pid matched; the launch
   carries the association directly, and it keeps working after the child
   exits or forwards, which the pid scan could not do.
 
 `launched_by` is also what keeps a launch alive: it stays findable for as
-long as the Command holds it or any window it produced exists, so an
+long as the Program Launcher holds it or any window it produced exists, so an
 application opening another window hours later still associates correctly.
 
-## Command and the launch
+## Program Launcher and the launch
 
-A Command holds a single `Ptr<Launch> launch` — the current run, or the last
+A Program Launcher holds a single `Ptr<Launch> launch` — the current run, or the last
 one after it exits. Re-running replaces it, which is also what bounds the
 capture buffers: one run, one set of buffers, overwritten by the next run.
 The exit chip and the stdout meters read through this launch.
@@ -93,8 +93,9 @@ The exit chip and the stdout meters read through this launch.
 The launch is displayed as an icon: a gear with the pid under it, rotating
 and saturated while the process runs, still and desaturated after it exits.
 One widget draws it everywhere (`LaunchWidget`, `src/launcher.hpp`): the
-Command plate embeds it small, and an extracted launch shows it standalone. The desaturation deliberately changes nothing beyond the
-display: matching does not depend on the launch's state, so a window
+Program Launcher plate embeds it small, and an extracted launch shows it
+standalone. The desaturation deliberately changes nothing beyond the display:
+matching does not depend on the launch's state, so a window
 arriving after the process ended — the nemo forward, a slow application —
 still finds its launch and lands correctly. There is no way to know at exit
 time whether a cleanly-exited process was `ls` being done or a process
@@ -102,12 +103,12 @@ whose forwarded startup continues elsewhere; the design makes the
 distinction unnecessary instead of guessing.
 
 The icon can be dragged off the plate. Dragging extracts the launch
-(`Command::ExtractLaunch`): the Command's slot empties, its running state
+(`ProgramLauncher::ExtractLaunch`): the Program Launcher's slot empties, its running state
 ends without cancelling the child and without scheduling `next`, and the
-launch becomes a board object under the pointer. This is how one Command
+launch becomes a board object under the pointer. This is how one Program Launcher
 runs several instances at once — extract the running one, run again — while
-the Command itself keeps strict one-instance semantics (RUN while running is
-refused; a Timer firing into a busy Command is skipped, which is the safe
+the Program Launcher itself keeps strict one-instance semantics (RUN while running is
+refused; a Timer firing into a busy Program Launcher is skipped, which is the safe
 scheduling default). Deleting a launch that sits on a Board SIGTERMs a
 child that has not exited and has produced no window; a child with a window is terminated
 through the window's own close path instead, and deleting the launch of an
@@ -130,7 +131,7 @@ a bounded ring buffer on the Launch (256 KiB per stream). This is
 deliberately different from inter-command pipes, where Automat holds no
 ends to preserve EOF and SIGPIPE semantics — that rule exists for pipes
 between processes and does not apply when Automat is the consumer. The
-Command's toy shows the tail of the last launch's captures on a paper strip
+Program Launcher's toy shows the tail of the last launch's captures on a paper strip
 under the plate — stdout in ink, stderr in red — so a program's output and
 errors are visible where it ran. Buffers live exactly as long as
 their launch: kept after exit, replaced by the next run, session-bound
@@ -140,20 +141,20 @@ Pipes between pipeline stages are recorded as `Pipe` objects
 (`ReferenceCounted`, not board objects): the writing launch holds the record
 and the record names the reading launch. The pipe's runtime meters — fill and capacity via
 a transient pidfd_getfd of the child's own descriptor, the blocked side via
-/proc — moved from Command onto `Launch::StdoutStats`, since they are
+/proc — moved from Program Launcher onto `Launch::StdoutStats`, since they are
 per-instance truths. The stream cable remains the pipe's visualization.
 
 ## The flows
 
-- **RUN on a Command**: `Command::Run` collects the downstream chain,
+- **RUN on a Program Launcher**: `ProgramLauncher::Run` collects the downstream chain,
   creates the inter-stage pipes and their Pipe records, and calls
   `SpawnStage` per stage, which goes through `Launch::Spawn` with
   `source = the command`.
 - **Restore on load**: `LaunchRestoredWindows` (called at the end of
   `LoadState`) walks the boards once and creates a launch for every
   `ClientWindow` that has a recipe and no client — through the linked
-  Command when one is connected and idle (`Command::RunFor`, so the Command
-  owns the child and STOP works), else directly. There is no pending state
+  Program Launcher when one is connected and idle (`ProgramLauncher::RunFor`,
+  so the launcher owns the child and STOP works), else directly. There is no pending state
   and no per-frame pass: launches are created at load, at copy, and at RUN,
   and nowhere else.
 - **Copy of a live window**: `Clone()` returns a new window of the same

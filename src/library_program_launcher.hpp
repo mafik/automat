@@ -18,26 +18,26 @@ namespace automat::library {
 // that should contain spaces must arrive as whole argv elements instead.
 Vec<Str> SplitWords(StrView line);
 
-// Command holds one program invocation - an executable name plus arguments -
+// ProgramLauncher holds one program invocation - an executable name plus arguments -
 // and runs it as a child process. There is no shell anywhere: `argv` reaches
 // posix_spawnp exactly as stored, so quoting, globs and $variables do not
 // exist. Elements may contain spaces (one element = one argument, always);
 // empty elements are transient editor state, skipped at spawn and save.
-struct Command : Object, Container {
+struct ProgramLauncher : Object, Container {
   mutable std::mutex mutex;  // guards argv and the launch below
   Vec<Str> argv;             // argv[0] is the program
   Ptr<Launch> launch;        // current or last run; replaced by the next run
   bool ever_ran = false;
 
-  DEF_INTERFACE(Command, Runnable, run, "Run")
+  DEF_INTERFACE(ProgramLauncher, Runnable, run, "Run")
   void OnRun(std::unique_ptr<RunTask>& t) { obj->Run(t); }
   DEF_END(run);
 
-  DEF_INTERFACE(Command, LongRunning, running, "Running")
+  DEF_INTERFACE(ProgramLauncher, LongRunning, running, "Running")
   void OnCancel() { obj->Terminate(true); }
   DEF_END(running);
 
-  DEF_INTERFACE(Command, Signal, stop, "Stop")
+  DEF_INTERFACE(ProgramLauncher, Signal, stop, "Stop")
   static constexpr bool kSchedulesNext = false;
   void OnRun(std::unique_ptr<RunTask>&) {
     obj->Terminate();
@@ -45,33 +45,33 @@ struct Command : Object, Container {
   }
   DEF_END(stop);
 
-  DEF_INTERFACE(Command, Text, text, "Command line")
+  DEF_INTERFACE(ProgramLauncher, Text, text, "Command line")
   Str OnGet() { return obj->GetText(); }
   void OnSet(StrView value) { obj->SetText(value); }
   DEF_END(text);
 
-  DEF_INTERFACE(Command, NextArg, next, "Next")
+  DEF_INTERFACE(ProgramLauncher, NextArg, next, "Next")
   DEF_END(next);
 
-  DEF_INTERFACE(Command, StreamArgument, out_stream, "stdout")
+  DEF_INTERFACE(ProgramLauncher, StreamArgument, out_stream, "stdout")
   Str OnFormat() { return "bytes"; }
   StreamStats OnStats() { return obj->StdoutStats(); }
   DEF_END(out_stream);
 
-  DEF_INTERFACE(Command, StreamInput, in_stream, "stdin")
+  DEF_INTERFACE(ProgramLauncher, StreamInput, in_stream, "stdin")
   Str OnFormat() { return "bytes"; }
   DEF_END(in_stream);
 
   INTERFACES(run, running, next, out_stream, in_stream, stop, text);
 
-  Command() = default;
-  Command(const Command& o)
+  ProgramLauncher() = default;
+  ProgramLauncher(const ProgramLauncher& o)
       : Object(o), argv(o.argv), run(o.run), next(o.next), out_stream(o.out_stream) {}
 
-  ~Command() override;
+  ~ProgramLauncher() override;
 
-  StrView Name() const override { return "Command"; }
-  Ptr<Object> Clone() const override { return MAKE_PTR(Command, *this); }
+  StrView Name() const override { return "Program Launcher"; }
+  Ptr<Object> Clone() const override { return MAKE_PTR(ProgramLauncher, *this); }
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 
   std::string GetText() const override;          // argv joined with single spaces
@@ -84,14 +84,14 @@ struct Command : Object, Container {
   // way a shell starts a pipeline. On failure reports the error and leaves
   // `task` alone.
   void Run(std::unique_ptr<RunTask>& task);
-  // Launches this Command's argv with the launch aimed at the given window,
+  // Launches this ProgramLauncher's argv with the launch aimed at the given window,
   // synthesizing the RunTask the way Timer does when it resumes from a save.
   // Returns the launch, or null with `status` filled.
   Ptr<Launch> RunFor(ClientWindow& window, Status& status);
   // Asks the live child to exit (SIGTERM). With `keep_connected`, windows in
   // the connected mode survive; the stop button closes them too.
   void Terminate(bool keep_connected = false);
-  // Takes the launch out of this Command, leaving it free to run again. The
+  // Takes the launch out of this ProgramLauncher, leaving it free to run again. The
   // running state ends without cancelling the child or scheduling `next`.
   Ptr<Launch> ExtractLaunch();
   Container* AsContainer() override { return this; }

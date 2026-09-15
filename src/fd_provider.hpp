@@ -13,7 +13,7 @@ namespace automat {
 struct Object;
 
 // Interface for objects that stand for an openable file. A consumer wiring
-// its descriptors at start (a Command installing stdio) resolves the object
+// its descriptors at start (a ProgramLauncher installing stdio) resolves the object
 // to a concrete file descriptor and owns the result: it installs the
 // descriptor and closes its copy. Resolution is a fresh open on every call,
 // so a rerun rereads or rewrites the file the way a shell redirection does;

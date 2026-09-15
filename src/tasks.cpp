@@ -218,7 +218,7 @@ void ScheduleArgumentTargets(Argument arg) {
     if (auto* s = dyn_cast_if_present<Command::Table>(next.table_ptr)) {
       command = Command(next.object_ptr, s);
     } else if (auto* obj = next.object_ptr) {
-      command = obj->As<Command>();
+      command = obj->Find<Command>();
     }
     if (command) {
       command.ScheduleRun();
@@ -231,7 +231,7 @@ void RunTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("RunTask");
   if (auto s = target.lock()) {
     auto* sig = static_cast<Command::Table*>(command);
-    if (auto lr = s->As<LongRunning>();
+    if (auto lr = s->Find<LongRunning>();
         lr && lr.IsRunning() && sig->while_long_running == Command::kInhibit) {
       return;
     }
@@ -261,7 +261,7 @@ std::string CancelTask::Format() { return f("CancelTask({})", Name(target)); }
 void CancelTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("CancelTask");
   if (auto s = target.lock()) {
-    if (auto lr = s->As<LongRunning>()) {
+    if (auto lr = s->Find<LongRunning>()) {
       lr.Cancel();
     }
   }

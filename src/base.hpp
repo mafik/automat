@@ -162,7 +162,7 @@ struct LongRunning : OnOff {
       struct FullImpl : ImplT {
         bool IsOn() const { return this->IsRunning(); }
         void OnTurnOn() {
-          if (auto r = this->object_ptr->template As<Runnable>()) r.ScheduleRun(*this);
+          if (auto r = this->object_ptr->template Find<Runnable>()) r.ScheduleRun(*this);
         }
         void OnTurnOff() { this->CancelWithoutNotify(); }
       };

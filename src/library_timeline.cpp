@@ -2689,15 +2689,15 @@ void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
   if (timeline->state != Timeline::kPlaying) {
     on = false;
   }
-  if (auto on_off = target.object->As<OnOff>()) {
+  if (auto on_off = target.object->Find<OnOff>()) {
     if (on) {
       on_off.TurnOn();
     } else {
       on_off.TurnOff();
     }
-  } else if (auto lr = target.object->As<LongRunning>(); lr && lr.IsRunning() && !on) {
+  } else if (auto lr = target.object->Find<LongRunning>(); lr && lr.IsRunning() && !on) {
     lr.Cancel();
-  } else if (auto runnable = target.object->As<Runnable>(); runnable && on) {
+  } else if (auto runnable = target.object->Find<Runnable>(); runnable && on) {
     runnable.ScheduleRun();
   } else {
     ERROR << "Target is not runnable!";

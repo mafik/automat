@@ -95,7 +95,7 @@ struct Object : public ReferenceCounted {
 
   // Find the first interface of the given type. Returns a null bound type if not found.
   template <typename T>
-  T As() {
+  T Find() {
     T result;
     Each<T>([&](T t) {
       result = t;

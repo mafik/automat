@@ -198,13 +198,13 @@ Interface ObjectToy::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
   if (dir == S) return ParentLocation();
   if (dir == N) {
     if (HasError(*object)) return Interface(*object, kThisIsFine);
-    return object->As<Runnable>();
+    return object->Find<Runnable>();
   }
   return {};
 }
 
 void Object::Updated(WeakPtr<Object>& updated) {
-  if (auto runnable = As<Runnable>()) {
+  if (auto runnable = Find<Runnable>()) {
     runnable.ScheduleRun();
   }
 }

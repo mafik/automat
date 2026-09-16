@@ -210,8 +210,7 @@ struct HotKeyWidget : ObjectToy {
   HotKeyWidget(ui::Widget* parent, Object& hotkey_obj) : ObjectToy(parent, hotkey_obj) {
     auto hk = LockHotKey();
 
-    power_button.reset(
-        new PowerButton(this, Linked<OnOff>(hk->AcquireWeakPtr(), &HotKey::enabled_tbl)));
+    power_button.reset(new PowerButton(this, hk->enabled.Bind()));
     ctrl_button.reset(new KeyButton(this, "Ctrl", KeyColor(hk->ctrl), kCtrlKeyWidth));
     alt_button.reset(new KeyButton(this, "Alt", KeyColor(hk->alt), kAltKeyWidth));
     shift_button.reset(new KeyButton(this, "Shift", KeyColor(hk->shift), kShiftKeyWidth));

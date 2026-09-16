@@ -100,7 +100,16 @@ struct Object : public ReferenceCounted {
   AtomicCounter monitor = 0;
 
   // Used during initialization & to prevent feedback loops in synchronization.
+  //
+  // While an object is suspended, it should not produce any side-effects.
   bool suspended = false;
+
+  void OnUnsuspend() {}
+
+  void Unsuspend() {
+    suspended = false;
+    OnUnsuspend();
+  }
 
   SpinLock owners_lock;
 

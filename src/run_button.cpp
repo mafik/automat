@@ -13,8 +13,8 @@ using namespace std;
 
 namespace automat::ui {
 
-PowerButton::PowerButton(Widget* parent, Linked<OnOff> target, SkColor4f fg, SkColor4f bg)
-    : ToggleButton(parent), target(std::move(target)) {
+PowerButton::PowerButton(Widget* parent, OnOff target, SkColor4f fg, SkColor4f bg)
+    : ToggleButton(parent), target(target) {
   on = make_unique<ColoredButton>(this, PathFromSVG(kPowerSVG),
                                   ColoredButtonArgs{.fg = bg, .bg = fg});
   off = make_unique<ColoredButton>(this, PathFromSVG(kPowerSVG),

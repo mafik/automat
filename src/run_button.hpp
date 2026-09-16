@@ -12,7 +12,7 @@ namespace automat::ui {
 struct PowerButton : ToggleButton {
   Linked<OnOff> target;
 
-  PowerButton(Widget* parent, Linked<OnOff> target, SkColor4f fg = "#fa2305"_color4f,
+  PowerButton(Widget* parent, OnOff target, SkColor4f fg = "#fa2305"_color4f,
               SkColor4f bg = SkColors::kWhite);
 
   Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;

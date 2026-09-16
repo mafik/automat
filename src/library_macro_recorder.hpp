@@ -9,13 +9,13 @@
 namespace automat::library {
 
 struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
-  DEF_INTERFACE(MacroRecorder, Runnable, runnable, "Run")
-  void OnRun(std::unique_ptr<RunTask>& run_task) { obj->StartRecording(run_task); }
-  DEF_END(runnable);
+  DEF_INTERFACE(MacroRecorder, OnOff, recording, "Recording")
 
-  DEF_INTERFACE(MacroRecorder, LongRunning, long_running, "Running")
-  void OnCancel() { obj->StopRecording(); }
-  DEF_END(long_running);
+  bool IsOn() const { return obj->keylogging != nullptr; }
+  void OnTurnOn() { obj->StartRecording(); }
+  void OnTurnOff() { obj->StopRecording(); }
+
+  DEF_END(recording);
 
   MortalPtr<ui::Keylogging> keylogging;
   MortalPtr<ui::Pointer::Logging> pointer_logging;
@@ -31,13 +31,13 @@ struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
   MacroRecorder();
   MacroRecorder(const MacroRecorder&);
   ~MacroRecorder();
-  void StartRecording(std::unique_ptr<RunTask>&);
+  void StartRecording();
   void StopRecording();
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  INTERFACES(runnable, long_running, timeline)
+  INTERFACES(recording, timeline)
 
   void KeyloggerKeyDown(ui::Key) override;
   void KeyloggerKeyUp(ui::Key) override;

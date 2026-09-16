@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
 
+#include "pointer.hpp"
 #include "sync.hpp"
 
 namespace automat {
@@ -34,6 +35,7 @@ struct OnOff : Syncable {
         OnOff(self.object_ptr, OUTER_PTR(Table, turn_off, self.table_ptr)).TurnOff();
         return std::make_unique<EmptyAction>(pointer);
       };
+      cursor = ui::Cursor::Hand;
     }
 
     template <typename ImplT>

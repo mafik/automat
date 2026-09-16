@@ -83,7 +83,7 @@ void MacroRecorder::timeline_Impl::OnConnect(Interface end) {
   }
   ObjectArgument<Timeline>::Table::DefaultOnConnect(*this, end);
   if (auto timeline = state->target.Lock()) {
-    if (obj->long_running->IsRunning()) {
+    if (obj->recording->IsOn()) {
       timeline->BeginRecording();
     }
   }
@@ -105,7 +105,7 @@ static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
 
 // MacroRecorder static interface definitions
 
-void MacroRecorder::StartRecording(std::unique_ptr<RunTask>& run_task) {
+void MacroRecorder::StartRecording() {
   ZoneScopedN("MacroRecorder");
   if (keylogging == nullptr) {
     auto timeline = FindOrCreateTimeline(*this);
@@ -113,7 +113,6 @@ void MacroRecorder::StartRecording(std::unique_ptr<RunTask>& run_task) {
     audio::Play(embedded::assets_SFX_macro_start_wav);
     root_widget->window->BeginLogging(this, &keylogging, this, &pointer_logging);
   }
-  long_running->BeginLongRunning(std::move(run_task));
 }
 
 void MacroRecorder::StopRecording() {
@@ -360,11 +359,15 @@ bool MacroRecorder::DeserializeKey(ObjectDeserializer& d, StrView key) {
     Status status;
     bool value;
     d.Get(value, status);
-    if (OK(status) && long_running->IsRunning() != value) {
+    if (OK(status) && recording->IsOn() != value) {
       if (value) {
-        runnable->ScheduleRun();
+        (new FunctionTask(AcquireWeakPtr(), [](Object& obj) {
+          cast<MacroRecorder>(obj).StartRecording();
+        }))->Schedule();
       } else {
-        (new CancelTask(AcquireWeakPtr()))->Schedule();
+        (new FunctionTask(AcquireWeakPtr(), [](Object& obj) {
+          cast<MacroRecorder>(obj).StopRecording();
+        }))->Schedule();
       }
     }
     if (!OK(status)) {
@@ -378,10 +381,11 @@ bool MacroRecorder::DeserializeKey(ObjectDeserializer& d, StrView key) {
 // GlassRunButton
 
 struct GlassRunButton : ui::PowerButton {
-  GlassRunButton(ui::Widget* parent, Linked<OnOff> on_off)
-      : ui::PowerButton(parent, std::move(on_off), color::kParrotRed, "#eeeeee"_color4f) {}
+  GlassRunButton(ui::Widget* parent, OnOff on_off)
+      : ui::PowerButton(parent, on_off, color::kParrotRed, "#eeeeee"_color4f) {}
   void PointerEnter(ui::Pointer& p) override {
     ToggleButton::PointerEnter(p);
+
     if (auto locked = target.Lock()) {
       auto& mr = static_cast<MacroRecorder&>(*locked.object_ptr);
       auto& toys = parent->ToyScope();
@@ -413,8 +417,8 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
     auto object = LockObject<MacroRecorder>();
     if (!object) return {};
     switch (static_cast<ui::Dir>(trigger)) {
-      case NE:
-        return Interface(*object, MacroRecorder::long_running_tbl);
+      case N:
+        return object->recording.Bind();
       default:
         return ObjectToy::FindOption(pointer, trigger);
     }
@@ -437,8 +441,7 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
 
   MacroRecorderWidget(ui::Widget* parent, Object& mr_obj) : ObjectToy(parent, mr_obj) {
     if (auto mr = LockMacroRecorder()) {
-      record_button.reset(new GlassRunButton(
-          this, Linked<OnOff>(mr->AcquireWeakPtr(), &MacroRecorder::long_running_tbl)));
+      record_button.reset(new GlassRunButton(this, mr->recording.Bind()));
       record_button->local_to_parent = SkM44::Translate(17.5_mm, 3.2_mm);
       is_recording = mr->keylogging != nullptr;
     }

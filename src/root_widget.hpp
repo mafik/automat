@@ -14,10 +14,13 @@
 #include "deserializer.hpp"
 #include "drag_action.hpp"
 #include "keyboard.hpp"
+#include "library_flip_flop.hpp"
+#include "library_key_presser.hpp"
 #include "library_toolbar.hpp"
 #include "loading_animation.hpp"
 #include "math.hpp"
 #include "mortal.hpp"
+#include "sync.hpp"
 #include "time.hpp"
 #include "widget.hpp"
 #include "window.hpp"
@@ -215,6 +218,11 @@ struct RootWidget final : Widget {
   int drag_action_count = 0;
   bool panning_during_last_frame = false;
   bool inertia = false;
+
+  Ptr<library::KeyPresser> left_ctrl;
+  Ptr<library::FlipFlop> control;
+  Ptr<Gear> control_gear;
+
   std::deque<Vec3> camera_timeline;
   std::deque<time::SteadyPoint> timeline;
 

@@ -217,6 +217,8 @@ struct KeyboardWidget final : Widget {
 
   std::unique_ptr<Action> actions[static_cast<size_t>(AnsiKey::Count)];
 
+  // TODO: clear / suspend (?) actions when window is deactivated
+
   KeyboardWidget(RootWidget&);
   ~KeyboardWidget();
 

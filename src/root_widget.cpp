@@ -23,6 +23,9 @@
 #include "embedded.hpp"
 #include "font.hpp"
 #include "global_resources.hpp"
+#include "key.hpp"
+#include "library_flip_flop.hpp"
+#include "library_key_presser.hpp"
 #include "loading_animation.hpp"
 #include "math.hpp"
 #include "object.hpp"
@@ -135,6 +138,7 @@ void RenderThread(RootWidget& rw, std::stop_token stop_token) {
 RootWidget::RootWidget() : Widget(nullptr), keyboard(*this), zoom_warning(this), black_hole(this) {
   root_widgets.push_back(this);
 }
+
 RootWidget::~RootWidget() {
   if (render_thread.joinable()) {
     render_thread.request_stop();
@@ -180,6 +184,13 @@ void RootWidget::Init() {
   // Started last: the render thread ticks the toolbar and the toy store, so both must be fully
   // built before it exists.
   render_thread = std::jthread(RenderThread, std::ref(*this), stop_source.get_token());
+
+  left_ctrl.Reset(new library::KeyPresser(ui::AnsiKey::ControlLeft));
+  control.Reset(new library::FlipFlop());
+  control_gear.Reset(new Gear());
+
+  control_gear->AddSource(left_ctrl->state.Bind());
+  control_gear->AddSink(control->enabled.Bind());
 }
 
 ui::Tock RootWidget::ZoomWarning::Tick(time::Timer& timer) {

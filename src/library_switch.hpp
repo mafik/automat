@@ -7,10 +7,10 @@
 
 namespace automat::library {
 
-struct FlipFlopController : Object {
+struct LinkedSwitch : Object {
   Linked<OnOff> on_off;
 
-  DEF_INTERFACE(FlipFlopController, Runnable, flip, "Flip")
+  DEF_INTERFACE(LinkedSwitch, Runnable, flip, "Flip")
   void OnRun(std::unique_ptr<RunTask>&) {
     if (auto locked = obj->on_off.Lock()) {
       locked.Toggle();
@@ -20,7 +20,7 @@ struct FlipFlopController : Object {
 
   INTERFACES(flip)
 
-  FlipFlopController(OnOff);
+  LinkedSwitch(OnOff);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
 
@@ -30,14 +30,14 @@ struct FlipFlopController : Object {
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 };
 
-struct FlipFlop : Object {
+struct Switch : Object {
   bool current_state = false;
 
-  DEF_INTERFACE(FlipFlop, Runnable, flip, "Flip")
+  DEF_INTERFACE(Switch, Runnable, flip, "Flip")
   void OnRun(std::unique_ptr<RunTask>&) { obj->enabled->Toggle(); }
   DEF_END(flip);
 
-  DEF_INTERFACE(FlipFlop, OnOff, enabled, "State")
+  DEF_INTERFACE(Switch, OnOff, enabled, "On/Off")
   bool IsOn() const { return obj->current_state; }
   void OnTurnOn() {
     obj->current_state = true;
@@ -51,7 +51,7 @@ struct FlipFlop : Object {
 
   INTERFACES(flip, enabled);
 
-  FlipFlop() = default;
+  Switch() = default;
 
   string_view Name() const override;
   Ptr<Object> Clone() const override;

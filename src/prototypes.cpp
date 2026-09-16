@@ -7,7 +7,6 @@
 #include "library_data_offer.hpp"
 #include "library_ffmpeg.hpp"
 #include "library_file.hpp"
-#include "library_flip_flop.hpp"
 #include "library_gegl.hpp"
 #include "library_gstreamer.hpp"
 #include "library_hotkey.hpp"
@@ -18,6 +17,7 @@
 #include "library_number.hpp"
 #include "library_program_launcher.hpp"
 #include "library_sources.hpp"
+#include "library_switch.hpp"
 // TODO: re-enable TensorFlow once the embedded library stops costing ~400 MB
 // #include "library_tensorflow.hpp"
 #include "library_tesseract_ocr.hpp"
@@ -68,8 +68,8 @@ struct IndexHelper {
 PrototypeLibrary::PrototypeLibrary() {
   IndexHelper index(*this);
 
-  index.Register<FlipFlop>();
-  index.Register<FlipFlopController, HideInToolbar>(OnOff{});
+  index.Register<Switch>();
+  index.Register<LinkedSwitch, HideInToolbar>(OnOff{});
   index.Register<ProgramLauncher, HideInToolbar>();
   index.Register<MacroRecorder>();
   index.Register<Timer>();

@@ -3,7 +3,7 @@
 
 #include "interface.hpp"
 
-#include "library_flip_flop.hpp"
+#include "library_switch.hpp"
 #include "menu.hpp"
 #include "object.hpp"
 #include "object_source.hpp"
@@ -48,7 +48,7 @@ std::unique_ptr<ui::Widget> Interface::MakeIcon(ui::Widget* parent) const {
 
 Ptr<Object> Interface::MakeController() const {
   if (auto on_off = dyn_cast<OnOff>(*this)) {
-    return MAKE_PTR(library::FlipFlopController, cast<OnOff>(*this));
+    return MAKE_PTR(library::LinkedSwitch, cast<OnOff>(*this));
   }
   return nullptr;
 }

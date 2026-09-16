@@ -24,8 +24,8 @@
 #include "font.hpp"
 #include "global_resources.hpp"
 #include "key.hpp"
-#include "library_flip_flop.hpp"
 #include "library_key_presser.hpp"
+#include "library_switch.hpp"
 #include "loading_animation.hpp"
 #include "math.hpp"
 #include "object.hpp"
@@ -186,7 +186,7 @@ void RootWidget::Init() {
   render_thread = std::jthread(RenderThread, std::ref(*this), stop_source.get_token());
 
   left_ctrl.Reset(new library::KeyPresser(ui::AnsiKey::ControlLeft));
-  control.Reset(new library::FlipFlop());
+  control.Reset(new library::Switch());
   control_gear.Reset(new Gear());
 
   control_gear->AddSource(left_ctrl->state.Bind());

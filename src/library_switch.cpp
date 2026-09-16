@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
-#include "library_flip_flop.hpp"
+#include "library_switch.hpp"
 
 #include <include/core/SkBlendMode.h>
 #include <include/core/SkBlurTypes.h>
@@ -27,21 +27,19 @@ using namespace std;
 
 namespace automat::library {
 
-FlipFlopController::FlipFlopController(OnOff on_off) : on_off(on_off) {}
+LinkedSwitch::LinkedSwitch(OnOff on_off) : on_off(on_off) {}
 
-string_view FlipFlopController::Name() const { return "Flip-Flop Controller"; }
+string_view LinkedSwitch::Name() const { return "Linked Switch"; }
 
-Ptr<Object> FlipFlopController::Clone() const {
-  return MAKE_PTR(FlipFlopController, on_off.Lock());
-}
+Ptr<Object> LinkedSwitch::Clone() const { return MAKE_PTR(LinkedSwitch, on_off.Lock()); }
 
-void FlipFlopController::SerializeState(ObjectSerializer& writer) const {
+void LinkedSwitch::SerializeState(ObjectSerializer& writer) const {
   if (auto locked = on_off.Lock()) {
     writer.Key("on_off");
     writer.String(writer.ResolveName(*locked.object_ptr, locked.table_ptr));
   }
 }
-bool FlipFlopController::DeserializeKey(ObjectDeserializer& d, StrView key) {
+bool LinkedSwitch::DeserializeKey(ObjectDeserializer& d, StrView key) {
   if (key == "on_off") {
     Str name;
     Status status;
@@ -56,20 +54,20 @@ bool FlipFlopController::DeserializeKey(ObjectDeserializer& d, StrView key) {
   return false;
 }
 
-string_view FlipFlop::Name() const { return "Flip-Flop"; }
+string_view Switch::Name() const { return "Switch"; }
 
-Ptr<Object> FlipFlop::Clone() const {
-  auto ret = MAKE_PTR(FlipFlop);
+Ptr<Object> Switch::Clone() const {
+  auto ret = MAKE_PTR(Switch);
   ret->current_state = current_state;
   return ret;
 }
 
-void FlipFlop::SerializeState(ObjectSerializer& writer) const {
+void Switch::SerializeState(ObjectSerializer& writer) const {
   writer.Key("on");
   writer.Bool(current_state);
 }
 
-bool FlipFlop::DeserializeKey(ObjectDeserializer& d, StrView key) {
+bool Switch::DeserializeKey(ObjectDeserializer& d, StrView key) {
   if (key == "on") {
     Status status;
     d.Get(current_state, status);
@@ -81,12 +79,13 @@ bool FlipFlop::DeserializeKey(ObjectDeserializer& d, StrView key) {
   return false;
 }
 
-struct FlipFlopWidgetBase : ObjectToy {
+struct SwitchToy : ObjectToy {
   MiniMenuMode MenuMode() override { return MODE_4_DIR; }
-  float light = 0;
-  bool current_state = false;
   std::unique_ptr<ui::Rocker> rocker;
+  Str label = "?"s;
+  float light = 0;
   animation::SpringV2<float> iconification;
+  uint32_t observed_target_monitor = 0;
 
   constexpr static SkColor4f kBgLight = "#216778"_color4f;
   constexpr static SkColor4f kBgDark = "#164450"_color4f;
@@ -101,9 +100,14 @@ struct FlipFlopWidgetBase : ObjectToy {
   // The raised part of the panel that the rocker is mounted in.
   constexpr static auto kSocketRRect = ui::Rocker::kBounds.Outset(1_mm);
 
-  FlipFlopWidgetBase(ui::Widget* parent, Object& object, OnOff on_off) : ObjectToy(parent, object) {
-    rocker = std::make_unique<ui::Rocker>(this);
+  SwitchToy(ui::Widget* parent, Object& object, Linked<OnOff> on_off)
+      : ObjectToy(parent, object), rocker(std::make_unique<ui::Rocker>(this)) {
     rocker->target = on_off;
+  }
+
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    if (trigger == ui::Dir::E) return rocker->target.Lock();
+    return ObjectToy::FindOption(pointer, trigger);
   }
 
   float GetBaseScale() const override { return 1.0f; }
@@ -111,15 +115,29 @@ struct FlipFlopWidgetBase : ObjectToy {
   RRect CoarseBounds() const override { return Lerp(kFullBounds, kIconBounds, iconification); }
 
   Tock Tick(time::Timer& timer) override {
+    if (owner.IsExpired()) MarkDead(timer.now);
+    if (auto on_off = rocker->target.Lock()) {
+      rocker->SetOn(on_off.IsOn());
+      label = on_off.Name();
+    }
     Tock tock;
-    tock.drawing |= animation::LinearApproach(current_state, timer.d, 10, light);
+    tock.drawing |= animation::LinearApproach(rocker->on, timer.d, 10, light);
     if (last_tick == time::SteadyPoint::min()) {
       iconification = iconified ? 1.f : 0.f;
     }
     tock.shaping |= iconification.SineTowards(iconified ? 1.f : 0.f, timer.d, 0.4);
-    rocker->SetOn(current_state);
     rocker->alpha = 1 - iconification;
     return tock;
+  }
+
+  void OnPoll(time::Timer& timer) override {
+    auto target = rocker->target.Unsafe();
+    if (!target) return;
+    uint32_t current = target.object_ptr->monitor.load(std::memory_order_relaxed);
+    if (current != observed_target_monitor) {
+      observed_target_monitor = current;
+      WakeAnimationAt(timer.last);
+    }
   }
 
   static inline RasterPatch bg_patch;
@@ -128,15 +146,11 @@ struct FlipFlopWidgetBase : ObjectToy {
   static inline RasterPatch light_on_patch;
   static inline RasterPatch light_glow_patch;
 
-  virtual StrView Label() const = 0;
-
   void Draw(SkCanvas& canvas) const override {
     auto bounds = CoarseBounds();
     auto& flat = kFlatRRect.rect;
-    float expansion = 1.f - iconification;
     SkPoint light_center = {0, (flat.top + kSocketRRect.rect.top) / 2};
     SkPoint ic_light_center = {0, 0_mm};
-    auto ic_light_vec = ic_light_center - light_center;
     float light_radius = 2_mm;
 
     SkPaint flat_paint;
@@ -220,10 +234,6 @@ struct FlipFlopWidgetBase : ObjectToy {
                 SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, light_radius / 3));
             canvas.drawCircle(ic_light_center, light_radius * 1.3, inset_paint);
 
-            SkPathBuilder clip_builder(shape);
-            clip_builder.addRRect(kSocketRRect);
-            clip_builder.setFillType(SkPathFillType::kEvenOdd);
-
             return SkPath::RRect(kIconBounds);
           },
           &ic_paint);
@@ -298,7 +308,6 @@ struct FlipFlopWidgetBase : ObjectToy {
     SkPaint label_paint;
     label_paint.setColor(SK_ColorWHITE);
     label_paint.setAlphaf(0.9f);
-    auto label = Label();
     auto label_w = font->MeasureText(label);
     // TODO: text sizing is kind of crappy now as very short text could cause glitches -  fix it
     float label_scale = min(1.0f, bounds.rect.Width() * 0.9f / label_w);
@@ -315,87 +324,11 @@ struct FlipFlopWidgetBase : ObjectToy {
   bool CenteredAtZero() const override { return true; }
 };
 
-struct FlipFlopWidget : FlipFlopWidgetBase {
-  FlipFlopWidget(ui::Widget* parent, FlipFlop& object)
-      : FlipFlopWidgetBase(parent, object, object.enabled.Bind()) {}
-
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    using enum ui::Dir;
-    auto object = LockObject<FlipFlop>();
-    if (!object) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case E:
-        return object->enabled.Bind();
-      default:
-        return ObjectToy::FindOption(pointer, trigger);
-    }
-  }
-
-  StrView Label() const override { return "On/Off"sv; }
-
-  Tock Tick(time::Timer& timer) override {
-    if (auto ptr = LockObject<FlipFlop>()) {
-      current_state = ptr->current_state;
-    } else {
-      MarkDead(timer.now);
-    }
-    return FlipFlopWidgetBase::Tick(timer);
-  }
-};
-
-struct FlipFlopControllerWidget : FlipFlopWidgetBase {
-  FlipFlopControllerWidget(ui::Widget* parent, FlipFlopController& object)
-      : FlipFlopWidgetBase(parent, object, object.on_off.Lock()) {}
-
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    using enum ui::Dir;
-    auto object = LockObject<FlipFlopController>();
-    if (!object) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case E:
-        return object->on_off.Lock();
-      default:
-        return ObjectToy::FindOption(pointer, trigger);
-    }
-  }
-
-  Str label = "?"s;
-
-  StrView Label() const override { return label; }
-
-  Tock Tick(time::Timer& timer) override {
-    if (auto ptr = LockObject<FlipFlopController>()) {
-      if (auto locked = ptr->on_off.Lock()) {
-        current_state = locked.IsOn();
-        label = locked.Name();
-      }
-    } else {
-      MarkDead(timer.now);
-    }
-    return FlipFlopWidgetBase::Tick(timer);
-  }
-
-  uint32_t observed_on_off_monitor;
-
-  void OnPoll(time::Timer& timer) override {
-    if (IsAnimating()) return;
-    uint32_t current = rocker->target.Unsafe().object_ptr->monitor.load(std::memory_order_relaxed);
-    if (current != observed_on_off_monitor) {
-      observed_on_off_monitor = current;
-      WakeAnimationAt(timer.last);
-      OnWake();
-    } else if (rocker->target.IsExpired()) {
-      rocker->target.Reset();
-    }
-    FlipFlopWidgetBase::OnPoll(timer);
-  }
-};
-
-std::unique_ptr<ObjectToy> FlipFlopController::MakeToy(ui::Widget* parent) {
-  return std::make_unique<FlipFlopControllerWidget>(parent, *this);
+std::unique_ptr<ObjectToy> LinkedSwitch::MakeToy(ui::Widget* parent) {
+  return std::make_unique<SwitchToy>(parent, *this, on_off);
 }
 
-std::unique_ptr<ObjectToy> FlipFlop::MakeToy(ui::Widget* parent) {
-  return std::make_unique<FlipFlopWidget>(parent, *this);
+std::unique_ptr<ObjectToy> Switch::MakeToy(ui::Widget* parent) {
+  return std::make_unique<SwitchToy>(parent, *this, enabled.Bind());
 }
 }  // namespace automat::library

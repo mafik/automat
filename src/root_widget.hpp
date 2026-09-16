@@ -14,8 +14,8 @@
 #include "deserializer.hpp"
 #include "drag_action.hpp"
 #include "keyboard.hpp"
-#include "library_flip_flop.hpp"
 #include "library_key_presser.hpp"
+#include "library_switch.hpp"
 #include "library_toolbar.hpp"
 #include "loading_animation.hpp"
 #include "math.hpp"
@@ -220,7 +220,7 @@ struct RootWidget final : Widget {
   bool inertia = false;
 
   Ptr<library::KeyPresser> left_ctrl;
-  Ptr<library::FlipFlop> control;
+  Ptr<library::Switch> control;
   Ptr<Gear> control_gear;
 
   std::deque<Vec3> camera_timeline;

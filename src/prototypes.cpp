@@ -69,6 +69,7 @@ PrototypeLibrary::PrototypeLibrary() {
   IndexHelper index(*this);
 
   index.Register<FlipFlop>();
+  index.Register<FlipFlopController, HideInToolbar>(OnOff{});
   index.Register<ProgramLauncher, HideInToolbar>();
   index.Register<MacroRecorder>();
   index.Register<Timer>();

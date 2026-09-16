@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
 
+#include "command.hpp"
 #include "pointer.hpp"
 #include "sync.hpp"
 
@@ -17,14 +18,25 @@ struct OnOff : Syncable {
     void (*on_turn_on)(OnOff) = nullptr;
     void (*on_turn_off)(OnOff) = nullptr;
 
-    Interface::Table turn_on;
-    Interface::Table turn_off;
+    Command::Table turn_on;
+    Command::Table turn_off;
 
     static bool DefaultCanSync(Syncable, Syncable other);
 
     constexpr Table(StrView name, Kind kind = Interface::kOnOff)
-        : Syncable::Table(name, kind), turn_on(kind, "Turn on"), turn_off(kind, "Turn off") {
+        : Syncable::Table(name, kind), turn_on("Turn on"), turn_off("Turn off") {
       can_sync = &DefaultCanSync;
+      find_option = [](Interface self, ui::Dir dir) -> Interface {
+        if (dir != ui::Dir::N) return Syncable::Table::DefaultFindOption(self, dir);
+        auto on_off = cast<OnOff>(self);
+        return Interface(self.object_ptr,
+                         on_off.IsOn() ? &on_off.table->turn_off : &on_off.table->turn_on);
+      };
+      activate = [](Interface self, ui::Pointer& pointer,
+                    automat::Toy*) -> std::unique_ptr<Action> {
+        cast<OnOff>(self).Toggle();
+        return std::make_unique<EmptyAction>(pointer);
+      };
       turn_on.activate = [](Interface self, ui::Pointer& pointer,
                             automat::Toy*) -> std::unique_ptr<Action> {
         OnOff(self.object_ptr, OUTER_PTR(Table, turn_on, self.table_ptr)).TurnOn();

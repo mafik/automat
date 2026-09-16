@@ -14,6 +14,7 @@
 #include "casting.hpp"
 #include "error.hpp"
 #include "error_recovery.hpp"
+#include "long_running.hpp"
 #include "memory.hpp"
 #include "source_location.hpp"
 #include "thread_name.hpp"

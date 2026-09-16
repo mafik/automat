@@ -9,7 +9,7 @@
 
 namespace automat {
 
-std::unique_ptr<Action> MakeMenuAction(ui::Pointer&, OptionsProvider::MiniMenuMode,
+std::unique_ptr<Action> MakeMenuAction(ui::Pointer&, MiniMenuMode,
                                        const Interface (&options)[ui::kDirCount], Toy* toy);
 
 }  // namespace automat

@@ -21,7 +21,6 @@
 #include "global_resources.hpp"
 #include "log.hpp"
 #include "math.hpp"
-#include "menu.hpp"
 #include "root_widget.hpp"
 #include "status.hpp"
 #include "textures.hpp"
@@ -103,22 +102,18 @@ Locked<Interface> Syncable::Table::DefaultFind(Argument self) {
 
 void Syncable::Unsync() { state->Unsync(*object_ptr, *table); }
 
-std::unique_ptr<Action> Syncable::Table::MenuActivate(Interface self, ui::Pointer& pointer,
-                                                      automat::Toy* toy) {
+Interface Syncable::Table::DefaultFindOption(Interface self, ui::Dir dir) {
   using enum ui::Dir;
   auto* table = static_cast<Table*>(self.table_ptr);
-  Syncable syncable(self.object_ptr, table);
-  Interface options[ui::kDirCount];
-  if (auto* on_off = dyn_cast<OnOff::Table>(table)) {
-    bool on = OnOff(self.object_ptr, on_off).IsOn();
-    options[static_cast<int>(N)] =
-        Interface(self.object_ptr, on ? &on_off->turn_off : &on_off->turn_on);
+  switch (dir) {
+    case E:
+      return Interface(self.object_ptr, &table->sync);
+    case W:
+      if (Syncable(self.object_ptr, table).state->gear_weak.IsExpired()) return {};
+      return Interface(self.object_ptr, &table->unsync);
+    default:
+      return {};
   }
-  options[static_cast<int>(E)] = Interface(self.object_ptr, &table->sync);
-  if (!syncable.state->gear_weak.IsExpired()) {
-    options[static_cast<int>(W)] = Interface(self.object_ptr, &table->unsync);
-  }
-  return MakeMenuAction(pointer, OptionsProvider::MODE_4_DIR, options, toy);
 }
 
 std::unique_ptr<Action> Syncable::Table::SyncActivate(Interface self, ui::Pointer& pointer,

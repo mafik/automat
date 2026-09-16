@@ -6,6 +6,7 @@
 
 #include "base.hpp"
 #include "launcher.hpp"
+#include "long_running.hpp"
 #include "status.hpp"
 #include "str.hpp"
 #include "stream.hpp"
@@ -24,8 +25,8 @@ Vec<Str> SplitWords(StrView line);
 // exist. Elements may contain spaces (one element = one argument, always);
 // empty elements are transient editor state, skipped at spawn and save.
 struct ProgramLauncher : Object, Container {
-  mutable std::mutex mutex;  // guards argv and the launch below
-  Vec<Str> argv;             // argv[0] is the program
+  mutable std::mutex mutex;     // guards argv and the launch below
+  Vec<Str> argv;                // argv[0] is the program
   Owned<Launch> launch{*this};  // current or last run; replaced by the next run
   bool ever_ran = false;
 

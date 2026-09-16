@@ -580,20 +580,26 @@ constinit Command::Table kDragCamera = [] {
   return t;
 }();
 
-constinit Command::Table kCameraMenu = MenuTable<Command::Table>(
-    "Camera",
-    [](Interface, Pointer& pointer, Toy*) { return pointer.root_widget.OpenMenu(pointer); });
+constinit Interface::Table kCameraMenu =
+    MenuTable("Camera", MODE_8_DIR, [](Interface self, Dir dir) -> Interface {
+      using enum Dir;
+      auto& camera = *self.object_ptr;
+      if (dir == N) return Interface(camera, Camera::up_tbl);
+      if (dir == S) return Interface(camera, Camera::down_tbl);
+      if (dir == W) return Interface(camera, Camera::left_tbl);
+      if (dir == E) return Interface(camera, Camera::right_tbl);
+      return {};
+    });
 
 Interface RootWidget::FindOption(Pointer&, ActionTrigger trigger) {
-  using enum Dir;
   if (trigger == PointerButton::Middle) return Interface(*camera, kDragCamera);
   AnsiKey key = trigger;
+  if (key == AnsiKey::W) return Interface(*camera, Camera::up_tbl);
+  if (key == AnsiKey::S) return Interface(*camera, Camera::down_tbl);
+  if (key == AnsiKey::A) return Interface(*camera, Camera::left_tbl);
+  if (key == AnsiKey::D) return Interface(*camera, Camera::right_tbl);
   Dir dir = trigger;
-  if (key == AnsiKey::W || dir == N) return Interface(*camera, Camera::up_tbl);
-  if (key == AnsiKey::S || dir == S) return Interface(*camera, Camera::down_tbl);
-  if (key == AnsiKey::A || dir == W) return Interface(*camera, Camera::left_tbl);
-  if (key == AnsiKey::D || dir == E) return Interface(*camera, Camera::right_tbl);
-  return {};
+  return Interface(*camera, kCameraMenu).FindOption(dir);
 }
 
 void RootWidget::Zoom(float delta) {

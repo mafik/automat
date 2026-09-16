@@ -4,6 +4,7 @@
 
 #include "base.hpp"
 #include "color.hpp"
+#include "long_running.hpp"
 #include "sync.hpp"
 #include "time.hpp"
 #include "timer_thread.hpp"

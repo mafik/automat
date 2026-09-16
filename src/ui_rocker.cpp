@@ -36,8 +36,7 @@ Interface Rocker::FindOption(Pointer&, ActionTrigger trigger) {
   if (trigger != PointerButton::Left) return {};
   auto on_off = target.Lock();
   if (!on_off) return {};
-  return Interface(on_off.object_ptr,
-                   on_off.IsOn() ? &on_off.table->turn_off : &on_off.table->turn_on);
+  return on_off;
 }
 
 void Rocker::SetOn(bool value) {

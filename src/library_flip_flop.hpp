@@ -7,6 +7,29 @@
 
 namespace automat::library {
 
+struct FlipFlopController : Object {
+  Linked<OnOff> on_off;
+
+  DEF_INTERFACE(FlipFlopController, Runnable, flip, "Flip")
+  void OnRun(std::unique_ptr<RunTask>&) {
+    if (auto locked = obj->on_off.Lock()) {
+      locked.Toggle();
+    }
+  }
+  DEF_END(flip);
+
+  INTERFACES(flip)
+
+  FlipFlopController(OnOff);
+  string_view Name() const override;
+  Ptr<Object> Clone() const override;
+
+  void SerializeState(ObjectSerializer& writer) const override;
+  bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
+
+  std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
+};
+
 struct FlipFlop : Object {
   bool current_state = false;
 
@@ -26,12 +49,12 @@ struct FlipFlop : Object {
   }
   DEF_END(enabled);
 
-  INTERFACES(flip, enabled)
+  INTERFACES(flip, enabled);
 
   FlipFlop() = default;
+
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  void SetKey(ui::AnsiKey);
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

@@ -30,7 +30,6 @@ PersistentImage kSkyBox = PersistentImage::MakeFromAsset(embedded::assets_skybox
 constexpr float kMenuSize = 2_cm;
 
 using ui::kDirCount;
-using enum OptionsProvider::MiniMenuMode;
 
 constexpr bool kValidSlots[5][kDirCount] = {
     [MODE_8_DIR] = {true, true, true, true, true, true, true, true},
@@ -40,7 +39,7 @@ constexpr bool kValidSlots[5][kDirCount] = {
     [MODE_1_DIR] = {false, false, false, false, false, false, true, false},
 };
 
-static ui::Dir SinCosToDir(OptionsProvider::MiniMenuMode mode, SinCos sc) {
+static ui::Dir SinCosToDir(MiniMenuMode mode, SinCos sc) {
   using enum ui::Dir;
   float angle = sc.ToDegreesPositive();
   switch (mode) {
@@ -80,7 +79,7 @@ static ui::Dir SinCosToDir(OptionsProvider::MiniMenuMode mode, SinCos sc) {
   }
 }
 
-static SinCos DirToSinCos(OptionsProvider::MiniMenuMode mode, ui::Dir dir) {
+static SinCos DirToSinCos(MiniMenuMode mode, ui::Dir dir) {
   using enum ui::Dir;
   if (mode == MODE_6_DIR) {
     switch (dir) {
@@ -103,7 +102,7 @@ static SinCos DirToSinCos(OptionsProvider::MiniMenuMode mode, ui::Dir dir) {
   return SinCos::FromDegrees(static_cast<int>(dir) * 45.f);
 }
 
-static int SlotCount(OptionsProvider::MiniMenuMode mode) {
+static int SlotCount(MiniMenuMode mode) {
   switch (mode) {
     case MODE_8_DIR:
       return 8;
@@ -191,6 +190,10 @@ std::unique_ptr<Action> Menu::Activate(int dir, ui::Pointer& pointer) {
   if (!option.has_object()) return nullptr;
   Toy* source = dynamic_cast<Toy*>(icons[dir].get());
   if (source == nullptr && action) source = action->toy.Get();
+  if (pointer.root_widget.control->current_state) {
+    if (auto drag = option.DragNewController(pointer, *icons[dir])) return drag;
+  }
+  if (auto sub_menu = option.OpenMenu(pointer, source)) return sub_menu;
   return option.Activate(pointer, source);
 }
 
@@ -289,21 +292,19 @@ ui::Tock Menu::Tick(time::Timer& timer) {
   return Tock::Drawing;
 }
 
-std::unique_ptr<Action> OptionsProvider::TriggerActivate(ui::Pointer& pointer,
-                                                         ui::ActionTrigger trigger) {
-  // TODO: Closest<Toy> is very strange here. OptionsProvider shouldn't have to depend on its
-  // parents!
-  Toy* toy = ui::Closest<Toy>(static_cast<ui::Widget&>(*this));
-  Interface option = FindOption(pointer, trigger);
-  if (!option.has_object()) return nullptr;
-  return option.Activate(pointer, toy);
-}
-
-std::unique_ptr<Action> MakeMenuAction(ui::Pointer& pointer, OptionsProvider::MiniMenuMode mode,
+std::unique_ptr<Action> MakeMenuAction(ui::Pointer& pointer, MiniMenuMode mode,
                                        const Interface (&options)[kDirCount], Toy* toy) {
+  Interface valid[kDirCount];
+  bool found = false;
+  for (int i = 0; i < kDirCount; ++i) {
+    if (!kValidSlots[mode][i]) continue;
+    valid[i] = options[i];
+    found |= options[i].has_object();
+  }
+  if (!found) return nullptr;
   auto action = std::make_unique<MenuAction>(pointer);
   action->toy = toy;
-  action->menu_widget = std::make_unique<Menu>(pointer.GetWidget(), mode, options, action.get());
+  action->menu_widget = std::make_unique<Menu>(pointer.GetWidget(), mode, valid, action.get());
   return action;
 }
 
@@ -311,16 +312,11 @@ std::unique_ptr<Action> OptionsProvider::OpenMenu(ui::Pointer& pointer) {
   // TODO: Closest<Toy> is very strange here. OptionsProvider shouldn't have to depend on its
   // parents!
   Toy* toy = ui::Closest<Toy>(static_cast<ui::Widget&>(*this));
-  auto mode = MenuMode();
   Interface options[kDirCount];
-  bool found = false;
   for (int i = 0; i < kDirCount; ++i) {
-    if (!kValidSlots[mode][i]) continue;
     options[i] = FindOption(pointer, static_cast<ui::Dir>(i));
-    found |= options[i].has_object();
   }
-  if (!found) return nullptr;
-  return MakeMenuAction(pointer, mode, options, toy);
+  return MakeMenuAction(pointer, MenuMode(), options, toy);
 }
 
 }  // namespace automat

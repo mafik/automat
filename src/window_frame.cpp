@@ -62,17 +62,22 @@ constinit Command::Table kDecorationClientSide = [] {
   return t;
 }();
 
-std::unique_ptr<Action> OpenDecorationMenu(Interface self, ui::Pointer& pointer, Toy* toy) {
+Interface DecorationOption(Interface self, ui::Dir dir) {
   using enum ui::Dir;
-  Interface options[ui::kDirCount];
-  options[static_cast<int>(S)] = Interface(self.object_ptr, &kDecorationAuto);
-  options[static_cast<int>(W)] = Interface(self.object_ptr, &kDecorationServerSide);
-  options[static_cast<int>(E)] = Interface(self.object_ptr, &kDecorationClientSide);
-  return MakeMenuAction(pointer, OptionsProvider::MODE_4_DIR, options, toy);
+  switch (dir) {
+    case S:
+      return Interface(self.object_ptr, &kDecorationAuto);
+    case W:
+      return Interface(self.object_ptr, &kDecorationServerSide);
+    case E:
+      return Interface(self.object_ptr, &kDecorationClientSide);
+    default:
+      return {};
+  }
 }
 
-constinit Command::Table kDecorationMenu =
-    MenuTable<Command::Table>("Decoration...", &OpenDecorationMenu);
+constinit Interface::Table kDecorationMenu =
+    MenuTable("Decoration...", MODE_4_DIR, &DecorationOption);
 
 constinit Command::Table kClientPress = [] {
   Command::Table t("Press");

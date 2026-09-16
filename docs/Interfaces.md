@@ -66,8 +66,8 @@ The implementation of the interface (called Impl) should be located between the 
 Interfaces are exposed to the user as "Options":
 
 - `Widget::FindOption` - which allows a Widget to map keyboard keys, mouse buttons & menu directions to different interfaces
-- `Interface::Table::{activate,cursor,make_icon}` - which an interface can customize to control its menu appearance & behavior when activated by a user
-- TODO: Option Objects - the idea is to create a distinct object that will be able to control a given interface (for example FlipFlop will be able to connect to OnOff interfaces)
+- `Interface::Table::{activate,cursor,make_icon,find_option,menu_mode}` - which an interface can customize to control its menu appearance & behavior when activated by a user
+- Controllers - special objects that can offer finer control over a linked interface
 
 ## UI update granularity
 

@@ -6,6 +6,7 @@
 #include <memory>
 
 #include "base.hpp"
+#include "long_running.hpp"
 #include "pointer.hpp"
 #include "time.hpp"
 #include "timer_thread.hpp"

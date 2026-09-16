@@ -114,10 +114,8 @@ Str ToStr(ActionTrigger);
 }  // namespace ui
 
 struct OptionsProvider {
-  enum MiniMenuMode { MODE_8_DIR, MODE_6_DIR, MODE_4_DIR, MODE_2_DIR, MODE_1_DIR };
   virtual MiniMenuMode MenuMode() { return MODE_8_DIR; }
   virtual Interface FindOption(ui::Pointer&, ui::ActionTrigger) { return {}; }
-  std::unique_ptr<Action> TriggerActivate(ui::Pointer&, ui::ActionTrigger);
   std::unique_ptr<Action> OpenMenu(ui::Pointer&);
 };
 }  // namespace automat

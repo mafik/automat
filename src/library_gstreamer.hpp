@@ -12,6 +12,7 @@
 
 #include "base.hpp"
 #include "image_provider.hpp"
+#include "long_running.hpp"
 #include "status.hpp"
 #include "str.hpp"
 #include "stream.hpp"

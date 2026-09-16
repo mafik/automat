@@ -84,7 +84,7 @@ struct Camera : Object {
 };
 
 extern Command::Table kDragCamera;
-extern Command::Table kCameraMenu;
+extern Interface::Table kCameraMenu;
 
 struct RootWidget final : Widget {
   RootWidget();

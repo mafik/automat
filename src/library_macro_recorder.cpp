@@ -112,6 +112,7 @@ void MacroRecorder::StartRecording() {
     timeline->BeginRecording();
     audio::Play(embedded::assets_SFX_macro_start_wav);
     root_widget->window->BeginLogging(this, &keylogging, this, &pointer_logging);
+    WakeToys();
   }
 }
 
@@ -126,6 +127,7 @@ void MacroRecorder::StopRecording() {
   if (pointer_logging) {
     pointer_logging->Release();
   }
+  WakeToys();
 }
 
 // MacroRecorder Object methods

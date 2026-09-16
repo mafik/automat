@@ -27,8 +27,7 @@ Interface PowerButton::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
   if (trigger != PointerButton::Left) return {};
   auto on_off = target.Lock();
   if (!on_off) return {};
-  return Interface(on_off.object_ptr,
-                   on_off.IsOn() ? &on_off.table->turn_off : &on_off.table->turn_on);
+  return on_off;
 }
 bool PowerButton::Filled() const {
   if (auto on_off = target.Lock()) {

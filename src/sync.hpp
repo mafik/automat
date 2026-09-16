@@ -5,6 +5,7 @@
 #include <shared_mutex>
 
 #include "argument.hpp"
+#include "command.hpp"
 #include "object.hpp"
 #include "ptr.hpp"
 
@@ -25,25 +26,26 @@ struct Syncable : Argument {
     void (*on_sync)(Syncable) = nullptr;
     void (*on_unsync)(Syncable) = nullptr;
 
-    Interface::Table sync;
-    Interface::Table unsync;
+    Command::Table sync;
+    Command::Table unsync;
 
     static void DefaultCanConnect(Argument self, Interface end, Status& status);
     static void DefaultOnConnect(Argument self, Interface end);
     static Locked<Interface> DefaultFind(Argument self);
-    static std::unique_ptr<Action> MenuActivate(Interface, ui::Pointer&, automat::Toy*);
+    static Interface DefaultFindOption(Interface self, ui::Dir);
     static std::unique_ptr<Action> SyncActivate(Interface, ui::Pointer&, automat::Toy*);
     static std::unique_ptr<Action> UnsyncActivate(Interface, ui::Pointer&, automat::Toy*);
 
     constexpr Table(StrView name, Kind kind = Interface::kSyncable)
-        : Argument::Table(name, kind), sync(kind, "Sync"), unsync(kind, "Unsync") {
+        : Argument::Table(name, kind), sync("Sync"), unsync("Unsync") {
       style = Style::Belt;
       visible_when_disconnected = false;
       can_connect = &DefaultCanConnect;
       on_connect = &DefaultOnConnect;
       find = &DefaultFind;
       make_icon = &Interface::Table::DefaultMakeIcon;
-      activate = &MenuActivate;
+      menu_mode = MODE_4_DIR;
+      find_option = &DefaultFindOption;
       sync.activate = &SyncActivate;
       unsync.activate = &UnsyncActivate;
     }

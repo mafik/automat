@@ -7,7 +7,6 @@
 
 #include <include/core/SkCanvas.h>
 
-#include "menu.hpp"
 #include "object_source.hpp"
 #include "prototypes.hpp"
 #include "ui_beta.hpp"
@@ -24,41 +23,54 @@ Interface Proto(StrView name) {
   return proto ? Interface(*proto, kMakeObject) : Interface();
 }
 
-std::unique_ptr<Action> OpenFfmpegMenu(Interface, ui::Pointer& pointer, Toy* toy) {
+Interface FfmpegOption(Interface, ui::Dir dir) {
   using enum ui::Dir;
-  Interface options[ui::kDirCount];
-  options[static_cast<int>(N)] = Proto("avformat");
-  options[static_cast<int>(S)] = Proto("avcodec");
-  return MakeMenuAction(pointer, OptionsProvider::MODE_2_DIR, options, toy);
+  switch (dir) {
+    case N:
+      return Proto("avformat");
+    case S:
+      return Proto("avcodec");
+    default:
+      return {};
+  }
 }
 
-std::unique_ptr<Action> OpenTensorFlowMenu(Interface, ui::Pointer& pointer, Toy* toy) {
+Interface TensorFlowOption(Interface, ui::Dir dir) {
   using enum ui::Dir;
-  Interface options[ui::kDirCount];
-  options[static_cast<int>(N)] = Proto("tf:tensor");
-  options[static_cast<int>(S)] = Proto("Square");
-  return MakeMenuAction(pointer, OptionsProvider::MODE_2_DIR, options, toy);
+  switch (dir) {
+    case N:
+      return Proto("tf:tensor");
+    case S:
+      return Proto("Square");
+    default:
+      return {};
+  }
 }
 
-constinit ObjectSource::Table kFfmpegMenu =
-    MenuTable<ObjectSource::Table>("FFmpeg", &OpenFfmpegMenu);
-constinit ObjectSource::Table kTensorFlowMenu =
-    MenuTable<ObjectSource::Table>("TensorFlow", &OpenTensorFlowMenu);
+constinit Interface::Table kFfmpegMenu = MenuTable("FFmpeg", MODE_2_DIR, &FfmpegOption);
+constinit Interface::Table kTensorFlowMenu = MenuTable("TensorFlow", MODE_2_DIR, &TensorFlowOption);
 
-std::unique_ptr<Action> OpenPipelinesMenu(Interface self, ui::Pointer& pointer, Toy* toy) {
+Interface PipelinesOption(Interface self, ui::Dir dir) {
   using enum ui::Dir;
-  Interface options[ui::kDirCount];
-  options[static_cast<int>(NW)] = Proto("GStreamer");
-  options[static_cast<int>(N)] = Interface(self.object_ptr, &kFfmpegMenu);
-  options[static_cast<int>(NE)] = Interface(self.object_ptr, &kTensorFlowMenu);
-  options[static_cast<int>(SW)] = Proto("GEGL");
-  options[static_cast<int>(SE)] = Proto("PipeWire");
-  options[static_cast<int>(S)] = Proto("pipewire:node");
-  return MakeMenuAction(pointer, OptionsProvider::MODE_8_DIR, options, toy);
+  switch (dir) {
+    case NW:
+      return Proto("GStreamer");
+    case N:
+      return Interface(self.object_ptr, &kFfmpegMenu);
+    case NE:
+      return Interface(self.object_ptr, &kTensorFlowMenu);
+    case SW:
+      return Proto("GEGL");
+    case SE:
+      return Proto("PipeWire");
+    case S:
+      return Proto("pipewire:node");
+    default:
+      return {};
+  }
 }
 
-constinit ObjectSource::Table kPipelinesMenu =
-    MenuTable<ObjectSource::Table>("Pipelines", &OpenPipelinesMenu);
+constinit Interface::Table kPipelinesMenu = MenuTable("Pipelines", MODE_8_DIR, &PipelinesOption);
 
 struct BetaShelfToy : ObjectToy {
   BetaShelfToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {}

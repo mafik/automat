@@ -10,6 +10,7 @@
 
 #include "animation.hpp"
 #include "library_instruction.hpp"
+#include "long_running.hpp"
 #include "machine_code.hpp"
 #include "object.hpp"
 #include "shared_or_weak.hpp"

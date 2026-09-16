@@ -21,7 +21,7 @@ interfaces, and the widgets only map triggers to those interfaces:
   `RunTask::DoneRunning` (src/tasks.cpp) does not fire the object's `next` argument. A command
   exposed this way is also connectable and schedulable by other objects, which is why commands
   are not a separate kind. The default activation schedules the run (`Command::Table::
-  DefaultActivate`, src/base.cpp); a command whose activation is a gesture overrides it with
+  DefaultActivate`, src/command.cpp); a command whose activation is a gesture overrides it with
   `OnActivate` and has no `OnRun` (`kSplice` in src/library_timeline.cpp).
 - A continuous value is a `Scalar` (src/base.hpp): `OnGet`, `OnSet` and an `OnActivate` that starts
   the drag of its handle (Timer `duration`, src/library_timer.hpp).
@@ -35,8 +35,13 @@ interfaces, and the widgets only map triggers to those interfaces:
   `ShelfButton` are Toys of the prototype they display, and `pick` places the card's toy at the
   front of the deck.
 - Sub-options of an interface are tables nested inside its table (`sync` and `unsync` in
-  `Syncable::Table`, `turn_on` and `turn_off` in `OnOff::Table`); the interface's own activation
-  opens the menu that lists them (`Syncable::Table::MenuActivate`, src/sync.cpp).
+  `Syncable::Table`, `turn_on` and `turn_off` in `OnOff::Table`, all four Command tables). The
+  interface lays them out itself: `find_option` in its table answers a menu direction with one of
+  them and `menu_mode` picks the slot layout. A derived table answers its own directions and defers
+  the rest to its base: `Syncable::Table::DefaultFindOption` (src/sync.cpp) answers E with `sync`
+  and W with `unsync` while synced, and the OnOff table (src/on_off.hpp) answers N with `turn_on`
+  or `turn_off` by state before deferring to it. The primary action stays in `activate` (an OnOff
+  toggles); an interface without `activate` opens its sub-options when activated.
 - Parameters: an enum-valued option is one table per value (Timer `next_range` and
   `prev_range`); an indexed or continuous one is derived from the pointer position and the Toy
   inside `OnActivate`.
@@ -57,23 +62,34 @@ displayed object.
 ```cpp
 virtual MiniMenuMode MenuMode();
 virtual Interface FindOption(ui::Pointer&, ui::ActionTrigger);
-std::unique_ptr<Action> TriggerActivate(ui::Pointer&, ui::ActionTrigger);
 std::unique_ptr<Action> OpenMenu(ui::Pointer&);
 ```
 
 `ActionTrigger` is a pointer button, a key or a menu direction (`ui::Dir`). `FindOption` is a
-switch: buttons and keys map gestures, directions lay out the menu. The tables hold no direction;
-the widget that opens a menu decides the layout, and an interface activation that opens a sub-menu
-decides the layout of that sub-menu. `FindOption` returns a plain `Interface` without transferring
-ownership: the walkers (`TriggerActivate` and `OpenMenu` in src/menu.cpp, the cursor walk in
+switch: buttons and keys map gestures, directions lay out the menu. A widget lays out the menu of
+its object; an interface lays out only its own sub-options, through `find_option`. `FindOption`
+returns a plain `Interface` without transferring ownership: the walkers (`Pointer::ButtonDown`,
+`KeyboardWidget::KeyDown`, `Menu::Activate` and `OpenMenu` in src/menu.cpp, the cursor walk in
 src/pointer.cpp) lock the owner through `Closest<Toy>` around the lookup and the activation, and
-pass that Toy to `Activate`.
+pass that Toy to `Interface::Activate`.
 
 `Pointer::ButtonDown` and `KeyboardWidget::KeyDown` walk from the hovered widget up to the root and
 the first provider that answers wins. A button is not a direction, so this fallback aliases nothing:
 a silent zone or toy costs nothing. The cursor (`CheckCursorChanged`, src/pointer.cpp) is the most
 recent `CursorOverride` if there is one, else the `cursor` of the first left-button interface found
 by the same walk, else the arrow.
+
+Each walker applies its own rules to the option it found. While Control is held (the `control`
+FlipFlop of `RootWidget`, synced to the left Control key), every walker first tries
+`Interface::DragController(pointer, birthplace)` (src/interface.cpp): an option with a controller
+(`Interface::MakeController`, a `FlipFlopController` for every OnOff) is wrapped in one, whose toy
+is born under `birthplace` and handed to `DragNew`, the same drag that springs a new object out of
+a toolbar or a menu slot; an option without a controller falls through. The birthplace is the
+widget that answered `FindOption` for a button or key, and the slot icon for a swipe. A swipe
+(`Menu::Activate`, src/menu.cpp) then enters the option's sub-options (`Interface::OpenMenu`) when
+it has any. Otherwise the primary action runs (`Interface::Activate`). Buttons and keys act,
+directions enter: the same OnOff toggles from its power button, opens its sub-menu from a slot of
+the object menu, and becomes a controller from either while Control is held.
 
 `FindOption` runs on every pointer move and inside `RootWidget::Tick`, so it only describes the
 current state: no mutation, no object mutexes beyond the owner lock the walker already holds, no
@@ -99,8 +115,18 @@ The bubble menu (`Menu` in src/menu.cpp) has eight fixed slots of `NestedWeakPtr
 Swiping past the bubble radius locks the slot and activates it, with the slot's icon as the Toy when
 that icon is a Toy (the prototype icons made by `kMakeObject`), else the toy the menu was opened
 from, so a new object flies out of the bubble. `MakeMenuAction(pointer, mode, options, toy)` builds a
-menu from a slot list; interface activations use it for their sub-menus, and `MenuTable<Table>(name,
-open)` (src/interface.hpp) makes a table whose activation is such a menu.
+menu from a slot list, drops the slots that are not valid in the mode and returns nothing when no
+slot is filled; `OptionsProvider::OpenMenu` fills the list from the widget's `FindOption` and
+`Interface::OpenMenu` from the table's `find_option`.
+
+A node that only groups other options is a table of kind `kMenu`, made by `MenuTable(name, mode,
+find_option)` (src/interface.hpp): it has `find_option` and a name, but no `activate`, no state and
+no methods, so no cast accepts it and `MakeController` returns nothing for it. An Object never
+reports such a table through `INTERFACES()`; it is only returned by `FindOption` (the camera menu
+in src/root_widget.cpp, the decoration menu in src/window_frame.cpp, the shelf categories in
+src/library_beta_shelf.cpp, the register pages in src/library_assembler.cpp, the mouse menus in
+src/library_mouse.cpp). Interfaces are for Objects to call; a menu exposes nothing to call, so it
+is not one of an Object's interfaces.
 
 Three hierarchies meet in a menu and must not compete for directions:
 
@@ -118,7 +144,7 @@ Three hierarchies meet in a menu and must not compete for directions:
 
 Conventions: S is the parent, NW is destructive, N is the primary action. Availability may vary with
 state (the Timer's start pusher answers the left button with `run` while the timer is stopped and
-with the `turn_off` sub-option of `running` while it runs), the meaning of a slot may not. Sub-menus opened by interface activations are leaves and reserve no S.
+with the `turn_off` sub-option of `running` while it runs), the meaning of a slot may not. Sub-menus opened from an interface's sub-options are leaves and reserve no S.
 
 The generic layer provides only the slots that mean the same on every object. `ObjectToy::FindOption`
 (src/object.cpp) answers N with the object's Runnable, or with `kThisIsFine` while the object shows

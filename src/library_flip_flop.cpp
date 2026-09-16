@@ -27,6 +27,35 @@ using namespace std;
 
 namespace automat::library {
 
+FlipFlopController::FlipFlopController(OnOff on_off) : on_off(on_off) {}
+
+string_view FlipFlopController::Name() const { return "Flip-Flop Controller"; }
+
+Ptr<Object> FlipFlopController::Clone() const {
+  return MAKE_PTR(FlipFlopController, on_off.Lock());
+}
+
+void FlipFlopController::SerializeState(ObjectSerializer& writer) const {
+  if (auto locked = on_off.Lock()) {
+    writer.Key("on_off");
+    writer.String(writer.ResolveName(*locked.object_ptr, locked.table_ptr));
+  }
+}
+bool FlipFlopController::DeserializeKey(ObjectDeserializer& d, StrView key) {
+  if (key == "on_off") {
+    Str name;
+    Status status;
+    d.Get(name, status);
+    if (!OK(status)) {
+      ReportError(status.ToStr());
+    } else {
+      on_off = cast<OnOff>(d.LookupInterface(name));
+    }
+    return true;
+  }
+  return false;
+}
+
 string_view FlipFlop::Name() const { return "Flip-Flop"; }
 
 Ptr<Object> FlipFlop::Clone() const {
@@ -52,18 +81,7 @@ bool FlipFlop::DeserializeKey(ObjectDeserializer& d, StrView key) {
   return false;
 }
 
-struct FlipFlopWidget : ObjectToy {
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    using enum ui::Dir;
-    auto object = LockObject<FlipFlop>();
-    if (!object) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case E:
-        return Interface(*object, FlipFlop::enabled_tbl);
-      default:
-        return ObjectToy::FindOption(pointer, trigger);
-    }
-  }
+struct FlipFlopWidgetBase : ObjectToy {
   MiniMenuMode MenuMode() override { return MODE_4_DIR; }
   float light = 0;
   bool current_state = false;
@@ -83,28 +101,23 @@ struct FlipFlopWidget : ObjectToy {
   // The raised part of the panel that the rocker is mounted in.
   constexpr static auto kSocketRRect = ui::Rocker::kBounds.Outset(1_mm);
 
-  FlipFlopWidget(ui::Widget* parent, Object& object) : ObjectToy(parent, object) {
+  FlipFlopWidgetBase(ui::Widget* parent, Object& object, OnOff on_off) : ObjectToy(parent, object) {
     rocker = std::make_unique<ui::Rocker>(this);
-    rocker->target = Linked<OnOff>(object.AcquireWeakPtr(), &FlipFlop::enabled_tbl);
+    rocker->target = on_off;
   }
 
   float GetBaseScale() const override { return 1.0f; }
 
   RRect CoarseBounds() const override { return Lerp(kFullBounds, kIconBounds, iconification); }
 
-  ui::Widget* FindWidget(Interface::Table* iface) override { return this; }
-
   Tock Tick(time::Timer& timer) override {
-    if (auto ptr = LockObject<FlipFlop>()) {
-      current_state = ptr->current_state;
-      rocker->SetOn(current_state);
-    }
     Tock tock;
     tock.drawing |= animation::LinearApproach(current_state, timer.d, 10, light);
     if (last_tick == time::SteadyPoint::min()) {
       iconification = iconified ? 1.f : 0.f;
     }
     tock.shaping |= iconification.SineTowards(iconified ? 1.f : 0.f, timer.d, 0.4);
+    rocker->SetOn(current_state);
     rocker->alpha = 1 - iconification;
     return tock;
   }
@@ -114,6 +127,8 @@ struct FlipFlopWidget : ObjectToy {
   static inline RasterPatch light_off_patch;
   static inline RasterPatch light_on_patch;
   static inline RasterPatch light_glow_patch;
+
+  virtual StrView Label() const = 0;
 
   void Draw(SkCanvas& canvas) const override {
     auto bounds = CoarseBounds();
@@ -283,7 +298,7 @@ struct FlipFlopWidget : ObjectToy {
     SkPaint label_paint;
     label_paint.setColor(SK_ColorWHITE);
     label_paint.setAlphaf(0.9f);
-    auto label = "On/Off"sv;
+    auto label = Label();
     auto label_w = font->MeasureText(label);
     // TODO: text sizing is kind of crappy now as very short text could cause glitches -  fix it
     float label_scale = min(1.0f, bounds.rect.Width() * 0.9f / label_w);
@@ -299,6 +314,86 @@ struct FlipFlopWidget : ObjectToy {
   SkPath Shape() const override { return SkPath::RRect(CoarseBounds()); }
   bool CenteredAtZero() const override { return true; }
 };
+
+struct FlipFlopWidget : FlipFlopWidgetBase {
+  FlipFlopWidget(ui::Widget* parent, FlipFlop& object)
+      : FlipFlopWidgetBase(parent, object, object.enabled.Bind()) {}
+
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    using enum ui::Dir;
+    auto object = LockObject<FlipFlop>();
+    if (!object) return {};
+    switch (static_cast<ui::Dir>(trigger)) {
+      case E:
+        return object->enabled.Bind();
+      default:
+        return ObjectToy::FindOption(pointer, trigger);
+    }
+  }
+
+  StrView Label() const override { return "On/Off"sv; }
+
+  Tock Tick(time::Timer& timer) override {
+    if (auto ptr = LockObject<FlipFlop>()) {
+      current_state = ptr->current_state;
+    } else {
+      MarkDead(timer.now);
+    }
+    return FlipFlopWidgetBase::Tick(timer);
+  }
+};
+
+struct FlipFlopControllerWidget : FlipFlopWidgetBase {
+  FlipFlopControllerWidget(ui::Widget* parent, FlipFlopController& object)
+      : FlipFlopWidgetBase(parent, object, object.on_off.Lock()) {}
+
+  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    using enum ui::Dir;
+    auto object = LockObject<FlipFlopController>();
+    if (!object) return {};
+    switch (static_cast<ui::Dir>(trigger)) {
+      case E:
+        return object->on_off.Lock();
+      default:
+        return ObjectToy::FindOption(pointer, trigger);
+    }
+  }
+
+  Str label = "?"s;
+
+  StrView Label() const override { return label; }
+
+  Tock Tick(time::Timer& timer) override {
+    if (auto ptr = LockObject<FlipFlopController>()) {
+      if (auto locked = ptr->on_off.Lock()) {
+        current_state = locked.IsOn();
+        label = locked.Name();
+      }
+    } else {
+      MarkDead(timer.now);
+    }
+    return FlipFlopWidgetBase::Tick(timer);
+  }
+
+  uint32_t observed_on_off_monitor;
+
+  void OnPoll(time::Timer& timer) override {
+    if (IsAnimating()) return;
+    uint32_t current = rocker->target.Unsafe().object_ptr->monitor.load(std::memory_order_relaxed);
+    if (current != observed_on_off_monitor) {
+      observed_on_off_monitor = current;
+      WakeAnimationAt(timer.last);
+      OnWake();
+    } else if (rocker->target.IsExpired()) {
+      rocker->target.Reset();
+    }
+    FlipFlopWidgetBase::OnPoll(timer);
+  }
+};
+
+std::unique_ptr<ObjectToy> FlipFlopController::MakeToy(ui::Widget* parent) {
+  return std::make_unique<FlipFlopControllerWidget>(parent, *this);
+}
 
 std::unique_ptr<ObjectToy> FlipFlop::MakeToy(ui::Widget* parent) {
   return std::make_unique<FlipFlopWidget>(parent, *this);

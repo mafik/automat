@@ -213,8 +213,14 @@ void Pointer::ButtonDown(PointerButton btn) {
   UpdatePath();
 
   if (action == nullptr && hover) {
-    for (Widget* w = hover; w && !action; w = w->parent) {
-      action = w->TriggerActivate(*this, btn);
+    for (Widget* w = hover; w; w = w->parent) {
+      if (Interface option = w->FindOption(*this, btn); option.has_object()) {
+        if (root_widget.control->current_state)
+          action = option.DragNewController(*this, *w);
+        else
+          action = option.Activate(*this, Closest<Toy>(*hover));
+        break;
+      }
     }
     if (action == nullptr && btn == PointerButton::Right) {
       for (Widget* w = hover; w && !action; w = w->parent) {

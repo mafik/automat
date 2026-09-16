@@ -596,11 +596,16 @@ void KeyboardWidget::KeyDown(Key key) {
   } else {
     size_t i = static_cast<int>(key.physical);
     if (actions[i] == nullptr && pointer && pointer->hover) {
-      Widget* current = pointer->hover;
-      do {
-        actions[i] = current->TriggerActivate(*pointer, key.physical);
-        current = current->parent;
-      } while (actions[i] == nullptr && current);
+      for (Widget* w = pointer->hover; w; w = w->parent) {
+        if (Interface option = w->FindOption(*pointer, key.physical); option.has_object()) {
+          if (pointer->root_widget.control->current_state) {
+            actions[i] = option.DragNewController(*pointer, *w);
+          } else {
+            actions[i] = option.Activate(*pointer, Closest<Toy>(*pointer->hover));
+          }
+          break;
+        }
+      }
       if (actions[i]) {
         pointer->UpdatePath();
       }

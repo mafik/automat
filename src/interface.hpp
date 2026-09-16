@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <concepts>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <type_traits>
@@ -22,7 +23,10 @@ namespace ui {
 struct Pointer;
 struct Widget;
 enum class Cursor;
+enum class Dir : uint8_t;
 }  // namespace ui
+
+enum MiniMenuMode { MODE_8_DIR, MODE_6_DIR, MODE_4_DIR, MODE_2_DIR, MODE_1_DIR };
 
 // Interface is the base class for parts of Objects that can be exposed to other Objects.
 //
@@ -76,6 +80,7 @@ struct Interface {
     kObjectSource,
     kScalar,
     kText,
+    kMenu,
   };
 
   struct Table {
@@ -83,7 +88,9 @@ struct Interface {
     int state_off = 0;  // byte offset from Object* to Interface::State
     StrView name;
     ui::Cursor cursor = {};
+    MiniMenuMode menu_mode = MODE_8_DIR;
     std::unique_ptr<Action> (*activate)(Interface, ui::Pointer&, Toy*) = nullptr;
+    Interface (*find_option)(Interface, ui::Dir) = nullptr;
     std::unique_ptr<ui::Widget> (*make_icon)(Interface, ui::Widget* parent) = &DefaultMakeIcon;
 
     constexpr Table(Kind kind, StrView name, int state_off = 0)
@@ -110,6 +117,11 @@ struct Interface {
       if constexpr (requires(ImplT& i, ui::Widget* p) { i.OnMakeIcon(p); })
         make_icon = [](Interface self, ui::Widget* p) -> std::unique_ptr<ui::Widget> {
           return static_cast<ImplT&>(self).OnMakeIcon(p);
+        };
+      if constexpr (requires { ImplT::kMenuMode; }) menu_mode = ImplT::kMenuMode;
+      if constexpr (requires(ImplT& i, ui::Dir d) { i.OnFindOption(d); })
+        find_option = [](Interface self, ui::Dir d) -> Interface {
+          return static_cast<ImplT&>(self).OnFindOption(d);
         };
     }
   };
@@ -175,7 +187,14 @@ struct Interface {
   StrView Name() const { return table_ptr->name; }
 
   std::unique_ptr<Action> Activate(ui::Pointer&, Toy* toy = nullptr) const;
+  Interface FindOption(ui::Dir) const;
+  std::unique_ptr<Action> OpenMenu(ui::Pointer&, Toy* toy) const;
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) const;
+
+  // TODO: make this a Table's function pointer
+  Ptr<Object> MakeController() const;
+
+  std::unique_ptr<Action> DragNewController(ui::Pointer&, ui::Widget& birthplace) const;
 };
 
 // Ref-counted wrapper for bound interface types. Keeps the owner Object alive.
@@ -294,11 +313,11 @@ struct Linked : private T {
   bool operator==(const Linked&) const = default;
 };
 
-template <typename Table>
-constexpr Table MenuTable(StrView name,
-                          std::unique_ptr<Action> (*open)(Interface, ui::Pointer&, Toy*)) {
-  Table t(name);
-  t.activate = open;
+constexpr Interface::Table MenuTable(StrView name, MiniMenuMode mode,
+                                     Interface (*find_option)(Interface, ui::Dir)) {
+  Interface::Table t(Interface::kMenu, name);
+  t.menu_mode = mode;
+  t.find_option = find_option;
   return t;
 }
 

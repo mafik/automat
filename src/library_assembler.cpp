@@ -29,7 +29,6 @@
 #include "library_instruction.hpp"
 #include "machine_code.hpp"
 #include "math.hpp"
-#include "menu.hpp"
 #include "object_source.hpp"
 #include "root_widget.hpp"
 #include "status.hpp"
@@ -60,29 +59,30 @@ struct ImageWidget : ui::Widget {
   void Draw(SkCanvas& canvas) const override { image.draw(canvas); }
 };
 
-static std::unique_ptr<Action> OpenRegistersPage(Interface, ui::Pointer&, Toy*);
+static Interface RegistersPageOption(Interface, ui::Dir);
 
-constinit std::array<ObjectSource::Table, 3> kRegistersMenu = {
-    MenuTable<ObjectSource::Table>("Registers", &OpenRegistersPage),
-    MenuTable<ObjectSource::Table>("More registers", &OpenRegistersPage),
-    MenuTable<ObjectSource::Table>("More registers", &OpenRegistersPage)};
+constinit std::array<Interface::Table, 3> kRegistersMenu = {
+    MenuTable("Registers", MODE_8_DIR, &RegistersPageOption),
+    MenuTable("More registers", MODE_8_DIR, &RegistersPageOption),
+    MenuTable("More registers", MODE_8_DIR, &RegistersPageOption)};
 
-static std::unique_ptr<Action> OpenRegistersPage(Interface self, ui::Pointer& pointer, Toy* toy) {
+static Interface RegistersPageOption(Interface self, ui::Dir dir) {
   using enum ui::Dir;
   constexpr ui::Dir kSlots[] = {N, NE, E, SE, SW, W, NW};
   constexpr int kPerPage = std::size(kSlots);
-  int page = cast<ObjectSource::Table>(self.table_ptr) - kRegistersMenu.data();
+  int page = self.table_ptr - kRegistersMenu.data();
   auto& assembler = static_cast<Assembler&>(*self.object_ptr);
-  Interface options[ui::kDirCount];
+  if (dir == S) {
+    if ((page + 1) * kPerPage >= kGeneralPurposeRegisterCount) return {};
+    return Interface(assembler, kRegistersMenu[page + 1]);
+  }
   for (int i = 0; i < kPerPage; ++i) {
+    if (kSlots[i] != dir) continue;
     int reg = page * kPerPage + i;
-    if (reg >= kGeneralPurposeRegisterCount) break;
-    options[static_cast<int>(kSlots[i])] = Interface(*assembler.regs[reg], kMakeObject);
+    if (reg >= kGeneralPurposeRegisterCount) return {};
+    return Interface(*assembler.regs[reg], kMakeObject);
   }
-  if ((page + 1) * kPerPage < kGeneralPurposeRegisterCount) {
-    options[static_cast<int>(S)] = Interface(assembler, kRegistersMenu[page + 1]);
-  }
-  return MakeMenuAction(pointer, OptionsProvider::MODE_8_DIR, options, toy);
+  return {};
 }
 
 Interface AssemblerWidget::FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) {

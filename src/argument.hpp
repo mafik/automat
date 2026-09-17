@@ -91,6 +91,13 @@ struct Argument : Interface {
     // is used through one of the *OrMake functions.
     Ptr<Object> (*prototype)() = []() { return Ptr<Object>(nullptr); };
 
+    std::atomic<uint32_t>& (*monitor)(Argument) = [](Argument self) -> std::atomic<uint32_t>& {
+      return self.object_ptr->monitor;
+    };
+    std::atomic<uint32_t>* (*last_activity)(Argument) = [](Argument) -> std::atomic<uint32_t>* {
+      return nullptr;
+    };
+
     static std::unique_ptr<ui::Widget> DefaultMakeIcon(Interface, ui::Widget* parent);
     static std::unique_ptr<Action> DefaultActivate(Interface, ui::Pointer&, automat::Toy*);
 
@@ -133,12 +140,7 @@ struct Argument : Interface {
   using Toy = ArgumentToy;
   using Style = Table::Style;
 
-  struct State {
-    std::atomic<uint32_t> last_activity;
-    std::atomic<uint32_t> monitor;
-    State() : last_activity(0), monitor(0) {}
-    State(const State& other) : last_activity(0), monitor(0) {}
-  };
+  struct State {};
   INTERFACE_BOUND(Argument, Interface)
   Argument(Object& obj) : Interface(obj) {}
 
@@ -178,7 +180,7 @@ struct Argument : Interface {
 
   void Connect(Interface end) const {
     if (table->on_connect) table->on_connect(*this, end);
-    state->monitor.fetch_add(1, std::memory_order_relaxed);
+    WakeToys();
     object_ptr->WakeToys();
   }
 
@@ -192,7 +194,9 @@ struct Argument : Interface {
 
   Object& ObjectOrMake() const;
 
-  void WakeToys() { state->monitor.fetch_add(1, std::memory_order_relaxed); }
+  void WakeToys() const { table->monitor(*this).fetch_add(1, std::memory_order_relaxed); }
+
+  std::atomic<uint32_t>* LastActivity() const { return table->last_activity(*this); }
 
   // ImplT may optionally provide:
   //   static constexpr Style kStyle = ...;
@@ -226,7 +230,7 @@ struct ArgumentToy : Toy {
   std::unique_ptr<ui::Widget> prototype_ghost;
 
   ArgumentToy(ui::Widget* parent, Object& owner, Argument::Table& table)
-      : Toy(parent, owner, &table, Argument(owner, table).state->monitor) {}
+      : Toy(parent, owner, &table, table.monitor(Argument(owner, table))) {}
 
   Ptr<Location> StartLocation() const;
   Ptr<Location> EndLocation() const;
@@ -243,6 +247,10 @@ template <typename T>
 struct ObjectArgument : Argument {
   struct State : Argument::State {
     WeakPtr<T> target;
+    std::atomic<uint32_t> last_activity = 0;
+    std::atomic<uint32_t> monitor = 0;
+    State() = default;
+    State(const State& other) : target(other.target) {}
   };
 
   INTERFACE_BOUND(ObjectArgument, Argument)
@@ -279,6 +287,12 @@ struct ObjectArgument : Argument {
       end_kind_matches = [](Argument, Interface end) {
         return !end.has_table() && dynamic_cast<T*>(end.object_ptr) != nullptr;
       };
+      monitor = [](Argument self) -> std::atomic<uint32_t>& {
+        return cast<ObjectArgument>(self).state->monitor;
+      };
+      last_activity = [](Argument self) {
+        return &cast<ObjectArgument>(self).state->last_activity;
+      };
     }
   };
 
@@ -313,6 +327,10 @@ template <typename T, Interface::Kind kKind = Interface::kInterfaceArgument>
 struct InterfaceArgument : Argument {
   struct State : Argument::State {
     Linked<T> target;
+    std::atomic<uint32_t> last_activity = 0;
+    std::atomic<uint32_t> monitor = 0;
+    State() = default;
+    State(const State& other) : target(other.target) {}
   };
 
   INTERFACE_BOUND(InterfaceArgument, Argument)
@@ -347,6 +365,12 @@ struct InterfaceArgument : Argument {
       find = &DefaultFind;
       end_kind_matches = [](Argument, Interface end) {
         return dyn_cast_if_present<typename T::Table>(end.table_ptr) != nullptr;
+      };
+      monitor = [](Argument self) -> std::atomic<uint32_t>& {
+        return cast<InterfaceArgument>(self).state->monitor;
+      };
+      last_activity = [](Argument self) {
+        return &cast<InterfaceArgument>(self).state->last_activity;
       };
       if constexpr (kKind == Interface::kNextArg) make_icon = &DefaultMakeIcon;
     }

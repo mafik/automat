@@ -598,10 +598,12 @@ ui::Tock CableWidget::Tick(time::Timer& timer) {
   }
   tock.shaping |= state->steel_insert_hidden.Tick(timer);
 
-  uint32_t last_activity = arg.state->last_activity.load(std::memory_order_relaxed);
-  if (state->last_activity != last_activity) {
-    state->lightness_pct = 100;
-    state->last_activity = last_activity;
+  if (auto* activity = arg.LastActivity()) {
+    uint32_t last_activity = activity->load(std::memory_order_relaxed);
+    if (state->last_activity != last_activity) {
+      state->lightness_pct = 100;
+      state->last_activity = last_activity;
+    }
   }
 
   tock.shaping |= SimulateCablePhysics(timer, *state, pos_dir, to_points);

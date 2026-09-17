@@ -211,7 +211,9 @@ void ScheduleNext(Object& source) {
 void ScheduleArgumentTargets(Argument arg) {
   // audio::Play(source.object->NextSound());
 
-  arg.state->last_activity.fetch_add(1, std::memory_order_relaxed);
+  if (auto* last_activity = arg.LastActivity()) {
+    last_activity->fetch_add(1, std::memory_order_relaxed);
+  }
 
   if (auto next = arg.Find()) {
     // The target may be a Command sub-interface or the Object itself (its first Command).

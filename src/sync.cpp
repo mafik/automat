@@ -245,6 +245,7 @@ void Gear::AddSource(Syncable syncable) {
   if (old_gear.Get() != this) {
     state.SetGear(this);
     if (old_gear) {
+      auto lock = std::scoped_lock(mutex, old_gear->mutex);
       while (!old_gear->members.empty()) {
         // stealing all of the members from the old gear
         members.emplace_back(old_gear->members.back());
@@ -256,6 +257,7 @@ void Gear::AddSource(Syncable syncable) {
         }
       }
     } else {
+      auto lock = std::unique_lock(mutex);
       Linked<Syncable> weak(syncable);
       bool found = false;
       for (int i = 0; i < (int)members.size(); ++i) {

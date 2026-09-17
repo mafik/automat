@@ -201,7 +201,7 @@ void Instruction::Interfaces(const std::function<LoopControl(Interface)>& cb) {
     if (LoopControl::Break == cb(jump_arg.Bind())) return;
   }
   if (auto* as = FindAssembler(*this)) {
-    if (LoopControl::Break == cb(Interface(*as, Assembler::running_tbl))) return;
+    if (LoopControl::Break == cb(as->running.Bind())) return;
   }
 }
 

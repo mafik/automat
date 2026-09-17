@@ -156,8 +156,7 @@ struct BoardWidget : ObjectToy, ui::DropTarget {
   SkPath Shape() const override;
   SkPath SubtreeShape() const override;
   Compositor GetCompositor() const override { return Compositor::QUANTUM_REALM; }
-  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
-  MiniMenuMode MenuMode() override { return MODE_6_DIR; }
+  void FillMenu(ui::Pointer&, Menu&) override;
 
   // DropTarget overrides
   ui::DropTarget* AsDropTarget() override { return this; }

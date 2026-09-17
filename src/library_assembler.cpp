@@ -29,6 +29,7 @@
 #include "library_instruction.hpp"
 #include "machine_code.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "object_source.hpp"
 #include "root_widget.hpp"
 #include "status.hpp"
@@ -59,44 +60,35 @@ struct ImageWidget : ui::Widget {
   void Draw(SkCanvas& canvas) const override { image.draw(canvas); }
 };
 
-static Interface RegistersPageOption(Interface, ui::Dir);
+static void FillRegistersPage(Interface, Menu&);
 
 constinit std::array<Interface::Table, 3> kRegistersMenu = {
-    MenuTable("Registers", MODE_8_DIR, &RegistersPageOption),
-    MenuTable("More registers", MODE_8_DIR, &RegistersPageOption),
-    MenuTable("More registers", MODE_8_DIR, &RegistersPageOption)};
+    MenuTable("Registers", &FillRegistersPage), MenuTable("More registers", &FillRegistersPage),
+    MenuTable("More registers", &FillRegistersPage)};
 
-static Interface RegistersPageOption(Interface self, ui::Dir dir) {
+static void FillRegistersPage(Interface self, Menu& menu) {
   using enum ui::Dir;
   constexpr ui::Dir kSlots[] = {N, NE, E, SE, SW, W, NW};
   constexpr int kPerPage = std::size(kSlots);
   int page = self.table_ptr - kRegistersMenu.data();
   auto& assembler = static_cast<Assembler&>(*self.object_ptr);
-  if (dir == S) {
-    if ((page + 1) * kPerPage >= kGeneralPurposeRegisterCount) return {};
-    return Interface(assembler, kRegistersMenu[page + 1]);
-  }
   for (int i = 0; i < kPerPage; ++i) {
-    if (kSlots[i] != dir) continue;
     int reg = page * kPerPage + i;
-    if (reg >= kGeneralPurposeRegisterCount) return {};
-    return Interface(*assembler.regs[reg], kMakeObject);
+    if (reg >= kGeneralPurposeRegisterCount) break;
+    menu.Place(kSlots[i], Interface(*assembler.regs[reg], kMakeObject));
   }
-  return {};
+  if ((page + 1) * kPerPage < kGeneralPurposeRegisterCount) {
+    menu.Place(S, Interface(assembler, kRegistersMenu[page + 1]));
+  }
 }
 
-Interface AssemblerWidget::FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) {
+void AssemblerWidget::FillMenu(ui::Pointer& pointer, Menu& menu) {
   using enum ui::Dir;
+  ObjectToy::FillMenu(pointer, menu);
   auto assembler = LockObject<Assembler>();
-  if (!assembler) return {};
-  switch (static_cast<ui::Dir>(trigger)) {
-    case NW:
-      return Interface(*assembler, kRegistersMenu[0]);
-    case NE:
-      return Interface(*assembler, Assembler::running_tbl);
-    default:
-      return ObjectToy::FindOption(pointer, trigger);
-  }
+  if (!assembler) return;
+  menu.Place(NW, Interface(*assembler, kRegistersMenu[0]));
+  menu.Place(NE, assembler->running.Bind());
 }
 
 Assembler::Assembler() {

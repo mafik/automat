@@ -126,8 +126,7 @@ class MachineCodeControllerTest : public ::testing::Test {
   }
 
   void Next(Ptr<library::Instruction>& a, Ptr<library::Instruction>& b) {
-    Argument(*a, library::Instruction::next_tbl)
-        .Connect(Interface(*b, library::Instruction::run_tbl));
+    a->next.Bind().Connect(b->run.Bind());
   }
 
   void TestUpdateCode(std::span<library::Instruction*> instructions) {

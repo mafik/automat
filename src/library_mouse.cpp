@@ -15,6 +15,7 @@
 #include <tracy/Tracy.hpp>
 
 #include "animation.hpp"
+#include "menu.hpp"
 #include "object_source.hpp"
 #include "optional.hpp"
 
@@ -278,16 +279,14 @@ static std::unique_ptr<ui::Widget> MakeMouseMenuIcon(ui::Widget* parent, Optiona
   return std::make_unique<MouseIcon>(parent, ui::PointerButton::Unknown, down, presser, scroll);
 }
 
-static Interface ButtonOption(ui::Dir dir, const Ptr<Object> (&protos)[5]) {
-  using enum ui::Dir;
-  constexpr ui::Dir kSlots[5] = {SW, S, SE, NW, NE};
+static void PlaceButtons(Menu& menu, const Ptr<Object> (&protos)[5]) {
+  static const SinCos kSlots[5] = {198_deg, 270_deg, 342_deg, 126_deg, 54_deg};
   for (int i = 0; i < 5; ++i) {
-    if (kSlots[i] == dir) return Interface(*protos[i], kMakeObject);
+    menu.Place(kSlots[i], Interface(*protos[i], kMakeObject));
   }
-  return {};
 }
 
-static Interface ButtonEventOption(ui::Dir dir, bool down) {
+static void FillButtonEventMenu(Menu& menu, bool down) {
   using enum ui::PointerButton;
   static const Ptr<Object> up_events[5] = {
       MAKE_PTR(MouseButtonEvent, Left, false), MAKE_PTR(MouseButtonEvent, Middle, false),
@@ -297,54 +296,46 @@ static Interface ButtonEventOption(ui::Dir dir, bool down) {
       MAKE_PTR(MouseButtonEvent, Left, true), MAKE_PTR(MouseButtonEvent, Middle, true),
       MAKE_PTR(MouseButtonEvent, Right, true), MAKE_PTR(MouseButtonEvent, Back, true),
       MAKE_PTR(MouseButtonEvent, Forward, true)};
-  return ButtonOption(dir, down ? down_events : up_events);
+  PlaceButtons(menu, down ? down_events : up_events);
 }
 
-static Interface PresserOption(Interface, ui::Dir dir) {
+static void FillPresserMenu(Interface, Menu& menu) {
   using enum ui::PointerButton;
   static const Ptr<Object> pressers[5] = {
       MAKE_PTR(MouseButtonPresser, Left), MAKE_PTR(MouseButtonPresser, Middle),
       MAKE_PTR(MouseButtonPresser, Right), MAKE_PTR(MouseButtonPresser, Back),
       MAKE_PTR(MouseButtonPresser, Forward)};
-  return ButtonOption(dir, pressers);
+  PlaceButtons(menu, pressers);
 }
 
-static Interface ScrollOption(Interface, ui::Dir dir) {
+static void FillScrollMenu(Interface, Menu& menu) {
   using enum ui::Dir;
   static const Ptr<Object> scroll_x = MAKE_PTR(MouseScrollX);
   static const Ptr<Object> scroll_y = MAKE_PTR(MouseScrollY);
-  switch (dir) {
-    case N:
-      return Interface(*scroll_x, kMakeObject);
-    case S:
-      return Interface(*scroll_y, kMakeObject);
-    default:
-      return {};
-  }
+  menu.Place(N, Interface(*scroll_x, kMakeObject));
+  menu.Place(S, Interface(*scroll_y, kMakeObject));
 }
 
 constinit Interface::Table kMouseDownMenu = [] {
-  auto t = MenuTable("Down", MODE_8_DIR,
-                     [](Interface, ui::Dir dir) { return ButtonEventOption(dir, true); });
+  auto t = MenuTable("Down", [](Interface, Menu& menu) { FillButtonEventMenu(menu, true); });
   t.make_icon = [](Interface, ui::Widget* p) { return MakeMouseMenuIcon(p, true, false); };
   return t;
 }();
 
 constinit Interface::Table kMouseUpMenu = [] {
-  auto t = MenuTable("Up", MODE_8_DIR,
-                     [](Interface, ui::Dir dir) { return ButtonEventOption(dir, false); });
+  auto t = MenuTable("Up", [](Interface, Menu& menu) { FillButtonEventMenu(menu, false); });
   t.make_icon = [](Interface, ui::Widget* p) { return MakeMouseMenuIcon(p, false, false); };
   return t;
 }();
 
 constinit Interface::Table kMousePresserMenu = [] {
-  auto t = MenuTable("Presser", MODE_8_DIR, &PresserOption);
+  auto t = MenuTable("Presser", &FillPresserMenu);
   t.make_icon = [](Interface, ui::Widget* p) { return MakeMouseMenuIcon(p, std::nullopt, true); };
   return t;
 }();
 
 constinit Interface::Table kMouseScrollMenu = [] {
-  auto t = MenuTable("Scroll", MODE_2_DIR, &ScrollOption);
+  auto t = MenuTable("Scroll", &FillScrollMenu);
   t.make_icon = [](Interface, ui::Widget* p) {
     return MakeMouseMenuIcon(p, std::nullopt, false, true);
   };
@@ -370,26 +361,17 @@ struct MouseWidget : MouseWidgetBase {
     MouseWidgetCommon::Draw(canvas, ui::PointerButton::Unknown, std::nullopt, nullptr, false);
   }
 
-  MiniMenuMode MenuMode() override { return MODE_8_DIR; }
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
     using enum ui::Dir;
     static const Ptr<Object> mouse_move = MAKE_PTR(MouseMove);
+    ObjectToy::FillMenu(pointer, menu);
     auto mouse = LockOwner();
-    if (!mouse) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case N:
-        return Interface(*mouse, kMousePresserMenu);
-      case SW:
-        return Interface(*mouse, kMouseDownMenu);
-      case SE:
-        return Interface(*mouse, kMouseUpMenu);
-      case W:
-        return Interface(*mouse_move, kMakeObject);
-      case E:
-        return Interface(*mouse, kMouseScrollMenu);
-      default:
-        return ObjectToy::FindOption(pointer, trigger);
-    }
+    if (!mouse) return;
+    menu.Place(N, Interface(*mouse, kMousePresserMenu));
+    menu.Place(210_deg, Interface(*mouse, kMouseDownMenu));
+    menu.Place(330_deg, Interface(*mouse, kMouseUpMenu));
+    menu.Place(150_deg, Interface(*mouse_move, kMakeObject));
+    menu.Place(30_deg, Interface(*mouse, kMouseScrollMenu));
   }
 };
 
@@ -546,9 +528,7 @@ struct MouseMoveWidget : MouseWidget {
   MouseMoveWidget(ui::Widget* parent, Object& weak_mouse_move)
       : MouseWidget(parent, weak_mouse_move) {}
 
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    return ObjectToy::FindOption(pointer, trigger);
-  }
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override { ObjectToy::FillMenu(pointer, menu); }
 
   void Draw(SkCanvas& canvas) const override {
     krita::mouse::base.draw(canvas);
@@ -714,7 +694,7 @@ struct MouseScrollXWidget : MouseWidgetBase {
   animation::SpringV2<SinCos> rotation;
 
   Tock Tick(time::Timer& t) override {
-    if (auto o = LockObject<MouseScrollY>()) {
+    if (auto o = LockObject<MouseScrollX>()) {
       target = o->rotation;
     }
     Tock tock;
@@ -815,18 +795,12 @@ std::unique_ptr<ObjectToy> Mouse::MakeToy(ui::Widget* parent) {
 Ptr<Object> Mouse::Clone() const { return MAKE_PTR(Mouse); }
 
 struct MouseButtonPresserWidget : MouseWidgetBase {
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    using enum ui::Dir;
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
+    MouseWidgetBase::FillMenu(pointer, menu);
     auto object = LockObject<MouseButtonPresser>();
-    if (!object) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case NE:
-        return Interface(*object, MouseButtonPresser::state_tbl);
-      default:
-        return MouseWidgetBase::FindOption(pointer, trigger);
-    }
+    if (!object) return;
+    menu.Place(ui::Dir::NE, object->state.Bind());
   }
-  MiniMenuMode MenuMode() override { return MODE_6_DIR; }
   mutable PresserWidget presser_widget;
   SkPath shape;
   ui::PointerButton button;

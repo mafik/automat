@@ -7,6 +7,7 @@
 
 #include "embedded.hpp"
 #include "log.hpp"
+#include "menu.hpp"
 #include "path.hpp"
 #include "textures.hpp"
 #include "virtual_fs.hpp"
@@ -60,16 +61,11 @@ void Sources::extract_files_Impl::OnRun(std::unique_ptr<RunTask>&) {
 }
 
 struct SourcesWidget : ObjectToy {
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    using enum ui::Dir;
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
+    ObjectToy::FillMenu(pointer, menu);
     auto object = LockObject<Sources>();
-    if (!object) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case N:
-        return Interface(*object, Sources::extract_files_tbl);
-      default:
-        return ObjectToy::FindOption(pointer, trigger);
-    }
+    if (!object) return;
+    menu.Place(ui::Dir::N, object->extract_files.Bind());
   }
   SourcesWidget(ui::Widget* parent, Object& sources) : ObjectToy(parent, sources) {}
 

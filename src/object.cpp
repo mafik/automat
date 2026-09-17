@@ -21,6 +21,7 @@
 #include "format.hpp"
 #include "image_provider.hpp"
 #include "location.hpp"
+#include "menu.hpp"
 #include "object_lifetime.hpp"
 #include "object_source.hpp"
 #include "pointer.hpp"
@@ -190,17 +191,16 @@ Interface ObjectToy::ParentLocation() {
   return loc ? Interface(*loc) : Interface();
 }
 
-Interface ObjectToy::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
+void ObjectToy::FillMenu(ui::Pointer&, Menu& menu) {
   using enum ui::Dir;
   auto object = LockOwner();
-  if (!object) return {};
-  ui::Dir dir = trigger;
-  if (dir == S) return ParentLocation();
-  if (dir == N) {
-    if (HasError(*object)) return Interface(*object, kThisIsFine);
-    return object->Find<Runnable>();
+  if (!object) return;
+  if (HasError(*object)) {
+    menu.Place(N, Interface(*object, kThisIsFine));
+  } else {
+    menu.Place(N, object->Find<Runnable>());
   }
-  return {};
+  menu.Place(S, ParentLocation());
 }
 
 void Object::Updated(WeakPtr<Object>& updated) {

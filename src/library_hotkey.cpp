@@ -15,6 +15,7 @@
 #include "key_button.hpp"
 #include "keyboard.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "root_widget.hpp"
 #include "ui_constants.hpp"
 #include "widget.hpp"
@@ -184,16 +185,11 @@ bool HotKey::DeserializeKey(ObjectDeserializer& d, StrView keyName) {
 // HotKeyWidget
 
 struct HotKeyWidget : ObjectToy {
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    using enum ui::Dir;
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
+    ObjectToy::FillMenu(pointer, menu);
     auto object = LockObject<HotKey>();
-    if (!object) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case N:
-        return Interface(*object, HotKey::enabled_tbl);
-      default:
-        return ObjectToy::FindOption(pointer, trigger);
-    }
+    if (!object) return;
+    menu.Place(ui::Dir::N, object->enabled.Bind());
   }
   unique_ptr<ui::PowerButton> power_button;
   unique_ptr<KeyButton> ctrl_button;

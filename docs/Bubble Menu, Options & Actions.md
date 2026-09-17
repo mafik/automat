@@ -4,7 +4,7 @@ Automat's includes a mechanism which allows Objects to expose various available 
 
 This mechanism is supposed to be parallel to the Widget system. In theory Automat could have a text-based interface (or a VR-based interface, or a REST API) and it would be able to re-use the same Options exposed by the Objects.
 
-Menu/Option/Action design is optimized towards muscle memory development & speed of use. Because of that every Widget (or Object) is responsible for meaningful grouping of available options. It can provide a maximum of eight Options. One special direction is reserved for accessing the widgets below.
+Menu/Option/Action design is optimized towards muscle memory development & speed of use. Because of that every Widget (or Object) is responsible for meaningful placement & grouping of available options. One special direction is reserved for accessing the widgets below.
 
 ## Option
 
@@ -20,7 +20,7 @@ The list of available Options may be dependent on the region on the Widget. Widg
 
 Options may have assigned activators: mouse buttons or keyboard keys. This makes it possible to quickly invoke some Action without opening any menu.
 
-Options may have assigned menu directions (one of eight directions).
+Options may have assigned menu directions.
 
 ### [IDEA] Option index
 
@@ -69,7 +69,7 @@ As the Action progresses it may construct an "Undo" Option. This Undo Option mig
 
 ## Bubble Menu
 
-Bubble Menu is an eight-directional radial menu.
+Bubble Menu is a radial menu that activates an option when the pointer crosses (pops) the bubble surface.
 
 Menu is associated with some origin position on the Widget. This position is passed to the activated Option.
 
@@ -105,7 +105,7 @@ How could a Menu be serialized?
 
 ### Parent Menus
 
-Objects in Automat form a hierarchy (Object/Interface->Owner hierarchy - not related to Widgets or Toy stacks). Right clicking on any Widget will open a menu with the seven options for that Object. The eight option (south) should allow the user to access the options of the parent Object (Location). It's the responsibilty of the Object to add that eight option for the parent.
+Objects in Automat form a hierarchy (Object/Interface->Owner hierarchy - not related to Widgets or Toy stacks). Right clicking on any Widget will open a menu with the options for that Object. The south option should allow the user to access the options of the parent Object (Location). It's the responsibilty of the Object to add that south option for the parent.
 
 This convention only applies to top-level menus. Once user enters sub-menu, there is no need to show an option to access the parent Object.
 

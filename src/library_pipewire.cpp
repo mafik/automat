@@ -16,6 +16,7 @@
 #include "format.hpp"
 #include "location.hpp"
 #include "log.hpp"
+#include "menu.hpp"
 #include "text_field.hpp"
 #include "ui_beta.hpp"
 #include "ui_shelf_button.hpp"
@@ -896,20 +897,14 @@ struct VolumeDrag : Action {
 };
 
 struct PipeWireNodeToy : ui::beta::ObjectToy {
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
     using enum ui::Dir;
+    ui::beta::ObjectToy::FillMenu(pointer, menu);
     auto object = LockObject<PipeWireNode>();
-    if (!object) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case W:
-        return Interface(*object, PipeWireNode::muted_tbl);
-      case E:
-        return Interface(*object, PipeWireNode::level_tbl);
-      default:
-        return ui::beta::ObjectToy::FindOption(pointer, trigger);
-    }
+    if (!object) return;
+    menu.Place(W, object->muted.Bind());
+    menu.Place(E, object->level.Bind());
   }
-  MiniMenuMode MenuMode() override { return MODE_4_DIR; }
   std::unique_ptr<PwNameField> field;
   std::unique_ptr<ui::ActionZone> mute_zone;
   std::unique_ptr<ui::ActionZone> volume_zone;
@@ -1135,7 +1130,7 @@ struct VolumeZone : ui::ActionZone {
     auto& face = Face();
     if (trigger != ui::PointerButton::Left || !face.has_volume_) return {};
     auto node = face.LockObject<PipeWireNode>();
-    return node ? Interface(*node, PipeWireNode::level_tbl) : Interface();
+    return node ? node->level.Bind() : Interface();
   }
 };
 

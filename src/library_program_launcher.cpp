@@ -14,6 +14,7 @@
 #include "fd_provider.hpp"
 #include "format.hpp"
 #include "location.hpp"
+#include "menu.hpp"
 #include "text_field.hpp"
 #include "ui_beta.hpp"
 #include "ui_button.hpp"
@@ -514,18 +515,12 @@ struct ArgvField : ui::TextFieldBase {
 };
 
 struct ProgramLauncherToy : ui::beta::ObjectToy {
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    using enum ui::Dir;
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
+    ui::beta::ObjectToy::FillMenu(pointer, menu);
     auto object = LockObject<ProgramLauncher>();
-    if (!object) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case NE:
-        return Interface(*object, ProgramLauncher::running_tbl);
-      default:
-        return ui::beta::ObjectToy::FindOption(pointer, trigger);
-    }
+    if (!object) return;
+    menu.Place(ui::Dir::NE, object->running.Bind());
   }
-  MiniMenuMode MenuMode() override { return MODE_6_DIR; }
   std::unique_ptr<ArgvField> field;
   std::unique_ptr<ui::beta::RunButton> button;
   std::unique_ptr<LaunchWidget> launch_widget;

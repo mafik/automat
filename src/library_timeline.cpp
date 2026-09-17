@@ -32,6 +32,7 @@
 #include "font.hpp"
 #include "library_mouse.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "number_text_field.hpp"
 #include "pointer.hpp"
 #include "random.hpp"
@@ -754,22 +755,15 @@ void Timeline::SetOffset(time::Duration offset, time::SteadyPoint now) {
 }
 
 struct TimelineWidget : ObjectToy {
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
     using enum ui::Dir;
+    ObjectToy::FillMenu(pointer, menu);
     auto object = LockObject<Timeline>();
-    if (!object) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case NE:
-        return Interface(*object, Timeline::running_tbl);
-      case W:
-        return Interface(*object, Timeline::position_tbl);
-      case E:
-        return Interface(*object, Timeline::zoom_tbl);
-      default:
-        return ObjectToy::FindOption(pointer, trigger);
-    }
+    if (!object) return;
+    menu.Place(NE, object->running.Bind());
+    menu.Place(W, object->position.Bind());
+    menu.Place(E, object->zoom.Bind());
   }
-  MiniMenuMode MenuMode() override { return MODE_8_DIR; }
   std::unique_ptr<TimelineRunButton> run_button;
   std::unique_ptr<PrevButton> prev_button;
   std::unique_ptr<NextButton> next_button;
@@ -1584,9 +1578,9 @@ Interface TimelineRunButton::FindOption(ui::Pointer&, ui::ActionTrigger trigger)
     case Timeline::kPlaying:
       return Interface(*timeline, Timeline::running_tbl.turn_off);
     case Timeline::kPaused:
-      return Interface(*timeline, Timeline::run_tbl);
+      return timeline->run.Bind();
     case Timeline::kRecording:
-      return Interface(*timeline, Timeline::stop_recording_tbl);
+      return timeline->stop_recording.Bind();
   }
   return {};
 }
@@ -1836,7 +1830,7 @@ struct TimelineZone : ui::ActionZone {
   Interface Position(ui::ActionTrigger trigger) const {
     if (trigger != ui::PointerButton::Left) return {};
     auto timeline = Face().LockObject<Timeline>();
-    return timeline ? Interface(*timeline, Timeline::position_tbl) : Interface();
+    return timeline ? timeline->position.Bind() : Interface();
   }
 };
 
@@ -1885,7 +1879,7 @@ struct ZoomZone : TimelineZone {
   Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
     if (trigger != ui::PointerButton::Left) return {};
     auto timeline = Face().LockObject<Timeline>();
-    return timeline ? Interface(*timeline, Timeline::zoom_tbl) : Interface();
+    return timeline ? timeline->zoom.Bind() : Interface();
   }
 };
 
@@ -2009,17 +2003,19 @@ struct TrackBaseWidget : ObjectToy {
     return nullopt;
   }
   void Draw(SkCanvas& canvas) const override { canvas.drawRect(shape.sk, kTrackPaint); }
-  MiniMenuMode MenuMode() override {
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
     Context ctx(*this);
-    return ctx.timeline_widget ? ctx.timeline_widget->MenuMode() : ObjectToy::MenuMode();
-  }
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    Context ctx(*this);
-    if (!ctx.timeline_widget) return ObjectToy::FindOption(pointer, trigger);
-    if (trigger == ui::PointerButton::Left) {
-      return ctx.timeline ? Interface(*ctx.timeline, Timeline::position_tbl) : Interface();
+    if (ctx.timeline_widget) {
+      ctx.timeline_widget->FillMenu(pointer, menu);
+    } else {
+      ObjectToy::FillMenu(pointer, menu);
     }
-    return ctx.timeline_widget->FindOption(pointer, trigger);
+  }
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
+    if (trigger != ui::PointerButton::Left) return {};
+    Context ctx(*this);
+    if (!ctx.timeline_widget || !ctx.timeline) return {};
+    return ctx.timeline->position.Bind();
   }
 };
 

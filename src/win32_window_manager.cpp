@@ -19,6 +19,7 @@
 #include "engine.hpp"
 #include "keyboard.hpp"
 #include "log.hpp"
+#include "menu.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
 #include "time.hpp"
@@ -696,7 +697,7 @@ struct AppWindowToy : ClientWindowToy {
   bool AllowClientPress(ui::Pointer& p) override;
   std::unique_ptr<Action> BeginClientPress(ui::Pointer& p) override;
 
-  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
+  void FillMenu(ui::Pointer&, Menu&) override;
 };
 
 // Held while a button pressed over the window is down: routes the press and
@@ -781,13 +782,12 @@ constinit Command::Table kEmbed = [] {
   return t;
 }();
 
-Interface AppWindowToy::FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) {
-  if (trigger == ui::Dir::E) {
-    if (auto window = LockOwner()) {
-      return Interface(*window, mode_ == AppWindow::Mode::Embedded ? kPopOut : kEmbed);
-    }
+void AppWindowToy::FillMenu(ui::Pointer& pointer, Menu& menu) {
+  ClientWindowToy::FillMenu(pointer, menu);
+  if (auto window = LockOwner()) {
+    menu.Place(ui::Dir::E,
+               Interface(*window, mode_ == AppWindow::Mode::Embedded ? kPopOut : kEmbed));
   }
-  return ClientWindowToy::FindOption(pointer, trigger);
 }
 
 // ============================================================================

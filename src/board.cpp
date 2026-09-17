@@ -23,6 +23,7 @@
 #include "global_resources.hpp"
 #include "location.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "root_widget.hpp"
 #include "status.hpp"
 #include "textures.hpp"
@@ -662,20 +663,13 @@ std::unique_ptr<Action> Board::move_Impl::OnActivate(ui::Pointer& pointer, autom
   return std::make_unique<MoveBoardAction>(pointer, obj->AcquirePtr());
 }
 
-Interface BoardWidget::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
+void BoardWidget::FillMenu(ui::Pointer&, Menu& menu) {
   using enum ui::Dir;
   auto board = LockBoard();
-  if (!board) return {};
-  switch (static_cast<ui::Dir>(trigger)) {
-    case N:
-      return Interface(*board, Board::move_tbl);
-    case NE:
-      return Interface(*board, Board::toggle_frame_tbl);
-    case S:
-      return Interface(*FindRootWidget().camera, ui::kCameraMenu);
-    default:
-      return {};
-  }
+  if (!board) return;
+  menu.Place(N, board->move.Bind());
+  menu.Place(NE, board->toggle_frame.Bind());
+  menu.Place(S, Interface(*FindRootWidget().camera, ui::kCameraMenu));
 }
 
 }  // namespace automat

@@ -184,7 +184,7 @@ struct RootWidget final : Widget {
   Ptr<Camera> camera = MAKE_PTR(Camera);
   uint32_t camera_observed = 0;
   Interface FindOption(Pointer&, ActionTrigger) override;
-  MiniMenuMode MenuMode() override { return MODE_4_DIR; }
+  void FillMenu(Pointer&, Menu&) override;
 
   void Zoom(float delta);
   std::unique_ptr<Pointer> MakePointer(Vec2 position);

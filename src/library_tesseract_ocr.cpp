@@ -34,6 +34,7 @@
 #include "font.hpp"
 #include "image_provider.hpp"
 #include "log.hpp"
+#include "menu.hpp"
 #include "str.hpp"
 #include "svg.hpp"
 #include "text_widget.hpp"
@@ -90,18 +91,12 @@ std::string_view TesseractOCR::Name() const { return "Tesseract OCR"; }
 Ptr<Object> TesseractOCR::Clone() const { return MAKE_PTR(TesseractOCR, *this); }
 
 struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    using enum ui::Dir;
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
+    ObjectToy::FillMenu(pointer, menu);
     auto object = LockTesseract();
-    if (!object) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case E:
-        return Interface(*object, TesseractOCR::region_tbl);
-      default:
-        return ObjectToy::FindOption(pointer, trigger);
-    }
+    if (!object) return;
+    menu.Place(ui::Dir::E, object->region.Bind());
   }
-  MiniMenuMode MenuMode() override { return MODE_4_DIR; }
   using ui::Widget::mortal_coil;
   constexpr static float kSize = 5_cm;
   constexpr static float kRegionStrokeWidth = 1_mm;
@@ -1129,15 +1124,15 @@ struct RegionZone : ui::ActionZone {
     if (!tesseract) return {};
     switch (mode) {
       case DragMode::Top:
-        return Interface(*tesseract, TesseractOCR::top_tbl);
+        return tesseract->top.Bind();
       case DragMode::Bottom:
-        return Interface(*tesseract, TesseractOCR::bottom_tbl);
+        return tesseract->bottom.Bind();
       case DragMode::Left:
-        return Interface(*tesseract, TesseractOCR::left_tbl);
+        return tesseract->left.Bind();
       case DragMode::Right:
-        return Interface(*tesseract, TesseractOCR::right_tbl);
+        return tesseract->right.Bind();
       case DragMode::Move:
-        return Interface(*tesseract, TesseractOCR::region_tbl);
+        return tesseract->region.Bind();
     }
   }
 };

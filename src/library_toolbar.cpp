@@ -9,6 +9,7 @@
 #include "../build/generated/embedded.hpp"
 #include "audio.hpp"
 #include "automat.hpp"
+#include "menu.hpp"
 #include "object_source.hpp"
 #include "random.hpp"
 #include "root_widget.hpp"
@@ -30,6 +31,10 @@ void PrototypeButton::Init() {
 Interface PrototypeButton::FindOption(Pointer& pointer, ActionTrigger trigger) {
   if (trigger == PointerButton::Left) return Interface(*proto, kMakeObject);
   return proto_widget->FindOption(pointer, trigger);
+}
+
+void PrototypeButton::FillMenu(Pointer& pointer, Menu& menu) {
+  proto_widget->FillMenu(pointer, menu);
 }
 
 constexpr float kMarginBetweenIcons = 1_mm;

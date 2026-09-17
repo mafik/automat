@@ -31,6 +31,7 @@ struct PrototypeButton : Toy {
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
 
   Interface FindOption(Pointer&, ActionTrigger) override;
+  void FillMenu(Pointer&, Menu&) override;
 
   StrView Name() const override { return "PrototypeButton"; }
 };

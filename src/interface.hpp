@@ -18,15 +18,13 @@ namespace automat {
 struct Action;
 struct Object;
 struct Toy;
+struct Menu;
 
 namespace ui {
 struct Pointer;
 struct Widget;
 enum class Cursor;
-enum class Dir : uint8_t;
 }  // namespace ui
-
-enum MiniMenuMode { MODE_8_DIR, MODE_6_DIR, MODE_4_DIR, MODE_2_DIR, MODE_1_DIR };
 
 // Interface is the base class for parts of Objects that can be exposed to other Objects.
 //
@@ -88,9 +86,8 @@ struct Interface {
     int state_off = 0;  // byte offset from Object* to Interface::State
     StrView name;
     ui::Cursor cursor = {};
-    MiniMenuMode menu_mode = MODE_8_DIR;
     std::unique_ptr<Action> (*activate)(Interface, ui::Pointer&, Toy*) = nullptr;
-    Interface (*find_option)(Interface, ui::Dir) = nullptr;
+    void (*fill_menu)(Interface, Menu&) = nullptr;
     std::unique_ptr<ui::Widget> (*make_icon)(Interface, ui::Widget* parent) = &DefaultMakeIcon;
 
     constexpr Table(Kind kind, StrView name, int state_off = 0)
@@ -118,11 +115,8 @@ struct Interface {
         make_icon = [](Interface self, ui::Widget* p) -> std::unique_ptr<ui::Widget> {
           return static_cast<ImplT&>(self).OnMakeIcon(p);
         };
-      if constexpr (requires { ImplT::kMenuMode; }) menu_mode = ImplT::kMenuMode;
-      if constexpr (requires(ImplT& i, ui::Dir d) { i.OnFindOption(d); })
-        find_option = [](Interface self, ui::Dir d) -> Interface {
-          return static_cast<ImplT&>(self).OnFindOption(d);
-        };
+      if constexpr (requires(ImplT& i, Menu& m) { i.OnFillMenu(m); })
+        fill_menu = [](Interface self, Menu& m) { static_cast<ImplT&>(self).OnFillMenu(m); };
     }
   };
 
@@ -187,7 +181,7 @@ struct Interface {
   StrView Name() const { return table_ptr->name; }
 
   std::unique_ptr<Action> Activate(ui::Pointer&, Toy* toy = nullptr) const;
-  Interface FindOption(ui::Dir) const;
+  void FillMenu(Menu&) const;
   std::unique_ptr<Action> OpenMenu(ui::Pointer&, Toy* toy) const;
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) const;
 
@@ -313,11 +307,9 @@ struct Linked : private T {
   bool operator==(const Linked&) const = default;
 };
 
-constexpr Interface::Table MenuTable(StrView name, MiniMenuMode mode,
-                                     Interface (*find_option)(Interface, ui::Dir)) {
+constexpr Interface::Table MenuTable(StrView name, void (*fill_menu)(Interface, Menu&)) {
   Interface::Table t(Interface::kMenu, name);
-  t.menu_mode = mode;
-  t.find_option = find_option;
+  t.fill_menu = fill_menu;
   return t;
 }
 

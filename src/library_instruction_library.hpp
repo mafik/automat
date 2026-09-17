@@ -8,6 +8,7 @@
 #include "animation.hpp"
 #include "base.hpp"
 #include "library_instruction.hpp"
+#include "menu.hpp"
 #include "object_source.hpp"
 #include "random.hpp"
 
@@ -63,20 +64,14 @@ struct InstructionLibrary : Object {
   INTERFACES(scroll, pick)
 
   struct Widget : Toy, ui::PointerMoveCallback {
-    Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    void FillMenu(ui::Pointer& pointer, Menu& menu) override {
       using enum ui::Dir;
+      automat::ObjectToy::FillMenu(pointer, menu);
       auto object = LockObject<InstructionLibrary>();
-      if (!object) return {};
-      switch (static_cast<ui::Dir>(trigger)) {
-        case E:
-          return Interface(*object, InstructionLibrary::scroll_tbl);
-        case N:
-          return Interface(*object, InstructionLibrary::pick_tbl);
-        default:
-          return automat::ObjectToy::FindOption(pointer, trigger);
-      }
+      if (!object) return;
+      menu.Place(E, object->scroll.Bind());
+      menu.Place(N, object->pick.Bind());
     }
-    MiniMenuMode MenuMode() override { return MODE_4_DIR; }
     using Toy::mortal_coil;  // disambiguate from PointerMoveCallback's coil for MortalPtr<Widget>
     struct InstructionCard {
       std::unique_ptr<Instruction::Widget> widget;

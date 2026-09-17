@@ -20,6 +20,7 @@
 #include "drawing.hpp"
 #include "font.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "ui_rocker.hpp"
 #include "widget.hpp"
 
@@ -80,7 +81,6 @@ bool Switch::DeserializeKey(ObjectDeserializer& d, StrView key) {
 }
 
 struct SwitchToy : ObjectToy {
-  MiniMenuMode MenuMode() override { return MODE_4_DIR; }
   std::unique_ptr<ui::Rocker> rocker;
   Str label = "?"s;
   float light = 0;
@@ -105,9 +105,9 @@ struct SwitchToy : ObjectToy {
     rocker->target = on_off;
   }
 
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    if (trigger == ui::Dir::E) return rocker->target.Lock();
-    return ObjectToy::FindOption(pointer, trigger);
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
+    ObjectToy::FillMenu(pointer, menu);
+    menu.Place(ui::Dir::E, rocker->target.Lock());
   }
 
   float GetBaseScale() const override { return 1.0f; }

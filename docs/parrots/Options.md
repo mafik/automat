@@ -36,12 +36,12 @@ interfaces, and the widgets only map triggers to those interfaces:
   front of the deck.
 - Sub-options of an interface are tables nested inside its table (`sync` and `unsync` in
   `Syncable::Table`, `turn_on` and `turn_off` in `OnOff::Table`, all four Command tables). The
-  interface lays them out itself: `find_option` in its table answers a menu direction with one of
-  them and `menu_mode` picks the slot layout. A derived table answers its own directions and defers
-  the rest to its base: `Syncable::Table::DefaultFindOption` (src/sync.cpp) answers E with `sync`
-  and W with `unsync` while synced, and the OnOff table (src/on_off.hpp) answers N with `turn_on`
-  or `turn_off` by state before deferring to it. The primary action stays in `activate` (an OnOff
-  toggles); an interface without `activate` opens its sub-options when activated.
+  interface lays them out itself: `fill_menu` in its table places them in the menu. A derived table
+  calls the filler of its base first and then places its own: `Syncable::Table::DefaultFillMenu`
+  (src/sync.cpp) places `sync` at E and `unsync` at W while synced, and the OnOff table
+  (src/on_off.hpp) calls it and then places `turn_on` or `turn_off` by state at N. The primary
+  action stays in `activate` (an OnOff toggles); an interface without `activate` opens its
+  sub-options when activated.
 - Parameters: an enum-valued option is one table per value (Timer `next_range` and
   `prev_range`); an indexed or continuous one is derived from the pointer position and the Toy
   inside `OnActivate`.
@@ -60,17 +60,18 @@ displayed object.
 `OptionsProvider` (src/widget.hpp) is the base of every widget:
 
 ```cpp
-virtual MiniMenuMode MenuMode();
 virtual Interface FindOption(ui::Pointer&, ui::ActionTrigger);
+virtual void FillMenu(ui::Pointer&, Menu&);
 std::unique_ptr<Action> OpenMenu(ui::Pointer&);
 ```
 
-`ActionTrigger` is a pointer button, a key or a menu direction (`ui::Dir`). `FindOption` is a
-switch: buttons and keys map gestures, directions lay out the menu. A widget lays out the menu of
-its object; an interface lays out only its own sub-options, through `find_option`. `FindOption`
-returns a plain `Interface` without transferring ownership: the walkers (`Pointer::ButtonDown`,
-`KeyboardWidget::KeyDown`, `Menu::Activate` and `OpenMenu` in src/menu.cpp, the cursor walk in
-src/pointer.cpp) lock the owner through `Closest<Toy>` around the lookup and the activation, and
+`ActionTrigger` is a pointer button or a key. `FindOption` maps gestures: it answers a button or a
+key with the interface that the gesture activates. `FillMenu` lays out the menu: it places
+interfaces in a `Menu` (src/menu.hpp), each at an angle. A widget lays out the menu of its object;
+an interface lays out only its own sub-options, through `fill_menu`. Both hand out plain
+`Interface` values without transferring ownership: the walkers (`Pointer::ButtonDown`,
+`KeyboardWidget::KeyDown`, `MenuWidget::Activate` and `OpenMenu` in src/menu.cpp, the cursor walk
+in src/pointer.cpp) lock the owner through `Closest<Toy>` around the lookup and the activation, and
 pass that Toy to `Interface::Activate`.
 
 `Pointer::ButtonDown` and `KeyboardWidget::KeyDown` walk from the hovered widget up to the root and
@@ -81,20 +82,21 @@ by the same walk, else the arrow.
 
 Each walker applies its own rules to the option it found. While Control is held (the `control`
 FlipFlop of `RootWidget`, synced to the left Control key), every walker first tries
-`Interface::DragController(pointer, birthplace)` (src/interface.cpp): an option with a controller
+`Interface::DragNewController(pointer, birthplace)` (src/interface.cpp): an option with a controller
 (`Interface::MakeController`, a `FlipFlopController` for every OnOff) is wrapped in one, whose toy
 is born under `birthplace` and handed to `DragNew`, the same drag that springs a new object out of
 a toolbar or a menu slot; an option without a controller falls through. The birthplace is the
 widget that answered `FindOption` for a button or key, and the slot icon for a swipe. A swipe
-(`Menu::Activate`, src/menu.cpp) then enters the option's sub-options (`Interface::OpenMenu`) when
-it has any. Otherwise the primary action runs (`Interface::Activate`). Buttons and keys act,
+(`MenuWidget::Activate`, src/menu.cpp) then enters the option's sub-options (`Interface::OpenMenu`)
+when it has any. Otherwise the primary action runs (`Interface::Activate`). Buttons and keys act,
 directions enter: the same OnOff toggles from its power button, opens its sub-menu from a slot of
 the object menu, and becomes a controller from either while Control is held.
 
 `FindOption` runs on every pointer move and inside `RootWidget::Tick`, so it only describes the
 current state: no mutation, no object mutexes beyond the owner lock the walker already holds, no
 widget creation, no `WakeAnimation`, and no pointer position. Which part of a widget is under the
-pointer is decided by pointer routing, through action zones.
+pointer is decided by pointer routing, through action zones. `FillMenu` runs once, when a menu
+opens.
 
 ## Action zones
 
@@ -109,21 +111,43 @@ wakes it when the part moves.
 
 ## Menus
 
-The bubble menu (`Menu` in src/menu.cpp) has eight fixed slots of `NestedWeakPtr<Interface::Table>`.
-`OptionsProvider::OpenMenu` asks `FindOption` for every direction valid in the provider's
-`MenuMode` and opens the menu when any slot is filled; icons come from `Interface::MakeIcon`.
-Swiping past the bubble radius locks the slot and activates it, with the slot's icon as the Toy when
-that icon is a Toy (the prototype icons made by `kMakeObject`), else the toy the menu was opened
-from, so a new object flies out of the bubble. `MakeMenuAction(pointer, mode, options, toy)` builds a
-menu from a slot list, drops the slots that are not valid in the mode and returns nothing when no
-slot is filled; `OptionsProvider::OpenMenu` fills the list from the widget's `FindOption` and
-`Interface::OpenMenu` from the table's `find_option`.
+A `Menu` (src/menu.hpp) is a list of slots, each an interface placed at an angle. `Menu::Place`
+takes the angle as a `SinCos` or as one of the eight compass names of `ui::Dir`, which stand for
+multiples of 45 degrees counted counter-clockwise from east. Placing at an angle that already holds
+a slot replaces that slot, and placing an empty interface removes it. Nothing declares a shape: the
+count and the orientation of a menu follow from the placements, so any count and any set of angles
+is a valid menu.
 
-A node that only groups other options is a table of kind `kMenu`, made by `MenuTable(name, mode,
-find_option)` (src/interface.hpp): it has `find_option` and a name, but no `activate`, no state and
-no methods, so no cast accepts it and `MakeController` returns nothing for it. An Object never
-reports such a table through `INTERFACES()`; it is only returned by `FindOption` (the camera menu
-in src/root_widget.cpp, the decoration menu in src/window_frame.cpp, the shelf categories in
+`OptionsProvider::OpenMenu` fills a `Menu` through the widget's `FillMenu` and
+`Interface::OpenMenu` through the table's `fill_menu`; `MakeMenuAction(pointer, menu, toy)` builds
+the bubble (`MenuWidget` in src/menu.cpp) from it and returns nothing when the menu is empty. Icons
+come from `Interface::MakeIcon`. The icon of each slot sits at its angle, at two thirds of the
+bubble radius, and the bubble area is divided equally among the slots for icon sizing. The pointer
+selects the slot whose angle is nearest to the pointer direction (`MenuWidget::PointerSlot`), so
+each slot owns the sector reaching halfway to its angular neighbours: two slots at N and S split
+the circle into an upper and a lower half, four slots at the cardinal points get 90 degrees each,
+and a single slot takes the whole circle. Swiping past the bubble radius activates the slot, with
+the slot's icon as the Toy when that icon is a Toy (the prototype icons made by `kMakeObject`),
+else the toy the menu was opened from, so a new object flies out of the bubble.
+
+An option keeps its angle in every menu that offers it, whatever else the menu holds; only its
+sector width changes with the neighbours. A swipe learned on one menu therefore lands on the same
+option in every other menu that has it. Options that exist in one menu only may be spread evenly
+instead: the mouse menu (src/library_mouse.cpp) keeps N and S and spaces its six options 60 degrees
+apart, and its button sub-menus space their five buttons 72 degrees apart around the middle button
+at S.
+
+A widget or table that builds on a base calls the filler of the base first and then places its
+own slots, so a later placement at the same angle is an override, visible where it happens
+(`MacroRecorderWidget` in src/library_macro_recorder.cpp replaces the Runnable at N with its
+`recording` interface). The base places only the slots that mean the same everywhere and never
+needs to know the final shape, because the sectors follow from the final list.
+
+A node that only groups other options is a table of kind `kMenu`, made by `MenuTable(name,
+fill_menu)` (src/interface.hpp): it has `fill_menu` and a name, but no `activate`, no state and no
+methods, so no cast accepts it and `MakeController` returns nothing for it. An Object never reports
+such a table through `INTERFACES()`; it is only placed in menus (the camera menu in
+src/root_widget.cpp, the decoration menu in src/window_frame.cpp, the shelf categories in
 src/library_beta_shelf.cpp, the register pages in src/library_assembler.cpp, the mouse menus in
 src/library_mouse.cpp). Interfaces are for Objects to call; a menu exposes nothing to call, so it
 is not one of an Object's interfaces.
@@ -134,7 +158,7 @@ Three hierarchies meet in a menu and must not compete for directions:
   never lays out menus.
 - The ownership tree (Object, Location, Board, root) is combined by chained menus with one reserved
   direction: the object menu opens on the right button, its S slot is the Location, the Location's S
-  is the Board, the Board's S is the camera menu. S is valid in every `MiniMenuMode`, so every small
+  is the Board, the Board's S is the camera menu. A menu of any count can hold S, so every small
   menu can still chain. A directional fallback, an outer provider filling the directions an inner
   one leaves free, is rejected: a three-option menu with wide sectors cannot host an outer
   provider's eight sectors, and the outer commands would change meaning with every stacking.
@@ -146,15 +170,16 @@ Conventions: S is the parent, NW is destructive, N is the primary action. Availa
 state (the Timer's start pusher answers the left button with `run` while the timer is stopped and
 with the `turn_off` sub-option of `running` while it runs), the meaning of a slot may not. Sub-menus opened from an interface's sub-options are leaves and reserve no S.
 
-The generic layer provides only the slots that mean the same on every object. `ObjectToy::FindOption`
-(src/object.cpp) answers N with the object's Runnable, or with `kThisIsFine` while the object shows
-an error, and S with its Location; its `MenuMode` is two directions. The left button is not answered
-by the object toy and falls through to `LocationWidget::FindOption` (src/location.cpp): Left and N
-move, NW delete, NE iconify or deiconify, E copy, W clone, SE make home when the Location is not the
-object's home, S the Board. `BoardWidget::FindOption`
-(src/board.cpp): N move, NE toggle frame, S the camera menu. `RootWidget::FindOption`
-(src/root_widget.cpp) maps the W, A, S and D keys and the N, S, W and E directions to the `Camera`
-object's nudge commands and the middle button to the camera drag. An object with more commands
-overrides `FindOption` and `MenuMode` and places each command by hand (`TimerWidget` in
-src/library_timer.cpp); nothing is placed by enumeration order, because adding an interface would
-then shift every direction after it.
+The generic layer provides only the slots that mean the same on every object. `ObjectToy::FillMenu`
+(src/object.cpp) places the object's Runnable, or `kThisIsFine` while the object shows an error, at
+N and its Location at S. The left button is not answered by the object toy and falls through to
+`LocationWidget::FindOption` (src/location.cpp), which answers it with move.
+`LocationWidget::FillMenu` places move at N, delete at NW, iconify or deiconify at NE, copy at E,
+clone at W, make home at SE when the Location is not the object's home, and the Board at S.
+`BoardWidget::FillMenu` (src/board.cpp) places move at N, toggle frame at NE and the camera menu at
+S.
+`RootWidget::FindOption` (src/root_widget.cpp) maps the W, A, S and D keys to the `Camera` object's
+nudge commands and the middle button to the camera drag; `RootWidget::FillMenu` fills the same
+camera menu that the Board's S slot opens. An object with more commands overrides `FillMenu`, calls
+the base and places each command by hand (`TimerWidget` in src/library_timer.cpp); nothing is placed
+by enumeration order, because adding an interface would then shift every direction after it.

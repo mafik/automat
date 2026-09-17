@@ -27,18 +27,16 @@ std::unique_ptr<Action> Interface::Activate(ui::Pointer& pointer, Toy* toy) cons
   return OpenMenu(pointer, toy);
 }
 
-Interface Interface::FindOption(ui::Dir dir) const {
-  if (table_ptr == nullptr || table_ptr->find_option == nullptr) return {};
-  return table_ptr->find_option(*this, dir);
+void Interface::FillMenu(Menu& menu) const {
+  if (table_ptr == nullptr || table_ptr->fill_menu == nullptr) return;
+  table_ptr->fill_menu(*this, menu);
 }
 
 std::unique_ptr<Action> Interface::OpenMenu(ui::Pointer& pointer, Toy* toy) const {
-  if (table_ptr == nullptr || table_ptr->find_option == nullptr) return nullptr;
-  Interface options[ui::kDirCount];
-  for (int i = 0; i < ui::kDirCount; ++i) {
-    options[i] = FindOption(static_cast<ui::Dir>(i));
-  }
-  return MakeMenuAction(pointer, table_ptr->menu_mode, options, toy);
+  if (table_ptr == nullptr || table_ptr->fill_menu == nullptr) return nullptr;
+  Menu menu;
+  table_ptr->fill_menu(*this, menu);
+  return MakeMenuAction(pointer, menu, toy);
 }
 
 std::unique_ptr<ui::Widget> Interface::MakeIcon(ui::Widget* parent) const {

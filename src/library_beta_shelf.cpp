@@ -7,6 +7,7 @@
 
 #include <include/core/SkCanvas.h>
 
+#include "menu.hpp"
 #include "object_source.hpp"
 #include "prototypes.hpp"
 #include "ui_beta.hpp"
@@ -23,54 +24,32 @@ Interface Proto(StrView name) {
   return proto ? Interface(*proto, kMakeObject) : Interface();
 }
 
-Interface FfmpegOption(Interface, ui::Dir dir) {
+void FillFfmpegMenu(Interface, Menu& menu) {
   using enum ui::Dir;
-  switch (dir) {
-    case N:
-      return Proto("avformat");
-    case S:
-      return Proto("avcodec");
-    default:
-      return {};
-  }
+  menu.Place(N, Proto("avformat"));
+  menu.Place(S, Proto("avcodec"));
 }
 
-Interface TensorFlowOption(Interface, ui::Dir dir) {
+void FillTensorFlowMenu(Interface, Menu& menu) {
   using enum ui::Dir;
-  switch (dir) {
-    case N:
-      return Proto("tf:tensor");
-    case S:
-      return Proto("Square");
-    default:
-      return {};
-  }
+  menu.Place(N, Proto("tf:tensor"));
+  menu.Place(S, Proto("Square"));
 }
 
-constinit Interface::Table kFfmpegMenu = MenuTable("FFmpeg", MODE_2_DIR, &FfmpegOption);
-constinit Interface::Table kTensorFlowMenu = MenuTable("TensorFlow", MODE_2_DIR, &TensorFlowOption);
+constinit Interface::Table kFfmpegMenu = MenuTable("FFmpeg", &FillFfmpegMenu);
+constinit Interface::Table kTensorFlowMenu = MenuTable("TensorFlow", &FillTensorFlowMenu);
 
-Interface PipelinesOption(Interface self, ui::Dir dir) {
+void FillPipelinesMenu(Interface self, Menu& menu) {
   using enum ui::Dir;
-  switch (dir) {
-    case NW:
-      return Proto("GStreamer");
-    case N:
-      return Interface(self.object_ptr, &kFfmpegMenu);
-    case NE:
-      return Interface(self.object_ptr, &kTensorFlowMenu);
-    case SW:
-      return Proto("GEGL");
-    case SE:
-      return Proto("PipeWire");
-    case S:
-      return Proto("pipewire:node");
-    default:
-      return {};
-  }
+  menu.Place(NW, Proto("GStreamer"));
+  menu.Place(N, Interface(self.object_ptr, &kFfmpegMenu));
+  menu.Place(NE, Interface(self.object_ptr, &kTensorFlowMenu));
+  menu.Place(SW, Proto("GEGL"));
+  menu.Place(SE, Proto("PipeWire"));
+  menu.Place(S, Proto("pipewire:node"));
 }
 
-constinit Interface::Table kPipelinesMenu = MenuTable("Pipelines", MODE_8_DIR, &PipelinesOption);
+constinit Interface::Table kPipelinesMenu = MenuTable("Pipelines", &FillPipelinesMenu);
 
 struct BetaShelfToy : ObjectToy {
   BetaShelfToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {}
@@ -85,21 +64,14 @@ struct BetaShelfToy : ObjectToy {
     ui::beta::DrawBetaStamp(canvas, {0, 0}, kStampRadius - 1_mm, -12, ID());
   }
 
-  MiniMenuMode MenuMode() override { return MODE_8_DIR; }
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
     using enum ui::Dir;
+    ObjectToy::FillMenu(pointer, menu);
     auto shelf = LockOwner();
-    if (!shelf) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case W:
-        return Proto("Program Launcher");
-      case SW:
-        return Proto("File");
-      case N:
-        return Interface(*shelf, kPipelinesMenu);
-      default:
-        return ObjectToy::FindOption(pointer, trigger);
-    }
+    if (!shelf) return;
+    menu.Place(W, Proto("Program Launcher"));
+    menu.Place(SW, Proto("File"));
+    menu.Place(N, Interface(*shelf, kPipelinesMenu));
   }
 };
 

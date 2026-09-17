@@ -299,7 +299,7 @@ struct LocationWidget : ObjectToy {
   SkPath Shape() const override;
   Optional<Rect> DrawBounds() const override;
   Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
-  MiniMenuMode MenuMode() override { return MODE_8_DIR; }
+  void FillMenu(ui::Pointer&, Menu&) override;
 
   void OnPoll(time::Timer& timer) override {
     if (owned_toy) owned_toy->Poll(timer);

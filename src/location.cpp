@@ -28,6 +28,7 @@
 #include "format.hpp"
 #include "interface.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "raycast.hpp"
 #include "root_widget.hpp"
 #include "time.hpp"
@@ -704,33 +705,28 @@ void LocationWidget::OnChildReparentedAway(ui::Widget& child) {
   }
 }
 Interface LocationWidget::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
+  if (trigger != ui::PointerButton::Left) return {};
+  auto loc = LockLocation();
+  return loc ? loc->move.Bind() : Interface();
+}
+
+void LocationWidget::FillMenu(ui::Pointer&, Menu& menu) {
   using enum ui::Dir;
   auto loc = LockLocation();
-  if (!loc) return {};
-  if (trigger == ui::PointerButton::Left) return Interface(*loc, Location::move_tbl);
-  switch (static_cast<ui::Dir>(trigger)) {
-    case N:
-      return Interface(*loc, Location::move_tbl);
-    case NW:
-      return Interface(*loc, Location::remove_tbl);
-    case NE:
-      if (loc->iconified) return Interface(*loc, Location::deiconify_tbl);
-      return Interface(*loc, Location::iconify_tbl);
-    case E:
-      return Interface(*loc, Location::copy_tbl);
-    case W:
-      return Interface(*loc, Location::clone_tbl);
-    case SE:
-      if (loc->object && loc->object->HomeLocation() != loc) {
-        return Interface(*loc, Location::make_home_tbl);
-      }
-      return {};
-    case S:
-      if (auto board = loc->LockBoard()) return Interface(*board);
-      return {};
-    default:
-      return {};
+  if (!loc) return;
+  menu.Place(N, loc->move.Bind());
+  menu.Place(NW, loc->remove.Bind());
+  if (loc->iconified) {
+    menu.Place(NE, loc->deiconify.Bind());
+  } else {
+    menu.Place(NE, loc->iconify.Bind());
   }
+  menu.Place(E, loc->copy.Bind());
+  menu.Place(W, loc->clone.Bind());
+  if (loc->object && loc->object->HomeLocation() != loc) {
+    menu.Place(SE, loc->make_home.Bind());
+  }
+  if (auto board = loc->LockBoard()) menu.Place(S, Interface(*board));
 }
 
 }  // namespace automat

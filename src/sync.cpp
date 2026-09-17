@@ -21,6 +21,7 @@
 #include "global_resources.hpp"
 #include "log.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "root_widget.hpp"
 #include "status.hpp"
 #include "textures.hpp"
@@ -102,17 +103,12 @@ Locked<Interface> Syncable::Table::DefaultFind(Argument self) {
 
 void Syncable::Unsync() { state->Unsync(*object_ptr, *table); }
 
-Interface Syncable::Table::DefaultFindOption(Interface self, ui::Dir dir) {
+void Syncable::Table::DefaultFillMenu(Interface self, Menu& menu) {
   using enum ui::Dir;
   auto* table = static_cast<Table*>(self.table_ptr);
-  switch (dir) {
-    case E:
-      return Interface(self.object_ptr, &table->sync);
-    case W:
-      if (Syncable(self.object_ptr, table).state->gear_weak.IsExpired()) return {};
-      return Interface(self.object_ptr, &table->unsync);
-    default:
-      return {};
+  menu.Place(E, Interface(self.object_ptr, &table->sync));
+  if (!Syncable(self.object_ptr, table).state->gear_weak.IsExpired()) {
+    menu.Place(W, Interface(self.object_ptr, &table->unsync));
   }
 }
 

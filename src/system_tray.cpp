@@ -248,7 +248,7 @@ class DBusMenu final : public AdaptorInterfaces<com::canonical::dbusmenu_adaptor
         break;
       }
       case MenuItem::MenuKind: {
-        auto& m = *reinterpret_cast<Menu*>(&node);
+        auto& m = *reinterpret_cast<system_tray::Menu*>(&node);
         items[id].label = m.name;
         for (auto* link = m.icon; link; link = NextInChain(link)) {
           if (string name = TryGetIconName(link); !name.empty()) {

@@ -5,11 +5,23 @@
 #include <memory>
 
 #include "action.hpp"
+#include "interface.hpp"
 #include "pointer.hpp"
+#include "sincos.hpp"
+#include "vec.hpp"
 
 namespace automat {
 
-std::unique_ptr<Action> MakeMenuAction(ui::Pointer&, MiniMenuMode,
-                                       const Interface (&options)[ui::kDirCount], Toy* toy);
+struct Menu {
+  struct Slot {
+    SinCos angle;
+    Interface option;
+  };
+  SmallVec<Slot, 8> slots;
+  void Place(SinCos angle, Interface option);
+  void Place(ui::Dir dir, Interface option);
+};
+
+std::unique_ptr<Action> MakeMenuAction(ui::Pointer&, const Menu&, Toy* toy);
 
 }  // namespace automat

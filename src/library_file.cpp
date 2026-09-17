@@ -15,6 +15,7 @@
 #include "deserializer.hpp"
 #include "file_import.hpp"
 #include "font.hpp"
+#include "menu.hpp"
 #include "object.hpp"
 #include "root_widget.hpp"
 #include "textures.hpp"
@@ -295,16 +296,11 @@ Vec2 File::Size() const {
 }
 
 struct FileToy : automat::ObjectToy {
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    using enum ui::Dir;
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
+    automat::ObjectToy::FillMenu(pointer, menu);
     auto object = LockObject<File>();
-    if (!object) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case N:
-        return Interface(*object, File::toggle_filename_tbl);
-      default:
-        return automat::ObjectToy::FindOption(pointer, trigger);
-    }
+    if (!object) return;
+    menu.Place(ui::Dir::N, object->toggle_filename.Bind());
   }
   sk_sp<SkImage> image;
   sk_sp<SkPicture> icon;

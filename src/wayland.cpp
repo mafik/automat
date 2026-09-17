@@ -39,6 +39,7 @@
 #include "location.hpp"
 #include "log.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
 #include "toy.hpp"
@@ -2009,6 +2010,7 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
     return true;
   }
   Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
+  void FillMenu(ui::Pointer&, Menu&) override;
 
   void Draw(SkCanvas& canvas) const override {
     DrawSurfaceImage(canvas, image_, src_crop_, dst_size_, TopLeft());
@@ -2149,11 +2151,9 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
   void KeyDown(ui::Caret&, ui::Key key) override { ForwardKey(key, true); }
   void KeyUp(ui::Caret&, ui::Key key) override { ForwardKey(key, false); }
 
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    if (trigger == ui::Dir::W) {
-      if (auto window = LockOwner()) return DecorationMenu(*window);
-    }
-    return ObjectToy::FindOption(pointer, trigger);
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
+    ObjectToy::FillMenu(pointer, menu);
+    if (auto window = LockOwner()) menu.Place(ui::Dir::W, DecorationMenu(*window));
   }
 
   SkPath Shape() const override {
@@ -2244,7 +2244,16 @@ Interface WaylandSurfaceToy::FindOption(ui::Pointer& p, ui::ActionTrigger trigge
   }
   Toy* base = BaseToy();
   if (base != this) return base->FindOption(p, trigger);
-  return ObjectToy::FindOption(p, trigger);
+  return {};
+}
+
+void WaylandSurfaceToy::FillMenu(ui::Pointer& pointer, Menu& menu) {
+  Toy* base = BaseToy();
+  if (base != this) {
+    base->FillMenu(pointer, menu);
+  } else {
+    ObjectToy::FillMenu(pointer, menu);
+  }
 }
 
 std::unique_ptr<ObjectToy> WaylandSurface::MakeToy(ui::Widget* parent) {

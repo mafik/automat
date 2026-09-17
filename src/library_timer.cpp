@@ -24,6 +24,7 @@
 #include "drag_action.hpp"
 #include "font.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "number_text_field.hpp"
 #include "pointer.hpp"
 #include "status.hpp"
@@ -492,24 +493,16 @@ struct TimerHand : Object {
 };
 
 struct TimerWidget : ObjectToy {
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
     using enum ui::Dir;
+    ObjectToy::FillMenu(pointer, menu);
     auto object = LockTimer();
-    if (!object) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case NW:
-        return Interface(*object, Timer::duration_tbl);
-      case NE:
-        return Interface(*object, Timer::running_tbl);
-      case E:
-        return Interface(*object, Timer::next_range_tbl);
-      case W:
-        return Interface(*object, Timer::prev_range_tbl);
-      default:
-        return ObjectToy::FindOption(pointer, trigger);
-    }
+    if (!object) return;
+    menu.Place(NW, object->duration.Bind());
+    menu.Place(NE, object->running.Bind());
+    menu.Place(E, object->next_range.Bind());
+    menu.Place(W, object->prev_range.Bind());
   }
-  MiniMenuMode MenuMode() override { return MODE_8_DIR; }
   // Animation state
   float start_pusher_depression = 0;
   float left_pusher_depression = 0;
@@ -863,7 +856,7 @@ struct DurationHandleZone : TimerZone {
   Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
     if (trigger != ui::PointerButton::Left) return {};
     auto timer = Face().LockTimer();
-    return timer ? Interface(*timer, Timer::duration_tbl) : Interface();
+    return timer ? timer->duration.Bind() : Interface();
   }
 };
 
@@ -875,7 +868,7 @@ struct StartPusherZone : TimerZone {
     auto timer = Face().LockTimer();
     if (!timer) return {};
     if (Face().is_running) return Interface(*timer, Timer::running_tbl.turn_off);
-    return Interface(*timer, Timer::run_tbl);
+    return timer->run.Bind();
   }
 };
 

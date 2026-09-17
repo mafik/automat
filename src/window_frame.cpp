@@ -18,6 +18,7 @@
 #include "font.hpp"
 #include "launcher.hpp"
 #include "location.hpp"
+#include "menu.hpp"
 #include "object.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
@@ -62,22 +63,14 @@ constinit Command::Table kDecorationClientSide = [] {
   return t;
 }();
 
-Interface DecorationOption(Interface self, ui::Dir dir) {
+void FillDecorationMenu(Interface self, Menu& menu) {
   using enum ui::Dir;
-  switch (dir) {
-    case S:
-      return Interface(self.object_ptr, &kDecorationAuto);
-    case W:
-      return Interface(self.object_ptr, &kDecorationServerSide);
-    case E:
-      return Interface(self.object_ptr, &kDecorationClientSide);
-    default:
-      return {};
-  }
+  menu.Place(S, Interface(self.object_ptr, &kDecorationAuto));
+  menu.Place(W, Interface(self.object_ptr, &kDecorationServerSide));
+  menu.Place(E, Interface(self.object_ptr, &kDecorationClientSide));
 }
 
-constinit Interface::Table kDecorationMenu =
-    MenuTable("Decoration...", MODE_4_DIR, &DecorationOption);
+constinit Interface::Table kDecorationMenu = MenuTable("Decoration...", &FillDecorationMenu);
 
 constinit Command::Table kClientPress = [] {
   Command::Table t("Press");
@@ -244,10 +237,12 @@ Interface ClientWindowToy::FindOption(ui::Pointer& pointer, ui::ActionTrigger tr
     auto window = LockOwner();
     return window ? Interface(*window, kClientPress) : Interface();
   }
-  if (trigger == ui::Dir::W) {
-    if (auto window = LockOwner()) return DecorationMenu(*window);
-  }
-  return ObjectToy::FindOption(pointer, trigger);
+  return {};
+}
+
+void ClientWindowToy::FillMenu(ui::Pointer& pointer, Menu& menu) {
+  ObjectToy::FillMenu(pointer, menu);
+  if (auto window = LockOwner()) menu.Place(ui::Dir::W, DecorationMenu(*window));
 }
 
 void ClientWindowToy::FocusClient(ui::Pointer& p) {

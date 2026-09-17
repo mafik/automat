@@ -32,7 +32,7 @@ struct Syncable : Argument {
     static void DefaultCanConnect(Argument self, Interface end, Status& status);
     static void DefaultOnConnect(Argument self, Interface end);
     static Locked<Interface> DefaultFind(Argument self);
-    static Interface DefaultFindOption(Interface self, ui::Dir);
+    static void DefaultFillMenu(Interface self, Menu&);
     static std::unique_ptr<Action> SyncActivate(Interface, ui::Pointer&, automat::Toy*);
     static std::unique_ptr<Action> UnsyncActivate(Interface, ui::Pointer&, automat::Toy*);
 
@@ -44,8 +44,7 @@ struct Syncable : Argument {
       on_connect = &DefaultOnConnect;
       find = &DefaultFind;
       make_icon = &Interface::Table::DefaultMakeIcon;
-      menu_mode = MODE_4_DIR;
-      find_option = &DefaultFindOption;
+      fill_menu = &DefaultFillMenu;
       sync.activate = &SyncActivate;
       unsync.activate = &UnsyncActivate;
     }

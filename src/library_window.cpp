@@ -26,6 +26,7 @@
 #include "font.hpp"
 #include "key.hpp"
 #include "library_window.hpp"
+#include "menu.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
 #include "str.hpp"
@@ -181,18 +182,12 @@ static void SearchWindows(xcb_window_t start, WindowVisitor visitor) {
 #endif
 
 struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    using enum ui::Dir;
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
+    ObjectToy::FillMenu(pointer, menu);
     auto object = LockObject<Window>();
-    if (!object) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case NE:
-        return Interface(*object, Window::on_off_tbl);
-      default:
-        return ObjectToy::FindOption(pointer, trigger);
-    }
+    if (!object) return;
+    menu.Place(ui::Dir::NE, object->on_off.Bind());
   }
-  MiniMenuMode MenuMode() override { return MODE_6_DIR; }
   constexpr static float kWidth = 5_cm;
   constexpr static float kCornerRadius = 1_mm;
   constexpr static float kHeight = 5_cm;

@@ -28,6 +28,7 @@
 #include "library_switch.hpp"
 #include "loading_animation.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "object.hpp"
 #include "pointer.hpp"
 #include "prototypes.hpp"
@@ -580,27 +581,26 @@ constinit Command::Table kDragCamera = [] {
   return t;
 }();
 
-constinit Interface::Table kCameraMenu =
-    MenuTable("Camera", MODE_8_DIR, [](Interface self, Dir dir) -> Interface {
-      using enum Dir;
-      auto& camera = *self.object_ptr;
-      if (dir == N) return Interface(camera, Camera::up_tbl);
-      if (dir == S) return Interface(camera, Camera::down_tbl);
-      if (dir == W) return Interface(camera, Camera::left_tbl);
-      if (dir == E) return Interface(camera, Camera::right_tbl);
-      return {};
-    });
+constinit Interface::Table kCameraMenu = MenuTable("Camera", [](Interface self, Menu& menu) {
+  using enum Dir;
+  auto& camera = static_cast<Camera&>(*self.object_ptr);
+  menu.Place(N, camera.up.Bind());
+  menu.Place(S, camera.down.Bind());
+  menu.Place(W, camera.left.Bind());
+  menu.Place(E, camera.right.Bind());
+});
 
 Interface RootWidget::FindOption(Pointer&, ActionTrigger trigger) {
   if (trigger == PointerButton::Middle) return Interface(*camera, kDragCamera);
   AnsiKey key = trigger;
-  if (key == AnsiKey::W) return Interface(*camera, Camera::up_tbl);
-  if (key == AnsiKey::S) return Interface(*camera, Camera::down_tbl);
-  if (key == AnsiKey::A) return Interface(*camera, Camera::left_tbl);
-  if (key == AnsiKey::D) return Interface(*camera, Camera::right_tbl);
-  Dir dir = trigger;
-  return Interface(*camera, kCameraMenu).FindOption(dir);
+  if (key == AnsiKey::W) return camera->up.Bind();
+  if (key == AnsiKey::S) return camera->down.Bind();
+  if (key == AnsiKey::A) return camera->left.Bind();
+  if (key == AnsiKey::D) return camera->right.Bind();
+  return {};
 }
+
+void RootWidget::FillMenu(Pointer&, Menu& menu) { Interface(*camera, kCameraMenu).FillMenu(menu); }
 
 void RootWidget::Zoom(float delta) {
   if (pointers.size() > 0) {

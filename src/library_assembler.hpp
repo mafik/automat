@@ -81,8 +81,7 @@ struct AssemblerWidget : ObjectToy {
   void OnPoll(time::Timer&) override;
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
-  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
-  MiniMenuMode MenuMode() override { return MODE_6_DIR; }
+  void FillMenu(ui::Pointer&, Menu&) override;
 };
 
 struct Register : Object, Buffer {

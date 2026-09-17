@@ -16,6 +16,7 @@
 #include <thread>
 
 #include "format.hpp"
+#include "menu.hpp"
 #include "prototypes.hpp"
 #include "ui_beta.hpp"
 #include "ui_shelf_button.hpp"
@@ -1839,18 +1840,14 @@ constexpr uint32_t kBSeed = 0x9A2;
 }  // namespace
 
 struct BoundaryToy : ui::beta::ObjectToy {
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    using enum ui::Dir;
-    auto object = LockObject<Object>();
-    if (!object) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case NE:
-        return Interface(*object, is_sink ? AppSinkBoundary::step_tbl : AppSrcBoundary::step_tbl);
-      default:
-        return ui::beta::ObjectToy::FindOption(pointer, trigger);
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
+    ui::beta::ObjectToy::FillMenu(pointer, menu);
+    if (is_sink) {
+      if (auto sink = LockObject<AppSinkBoundary>()) menu.Place(ui::Dir::NE, sink->step.Bind());
+    } else {
+      if (auto src = LockObject<AppSrcBoundary>()) menu.Place(ui::Dir::NE, src->step.Bind());
     }
   }
-  MiniMenuMode MenuMode() override { return MODE_6_DIR; }
   bool is_sink;  // appsink pulls; appsrc pushes
   std::unique_ptr<ui::beta::RunButton> button;
 
@@ -2049,10 +2046,12 @@ struct StepZone : ui::ActionZone {
   Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
     if (trigger != ui::PointerButton::Left) return {};
     auto& face = Face();
-    auto element = face.LockObject<GStreamerElement>();
-    if (!element) return {};
-    if (face.is_sink) return Interface(*element, AppSinkBoundary::step_tbl);
-    return Interface(*element, AppSrcBoundary::step_tbl);
+    if (face.is_sink) {
+      auto sink = face.LockObject<AppSinkBoundary>();
+      return sink ? sink->step.Bind() : Interface();
+    }
+    auto src = face.LockObject<AppSrcBoundary>();
+    return src ? src->step.Bind() : Interface();
   }
 };
 

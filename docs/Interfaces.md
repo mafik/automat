@@ -65,8 +65,9 @@ The implementation of the interface (called Impl) should be located between the 
 
 Interfaces are exposed to the user as "Options":
 
-- `Widget::FindOption` - which allows a Widget to map keyboard keys, mouse buttons & menu directions to different interfaces
-- `Interface::Table::{activate,cursor,make_icon,find_option,menu_mode}` - which an interface can customize to control its menu appearance & behavior when activated by a user
+- `Widget::FindOption` - which allows a Widget to map keyboard keys & mouse buttons to different interfaces
+- `Widget::FillMenu` - which allows a Widget to arrange its interfaces in a menu
+- `Interface::Table::{activate,cursor,make_icon,fill_menu}` - which an interface can customize to control its menu appearance & behavior when activated by a user
 - Controllers - special objects that can offer finer control over a linked interface
 
 ## UI update granularity

@@ -112,7 +112,7 @@ struct ClientWindowToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
   Tock Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
-  MiniMenuMode MenuMode() override { return MODE_4_DIR; }
+  void FillMenu(ui::Pointer&, Menu&) override;
 
   void FocusClient(ui::Pointer&);
   void ReleaseCaret(ui::Caret&) override;

@@ -221,8 +221,7 @@ struct ObjectToy : Toy {
   virtual std::string Text() const { return std::string(Name()); }
   SkPath Shape() const override;
   void Draw(SkCanvas&) const override;
-  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
-  MiniMenuMode MenuMode() override { return MODE_2_DIR; }
+  void FillMenu(ui::Pointer&, Menu&) override;
   Interface ParentLocation();
 
   // Reports 1 but if the object is iconified, it checks the CoarseBounds()

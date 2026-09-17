@@ -24,6 +24,7 @@
 #include "library_timeline.hpp"
 #include "log.hpp"
 #include "math.hpp"
+#include "menu.hpp"
 #include "root_widget.hpp"
 #include "run_button.hpp"
 #include "sincos.hpp"
@@ -414,18 +415,12 @@ struct GlassRunButton : ui::PowerButton {
 // MacroRecorderWidget
 
 struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
-  Interface FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    using enum ui::Dir;
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
+    ObjectToy::FillMenu(pointer, menu);
     auto object = LockObject<MacroRecorder>();
-    if (!object) return {};
-    switch (static_cast<ui::Dir>(trigger)) {
-      case N:
-        return object->recording.Bind();
-      default:
-        return ObjectToy::FindOption(pointer, trigger);
-    }
+    if (!object) return;
+    menu.Place(ui::Dir::N, object->recording.Bind());
   }
-  MiniMenuMode MenuMode() override { return MODE_6_DIR; }
   struct AnimationState {
     animation::SpringV2<Vec2> googly_left;
     animation::SpringV2<Vec2> googly_right;

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "command.hpp"
+#include "menu.hpp"
 #include "pointer.hpp"
 #include "sync.hpp"
 
@@ -26,11 +27,11 @@ struct OnOff : Syncable {
     constexpr Table(StrView name, Kind kind = Interface::kOnOff)
         : Syncable::Table(name, kind), turn_on("Turn on"), turn_off("Turn off") {
       can_sync = &DefaultCanSync;
-      find_option = [](Interface self, ui::Dir dir) -> Interface {
-        if (dir != ui::Dir::N) return Syncable::Table::DefaultFindOption(self, dir);
+      fill_menu = [](Interface self, Menu& menu) {
+        Syncable::Table::DefaultFillMenu(self, menu);
         auto on_off = cast<OnOff>(self);
-        return Interface(self.object_ptr,
-                         on_off.IsOn() ? &on_off.table->turn_off : &on_off.table->turn_on);
+        menu.Place(ui::Dir::N, Interface(self.object_ptr, on_off.IsOn() ? &on_off.table->turn_off
+                                                                        : &on_off.table->turn_on));
       };
       activate = [](Interface self, ui::Pointer& pointer,
                     automat::Toy*) -> std::unique_ptr<Action> {

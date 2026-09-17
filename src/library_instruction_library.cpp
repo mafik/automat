@@ -1207,7 +1207,7 @@ struct DeckZone : LibraryZone {
   Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
     if (trigger != ui::PointerButton::Left) return {};
     auto library = LockLibrary();
-    return library ? Interface(*library, InstructionLibrary::scroll_tbl) : Interface();
+    return library ? library->scroll.Bind() : Interface();
   }
 };
 
@@ -1217,7 +1217,7 @@ struct FrontCardZone : LibraryZone {
   Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
     if (trigger != ui::PointerButton::Left || Face().instruction_helix.empty()) return {};
     auto library = LockLibrary();
-    return library ? Interface(*library, InstructionLibrary::pick_tbl) : Interface();
+    return library ? library->pick.Bind() : Interface();
   }
 };
 

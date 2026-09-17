@@ -12,6 +12,7 @@
 #include "audio.hpp"
 #include "key_button.hpp"
 #include "keyboard.hpp"
+#include "menu.hpp"
 #include "root_widget.hpp"
 #include "sincos.hpp"
 #include "status.hpp"
@@ -168,7 +169,7 @@ struct KeyPresserWidget : ObjectToy {
   }
 
   Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
-  MiniMenuMode MenuMode() override { return MODE_6_DIR; }
+  void FillMenu(ui::Pointer&, Menu&) override;
 
   void KeyDown(ui::Caret&, ui::Key k) override {
     key_selector->Release();
@@ -253,19 +254,19 @@ KeyPresserWidget::KeyPresserWidget(Widget* parent, Object& key_presser)
   layers.OrderInside(shortcut_button.get());
 }
 
-Interface KeyPresserWidget::FindOption(ui::Pointer& pointer, ui::ActionTrigger trigger) {
-  using enum ui::Dir;
+Interface KeyPresserWidget::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
+  if (trigger != ui::PointerButton::Left) return {};
   auto key_presser = LockObject<KeyPresser>();
-  if (!key_presser) return {};
-  if (trigger == ui::PointerButton::Left) return Interface(*key_presser, kSetKey);
-  switch (static_cast<ui::Dir>(trigger)) {
-    case NE:
-      return Interface(*key_presser, KeyPresser::state_tbl);
-    case NW:
-      return Interface(*key_presser, KeyPresser::monitoring_tbl);
-    default:
-      return ObjectToy::FindOption(pointer, trigger);
-  }
+  return key_presser ? Interface(*key_presser, kSetKey) : Interface();
+}
+
+void KeyPresserWidget::FillMenu(ui::Pointer& pointer, Menu& menu) {
+  using enum ui::Dir;
+  ObjectToy::FillMenu(pointer, menu);
+  auto key_presser = LockObject<KeyPresser>();
+  if (!key_presser) return;
+  menu.Place(NE, key_presser->state.Bind());
+  menu.Place(NW, key_presser->monitoring.Bind());
 }
 
 KeyPresser::KeyPresser(ui::AnsiKey key) : key(key) {}

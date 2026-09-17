@@ -61,10 +61,7 @@ enum class PointerButton { Unknown, Left, Middle, Right, Back, Forward, Count };
 
 Str ToStr(PointerButton);
 
-enum class Dir : uint8_t { E, NE, N, NW, W, SW, S, SE, DIR_COUNT, DIR_NONE = 255 };
-constexpr int kDirCount = static_cast<int>(Dir::DIR_COUNT);
-
-StrView ToStr(Dir);
+enum class Dir : uint8_t { E, NE, N, NW, W, SW, S, SE };
 
 struct ActionTrigger {
   int repr;
@@ -73,12 +70,9 @@ struct ActionTrigger {
   constexpr static int kAnsiKeyEnd = static_cast<int>(AnsiKey::Count);
   constexpr static int kPointerStart = kAnsiKeyEnd;
   constexpr static int kPointerEnd = kPointerStart + static_cast<int>(PointerButton::Count);
-  constexpr static int kDirStart = kPointerEnd;
-  constexpr static int kDirEnd = kDirStart + static_cast<int>(Dir::DIR_COUNT);
 
   constexpr ActionTrigger(PointerButton button) : repr(kPointerStart + static_cast<int>(button)) {}
   constexpr ActionTrigger(AnsiKey key) : repr(kAnsiKeyStart + static_cast<int>(key)) {}
-  constexpr ActionTrigger(Dir dir) : repr(kDirStart + static_cast<int>(dir)) {}
 
   constexpr operator PointerButton() const {
     if (repr < kPointerStart || repr >= kPointerEnd) {
@@ -94,28 +88,22 @@ struct ActionTrigger {
     return static_cast<AnsiKey>(repr - kAnsiKeyStart);
   }
 
-  constexpr operator Dir() const {
-    if (repr < kDirStart || repr >= kDirEnd) {
-      return Dir::DIR_NONE;
-    }
-    return static_cast<Dir>(repr - kDirStart);
-  }
-
   constexpr auto operator<=>(const ActionTrigger&) const = default;
   constexpr bool operator==(const ActionTrigger&) const = default;
   constexpr bool operator==(PointerButton button) const {
     return ActionTrigger(button).repr == repr;
   }
-  constexpr bool operator==(Dir dir) const { return ActionTrigger(dir).repr == repr; }
 };
 
 Str ToStr(ActionTrigger);
 
 }  // namespace ui
 
+struct Menu;
+
 struct OptionsProvider {
-  virtual MiniMenuMode MenuMode() { return MODE_8_DIR; }
   virtual Interface FindOption(ui::Pointer&, ui::ActionTrigger) { return {}; }
+  virtual void FillMenu(ui::Pointer&, Menu&) {}
   std::unique_ptr<Action> OpenMenu(ui::Pointer&);
 };
 }  // namespace automat

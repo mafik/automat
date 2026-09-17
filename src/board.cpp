@@ -11,7 +11,6 @@
 #include <include/pathops/SkPathOps.h>
 
 #include <algorithm>
-#include <ranges>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -102,6 +101,14 @@ bool Board::DeserializeKey(ObjectDeserializer& d, StrView key) {
   } else if (key == "locations") {
     for (auto& object_name : ObjectView(d, status)) {
       auto* object = d.LookupObject(object_name);
+      if (object == nullptr) {
+        ERROR << "Warning: While loading a board tried to place \"" << object_name
+              << "\" but it wasn't found in the saved state. This may have happened due to changes "
+                 "in Automat or some kind of corruption of automat_state.json. Maybe an earlier "
+                 "warning may provide more information.";
+        d.Skip();
+        continue;
+      }
 
       auto& loc = CreateEmpty();
       {  // Place the new location below all the others.

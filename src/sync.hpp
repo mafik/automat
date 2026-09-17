@@ -222,14 +222,21 @@ void Syncable::ForwardNotify(this T self, F&& lambda) {
     if (auto gear = st.gear_weak.Lock()) {
       gear->WakeToys();
       auto lock = std::shared_lock(gear->mutex);
+      Locked<Syncable> sinks[gear->members.size()];
+      int sink_count = 0;
       for (auto& member : gear->members) {
         if (!member.sink) continue;
         auto locked = member.weak.Lock();
         if (!locked) continue;
         if (self == locked) continue;  // Skip self
-        lambda(cast<T>(locked));
-        ++locked.state->sync_balance;
-        locked.WakeToys();
+        sinks[sink_count++] = std::move(locked);
+      }
+      lock.unlock();
+      for (int i = 0; i < sink_count; ++i) {
+        Syncable& sink = sinks[i];
+        lambda(cast<T>(sink));
+        ++sink.state->sync_balance;
+        sink.WakeToys();
       }
     }
   }

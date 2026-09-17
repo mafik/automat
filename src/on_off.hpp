@@ -127,7 +127,7 @@ struct OnOff : Syncable {
     inline constinit static Table tbl = MakeTable();
 
     ~Def() {
-      if (source || !gear_weak.IsExpired()) {
+      if (IsSource() || HasGear()) {
         Bind().Unsync();
       }
     }

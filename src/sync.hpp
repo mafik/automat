@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
 
+#include <atomic>
+#include <cstdint>
 #include <shared_mutex>
 
 #include "argument.hpp"
@@ -63,9 +65,20 @@ struct Syncable : Argument {
   };
 
   struct State : Argument::State {
-    WeakPtr<Gear> gear_weak;
+    static constexpr uintptr_t kSource = 1;
+    std::atomic<uintptr_t> gear = 0;
     uint32_t sync_balance = 0;  // used for scrolling the sync belt
-    bool source = false;
+
+    State() = default;
+    State(const State& other) : Argument::State(other) {}
+    ~State();
+
+    bool IsSource() const { return gear.load(std::memory_order_relaxed) & kSource; }
+    bool HasGear() const;
+    Ptr<Gear> LockGear() const;
+    void SetGear(Gear*);
+    void SetSource(bool);
+    void Clear();
 
     // Remember to call this before this state is destroyed!
     //
@@ -99,7 +112,7 @@ struct Syncable : Argument {
     using Impl = ImplT;
     using Bound = Syncable;
 
-    bool OnIsConnected() { return !gear_weak.IsExpired(); }
+    bool OnIsConnected() { return HasGear(); }
 
     static constexpr Table MakeTable() {
       Table t(ImplT::kName);
@@ -110,7 +123,7 @@ struct Syncable : Argument {
     inline constinit static Table tbl = MakeTable();
 
     ~Def() {
-      if (source || !gear_weak.IsExpired()) {
+      if (IsSource() || HasGear()) {
         Bind().Unsync();
       }
     }
@@ -218,8 +231,8 @@ void Syncable::ForwardNotify(this T self, F&& lambda) {
   --self.state->sync_balance;
   self.WakeToys();
   auto& st = *self.state;
-  if (st.source) {
-    if (auto gear = st.gear_weak.Lock()) {
+  if (st.IsSource()) {
+    if (auto gear = st.LockGear()) {
       gear->WakeToys();
       auto lock = std::shared_lock(gear->mutex);
       Locked<Syncable> sinks[gear->members.size()];

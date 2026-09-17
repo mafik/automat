@@ -93,7 +93,7 @@ void Syncable::Table::DefaultOnConnect(Argument self, Interface end) {
 
 Locked<Interface> Syncable::Table::DefaultFind(Argument self) {
   auto& syncable = static_cast<Syncable::Table&>(*self.table);
-  if (auto gear = Syncable(*self.object_ptr, syncable).state->gear_weak.Lock()) {
+  if (auto gear = Syncable(*self.object_ptr, syncable).state->LockGear()) {
     return AdoptLocked(Interface(*gear.Release()));
   }
   return {};
@@ -107,7 +107,7 @@ void Syncable::Table::DefaultFillMenu(Interface self, Menu& menu) {
   using enum ui::Dir;
   auto* table = static_cast<Table*>(self.table_ptr);
   menu.Place(E, Interface(self.object_ptr, &table->sync));
-  if (!Syncable(self.object_ptr, table).state->gear_weak.IsExpired()) {
+  if (Syncable(self.object_ptr, table).state->HasGear()) {
     menu.Place(W, Interface(self.object_ptr, &table->unsync));
   }
 }
@@ -126,7 +126,7 @@ std::unique_ptr<Action> Syncable::Table::UnsyncActivate(Interface self, ui::Poin
 }
 
 void Syncable::State::Unsync(Object& self, Syncable::Table& table) {
-  auto gear = gear_weak.Lock();
+  auto gear = LockGear();
   if (!gear) return;
   auto lock = std::unique_lock(gear->mutex);
 
@@ -140,17 +140,58 @@ void Syncable::State::Unsync(Object& self, Syncable::Table& table) {
     }
   }
 
-  source = false;
-  gear_weak.Reset();
+  Clear();
   auto syncable = Syncable(self, table);
   if (table.on_unsync) table.on_unsync(syncable);
   syncable.WakeToys();
 }
 
+static_assert(alignof(Gear) > Syncable::State::kSource);
+
+static Gear* GearOf(uintptr_t bits) {
+  return reinterpret_cast<Gear*>(bits & ~Syncable::State::kSource);
+}
+
+bool Syncable::State::HasGear() const {
+  Gear* locked = GearOf(gear.load(std::memory_order_relaxed));
+  return locked && locked->owning_refs.load(std::memory_order_relaxed) != 0;
+}
+
+Ptr<Gear> Syncable::State::LockGear() const {
+  Gear* locked = GearOf(gear.load(std::memory_order_acquire));
+  if (locked && !locked->IncrementOwningRefsNonZero()) locked = nullptr;
+  return Ptr<Gear>(locked);
+}
+
+void Syncable::State::SetGear(Gear* new_gear) {
+  SafeIncrementWeakRefs(new_gear);
+  uintptr_t bits = gear.load(std::memory_order_relaxed);
+  uintptr_t new_bits;
+  do {
+    new_bits = reinterpret_cast<uintptr_t>(new_gear) | (bits & kSource);
+  } while (!gear.compare_exchange_weak(bits, new_bits, std::memory_order_release,
+                                       std::memory_order_relaxed));
+  SafeDecrementWeakRefs(GearOf(bits));
+}
+
+void Syncable::State::SetSource(bool source) {
+  if (source) {
+    gear.fetch_or(kSource, std::memory_order_release);
+  } else {
+    gear.fetch_and(~kSource, std::memory_order_release);
+  }
+}
+
+void Syncable::State::Clear() {
+  SafeDecrementWeakRefs(GearOf(gear.exchange(0, std::memory_order_acq_rel)));
+}
+
+Syncable::State::~State() { Clear(); }
+
 // --- FindGearOrMake / FindGearOrNull ---
 
 Ptr<Gear> FindGearOrMake(Syncable source) {
-  auto sync_block = source.state->gear_weak.Lock();
+  auto sync_block = source.state->LockGear();
   if (!sync_block) {
     sync_block = MAKE_PTR(Gear);
     sync_block->AddSource(source);
@@ -159,7 +200,7 @@ Ptr<Gear> FindGearOrMake(Syncable source) {
 }
 
 Ptr<Gear> FindGearOrNull(Syncable source) {
-  auto sync_block = source.state->gear_weak.Lock();
+  auto sync_block = source.state->LockGear();
   if (!sync_block) {
     return nullptr;
   }
@@ -175,9 +216,8 @@ Gear::~Gear() {
     if (auto syncable = back.weak.Lock()) {
       auto* table = syncable.table.operator->();
       auto& state = *syncable.state;
-      if (state.source) {
-        state.source = false;
-        state.gear_weak.Reset();
+      if (state.IsSource()) {
+        state.SetSource(false);
         if (table->on_unsync) table->on_unsync(syncable);
       }
       syncable.WakeToys();
@@ -200,10 +240,10 @@ void Gear::AddSink(Syncable syncable) {
 
 void Gear::AddSource(Syncable syncable) {
   auto& state = *syncable.state;
-  auto old_gear = state.gear_weak.Lock();
-  bool was_source = state.source;
+  auto old_gear = state.LockGear();
+  bool was_source = state.IsSource();
   if (old_gear.Get() != this) {
-    state.gear_weak = AcquireWeakPtr();
+    state.SetGear(this);
     if (old_gear) {
       while (!old_gear->members.empty()) {
         // stealing all of the members from the old gear
@@ -212,7 +252,7 @@ void Gear::AddSource(Syncable syncable) {
 
         // redirecting the members' sync state to this gear
         if (auto member = members.back().weak.Lock()) {
-          member.state->gear_weak = AcquireWeakPtr();
+          member.state->SetGear(this);
         }
       }
     } else {
@@ -230,7 +270,7 @@ void Gear::AddSource(Syncable syncable) {
     }
   }
   if (!was_source) {
-    state.source = true;
+    state.SetSource(true);
     if (syncable.table->on_sync) syncable.table->on_sync(syncable);
   }
 }
@@ -431,7 +471,7 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
 
   // Find the gear via the syncable's sync state
   auto& state = syncable.state;
-  auto gear = state->gear_weak.Lock();
+  auto gear = state->LockGear();
   auto* gear_widget = gear ? toy_store.FindOrNull(*gear) : nullptr;
   if (gear && !gear_widget) {
     tock.drawing |=

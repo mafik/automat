@@ -75,7 +75,7 @@ struct LongRunning : OnOff {
       if (task) {
         Bind().Cancel();
       }
-      if (source || !gear_weak.IsExpired()) {
+      if (IsSource() || HasGear()) {
         Bind().Unsync();
       }
     }

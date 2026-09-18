@@ -603,6 +603,38 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
     }
     return ObjectToy::ArgStart(arg);
   }
+  void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override {
+    // By default just one position on the top of the bounding box.
+    Rect bounds = CoarseBounds().rect;
+    out_positions.push_back(Vec2AndDir{
+        .pos = bounds.TopCenter(),
+        .dir = -90_deg,
+    });
+    out_positions.push_back(Vec2AndDir{
+        .pos = {4_mm, 46_mm},
+        .dir = 0_deg,
+    });
+    out_positions.push_back(Vec2AndDir{
+        .pos = {40_mm, 46_mm},
+        .dir = -180_deg,
+    });
+    out_positions.push_back(Vec2AndDir{
+        .pos = {4_mm, 36_mm},
+        .dir = 0_deg,
+    });
+    out_positions.push_back(Vec2AndDir{
+        .pos = {40_mm, 36_mm},
+        .dir = -180_deg,
+    });
+    out_positions.push_back(Vec2AndDir{
+        .pos = {4_mm, 26_mm},
+        .dir = 0_deg,
+    });
+    out_positions.push_back(Vec2AndDir{
+        .pos = {40_mm, 26_mm},
+        .dir = -180_deg,
+    });
+  }
 };
 
 std::unique_ptr<ObjectToy> MacroRecorder::MakeToy(ui::Widget* parent) {

@@ -8,24 +8,26 @@
 namespace automat::library {
 
 struct LinkedSwitch : Object {
-  Linked<OnOff> on_off;
+  DEF_INTERFACE(LinkedSwitch, InterfaceArgument<OnOff>, on_off, "On/Off")
+  static constexpr auto kStyle = Argument::Style::RoutedCable;
+  static constexpr bool kVisibleWhenDisconnected = false;
+  static constexpr SkColor4f kTint = "#216778"_color4f;
+  DEF_END(on_off);
 
   DEF_INTERFACE(LinkedSwitch, Runnable, flip, "Flip")
   void OnRun(std::unique_ptr<RunTask>&) {
-    if (auto locked = obj->on_off.Lock()) {
+    if (auto locked = obj->on_off->FindInterface()) {
       locked.Toggle();
+      obj->on_off->LastActivity()->fetch_add(1, std::memory_order_relaxed);
     }
   }
   DEF_END(flip);
 
-  INTERFACES(flip)
+  INTERFACES(flip, on_off)
 
   LinkedSwitch(OnOff);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-
-  void SerializeState(ObjectSerializer& writer) const override;
-  bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 };

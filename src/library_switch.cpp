@@ -28,32 +28,11 @@ using namespace std;
 
 namespace automat::library {
 
-LinkedSwitch::LinkedSwitch(OnOff on_off) : on_off(on_off) {}
+LinkedSwitch::LinkedSwitch(OnOff target) { on_off->Connect(target); }
 
 string_view LinkedSwitch::Name() const { return "Linked Switch"; }
 
-Ptr<Object> LinkedSwitch::Clone() const { return MAKE_PTR(LinkedSwitch, on_off.Lock()); }
-
-void LinkedSwitch::SerializeState(ObjectSerializer& writer) const {
-  if (auto locked = on_off.Lock()) {
-    writer.Key("on_off");
-    writer.String(writer.ResolveName(*locked.object_ptr, locked.table_ptr));
-  }
-}
-bool LinkedSwitch::DeserializeKey(ObjectDeserializer& d, StrView key) {
-  if (key == "on_off") {
-    Str name;
-    Status status;
-    d.Get(name, status);
-    if (!OK(status)) {
-      ReportError(status.ToStr());
-    } else {
-      on_off = cast<OnOff>(d.LookupInterface(name));
-    }
-    return true;
-  }
-  return false;
-}
+Ptr<Object> LinkedSwitch::Clone() const { return MAKE_PTR(LinkedSwitch, on_off->FindInterface()); }
 
 string_view Switch::Name() const { return "Switch"; }
 
@@ -116,6 +95,7 @@ struct SwitchToy : ObjectToy {
 
   Tock Tick(time::Timer& timer) override {
     if (owner.IsExpired()) MarkDead(timer.now);
+    if (auto linked = dyn_cast<LinkedSwitch>(owner.Lock())) rocker->target = linked->on_off.target;
     if (auto on_off = rocker->target.Lock()) {
       rocker->SetOn(on_off.IsOn());
       label = on_off.Name();
@@ -322,10 +302,21 @@ struct SwitchToy : ObjectToy {
   }
   SkPath Shape() const override { return SkPath::RRect(CoarseBounds()); }
   bool CenteredAtZero() const override { return true; }
+
+  Vec2AndDir ArgStart(const Interface::Table& arg) override {
+    if (&arg == &LinkedSwitch::on_off_tbl) {
+      Vec2AndDir pos_dir{
+          .pos = CoarseBounds().rect.LeftCenter(),
+          .dir = 180_deg,
+      };
+      return pos_dir;
+    }
+    return ObjectToy::ArgStart(arg);
+  }
 };
 
 std::unique_ptr<ObjectToy> LinkedSwitch::MakeToy(ui::Widget* parent) {
-  return std::make_unique<SwitchToy>(parent, *this, on_off);
+  return std::make_unique<SwitchToy>(parent, *this, on_off->FindInterface());
 }
 
 std::unique_ptr<ObjectToy> Switch::MakeToy(ui::Widget* parent) {

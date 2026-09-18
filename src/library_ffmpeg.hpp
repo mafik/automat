@@ -142,8 +142,11 @@ struct FfmpegDecoder : Object {
   uint64_t frames = 0;
   uint64_t frame_bytes = 0;
 
-  DEF_INTERFACE(FfmpegDecoder, Runnable, run, "Run")
-  void OnRun(std::unique_ptr<RunTask>& t) { obj->Step(); }
+  DEF_INTERFACE(FfmpegDecoder, Command, run, "Run")
+  void OnRun() {
+    obj->Step();
+    Done();
+  }
   DEF_END(run);
 
   DEF_INTERFACE(FfmpegDecoder, NextArg, next, "Next")

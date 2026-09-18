@@ -41,8 +41,11 @@ struct KeyPresser : Object, ui::Keylogger {
   }
   DEF_END(state);
 
-  DEF_INTERFACE(KeyPresser, Runnable, run, "Run")
-  void OnRun(std::unique_ptr<RunTask>&) { obj->state->TurnOn(); }
+  DEF_INTERFACE(KeyPresser, Command, run, "Run")
+  void OnRun() {
+    obj->state->TurnOn();
+    Done();
+  }
   DEF_END(run);
 
   KeyPresser(ui::AnsiKey = ui::AnsiKey::F);

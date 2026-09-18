@@ -377,11 +377,11 @@ instead of hiding it:
   paused. Automat-driven blocks step by definition. Live PipeWire
   devices cannot be stepped, so no step control appears on them.
   Automat's control flow drives blocks through Command interfaces
-  (src/base.hpp). Each signal declares what happens when it arrives
-  while the block's LongRunning is active: the starting signal
-  (Runnable) is inhibited, because a running thing is not started
-  twice; a step signal is delivered, because it performs one bounded
-  unit of work regardless of the stream running. This is what lets a
+  (src/command.hpp). The starting signal is the block's `running`
+  Command, and a Command that is already running ignores a
+  second start, because a running thing is not started twice. A step
+  signal is a separate Command, so it is delivered while the stream
+  runs, because it performs one bounded unit of work. This is what lets a
   Timer or a Next chain drive a boundary block's Pull or Push during
   playback. A step on a stopped boundary block starts its chain first,
   so stepping works from the first press.

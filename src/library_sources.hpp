@@ -11,9 +11,8 @@ namespace automat::library {
 struct Sources : Object {
   Sources();
 
-  DEF_INTERFACE(Sources, Command, extract_files, "Extract Files")
-  static constexpr bool kSchedulesNext = false;
-  void OnRun(std::unique_ptr<RunTask>&);
+  DEF_INTERFACE(Sources, BasicCommand, extract_files, "Extract Files")
+  void OnRun();
   DEF_END(extract_files);
 
   INTERFACES(extract_files)

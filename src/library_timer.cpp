@@ -151,7 +151,7 @@ static void PropagateDurationOutwards(Timer& timer) {
   }
 }
 
-void Timer::StartTimer(std::unique_ptr<RunTask>& run_task) {
+void Timer::StartTimer() {
   auto lock = std::lock_guard(mtx);
   ZoneScopedN("Timer");
   start_time = time::SteadyClock::now();
@@ -159,7 +159,6 @@ void Timer::StartTimer(std::unique_ptr<RunTask>& run_task) {
     ScheduleAt(*location, start_time + duration_value);
   }
   WakeToys();
-  running->BeginLongRunning(std::move(run_task));
 }
 
 void Timer::CancelTimer() {
@@ -182,11 +181,7 @@ void Timer::ShiftRange(int delta) {
 Timer::Timer() {}
 
 Timer::Timer(const Timer& other)
-    : Object(other),
-      duration_value(other.duration_value),
-      run(other.run),
-      next(other.next),
-      range(other.range) {}
+    : Object(other), duration_value(other.duration_value), next(other.next), range(other.range) {}
 
 Ptr<Object> Timer::Clone() const { return MAKE_PTR(Timer, *this); }
 
@@ -248,7 +243,7 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
   if (key == "running") {
     double value = 0;
     d.Get(value, status);
-    running->BeginLongRunning(make_unique<RunTask>(AcquireWeakPtr(), &Timer::run_tbl));
+    running->StartRunning();
     start_time = time::SteadyNow() - time::FromSeconds(value);
     if (auto location = HomeLocation()) {
       ScheduleAt(*location, start_time + duration_value);
@@ -499,7 +494,6 @@ struct TimerWidget : ObjectToy {
     auto object = LockTimer();
     if (!object) return;
     menu.Place(NW, object->duration.Bind());
-    menu.Place(NE, object->running.Bind());
     menu.Place(E, object->next_range.Bind());
     menu.Place(W, object->prev_range.Bind());
   }
@@ -867,8 +861,7 @@ struct StartPusherZone : TimerZone {
     if (trigger != ui::PointerButton::Left) return {};
     auto timer = Face().LockTimer();
     if (!timer) return {};
-    if (Face().is_running) return Interface(*timer, Timer::running_tbl.turn_off);
-    return timer->run.Bind();
+    return timer->running.Bind();
   }
 };
 

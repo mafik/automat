@@ -6,7 +6,7 @@
 #include <memory>
 
 #include "base.hpp"
-#include "long_running.hpp"
+#include "command.hpp"
 #include "pointer.hpp"
 #include "time.hpp"
 #include "timer_thread.hpp"
@@ -99,11 +99,8 @@ struct Float64Track : TrackBase {
 struct Timeline : Object, TimerNotificationReceiver {
   std::mutex mutex;
 
-  DEF_INTERFACE(Timeline, Runnable, run, "Run")
-  void OnRun(std::unique_ptr<RunTask>& run_task) { obj->Play(run_task); }
-  DEF_END(run);
-
-  DEF_INTERFACE(Timeline, LongRunning, running, "Running")
+  DEF_INTERFACE(Timeline, Command, running, "Running")
+  void OnRun() { obj->Play(); }
   void OnCancel() { obj->Pause(); }
   DEF_END(running);
 
@@ -136,19 +133,16 @@ struct Timeline : Object, TimerNotificationReceiver {
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(zoom);
 
-  DEF_INTERFACE(Timeline, Command, jump_to_start, "Jump to start")
-  static constexpr bool kSchedulesNext = false;
-  void OnRun(std::unique_ptr<RunTask>&);
+  DEF_INTERFACE(Timeline, BasicCommand, jump_to_start, "Jump to start")
+  void OnRun();
   DEF_END(jump_to_start);
 
-  DEF_INTERFACE(Timeline, Command, jump_to_end, "Jump to end")
-  static constexpr bool kSchedulesNext = false;
-  void OnRun(std::unique_ptr<RunTask>&);
+  DEF_INTERFACE(Timeline, BasicCommand, jump_to_end, "Jump to end")
+  void OnRun();
   DEF_END(jump_to_end);
 
-  DEF_INTERFACE(Timeline, Command, stop_recording, "Stop recording")
-  static constexpr bool kSchedulesNext = false;
-  void OnRun(std::unique_ptr<RunTask>&);
+  DEF_INTERFACE(Timeline, BasicCommand, stop_recording, "Stop recording")
+  void OnRun();
   DEF_END(stop_recording);
 
   Vec<Owned<TrackBase>> tracks;
@@ -181,7 +175,7 @@ struct Timeline : Object, TimerNotificationReceiver {
   Timeline();
   Timeline(const Timeline&);
   string_view Name() const override;
-  void Play(std::unique_ptr<RunTask>&);
+  void Play();
   void Pause();
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;

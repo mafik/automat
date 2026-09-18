@@ -28,8 +28,11 @@ struct MouseButtonEvent : Object {
   ui::PointerButton button;
   bool down;
 
-  DEF_INTERFACE(MouseButtonEvent, Runnable, run, "Run")
-  void OnRun(std::unique_ptr<RunTask>&) { obj->Run(); }
+  DEF_INTERFACE(MouseButtonEvent, Command, run, "Run")
+  void OnRun() {
+    obj->Run();
+    Done();
+  }
   DEF_END(run);
 
   DEF_INTERFACE(MouseButtonEvent, NextArg, next, "Next")
@@ -79,8 +82,11 @@ struct MouseButtonPresser : Object {
   ui::PointerButton button;
   bool down = false;
 
-  DEF_INTERFACE(MouseButtonPresser, Runnable, click, "Click")
-  void OnRun(std::unique_ptr<RunTask>&) { obj->Click(); }
+  DEF_INTERFACE(MouseButtonPresser, Command, click, "Click")
+  void OnRun() {
+    obj->Click();
+    Done();
+  }
   DEF_END(click);
 
   DEF_INTERFACE(MouseButtonPresser, OnOff, state, "State")
@@ -97,7 +103,7 @@ struct MouseButtonPresser : Object {
   ~MouseButtonPresser() override;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  INTERFACES(next, click, state)
+  INTERFACES(next, state, click)
   void Click();
   void Press();
   void Release();

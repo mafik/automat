@@ -128,15 +128,16 @@ std::unique_ptr<Action> Syncable::Table::UnsyncActivate(Interface self, ui::Poin
 void Syncable::State::Unsync(Object& self, Syncable::Table& table) {
   auto gear = LockGear();
   if (!gear) return;
-  auto lock = std::unique_lock(gear->mutex);
-
-  auto& members = gear->members;
-  for (int i = 0; i < (int)members.size(); ++i) {
-    // Compare both the interface pointer and the owner
-    auto member_iface = members[i].weak.Unsafe();
-    if (member_iface.table_ptr == &table && member_iface.object_ptr == &self) {
-      members.erase(members.begin() + i);
-      break;
+  {
+    auto lock = std::unique_lock(gear->mutex);
+    auto& members = gear->members;
+    for (int i = 0; i < (int)members.size(); ++i) {
+      // Compare both the interface pointer and the owner
+      auto member_iface = members[i].weak.Unsafe();
+      if (member_iface.table_ptr == &table && member_iface.object_ptr == &self) {
+        members.erase(members.begin() + i);
+        break;
+      }
     }
   }
 
@@ -146,10 +147,41 @@ void Syncable::State::Unsync(Object& self, Syncable::Table& table) {
   syncable.WakeToys();
 }
 
-static_assert(alignof(Gear) > Syncable::State::kSource);
+static constexpr uintptr_t kGearBits = Syncable::State::kSource | Syncable::State::kRunning;
 
-static Gear* GearOf(uintptr_t bits) {
-  return reinterpret_cast<Gear*>(bits & ~Syncable::State::kSource);
+static_assert(alignof(Gear) > kGearBits);
+
+static Gear* GearOf(uintptr_t bits) { return reinterpret_cast<Gear*>(bits & ~kGearBits); }
+
+static void NotifyIdle(Gear& gear) {
+  auto lock = std::shared_lock(gear.mutex);
+  Locked<Syncable> sinks[gear.members.size()];
+  int sink_count = 0;
+  for (auto& member : gear.members) {
+    if (!member.sink) continue;
+    auto locked = member.weak.Lock();
+    if (!locked) continue;
+    sinks[sink_count++] = std::move(locked);
+  }
+  lock.unlock();
+  for (int i = 0; i < sink_count; ++i) {
+    Syncable& sink = sinks[i];
+    if (sink.table->on_idle) sink.table->on_idle(sink);
+  }
+}
+
+static bool CountDown(Gear& gear) {
+  if (--gear.running != 0) return false;
+  gear.running |= Gear::kNoMemberStopped;
+  return true;
+}
+
+static void CountOut(Gear& gear) {
+  gear.running &= ~Gear::kNoMemberStopped;
+  if (!CountDown(gear)) return;
+  if (!gear.IncrementOwningRefsNonZero()) return;
+  Ptr<Gear> locked(&gear);
+  NotifyIdle(gear);
 }
 
 bool Syncable::State::HasGear() const {
@@ -168,10 +200,15 @@ void Syncable::State::SetGear(Gear* new_gear) {
   uintptr_t bits = gear.load(std::memory_order_relaxed);
   uintptr_t new_bits;
   do {
-    new_bits = reinterpret_cast<uintptr_t>(new_gear) | (bits & kSource);
+    new_bits = reinterpret_cast<uintptr_t>(new_gear) | (bits & kGearBits);
   } while (!gear.compare_exchange_weak(bits, new_bits, std::memory_order_release,
                                        std::memory_order_relaxed));
-  SafeDecrementWeakRefs(GearOf(bits));
+  Gear* old_gear = GearOf(bits);
+  if (bits & kRunning) {
+    if (new_gear) ++new_gear->running;
+    if (old_gear) CountDown(*old_gear);
+  }
+  SafeDecrementWeakRefs(old_gear);
 }
 
 void Syncable::State::SetSource(bool source) {
@@ -183,7 +220,30 @@ void Syncable::State::SetSource(bool source) {
 }
 
 void Syncable::State::Clear() {
-  SafeDecrementWeakRefs(GearOf(gear.exchange(0, std::memory_order_acq_rel)));
+  uintptr_t bits = gear.fetch_and(kRunning, std::memory_order_acq_rel);
+  Gear* old_gear = GearOf(bits);
+  if (old_gear && (bits & kRunning)) CountOut(*old_gear);
+  SafeDecrementWeakRefs(old_gear);
+}
+
+bool Syncable::State::StartRunning() {
+  uintptr_t bits = gear.fetch_or(kRunning, std::memory_order_acq_rel);
+  if (bits & kRunning) return false;
+  if (Gear* counted_in = GearOf(bits)) ++counted_in->running;
+  return true;
+}
+
+bool Syncable::State::StopRunning() {
+  uintptr_t bits = gear.fetch_and(~kRunning, std::memory_order_acq_rel);
+  if (!(bits & kRunning)) return false;
+  if (Gear* counted_in = GearOf(bits)) CountOut(*counted_in);
+  return true;
+}
+
+bool Syncable::StopRunning() const {
+  if (!state->StopRunning()) return false;
+  if (!state->HasGear() && table->on_idle) table->on_idle(*this);
+  return true;
 }
 
 Syncable::State::~State() { Clear(); }
@@ -224,6 +284,14 @@ Gear::~Gear() {
     }
     members.pop_back();
   }
+}
+
+Gear::RunningGuard::RunningGuard(Ptr<Gear> gear) : gear(std::move(gear)) {
+  if (this->gear) ++this->gear->running;
+}
+
+Gear::RunningGuard::~RunningGuard() {
+  if (gear && CountDown(*gear)) NotifyIdle(*gear);
 }
 
 void Gear::AddSink(Syncable syncable) {

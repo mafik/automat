@@ -55,35 +55,31 @@ struct Camera : Object {
     WakeToys();
   }
 
-  DEF_INTERFACE(Camera, Command, up, "Camera up")
-  static constexpr bool kSchedulesNext = false;
+  DEF_INTERFACE(Camera, BasicCommand, up, "Camera up")
   static constexpr Vec2 kDelta = Vec2(0, 10_cm);
-  void OnRun(std::unique_ptr<RunTask>&) { obj->Move(kDelta); }
+  void OnRun() { obj->Move(kDelta); }
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(up);
-  DEF_INTERFACE(Camera, Command, down, "Camera down")
-  static constexpr bool kSchedulesNext = false;
+  DEF_INTERFACE(Camera, BasicCommand, down, "Camera down")
   static constexpr Vec2 kDelta = Vec2(0, -10_cm);
-  void OnRun(std::unique_ptr<RunTask>&) { obj->Move(kDelta); }
+  void OnRun() { obj->Move(kDelta); }
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(down);
-  DEF_INTERFACE(Camera, Command, left, "Camera left")
-  static constexpr bool kSchedulesNext = false;
+  DEF_INTERFACE(Camera, BasicCommand, left, "Camera left")
   static constexpr Vec2 kDelta = Vec2(-10_cm, 0);
-  void OnRun(std::unique_ptr<RunTask>&) { obj->Move(kDelta); }
+  void OnRun() { obj->Move(kDelta); }
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(left);
-  DEF_INTERFACE(Camera, Command, right, "Camera right")
-  static constexpr bool kSchedulesNext = false;
+  DEF_INTERFACE(Camera, BasicCommand, right, "Camera right")
   static constexpr Vec2 kDelta = Vec2(10_cm, 0);
-  void OnRun(std::unique_ptr<RunTask>&) { obj->Move(kDelta); }
+  void OnRun() { obj->Move(kDelta); }
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(right);
 
   INTERFACES(up, down, left, right)
 };
 
-extern Command::Table kDragCamera;
+extern BasicCommand::Table kDragCamera;
 extern Interface::Table kCameraMenu;
 
 struct RootWidget final : Widget {

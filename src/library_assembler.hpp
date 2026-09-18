@@ -9,8 +9,8 @@
 #include <llvm/Target/TargetMachine.h>
 
 #include "animation.hpp"
+#include "command.hpp"
 #include "library_instruction.hpp"
-#include "long_running.hpp"
 #include "machine_code.hpp"
 #include "object.hpp"
 #include "shared_or_weak.hpp"
@@ -137,7 +137,7 @@ struct Assembler : Object {
   using PrologueFn = uintptr_t (*)(void*);
   using Toy = AssemblerWidget;
 
-  DEF_INTERFACE(Assembler, LongRunning, running, "Running")
+  DEF_INTERFACE(Assembler, Command, running, "Running")
   void OnCancel() {
     Status status;
     obj->mc_controller->Cancel(status);
@@ -163,7 +163,7 @@ struct Assembler : Object {
 
   void UpdateMachineCode();
 
-  void RunMachineCode(library::Instruction* entry_point, std::unique_ptr<RunTask>&&);
+  void RunMachineCode(library::Instruction* entry_point);
 
   unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override {
     return make_unique<AssemblerWidget>(parent, *this);

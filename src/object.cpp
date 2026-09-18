@@ -198,14 +198,14 @@ void ObjectToy::FillMenu(ui::Pointer&, Menu& menu) {
   if (HasError(*object)) {
     menu.Place(N, Interface(*object, kThisIsFine));
   } else {
-    menu.Place(N, object->Find<Runnable>());
+    menu.Place(N, object->Find<Command>());
   }
   menu.Place(S, ParentLocation());
 }
 
 void Object::Updated(WeakPtr<Object>& updated) {
-  if (auto runnable = Find<Runnable>()) {
-    runnable.ScheduleRun();
+  if (auto command = Find<Command>()) {
+    command.ScheduleRun();
   }
 }
 

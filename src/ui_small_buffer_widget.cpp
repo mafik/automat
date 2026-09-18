@@ -127,10 +127,9 @@ constinit automat::Text::Table kBufferText = [] {
   return t;
 }();
 
-constinit Command::Table kCycleBufferType = [] {
-  Command::Table t("Cycle type");
-  t.schedules_next = false;
-  t.on_run = [](Command self, std::unique_ptr<RunTask>&) {
+constinit BasicCommand::Table kCycleBufferType = [] {
+  BasicCommand::Table t("Cycle type");
+  t.on_run = [](BasicCommand self) {
     auto& buffer = dynamic_cast<Buffer&>(*self.object_ptr);
     auto next = (Buffer::Type)(((int)buffer.GetBufferType() + 1) % (int)Buffer::Type::TypeCount);
     buffer.SetBufferType(next);

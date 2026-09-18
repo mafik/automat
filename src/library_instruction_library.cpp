@@ -1087,7 +1087,7 @@ static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary
   library.Filter();
 }
 
-void InstructionLibrary::scroll_Impl::OnRun(std::unique_ptr<RunTask>&) {
+void InstructionLibrary::scroll_Impl::OnRun() {
   auto lock = std::lock_guard(obj->mutex);
   if (obj->instructions.empty()) return;
   obj->instructions.push_back(obj->instructions.front());
@@ -1120,19 +1120,18 @@ std::unique_ptr<Action> InstructionLibrary::pick_Impl::OnActivate(ui::Pointer& p
   return DragNew(pointer, std::move(object), std::move(card));
 }
 
-struct RegisterFilterTable : Command::Table {
+struct RegisterFilterTable : BasicCommand::Table {
   int reg;
   bool read;
   Str label;
   RegisterFilterTable(int reg, bool read)
-      : Command::Table(""),
+      : BasicCommand::Table(""),
         reg(reg),
         read(read),
         label((read ? "Read " : "Write ") + kRegisters[reg].name) {
     name = label;
     cursor = ui::Cursor::Hand;
-    schedules_next = false;
-    on_run = [](Command self, std::unique_ptr<RunTask>&) {
+    on_run = [](BasicCommand self) {
       auto& table = static_cast<RegisterFilterTable&>(*self.table_ptr);
       auto& library = static_cast<InstructionLibrary&>(*self.object_ptr);
       auto lock = std::lock_guard(library.mutex);
@@ -1155,17 +1154,16 @@ static RegisterFilterTable& RegisterFilter(int reg, bool read) {
   return *table;
 }
 
-struct CategoryTable : Command::Table {
+struct CategoryTable : BasicCommand::Table {
   int category;
   int group;  // -1 selects the whole category
   CategoryTable(int category, int group)
-      : Command::Table(group < 0 ? x86::kCategories[category].name
-                                 : x86::kCategories[category].groups[group].name),
+      : BasicCommand::Table(group < 0 ? x86::kCategories[category].name
+                                      : x86::kCategories[category].groups[group].name),
         category(category),
         group(group) {
     cursor = ui::Cursor::Hand;
-    schedules_next = false;
-    on_run = [](Command self, std::unique_ptr<RunTask>&) {
+    on_run = [](BasicCommand self) {
       auto& table = static_cast<CategoryTable&>(*self.table_ptr);
       auto& library = static_cast<InstructionLibrary&>(*self.object_ptr);
       auto lock = std::lock_guard(library.mutex);

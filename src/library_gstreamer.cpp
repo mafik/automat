@@ -252,7 +252,6 @@ void GStreamerElement::InitPorts() {
 }
 
 void GStreamerElement::Interfaces(const std::function<LoopControl(Interface)>& cb) {
-  if (cb(run.Bind()) == LoopControl::Break) return;
   if (cb(running.Bind()) == LoopControl::Break) return;
   if (cb(next.Bind()) == LoopControl::Break) return;
   if (cb(out_stream.Bind()) == LoopControl::Break) return;
@@ -285,12 +284,7 @@ GStreamerElement::GStreamerElement(StrView factory) : factory(factory) {
 }
 
 GStreamerElement::GStreamerElement(const GStreamerElement& o)
-    : Object(o),
-      factory(o.factory),
-      props(o.props),
-      run(o.run),
-      next(o.next),
-      out_stream(o.out_stream) {
+    : Object(o), factory(o.factory), props(o.props), next(o.next), out_stream(o.out_stream) {
   InitPorts();
 }
 
@@ -511,7 +505,7 @@ void GStreamerElement::OnOutStreamConnect(StreamArgument self, Interface end) {
   stop_chain_of(*this);
   if (old_peer) stop_chain_of(*old_peer);
   if (new_peer && new_peer != this) stop_chain_of(*new_peer);
-  if (was_running) run->ScheduleRun();
+  if (was_running) running->ScheduleRun();
 }
 
 // One preview branch's identity: the chain plus the member it feeds.
@@ -741,14 +735,14 @@ static void OnPadAdded(GstElement* elem, GstPad* pad, gpointer user_data) {
   if (m) m->WakeToys();
 }
 
-void GStreamerElement::Start(std::unique_ptr<RunTask>& task) {
+bool GStreamerElement::Start() {
   // One start at a time, process-wide: overlapping linked runs rebuild each
   // other, and the lock makes collect-then-build atomic.
   static std::mutex start_mutex;
   auto start_lock = std::lock_guard(start_mutex);
   {
     auto lock = std::lock_guard(mutex);
-    if (chain) return;  // already running; Stop before restarting
+    if (chain) return false;  // already running; Stop before restarting
   }
 
   // Collect the linked component over every stream port, in both directions.
@@ -803,7 +797,7 @@ void GStreamerElement::Start(std::unique_ptr<RunTask>& task) {
     for (auto& e : edges) fed |= (e.consumer == i);
     if (!fed) {
       order[i]->ReportError(f("{}: sink is not connected", order[i]->factory));
-      return;
+      return false;
     }
   }
 
@@ -824,7 +818,7 @@ void GStreamerElement::Start(std::unique_ptr<RunTask>& task) {
     if (!elem) {
       m->ReportError(f("{}: element factory not found", m->factory));
       gst_object_unref(pipe);
-      return;
+      return false;
     }
     {
       auto lock = std::lock_guard(m->mutex);
@@ -858,7 +852,7 @@ void GStreamerElement::Start(std::unique_ptr<RunTask>& task) {
     if (out_name.empty() || in_name.empty()) {
       C->ReportError(f("cannot link {} → {}", P->factory, C->factory));
       gst_object_unref(pipe);
-      return;
+      return false;
     }
     GstPad* sink_pad = C->in_mode == PadMode::kRequest
                            ? gst_element_request_pad_simple(elems[e.consumer], in_name.c_str())
@@ -866,7 +860,7 @@ void GStreamerElement::Start(std::unique_ptr<RunTask>& task) {
     if (!sink_pad) {
       C->ReportError(f("{}: no pad {}", C->factory, in_name));
       gst_object_unref(pipe);
-      return;
+      return false;
     }
     if (P->out_mode == PadMode::kSometimes) {
       auto& p = chain_sp->pending[chain_sp->n_pending++];
@@ -886,7 +880,7 @@ void GStreamerElement::Start(std::unique_ptr<RunTask>& task) {
     if (!ok) {
       C->ReportError(f("cannot link {} → {}", P->factory, C->factory));
       gst_object_unref(pipe);
-      return;
+      return false;
     }
   }
 
@@ -914,7 +908,7 @@ void GStreamerElement::Start(std::unique_ptr<RunTask>& task) {
     if (!ok) {
       m->ReportError(f("{}: could not attach a sink", m->factory));
       gst_object_unref(pipe);
-      return;
+      return false;
     }
   }
 
@@ -947,12 +941,7 @@ void GStreamerElement::Start(std::unique_ptr<RunTask>& task) {
       m->chain = chain_sp;
       m->element = gst_object_ref(elems[i]);
       m->chain_index = i;
-      // The element whose Run started the chain consumes the caller's task;
-      // the other members synthesize their own.
-      std::unique_ptr<RunTask> own;
-      auto& consumed = m.get() == this ? task : own;
-      if (!consumed) consumed = std::make_unique<RunTask>(m->AcquireWeakPtr(), &run_tbl);
-      m->running->BeginLongRunning(std::move(consumed));
+      if (m->running->StartRunning()) m->running->NotifyTurnedOn();
     }
     m->ClearOwnError();
   }
@@ -967,6 +956,7 @@ void GStreamerElement::Start(std::unique_ptr<RunTask>& task) {
 
   gst_element_set_state(pipe, GST_STATE_PLAYING);
   for (auto& m : order) m->WakeToys();
+  return true;
 }
 
 void GStreamerElement::Stop() {
@@ -1035,12 +1025,7 @@ void AppSinkBoundary::StepOne() {
     auto lock = std::lock_guard(mutex);
     live = chain != nullptr;
   }
-  if (!live) {
-    // The chain synthesizes its own LongRunning tasks; the step task stays
-    // with the caller so Next fires after this step.
-    std::unique_ptr<RunTask> own;
-    Start(own);
-  }
+  if (!live) Start();
   PullOne();
 }
 
@@ -1100,12 +1085,7 @@ void AppSrcBoundary::StepOne() {
     auto lock = std::lock_guard(mutex);
     live = chain != nullptr;
   }
-  if (!live) {
-    // The chain synthesizes its own LongRunning tasks; the step task stays
-    // with the caller so Next fires after this step.
-    std::unique_ptr<RunTask> own;
-    Start(own);
-  }
+  if (!live) Start();
   PushOne();
 }
 
@@ -1416,7 +1396,7 @@ struct GStreamerToy : ui::beta::ObjectToy {
 
   GStreamerToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     button = std::make_unique<ui::beta::RunButton>(
-        this, Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::run_tbl),
+        this, Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::running_tbl),
         Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::running_tbl.turn_off), Seed(0x31));
     if (auto elem = LockObject<GStreamerElement>()) {
       factory_ = elem->factory;
@@ -1752,13 +1732,12 @@ struct PropScalarTable : Scalar::Table {
   }
 };
 
-struct PropCommandTable : Command::Table {
+struct PropCommandTable : BasicCommand::Table {
   PropInfo info;
-  PropCommandTable(const PropInfo& info) : Command::Table(""), info(info) {
+  PropCommandTable(const PropInfo& info) : BasicCommand::Table(""), info(info) {
     name = this->info.name;
     cursor = ui::Cursor::Hand;
-    schedules_next = false;
-    on_run = [](Command self, std::unique_ptr<RunTask>&) {
+    on_run = [](BasicCommand self) {
       auto& table = static_cast<PropCommandTable&>(*self.table_ptr);
       auto& element = static_cast<GStreamerElement&>(*self.object_ptr);
       Str value = PropValue(element, table.info);
@@ -2058,7 +2037,7 @@ struct StepZone : ui::ActionZone {
 BoundaryToy::BoundaryToy(ui::Widget* parent, Object& obj, bool is_sink)
     : ui::beta::ObjectToy(parent, obj), is_sink(is_sink), step_zone(new StepZone(this)) {
   button = std::make_unique<ui::beta::RunButton>(
-      this, Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::run_tbl),
+      this, Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::running_tbl),
       Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::running_tbl.turn_off), Seed(0x77));
   if (auto elem = LockObject<GStreamerElement>()) {
     factory_ = elem->factory;

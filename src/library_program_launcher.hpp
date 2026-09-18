@@ -5,8 +5,8 @@
 // Warning: coded with a stochastic parrot
 
 #include "base.hpp"
+#include "command.hpp"
 #include "launcher.hpp"
-#include "long_running.hpp"
 #include "status.hpp"
 #include "str.hpp"
 #include "stream.hpp"
@@ -30,17 +30,15 @@ struct ProgramLauncher : Object, Container {
   Owned<Launch> launch{*this};  // current or last run; replaced by the next run
   bool ever_ran = false;
 
-  DEF_INTERFACE(ProgramLauncher, Runnable, run, "Run")
-  void OnRun(std::unique_ptr<RunTask>& t) { obj->Run(t); }
-  DEF_END(run);
-
-  DEF_INTERFACE(ProgramLauncher, LongRunning, running, "Running")
+  DEF_INTERFACE(ProgramLauncher, Command, running, "Running")
+  void OnRun() {
+    if (!obj->Run()) Done();
+  }
   void OnCancel() { obj->Terminate(true); }
   DEF_END(running);
 
-  DEF_INTERFACE(ProgramLauncher, Command, stop, "Stop")
-  static constexpr bool kSchedulesNext = false;
-  void OnRun(std::unique_ptr<RunTask>&) {
+  DEF_INTERFACE(ProgramLauncher, BasicCommand, stop, "Stop")
+  void OnRun() {
     obj->Terminate();
     obj->running->Cancel();
   }
@@ -63,11 +61,11 @@ struct ProgramLauncher : Object, Container {
   Str OnFormat() { return "bytes"; }
   DEF_END(in_stream);
 
-  INTERFACES(run, running, next, out_stream, in_stream, stop, text);
+  INTERFACES(running, next, out_stream, in_stream, stop, text);
 
   ProgramLauncher() = default;
   ProgramLauncher(const ProgramLauncher& o)
-      : Object(o), argv(o.argv), run(o.run), next(o.next), out_stream(o.out_stream) {}
+      : Object(o), argv(o.argv), next(o.next), out_stream(o.out_stream) {}
 
   ~ProgramLauncher() override;
 
@@ -81,12 +79,8 @@ struct ProgramLauncher : Object, Container {
   void SerializeState(ObjectSerializer&) const override;
   bool DeserializeKey(ObjectDeserializer&, StrView key) override;
 
-  // Runs the connected stdio chain, spawning every idle downstream stage the
-  // way a shell starts a pipeline. On failure reports the error and leaves
-  // `task` alone.
-  void Run(std::unique_ptr<RunTask>& task);
+  bool Run();
   // Launches this ProgramLauncher's argv with the launch aimed at the given window,
-  // synthesizing the RunTask the way Timer does when it resumes from a save.
   // Returns the launch, or null with `status` filled.
   Ptr<Launch> RunFor(ClientWindow& window, Status& status);
   // Asks the live child to exit (SIGTERM). With `keep_connected`, windows in
@@ -102,11 +96,7 @@ struct ProgramLauncher : Object, Container {
 
  private:
   bool Busy();
-  // Spawns one stage and begins the long-running state. `task` may be null; a
-  // RunTask is synthesized then. On failure returns false with `status`
-  // filled and leaves `task` alone.
-  bool SpawnStage(const SpawnFds&, ClientWindow* restoring, std::unique_ptr<RunTask>& task,
-                  Status& status);
+  bool SpawnStage(const SpawnFds&, ClientWindow* restoring, Status& status);
 };
 
 }  // namespace automat::library

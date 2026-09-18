@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
 
-#include "command.hpp"
+#include "basic_command.hpp"
 #include "menu.hpp"
 #include "pointer.hpp"
 #include "sync.hpp"
@@ -19,8 +19,8 @@ struct OnOff : Syncable {
     void (*on_turn_on)(OnOff) = nullptr;
     void (*on_turn_off)(OnOff) = nullptr;
 
-    Command::Table turn_on;
-    Command::Table turn_off;
+    BasicCommand::Table turn_on;
+    BasicCommand::Table turn_off;
 
     static bool DefaultCanSync(Syncable, Syncable other);
 
@@ -32,6 +32,10 @@ struct OnOff : Syncable {
         auto on_off = cast<OnOff>(self);
         menu.Place(ui::Dir::N, Interface(self.object_ptr, on_off.IsOn() ? &on_off.table->turn_off
                                                                         : &on_off.table->turn_on));
+      };
+      on_idle = [](Syncable self) {
+        auto on_off = cast<OnOff>(self);
+        if (on_off.IsOn()) on_off.table->on_turn_off(on_off);
       };
       activate = [](Interface self, ui::Pointer& pointer,
                     automat::Toy*) -> std::unique_ptr<Action> {

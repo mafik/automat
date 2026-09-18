@@ -7,7 +7,7 @@
 #include <shared_mutex>
 
 #include "argument.hpp"
-#include "command.hpp"
+#include "basic_command.hpp"
 #include "object.hpp"
 #include "ptr.hpp"
 
@@ -27,9 +27,10 @@ struct Syncable : Argument {
     bool (*can_sync)(Syncable, Syncable other) = nullptr;
     void (*on_sync)(Syncable) = nullptr;
     void (*on_unsync)(Syncable) = nullptr;
+    void (*on_idle)(Syncable) = nullptr;
 
-    Command::Table sync;
-    Command::Table unsync;
+    BasicCommand::Table sync;
+    BasicCommand::Table unsync;
 
     static void DefaultCanConnect(Argument self, Interface end, Status& status);
     static void DefaultOnConnect(Argument self, Interface end);
@@ -66,6 +67,7 @@ struct Syncable : Argument {
 
   struct State : Argument::State {
     static constexpr uintptr_t kSource = 1;
+    static constexpr uintptr_t kRunning = 2;
     std::atomic<uintptr_t> gear = 0;
     uint32_t sync_balance = 0;  // used for scrolling the sync belt
 
@@ -74,6 +76,9 @@ struct Syncable : Argument {
     ~State();
 
     bool IsSource() const { return gear.load(std::memory_order_relaxed) & kSource; }
+    bool IsRunning() const { return gear.load(std::memory_order_relaxed) & kRunning; }
+    bool StartRunning();
+    bool StopRunning();
     bool HasGear() const;
     Ptr<Gear> LockGear() const;
     void SetGear(Gear*);
@@ -102,6 +107,10 @@ struct Syncable : Argument {
   void ForwardNotify(this T self, F&& lambda);
 
   void Unsync();
+
+  bool IsRunning() const { return state->IsRunning(); }
+  bool StartRunning() const { return state->StartRunning(); }
+  bool StopRunning() const;
 
   // Impl may provide:
   //   bool CanSync(Syncable other);
@@ -144,6 +153,15 @@ struct Gear : Object {
 
   std::vector<Member> members;
 
+  static constexpr uint32_t kNoMemberStopped = 1u << 31;
+  std::atomic<uint32_t> running = kNoMemberStopped;
+
+  struct RunningGuard {
+    Ptr<Gear> gear;
+    RunningGuard(Ptr<Gear>);
+    ~RunningGuard();
+  };
+
   ~Gear();
 
   Ptr<Object> Clone() const override { return MAKE_PTR(Gear); }
@@ -169,6 +187,7 @@ struct Gear : Object {
 
 template <typename T, typename F>
 void Syncable::ForwardDo(this T self, F&& lambda) {
+  Gear::RunningGuard guard(self.state->LockGear());
   lambda(self);
   self.ForwardNotify(std::forward<F>(lambda));
 }
@@ -204,9 +223,7 @@ void Syncable::ForwardDo(this T self, F&& lambda) {
 //    This is the reason for "TurnOn" / "OnTurnOn" distinction. TurnOn sends a notification,
 //    but OnTurnOn is not allowed to. This works fine for simple syncables, like FlipFlop, where the
 //    "may notify" signal can be passed through method signatures.
-// 2) Track the "source" of some action & make sure that notifications don't flow back. This
-//    approach is used in tasks.cpp/hpp for LongRunning syncables. They must schedule a job using a
-//    scheduler and the "source" field can be used to prevent backflow of notifications.
+// 2) Track the "source" of some action & make sure that notifications don't flow back.
 // 3) Track the target state in each Syncable and make sure that notifications are only sent when
 //    the state actually changes.
 // 4) A variable that inhibits notifications when set. Care must be taken to make it work in
@@ -234,6 +251,7 @@ void Syncable::ForwardNotify(this T self, F&& lambda) {
   if (st.IsSource()) {
     if (auto gear = st.LockGear()) {
       gear->WakeToys();
+      Gear::RunningGuard guard(gear);
       auto lock = std::shared_lock(gear->mutex);
       Locked<Syncable> sinks[gear->members.size()];
       int sink_count = 0;

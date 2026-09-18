@@ -79,8 +79,11 @@ struct GeglOperation : Object {
   bool mid_render = false;        // a capped visit left work in the processor
   Vec<GeglRect> pending_rects;    // computed regions awaiting the blit
 
-  DEF_INTERFACE(GeglOperation, Runnable, run, "Run")
-  void OnRun(std::unique_ptr<RunTask>& t) { obj->MarkDirty(); }
+  DEF_INTERFACE(GeglOperation, Command, run, "Run")
+  void OnRun() {
+    obj->MarkDirty();
+    Done();
+  }
   DEF_END(run);
 
   DEF_INTERFACE(GeglOperation, NextArg, next, "Next")

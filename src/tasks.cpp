@@ -6,15 +6,16 @@
 #include <shared_mutex>
 #include <stop_token>
 #include <tracy/Tracy.hpp>
+#include <vector>
 
 #include "argument.hpp"
 #include "automat.hpp"
 #include "base.hpp"
+#include "basic_command.hpp"
 #include "blockingconcurrentqueue.hpp"
 #include "casting.hpp"
 #include "error.hpp"
 #include "error_recovery.hpp"
-#include "long_running.hpp"
 #include "memory.hpp"
 #include "source_location.hpp"
 #include "thread_name.hpp"
@@ -23,7 +24,6 @@
 
 namespace automat {
 
-std::vector<Task*> global_successors;
 moodycamel::BlockingConcurrentQueue<Task*> queue;
 
 struct NoopTask : Task {
@@ -127,30 +127,15 @@ void JoinWorkerThreads() {
   worker_threads.clear();
 }
 
-NextGuard::NextGuard(std::vector<Task*>&& successors) : successors(std::move(successors)) {
-  old_global_successors = global_successors;
-  global_successors = this->successors;
-}
-NextGuard::~NextGuard() {
-  assert(global_successors == successors);
-  global_successors = old_global_successors;
-  for (Task* successor : successors) {
-    auto& pred = successor->predecessors;
-    if (pred.empty()) {
-      successor->Schedule();
-    }
-  }
+Task::Task(WeakPtr<Object> target) : target(target) {}
+
+Task::~Task() {
+  if (parent) parent->CountDown();
 }
 
-Task::Task(WeakPtr<Object> target)
-    : target(target),
-      source(nullptr),
-      source_interface(nullptr),
-      predecessors(),
-      successors(global_successors) {
-  for (Task* successor : successors) {
-    successor->predecessors.push_back(this);
-  }
+void Task::SetParent(Task& new_parent) {
+  parent = &new_parent;
+  ++new_parent.countdown;
 }
 
 static StrView Name(WeakPtr<Object>& weak) {
@@ -168,33 +153,20 @@ void Task::Schedule() {
     return;
   }
   scheduled = true;
-  // TODO: moodycamel::concurrentqueue should run faster with explicit producer tokens
-  queue.enqueue(this);
+  CountDown();
+}
+
+void Task::CountDown() {
+  if (--countdown == 0) {
+    // TODO: moodycamel::concurrentqueue should run faster with explicit producer tokens
+    queue.enqueue(this);
+  }
 }
 
 void Task::Execute(std::unique_ptr<Task> self) {
   ZoneScopedN("Execute");
   scheduled = false;
-  if (!successors.empty()) {
-    global_successors = successors;
-  }
   OnExecute(self);  // may steal self (lol)
-  if (self == nullptr) {
-    return;
-  }
-  if (!global_successors.empty()) {
-    assert(global_successors == successors);
-    global_successors.clear();
-    for (Task* successor : successors) {
-      auto& pred = successor->predecessors;
-      auto it = std::find(pred.begin(), pred.end(), this);
-      assert(it != pred.end());
-      pred.erase(it);
-      if (pred.empty()) {
-        successor->Schedule();
-      }
-    }
-  }
 }
 
 std::string Task::Format() { return "Task()"; }
@@ -232,41 +204,13 @@ void ScheduleArgumentTargets(Argument arg) {
 
 void RunTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("RunTask");
-  if (auto s = target.lock()) {
-    auto* sig = cast<Command::Table>(command);
-    if (auto lr = s->Find<LongRunning>();
-        lr && lr.IsRunning() && sig->while_long_running == Command::kInhibit) {
-      return;
-    }
-    s->ClearOwnError();
-    // Cast the `self` to RunTask for the OnRun invocation
-    std::unique_ptr<RunTask> self_as_run_task((RunTask*)self.release());
-    if (sig->on_run) {
-      sig->on_run(Command(*s, *sig), self_as_run_task);
-    }
-    // If OnRun didn't "steal" the ownership then we have to return it back.
-    self.reset(self_as_run_task.release());
-
-    if (self) {
-      DoneRunning(*s);
-    }
-  }
-}
-
-void RunTask::DoneRunning(Object& object) {
-  if (!cast<Command::Table>(command)->schedules_next) return;
-  if (HasError(object)) return;
-  ScheduleNext(object);
-}
-
-std::string CancelTask::Format() { return f("CancelTask({})", Name(target)); }
-
-void CancelTask::OnExecute(std::unique_ptr<Task>& self) {
-  ZoneScopedN("CancelTask");
-  if (auto s = target.lock()) {
-    if (auto lr = s->Find<LongRunning>()) {
-      lr.Cancel();
-    }
+  auto object = target.lock();
+  if (!object) return;
+  if (auto* basic_command = dyn_cast<BasicCommand::Table>(command)) {
+    object->ClearOwnError();
+    if (basic_command->on_run) basic_command->on_run(BasicCommand(*object, *basic_command));
+  } else {
+    Command(*object, *cast<Command::Table>(command)).TurnOn();
   }
 }
 

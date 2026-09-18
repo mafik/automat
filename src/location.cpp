@@ -118,7 +118,7 @@ void Location::Deiconify() {
   WakeToys();
 }
 
-void Location::remove_Impl::OnRun(std::unique_ptr<RunTask>&) {
+void Location::remove_Impl::OnRun() {
   if (auto board = obj->LockBoard()) {
     board->Extract(*obj);
     audio::Play(embedded::assets_SFX_canvas_pick_wav);

@@ -236,9 +236,8 @@ void Assembler::UpdateMachineCode() {
   }
 }
 
-void Assembler::RunMachineCode(library::Instruction* entry_point,
-                               std::unique_ptr<RunTask>&& run_task) {
-  running->BeginLongRunning(std::move(run_task));
+void Assembler::RunMachineCode(library::Instruction* entry_point) {
+  if (running->StartRunning()) running->NotifyTurnedOn();
 
   Status status;
   auto inst = entry_point->ToMC();

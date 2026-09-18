@@ -123,7 +123,6 @@ static void WatchRun(ProgramLauncher& launcher, const Ptr<Launch>& launch) {
       auto& launcher = static_cast<ProgramLauncher&>(*obj);
       auto lock = std::lock_guard(launcher.mutex);
       bool current = launcher.launch.Get() == launch_weak.GetUnsafe();
-      // Cancel() may have already consumed the task; Done() requires one.
       if (current && launcher.running->IsRunning()) launcher.running->Done();
       launcher.WakeToys();
     }
@@ -135,8 +134,7 @@ bool ProgramLauncher::Busy() {
   return launch && LaunchAlive(launch);
 }
 
-bool ProgramLauncher::SpawnStage(const SpawnFds& fds, ClientWindow* restoring,
-                                 std::unique_ptr<RunTask>& task, Status& status) {
+bool ProgramLauncher::SpawnStage(const SpawnFds& fds, ClientWindow* restoring, Status& status) {
   Vec<Str> argv_copy;
   {
     auto lock = std::lock_guard(mutex);
@@ -152,8 +150,7 @@ bool ProgramLauncher::SpawnStage(const SpawnFds& fds, ClientWindow* restoring,
     auto lock = std::lock_guard(mutex);
     launch = new_launch;
     ever_ran = true;
-    if (!task) task = std::make_unique<RunTask>(AcquireWeakPtr(), &ProgramLauncher::run_tbl);
-    running->BeginLongRunning(std::move(task));
+    if (running->StartRunning()) running->NotifyTurnedOn();
   }
   ClearOwnError();
   WakeToys();
@@ -161,8 +158,8 @@ bool ProgramLauncher::SpawnStage(const SpawnFds& fds, ClientWindow* restoring,
   return true;
 }
 
-void ProgramLauncher::Run(std::unique_ptr<RunTask>& task) {
-  if (Busy()) return;  // already running; STOP is the way to a restart
+bool ProgramLauncher::Run() {
+  if (Busy()) return false;  // already running; STOP is the way to a restart
 
   // The downstream chain connected through stdout -> stdin. An anonymous pipe
   // needs both ends at spawn, so the chain starts together, the way a shell
@@ -198,7 +195,7 @@ void ProgramLauncher::Run(std::unique_ptr<RunTask>& task) {
       int fd = fd_provider.Resolve(FdProvider::Dir::Read, status);
       if (fd < 0) {
         ReportError(f("stdin: {}", status.ToStr()));
-        return;
+        return false;
       }
       stdio[0].in = AdoptFileDescriptor(fd);
       to_close.push_back(stdio[0].in);
@@ -213,7 +210,7 @@ void ProgramLauncher::Run(std::unique_ptr<RunTask>& task) {
         if (fd < 0) {
           chain.back()->ReportError(f("stdout: {}", status.ToStr()));
           for (StdioHandle held : to_close) CloseStdio(held);
-          return;
+          return false;
         }
         stdio[n - 1].out = AdoptFileDescriptor(fd);
         to_close.push_back(stdio[n - 1].out);
@@ -229,7 +226,7 @@ void ProgramLauncher::Run(std::unique_ptr<RunTask>& task) {
     if (!MakeStdioPipe(read_end, write_end, status)) {
       ReportError(status.ToStr());
       for (StdioHandle held : to_close) CloseStdio(held);
-      return;
+      return false;
     }
     auto pipe = MAKE_PTR(Pipe);
     stdio[i].out = write_end;
@@ -240,12 +237,12 @@ void ProgramLauncher::Run(std::unique_ptr<RunTask>& task) {
     to_close.push_back(write_end);
   }
 
+  bool head_spawned = false;
   for (int i = 0; i < n; ++i) {
     Status status;
-    // The head consumes the caller's task; downstream stages synthesize their
-    // own, the way RunFor does.
-    std::unique_ptr<RunTask> stage_task;
-    if (!chain[i]->SpawnStage(stdio[i], nullptr, i == 0 ? task : stage_task, status)) {
+    bool spawned = chain[i]->SpawnStage(stdio[i], nullptr, status);
+    if (i == 0) head_spawned = spawned;
+    if (!spawned) {
       // A failed stage reports its own error; the rest of the chain still
       // runs and the kernel propagates EOF / SIGPIPE past the gap.
       chain[i]->ReportError(status.ToStr());
@@ -254,11 +251,11 @@ void ProgramLauncher::Run(std::unique_ptr<RunTask>& task) {
   // The parent never keeps pipe ends: a held read end would suppress the
   // writer's SIGPIPE and a held write end would suppress the reader's EOF.
   for (StdioHandle held : to_close) CloseStdio(held);
+  return head_spawned;
 }
 
 Ptr<Launch> ProgramLauncher::RunFor(ClientWindow& window, Status& status) {
-  std::unique_ptr<RunTask> task;
-  if (!SpawnStage({}, &window, task, status)) return nullptr;
+  if (!SpawnStage({}, &window, status)) return nullptr;
   auto lock = std::lock_guard(mutex);
   return launch;
 }
@@ -277,7 +274,7 @@ Ptr<Launch> ProgramLauncher::ExtractLaunch() {
   {
     auto lock = std::lock_guard(mutex);
     extracted = launch.Release();
-    if (running->IsRunning()) running.task.reset();
+    running->StopRunning();
   }
   WakeToys();
   return extracted;
@@ -546,7 +543,7 @@ struct ProgramLauncherToy : ui::beta::ObjectToy {
   ProgramLauncherToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     field = std::make_unique<ArgvField>(this, obj, *this);
     button = std::make_unique<ui::beta::RunButton>(
-        this, Linked<>(obj.AcquireWeakPtr(), &ProgramLauncher::run_tbl),
+        this, Linked<>(obj.AcquireWeakPtr(), &ProgramLauncher::running_tbl),
         Linked<>(obj.AcquireWeakPtr(), &ProgramLauncher::stop_tbl), Seed(0x12B));
   }
 
@@ -637,7 +634,7 @@ struct ProgramLauncherToy : ui::beta::ObjectToy {
 
   void ScheduleRunIfReady() {
     if (auto launcher = LockProgramLauncher()) {
-      if (!launcher->running->IsRunning() && program_resolves_) launcher->run->ScheduleRun();
+      if (!launcher->running->IsRunning() && program_resolves_) launcher->running->ScheduleRun();
     }
     WakeAnimation();
   }

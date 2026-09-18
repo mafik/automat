@@ -16,13 +16,18 @@ Every interface is an option (`docs/Interfaces.md`, section "Activation"). `Inte
 Toy*)` returns the `Action` that the activation becomes. Objects expose their commands as
 interfaces, and the widgets only map triggers to those interfaces:
 
-- A command that runs to completion is a `Command` interface: `DEF_INTERFACE(X, Command, name,
-  "Label")` with `OnRun`. Such commands set `static constexpr bool kSchedulesNext = false`, so
-  `RunTask::DoneRunning` (src/tasks.cpp) does not fire the object's `next` argument. A command
-  exposed this way is also connectable and schedulable by other objects, which is why commands
-  are not a separate kind. The default activation schedules the run (`Command::Table::
-  DefaultActivate`, src/command.cpp); a command whose activation is a gesture overrides it with
-  `OnActivate` and has no `OnRun` (`kSplice` in src/library_timeline.cpp).
+- A menu command that runs to completion is a `BasicCommand` interface
+  (src/basic_command.hpp): `DEF_INTERFACE(X, BasicCommand, name, "Label")` with `OnRun`. It has no
+  state, it cannot be synchronized and it never fires the object's `next` argument. The default
+  activation schedules the run (`BasicCommand::Table::DefaultActivate`, src/basic_command.cpp); a
+  command whose activation is a gesture overrides it with `OnActivate` and has no `OnRun`
+  (`kSplice` in src/library_timeline.cpp).
+- A command that takes part in the control flow is a `Command` (src/command.hpp). A `Command` is
+  an `OnOff`: turning it on runs `OnRun`, it is on while it runs, and it can be synchronized
+  through a Gear. It is done when it calls `Done()`: a synchronous command calls it at the end of
+  `OnRun`, a command that works in the background calls it later. When it is done it fires the
+  object's `next` argument. Turning it off cancels it; `OnCancel` is an optional hook for that.
+  Other objects connect to a `Command` and schedule it.
 - A continuous value is a `Scalar` (src/base.hpp): `OnGet`, `OnSet` and an `OnActivate` that starts
   the drag of its handle (Timer `duration`, src/library_timer.hpp).
 - Text is a `Text` interface (src/base.hpp); text fields are Toys of it (src/text_field.hpp).
@@ -35,7 +40,7 @@ interfaces, and the widgets only map triggers to those interfaces:
   `ShelfButton` are Toys of the prototype they display, and `pick` places the card's toy at the
   front of the deck.
 - Sub-options of an interface are tables nested inside its table (`sync` and `unsync` in
-  `Syncable::Table`, `turn_on` and `turn_off` in `OnOff::Table`, all four Command tables). The
+  `Syncable::Table`, `turn_on` and `turn_off` in `OnOff::Table`, all four BasicCommand tables). The
   interface lays them out itself: `fill_menu` in its table places them in the menu. A derived table
   calls the filler of its base first and then places its own: `Syncable::Table::DefaultFillMenu`
   (src/sync.cpp) places `sync` at E and `unsync` at W while synced, and the OnOff table
@@ -139,7 +144,7 @@ at S.
 
 A widget or table that builds on a base calls the filler of the base first and then places its
 own slots, so a later placement at the same angle is an override, visible where it happens
-(`MacroRecorderWidget` in src/library_macro_recorder.cpp replaces the Runnable at N with its
+(`MacroRecorderWidget` in src/library_macro_recorder.cpp replaces the Command at N with its
 `recording` interface). The base places only the slots that mean the same everywhere and never
 needs to know the final shape, because the sectors follow from the final list.
 
@@ -167,11 +172,11 @@ Three hierarchies meet in a menu and must not compete for directions:
   lies below.
 
 Conventions: S is the parent, NW is destructive, N is the primary action. Availability may vary with
-state (the Timer's start pusher answers the left button with `run` while the timer is stopped and
-with the `turn_off` sub-option of `running` while it runs), the meaning of a slot may not. Sub-menus opened from an interface's sub-options are leaves and reserve no S.
+state (an OnOff places `turn_on` or `turn_off` at N depending on whether it is on), the meaning of
+a slot may not. Sub-menus opened from an interface's sub-options are leaves and reserve no S.
 
 The generic layer provides only the slots that mean the same on every object. `ObjectToy::FillMenu`
-(src/object.cpp) places the object's Runnable, or `kThisIsFine` while the object shows an error, at
+(src/object.cpp) places the object's first Command, or `kThisIsFine` while the object shows an error, at
 N and its Location at S. The left button is not answered by the object toy and falls through to
 `LocationWidget::FindOption` (src/location.cpp), which answers it with move.
 `LocationWidget::FillMenu` places move at N, delete at NW, iconify or deiconify at NE, copy at E,

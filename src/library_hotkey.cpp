@@ -62,8 +62,8 @@ void HotKey::ToggleModifier(bool& modifier) {
 
 static std::unique_ptr<Action> SelectHotKeyActivate(Interface, ui::Pointer&, Toy*);
 
-constinit Command::Table kSelectHotKey = [] {
-  Command::Table t("Select key");
+constinit BasicCommand::Table kSelectHotKey = [] {
+  BasicCommand::Table t("Select key");
   t.activate = &SelectHotKeyActivate;
   return t;
 }();

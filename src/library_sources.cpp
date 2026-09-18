@@ -33,7 +33,7 @@ std::string_view Sources::Name() const { return "Sources"; }
 
 Ptr<Object> Sources::Clone() const { return MAKE_PTR(Sources); }
 
-void Sources::extract_files_Impl::OnRun(std::unique_ptr<RunTask>&) {
+void Sources::extract_files_Impl::OnRun() {
   // Extract all embedded files to the current directory
   Status status;
   int file_count = 0;

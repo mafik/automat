@@ -126,14 +126,14 @@ std::unique_ptr<ui::Widget> Instruction::jump_arg_Impl::OnMakeIcon(ui::Widget* p
 }
 
 void Instruction::jump_arg_Impl::OnConnect(Interface end) {
-  InterfaceArgument<Runnable>::Table::DefaultOnConnect(*this, end);
+  InterfaceArgument<Command>::Table::DefaultOnConnect(*this, end);
   if (auto* assembler = FindAssembler(*obj)) {
     assembler->UpdateMachineCode();
   }
 }
 
 void Instruction::next_Impl::OnConnect(Interface end) {
-  InterfaceArgument<Runnable, Interface::kNextArg>::Table::DefaultOnConnect(*this, end);
+  InterfaceArgument<Command, Interface::kNextArg>::Table::DefaultOnConnect(*this, end);
   if (auto* assembler = FindAssembler(*obj)) {
     assembler->UpdateMachineCode();
   }
@@ -230,10 +230,10 @@ void Instruction::BufferVisit(const BufferVisitor& visitor) {
   visitor(span<char>{});
 }
 
-void Instruction::Run(std::unique_ptr<RunTask>& run_task) {
+void Instruction::Run() {
   ZoneScopedN("Instruction");
   auto assembler = FindOrCreateAssembler(*this);
-  assembler->RunMachineCode(this, std::move(run_task));
+  assembler->RunMachineCode(this);
 }
 
 static std::string AssemblyText(const mc::Inst& mc_inst) {

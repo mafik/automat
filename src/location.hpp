@@ -24,7 +24,6 @@ struct ConnectionWidget;
 
 namespace automat {
 
-struct LongRunning;
 struct LocationWidget;
 struct Board;
 
@@ -123,24 +122,20 @@ struct Location : Object {
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(clone);
 
-  DEF_INTERFACE(Location, Command, remove, "Delete")
-  static constexpr bool kSchedulesNext = false;
-  void OnRun(std::unique_ptr<RunTask>&);
+  DEF_INTERFACE(Location, BasicCommand, remove, "Delete")
+  void OnRun();
   DEF_END(remove);
 
-  DEF_INTERFACE(Location, Command, iconify, "Iconify")
-  static constexpr bool kSchedulesNext = false;
-  void OnRun(std::unique_ptr<RunTask>&) { obj->Iconify(); }
+  DEF_INTERFACE(Location, BasicCommand, iconify, "Iconify")
+  void OnRun() { obj->Iconify(); }
   DEF_END(iconify);
 
-  DEF_INTERFACE(Location, Command, deiconify, "Deiconify")
-  static constexpr bool kSchedulesNext = false;
-  void OnRun(std::unique_ptr<RunTask>&) { obj->Deiconify(); }
+  DEF_INTERFACE(Location, BasicCommand, deiconify, "Deiconify")
+  void OnRun() { obj->Deiconify(); }
   DEF_END(deiconify);
 
-  DEF_INTERFACE(Location, Command, make_home, "Make Home")
-  static constexpr bool kSchedulesNext = false;
-  void OnRun(std::unique_ptr<RunTask>&) { obj->object->MakeHome(*obj); }
+  DEF_INTERFACE(Location, BasicCommand, make_home, "Make Home")
+  void OnRun() { obj->object->MakeHome(*obj); }
   DEF_END(make_home);
 
   INTERFACES(move, copy, clone, remove, iconify, deiconify, make_home)

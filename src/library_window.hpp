@@ -19,8 +19,11 @@ struct Window : public Object, ui::WindowWatcher {
   Str title = "";
   sk_sp<SkImage> captured_image;  // Captured window image
 
-  DEF_INTERFACE(Window, Runnable, capture, "Capture")
-  void OnRun(std::unique_ptr<RunTask>&) { obj->Capture(); }
+  DEF_INTERFACE(Window, Command, capture, "Capture")
+  void OnRun() {
+    obj->Capture();
+    Done();
+  }
   DEF_END(capture);
 
   DEF_INTERFACE(Window, NextArg, next, "Next")
@@ -80,7 +83,7 @@ struct Window : public Object, ui::WindowWatcher {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  INTERFACES(capture, next, image_provider, on_off);
+  INTERFACES(on_off, capture, next, image_provider);
 
   // Called after deserialization. Makes the window object attach its native handle to the window
   // with the current title.

@@ -41,9 +41,8 @@ struct InstructionLibrary : Object {
   // Potential instructions (after filtering)
   std::deque<llvm::MCInst> instructions;  // "deck", lol
 
-  DEF_INTERFACE(InstructionLibrary, Command, scroll, "Scroll")
-  static constexpr bool kSchedulesNext = false;
-  void OnRun(std::unique_ptr<RunTask>&);
+  DEF_INTERFACE(InstructionLibrary, BasicCommand, scroll, "Scroll")
+  void OnRun();
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(scroll);
 

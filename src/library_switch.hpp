@@ -14,12 +14,13 @@ struct LinkedSwitch : Object {
   static constexpr SkColor4f kTint = "#216778"_color4f;
   DEF_END(on_off);
 
-  DEF_INTERFACE(LinkedSwitch, Runnable, flip, "Flip")
-  void OnRun(std::unique_ptr<RunTask>&) {
+  DEF_INTERFACE(LinkedSwitch, Command, flip, "Flip")
+  void OnRun() {
     if (auto locked = obj->on_off->FindInterface()) {
       locked.Toggle();
       obj->on_off->LastActivity()->fetch_add(1, std::memory_order_relaxed);
     }
+    Done();
   }
   DEF_END(flip);
 
@@ -35,8 +36,11 @@ struct LinkedSwitch : Object {
 struct Switch : Object {
   bool current_state = false;
 
-  DEF_INTERFACE(Switch, Runnable, flip, "Flip")
-  void OnRun(std::unique_ptr<RunTask>&) { obj->enabled->Toggle(); }
+  DEF_INTERFACE(Switch, Command, flip, "Flip")
+  void OnRun() {
+    obj->enabled->Toggle();
+    Done();
+  }
   DEF_END(flip);
 
   DEF_INTERFACE(Switch, OnOff, enabled, "On/Off")
@@ -51,7 +55,7 @@ struct Switch : Object {
   }
   DEF_END(enabled);
 
-  INTERFACES(flip, enabled);
+  INTERFACES(enabled, flip);
 
   Switch() = default;
 

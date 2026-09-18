@@ -40,8 +40,12 @@ struct Instruction : Object, Buffer {
   static ui::Font& FineFont();
   static ui::Font& HeavyFont();
 
-  DEF_INTERFACE(Instruction, Runnable, run, "Run")
-  void OnRun(std::unique_ptr<RunTask>& run_task) { obj->Run(run_task); }
+  DEF_INTERFACE(Instruction, Command, run, "Run")
+  static constexpr bool kSchedulesNext = false;
+  void OnRun() {
+    obj->Run();
+    Done();
+  }
   DEF_END(run);
 
   DEF_INTERFACE(Instruction, NextArg, next, "Next")
@@ -59,14 +63,14 @@ struct Instruction : Object, Buffer {
   bool OnIsConnected();
   DEF_END(assembler_arg);
 
-  DEF_INTERFACE(Instruction, InterfaceArgument<Runnable>, jump_arg, "Jump")
+  DEF_INTERFACE(Instruction, InterfaceArgument<Command>, jump_arg, "Jump")
   void OnConnect(Interface end);
   std::unique_ptr<ui::Widget> OnMakeIcon(ui::Widget* parent);
   DEF_END(jump_arg);
 
   void Interfaces(const std::function<LoopControl(Interface)>& cb) override;
 
-  void Run(std::unique_ptr<RunTask>&);
+  void Run();
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;

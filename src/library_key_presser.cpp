@@ -200,7 +200,7 @@ static std::unique_ptr<Action> PressKeyActivate(Interface self, ui::Pointer& poi
   WeakPtr<Object> weak = self.object_ptr->AcquireWeakPtr();
   return std::make_unique<DragAndClickAction>(
       pointer, ui::PointerButton::Left, DragKeyPresser(pointer, *widget), [weak](ui::Pointer&) {
-        if (auto object = weak.Lock()) Runnable(*object, KeyPresser::run_tbl).ScheduleRun();
+        if (auto object = weak.Lock()) Command(*object, KeyPresser::run_tbl).ScheduleRun();
       });
 }
 
@@ -225,14 +225,14 @@ static std::unique_ptr<Action> SetKeyActivate(Interface, ui::Pointer& pointer, T
       });
 }
 
-constinit Command::Table kPressKey = [] {
-  Command::Table t("Press key");
+constinit BasicCommand::Table kPressKey = [] {
+  BasicCommand::Table t("Press key");
   t.activate = &PressKeyActivate;
   return t;
 }();
 
-constinit Command::Table kSetKey = [] {
-  Command::Table t("Set key");
+constinit BasicCommand::Table kSetKey = [] {
+  BasicCommand::Table t("Set key");
   t.activate = &SetKeyActivate;
   return t;
 }();

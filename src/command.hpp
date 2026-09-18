@@ -2,64 +2,67 @@
 // SPDX-FileCopyrightText: Copyright 2026 Automat Authors
 // SPDX-License-Identifier: MIT
 
-#include "interface.hpp"
-#include "tasks.hpp"
+#include "on_off.hpp"
 
 namespace automat {
 
-struct Command : Interface {
-  // What to do with a command that arrives while the object's LongRunning is
-  // active. An object's starting command is inhibited (a running thing is not
-  // started twice); a command that performs one bounded unit of work (pull one
-  // buffer, decode one frame) is delivered.
-  enum WhileLongRunning : bool { kDeliver, kInhibit };
-
-  struct Table : Interface::Table {
+struct Command : OnOff {
+  struct Table : OnOff::Table {
     static bool classof(const Interface::Table* i) { return i->kind == Interface::kCommand; }
 
-    void (*on_run)(Command, std::unique_ptr<RunTask>&) = nullptr;
+    void (*on_cancel)(Command) = nullptr;
 
-    WhileLongRunning while_long_running;
     bool schedules_next = true;
 
-    static std::unique_ptr<Action> DefaultActivate(Interface, ui::Pointer&, Toy*);
-
-    constexpr Table(StrView name, WhileLongRunning while_long_running = kDeliver)
-        : Interface::Table(Interface::kCommand, name), while_long_running(while_long_running) {
-      activate = &DefaultActivate;
+    constexpr Table(StrView name) : OnOff::Table(name, Interface::kCommand) {
+      on_idle = [](Syncable self) { cast<Command>(self).ContinueIfWaiting(); };
     }
 
     template <typename ImplT>
     constexpr void FillFrom() {
-      Interface::Table::FillFrom<ImplT>();
-      on_run = [](Command self, std::unique_ptr<RunTask>& t) {
-        static_cast<ImplT&>(self).OnRun(t);
+      struct FullImpl : ImplT {
+        bool IsOn() const { return this->IsRunning(); }
+        void OnTurnOn() {
+          if constexpr (requires(ImplT& i) { i.OnRun(); }) {
+            if (this->BeginRun()) this->OnRun();
+          }
+        }
+        void OnTurnOff() { this->CancelWithoutNotify(); }
+        void OnUnsync() {
+          if constexpr (requires(ImplT& i) { i.OnUnsync(); }) ImplT::OnUnsync();
+          this->ContinueIfWaiting();
+        }
       };
+      OnOff::Table::FillFrom<FullImpl>();
       if constexpr (requires { ImplT::kSchedulesNext; }) schedules_next = ImplT::kSchedulesNext;
+      if constexpr (requires(ImplT& i) { i.OnCancel(); })
+        on_cancel = [](Command self) { static_cast<ImplT&>(self).OnCancel(); };
     }
   };
 
-  struct State {};
+  struct State : OnOff::State {
+    std::atomic<bool> waiting = false;
 
-  INTERFACE_BOUND(Command, Interface)
+    State() = default;
+    State(const State& other) : OnOff::State(other) {}
+  };
 
-  void Run(std::unique_ptr<RunTask>& run_task) const { table->on_run(*this, run_task); }
+  INTERFACE_BOUND(Command, OnOff)
 
-  void ScheduleRun(Interface source = {}) const {
-    auto* task = new RunTask(object_ptr->AcquireWeakPtr(), table_ptr);
-    if (source) {
-      task->source = source.object_ptr->AcquireWeakPtr();
-      task->source_interface = source.table_ptr;
-    }
-    task->Schedule();  // steals the ownership of the pointer
-  }
+  void ScheduleRun() const { (new RunTask(object_ptr->AcquireWeakPtr(), table_ptr))->Schedule(); }
 
-  // ImplT must provide:
-  //   static constexpr StrView kName = "..."sv;
-  //   static constexpr int Offset();  // offsetof(Parent, def_member)
-  //   void OnRun(std::unique_ptr<RunTask>&);
+  bool BeginRun() const;
+
+  void Done() const;
+
+  void ContinueIfWaiting() const;
+
+  void CancelWithoutNotify() const;
+
+  void Cancel() const { TurnOff(); }
+
   template <typename ImplT>
-  struct Def : Interface::DefBase {
+  struct Def : State, Interface::DefBase {
     using Impl = ImplT;
     using Bound = Command;
 
@@ -71,10 +74,15 @@ struct Command : Interface {
 
     inline constinit static Table tbl = MakeTable();
 
-    ~Def() {}
+    ~Def() {
+      if (IsRunning()) {
+        Bind().Cancel();
+      }
+      if (IsSource() || HasGear()) {
+        Bind().Unsync();
+      }
+    }
   };
 };
-
-extern Command::Table kThisIsFine;
 
 }  // namespace automat

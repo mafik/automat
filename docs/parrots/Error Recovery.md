@@ -15,7 +15,7 @@ Error attached to that Object.
 - An Error explains to the user what went wrong and helps with recovery. Errors are attached
   to Objects; each Object has at most one Error.
 - While present, an Error pauses the execution of its Object. Each Object is responsible for
-  checking its Error when it executes. `RunTask::DoneRunning` in `src/tasks.cpp` schedules an
+  checking its Error when it executes. `Command::ContinueIfWaiting` in `src/command.cpp` schedules an
   Object's successors only when `HasError` reports no Error.
 - Errors may be attached by external reporters, which work like validators. An Error records
   its reporter, which is usually the target Object itself. `Object::ReportError`

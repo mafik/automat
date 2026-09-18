@@ -364,7 +364,6 @@ void Timeline::AddTrack(Ptr<TrackBase>&& track) {
 
 Timeline::Timeline(const Timeline& other)
     : Object(other),
-      run(other.run),
       next(other.next),
       zoom_seconds(other.zoom_seconds),
       state(other.state),
@@ -760,7 +759,6 @@ struct TimelineWidget : ObjectToy {
     ObjectToy::FillMenu(pointer, menu);
     auto object = LockObject<Timeline>();
     if (!object) return;
-    menu.Place(NE, object->running.Bind());
     menu.Place(W, object->position.Bind());
     menu.Place(E, object->zoom.Bind());
   }
@@ -1576,9 +1574,8 @@ Interface TimelineRunButton::FindOption(ui::Pointer&, ui::ActionTrigger trigger)
   if (!tw || !timeline) return {};
   switch (tw->state) {
     case Timeline::kPlaying:
-      return Interface(*timeline, Timeline::running_tbl.turn_off);
     case Timeline::kPaused:
-      return timeline->run.Bind();
+      return timeline->running.Bind();
     case Timeline::kRecording:
       return timeline->stop_recording.Bind();
   }
@@ -1812,8 +1809,8 @@ std::unique_ptr<Action> Timeline::zoom_Impl::OnActivate(ui::Pointer& pointer, au
   return widget ? make_unique<DragZoomAction>(pointer, *widget) : nullptr;
 }
 
-constinit Command::Table kSplice = [] {
-  Command::Table t("Splice");
+constinit BasicCommand::Table kSplice = [] {
+  BasicCommand::Table t("Splice");
   t.cursor = ui::Cursor::ResizeHorizontal;
   t.activate = [](Interface, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
     auto* widget = toy ? ui::Closest<TimelineWidget>(*toy) : nullptr;
@@ -1918,7 +1915,6 @@ void Timeline::Interfaces(const function<LoopControl(Interface)>& cb) {
     if (LoopControl::Break == cb(Interface(*track, track->arg_table))) return;
   }
   if (LoopControl::Break == cb(next.Bind())) return;
-  if (LoopControl::Break == cb(run.Bind())) return;
   if (LoopControl::Break == cb(running.Bind())) return;
   if (LoopControl::Break == cb(position.Bind())) return;
   if (LoopControl::Break == cb(zoom.Bind())) return;
@@ -2582,9 +2578,10 @@ void Timeline::Pause() {
   }
 }
 
-void Timeline::Play(std::unique_ptr<RunTask>& run_task) {
+void Timeline::Play() {
   ZoneScopedN("Timeline");
   if (state != Timeline::kPaused) {
+    running->Done();
     return;
   }
   if (paused.playback_offset >= MaxTrackLength()) {
@@ -2597,7 +2594,6 @@ void Timeline::Play(std::unique_ptr<RunTask>& run_task) {
   TimelineScheduleNextAfter(*this, now);
   WakeRunButton(*this);
   WakeToys();
-  running->BeginLongRunning(std::move(run_task));
 }
 
 void Timeline::BeginRecording() {
@@ -2629,19 +2625,19 @@ void Timeline::StopRecording() {
   WakeToys();
 }
 
-void Timeline::jump_to_start_Impl::OnRun(std::unique_ptr<RunTask>&) {
+void Timeline::jump_to_start_Impl::OnRun() {
   auto lock = std::lock_guard(obj->mutex);
   obj->SetOffset(0s, time::SteadyNow());
   obj->WakeToys();
 }
 
-void Timeline::jump_to_end_Impl::OnRun(std::unique_ptr<RunTask>&) {
+void Timeline::jump_to_end_Impl::OnRun() {
   auto lock = std::lock_guard(obj->mutex);
   obj->SetOffset(obj->MaxTrackLength(), time::SteadyNow());
   obj->WakeToys();
 }
 
-void Timeline::stop_recording_Impl::OnRun(std::unique_ptr<RunTask>&) {
+void Timeline::stop_recording_Impl::OnRun() {
   auto lock = std::lock_guard(obj->mutex);
   obj->StopRecording();
 }
@@ -2690,10 +2686,6 @@ void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
     } else {
       on_off.TurnOff();
     }
-  } else if (auto lr = target.object->Find<LongRunning>(); lr && lr.IsRunning() && !on) {
-    lr.Cancel();
-  } else if (auto runnable = target.object->Find<Runnable>(); runnable && on) {
-    runnable.ScheduleRun();
   } else {
     ERROR << "Target is not runnable!";
   }
@@ -2913,7 +2905,7 @@ bool Timeline::DeserializeKey(ObjectDeserializer& d, StrView key) {
     // We're not updating the outputs because they should be deserialized in a proper state
     // TimelineUpdateOutputs(l, *this, playing.started_at, now);
     TimelineScheduleNextAfter(*this, now);
-    running->BeginLongRunning(std::make_unique<RunTask>(AcquireWeakPtr(), &run_tbl));
+    running->StartRunning();
   } else if (key == "recording") {
     state = kRecording;
     double value = 0;

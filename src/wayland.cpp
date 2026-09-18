@@ -2216,10 +2216,10 @@ static bool ForwardsToClient(ui::ActionTrigger btn) {
   return ui::RootWidget::kWaylandLock || (ui::PointerButton)btn == ui::PointerButton::Left;
 }
 
-struct ClientButtonTable : Command::Table {
+struct ClientButtonTable : BasicCommand::Table {
   ui::PointerButton button;
   constexpr ClientButtonTable(StrView name, ui::PointerButton button)
-      : Command::Table(name), button(button) {
+      : BasicCommand::Table(name), button(button) {
     activate = [](Interface self, ui::Pointer& p, Toy* toy) -> std::unique_ptr<Action> {
       auto* surface = dynamic_cast<WaylandSurfaceToy*>(toy);
       auto& table = static_cast<ClientButtonTable&>(*self.table_ptr);

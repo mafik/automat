@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "argument.hpp"
+#include "command.hpp"
 #include "deserializer.hpp"
 #include "drag_action.hpp"
 #include "error.hpp"
@@ -45,37 +46,6 @@ using std::vector;
 struct Error;
 struct Object;
 struct Location;
-
-// The command that starts an Object's work. While the object's LongRunning is
-// active the work is already happening, so this command is inhibited.
-struct Runnable : Command {
-  struct Table : Command::Table {
-    static bool classof(const Interface::Table* i) {
-      return Command::Table::classof(i) &&
-             static_cast<const Command::Table*>(i)->while_long_running == kInhibit;
-    }
-
-    constexpr Table(StrView name) : Command::Table(name, kInhibit) {}
-  };
-
-  INTERFACE_BOUND(Runnable, Command)
-
-  template <typename ImplT>
-  struct Def : Interface::DefBase {
-    using Impl = ImplT;
-    using Bound = Runnable;
-
-    static constexpr Table MakeTable() {
-      Table t(ImplT::kName);
-      t.FillFrom<ImplT>();
-      return t;
-    }
-
-    inline constinit static Table tbl = MakeTable();
-
-    ~Def() {}
-  };
-};
 
 using NextArg = InterfaceArgument<Command, Interface::kNextArg>;
 

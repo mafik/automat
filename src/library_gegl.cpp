@@ -935,13 +935,12 @@ struct PropScalarTable : Scalar::Table {
   }
 };
 
-struct PropCommandTable : Command::Table {
+struct PropCommandTable : BasicCommand::Table {
   PropInfo info;
-  PropCommandTable(const PropInfo& info) : Command::Table(""), info(info) {
+  PropCommandTable(const PropInfo& info) : BasicCommand::Table(""), info(info) {
     name = this->info.name;
     cursor = ui::Cursor::Hand;
-    schedules_next = false;
-    on_run = [](Command self, std::unique_ptr<RunTask>&) {
+    on_run = [](BasicCommand self) {
       auto& table = static_cast<PropCommandTable&>(*self.table_ptr);
       auto& gegl = static_cast<GeglOperation&>(*self.object_ptr);
       Str value = PropValue(gegl, table.info);

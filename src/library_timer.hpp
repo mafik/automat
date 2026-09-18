@@ -4,7 +4,7 @@
 
 #include "base.hpp"
 #include "color.hpp"
-#include "long_running.hpp"
+#include "command.hpp"
 #include "sync.hpp"
 #include "time.hpp"
 #include "timer_thread.hpp"
@@ -25,13 +25,9 @@ struct Timer : Object, TimerNotificationReceiver {
   // bool CanSync(Syncable other) { return other.table == &Syncable::Def<duration_Impl>::tbl; }
   // DEF_END(duration);
 
-  DEF_INTERFACE(Timer, Runnable, run, "Run")
+  DEF_INTERFACE(Timer, Command, running, "Running")
   static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
-  void OnRun(std::unique_ptr<RunTask>& run_task) { obj->StartTimer(run_task); }
-  DEF_END(run);
-
-  DEF_INTERFACE(Timer, LongRunning, running, "Running")
-  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  void OnRun() { obj->StartTimer(); }
   void OnCancel() { obj->CancelTimer(); }
   DEF_END(running);
 
@@ -49,16 +45,14 @@ struct Timer : Object, TimerNotificationReceiver {
   void OnSet(StrView);
   DEF_END(readout);
 
-  DEF_INTERFACE(Timer, Command, next_range, "Next range")
-  static constexpr bool kSchedulesNext = false;
+  DEF_INTERFACE(Timer, BasicCommand, next_range, "Next range")
   static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
-  void OnRun(std::unique_ptr<RunTask>&) { obj->ShiftRange(1); }
+  void OnRun() { obj->ShiftRange(1); }
   DEF_END(next_range);
 
-  DEF_INTERFACE(Timer, Command, prev_range, "Previous range")
-  static constexpr bool kSchedulesNext = false;
+  DEF_INTERFACE(Timer, BasicCommand, prev_range, "Previous range")
   static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
-  void OnRun(std::unique_ptr<RunTask>&) { obj->ShiftRange(-1); }
+  void OnRun() { obj->ShiftRange(-1); }
   DEF_END(prev_range);
 
   enum class Range : char {
@@ -72,13 +66,13 @@ struct Timer : Object, TimerNotificationReceiver {
 
   Timer();
   Timer(const Timer&);
-  void StartTimer(std::unique_ptr<RunTask>&);
+  void StartTimer();
   void CancelTimer();
   void ShiftRange(int delta);
   StrView Name() const override { return "Timer"; }
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  INTERFACES(run, next, running, duration, next_range, prev_range, readout)
+  INTERFACES(running, next, duration, next_range, prev_range, readout)
   void Updated(WeakPtr<Object>& updated) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
 

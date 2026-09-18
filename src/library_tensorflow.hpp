@@ -46,8 +46,11 @@ struct TfTensor : Object {
   sk_sp<SkImage> computed_input;
   bool computing = false;
 
-  DEF_INTERFACE(TfTensor, Runnable, run, "Run")
-  void OnRun(std::unique_ptr<RunTask>& t) { obj->Materialize(); }
+  DEF_INTERFACE(TfTensor, Command, run, "Run")
+  void OnRun() {
+    obj->Materialize();
+    Done();
+  }
   DEF_END(run);
 
   DEF_INTERFACE(TfTensor, NextArg, next, "Next")
@@ -96,8 +99,11 @@ struct TfOp : Object {
   bool computing = false;
   sk_sp<SkImage> result_image;
 
-  DEF_INTERFACE(TfOp, Runnable, run, "Run")
-  void OnRun(std::unique_ptr<RunTask>& t) { obj->Execute(); }
+  DEF_INTERFACE(TfOp, Command, run, "Run")
+  void OnRun() {
+    obj->Execute();
+    Done();
+  }
   DEF_END(run);
 
   DEF_INTERFACE(TfOp, NextArg, next, "Next")

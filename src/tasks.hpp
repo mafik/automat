@@ -2,10 +2,10 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
 
+#include <atomic>
 #include <functional>
 #include <stop_token>
 #include <string>
-#include <vector>
 
 #include "argument.hpp"
 #include "object.hpp"
@@ -32,19 +32,17 @@ void ScheduleArgumentTargets(Argument);
 struct Task {
   WeakPtr<Object> target;
 
-  // Record of which object (& interface) started this task.
-  WeakPtr<Object> source;
-  Interface::Table* source_interface;
-
-  std::vector<Task*> predecessors;
-  std::vector<Task*> successors;
+  Task* parent = nullptr;
+  std::atomic<int> countdown = 1;
   bool scheduled = false;  // only used for error detection
   Task(WeakPtr<Object> target);
-  virtual ~Task() {}
+  virtual ~Task();
+  void SetParent(Task&);
   // Add this task to the task queue.
   //
   // Steals ownership of this object.
   void Schedule();
+  void CountDown();
   virtual std::string Format();
   virtual void OnExecute(std::unique_ptr<Task>& self) = 0;
   void Execute(std::unique_ptr<Task> self);
@@ -53,14 +51,6 @@ struct Task {
 struct RunTask : Task {
   Interface::Table* command;
   RunTask(WeakPtr<Object> target, Interface::Table* command) : Task(target), command(command) {}
-  std::string Format() override;
-  void OnExecute(std::unique_ptr<Task>& self) override;
-
-  void DoneRunning(Object& here);
-};
-
-struct CancelTask : Task {
-  CancelTask(WeakPtr<Object> target) : Task(target) {}
   std::string Format() override;
   void OnExecute(std::unique_ptr<Task>& self) override;
 };
@@ -78,13 +68,6 @@ struct FunctionTask : Task {
       : Task(target), function(function) {}
   std::string Format() override;
   void OnExecute(std::unique_ptr<Task>& self) override;
-};
-
-struct NextGuard {
-  std::vector<Task*> successors;
-  std::vector<Task*> old_global_successors;
-  NextGuard(std::vector<Task*>&& successors);
-  ~NextGuard();
 };
 
 }  // namespace automat

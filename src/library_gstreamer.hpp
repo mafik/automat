@@ -11,8 +11,8 @@
 #include <mutex>
 
 #include "base.hpp"
+#include "command.hpp"
 #include "image_provider.hpp"
-#include "long_running.hpp"
 #include "status.hpp"
 #include "str.hpp"
 #include "stream.hpp"
@@ -100,11 +100,10 @@ struct GStreamerElement : Object {
     uint64_t counter = 0;  // bumped per frame; the toy polls it
   };
 
-  DEF_INTERFACE(GStreamerElement, Runnable, run, "Run")
-  void OnRun(std::unique_ptr<RunTask>& t) { obj->Start(t); }
-  DEF_END(run);
-
-  DEF_INTERFACE(GStreamerElement, LongRunning, running, "Running")
+  DEF_INTERFACE(GStreamerElement, Command, running, "Running")
+  void OnRun() {
+    if (!obj->Start()) Done();
+  }
   void OnCancel() { obj->Stop(); }
   DEF_END(running);
 
@@ -138,9 +137,7 @@ struct GStreamerElement : Object {
   bool DeserializeKey(ObjectDeserializer&, StrView key) override;
 
   // Builds the hidden pipeline for the whole linked run and sets it PLAYING.
-  // Reports errors on the member that caused them; consumes `task`
-  // (LongRunning) only on success.
-  void Start(std::unique_ptr<RunTask>& task);
+  bool Start();
   // Stops the whole chain this element runs in. Safe from any thread except
   // a GStreamer streaming thread.
   void Stop();
@@ -212,10 +209,13 @@ struct AppSinkBoundary : GStreamerElement {
 
   DEF_INTERFACE(AppSinkBoundary, Command, step, "Pull")
   static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
-  void OnRun(std::unique_ptr<RunTask>& t) { obj->StepOne(); }
+  void OnRun() {
+    obj->StepOne();
+    Done();
+  }
   DEF_END(step);
 
-  INTERFACES(run, running, step, next, in_stream, image_provider);
+  INTERFACES(running, step, next, in_stream, image_provider);
 
   AppSinkBoundary() : GStreamerElement("appsink") {}
   AppSinkBoundary(const AppSinkBoundary& o) : GStreamerElement(o) {}
@@ -248,10 +248,13 @@ struct AppSrcBoundary : GStreamerElement {
 
   DEF_INTERFACE(AppSrcBoundary, Command, step, "Push")
   static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
-  void OnRun(std::unique_ptr<RunTask>& t) { obj->StepOne(); }
+  void OnRun() {
+    obj->StepOne();
+    Done();
+  }
   DEF_END(step);
 
-  INTERFACES(run, running, step, next, out_stream, image);
+  INTERFACES(running, step, next, out_stream, image);
 
   AppSrcBoundary() : GStreamerElement("appsrc") {}
   AppSrcBoundary(const AppSrcBoundary& o) : GStreamerElement(o), image(o.image) {}

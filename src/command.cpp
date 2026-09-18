@@ -4,23 +4,33 @@
 
 #include "error.hpp"
 
-using namespace std;
-
 namespace automat {
 
-std::unique_ptr<Action> Command::Table::DefaultActivate(Interface self, ui::Pointer& pointer,
-                                                        Toy*) {
-  cast<Command>(self).ScheduleRun();
-  return std::make_unique<EmptyAction>(pointer);
+bool Command::BeginRun() const {
+  if (state->waiting) return false;
+  if (!StartRunning()) return false;
+  object_ptr->ClearOwnError();
+  WakeToys();
+  return true;
 }
 
-constinit Command::Table kThisIsFine = [] {
-  Command::Table t("This Is Fine");
-  t.schedules_next = false;
-  t.on_run = [](Command self, std::unique_ptr<RunTask>&) {
-    ManipulateError(*self.object_ptr, [](Error& err) { err.Clear(); });
-  };
-  return t;
-}();
+void Command::Done() const {
+  state->waiting = true;
+  WakeToys();
+  if (!StopRunning()) state->waiting = false;
+}
+
+void Command::ContinueIfWaiting() const {
+  if (!state->waiting.exchange(false)) return;
+  if (!table->schedules_next) return;
+  if (HasError(*object_ptr)) return;
+  ScheduleNext(*object_ptr);
+}
+
+void Command::CancelWithoutNotify() const {
+  state->waiting = false;
+  if (!StopRunning()) return;
+  if (auto on_cancel = table->on_cancel) on_cancel(*this);
+}
 
 }  // namespace automat

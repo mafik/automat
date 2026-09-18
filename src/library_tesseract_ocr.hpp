@@ -16,8 +16,11 @@ struct TesseractOCR : public Object {
   mutable std::mutex mutex;
   Str ocr_text = "";
 
-  DEF_INTERFACE(TesseractOCR, Runnable, run, "Run")
-  void OnRun(std::unique_ptr<RunTask>&) { obj->Run(); }
+  DEF_INTERFACE(TesseractOCR, Command, run, "Run")
+  void OnRun() {
+    obj->Run();
+    Done();
+  }
   DEF_END(run);
 
   DEF_INTERFACE(TesseractOCR, NextArg, next, "Next")

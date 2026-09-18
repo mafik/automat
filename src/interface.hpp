@@ -63,14 +63,14 @@ struct Interface {
     kNextArg,    // sub-kind of InterfaceArgument
     kStreamArg,  // sub-kind of InterfaceArgument; connects to a StreamInput
     kLastInterfaceArgument = kStreamArg,
-    kSyncable,     // also an Argument (via Syncable)
-    kOnOff,        // also a Syncable
-    kLongRunning,  // also an OnOff
-    kLastOnOff = kLongRunning,
+    kSyncable,  // also an Argument (via Syncable)
+    kOnOff,     // also a Syncable
+    kCommand,
+    kLastOnOff = kCommand,
     kLastSyncable = kLastOnOff,
     kLastArgument = kLastSyncable,
     // Standalone interfaces
-    kCommand,
+    kBasicCommand,
     kImageProvider,
     kResizable,
     kStreamInput,

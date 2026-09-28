@@ -104,7 +104,7 @@ struct GeglOperation : Object {
   void OnConnect(Interface end) { obj->OnOutConnect(*this, end); }
   DEF_END(out_stream);
 
-  INTERFACES(run, next, image, image_provider, in_stream, out_stream);
+  INTERFACES(run_tbl, next_tbl, image_tbl, image_provider_tbl, in_stream_tbl, out_stream_tbl);
 
   GeglOperation(StrView op);
   GeglOperation(const GeglOperation&);

@@ -15,7 +15,7 @@ struct Sources : Object {
   void OnRun();
   DEF_END(extract_files);
 
-  INTERFACES(extract_files)
+  INTERFACES(extract_files_tbl);
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;

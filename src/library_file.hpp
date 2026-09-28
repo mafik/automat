@@ -32,6 +32,8 @@ struct File : Object {
   void OnRun() { obj->ToggleFilename(); }
   DEF_END(toggle_filename);
 
+  INTERFACES(toggle_filename_tbl);
+
   File() = default;
   File(const File&);
   ~File() override;

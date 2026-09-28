@@ -123,7 +123,7 @@ struct Register : Object, Buffer {
     WakeToys();
   }
 
-  INTERFACES(assembler_arg, index)
+  INTERFACES(assembler_arg_tbl, index_tbl);
   void SetText(std::string_view text) override;
 
   void SerializeState(ObjectSerializer& writer) const override;
@@ -148,7 +148,7 @@ struct Assembler : Object {
   DEF_END(running);
 
   Ptr<Object> Clone() const override;
-  INTERFACES(running)
+  INTERFACES(running_tbl);
 
   Assembler();
 

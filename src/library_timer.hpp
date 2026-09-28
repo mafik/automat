@@ -72,7 +72,7 @@ struct Timer : Object, TimerNotificationReceiver {
   StrView Name() const override { return "Timer"; }
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  INTERFACES(running, next, duration, next_range, prev_range, readout)
+  INTERFACES(running_tbl, next_tbl, duration_tbl, next_range_tbl, prev_range_tbl, readout_tbl);
   void Updated(WeakPtr<Object>& updated) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
 

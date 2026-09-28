@@ -63,7 +63,7 @@ struct TfTensor : Object {
   Str OnFormat() { return obj->Format(); }
   DEF_END(out_stream);
 
-  INTERFACES(run, next, image, out_stream);
+  INTERFACES(run_tbl, next_tbl, image_tbl, out_stream_tbl);
 
   TfTensor() = default;
   TfTensor(const TfTensor& o)
@@ -120,7 +120,7 @@ struct TfOp : Object {
   sk_sp<SkImage> GetImage() { return obj->ResultImage(); }
   DEF_END(image_provider);
 
-  INTERFACES(run, next, in_stream, out_stream, image_provider);
+  INTERFACES(run_tbl, next_tbl, in_stream_tbl, out_stream_tbl, image_provider_tbl);
 
   TfOp(StrView op_name) : op_name(op_name) {}
   TfOp(const TfOp& o)

@@ -41,7 +41,7 @@ struct MouseButtonEvent : Object {
   MouseButtonEvent(ui::PointerButton button, bool down) : button(button), down(down) {}
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  INTERFACES(run, next)
+  INTERFACES(run_tbl, next_tbl);
   audio::Sound& NextSound() override;
   void Run();
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
@@ -103,7 +103,7 @@ struct MouseButtonPresser : Object {
   ~MouseButtonPresser() override;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  INTERFACES(next, state, click)
+  INTERFACES(next_tbl, state_tbl, click_tbl);
   void Click();
   void Press();
   void Release();

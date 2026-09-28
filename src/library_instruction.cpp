@@ -188,7 +188,9 @@ static Assembler* FindOrCreateAssembler(Object& start) {
 }
 
 void Instruction::Interfaces(const std::function<LoopControl(Interface)>& cb) {
-  if (LoopControl::Break == cb(run.Bind())) return;
+  for (auto* tab : *toc) {
+    if (LoopControl::Break == cb(Interface(*this, *tab))) return;
+  }
   auto opcode = mc_inst.getOpcode();
   auto& assembler_info = LLVM_Assembler::Get();
   auto& info = assembler_info.mc_instr_info->get(opcode);
@@ -196,7 +198,6 @@ void Instruction::Interfaces(const std::function<LoopControl(Interface)>& cb) {
   if (!is_terminal) {
     if (LoopControl::Break == cb(next.Bind())) return;
   }
-  if (LoopControl::Break == cb(assembler_arg.Bind())) return;
   if (info.isBranch() || info.isCall()) {
     if (LoopControl::Break == cb(jump_arg.Bind())) return;
   }

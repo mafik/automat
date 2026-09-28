@@ -116,12 +116,17 @@ struct Object : public ReferenceCounted {
   // Note: 2 bytes of padding here
   OwnerLink* owners = nullptr;
 
+  // Lists interfaces offered by this object.
+  //
+  // Lifetime of interface tables is at least as long as this object's.
+  ToC* toc = &toc_of<>;
+
   // Bump the counter to notify Toys that state has changed.
   void WakeToys() { monitor.fetch_add(1, std::memory_order_relaxed); }
 
   Object() = default;
 
-  Object(const Object&) : ReferenceCounted(), monitor(0) {}
+  Object(const Object& other) : ReferenceCounted(), monitor(0), toc(other.toc) {}
 
   // Create a copy of this object.
   //
@@ -150,11 +155,13 @@ struct Object : public ReferenceCounted {
 
   virtual Container* AsContainer() { return nullptr; }
 
-  // Visits all interfaces that are members of this object.
-  //
-  // Lifetime of interfaces is the same as this object. Interfaces should never be deleted as it
-  // may create dangling references.
-  virtual void Interfaces(const std::function<LoopControl(Interface)>&);
+  // Visits all interfaces offered by this object (& possibly its sub-objects).
+  virtual void Interfaces(const std::function<LoopControl(Interface)>& cb) {
+    for (auto* tab : *toc) {
+      auto then = cb(Interface(*this, *tab));
+      if (then == LoopControl::Break) break;
+    }
+  }
 
   // Call cb for each interface of type T. cb returns LoopControl to continue or stop early.
   template <typename T>
@@ -176,6 +183,11 @@ struct Object : public ReferenceCounted {
       return LoopControl::Break;
     });
     return result;
+  }
+
+  template <typename T>
+  T InterfaceFromIdx(int toc_idx) {
+    return cast<T>(Interface(this, (*toc)[toc_idx]));
   }
 
   virtual Interface InterfaceFromName(StrView name);
@@ -207,6 +219,10 @@ struct Object : public ReferenceCounted {
   void MakeHome(Object& owner);
 
   Ptr<Location> HomeLocation();
+};
+
+struct SetToC {
+  SetToC(Object* object, ToC* toc) { object->toc = toc; }
 };
 
 std::unique_ptr<Action> PickUp(ui::Pointer&, Location&, Object&);

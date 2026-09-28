@@ -4,6 +4,7 @@
 
 #include <concepts>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <type_traits>
@@ -315,6 +316,18 @@ constexpr Interface::Table MenuTable(StrView name, void (*fill_menu)(Interface, 
 
 Str ToStr(Interface iface);
 
+struct ToC {
+  int count;
+  Interface::Table* array[];
+
+  Interface::Table** begin() { return &array[0]; }
+  Interface::Table** end() { return &array[count]; }
+  Interface::Table*& operator[](int i) { return array[i]; }
+};
+
+template <auto&... tables>
+inline ToC toc_of = {sizeof...(tables), {&tables...}};
+
 }  // namespace automat
 
 #if defined(_MSC_VER)
@@ -350,18 +363,8 @@ Str ToStr(Interface iface);
     State& operator*() const { return *operator->(); }                                             \
   } state NO_UNIQUE_ADDRESS;
 
-namespace automat::detail {
-template <typename... Ts>
-void VisitInterfaces(const std::function<LoopControl(Interface)>& cb, Ts&... members) {
-  (void)((cb(members.Bind()) == LoopControl::Break) || ...);
-}
-}  // namespace automat::detail
-
-// INTERFACES macro: generates the Interfaces() override from a list of member names.
-#define INTERFACES(...)                                                                  \
-  void Interfaces(const std::function<LoopControl(::automat::Interface)>& cb) override { \
-    ::automat::detail::VisitInterfaces(cb, __VA_ARGS__);                                 \
-  }
+#define INTERFACES(...) \
+  NO_UNIQUE_ADDRESS ::automat::SetToC toc_initializer { this, &::automat::toc_of<__VA_ARGS__> }
 
 // Helper for implementing Interfaces within objects. See `Interfaces.md`.
 //

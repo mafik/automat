@@ -61,7 +61,7 @@ struct KeyPresser : Object, ui::Keylogger {
 
   void SetKey(ui::AnsiKey);
 
-  INTERFACES(state, monitoring, run)
+  INTERFACES(state_tbl, monitoring_tbl, run_tbl);
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

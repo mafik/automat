@@ -88,7 +88,7 @@ struct PipeWireNode : Object {
   void OnSet(StrView name) { obj->SetNodeName(name); }
   DEF_END(name_text);
 
-  INTERFACES(in_stream, out_stream, muted, level, name_text);
+  INTERFACES(in_stream_tbl, out_stream_tbl, muted_tbl, level_tbl, name_text_tbl);
 
   PipeWireNode() = default;
   PipeWireNode(const PipeWireNode& o)

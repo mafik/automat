@@ -69,6 +69,8 @@ struct MediaFile : Object {
   void OnSet(StrView);
   DEF_END(path_text);
 
+  INTERFACES(out_stream_tbl, path_text_tbl);
+
   void Interfaces(const std::function<LoopControl(Interface)>& cb) override;
 
   MediaFile();
@@ -164,7 +166,7 @@ struct FfmpegDecoder : Object {
   sk_sp<SkImage> GetImage() { return obj->Held(); }
   DEF_END(image_provider);
 
-  INTERFACES(run, next, in_stream, out_stream, image_provider);
+  INTERFACES(run_tbl, next_tbl, in_stream_tbl, out_stream_tbl, image_provider_tbl);
 
   FfmpegDecoder() = default;
   FfmpegDecoder(const FfmpegDecoder& o)

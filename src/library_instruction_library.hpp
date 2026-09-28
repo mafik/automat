@@ -60,7 +60,7 @@ struct InstructionLibrary : Object {
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
-  INTERFACES(scroll, pick)
+  INTERFACES(scroll_tbl, pick_tbl);
 
   struct Widget : Toy, ui::PointerMoveCallback {
     void FillMenu(ui::Pointer& pointer, Menu& menu) override {

@@ -172,7 +172,7 @@ File::~File() {
 
 void File::Interfaces(const std::function<LoopControl(Interface)>& cb) {
   if (IsImage() && cb(image_provider.Bind()) == LoopControl::Break) return;
-  cb(toggle_filename.Bind());
+  Object::Interfaces(cb);
 }
 
 void File::SerializeState(ObjectSerializer& writer) const {

@@ -83,7 +83,7 @@ struct Window : public Object, ui::WindowWatcher {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  INTERFACES(on_off, capture, next, image_provider);
+  INTERFACES(on_off_tbl, capture_tbl, next_tbl, image_provider_tbl);
 
   // Called after deserialization. Makes the window object attach its native handle to the window
   // with the current title.

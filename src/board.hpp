@@ -125,7 +125,7 @@ struct Board : Object {
   }
   DEF_END(toggle_frame);
 
-  INTERFACES(move, toggle_frame, resizable);
+  INTERFACES(move_tbl, toggle_frame_tbl, resizable_tbl);
 };
 
 // UI widget for Board. Handles drawing, drop target, and spatial queries.

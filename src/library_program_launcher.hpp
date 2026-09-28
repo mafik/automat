@@ -61,7 +61,7 @@ struct ProgramLauncher : Object, Container {
   Str OnFormat() { return "bytes"; }
   DEF_END(in_stream);
 
-  INTERFACES(running, next, out_stream, in_stream, stop, text);
+  INTERFACES(running_tbl, next_tbl, out_stream_tbl, in_stream_tbl, stop_tbl, text_tbl);
 
   ProgramLauncher() = default;
   ProgramLauncher(const ProgramLauncher& o)

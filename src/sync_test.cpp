@@ -27,7 +27,7 @@ struct Bell : Object {
   }
   DEF_END(ring);
 
-  INTERFACES(ring)
+  INTERFACES(ring_tbl);
   Ptr<Object> Clone() const override { return MAKE_PTR(Bell); }
 };
 
@@ -47,7 +47,7 @@ struct Step : Object {
   DEF_INTERFACE(Step, NextArg, next, "Next")
   DEF_END(next);
 
-  INTERFACES(run, next)
+  INTERFACES(run_tbl, next_tbl);
   Ptr<Object> Clone() const override { return MAKE_PTR(Step); }
 };
 
@@ -63,7 +63,7 @@ struct Job : Object {
   DEF_INTERFACE(Job, NextArg, next, "Next")
   DEF_END(next);
 
-  INTERFACES(running, next)
+  INTERFACES(running_tbl, next_tbl);
   Ptr<Object> Clone() const override { return MAKE_PTR(Job); }
 };
 
@@ -84,7 +84,7 @@ struct Lamp : Object {
   }
   DEF_END(on_off);
 
-  INTERFACES(on_off)
+  INTERFACES(on_off_tbl);
   Ptr<Object> Clone() const override { return MAKE_PTR(Lamp); }
 };
 

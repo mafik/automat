@@ -306,8 +306,6 @@ void ObjectToy::UpdateErrorFlames() {
   error_flames->SetText(text);
 }
 
-void Object::Interfaces(const std::function<LoopControl(Interface)>& cb) {}
-
 void OwnerLink::Link(Object& target) {
   auto lock = std::lock_guard(target.owners_lock);
   if (target.owners == nullptr) {

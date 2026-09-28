@@ -484,7 +484,7 @@ struct TimerHand : Object {
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(angle);
 
-  INTERFACES(angle)
+  INTERFACES(angle_tbl);
 };
 
 struct TimerWidget : ObjectToy {

@@ -100,7 +100,8 @@ struct TesseractOCR : public Object {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  INTERFACES(image, text, next, run, left, right, bottom, top, region)
+  INTERFACES(image_tbl, text_tbl, next_tbl, run_tbl, left_tbl, right_tbl, bottom_tbl, top_tbl,
+             region_tbl);
   void Updated(WeakPtr<Object>& updated) override;
 
   void SerializeState(ObjectSerializer& writer) const override;

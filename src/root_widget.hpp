@@ -76,7 +76,7 @@ struct Camera : Object {
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(right);
 
-  INTERFACES(up, down, left, right)
+  INTERFACES(up_tbl, down_tbl, left_tbl, right_tbl);
 };
 
 extern BasicCommand::Table kDragCamera;

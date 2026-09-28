@@ -84,8 +84,9 @@ MediaFile::~MediaFile() {
 }
 
 void MediaFile::Interfaces(const std::function<LoopControl(Interface)>& cb) {
-  if (cb(out_stream.Bind()) == LoopControl::Break) return;
-  if (cb(path_text.Bind()) == LoopControl::Break) return;
+  for (auto* tab : *toc) {
+    if (cb(Interface(*this, *tab)) == LoopControl::Break) return;
+  }
   for (int i = 0; i < n_streams; ++i) {
     if (cb(Interface(*this, stream_ports[i].table)) == LoopControl::Break) return;
   }

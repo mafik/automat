@@ -50,7 +50,8 @@ struct HotKey : Object, ui::KeyGrabber {
   void ToggleModifier(bool& modifier);
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  INTERFACES(next, enabled, toggle_ctrl, toggle_alt, toggle_shift, toggle_super)
+  INTERFACES(next_tbl, enabled_tbl, toggle_ctrl_tbl, toggle_alt_tbl, toggle_shift_tbl,
+             toggle_super_tbl);
 
   void ReleaseKeyGrab(ui::KeyGrab&) override;
   void KeyGrabberKeyDown(ui::KeyGrab&) override;

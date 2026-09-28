@@ -20,7 +20,7 @@ struct Number : Object {
   Str OnGet() { return obj->GetText(); }
   void OnSet(StrView);
   DEF_END(text);
-  INTERFACES(text)
+  INTERFACES(text_tbl);
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

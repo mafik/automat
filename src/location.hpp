@@ -138,7 +138,7 @@ struct Location : Object {
   void OnRun() { obj->object->MakeHome(*obj); }
   DEF_END(make_home);
 
-  INTERFACES(move, copy, clone, remove, iconify, deiconify, make_home)
+  INTERFACES(move_tbl, copy_tbl, clone_tbl, remove_tbl, iconify_tbl, deiconify_tbl, make_home_tbl);
 
   explicit Location(WeakPtr<Board> board = {});
   ~Location();

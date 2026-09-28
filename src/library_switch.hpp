@@ -24,7 +24,7 @@ struct LinkedSwitch : Object {
   }
   DEF_END(flip);
 
-  INTERFACES(flip, on_off)
+  INTERFACES(flip_tbl, on_off_tbl);
 
   LinkedSwitch(OnOff);
   string_view Name() const override;
@@ -55,7 +55,7 @@ struct Switch : Object {
   }
   DEF_END(enabled);
 
-  INTERFACES(enabled, flip);
+  INTERFACES(enabled_tbl, flip_tbl);
 
   Switch() = default;
 

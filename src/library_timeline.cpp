@@ -1911,16 +1911,12 @@ std::unique_ptr<ObjectToy> Timeline::MakeToy(ui::Widget* parent) {
 }
 
 void Timeline::Interfaces(const function<LoopControl(Interface)>& cb) {
+  for (auto* tab : *toc) {
+    if (LoopControl::Break == cb(Interface(*this, *tab))) return;
+  }
   for (auto& track : tracks) {
     if (LoopControl::Break == cb(Interface(*track, track->arg_table))) return;
   }
-  if (LoopControl::Break == cb(next.Bind())) return;
-  if (LoopControl::Break == cb(running.Bind())) return;
-  if (LoopControl::Break == cb(position.Bind())) return;
-  if (LoopControl::Break == cb(zoom.Bind())) return;
-  if (LoopControl::Break == cb(jump_to_start.Bind())) return;
-  if (LoopControl::Break == cb(jump_to_end.Bind())) return;
-  if (LoopControl::Break == cb(stop_recording.Bind())) return;
 }
 
 struct TrackBaseWidget : ObjectToy {

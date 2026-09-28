@@ -160,7 +160,7 @@ struct ClientWindow : Object, DecoratedWindow {
   static constexpr float kAutoconnectRadius = 0.f;
   DEF_END(launcher);
 
-  INTERFACES(launcher);
+  INTERFACES(launcher_tbl);
 
   ClientWindow() = default;
   ClientWindow(const ClientWindow&);

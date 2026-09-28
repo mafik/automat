@@ -52,7 +52,7 @@ struct OnOffTrack : TrackBase {
   string_view Type() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  INTERFACES(on_off)
+  INTERFACES(on_off_tbl);
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -144,6 +144,9 @@ struct Timeline : Object, TimerNotificationReceiver {
   DEF_INTERFACE(Timeline, BasicCommand, stop_recording, "Stop recording")
   void OnRun();
   DEF_END(stop_recording);
+
+  INTERFACES(next_tbl, running_tbl, position_tbl, zoom_tbl, jump_to_start_tbl, jump_to_end_tbl,
+             stop_recording_tbl);
 
   Vec<Owned<TrackBase>> tracks;
 

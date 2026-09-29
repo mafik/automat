@@ -61,8 +61,6 @@ void FillDecorationMenu(Interface self, Menu& menu) {
   menu.Place(E, Interface(self.object_ptr, &kDecorationClientSide));
 }
 
-constinit Interface::Table kDecorationMenu = MenuTable("Decoration...", &FillDecorationMenu);
-
 constinit BasicCommand::Table kClientPress = [] {
   BasicCommand::Table t("Press");
   t.activate = [](Interface, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
@@ -73,6 +71,8 @@ constinit BasicCommand::Table kClientPress = [] {
 }();
 
 }  // namespace
+
+constinit Interface::Table kDecorationMenu = MenuTable("Decoration...", &FillDecorationMenu);
 
 Interface DecorationMenu(Object& window) { return Interface(window, kDecorationMenu); }
 

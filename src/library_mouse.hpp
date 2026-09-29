@@ -16,11 +16,17 @@ SkRuntimeEffect& GetPixelGridRuntimeEffect();
 
 namespace automat::library {
 
+extern constinit Interface::Table kMouseDownMenu;
+extern constinit Interface::Table kMouseUpMenu;
+extern constinit Interface::Table kMousePresserMenu;
+extern constinit Interface::Table kMouseScrollMenu;
+
 // Mouse is an object that really does nothing, except offering access into other mouse-related
 // objects.
 struct Mouse : Object {
   string_view Name() const override { return "Mouse"; }
   Ptr<Object> Clone() const override;
+  INTERFACES(kMouseDownMenu, kMouseUpMenu, kMousePresserMenu, kMouseScrollMenu);
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 };
 

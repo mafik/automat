@@ -36,9 +36,6 @@ void FillTensorFlowMenu(Interface, Menu& menu) {
   menu.Place(S, Proto("Square"));
 }
 
-constinit Interface::Table kFfmpegMenu = MenuTable("FFmpeg", &FillFfmpegMenu);
-constinit Interface::Table kTensorFlowMenu = MenuTable("TensorFlow", &FillTensorFlowMenu);
-
 void FillPipelinesMenu(Interface self, Menu& menu) {
   using enum ui::Dir;
   menu.Place(NW, Proto("GStreamer"));
@@ -48,8 +45,6 @@ void FillPipelinesMenu(Interface self, Menu& menu) {
   menu.Place(SE, Proto("PipeWire"));
   menu.Place(S, Proto("pipewire:node"));
 }
-
-constinit Interface::Table kPipelinesMenu = MenuTable("Pipelines", &FillPipelinesMenu);
 
 struct BetaShelfToy : ObjectToy {
   BetaShelfToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) {}
@@ -76,6 +71,10 @@ struct BetaShelfToy : ObjectToy {
 };
 
 }  // namespace
+
+constinit Interface::Table kFfmpegMenu = MenuTable("FFmpeg", &FillFfmpegMenu);
+constinit Interface::Table kTensorFlowMenu = MenuTable("TensorFlow", &FillTensorFlowMenu);
+constinit Interface::Table kPipelinesMenu = MenuTable("Pipelines", &FillPipelinesMenu);
 
 std::unique_ptr<ObjectToy> BetaShelf::MakeToy(ui::Widget* parent) {
   return std::make_unique<BetaShelfToy>(parent, *this);

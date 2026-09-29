@@ -130,6 +130,8 @@ struct Register : Object, Buffer {
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
 };
 
+extern constinit Interface::Table kRegistersMenu;
+
 // Combines functions of Assembler and Thread.
 // Assembler part takes care of emitting machine code to an executable memory region.
 // Thread part maintains register state across executions.
@@ -148,7 +150,7 @@ struct Assembler : Object {
   DEF_END(running);
 
   Ptr<Object> Clone() const override;
-  INTERFACES(running_tbl);
+  INTERFACES(running_tbl, kRegistersMenu);
 
   Assembler();
 

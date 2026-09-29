@@ -60,6 +60,8 @@ struct DecoratedWindow {
   bool DeserializeDecoration(ObjectDeserializer&, StrView key);
 };
 
+extern constinit Interface::Table kDecorationMenu;
+
 // Adds the "Decoration..." submenu (Auto / Automat / App) to an object menu; `window` is
 // the menu's window object, which implements DecoratedWindow.
 Interface DecorationMenu(Object& window);

@@ -152,12 +152,14 @@ needs to know the final shape, because the sectors follow from the final list.
 
 A node that only groups other options is a table of kind `kMenu`, made by `MenuTable(name,
 fill_menu)` (src/interface.hpp): it has `fill_menu` and a name, but no `activate`, no state and no
-methods, so no cast accepts it and `MakeController` returns nothing for it. An Object never reports
-such a table through `INTERFACES()`; it is only placed in menus (the camera menu in
-src/root_widget.cpp, the decoration menu in src/window_frame.cpp, the shelf categories in
-src/library_beta_shelf.cpp, the register menu in src/library_assembler.cpp, the mouse menus in
-src/library_mouse.cpp). Interfaces are for Objects to call; a menu exposes nothing to call, so it
-is not one of an Object's interfaces.
+methods, so no cast accepts it and `MakeController` returns nothing for it. The Object type that
+offers such a table lists it in `INTERFACES()`, so that each menu has an index in the object's table
+of contents (`Object::toc`, src/object.hpp) like the object's other interfaces: `Camera` lists the
+camera menu (src/root_widget.cpp), `ClientWindow` lists the decoration menu (src/window_frame.cpp)
+for the X11, Wayland and Windows window objects, `BetaShelf` lists the shelf categories
+(src/library_beta_shelf.cpp), `Assembler` lists the register menu (src/library_assembler.cpp) and
+`Mouse` lists the mouse menus (src/library_mouse.cpp). The name of a menu must differ from the names
+of the object's other interfaces, because `Object::InterfaceFromName` returns the first match.
 
 Three hierarchies meet in a menu and must not compete for directions:
 

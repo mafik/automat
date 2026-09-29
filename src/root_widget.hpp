@@ -40,6 +40,8 @@ struct Pointer;
 extern std::vector<RootWidget*> root_widgets;
 extern unique_ptr<RootWidget> root_widget;
 
+extern constinit Interface::Table kCameraMenu;
+
 struct Camera : Object {
   std::mutex mutex;
   Vec2 nudge;
@@ -76,11 +78,10 @@ struct Camera : Object {
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(right);
 
-  INTERFACES(up_tbl, down_tbl, left_tbl, right_tbl);
+  INTERFACES(up_tbl, down_tbl, left_tbl, right_tbl, kCameraMenu);
 };
 
 extern BasicCommand::Table kDragCamera;
-extern Interface::Table kCameraMenu;
 
 struct RootWidget final : Widget {
   RootWidget();

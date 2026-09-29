@@ -1910,13 +1910,12 @@ std::unique_ptr<ObjectToy> Timeline::MakeToy(ui::Widget* parent) {
   return std::make_unique<TimelineWidget>(parent, *this);
 }
 
-void Timeline::Interfaces(const function<LoopControl(Interface)>& cb) {
-  for (auto* tab : *toc) {
-    if (LoopControl::Break == cb(Interface(*this, *tab))) return;
-  }
+LoopControl Timeline::Interfaces(const function<LoopControl(Interface)>& cb) {
+  if (LoopControl::Break == Object::Interfaces(cb)) return LoopControl::Break;
   for (auto& track : tracks) {
-    if (LoopControl::Break == cb(Interface(*track, track->arg_table))) return;
+    if (LoopControl::Break == cb(Interface(*track, track->arg_table))) return LoopControl::Break;
   }
+  return LoopControl::Continue;
 }
 
 struct TrackBaseWidget : ObjectToy {

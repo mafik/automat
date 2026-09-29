@@ -41,7 +41,7 @@ struct File : Object {
   StrView Name() const override { return "File"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(File, *this); }
 
-  void Interfaces(const std::function<LoopControl(Interface)>&) override;
+  LoopControl Interfaces(const std::function<LoopControl(Interface)>&) override;
 
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 

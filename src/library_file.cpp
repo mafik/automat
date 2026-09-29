@@ -170,9 +170,9 @@ File::~File() {
   }
 }
 
-void File::Interfaces(const std::function<LoopControl(Interface)>& cb) {
-  if (IsImage() && cb(image_provider.Bind()) == LoopControl::Break) return;
-  Object::Interfaces(cb);
+LoopControl File::Interfaces(const std::function<LoopControl(Interface)>& cb) {
+  if (IsImage() && cb(image_provider.Bind()) == LoopControl::Break) return LoopControl::Break;
+  return Object::Interfaces(cb);
 }
 
 void File::SerializeState(ObjectSerializer& writer) const {

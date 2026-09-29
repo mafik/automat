@@ -156,11 +156,12 @@ struct Object : public ReferenceCounted {
   virtual Container* AsContainer() { return nullptr; }
 
   // Visits all interfaces offered by this object (& possibly its sub-objects).
-  virtual void Interfaces(const std::function<LoopControl(Interface)>& cb) {
+  virtual LoopControl Interfaces(const std::function<LoopControl(Interface)>& cb) {
     for (auto* tab : *toc) {
       auto then = cb(Interface(*this, *tab));
-      if (then == LoopControl::Break) break;
+      if (then == LoopControl::Break) return then;
     }
+    return LoopControl::Continue;
   }
 
   // Call cb for each interface of type T. cb returns LoopControl to continue or stop early.

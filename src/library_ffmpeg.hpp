@@ -71,7 +71,7 @@ struct MediaFile : Object {
 
   INTERFACES(out_stream_tbl, path_text_tbl);
 
-  void Interfaces(const std::function<LoopControl(Interface)>& cb) override;
+  LoopControl Interfaces(const std::function<LoopControl(Interface)>& cb) override;
 
   MediaFile();
   MediaFile(const MediaFile& o);

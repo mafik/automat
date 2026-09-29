@@ -83,13 +83,13 @@ MediaFile::~MediaFile() {
   CloseLocked();
 }
 
-void MediaFile::Interfaces(const std::function<LoopControl(Interface)>& cb) {
-  for (auto* tab : *toc) {
-    if (cb(Interface(*this, *tab)) == LoopControl::Break) return;
-  }
+LoopControl MediaFile::Interfaces(const std::function<LoopControl(Interface)>& cb) {
+  if (Object::Interfaces(cb) == LoopControl::Break) return LoopControl::Break;
   for (int i = 0; i < n_streams; ++i) {
-    if (cb(Interface(*this, stream_ports[i].table)) == LoopControl::Break) return;
+    if (cb(Interface(*this, stream_ports[i].table)) == LoopControl::Break)
+      return LoopControl::Break;
   }
+  return LoopControl::Continue;
 }
 
 Str MediaFile::path_text_Impl::OnGet() {

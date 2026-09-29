@@ -125,7 +125,7 @@ struct GStreamerElement : Object {
 
   INTERFACES(running_tbl, next_tbl, out_stream_tbl, in_stream_tbl);
 
-  void Interfaces(const std::function<LoopControl(Interface)>& cb) override;
+  LoopControl Interfaces(const std::function<LoopControl(Interface)>& cb) override;
 
   GStreamerElement(StrView factory);
   GStreamerElement(const GStreamerElement&);

@@ -251,16 +251,15 @@ void GStreamerElement::InitPorts() {
   }
 }
 
-void GStreamerElement::Interfaces(const std::function<LoopControl(Interface)>& cb) {
-  for (auto* tab : *toc) {
-    if (cb(Interface(*this, *tab)) == LoopControl::Break) return;
-  }
+LoopControl GStreamerElement::Interfaces(const std::function<LoopControl(Interface)>& cb) {
+  if (Object::Interfaces(cb) == LoopControl::Break) return LoopControl::Break;
   for (int i = 0; i < n_extra_out; ++i) {
-    if (cb(Interface(*this, extra_out[i].table)) == LoopControl::Break) return;
+    if (cb(Interface(*this, extra_out[i].table)) == LoopControl::Break) return LoopControl::Break;
   }
   for (int i = 0; i < n_extra_in; ++i) {
-    if (cb(Interface(*this, extra_in[i].table)) == LoopControl::Break) return;
+    if (cb(Interface(*this, extra_in[i].table)) == LoopControl::Break) return LoopControl::Break;
   }
+  return LoopControl::Continue;
 }
 
 int GStreamerElement::OutSlotOf(const Interface::Table* table) const {

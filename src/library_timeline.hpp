@@ -182,7 +182,7 @@ struct Timeline : Object, TimerNotificationReceiver {
   void Pause();
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  void Interfaces(const std::function<LoopControl(Interface)>& cb) override;
+  LoopControl Interfaces(const std::function<LoopControl(Interface)>& cb) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   OnOffTrack& AddOnOffTrack(Str name);
   Vec2Track& AddVec2Track(Str name);

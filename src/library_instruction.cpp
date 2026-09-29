@@ -187,23 +187,22 @@ static Assembler* FindOrCreateAssembler(Object& start) {
   return dynamic_cast<Assembler*>(&Argument(start, Instruction::assembler_arg_tbl).ObjectOrMake());
 }
 
-void Instruction::Interfaces(const std::function<LoopControl(Interface)>& cb) {
-  for (auto* tab : *toc) {
-    if (LoopControl::Break == cb(Interface(*this, *tab))) return;
-  }
+LoopControl Instruction::Interfaces(const std::function<LoopControl(Interface)>& cb) {
+  if (LoopControl::Break == Object::Interfaces(cb)) return LoopControl::Break;
   auto opcode = mc_inst.getOpcode();
   auto& assembler_info = LLVM_Assembler::Get();
   auto& info = assembler_info.mc_instr_info->get(opcode);
   bool is_terminal = (opcode == X86::JMP_1 || opcode == X86::JMP_4 || info.isReturn());
   if (!is_terminal) {
-    if (LoopControl::Break == cb(next.Bind())) return;
+    if (LoopControl::Break == cb(next.Bind())) return LoopControl::Break;
   }
   if (info.isBranch() || info.isCall()) {
-    if (LoopControl::Break == cb(jump_arg.Bind())) return;
+    if (LoopControl::Break == cb(jump_arg.Bind())) return LoopControl::Break;
   }
   if (auto* as = FindAssembler(*this)) {
-    if (LoopControl::Break == cb(as->running.Bind())) return;
+    return cb(as->running.Bind());
   }
+  return LoopControl::Continue;
 }
 
 string_view Instruction::Name() const { return "Instruction"; }

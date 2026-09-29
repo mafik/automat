@@ -70,7 +70,7 @@ struct Instruction : Object, Buffer {
 
   INTERFACES(run_tbl, assembler_arg_tbl);
 
-  void Interfaces(const std::function<LoopControl(Interface)>& cb) override;
+  LoopControl Interfaces(const std::function<LoopControl(Interface)>& cb) override;
 
   void Run();
 

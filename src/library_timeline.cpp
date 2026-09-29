@@ -312,8 +312,8 @@ TrackBase::TrackBase(Str name_arg, std::initializer_list<Interface::Table*> tabl
   };
   arg_table.state_off = offsetof(TrackBase, arg_state);
   toc = ToC::MakeOnHeap(1 + tables.size());
-  toc[0] = &arg_table;
-  int i = 1;
+  toc[1] = &arg_table;
+  int i = 2;
   for (auto* table : tables) {
     toc[i++] = table;
   }
@@ -327,7 +327,7 @@ TrackBase::TrackBase(const TrackBase& other)
       timeline(other.timeline),
       timestamps(other.timestamps) {
   arg_table.name = name_str;
-  toc[0] = &arg_table;
+  toc[1] = &arg_table;
 }
 
 bool OnOffTrack::on_off_Impl::IsOn() const {

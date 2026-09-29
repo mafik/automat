@@ -190,8 +190,8 @@ static Assembler* FindOrCreateAssembler(Object& start) {
 
 Instruction::Instruction() {
   toc = ToC::MakeOnHeap(4);
-  toc[0] = &run_tbl;
-  toc[1] = &assembler_arg_tbl;
+  toc[1] = &run_tbl;
+  toc[2] = &assembler_arg_tbl;
 }
 
 void Instruction::UpdateToC() {
@@ -199,8 +199,8 @@ void Instruction::UpdateToC() {
   auto& assembler_info = LLVM_Assembler::Get();
   auto& info = assembler_info.mc_instr_info->get(opcode);
   bool is_terminal = (opcode == X86::JMP_1 || opcode == X86::JMP_4 || info.isReturn());
-  toc[2] = is_terminal ? nullptr : &next_tbl;
-  toc[3] = info.isBranch() || info.isCall() ? &jump_arg_tbl : nullptr;
+  toc[3] = is_terminal ? nullptr : &next_tbl;
+  toc[4] = info.isBranch() || info.isCall() ? &jump_arg_tbl : nullptr;
 }
 
 LoopControl Instruction::Interfaces(const std::function<LoopControl(Interface)>& cb) {

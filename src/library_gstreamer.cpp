@@ -180,11 +180,11 @@ static Str ExpandPadName(StrView name_template, int port) {
 
 void GStreamerElement::InitPorts() {
   toc = ToC::MakeOnHeap(5 + 2 * kMaxExtraPorts);
-  toc[0] = &running_tbl;
-  toc[1] = &next_tbl;
-  toc[2] = &out_stream_tbl;
-  toc[3] = &in_stream_tbl;
-  toc[4] = &running_tbl.turn_off;
+  toc[1] = &running_tbl;
+  toc[2] = &next_tbl;
+  toc[3] = &out_stream_tbl;
+  toc[4] = &in_stream_tbl;
+  toc[5] = &running_tbl.turn_off;
   n_extra_out = n_extra_in = 0;
   out_mode = in_mode = PadMode::kNone;
   out_pad_names.clear();
@@ -249,13 +249,13 @@ void GStreamerElement::InitPorts() {
       auto* elem = static_cast<GStreamerElement*>(self.object_ptr);
       return elem->PortStats(1 + elem->OutSlotOf(self.table_ptr));
     };
-    toc[5 + i] = &p.table;
+    toc[6 + i] = &p.table;
   }
   for (int i = 0; i < n_extra_in; ++i) {
     auto& p = extra_in[i];
     p.Init(in_pad_names[i + 1], int(offsetof(GStreamerElement, extra_in) +
                                     i * sizeof(StreamInSlot) + offsetof(StreamInSlot, state)));
-    toc[5 + kMaxExtraPorts + i] = &p.table;
+    toc[6 + kMaxExtraPorts + i] = &p.table;
   }
 }
 

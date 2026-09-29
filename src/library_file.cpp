@@ -153,7 +153,7 @@ ui::Font& LabelFont() {
 
 File::File() {
   toc = ToC::MakeOnHeap(2);
-  toc[1] = &toggle_filename_tbl;
+  toc[2] = &toggle_filename_tbl;
 }
 
 File::File(const File& o) : File() {
@@ -247,7 +247,7 @@ void File::SetPath(StrView new_path) {
         size = FitAspect(Vec2(bounds.width(), bounds.height()), 0, kIconSize);
       }
     }
-    toc[0] = image ? &image_provider_tbl : nullptr;
+    toc[1] = image ? &image_provider_tbl : nullptr;
   }
   WakeToys();
 }

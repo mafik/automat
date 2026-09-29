@@ -186,10 +186,14 @@ struct Object : public ReferenceCounted {
     return result;
   }
 
+  Interface InterfaceFromIdx(int idx);
+
   template <typename T>
-  T InterfaceFromIdx(int toc_idx) {
-    return cast<T>(Interface(this, toc[toc_idx]));
+  T InterfaceFromIdx(int idx) {
+    return cast<T>(InterfaceFromIdx(idx));
   }
+
+  int IndexOf(const Interface::Table*);
 
   virtual Interface InterfaceFromName(StrView name);
 
@@ -221,6 +225,8 @@ struct Object : public ReferenceCounted {
 
   Ptr<Location> HomeLocation();
 };
+
+extern ToC::Data& global_toc;
 
 struct SetToC {
   SetToC(Object* object, ToC::Data& toc) { object->toc = toc; }

@@ -317,6 +317,9 @@ constexpr Interface::Table MenuTable(StrView name, void (*fill_menu)(Interface, 
 
 Str ToStr(Interface iface);
 
+// Manages list of interfaces supported by an object.
+//
+// WARNING: Indexing is 1-based! Index 0 is reserved for "whole-object" linking.
 struct ToC {
   struct Data {
     int count;
@@ -340,7 +343,14 @@ struct ToC {
   int size() const { return data->count; }
   Interface::Table** begin() { return &data->array[0]; }
   Interface::Table** end() { return &data->array[data->count]; }
-  Interface::Table*& operator[](int i) { return data->array[i]; }
+  Interface::Table*& operator[](int i) { return data->array[i - 1]; }
+
+  int IndexOf(const Interface::Table* table) {
+    for (int i = 1; i <= size(); ++i) {
+      if ((*this)[i] == table) return i;
+    }
+    return 0;
+  }
 
  private:
   Data* data;

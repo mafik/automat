@@ -390,6 +390,28 @@ Ptr<Location> Object::HomeLocation() {
   return owner->HomeLocation();
 }
 
+constinit ToC::Data& global_toc = toc_of<kMakeObject, kThisIsFine>;
+
+Interface Object::InterfaceFromIdx(int idx) {
+  if (idx < 0) {
+    assert(~idx < global_toc.count);
+    return Interface(*this, *global_toc.array[~idx]);
+  }
+  if (idx == 0) return Interface(*this);
+  assert(idx <= toc.size());
+  auto* table = toc[idx];
+  if (table == nullptr) return Interface();
+  return Interface(*this, *table);
+}
+
+int Object::IndexOf(const Interface::Table* table) {
+  if (table == nullptr) return 0;
+  if (int idx = toc.IndexOf(table)) return idx;
+  int global_idx = ToC(global_toc).IndexOf(table);
+  assert(global_idx != 0);
+  return -global_idx;
+}
+
 Interface Object::InterfaceFromName(StrView needle) {
   Interface result;
   Interfaces([&](Interface iface) {

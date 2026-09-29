@@ -44,6 +44,9 @@ static Str AvErrWord(int err) {
 // ============================================================================
 
 void MediaFile::InitPorts() {
+  toc = ToC::MakeOnHeap(2 + kMaxStreams).release();
+  (*toc)[0] = &out_stream_tbl;
+  (*toc)[1] = &path_text_tbl;
   for (int i = 0; i < kMaxStreams; ++i) {
     auto& p = stream_ports[i];
     p.Init(f("#{}", i), int(offsetof(MediaFile, stream_ports) + i * sizeof(StreamOutSlot) +
@@ -81,14 +84,7 @@ MediaFile::MediaFile(const MediaFile& o) : Object(o), out_stream(o.out_stream) {
 MediaFile::~MediaFile() {
   auto lock = std::lock_guard(mutex);
   CloseLocked();
-}
-
-LoopControl MediaFile::Interfaces(const std::function<LoopControl(Interface)>& cb) {
-  RETURN_ON_BREAK(Object::Interfaces(cb));
-  for (int i = 0; i < n_streams; ++i) {
-    RETURN_ON_BREAK(cb(Interface(*this, stream_ports[i].table)));
-  }
-  return LoopControl::Continue;
+  ::operator delete(toc);
 }
 
 Str MediaFile::path_text_Impl::OnGet() {
@@ -171,6 +167,9 @@ void MediaFile::SetPath(StrView new_path) {
         video_stream = av_find_best_stream(ctx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
         n_streams = std::min<int>((int)ctx->nb_streams, kMaxStreams);
       }
+    }
+    for (int i = 0; i < kMaxStreams; ++i) {
+      (*toc)[2 + i] = i < n_streams ? &stream_ports[i].table : nullptr;
     }
   }
   if (!error.empty()) {

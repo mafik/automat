@@ -68,7 +68,11 @@ struct Instruction : Object, Buffer {
   std::unique_ptr<ui::Widget> OnMakeIcon(ui::Widget* parent);
   DEF_END(jump_arg);
 
-  INTERFACES(run_tbl, assembler_arg_tbl);
+  Instruction();
+  Instruction(const Instruction&);
+  ~Instruction() override;
+
+  void UpdateToC();
 
   LoopControl Interfaces(const std::function<LoopControl(Interface)>& cb) override;
 

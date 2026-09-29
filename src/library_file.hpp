@@ -32,16 +32,12 @@ struct File : Object {
   void OnRun() { obj->ToggleFilename(); }
   DEF_END(toggle_filename);
 
-  INTERFACES(toggle_filename_tbl);
-
-  File() = default;
+  File();
   File(const File&);
   ~File() override;
 
   StrView Name() const override { return "File"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(File, *this); }
-
-  LoopControl Interfaces(const std::function<LoopControl(Interface)>&) override;
 
   std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 

@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <cctype>
 
-#include "control_flow.hpp"
 #include "deserializer.hpp"
 #include "file_import.hpp"
 #include "font.hpp"
@@ -152,7 +151,12 @@ ui::Font& LabelFont() {
 
 }  // namespace
 
-File::File(const File& o) : Object(o) {
+File::File() {
+  toc = ToC::MakeOnHeap(2).release();
+  (*toc)[1] = &toggle_filename_tbl;
+}
+
+File::File(const File& o) : File() {
   Str o_path;
   {
     auto lock = std::lock_guard(o.mutex);
@@ -168,11 +172,7 @@ File::~File() {
     Status status;
     automat::Path(path).Unlink(status, true);
   }
-}
-
-LoopControl File::Interfaces(const std::function<LoopControl(Interface)>& cb) {
-  if (IsImage()) RETURN_ON_BREAK(cb(image_provider.Bind()));
-  return Object::Interfaces(cb);
+  ::operator delete(toc);
 }
 
 void File::SerializeState(ObjectSerializer& writer) const {
@@ -248,6 +248,7 @@ void File::SetPath(StrView new_path) {
         size = FitAspect(Vec2(bounds.width(), bounds.height()), 0, kIconSize);
       }
     }
+    (*toc)[0] = image ? &image_provider_tbl : nullptr;
   }
   WakeToys();
 }

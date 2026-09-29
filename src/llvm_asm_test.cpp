@@ -120,6 +120,7 @@ class MachineCodeControllerTest : public ::testing::Test {
     auto& loc = root->CreateEmpty();
     auto inst = MAKE_PTR(library::Instruction);
     inst->mc_inst = mc_inst;
+    inst->UpdateToC();
     inst->mc_inst.setLoc(llvm::SMLoc::getFromPointer((const char*)inst.get()));
     loc.InsertHere(Ptr<library::Instruction>(inst));  // copy Ptr
     return inst;

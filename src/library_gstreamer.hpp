@@ -123,10 +123,6 @@ struct GStreamerElement : Object {
   DEF_INTERFACE(GStreamerElement, StreamInput, in_stream, "sink")
   DEF_END(in_stream);
 
-  INTERFACES(running_tbl, next_tbl, out_stream_tbl, in_stream_tbl);
-
-  LoopControl Interfaces(const std::function<LoopControl(Interface)>& cb) override;
-
   GStreamerElement(StrView factory);
   GStreamerElement(const GStreamerElement&);
   ~GStreamerElement() override;
@@ -217,7 +213,8 @@ struct AppSinkBoundary : GStreamerElement {
   }
   DEF_END(step);
 
-  INTERFACES(running_tbl, step_tbl, next_tbl, in_stream_tbl, image_provider_tbl);
+  INTERFACES(running_tbl, step_tbl, next_tbl, in_stream_tbl, image_provider_tbl,
+             running_tbl.turn_off);
 
   AppSinkBoundary() : GStreamerElement("appsink") {}
   AppSinkBoundary(const AppSinkBoundary& o) : GStreamerElement(o) {}
@@ -256,7 +253,7 @@ struct AppSrcBoundary : GStreamerElement {
   }
   DEF_END(step);
 
-  INTERFACES(running_tbl, step_tbl, next_tbl, out_stream_tbl, image_tbl);
+  INTERFACES(running_tbl, step_tbl, next_tbl, out_stream_tbl, image_tbl, running_tbl.turn_off);
 
   AppSrcBoundary() : GStreamerElement("appsrc") {}
   AppSrcBoundary(const AppSrcBoundary& o) : GStreamerElement(o), image(o.image) {}

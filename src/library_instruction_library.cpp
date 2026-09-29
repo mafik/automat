@@ -325,6 +325,7 @@ ui::Tock InstructionLibrary::Widget::Tick(time::Timer& timer) {
         }
         card.library_index = i;
         card.instruction->mc_inst = inst;
+        card.instruction->UpdateToC();
         found = true;
         // New cards should be inserted after the card that matches InstructionLibrary deck.
         insert_index = j + 1;
@@ -334,6 +335,7 @@ ui::Tock InstructionLibrary::Widget::Tick(time::Timer& timer) {
     if (!found) {
       auto instruction = MAKE_PTR(Instruction);
       instruction->mc_inst = inst;
+      instruction->UpdateToC();
       auto widget = make_unique<Instruction::Widget>(this, *instruction);
       auto it = instruction_helix.insert(instruction_helix.begin() + insert_index,
                                          InstructionCard{std::move(widget), instruction});
@@ -1106,6 +1108,7 @@ Ptr<Object> InstructionLibrary::pick_Impl::OnTake() {
   if (obj->instructions.empty()) return nullptr;
   auto instruction = MAKE_PTR(Instruction);
   instruction->mc_inst = obj->instructions.front();
+  instruction->UpdateToC();
   return instruction;
 }
 

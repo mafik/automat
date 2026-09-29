@@ -69,10 +69,6 @@ struct MediaFile : Object {
   void OnSet(StrView);
   DEF_END(path_text);
 
-  INTERFACES(out_stream_tbl, path_text_tbl);
-
-  LoopControl Interfaces(const std::function<LoopControl(Interface)>& cb) override;
-
   MediaFile();
   MediaFile(const MediaFile& o);
   ~MediaFile() override;

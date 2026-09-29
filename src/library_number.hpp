@@ -2,9 +2,15 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
 
+#include <array>
+
 #include "base.hpp"
 
 namespace automat::library {
+
+extern constinit std::array<BasicCommand::Table, 10> kDigits;
+extern constinit BasicCommand::Table kDot;
+extern constinit BasicCommand::Table kBackspace;
 
 struct Number : Object {
   double value;
@@ -20,7 +26,8 @@ struct Number : Object {
   Str OnGet() { return obj->GetText(); }
   void OnSet(StrView);
   DEF_END(text);
-  INTERFACES(text_tbl);
+  INTERFACES(text_tbl, kDigits[0], kDigits[1], kDigits[2], kDigits[3], kDigits[4], kDigits[5],
+             kDigits[6], kDigits[7], kDigits[8], kDigits[9], kDot, kBackspace);
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

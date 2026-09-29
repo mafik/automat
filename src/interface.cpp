@@ -72,6 +72,9 @@ Str ToStr(Interface iface) {
 std::unique_ptr<ToC> ToC::MakeOnHeap(int size) {
   auto* toc = static_cast<ToC*>(::operator new(sizeof(ToC) + size * sizeof(Interface::Table*)));
   toc->count = size;
+  for (auto*& table : *toc) {
+    table = nullptr;
+  }
   return std::unique_ptr<ToC>(toc);
 }
 

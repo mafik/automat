@@ -7,6 +7,8 @@
 
 namespace automat::library {
 
+extern constinit BasicCommand::Table kSelectHotKey;
+
 struct HotKey : Object, ui::KeyGrabber {
   ui::AnsiKey key = ui::AnsiKey::F11;
   bool ctrl = true;
@@ -51,7 +53,7 @@ struct HotKey : Object, ui::KeyGrabber {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   INTERFACES(next_tbl, enabled_tbl, toggle_ctrl_tbl, toggle_alt_tbl, toggle_shift_tbl,
-             toggle_super_tbl);
+             toggle_super_tbl, kSelectHotKey);
 
   void ReleaseKeyGrab(ui::KeyGrab&) override;
   void KeyGrabberKeyDown(ui::KeyGrab&) override;

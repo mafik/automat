@@ -188,18 +188,41 @@ static Assembler* FindOrCreateAssembler(Object& start) {
   return dynamic_cast<Assembler*>(&Argument(start, Instruction::assembler_arg_tbl).ObjectOrMake());
 }
 
-LoopControl Instruction::Interfaces(const std::function<LoopControl(Interface)>& cb) {
-  RETURN_ON_BREAK(Object::Interfaces(cb));
+Instruction::Instruction() {
+  toc = ToC::MakeOnHeap(4).release();
+  (*toc)[0] = &run_tbl;
+  (*toc)[1] = &assembler_arg_tbl;
+}
+
+Instruction::Instruction(const Instruction& o)
+    : Object(o),
+      Buffer(o),
+      mc_inst(o.mc_inst),
+      assembler_weak(o.assembler_weak),
+      run(o.run),
+      next(o.next),
+      assembler_arg(o.assembler_arg),
+      jump_arg(o.jump_arg),
+      imm_type(o.imm_type) {
+  toc = ToC::MakeOnHeap(4).release();
+  for (int i = 0; i < 4; ++i) {
+    (*toc)[i] = (*o.toc)[i];
+  }
+}
+
+Instruction::~Instruction() { ::operator delete(toc); }
+
+void Instruction::UpdateToC() {
   auto opcode = mc_inst.getOpcode();
   auto& assembler_info = LLVM_Assembler::Get();
   auto& info = assembler_info.mc_instr_info->get(opcode);
   bool is_terminal = (opcode == X86::JMP_1 || opcode == X86::JMP_4 || info.isReturn());
-  if (!is_terminal) {
-    RETURN_ON_BREAK(cb(next.Bind()));
-  }
-  if (info.isBranch() || info.isCall()) {
-    RETURN_ON_BREAK(cb(jump_arg.Bind()));
-  }
+  (*toc)[2] = is_terminal ? nullptr : &next_tbl;
+  (*toc)[3] = info.isBranch() || info.isCall() ? &jump_arg_tbl : nullptr;
+}
+
+LoopControl Instruction::Interfaces(const std::function<LoopControl(Interface)>& cb) {
+  RETURN_ON_BREAK(Object::Interfaces(cb));
   if (auto* as = FindAssembler(*this)) {
     return cb(as->running.Bind());
   }
@@ -2791,6 +2814,7 @@ constinit Scalar::Table kLoopCondition = [] {
     } else {
       LOG << "Can't set condition code for loop instruction";
     }
+    instruction.UpdateToC();
     instruction.WakeToys();
     if (auto assembler = FindAssembler(instruction)) {
       assembler->UpdateMachineCode();
@@ -3498,6 +3522,7 @@ bool Instruction::DeserializeKey(ObjectDeserializer& d, StrView key) {
         AppendErrorMessage(status) += "Opcode name is not a valid x86 LLVM opcode name";
       } else {
         mc_inst.setOpcode(opcode_i->second);
+        UpdateToC();
       }
     }
   } else if (key == "immediate_mode") {

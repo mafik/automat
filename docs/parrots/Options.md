@@ -16,18 +16,27 @@ Every interface is an option (`docs/Interfaces.md`, section "Activation"). `Inte
 Toy*)` returns the `Action` that the activation becomes. Objects expose their commands as
 interfaces, and the widgets only map triggers to those interfaces:
 
-- A menu command that runs to completion is a `BasicCommand` interface
-  (src/basic_command.hpp): `DEF_INTERFACE(X, BasicCommand, name, "Label")` with `OnRun`. It has no
-  state, it cannot be synchronized and it never fires the object's `next` argument. The default
-  activation schedules the run (`BasicCommand::Table::DefaultActivate`, src/basic_command.cpp); a
-  command whose activation is a gesture overrides it with `OnActivate` and has no `OnRun`
-  (`kSplice` in src/library_timeline.cpp).
-- A command that takes part in the control flow is a `Command` (src/command.hpp). A `Command` is
-  an `OnOff`: turning it on runs `OnRun`, it is on while it runs, and it can be synchronized
-  through a Gear. It is done when it calls `Done()`: a synchronous command calls it at the end of
-  `OnRun`, a command that works in the background calls it later. When it is done it fires the
-  object's `next` argument. Turning it off cancels it; `OnCancel` is an optional hook for that.
-  Other objects connect to a `Command` and schedule it.
+- A command is a `Command` interface (src/command.hpp): `DEF_INTERFACE(X, Command, name, "Label")`
+  with `OnRun`. It has no state and it cannot be synchronized. The default activation schedules a
+  `RunTask` (`Command::Table::DefaultActivate`, src/command.cpp); a command whose activation is a
+  gesture overrides it with `OnActivate` and has no `OnRun` (`kSplice` in
+  src/library_timeline.cpp). `Command::Run` returns the next Command, and `RunTask::OnExecute`
+  (src/tasks.cpp) runs the returned Commands one after another until one returns nothing, so a
+  chain of synchronous commands runs within one task. When `OnRun` returns nothing, the generated
+  `on_run` clears the object's own Error before the run and returns the target of the argument at
+  `NextIdx()` (`Command::NextCommand`) unless the object reports an Error after the run. When
+  `OnRun` returns a `Locked<Command>`, that value is the next Command: a command that works in the
+  background returns an empty one and calls `Done()` when its work ends, which schedules the next
+  Command. `CancelIdx()` names the Command that cancels it. Both indices are optional, and 0 means
+  none, because an argument or a command is never the object itself. Other objects reach a
+  `Command` through their `next` argument.
+- A command that runs for a while and shows it (Timer, Timeline, Program Launcher, the GStreamer
+  elements, Assembler) declares an `OnOff` named `running` over its `run` and `cancel` Commands
+  (src/library_timer.hpp). Each of them keeps its own running flag, except the Assembler. The
+  Assembler's machine code controller already records whether machine code is executing
+  (`mc::Controller::IsRunning`, src/machine_code.hpp), and a second flag could disagree with it.
+  The OnOff is the part that shows the running state, that can be synchronized through a Gear and
+  that becomes a controller.
 - A continuous value is a `Scalar` (src/base.hpp): `OnGet`, `OnSet` and an `OnActivate` that starts
   the drag of its handle (Timer `duration`, src/library_timer.hpp).
 - Text is a `Text` interface (src/base.hpp); text fields are Toys of it (src/text_field.hpp).
@@ -40,23 +49,23 @@ interfaces, and the widgets only map triggers to those interfaces:
   `ShelfButton` are Toys of the prototype they display, and `pick` places the card's toy at the
   front of the deck.
 - Sub-options of an interface are either tables nested inside its table (`sync` and `unsync` in
-  `Syncable::Table`, `turn_on` and `turn_off` in `Command::Table`, all four BasicCommand tables)
-  or other interfaces of the same object, named by interface index (`Object::InterfaceFromIdx`,
-  src/object.hpp). An `OnOff::Table` holds `turn_on_idx` and `turn_off_idx`, the interface indices
-  of two BasicCommands that the object's class declares next to its OnOff (HotKey's `enable` and
-  `disable`, src/library_hotkey.hpp), so each class names its own on and off commands. `TurnOn`
-  and `TurnOff` run the `OnRun` of the BasicCommand at the matching index on the object and on
-  every synced peer. Activated from a menu, the BasicCommand runs like any other BasicCommand and
-  changes only its own object. The indices are computed at compile time by `SlotOf`, which
-  `INTERFACES()` defines in the class (src/interface.hpp), so the OnOff table stays
-  constant-initialized; `OnOffTrack`, whose table of contents is built at run time, states its
-  slots as constants. The interface lays its sub-options out itself: `fill_menu` in its table
-  places them in the menu. A derived table calls the filler of its base first and then places its
-  own: `Syncable::Table::DefaultFillMenu` (src/sync.cpp) places `sync` at E and `unsync` at W while
-  synced, the OnOff table (src/on_off.hpp) calls it and then places the interface at `turn_on_idx`
-  or `turn_off_idx` by state at N, and the Command table (src/command.hpp) calls it and then places
-  its nested `turn_on` or `turn_off` by state at N. The primary action stays in `activate` (an OnOff
-  toggles); an interface without `activate` opens its sub-options when activated.
+  `Syncable::Table`, both Command tables) or other interfaces of the same object, named by
+  interface index (`Object::InterfaceFromIdx`, src/object.hpp). An `OnOff::Table` holds
+  `turn_on_idx` and `turn_off_idx`, the interface indices of two Commands that the object's class
+  declares next to its OnOff (HotKey's `enable` and `disable`, src/library_hotkey.hpp), so each
+  class names its own on and off commands. `TurnOn` and `TurnOff` run the Command at the matching
+  index on the object and on every synced peer, and schedule the next Command that the run
+  returns instead of running it in place. Activated from a menu, the Command runs like any other
+  Command and changes only its own object. The indices are computed at compile time by `SlotOf`,
+  which `INTERFACES()` defines in the class (src/interface.hpp), so the tables stay
+  constant-initialized; `OnOffTrack`, `Instruction` and `GStreamerElement`, whose tables of
+  contents are built at run time, state their slots as constants. The interface lays its
+  sub-options out itself: `fill_menu` in its table places them in the menu. A derived table calls
+  the filler of its base first and then places its own: `Syncable::Table::DefaultFillMenu`
+  (src/sync.cpp) places `sync` at E and `unsync` at W while synced, and the OnOff table
+  (src/on_off.hpp) calls it and then places the interface at `turn_on_idx` or `turn_off_idx` by
+  state at N. The primary action stays in `activate` (an OnOff toggles); an interface without
+  `activate` opens its sub-options when activated.
 - Parameters: an enum-valued option is one table per value (Timer `next_range` and
   `prev_range`); an indexed or continuous one is derived from the pointer position and the Toy
   inside `OnActivate`.
@@ -186,14 +195,17 @@ Three hierarchies meet in a menu and must not compete for directions:
   lies below.
 
 Conventions: S is the parent, NW is destructive, N is the primary action. Availability may vary with
-state (an OnOff places the BasicCommand at `turn_on_idx` or at `turn_off_idx` at N depending on
-whether it is on), the meaning of a slot may not. Sub-menus opened from an interface's sub-options
+state (an OnOff places the Command at `turn_on_idx` or at `turn_off_idx` at N depending on whether
+it is on), the meaning of a slot may not. Sub-menus opened from an interface's sub-options
 are leaves and reserve no S.
 
 The generic layer provides only the slots that mean the same on every object. `ObjectToy::FillMenu`
 (src/object.cpp) places the object's first Command, or `kThisIsFine` while the object shows an error, at
-N and its Location at S. The left button is not answered by the object toy and falls through to
-`LocationWidget::FindOption` (src/location.cpp), which answers it with move.
+N and its Location at S. A class lists its main command before its other Commands in `INTERFACES()`,
+because the first Command is also the one that `Object::Updated` schedules and the one that a `next`
+cable dropped on the object connects to (`BoardWidget::ConnectAtPoint`, src/board.cpp). The left
+button is not answered by the object toy and falls through to `LocationWidget::FindOption`
+(src/location.cpp), which answers it with move.
 `LocationWidget::FillMenu` places move at N, delete at NW, iconify or deiconify at NE, copy at E,
 clone at W, make home at SE when the Location is not the object's home, and the Board at S.
 `BoardWidget::FillMenu` (src/board.cpp) places move at N, toggle frame at NE and the camera menu at

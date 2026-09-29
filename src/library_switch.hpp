@@ -20,7 +20,6 @@ struct LinkedSwitch : Object {
       locked.Toggle();
       obj->on_off->LastActivity()->fetch_add(1, std::memory_order_relaxed);
     }
-    Done();
   }
   DEF_END(flip);
 
@@ -37,10 +36,7 @@ struct Switch : Object {
   bool current_state = false;
 
   DEF_INTERFACE(Switch, Command, flip, "Flip")
-  void OnRun() {
-    obj->enabled->Toggle();
-    Done();
-  }
+  void OnRun() { obj->enabled->Toggle(); }
   DEF_END(flip);
 
   DEF_INTERFACE(Switch, OnOff, enabled, "On/Off")
@@ -49,21 +45,21 @@ struct Switch : Object {
   static constexpr int TurnOffIdx() { return SlotOf(switch_off_tbl); }
   DEF_END(enabled);
 
-  DEF_INTERFACE(Switch, BasicCommand, switch_on, "Switch on")
+  DEF_INTERFACE(Switch, Command, switch_on, "Switch on")
   void OnRun() {
     obj->current_state = true;
     obj->WakeToys();
   }
   DEF_END(switch_on);
 
-  DEF_INTERFACE(Switch, BasicCommand, switch_off, "Switch off")
+  DEF_INTERFACE(Switch, Command, switch_off, "Switch off")
   void OnRun() {
     obj->current_state = false;
     obj->WakeToys();
   }
   DEF_END(switch_off);
 
-  INTERFACES(enabled_tbl, switch_on_tbl, switch_off_tbl, flip_tbl);
+  INTERFACES(flip_tbl, enabled_tbl, switch_on_tbl, switch_off_tbl);
 
   Switch() = default;
 

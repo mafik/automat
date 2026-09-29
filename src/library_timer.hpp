@@ -16,7 +16,8 @@ struct Timer : Object, TimerNotificationReceiver {
   std::mutex mtx;
 
   time::Duration duration_value = 10s;
-  time::SteadyPoint start_time;
+  static constexpr time::SteadyPoint kStopped = time::SteadyPoint::min();
+  std::atomic<time::SteadyPoint> start_time = kStopped;
 
   // Disabled until there are more objects that could be
   // combined with duration (for example some math objects)
@@ -25,11 +26,25 @@ struct Timer : Object, TimerNotificationReceiver {
   // bool CanSync(Syncable other) { return other.table == &Syncable::Def<duration_Impl>::tbl; }
   // DEF_END(duration);
 
-  DEF_INTERFACE(Timer, Command, running, "Running")
-  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
-  void OnRun() { obj->StartTimer(); }
-  void OnCancel() { obj->CancelTimer(); }
+  DEF_INTERFACE(Timer, OnOff, running, "Running")
+  bool IsOn() const { return obj->start_time.load(std::memory_order_relaxed) != kStopped; }
+  static constexpr int TurnOnIdx() { return SlotOf(run_tbl); }
+  static constexpr int TurnOffIdx() { return SlotOf(cancel_tbl); }
   DEF_END(running);
+
+  DEF_INTERFACE(Timer, Command, run, "Run")
+  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr int NextIdx() { return SlotOf(next_tbl); }
+  static constexpr int CancelIdx() { return SlotOf(cancel_tbl); }
+  Locked<Command> OnRun() {
+    obj->StartTimer();
+    return {};
+  }
+  DEF_END(run);
+
+  DEF_INTERFACE(Timer, Command, cancel, "Cancel")
+  void OnRun() { obj->CancelTimer(); }
+  DEF_END(cancel);
 
   DEF_INTERFACE(Timer, NextArg, next, "Next")
   DEF_END(next);
@@ -45,12 +60,12 @@ struct Timer : Object, TimerNotificationReceiver {
   void OnSet(StrView);
   DEF_END(readout);
 
-  DEF_INTERFACE(Timer, BasicCommand, next_range, "Next range")
+  DEF_INTERFACE(Timer, Command, next_range, "Next range")
   static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
   void OnRun() { obj->ShiftRange(1); }
   DEF_END(next_range);
 
-  DEF_INTERFACE(Timer, BasicCommand, prev_range, "Previous range")
+  DEF_INTERFACE(Timer, Command, prev_range, "Previous range")
   static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
   void OnRun() { obj->ShiftRange(-1); }
   DEF_END(prev_range);
@@ -72,7 +87,8 @@ struct Timer : Object, TimerNotificationReceiver {
   StrView Name() const override { return "Timer"; }
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  INTERFACES(running_tbl, next_tbl, duration_tbl, next_range_tbl, prev_range_tbl, readout_tbl);
+  INTERFACES(running_tbl, run_tbl, cancel_tbl, next_tbl, duration_tbl, next_range_tbl,
+             prev_range_tbl, readout_tbl);
   void Updated(WeakPtr<Object>& updated) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
 

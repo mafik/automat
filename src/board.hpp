@@ -118,7 +118,7 @@ struct Board : Object {
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(move);
 
-  DEF_INTERFACE(Board, BasicCommand, toggle_frame, "Toggle Frame")
+  DEF_INTERFACE(Board, Command, toggle_frame, "Toggle Frame")
   void OnRun() {
     obj->frame_visible = !obj->frame_visible;
     obj->WakeToys();

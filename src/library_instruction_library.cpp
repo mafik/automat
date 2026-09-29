@@ -1123,18 +1123,18 @@ std::unique_ptr<Action> InstructionLibrary::pick_Impl::OnActivate(ui::Pointer& p
   return DragNew(pointer, std::move(object), std::move(card));
 }
 
-struct RegisterFilterTable : BasicCommand::Table {
+struct RegisterFilterTable : Command::Table {
   int reg;
   bool read;
   Str label;
   RegisterFilterTable(int reg, bool read)
-      : BasicCommand::Table(""),
+      : Command::Table(""),
         reg(reg),
         read(read),
         label((read ? "Read " : "Write ") + kRegisters[reg].name) {
     name = label;
     cursor = ui::Cursor::Hand;
-    on_run = [](BasicCommand self) {
+    on_run = [](Command self) -> Locked<Command> {
       auto& table = static_cast<RegisterFilterTable&>(*self.table_ptr);
       auto& library = static_cast<InstructionLibrary&>(*self.object_ptr);
       auto lock = std::lock_guard(library.mutex);
@@ -1146,6 +1146,7 @@ struct RegisterFilterTable : BasicCommand::Table {
       }
       library.Filter();
       library.WakeToys();
+      return {};
     };
   }
 };
@@ -1157,16 +1158,16 @@ static RegisterFilterTable& RegisterFilter(int reg, bool read) {
   return *table;
 }
 
-struct CategoryTable : BasicCommand::Table {
+struct CategoryTable : Command::Table {
   int category;
   int group;  // -1 selects the whole category
   CategoryTable(int category, int group)
-      : BasicCommand::Table(group < 0 ? x86::kCategories[category].name
-                                      : x86::kCategories[category].groups[group].name),
+      : Command::Table(group < 0 ? x86::kCategories[category].name
+                                 : x86::kCategories[category].groups[group].name),
         category(category),
         group(group) {
     cursor = ui::Cursor::Hand;
-    on_run = [](BasicCommand self) {
+    on_run = [](Command self) -> Locked<Command> {
       auto& table = static_cast<CategoryTable&>(*self.table_ptr);
       auto& library = static_cast<InstructionLibrary&>(*self.object_ptr);
       auto lock = std::lock_guard(library.mutex);
@@ -1180,6 +1181,7 @@ struct CategoryTable : BasicCommand::Table {
       }
       library.Filter();
       library.WakeToys();
+      return {};
     };
   }
 };

@@ -1827,8 +1827,8 @@ std::unique_ptr<Action> Timeline::zoom_Impl::OnActivate(ui::Pointer& pointer, au
   return widget ? make_unique<DragZoomAction>(pointer, *widget) : nullptr;
 }
 
-constinit BasicCommand::Table kSplice = [] {
-  BasicCommand::Table t("Splice");
+constinit Command::Table kSplice = [] {
+  Command::Table t("Splice");
   t.cursor = ui::Cursor::ResizeHorizontal;
   t.activate = [](Interface, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
     auto* widget = toy ? ui::Closest<TimelineWidget>(*toy) : nullptr;
@@ -2593,8 +2593,9 @@ void Timeline::Pause() {
 
 void Timeline::Play() {
   ZoneScopedN("Timeline");
+  if (state == Timeline::kPlaying) return;
   if (state != Timeline::kPaused) {
-    running->Done();
+    run->Done();
     return;
   }
   if (paused.playback_offset >= MaxTrackLength()) {
@@ -2709,7 +2710,7 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
   if (now >= end_at) {
     state = kPaused;
     paused = {.playback_offset = MaxTrackLength()};
-    running->Done();
+    run->Done();
     WakeRunButton(*this);
   }
   TimelineUpdateOutputs(*this, playing.started_at, now);
@@ -2906,7 +2907,6 @@ bool Timeline::DeserializeKey(ObjectDeserializer& d, StrView key) {
     // We're not updating the outputs because they should be deserialized in a proper state
     // TimelineUpdateOutputs(l, *this, playing.started_at, now);
     TimelineScheduleNextAfter(*this, now);
-    running->StartRunning();
   } else if (key == "recording") {
     state = kRecording;
     double value = 0;

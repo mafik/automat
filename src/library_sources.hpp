@@ -11,7 +11,7 @@ namespace automat::library {
 struct Sources : Object {
   Sources();
 
-  DEF_INTERFACE(Sources, BasicCommand, extract_files, "Extract Files")
+  DEF_INTERFACE(Sources, Command, extract_files, "Extract Files")
   void OnRun();
   DEF_END(extract_files);
 

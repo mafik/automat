@@ -7,7 +7,7 @@
 #include <shared_mutex>
 
 #include "argument.hpp"
-#include "basic_command.hpp"
+#include "command.hpp"
 #include "object.hpp"
 #include "ptr.hpp"
 
@@ -29,8 +29,8 @@ struct Syncable : Argument {
     void (*on_unsync)(Syncable) = nullptr;
     void (*on_idle)(Syncable) = nullptr;
 
-    BasicCommand::Table sync;
-    BasicCommand::Table unsync;
+    Command::Table sync;
+    Command::Table unsync;
 
     static void DefaultCanConnect(Argument self, Interface end, Status& status);
     static void DefaultOnConnect(Argument self, Interface end);

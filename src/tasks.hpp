@@ -13,6 +13,7 @@
 
 namespace automat {
 
+struct Command;
 struct Location;
 struct Task;
 
@@ -25,8 +26,7 @@ void StartWorkerThreads(std::stop_token);
 // StartWorkerThreads.
 void JoinWorkerThreads();
 
-// Schedules all of the Locations pointed by the "next" argument from the "source" Location.
-void ScheduleNext(Object& source);
+Locked<Command> FollowArgument(Argument);
 void ScheduleArgumentTargets(Argument);
 
 struct Task {

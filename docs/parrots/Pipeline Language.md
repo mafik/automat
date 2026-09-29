@@ -358,9 +358,9 @@ instead of hiding it:
   call (one send/receive round, one gegl_processor_work chunk, one
   get_next), and Next chains, Timers, and loops schedule it. A media
   player built from FFmpeg blocks is a Timer running a decode step at
-  the frame rate — ordinary Automat, no new mechanism: a Timer in a
-  loop, with its Running property synced to the driven block's Step
-  property, fires the step repeatedly at a fixed period. The FFmpeg codec
+  the frame rate — ordinary Automat, no new mechanism: a Timer and the
+  driven block's Run, connected in a loop through their Next cables, fire
+  the step repeatedly at a fixed period. The FFmpeg codec
   block prints its last return value literally (OK, EAGAIN, EOF),
   because EAGAIN is the library's own word for "call the other
   function first".
@@ -377,9 +377,9 @@ instead of hiding it:
   paused. Automat-driven blocks step by definition. Live PipeWire
   devices cannot be stepped, so no step control appears on them.
   Automat's control flow drives blocks through Command interfaces
-  (src/command.hpp). The starting signal is the block's `running`
-  Command, and a Command that is already running ignores a
-  second start, because a running thing is not started twice. A step
+  (src/command.hpp). The starting signal is the block's `run` Command,
+  and it ignores a second start while the block's running flag is set,
+  because a running thing is not started twice. A step
   signal is a separate Command, so it is delivered while the stream
   runs, because it performs one bounded unit of work. This is what lets a
   Timer or a Next chain drive a boundary block's Pull or Push during

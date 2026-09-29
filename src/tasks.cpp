@@ -11,9 +11,9 @@
 #include "argument.hpp"
 #include "automat.hpp"
 #include "base.hpp"
-#include "basic_command.hpp"
 #include "blockingconcurrentqueue.hpp"
 #include "casting.hpp"
+#include "command.hpp"
 #include "error.hpp"
 #include "error_recovery.hpp"
 #include "memory.hpp"
@@ -173,20 +173,14 @@ std::string Task::Format() { return "Task()"; }
 
 std::string RunTask::Format() { return f("RunTask({})", Name(target)); }
 
-void ScheduleNext(Object& source) {
-  source.Each<NextArg>([&](NextArg next) {
-    ScheduleArgumentTargets(next);
-    return LoopControl::Continue;
-  });
-}
-
-void ScheduleArgumentTargets(Argument arg) {
+Locked<Command> FollowArgument(Argument arg) {
   // audio::Play(source.object->NextSound());
 
   if (auto* last_activity = arg.LastActivity()) {
     last_activity->fetch_add(1, std::memory_order_relaxed);
   }
 
+  Locked<Command> target;
   if (auto next = arg.Find()) {
     // The target may be a Command sub-interface or the Object itself (its first Command).
     Command command;
@@ -196,22 +190,24 @@ void ScheduleArgumentTargets(Argument arg) {
       command = obj->Find<Command>();
     }
     if (command) {
-      command.ScheduleRun();
+      command.object_ptr->IncrementOwningRefs();
+      target = AdoptLocked(command);
     }
   }
   arg.WakeToys();
+  return target;
+}
+
+void ScheduleArgumentTargets(Argument arg) {
+  if (auto command = FollowArgument(arg)) command.ScheduleRun();
 }
 
 void RunTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("RunTask");
   auto object = target.lock();
   if (!object) return;
-  if (auto* basic_command = dyn_cast<BasicCommand::Table>(command)) {
-    object->ClearOwnError();
-    if (basic_command->on_run) basic_command->on_run(BasicCommand(*object, *basic_command));
-  } else {
-    Command(*object, *cast<Command::Table>(command)).TurnOn();
-  }
+  auto cmd = AdoptLocked(Command(object.Release(), cast<Command::Table>(command)));
+  while (cmd) cmd = cmd.Run();
 }
 
 std::string UpdateTask::Format() { return f("UpdateTask({}, {})", Name(target), Name(updated)); }

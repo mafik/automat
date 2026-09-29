@@ -112,7 +112,7 @@ static ui::Tock RefreshState(Assembler& assembler, time::SteadyPoint now) {
     }
     assembler.last_state_refresh = now;
   }
-  if (assembler.running->IsRunning()) {
+  if (assembler.mc_controller->IsRunning()) {
     return ui::Tock::Drawing;
   } else {
     return ui::Tock::Draw;
@@ -120,7 +120,7 @@ static ui::Tock RefreshState(Assembler& assembler, time::SteadyPoint now) {
 }
 
 void Assembler::ExitCallback(mc::CodePoint code_point) {
-  running->Done();
+  WakeToys();
   RefreshState(*this, time::SteadyNow());
   Instruction* exit_inst = nullptr;
   if (code_point.instruction) {
@@ -135,7 +135,7 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
   if (exit_inst) {
     if (code_point.stop_type == mc::StopType::Next) {
       // LOG << "Exiting through " << exit_inst->ToAsmStr() << "->next";
-      ScheduleNext(*exit_inst);
+      exit_inst->run->Done();
     } else if (code_point.stop_type == mc::StopType::Jump) {
       // LOG << "Exiting through " << exit_inst->ToAsmStr() << "->jump";
       ScheduleArgumentTargets(exit_inst->jump_arg.Bind());
@@ -227,7 +227,7 @@ void Assembler::UpdateMachineCode() {
 }
 
 void Assembler::RunMachineCode(library::Instruction* entry_point) {
-  if (running->StartRunning()) running->NotifyTurnedOn();
+  if (!mc_controller->IsRunning()) running->NotifyTurnedOn();
 
   Status status;
   auto inst = entry_point->ToMC();

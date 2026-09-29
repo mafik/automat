@@ -141,10 +141,9 @@ struct FfmpegDecoder : Object {
   uint64_t frame_bytes = 0;
 
   DEF_INTERFACE(FfmpegDecoder, Command, run, "Run")
-  void OnRun() {
-    obj->Step();
-    Done();
-  }
+  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr int NextIdx() { return SlotOf(next_tbl); }
+  void OnRun() { obj->Step(); }
   DEF_END(run);
 
   DEF_INTERFACE(FfmpegDecoder, NextArg, next, "Next")
@@ -165,8 +164,7 @@ struct FfmpegDecoder : Object {
   INTERFACES(run_tbl, next_tbl, in_stream_tbl, out_stream_tbl, image_provider_tbl);
 
   FfmpegDecoder() = default;
-  FfmpegDecoder(const FfmpegDecoder& o)
-      : Object(o), run(o.run), next(o.next), out_stream(o.out_stream) {}
+  FfmpegDecoder(const FfmpegDecoder& o) : Object(o), next(o.next), out_stream(o.out_stream) {}
   ~FfmpegDecoder() override;
 
   StrView Name() const override { return "avcodec"; }

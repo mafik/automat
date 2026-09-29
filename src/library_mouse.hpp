@@ -35,10 +35,8 @@ struct MouseButtonEvent : Object {
   bool down;
 
   DEF_INTERFACE(MouseButtonEvent, Command, run, "Run")
-  void OnRun() {
-    obj->Run();
-    Done();
-  }
+  static constexpr int NextIdx() { return SlotOf(next_tbl); }
+  void OnRun() { obj->Run(); }
   DEF_END(run);
 
   DEF_INTERFACE(MouseButtonEvent, NextArg, next, "Next")
@@ -89,10 +87,8 @@ struct MouseButtonPresser : Object {
   bool down = false;
 
   DEF_INTERFACE(MouseButtonPresser, Command, click, "Click")
-  void OnRun() {
-    obj->Click();
-    Done();
-  }
+  static constexpr int NextIdx() { return SlotOf(next_tbl); }
+  void OnRun() { obj->Click(); }
   DEF_END(click);
 
   DEF_INTERFACE(MouseButtonPresser, OnOff, state, "State")
@@ -101,11 +97,11 @@ struct MouseButtonPresser : Object {
   static constexpr int TurnOffIdx() { return SlotOf(release_tbl); }
   DEF_END(state);
 
-  DEF_INTERFACE(MouseButtonPresser, BasicCommand, press, "Press")
+  DEF_INTERFACE(MouseButtonPresser, Command, press, "Press")
   void OnRun() { obj->Press(); }
   DEF_END(press);
 
-  DEF_INTERFACE(MouseButtonPresser, BasicCommand, release, "Release")
+  DEF_INTERFACE(MouseButtonPresser, Command, release, "Release")
   void OnRun() { obj->Release(); }
   DEF_END(release);
 
@@ -117,7 +113,7 @@ struct MouseButtonPresser : Object {
   ~MouseButtonPresser() override;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  INTERFACES(next_tbl, state_tbl, press_tbl, release_tbl, click_tbl);
+  INTERFACES(next_tbl, click_tbl, state_tbl, press_tbl, release_tbl);
   void Click();
   void Press();
   void Release();

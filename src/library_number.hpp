@@ -8,9 +8,9 @@
 
 namespace automat::library {
 
-extern constinit std::array<BasicCommand::Table, 10> kDigits;
-extern constinit BasicCommand::Table kDot;
-extern constinit BasicCommand::Table kBackspace;
+extern constinit std::array<Command::Table, 10> kDigits;
+extern constinit Command::Table kDot;
+extern constinit Command::Table kBackspace;
 
 struct Number : Object {
   double value;

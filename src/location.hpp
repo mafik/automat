@@ -122,19 +122,19 @@ struct Location : Object {
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(clone);
 
-  DEF_INTERFACE(Location, BasicCommand, remove, "Delete")
+  DEF_INTERFACE(Location, Command, remove, "Delete")
   void OnRun();
   DEF_END(remove);
 
-  DEF_INTERFACE(Location, BasicCommand, iconify, "Iconify")
+  DEF_INTERFACE(Location, Command, iconify, "Iconify")
   void OnRun() { obj->Iconify(); }
   DEF_END(iconify);
 
-  DEF_INTERFACE(Location, BasicCommand, deiconify, "Deiconify")
+  DEF_INTERFACE(Location, Command, deiconify, "Deiconify")
   void OnRun() { obj->Deiconify(); }
   DEF_END(deiconify);
 
-  DEF_INTERFACE(Location, BasicCommand, make_home, "Make Home")
+  DEF_INTERFACE(Location, Command, make_home, "Make Home")
   void OnRun() { obj->object->MakeHome(*obj); }
   DEF_END(make_home);
 

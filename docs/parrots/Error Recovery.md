@@ -15,8 +15,10 @@ Error attached to that Object.
 - An Error explains to the user what went wrong and helps with recovery. Errors are attached
   to Objects; each Object has at most one Error.
 - While present, an Error pauses the execution of its Object. Each Object is responsible for
-  checking its Error when it executes. `Command::ContinueIfWaiting` in `src/command.cpp` schedules an
-  Object's successors only when `HasError` reports no Error.
+  checking its Error when it executes. A Command continues to the next Command only when `HasError`
+  reports no Error: the `on_run` that `Command::Table::FillFrom` generates in `src/command.hpp`
+  checks it after a synchronous `OnRun`, and `Command::Done` in `src/command.cpp` checks it when
+  background work ends.
 - Errors may be attached by external reporters, which work like validators. An Error records
   its reporter, which is usually the target Object itself. `Object::ReportError`
   (`src/object.hpp`) reports an Error whose reporter is the Object; `automat::ReportError`

@@ -12,7 +12,7 @@
 
 namespace automat::library {
 
-extern constinit BasicCommand::Table kPickWindow;
+extern constinit Command::Table kPickWindow;
 
 struct Window : public Object, ui::WindowWatcher {
   std::mutex mutex;
@@ -22,10 +22,8 @@ struct Window : public Object, ui::WindowWatcher {
   sk_sp<SkImage> captured_image;  // Captured window image
 
   DEF_INTERFACE(Window, Command, capture, "Capture")
-  void OnRun() {
-    obj->Capture();
-    Done();
-  }
+  static constexpr int NextIdx() { return SlotOf(next_tbl); }
+  void OnRun() { obj->Capture(); }
   DEF_END(capture);
 
   DEF_INTERFACE(Window, NextArg, next, "Next")
@@ -50,7 +48,7 @@ struct Window : public Object, ui::WindowWatcher {
   }
   DEF_END(on_off);
 
-  DEF_INTERFACE(Window, BasicCommand, activate, "Activate")
+  DEF_INTERFACE(Window, Command, activate, "Activate")
   void OnRun() {
     os::WindowHandle tracked = os::kNoWindow;
     {
@@ -64,7 +62,7 @@ struct Window : public Object, ui::WindowWatcher {
   }
   DEF_END(activate);
 
-  DEF_INTERFACE(Window, BasicCommand, deactivate, "Deactivate")
+  DEF_INTERFACE(Window, Command, deactivate, "Deactivate")
   void OnRun() {
     // Note that we're not turning off the active window here!
     // OS-es don't really offer a great way to deactivate a window :(
@@ -92,7 +90,7 @@ struct Window : public Object, ui::WindowWatcher {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  INTERFACES(on_off_tbl, activate_tbl, deactivate_tbl, capture_tbl, next_tbl, image_provider_tbl,
+  INTERFACES(capture_tbl, on_off_tbl, activate_tbl, deactivate_tbl, next_tbl, image_provider_tbl,
              kPickWindow);
 
   // Called after deserialization. Makes the window object attach its native handle to the window

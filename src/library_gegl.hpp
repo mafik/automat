@@ -80,10 +80,8 @@ struct GeglOperation : Object {
   Vec<GeglRect> pending_rects;    // computed regions awaiting the blit
 
   DEF_INTERFACE(GeglOperation, Command, run, "Run")
-  void OnRun() {
-    obj->MarkDirty();
-    Done();
-  }
+  static constexpr int NextIdx() { return SlotOf(next_tbl); }
+  void OnRun() { obj->MarkDirty(); }
   DEF_END(run);
 
   DEF_INTERFACE(GeglOperation, NextArg, next, "Next")

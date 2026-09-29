@@ -17,11 +17,11 @@ struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
 
   DEF_END(recording);
 
-  DEF_INTERFACE(MacroRecorder, BasicCommand, start_recording, "Start recording")
+  DEF_INTERFACE(MacroRecorder, Command, start_recording, "Start recording")
   void OnRun() { obj->StartRecording(); }
   DEF_END(start_recording);
 
-  DEF_INTERFACE(MacroRecorder, BasicCommand, stop_recording, "Stop recording")
+  DEF_INTERFACE(MacroRecorder, Command, stop_recording, "Stop recording")
   void OnRun() { obj->StopRecording(); }
   DEF_END(stop_recording);
 

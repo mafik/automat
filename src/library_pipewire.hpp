@@ -74,12 +74,12 @@ struct PipeWireNode : Object {
   static constexpr int TurnOffIdx() { return SlotOf(mute_off_tbl); }
   DEF_END(muted);
 
-  DEF_INTERFACE(PipeWireNode, BasicCommand, mute_on, "Mute on")
+  DEF_INTERFACE(PipeWireNode, Command, mute_on, "Mute on")
   static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
   void OnRun() { obj->SetMute(true); }
   DEF_END(mute_on);
 
-  DEF_INTERFACE(PipeWireNode, BasicCommand, mute_off, "Mute off")
+  DEF_INTERFACE(PipeWireNode, Command, mute_off, "Mute off")
   static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
   void OnRun() { obj->SetMute(false); }
   DEF_END(mute_off);

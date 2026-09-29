@@ -139,18 +139,28 @@ struct Assembler : Object {
   using PrologueFn = uintptr_t (*)(void*);
   using Toy = AssemblerWidget;
 
-  DEF_INTERFACE(Assembler, Command, running, "Running")
-  void OnCancel() {
+  DEF_INTERFACE(Assembler, OnOff, running, "Running")
+  bool IsOn() const { return obj->mc_controller && obj->mc_controller->IsRunning(); }
+  static constexpr int TurnOnIdx() { return SlotOf(run_tbl); }
+  static constexpr int TurnOffIdx() { return SlotOf(cancel_tbl); }
+  DEF_END(running);
+
+  DEF_INTERFACE(Assembler, Command, run, "Run")
+  void OnRun() {}
+  DEF_END(run);
+
+  DEF_INTERFACE(Assembler, Command, cancel, "Cancel")
+  void OnRun() {
     Status status;
     obj->mc_controller->Cancel(status);
     if (!OK(status)) {
       ERROR << "Failed to cancel Assembler: " << status;
     }
   }
-  DEF_END(running);
+  DEF_END(cancel);
 
   Ptr<Object> Clone() const override;
-  INTERFACES(running_tbl, kRegistersMenu);
+  INTERFACES(running_tbl, run_tbl, cancel_tbl, kRegistersMenu);
 
   Assembler();
 

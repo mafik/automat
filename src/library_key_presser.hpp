@@ -22,11 +22,11 @@ struct KeyPresser : Object, ui::Keylogger {
   static constexpr int TurnOffIdx() { return SlotOf(stop_monitoring_tbl); }
   DEF_END(monitoring);
 
-  DEF_INTERFACE(KeyPresser, BasicCommand, start_monitoring, "Start monitoring")
+  DEF_INTERFACE(KeyPresser, Command, start_monitoring, "Start monitoring")
   void OnRun() { obj->StartMonitoring(); }
   DEF_END(start_monitoring);
 
-  DEF_INTERFACE(KeyPresser, BasicCommand, stop_monitoring, "Stop monitoring")
+  DEF_INTERFACE(KeyPresser, Command, stop_monitoring, "Stop monitoring")
   void OnRun() { obj->StopMonitoring(); }
   DEF_END(stop_monitoring);
 
@@ -49,19 +49,16 @@ struct KeyPresser : Object, ui::Keylogger {
   }
   DEF_END(state);
 
-  DEF_INTERFACE(KeyPresser, BasicCommand, press, "Press")
+  DEF_INTERFACE(KeyPresser, Command, press, "Press")
   void OnRun() { obj->Press(); }
   DEF_END(press);
 
-  DEF_INTERFACE(KeyPresser, BasicCommand, release, "Release")
+  DEF_INTERFACE(KeyPresser, Command, release, "Release")
   void OnRun() { obj->Release(); }
   DEF_END(release);
 
   DEF_INTERFACE(KeyPresser, Command, run, "Run")
-  void OnRun() {
-    obj->state->TurnOn();
-    Done();
-  }
+  void OnRun() { obj->state->TurnOn(); }
   DEF_END(run);
 
   KeyPresser(ui::AnsiKey = ui::AnsiKey::F);
@@ -77,8 +74,8 @@ struct KeyPresser : Object, ui::Keylogger {
 
   void SetKey(ui::AnsiKey);
 
-  INTERFACES(state_tbl, press_tbl, release_tbl, monitoring_tbl, start_monitoring_tbl,
-             stop_monitoring_tbl, run_tbl);
+  INTERFACES(run_tbl, state_tbl, press_tbl, release_tbl, monitoring_tbl, start_monitoring_tbl,
+             stop_monitoring_tbl);
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

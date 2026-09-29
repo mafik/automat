@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
 
-#include "basic_command.hpp"
+#include "command.hpp"
 #include "menu.hpp"
 #include "pointer.hpp"
 #include "sync.hpp"
@@ -38,6 +38,7 @@ struct OnOff : Syncable {
       };
       activate = [](Interface self, ui::Pointer& pointer,
                     automat::Toy*) -> std::unique_ptr<Action> {
+        self.object_ptr->ClearOwnError();
         cast<OnOff>(self).Toggle();
         return std::make_unique<EmptyAction>(pointer);
       };
@@ -51,12 +52,12 @@ struct OnOff : Syncable {
       turn_on_idx = ImplT::TurnOnIdx();
       turn_off_idx = ImplT::TurnOffIdx();
       on_turn_on = [](OnOff self) {
-        auto turn_on = self.object_ptr->InterfaceFromIdx<BasicCommand>(self.table->turn_on_idx);
-        turn_on.table->on_run(turn_on);
+        auto turn_on = self.object_ptr->InterfaceFromIdx<Command>(self.table->turn_on_idx);
+        if (auto next = turn_on.Run()) next.ScheduleRun();
       };
       on_turn_off = [](OnOff self) {
-        auto turn_off = self.object_ptr->InterfaceFromIdx<BasicCommand>(self.table->turn_off_idx);
-        turn_off.table->on_run(turn_off);
+        auto turn_off = self.object_ptr->InterfaceFromIdx<Command>(self.table->turn_off_idx);
+        if (auto next = turn_off.Run()) next.ScheduleRun();
       };
     }
   };

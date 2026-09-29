@@ -29,28 +29,37 @@ namespace {
 
 using DecorationPreference = DecoratedWindow::DecorationPreference;
 
-void SetDecoration(BasicCommand self, DecorationPreference pref) {
+void SetDecoration(Command self, DecorationPreference pref) {
   if (auto* w = dynamic_cast<DecoratedWindow*>(self.object_ptr)) {
     w->decoration_preference.store(pref, std::memory_order_relaxed);
     w->DecorationPreferenceChanged();
   }
 }
 
-constinit BasicCommand::Table kDecorationAuto = [] {
-  BasicCommand::Table t("Auto");
-  t.on_run = [](BasicCommand self) { SetDecoration(self, DecorationPreference::Auto); };
+constinit Command::Table kDecorationAuto = [] {
+  Command::Table t("Auto");
+  t.on_run = [](Command self) -> Locked<Command> {
+    SetDecoration(self, DecorationPreference::Auto);
+    return {};
+  };
   return t;
 }();
 
-constinit BasicCommand::Table kDecorationServerSide = [] {
-  BasicCommand::Table t("Automat");
-  t.on_run = [](BasicCommand self) { SetDecoration(self, DecorationPreference::ServerSide); };
+constinit Command::Table kDecorationServerSide = [] {
+  Command::Table t("Automat");
+  t.on_run = [](Command self) -> Locked<Command> {
+    SetDecoration(self, DecorationPreference::ServerSide);
+    return {};
+  };
   return t;
 }();
 
-constinit BasicCommand::Table kDecorationClientSide = [] {
-  BasicCommand::Table t("App");
-  t.on_run = [](BasicCommand self) { SetDecoration(self, DecorationPreference::ClientSide); };
+constinit Command::Table kDecorationClientSide = [] {
+  Command::Table t("App");
+  t.on_run = [](Command self) -> Locked<Command> {
+    SetDecoration(self, DecorationPreference::ClientSide);
+    return {};
+  };
   return t;
 }();
 
@@ -61,8 +70,8 @@ void FillDecorationMenu(Interface self, Menu& menu) {
   menu.Place(E, Interface(self.object_ptr, &kDecorationClientSide));
 }
 
-constinit BasicCommand::Table kClientPress = [] {
-  BasicCommand::Table t("Press");
+constinit Command::Table kClientPress = [] {
+  Command::Table t("Press");
   t.activate = [](Interface, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
     auto* window = dynamic_cast<ClientWindowToy*>(toy);
     return window ? window->BeginClientPress(pointer) : nullptr;

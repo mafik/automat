@@ -29,18 +29,38 @@ struct ProgramLauncher : Object, Container {
   Vec<Str> argv;                // argv[0] is the program
   Owned<Launch> launch{*this};  // current or last run; replaced by the next run
   bool ever_ran = false;
+  std::atomic<bool> is_running = false;
 
-  DEF_INTERFACE(ProgramLauncher, Command, running, "Running")
-  void OnRun() {
-    if (!obj->Run()) Done();
-  }
-  void OnCancel() { obj->Terminate(true); }
+  DEF_INTERFACE(ProgramLauncher, OnOff, running, "Running")
+  bool IsOn() const { return obj->is_running; }
+  static constexpr int TurnOnIdx() { return SlotOf(run_tbl); }
+  static constexpr int TurnOffIdx() { return SlotOf(cancel_tbl); }
   DEF_END(running);
 
-  DEF_INTERFACE(ProgramLauncher, BasicCommand, stop, "Stop")
+  DEF_INTERFACE(ProgramLauncher, Command, run, "Run")
+  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr int NextIdx() { return SlotOf(next_tbl); }
+  static constexpr int CancelIdx() { return SlotOf(cancel_tbl); }
+  Locked<Command> OnRun() {
+    if (obj->is_running.exchange(true)) return {};
+    if (!obj->Run()) {
+      obj->is_running = false;
+      Done();
+    }
+    return {};
+  }
+  DEF_END(run);
+
+  DEF_INTERFACE(ProgramLauncher, Command, cancel, "Cancel")
+  void OnRun() {
+    if (obj->is_running.exchange(false)) obj->Terminate(true);
+  }
+  DEF_END(cancel);
+
+  DEF_INTERFACE(ProgramLauncher, Command, stop, "Stop")
   void OnRun() {
     obj->Terminate();
-    obj->running->Cancel();
+    obj->running->TurnOff();
   }
   DEF_END(stop);
 
@@ -61,7 +81,8 @@ struct ProgramLauncher : Object, Container {
   Str OnFormat() { return "bytes"; }
   DEF_END(in_stream);
 
-  INTERFACES(running_tbl, next_tbl, out_stream_tbl, in_stream_tbl, stop_tbl, text_tbl);
+  INTERFACES(running_tbl, run_tbl, cancel_tbl, next_tbl, out_stream_tbl, in_stream_tbl, stop_tbl,
+             text_tbl);
 
   ProgramLauncher() = default;
   ProgramLauncher(const ProgramLauncher& o)

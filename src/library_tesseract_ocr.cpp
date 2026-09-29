@@ -71,7 +71,6 @@ TesseractOCR::TesseractOCR() {
 TesseractOCR::TesseractOCR(const TesseractOCR& other)
     : Object(other),
       ocr_text(other.ocr_text),
-      run(other.run),
       next(other.next),
       x_min_ratio(other.x_min_ratio),
       x_max_ratio(other.x_max_ratio),

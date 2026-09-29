@@ -50,11 +50,11 @@ struct OnOffTrack : TrackBase {
   static constexpr int TurnOffIdx() { return kTurnOffSlot; }
   DEF_END(on_off);
 
-  DEF_INTERFACE(OnOffTrack, BasicCommand, turn_on, "Turn on")
+  DEF_INTERFACE(OnOffTrack, Command, turn_on, "Turn on")
   void OnRun() {}
   DEF_END(turn_on);
 
-  DEF_INTERFACE(OnOffTrack, BasicCommand, turn_off, "Turn off")
+  DEF_INTERFACE(OnOffTrack, Command, turn_off, "Turn off")
   void OnRun() {}
   DEF_END(turn_off);
 
@@ -108,10 +108,24 @@ struct Float64Track : TrackBase {
 struct Timeline : Object, TimerNotificationReceiver {
   std::mutex mutex;
 
-  DEF_INTERFACE(Timeline, Command, running, "Running")
-  void OnRun() { obj->Play(); }
-  void OnCancel() { obj->Pause(); }
+  DEF_INTERFACE(Timeline, OnOff, running, "Running")
+  bool IsOn() const { return obj->state == kPlaying; }
+  static constexpr int TurnOnIdx() { return SlotOf(run_tbl); }
+  static constexpr int TurnOffIdx() { return SlotOf(cancel_tbl); }
   DEF_END(running);
+
+  DEF_INTERFACE(Timeline, Command, run, "Run")
+  static constexpr int NextIdx() { return SlotOf(next_tbl); }
+  static constexpr int CancelIdx() { return SlotOf(cancel_tbl); }
+  Locked<Command> OnRun() {
+    obj->Play();
+    return {};
+  }
+  DEF_END(run);
+
+  DEF_INTERFACE(Timeline, Command, cancel, "Cancel")
+  void OnRun() { obj->Pause(); }
+  DEF_END(cancel);
 
   DEF_INTERFACE(Timeline, NextArg, next, "Next")
   DEF_END(next);
@@ -142,20 +156,20 @@ struct Timeline : Object, TimerNotificationReceiver {
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(zoom);
 
-  DEF_INTERFACE(Timeline, BasicCommand, jump_to_start, "Jump to start")
+  DEF_INTERFACE(Timeline, Command, jump_to_start, "Jump to start")
   void OnRun();
   DEF_END(jump_to_start);
 
-  DEF_INTERFACE(Timeline, BasicCommand, jump_to_end, "Jump to end")
+  DEF_INTERFACE(Timeline, Command, jump_to_end, "Jump to end")
   void OnRun();
   DEF_END(jump_to_end);
 
-  DEF_INTERFACE(Timeline, BasicCommand, stop_recording, "Stop recording")
+  DEF_INTERFACE(Timeline, Command, stop_recording, "Stop recording")
   void OnRun();
   DEF_END(stop_recording);
 
-  INTERFACES(next_tbl, running_tbl, position_tbl, zoom_tbl, jump_to_start_tbl, jump_to_end_tbl,
-             stop_recording_tbl);
+  INTERFACES(next_tbl, running_tbl, run_tbl, cancel_tbl, position_tbl, zoom_tbl, jump_to_start_tbl,
+             jump_to_end_tbl, stop_recording_tbl);
 
   Vec<Owned<TrackBase>> tracks;
 

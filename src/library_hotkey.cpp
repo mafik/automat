@@ -62,8 +62,8 @@ void HotKey::ToggleModifier(bool& modifier) {
 
 static std::unique_ptr<Action> SelectHotKeyActivate(Interface, ui::Pointer&, Toy*);
 
-constinit BasicCommand::Table kSelectHotKey = [] {
-  BasicCommand::Table t("Select key");
+constinit Command::Table kSelectHotKey = [] {
+  Command::Table t("Select key");
   t.activate = &SelectHotKeyActivate;
   return t;
 }();
@@ -118,7 +118,7 @@ HotKey::HotKey(const HotKey& other)
 string_view HotKey::Name() const { return "HotKey"; }
 Ptr<Object> HotKey::Clone() const { return MAKE_PTR(HotKey, *this); }
 
-void HotKey::KeyGrabberKeyDown(ui::KeyGrab&) { ScheduleNext(*this); }
+void HotKey::KeyGrabberKeyDown(ui::KeyGrab&) { ScheduleArgumentTargets(next.Bind()); }
 void HotKey::KeyGrabberKeyUp(ui::KeyGrab&) {}
 void HotKey::ReleaseKeyGrab(ui::KeyGrab&) {}
 

@@ -7,7 +7,7 @@
 
 namespace automat::library {
 
-extern constinit BasicCommand::Table kSelectHotKey;
+extern constinit Command::Table kSelectHotKey;
 
 struct HotKey : Object, ui::KeyGrabber {
   ui::AnsiKey key = ui::AnsiKey::F11;
@@ -25,30 +25,30 @@ struct HotKey : Object, ui::KeyGrabber {
   static constexpr int TurnOffIdx() { return SlotOf(disable_tbl); }
   DEF_END(enabled);
 
-  DEF_INTERFACE(HotKey, BasicCommand, enable, "Enable")
+  DEF_INTERFACE(HotKey, Command, enable, "Enable")
   void OnRun() { obj->Enable(); }
   DEF_END(enable);
 
-  DEF_INTERFACE(HotKey, BasicCommand, disable, "Disable")
+  DEF_INTERFACE(HotKey, Command, disable, "Disable")
   void OnRun() { obj->Disable(); }
   DEF_END(disable);
 
   DEF_INTERFACE(HotKey, NextArg, next, "Next")
   DEF_END(next);
 
-  DEF_INTERFACE(HotKey, BasicCommand, toggle_ctrl, "Ctrl")
+  DEF_INTERFACE(HotKey, Command, toggle_ctrl, "Ctrl")
   void OnRun() { obj->ToggleModifier(obj->ctrl); }
   DEF_END(toggle_ctrl);
 
-  DEF_INTERFACE(HotKey, BasicCommand, toggle_alt, "Alt")
+  DEF_INTERFACE(HotKey, Command, toggle_alt, "Alt")
   void OnRun() { obj->ToggleModifier(obj->alt); }
   DEF_END(toggle_alt);
 
-  DEF_INTERFACE(HotKey, BasicCommand, toggle_shift, "Shift")
+  DEF_INTERFACE(HotKey, Command, toggle_shift, "Shift")
   void OnRun() { obj->ToggleModifier(obj->shift); }
   DEF_END(toggle_shift);
 
-  DEF_INTERFACE(HotKey, BasicCommand, toggle_super, "Super")
+  DEF_INTERFACE(HotKey, Command, toggle_super, "Super")
   void OnRun() { obj->ToggleModifier(obj->windows); }
   DEF_END(toggle_super);
 

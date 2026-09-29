@@ -67,12 +67,11 @@ struct Interface {
     kLastInterfaceArgument = kStreamArg,
     kSyncable,  // also an Argument (via Syncable)
     kOnOff,     // also a Syncable
-    kCommand,
-    kLastOnOff = kCommand,
+    kLastOnOff = kOnOff,
     kLastSyncable = kLastOnOff,
     kLastArgument = kLastSyncable,
     // Standalone interfaces
-    kBasicCommand,
+    kCommand,
     kImageProvider,
     kResizable,
     kStreamInput,

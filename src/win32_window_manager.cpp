@@ -758,21 +758,27 @@ static void PostApplyMode(const WeakPtr<AppWindow>& weak) {
   PostMessageW(main_window->hwnd, WM_USER, 0, (LPARAM)apply);
 }
 
-static void SetMode(BasicCommand self, AppWindow::Mode mode) {
+static void SetMode(Command self, AppWindow::Mode mode) {
   auto& window = static_cast<AppWindow&>(*self.object_ptr);
   window.mode.store(mode, std::memory_order_relaxed);
   PostApplyMode(window.AcquireWeakPtr());
 }
 
-constinit BasicCommand::Table kPopOut = [] {
-  BasicCommand::Table t("Pop Out");
-  t.on_run = [](BasicCommand self) { SetMode(self, AppWindow::Mode::Connected); };
+constinit Command::Table kPopOut = [] {
+  Command::Table t("Pop Out");
+  t.on_run = [](Command self) -> Locked<Command> {
+    SetMode(self, AppWindow::Mode::Connected);
+    return {};
+  };
   return t;
 }();
 
-constinit BasicCommand::Table kEmbed = [] {
-  BasicCommand::Table t("Embed");
-  t.on_run = [](BasicCommand self) { SetMode(self, AppWindow::Mode::Embedded); };
+constinit Command::Table kEmbed = [] {
+  Command::Table t("Embed");
+  t.on_run = [](Command self) -> Locked<Command> {
+    SetMode(self, AppWindow::Mode::Embedded);
+    return {};
+  };
   return t;
 }();
 

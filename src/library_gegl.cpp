@@ -443,13 +443,7 @@ Vec<GeglOpInfo> ListGeglOperations() {
 GeglOperation::GeglOperation(StrView op_name) : op(op_name) {}
 
 GeglOperation::GeglOperation(const GeglOperation& o)
-    : Object(o),
-      op(o.op),
-      props(o.props),
-      run(o.run),
-      next(o.next),
-      image(o.image),
-      out_stream(o.out_stream) {}
+    : Object(o), op(o.op), props(o.props), next(o.next), image(o.image), out_stream(o.out_stream) {}
 
 GeglOperation::~GeglOperation() {
   auto& host = GeglHost::Get();
@@ -935,18 +929,18 @@ struct PropScalarTable : Scalar::Table {
   }
 };
 
-struct PropCommandTable : BasicCommand::Table {
+struct PropCommandTable : Command::Table {
   PropInfo info;
-  PropCommandTable(const PropInfo& info) : BasicCommand::Table(""), info(info) {
+  PropCommandTable(const PropInfo& info) : Command::Table(""), info(info) {
     name = this->info.name;
     cursor = ui::Cursor::Hand;
-    on_run = [](BasicCommand self) {
+    on_run = [](Command self) -> Locked<Command> {
       auto& table = static_cast<PropCommandTable&>(*self.table_ptr);
       auto& gegl = static_cast<GeglOperation&>(*self.object_ptr);
       Str value = PropValue(gegl, table.info);
       if (table.info.kind == PropInfo::kBool) {
         gegl.SetProp(table.info.name, value == "true" ? "false" : "true");
-        return;
+        return {};
       }
       auto& nicks = table.info.nicks;
       int at = 0;
@@ -954,6 +948,7 @@ struct PropCommandTable : BasicCommand::Table {
         if (nicks[i] == value) at = i;
       }
       gegl.SetProp(table.info.name, nicks[(at + 1) % nicks.size()]);
+      return {};
     };
   }
 };

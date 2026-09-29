@@ -40,11 +40,13 @@ struct Instruction : Object, Buffer {
   static ui::Font& FineFont();
   static ui::Font& HeavyFont();
 
+  static constexpr int kNextSlot = 3;
+
   DEF_INTERFACE(Instruction, Command, run, "Run")
-  static constexpr bool kSchedulesNext = false;
-  void OnRun() {
+  static constexpr int NextIdx() { return kNextSlot; }
+  Locked<Command> OnRun() {
     obj->Run();
-    Done();
+    return {};
   }
   DEF_END(run);
 

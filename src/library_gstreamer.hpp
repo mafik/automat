@@ -100,11 +100,37 @@ struct GStreamerElement : Object {
     uint64_t counter = 0;  // bumped per frame; the toy polls it
   };
 
-  DEF_INTERFACE(GStreamerElement, Command, running, "Running")
-  void OnRun() {
-    if (!obj->Start()) Done();
+  static constexpr int kRunSlot = 1;
+  static constexpr int kNextSlot = 2;
+  static constexpr int kCancelSlot = 5;
+
+  std::atomic<bool> is_running = false;
+
+  DEF_INTERFACE(GStreamerElement, Command, run, "Run")
+  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr int NextIdx() { return kNextSlot; }
+  static constexpr int CancelIdx() { return kCancelSlot; }
+  Locked<Command> OnRun() {
+    if (obj->is_running.exchange(true)) return {};
+    if (!obj->Start()) {
+      obj->is_running = false;
+      Done();
+    }
+    return {};
   }
-  void OnCancel() { obj->Stop(); }
+  DEF_END(run);
+
+  DEF_INTERFACE(GStreamerElement, Command, cancel, "Cancel")
+  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  void OnRun() {
+    if (obj->is_running.exchange(false)) obj->Stop();
+  }
+  DEF_END(cancel);
+
+  DEF_INTERFACE(GStreamerElement, OnOff, running, "Running")
+  bool IsOn() const { return obj->is_running; }
+  static constexpr int TurnOnIdx() { return kRunSlot; }
+  static constexpr int TurnOffIdx() { return kCancelSlot; }
   DEF_END(running);
 
   DEF_INTERFACE(GStreamerElement, NextArg, next, "Next")
@@ -207,14 +233,12 @@ struct AppSinkBoundary : GStreamerElement {
 
   DEF_INTERFACE(AppSinkBoundary, Command, step, "Pull")
   static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
-  void OnRun() {
-    obj->StepOne();
-    Done();
-  }
+  static constexpr int NextIdx() { return kNextSlot; }
+  void OnRun() { obj->StepOne(); }
   DEF_END(step);
 
-  INTERFACES(running_tbl, step_tbl, next_tbl, in_stream_tbl, image_provider_tbl,
-             running_tbl.turn_off);
+  INTERFACES(run_tbl, next_tbl, step_tbl, in_stream_tbl, cancel_tbl, running_tbl,
+             image_provider_tbl);
 
   AppSinkBoundary() : GStreamerElement("appsink") {}
   AppSinkBoundary(const AppSinkBoundary& o) : GStreamerElement(o) {}
@@ -247,13 +271,11 @@ struct AppSrcBoundary : GStreamerElement {
 
   DEF_INTERFACE(AppSrcBoundary, Command, step, "Push")
   static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
-  void OnRun() {
-    obj->StepOne();
-    Done();
-  }
+  static constexpr int NextIdx() { return kNextSlot; }
+  void OnRun() { obj->StepOne(); }
   DEF_END(step);
 
-  INTERFACES(running_tbl, step_tbl, next_tbl, out_stream_tbl, image_tbl, running_tbl.turn_off);
+  INTERFACES(run_tbl, next_tbl, out_stream_tbl, step_tbl, cancel_tbl, running_tbl, image_tbl);
 
   AppSrcBoundary() : GStreamerElement("appsrc") {}
   AppSrcBoundary(const AppSrcBoundary& o) : GStreamerElement(o), image(o.image) {}

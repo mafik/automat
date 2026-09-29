@@ -117,7 +117,7 @@ struct SignalController : Controller {
 
 #endif  // __linux__
 
-  ThreadHandle executing_thread_tid{0};
+  std::atomic<ThreadHandle> executing_thread_tid{0};
 
   Regs regs;
   uint64_t cpp_rsp = 0;
@@ -238,14 +238,14 @@ struct SignalController : Controller {
     context.ContextFlags = CONTEXT_INTEGER | CONTEXT_CONTROL;
 #endif
     NativeContext* ctx_ptr = nullptr;
-    if (executing_thread_tid) {
+    if (executing_thread_tid.load(std::memory_order_relaxed)) {
 #if defined __linux__
-      syscall(SYS_tgkill, getpid(), executing_thread_tid, SIGUSR1);
+      syscall(SYS_tgkill, getpid(), executing_thread_tid.load(std::memory_order_relaxed), SIGUSR1);
       this->context.wait(nullptr);  // wait until assembly thread puts its context
       ctx_ptr = context.load();
 #elif defined _WIN32
-      SuspendThread(executing_thread_tid);
-      GetThreadContext(executing_thread_tid, &context);
+      SuspendThread(executing_thread_tid.load(std::memory_order_relaxed));
+      GetThreadContext(executing_thread_tid.load(std::memory_order_relaxed), &context);
       ctx_ptr = &context;
 #endif
       auto& ctx_ref = *ctx_ptr;
@@ -602,15 +602,15 @@ struct SignalController : Controller {
     mprotect(code.data(), code.size(), PROT_READ | PROT_EXEC);
 #endif  // __linux__
 
-    if (executing_thread_tid) {
+    if (executing_thread_tid.load(std::memory_order_relaxed)) {
       auto& ctx_ref = *ctx_ptr;
       NATIVE_RIP(ctx_ref) = InstToInstructionPointer(current_instruction);
 #if defined __linux__
       this->context = nullptr;
       this->context.notify_one();
 #elif defined _WIN32
-      SetThreadContext(executing_thread_tid, ctx_ptr);
-      ResumeThread(executing_thread_tid);
+      SetThreadContext(executing_thread_tid.load(std::memory_order_relaxed), ctx_ptr);
+      ResumeThread(executing_thread_tid.load(std::memory_order_relaxed));
 #endif
     }
   }
@@ -619,7 +619,7 @@ struct SignalController : Controller {
     uint64_t rip;
     {  // Pre-entering machine code section
       std::lock_guard<std::mutex> lock(mutex);
-      if (executing_thread_tid) {
+      if (executing_thread_tid.load(std::memory_order_relaxed)) {
         // If another thread is already executing, there are multiple potential strategies:
         // 1. Execute in parallel which will totally mess up the state
         // 2. Wait for the other Execute to finish & then execute
@@ -637,11 +637,13 @@ struct SignalController : Controller {
       }
       active_signal_controller = this;
 #if defined __linux__
-      executing_thread_tid = gettid();
+      executing_thread_tid.store(gettid(), std::memory_order_relaxed);
       InstallSignalHandlers();
 #elif defined _WIN32
-      DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(),
-                      &executing_thread_tid, 0, TRUE, DUPLICATE_SAME_ACCESS);
+      HANDLE thread;
+      DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &thread, 0,
+                      TRUE, DUPLICATE_SAME_ACCESS);
+      executing_thread_tid.store(thread, std::memory_order_relaxed);
 #endif
     }
     // Machine code section
@@ -651,13 +653,17 @@ struct SignalController : Controller {
 #if defined __linux__
       UninstallSignalHandlers();
 #elif defined _WIN32
-      CloseHandle(executing_thread_tid);
+      CloseHandle(executing_thread_tid.load(std::memory_order_relaxed));
 #endif
       active_signal_controller = nullptr;
-      executing_thread_tid = 0;
+      executing_thread_tid.store(0, std::memory_order_relaxed);
     }
     auto code_point = InstructionPointerToCodePoint(exit_ptr, true);
     exit_callback(code_point);
+  }
+
+  bool IsRunning() const override {
+    return executing_thread_tid.load(std::memory_order_relaxed) != 0;
   }
 
   uint64_t StateFromNative(State& state, const NativeContext& context) {
@@ -683,24 +689,27 @@ struct SignalController : Controller {
 
   void GetState(State& state, Status& status) override {
     std::lock_guard<std::mutex> lock(mutex);
-    if (executing_thread_tid) {
+    if (executing_thread_tid.load(std::memory_order_relaxed)) {
 #if defined __linux__
-      syscall(SYS_tgkill, getpid(), executing_thread_tid, SIGUSR1);
+      syscall(SYS_tgkill, getpid(), executing_thread_tid.load(std::memory_order_relaxed), SIGUSR1);
       this->context.wait(nullptr);  // wait until assembly thread puts its context
       auto& context = *this->context.load();
 #elif defined _WIN32
-      int previous_suspend_count = SuspendThread(executing_thread_tid);
+      int previous_suspend_count =
+          SuspendThread(executing_thread_tid.load(std::memory_order_relaxed));
       if (previous_suspend_count) {
         AppendErrorMessage(status) +=
-            f("Failed to suspend thread {}. Previous suspend count was {}", executing_thread_tid,
-              previous_suspend_count);
+            f("Failed to suspend thread {}. Previous suspend count was {}",
+              executing_thread_tid.load(std::memory_order_relaxed), previous_suspend_count);
       }
       CONTEXT context;
       context.ContextFlags = CONTEXT_INTEGER | CONTEXT_CONTROL;
-      bool got_context = GetThreadContext(executing_thread_tid, &context);
+      bool got_context =
+          GetThreadContext(executing_thread_tid.load(std::memory_order_relaxed), &context);
       if (!got_context) {
-        AppendErrorMessage(status) += f("Failed to get thread context for thread {}: {}",
-                                        executing_thread_tid, GetLastError());
+        AppendErrorMessage(status) +=
+            f("Failed to get thread context for thread {}: {}",
+              executing_thread_tid.load(std::memory_order_relaxed), GetLastError());
       }
 #endif
       StateFromNative(state, context);
@@ -708,7 +717,7 @@ struct SignalController : Controller {
       this->context = nullptr;
       this->context.notify_one();
 #elif defined _WIN32
-      ResumeThread(executing_thread_tid);
+      ResumeThread(executing_thread_tid.load(std::memory_order_relaxed));
 #endif
     } else {
       state.current_instruction.Reset();
@@ -719,16 +728,16 @@ struct SignalController : Controller {
   void ChangeState(StateVisitor visitor, Status& status) override {
     std::lock_guard<std::mutex> lock(mutex);
     State state;
-    if (executing_thread_tid) {
+    if (executing_thread_tid.load(std::memory_order_relaxed)) {
 #if defined __linux__
-      syscall(SYS_tgkill, getpid(), executing_thread_tid, SIGUSR1);
+      syscall(SYS_tgkill, getpid(), executing_thread_tid.load(std::memory_order_relaxed), SIGUSR1);
       this->context.wait(nullptr);  // wait until assembly thread puts its context
       auto& context = *this->context.load();
 #elif defined _WIN32
-      SuspendThread(executing_thread_tid);
+      SuspendThread(executing_thread_tid.load(std::memory_order_relaxed));
       CONTEXT context;
       context.ContextFlags = CONTEXT_INTEGER | CONTEXT_CONTROL;
-      GetThreadContext(executing_thread_tid, &context);
+      GetThreadContext(executing_thread_tid.load(std::memory_order_relaxed), &context);
 #endif
       auto old_rip = StateFromNative(state, context);
       visitor(state);
@@ -746,8 +755,8 @@ struct SignalController : Controller {
       this->context = nullptr;
       this->context.notify_one();
 #elif defined _WIN32
-      SetThreadContext(executing_thread_tid, &context);
-      ResumeThread(executing_thread_tid);
+      SetThreadContext(executing_thread_tid.load(std::memory_order_relaxed), &context);
+      ResumeThread(executing_thread_tid.load(std::memory_order_relaxed));
 #endif
     } else {
       state.regs = regs;
@@ -1130,6 +1139,12 @@ struct PtraceController : Controller {
       ResumeWorker(status);
     });
     WakeControlThread();
+  }
+
+  bool IsRunning() const override {
+    bool running;
+    const_cast<PtraceController*>(this)->RunOnControlThread([&] { running = worker_should_run; });
+    return running;
   }
 
   template <typename Lambda>

@@ -17,10 +17,8 @@ struct TesseractOCR : public Object {
   Str ocr_text = "";
 
   DEF_INTERFACE(TesseractOCR, Command, run, "Run")
-  void OnRun() {
-    obj->Run();
-    Done();
-  }
+  static constexpr int NextIdx() { return SlotOf(next_tbl); }
+  void OnRun() { obj->Run(); }
   DEF_END(run);
 
   DEF_INTERFACE(TesseractOCR, NextArg, next, "Next")

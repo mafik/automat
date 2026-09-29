@@ -138,27 +138,27 @@ static void EditText(Object& object, Str text) {
 
 void Number::text_Impl::OnSet(StrView value) { EditText(*obj, Str(value)); }
 
-constinit std::array<BasicCommand::Table, 10> kDigits = [] {
-  std::array<BasicCommand::Table, 10> tables = {BasicCommand::Table("0"), BasicCommand::Table("1"),
-                                                BasicCommand::Table("2"), BasicCommand::Table("3"),
-                                                BasicCommand::Table("4"), BasicCommand::Table("5"),
-                                                BasicCommand::Table("6"), BasicCommand::Table("7"),
-                                                BasicCommand::Table("8"), BasicCommand::Table("9")};
+constinit std::array<Command::Table, 10> kDigits = [] {
+  std::array<Command::Table, 10> tables = {
+      Command::Table("0"), Command::Table("1"), Command::Table("2"), Command::Table("3"),
+      Command::Table("4"), Command::Table("5"), Command::Table("6"), Command::Table("7"),
+      Command::Table("8"), Command::Table("9")};
   for (auto& t : tables) {
-    t.on_run = [](BasicCommand self) {
-      int digit = cast<BasicCommand::Table>(self.table_ptr) - kDigits.data();
+    t.on_run = [](Command self) -> Locked<Command> {
+      int digit = cast<Command::Table>(self.table_ptr) - kDigits.data();
       Str text = self.object_ptr->GetText();
       if (text == "0") text.clear();
       text += '0' + digit;
       EditText(*self.object_ptr, text);
+      return {};
     };
   }
   return tables;
 }();
 
-constinit BasicCommand::Table kDot = [] {
-  BasicCommand::Table t(".");
-  t.on_run = [](BasicCommand self) {
+constinit Command::Table kDot = [] {
+  Command::Table t(".");
+  t.on_run = [](Command self) -> Locked<Command> {
     Str text = self.object_ptr->GetText();
     if (text.empty()) {
       text = "0";
@@ -170,17 +170,19 @@ constinit BasicCommand::Table kDot = [] {
       text.erase(0, 1);
     }
     EditText(*self.object_ptr, text);
+    return {};
   };
   return t;
 }();
 
-constinit BasicCommand::Table kBackspace = [] {
-  BasicCommand::Table t("Backspace");
-  t.on_run = [](BasicCommand self) {
+constinit Command::Table kBackspace = [] {
+  Command::Table t("Backspace");
+  t.on_run = [](Command self) -> Locked<Command> {
     Str text = self.object_ptr->GetText();
     if (!text.empty()) text.pop_back();
     if (text.empty()) text = "0";
     EditText(*self.object_ptr, text);
+    return {};
   };
   return t;
 }();

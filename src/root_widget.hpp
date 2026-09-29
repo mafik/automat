@@ -57,22 +57,22 @@ struct Camera : Object {
     WakeToys();
   }
 
-  DEF_INTERFACE(Camera, BasicCommand, up, "Camera up")
+  DEF_INTERFACE(Camera, Command, up, "Camera up")
   static constexpr Vec2 kDelta = Vec2(0, 10_cm);
   void OnRun() { obj->Move(kDelta); }
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(up);
-  DEF_INTERFACE(Camera, BasicCommand, down, "Camera down")
+  DEF_INTERFACE(Camera, Command, down, "Camera down")
   static constexpr Vec2 kDelta = Vec2(0, -10_cm);
   void OnRun() { obj->Move(kDelta); }
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(down);
-  DEF_INTERFACE(Camera, BasicCommand, left, "Camera left")
+  DEF_INTERFACE(Camera, Command, left, "Camera left")
   static constexpr Vec2 kDelta = Vec2(-10_cm, 0);
   void OnRun() { obj->Move(kDelta); }
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(left);
-  DEF_INTERFACE(Camera, BasicCommand, right, "Camera right")
+  DEF_INTERFACE(Camera, Command, right, "Camera right")
   static constexpr Vec2 kDelta = Vec2(10_cm, 0);
   void OnRun() { obj->Move(kDelta); }
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
@@ -81,7 +81,7 @@ struct Camera : Object {
   INTERFACES(up_tbl, down_tbl, left_tbl, right_tbl, kCameraMenu);
 };
 
-extern BasicCommand::Table kDragCamera;
+extern Command::Table kDragCamera;
 
 struct RootWidget final : Widget {
   RootWidget();

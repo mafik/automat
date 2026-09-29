@@ -123,7 +123,7 @@ static void WatchRun(ProgramLauncher& launcher, const Ptr<Launch>& launch) {
       auto& launcher = static_cast<ProgramLauncher&>(*obj);
       auto lock = std::lock_guard(launcher.mutex);
       bool current = launcher.launch.Get() == launch_weak.GetUnsafe();
-      if (current && launcher.running->IsRunning()) launcher.running->Done();
+      if (current && launcher.is_running.exchange(false)) launcher.run->Done();
       launcher.WakeToys();
     }
   });
@@ -150,7 +150,7 @@ bool ProgramLauncher::SpawnStage(const SpawnFds& fds, ClientWindow* restoring, S
     auto lock = std::lock_guard(mutex);
     launch = new_launch;
     ever_ran = true;
-    if (running->StartRunning()) running->NotifyTurnedOn();
+    if (!is_running.exchange(true)) running->NotifyTurnedOn();
   }
   ClearOwnError();
   WakeToys();
@@ -274,7 +274,7 @@ Ptr<Launch> ProgramLauncher::ExtractLaunch() {
   {
     auto lock = std::lock_guard(mutex);
     extracted = launch.Release();
-    running->StopRunning();
+    is_running = false;
   }
   WakeToys();
   return extracted;
@@ -543,7 +543,7 @@ struct ProgramLauncherToy : ui::beta::ObjectToy {
   ProgramLauncherToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     field = std::make_unique<ArgvField>(this, obj, *this);
     button = std::make_unique<ui::beta::RunButton>(
-        this, Linked<>(obj.AcquireWeakPtr(), &ProgramLauncher::running_tbl),
+        this, Linked<>(obj.AcquireWeakPtr(), &ProgramLauncher::run_tbl),
         Linked<>(obj.AcquireWeakPtr(), &ProgramLauncher::stop_tbl), Seed(0x12B));
   }
 
@@ -634,7 +634,7 @@ struct ProgramLauncherToy : ui::beta::ObjectToy {
 
   void ScheduleRunIfReady() {
     if (auto launcher = LockProgramLauncher()) {
-      if (!launcher->running->IsRunning() && program_resolves_) launcher->running->ScheduleRun();
+      if (!launcher->is_running && program_resolves_) launcher->run->ScheduleRun();
     }
     WakeAnimation();
   }

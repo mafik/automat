@@ -78,6 +78,8 @@ struct Controller {
 
   virtual void Execute(NestedWeakPtr<const Inst> inst, Status&) = 0;
 
+  virtual bool IsRunning() const = 0;
+
   struct State {
     // Instruction which is about to be executed.
     NestedWeakPtr<const Inst> current_instruction;

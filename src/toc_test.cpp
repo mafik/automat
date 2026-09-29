@@ -3,7 +3,7 @@
 
 // Warning: coded with a stochastic parrot
 
-#include "basic_command.hpp"
+#include "command.hpp"
 #include "gtest.hpp"
 #include "library_file.hpp"
 #include "library_number.hpp"
@@ -58,7 +58,7 @@ TEST(TocTest, TypedAccessCasts) {
   Text text = number->InterfaceFromIdx<Text>(1);
   EXPECT_EQ(text.object_ptr, number.Get());
   EXPECT_EQ(text.table_ptr, &Number::text_tbl);
-  EXPECT_EQ(number->InterfaceFromIdx<BasicCommand>(-2).table_ptr, &kThisIsFine);
+  EXPECT_EQ(number->InterfaceFromIdx<Command>(-2).table_ptr, &kThisIsFine);
 }
 
 TEST(TocTest, StaticSlotOfMatchesToC) {
@@ -76,9 +76,9 @@ TEST(TocTest, OnOffRunsItsCommands) {
   auto sw = MAKE_PTR(Switch);
   EXPECT_EQ(Switch::enabled_tbl.turn_on_idx, sw->InterfaceIdx(&Switch::switch_on_tbl));
   EXPECT_EQ(Switch::enabled_tbl.turn_off_idx, sw->InterfaceIdx(&Switch::switch_off_tbl));
-  EXPECT_EQ(sw->InterfaceFromIdx<BasicCommand>(Switch::enabled_tbl.turn_on_idx).table_ptr,
+  EXPECT_EQ(sw->InterfaceFromIdx<Command>(Switch::enabled_tbl.turn_on_idx).table_ptr,
             &Switch::switch_on_tbl);
-  EXPECT_EQ(sw->InterfaceFromIdx<BasicCommand>(Switch::enabled_tbl.turn_off_idx).table_ptr,
+  EXPECT_EQ(sw->InterfaceFromIdx<Command>(Switch::enabled_tbl.turn_off_idx).table_ptr,
             &Switch::switch_off_tbl);
   sw->enabled->TurnOn();
   EXPECT_TRUE(sw->enabled->IsOn());

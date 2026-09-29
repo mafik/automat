@@ -82,9 +82,12 @@ Pressing Enter inside the tiles is equivalent to pressing RUN.
 
 ## Interfaces and composition
 
-The object exposes the standard `Command` interface (turning it on
-spawns, turning it off cancels, `Done` on reap) plus `Next` chaining, so
-Timers, Gears, chains and the bubble menu drive it without special cases.
+The object exposes a `run` Command, which spawns the child and calls
+`Done` when the child is reaped, so that the `Next` chain continues; a
+`cancel` Command, which sends SIGTERM; and a `running` OnOff over the
+two. Timers, chains, Gears (through the OnOff) and the bubble menu drive
+it without special cases. RUN activates `run`, and STOP activates the
+`stop` Command, which also closes the windows in the connected mode.
 The child is watched through a pidfd registered on the shared epoll thread
 (`mux::WatchProcess`), which reaps it and reports the exit status.
 

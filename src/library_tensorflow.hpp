@@ -47,10 +47,8 @@ struct TfTensor : Object {
   bool computing = false;
 
   DEF_INTERFACE(TfTensor, Command, run, "Run")
-  void OnRun() {
-    obj->Materialize();
-    Done();
-  }
+  static constexpr int NextIdx() { return SlotOf(next_tbl); }
+  void OnRun() { obj->Materialize(); }
   DEF_END(run);
 
   DEF_INTERFACE(TfTensor, NextArg, next, "Next")
@@ -66,8 +64,7 @@ struct TfTensor : Object {
   INTERFACES(run_tbl, next_tbl, image_tbl, out_stream_tbl);
 
   TfTensor() = default;
-  TfTensor(const TfTensor& o)
-      : Object(o), run(o.run), next(o.next), image(o.image), out_stream(o.out_stream) {}
+  TfTensor(const TfTensor& o) : Object(o), next(o.next), image(o.image), out_stream(o.out_stream) {}
   ~TfTensor() override;
 
   StrView Name() const override { return "tf:tensor"; }
@@ -100,10 +97,8 @@ struct TfOp : Object {
   sk_sp<SkImage> result_image;
 
   DEF_INTERFACE(TfOp, Command, run, "Run")
-  void OnRun() {
-    obj->Execute();
-    Done();
-  }
+  static constexpr int NextIdx() { return SlotOf(next_tbl); }
+  void OnRun() { obj->Execute(); }
   DEF_END(run);
 
   DEF_INTERFACE(TfOp, NextArg, next, "Next")
@@ -123,8 +118,7 @@ struct TfOp : Object {
   INTERFACES(run_tbl, next_tbl, in_stream_tbl, out_stream_tbl, image_provider_tbl);
 
   TfOp(StrView op_name) : op_name(op_name) {}
-  TfOp(const TfOp& o)
-      : Object(o), op_name(o.op_name), run(o.run), next(o.next), out_stream(o.out_stream) {}
+  TfOp(const TfOp& o) : Object(o), op_name(o.op_name), next(o.next), out_stream(o.out_stream) {}
   ~TfOp() override;
 
   StrView Name() const override { return op_name; }

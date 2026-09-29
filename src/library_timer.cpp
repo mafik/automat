@@ -131,9 +131,10 @@ static const char* RangeName(Timer::Range range) {
 
 static void SetDuration(Timer& timer, Duration new_duration) {
   auto lock = std::lock_guard(timer.mtx);
-  if (timer.running->IsRunning()) {
+  auto start = timer.start_time.load(std::memory_order_relaxed);
+  if (start != Timer::kStopped) {
     if (auto h = timer.HomeLocation()) {
-      RescheduleAt(*h, timer.start_time + timer.duration_value, timer.start_time + new_duration);
+      RescheduleAt(*h, start + timer.duration_value, start + new_duration);
     }
   }
 
@@ -153,17 +154,21 @@ static void PropagateDurationOutwards(Timer& timer) {
 
 void Timer::StartTimer() {
   auto lock = std::lock_guard(mtx);
+  auto stopped = kStopped;
+  auto now = time::SteadyClock::now();
+  if (!start_time.compare_exchange_strong(stopped, now, std::memory_order_relaxed)) return;
   ZoneScopedN("Timer");
-  start_time = time::SteadyClock::now();
   if (auto location = HomeLocation()) {
-    ScheduleAt(*location, start_time + duration_value);
+    ScheduleAt(*location, now + duration_value);
   }
   WakeToys();
 }
 
 void Timer::CancelTimer() {
+  auto start = start_time.exchange(kStopped, std::memory_order_relaxed);
+  if (start == kStopped) return;
   if (auto location = HomeLocation()) {
-    CancelScheduledAt(*location, start_time + duration_value);
+    CancelScheduledAt(*location, start + duration_value);
   }
   WakeToys();
 }
@@ -187,7 +192,7 @@ Ptr<Object> Timer::Clone() const { return MAKE_PTR(Timer, *this); }
 
 void Timer::OnTimerNotification(Location& here2, time::SteadyPoint) {
   auto lock = std::lock_guard(mtx);
-  running->Done();
+  if (start_time.exchange(kStopped, std::memory_order_relaxed) != kStopped) run->Done();
 }
 
 void Timer::Updated(WeakPtr<Object>& updated) {
@@ -233,9 +238,10 @@ void Timer::SerializeState(ObjectSerializer& writer) const {
   writer.String(range_str.data(), range_str.size());
   writer.Key("duration_seconds");
   writer.Double(time::ToSeconds(duration_value));
-  if (running->IsRunning()) {
+  auto start = start_time.load(std::memory_order_relaxed);
+  if (start != kStopped) {
     writer.Key("running");
-    writer.Double(time::ToSeconds(time::SteadyNow() - start_time));
+    writer.Double(time::ToSeconds(time::SteadyNow() - start));
   }
 }
 bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
@@ -243,19 +249,20 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
   if (key == "running") {
     double value = 0;
     d.Get(value, status);
-    running->StartRunning();
-    start_time = time::SteadyNow() - time::FromSeconds(value);
+    auto start = time::SteadyNow() - time::FromSeconds(value);
+    start_time.store(start, std::memory_order_relaxed);
     if (auto location = HomeLocation()) {
-      ScheduleAt(*location, start_time + duration_value);
+      ScheduleAt(*location, start + duration_value);
     }
   } else if (key == "duration_seconds") {
     double value;
     d.Get(value, status);
     if (OK(status)) {
       duration_value = time::FromSeconds(value);
-      if (running->IsRunning()) {
+      auto start = start_time.load(std::memory_order_relaxed);
+      if (start != kStopped) {
         if (auto location = HomeLocation()) {
-          ScheduleAt(*location, start_time + duration_value);
+          ScheduleAt(*location, start + duration_value);
         }
       }
     }
@@ -515,9 +522,9 @@ struct TimerWidget : ObjectToy {
   // Cached copies of Object state (refreshed in Tick)
   Timer::Range range = Timer::Range::Seconds;
   time::Duration duration_value = 10s;
-  bool is_running = false;
-  time::SteadyPoint start_time;
+  time::SteadyPoint start_time = Timer::kStopped;
 
+  bool Running() const { return start_time != Timer::kStopped; }
   Ptr<Timer> LockTimer() const { return LockObject<Timer>(); }
 
   TimerWidget(ui::Widget* parent, Object& timer_obj);
@@ -525,7 +532,7 @@ struct TimerWidget : ObjectToy {
   Tock Tick(time::Timer& timer) override {
     auto tock = ObjectToy::Tick(timer);
 
-    bool old_running = is_running;
+    bool old_running = Running();
     auto old_range = range;
     auto old_duration = duration_value;
     // Refresh cached Object state
@@ -533,18 +540,17 @@ struct TimerWidget : ObjectToy {
       auto lock = std::lock_guard(t->mtx);
       range = t->range;
       duration_value = t->duration_value;
-      is_running = t->running->IsRunning();
       start_time = t->start_time;
     }
     if (old_duration != duration_value || range != old_range) text_field->WakeAnimation();
-    if (is_running != old_running) start_pusher_depression = 1;
+    if (Running() != old_running) start_pusher_depression = 1;
     int range_end = (int)Timer::Range::EndGuard;
     if (range != old_range) {
       bool forward = ((int)range - (int)old_range + range_end) % range_end == 1;
       (forward ? right_pusher_depression : left_pusher_depression) = 1;
     }
 
-    tock |= is_running ? Tock::Drawing : Tock{};
+    tock |= Running() ? Tock::Drawing : Tock{};
     tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.2, start_pusher_depression);
     tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.2, left_pusher_depression);
     tock.drawing |= animation::ExponentialApproach(0, timer.d, 0.2, right_pusher_depression);
@@ -565,7 +571,7 @@ struct TimerWidget : ObjectToy {
       tock.drawing |= true;
     } else {
       float hand_target;
-      if (is_running) {
+      if (Running()) {
         hand_target = HandBaseDegrees(*this);
       } else {
         hand_target = 90;
@@ -705,7 +711,7 @@ struct TimerWidget : ObjectToy {
 };
 
 static float HandBaseDegrees(const TimerWidget& w) {
-  if (w.is_running) {
+  if (w.Running()) {
     Duration elapsed = SteadyClock::now() - w.start_time;
     return 90 - 360 * elapsed / time::FloatDuration(RangeDuration(w.range));
   } else {
@@ -908,7 +914,6 @@ TimerWidget::TimerWidget(ui::Widget* parent, Object& timer_obj)
   if (auto timer = LockTimer()) {
     range = timer->range;
     duration_value = timer->duration_value;
-    is_running = timer->running->IsRunning();
     start_time = timer->start_time;
   }
 }

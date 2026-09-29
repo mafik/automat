@@ -453,11 +453,12 @@ void ObjectSerializer::Serialize(Object& start) {
     {  // Serialize object parts
       // ATM we only serialize Args
       bool args_opened = false;  // used to lazily call StartObject
-      o->Each<Argument>([&](Argument arg) {
-        if (!arg.IsConnected()) return LoopControl::Continue;
+      for (auto* tab : *o->toc) {
+        Argument arg = dyn_cast<Argument>(Interface(o, tab));
+        if (!arg || !arg.IsConnected()) continue;
         auto end = arg.Find();
         auto* end_owner = end.object_ptr;
-        if (end_owner == nullptr) return LoopControl::Continue;
+        if (end_owner == nullptr) continue;
         if (!args_opened) {
           args_opened = true;
           Key("links");
@@ -467,8 +468,7 @@ void ObjectSerializer::Serialize(Object& start) {
         Key(arg_name);
         auto to_name = ResolveName(*end_owner, end.table_ptr);
         String(to_name);
-        return LoopControl::Continue;
-      });
+      }
       if (args_opened) {
         args_opened = false;
         EndObject();

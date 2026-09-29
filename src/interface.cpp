@@ -69,4 +69,10 @@ Str ToStr(Interface iface) {
   return obj_name + "." + iface_name;
 }
 
+std::unique_ptr<ToC> ToC::MakeOnHeap(int size) {
+  auto* toc = static_cast<ToC*>(::operator new(sizeof(ToC) + size * sizeof(Interface::Table*)));
+  toc->count = size;
+  return std::unique_ptr<ToC>(toc);
+}
+
 }  // namespace automat

@@ -295,7 +295,8 @@ static SkPath GetRecPath() {
 
 static constexpr SkColor4f kTimelineButtonBackground = "#fdfcfb"_color4f;
 
-TrackBase::TrackBase(Str name_arg) : name_str(std::move(name_arg)), arg_table(name_str) {
+TrackBase::TrackBase(Str name_arg, std::initializer_list<Interface::Table*> tables)
+    : name_str(std::move(name_arg)), arg_table(name_str) {
   arg_table.tint = "#17aeb7"_color4f;
   arg_table.light = "#17aeb7"_color4f;
   arg_table.can_connect = [](Argument, Interface, Status&) {};
@@ -310,7 +311,30 @@ TrackBase::TrackBase(Str name_arg) : name_str(std::move(name_arg)), arg_table(na
     return std::make_unique<TextWidget>(parent, Str(self.Name()));
   };
   arg_table.state_off = offsetof(TrackBase, arg_state);
+  toc = ToC::MakeOnHeap(1 + tables.size()).release();
+  (*toc)[0] = &arg_table;
+  int i = 1;
+  for (auto* table : tables) {
+    (*toc)[i++] = table;
+  }
 }
+
+TrackBase::TrackBase(const TrackBase& other)
+    : Object(other),
+      name_str(other.name_str),
+      arg_state(other.arg_state),
+      arg_table(other.arg_table),
+      timeline(other.timeline),
+      timestamps(other.timestamps) {
+  arg_table.name = name_str;
+  toc = ToC::MakeOnHeap(other.toc->count).release();
+  for (int i = 0; i < other.toc->count; ++i) {
+    auto* table = (*other.toc)[i];
+    (*toc)[i] = table == &other.arg_table ? &arg_table : table;
+  }
+}
+
+TrackBase::~TrackBase() { ::operator delete(toc); }
 
 bool OnOffTrack::on_off_Impl::IsOn() const {
   auto& track = *obj;
@@ -2701,6 +2725,8 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
 }
 
 void TrackBase::SerializeState(ObjectSerializer& writer) const {
+  writer.Key("name");
+  writer.String(name_str.data(), name_str.size());
   writer.Key("timestamps");
   writer.StartArray();
   for (auto t : timestamps) {
@@ -2742,17 +2768,13 @@ void Float64Track::SerializeState(ObjectSerializer& writer) const {
 
 void Timeline::SerializeState(ObjectSerializer& writer) const {
   writer.Key("tracks");
-  writer.StartObject();
-  for (int i = 0; i < tracks.size(); ++i) {
-    writer.Key(tracks[i]->name_str.data(), tracks[i]->name_str.size());
-    writer.StartObject();
-    writer.Key("type");
-    auto type = tracks[i]->Name();
-    writer.String(type.data(), type.size());
-    tracks[i]->SerializeState(writer);
-    writer.EndObject();
+  writer.StartArray();
+  auto hint = writer.ResolveName(const_cast<Timeline&>(*this));
+  hint += "'s";
+  for (auto& track : tracks) {
+    writer.String(writer.ResolveName(*track, hint));
   }
-  writer.EndObject();
+  writer.EndArray();
   writer.Key("zoom");
   writer.Double(zoom_seconds);
   writer.Key("length");
@@ -2775,6 +2797,15 @@ void Timeline::SerializeState(ObjectSerializer& writer) const {
 }
 
 bool TrackBase::DeserializeKey(ObjectDeserializer& d, StrView key) {
+  if (key == "name") {
+    Status status;
+    d.Get(name_str, status);
+    arg_table.name = name_str;
+    if (!OK(status)) {
+      ReportError(status.ToStr());
+    }
+    return true;
+  }
   if (key == "timestamps") {
     timestamps.clear();
     Status status;
@@ -2854,30 +2885,11 @@ bool Float64Track::DeserializeKey(ObjectDeserializer& d, StrView key) {
 bool Timeline::DeserializeKey(ObjectDeserializer& d, StrView key) {
   Status status;
   if (key == "tracks") {
-    for (auto& track_name : ObjectView(d, status)) {
-      Str track_type = "";
-      TrackBase* track = nullptr;
-      for (auto& track_key : ObjectView(d, status)) {
-        if (track_key == "type") {
-          d.Get(track_type, status);
-          if (OK(status)) {
-            if (track_type == "On/Off Track") {
-              track = &AddOnOffTrack(track_name);
-            } else if (track_type == "Vec2 Track") {
-              track = &AddVec2Track(track_name);
-            } else if (track_type == "Float64 Track") {
-              track = &AddFloat64Track(track_name);
-            } else {
-              AppendErrorMessage(status) += f("Unknown track type: {}", track_type);
-            }
-          }
-        } else {
-          if (track) {
-            track->DeserializeKey(d, track_key);
-          } else {
-            d.Skip();
-          }
-        }
+    for (int i : ArrayView(d, status)) {
+      Str track_name;
+      d.Get(track_name, status);
+      if (auto* track = dynamic_cast<TrackBase*>(d.LookupObject(track_name))) {
+        AddTrack(track->AcquirePtr());
       }
     }
   } else if (key == "zoom") {

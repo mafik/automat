@@ -19,7 +19,9 @@ struct Timeline;
 struct TrackBase : Object {
   Str name_str;
 
-  TrackBase(Str name);
+  TrackBase(Str name, std::initializer_list<Interface::Table*> tables);
+  TrackBase(const TrackBase&);
+  ~TrackBase() override;
 
   InterfaceArgument<Interface>::State arg_state;
   InterfaceArgument<Interface>::Table arg_table;
@@ -46,11 +48,10 @@ struct OnOffTrack : TrackBase {
   void OnTurnOff() {}
   DEF_END(on_off);
 
-  OnOffTrack(Str name) : TrackBase(name) {}
+  OnOffTrack(Str name) : TrackBase(std::move(name), {&on_off_tbl}) {}
   string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  INTERFACES(on_off_tbl);
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -63,7 +64,7 @@ struct Vec2Track : TrackBase {
   using ValueT = Vec2;
   Vec<Vec2> values;
 
-  Vec2Track(Str name) : TrackBase(name) {}
+  Vec2Track(Str name) : TrackBase(std::move(name), {}) {}
   string_view Name() const override { return "Vec2 Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Vec2Track, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
@@ -79,7 +80,7 @@ struct Float64Track : TrackBase {
   using ValueT = double;
   Vec<double> values;
 
-  Float64Track(Str name) : TrackBase(name) {}
+  Float64Track(Str name) : TrackBase(std::move(name), {}) {}
   string_view Name() const override { return "Float64 Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Float64Track, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;

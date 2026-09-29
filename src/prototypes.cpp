@@ -83,6 +83,9 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<MouseButtonPresser, HideInToolbar>();
   index.Register<Number>();
   index.Register<Timeline>();
+  index.Register<OnOffTrack, HideInToolbar>(Str{});
+  index.Register<Vec2Track, HideInToolbar>(Str{});
+  index.Register<Float64Track, HideInToolbar>(Str{});
   index.Register<InstructionLibrary>();
   index.Register<Instruction, HideInToolbar>();
   index.Register<Register, HideInToolbar>(nullptr, 0);

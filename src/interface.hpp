@@ -323,6 +323,8 @@ struct ToC {
   Interface::Table** begin() { return &array[0]; }
   Interface::Table** end() { return &array[count]; }
   Interface::Table*& operator[](int i) { return array[i]; }
+
+  static std::unique_ptr<ToC> MakeOnHeap(int size);
 };
 
 template <auto&... tables>

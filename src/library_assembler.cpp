@@ -60,34 +60,24 @@ struct ImageWidget : ui::Widget {
   void Draw(SkCanvas& canvas) const override { image.draw(canvas); }
 };
 
-static void FillRegistersPage(Interface, Menu&);
-
-constinit std::array<Interface::Table, 3> kRegistersMenu = {
-    MenuTable("Registers", &FillRegistersPage), MenuTable("More registers", &FillRegistersPage),
-    MenuTable("More registers", &FillRegistersPage)};
-
-static void FillRegistersPage(Interface self, Menu& menu) {
+static void FillRegistersMenu(Interface self, Menu& menu) {
   using enum ui::Dir;
-  constexpr ui::Dir kSlots[] = {N, NE, E, SE, SW, W, NW};
-  constexpr int kPerPage = std::size(kSlots);
-  int page = self.table_ptr - kRegistersMenu.data();
+  constexpr ui::Dir kSlots[] = {N, NE, E, SE, S, SW, W, NW};
+  static_assert(std::size(kSlots) == kGeneralPurposeRegisterCount);
   auto& assembler = static_cast<Assembler&>(*self.object_ptr);
-  for (int i = 0; i < kPerPage; ++i) {
-    int reg = page * kPerPage + i;
-    if (reg >= kGeneralPurposeRegisterCount) break;
-    menu.Place(kSlots[i], Interface(*assembler.regs[reg], kMakeObject));
-  }
-  if ((page + 1) * kPerPage < kGeneralPurposeRegisterCount) {
-    menu.Place(S, Interface(assembler, kRegistersMenu[page + 1]));
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+    menu.Place(kSlots[i], Interface(*assembler.regs[i], kMakeObject));
   }
 }
+
+constinit Interface::Table kRegistersMenu = MenuTable("Registers", &FillRegistersMenu);
 
 void AssemblerWidget::FillMenu(ui::Pointer& pointer, Menu& menu) {
   using enum ui::Dir;
   ObjectToy::FillMenu(pointer, menu);
   auto assembler = LockObject<Assembler>();
   if (!assembler) return;
-  menu.Place(NW, Interface(*assembler, kRegistersMenu[0]));
+  menu.Place(NW, Interface(*assembler, kRegistersMenu));
   menu.Place(NE, assembler->running.Bind());
 }
 

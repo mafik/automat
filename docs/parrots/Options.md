@@ -140,7 +140,9 @@ sector width changes with the neighbours. A swipe learned on one menu therefore 
 option in every other menu that has it. Options that exist in one menu only may be spread evenly
 instead: the mouse menu (src/library_mouse.cpp) keeps N and S and spaces its six options 60 degrees
 apart, and its button sub-menus space their five buttons 72 degrees apart around the middle button
-at S.
+at S. Menus are not split into pages: the register menu of the Assembler (src/library_assembler.cpp)
+places the eight general-purpose registers at the eight compass directions, clockwise from N, so
+each register has a permanent direction.
 
 A widget or table that builds on a base calls the filler of the base first and then places its
 own slots, so a later placement at the same angle is an override, visible where it happens
@@ -153,7 +155,7 @@ fill_menu)` (src/interface.hpp): it has `fill_menu` and a name, but no `activate
 methods, so no cast accepts it and `MakeController` returns nothing for it. An Object never reports
 such a table through `INTERFACES()`; it is only placed in menus (the camera menu in
 src/root_widget.cpp, the decoration menu in src/window_frame.cpp, the shelf categories in
-src/library_beta_shelf.cpp, the register pages in src/library_assembler.cpp, the mouse menus in
+src/library_beta_shelf.cpp, the register menu in src/library_assembler.cpp, the mouse menus in
 src/library_mouse.cpp). Interfaces are for Objects to call; a menu exposes nothing to call, so it
 is not one of an Object's interfaces.
 

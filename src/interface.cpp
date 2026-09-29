@@ -3,6 +3,8 @@
 
 #include "interface.hpp"
 
+#include <algorithm>
+
 #include "library_switch.hpp"
 #include "menu.hpp"
 #include "object.hpp"
@@ -69,13 +71,25 @@ Str ToStr(Interface iface) {
   return obj_name + "." + iface_name;
 }
 
-std::unique_ptr<ToC> ToC::MakeOnHeap(int size) {
-  auto* toc = static_cast<ToC*>(::operator new(sizeof(ToC) + size * sizeof(Interface::Table*)));
-  toc->count = size;
-  for (auto*& table : *toc) {
-    table = nullptr;
+static ToC::Data* AllocateOnHeap(int count) {
+  auto* data = static_cast<ToC::Data*>(
+      ::operator new(sizeof(ToC::Data) + count * sizeof(Interface::Table*)));
+  data->count = count;
+  data->on_heap = true;
+  return data;
+}
+
+ToC::ToC(const ToC& other) : data(other.data) {
+  if (data->on_heap) {
+    data = AllocateOnHeap(other.size());
+    std::copy_n(other.data->array, other.size(), data->array);
   }
-  return std::unique_ptr<ToC>(toc);
+}
+
+ToC ToC::MakeOnHeap(int size) {
+  auto* data = AllocateOnHeap(size);
+  std::fill_n(data->array, size, nullptr);
+  return ToC(*data);
 }
 
 }  // namespace automat

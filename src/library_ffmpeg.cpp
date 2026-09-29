@@ -44,9 +44,9 @@ static Str AvErrWord(int err) {
 // ============================================================================
 
 void MediaFile::InitPorts() {
-  toc = ToC::MakeOnHeap(2 + kMaxStreams).release();
-  (*toc)[0] = &out_stream_tbl;
-  (*toc)[1] = &path_text_tbl;
+  toc = ToC::MakeOnHeap(2 + kMaxStreams);
+  toc[0] = &out_stream_tbl;
+  toc[1] = &path_text_tbl;
   for (int i = 0; i < kMaxStreams; ++i) {
     auto& p = stream_ports[i];
     p.Init(f("#{}", i), int(offsetof(MediaFile, stream_ports) + i * sizeof(StreamOutSlot) +
@@ -84,7 +84,6 @@ MediaFile::MediaFile(const MediaFile& o) : Object(o), out_stream(o.out_stream) {
 MediaFile::~MediaFile() {
   auto lock = std::lock_guard(mutex);
   CloseLocked();
-  ::operator delete(toc);
 }
 
 Str MediaFile::path_text_Impl::OnGet() {
@@ -169,7 +168,7 @@ void MediaFile::SetPath(StrView new_path) {
       }
     }
     for (int i = 0; i < kMaxStreams; ++i) {
-      (*toc)[2 + i] = i < n_streams ? &stream_ports[i].table : nullptr;
+      toc[2 + i] = i < n_streams ? &stream_ports[i].table : nullptr;
     }
   }
   if (!error.empty()) {

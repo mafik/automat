@@ -311,11 +311,11 @@ TrackBase::TrackBase(Str name_arg, std::initializer_list<Interface::Table*> tabl
     return std::make_unique<TextWidget>(parent, Str(self.Name()));
   };
   arg_table.state_off = offsetof(TrackBase, arg_state);
-  toc = ToC::MakeOnHeap(1 + tables.size()).release();
-  (*toc)[0] = &arg_table;
+  toc = ToC::MakeOnHeap(1 + tables.size());
+  toc[0] = &arg_table;
   int i = 1;
   for (auto* table : tables) {
-    (*toc)[i++] = table;
+    toc[i++] = table;
   }
 }
 
@@ -327,14 +327,8 @@ TrackBase::TrackBase(const TrackBase& other)
       timeline(other.timeline),
       timestamps(other.timestamps) {
   arg_table.name = name_str;
-  toc = ToC::MakeOnHeap(other.toc->count).release();
-  for (int i = 0; i < other.toc->count; ++i) {
-    auto* table = (*other.toc)[i];
-    (*toc)[i] = table == &other.arg_table ? &arg_table : table;
-  }
+  toc[0] = &arg_table;
 }
-
-TrackBase::~TrackBase() { ::operator delete(toc); }
 
 bool OnOffTrack::on_off_Impl::IsOn() const {
   auto& track = *obj;

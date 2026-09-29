@@ -189,36 +189,18 @@ static Assembler* FindOrCreateAssembler(Object& start) {
 }
 
 Instruction::Instruction() {
-  toc = ToC::MakeOnHeap(4).release();
-  (*toc)[0] = &run_tbl;
-  (*toc)[1] = &assembler_arg_tbl;
+  toc = ToC::MakeOnHeap(4);
+  toc[0] = &run_tbl;
+  toc[1] = &assembler_arg_tbl;
 }
-
-Instruction::Instruction(const Instruction& o)
-    : Object(o),
-      Buffer(o),
-      mc_inst(o.mc_inst),
-      assembler_weak(o.assembler_weak),
-      run(o.run),
-      next(o.next),
-      assembler_arg(o.assembler_arg),
-      jump_arg(o.jump_arg),
-      imm_type(o.imm_type) {
-  toc = ToC::MakeOnHeap(4).release();
-  for (int i = 0; i < 4; ++i) {
-    (*toc)[i] = (*o.toc)[i];
-  }
-}
-
-Instruction::~Instruction() { ::operator delete(toc); }
 
 void Instruction::UpdateToC() {
   auto opcode = mc_inst.getOpcode();
   auto& assembler_info = LLVM_Assembler::Get();
   auto& info = assembler_info.mc_instr_info->get(opcode);
   bool is_terminal = (opcode == X86::JMP_1 || opcode == X86::JMP_4 || info.isReturn());
-  (*toc)[2] = is_terminal ? nullptr : &next_tbl;
-  (*toc)[3] = info.isBranch() || info.isCall() ? &jump_arg_tbl : nullptr;
+  toc[2] = is_terminal ? nullptr : &next_tbl;
+  toc[3] = info.isBranch() || info.isCall() ? &jump_arg_tbl : nullptr;
 }
 
 LoopControl Instruction::Interfaces(const std::function<LoopControl(Interface)>& cb) {

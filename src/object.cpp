@@ -453,7 +453,7 @@ void ObjectSerializer::Serialize(Object& start) {
     {  // Serialize object parts
       // ATM we only serialize Args
       bool args_opened = false;  // used to lazily call StartObject
-      for (auto* tab : *o->toc) {
+      for (auto* tab : o->toc) {
         Argument arg = dyn_cast<Argument>(Interface(o, tab));
         if (!arg || !arg.IsConnected()) continue;
         auto end = arg.Find();

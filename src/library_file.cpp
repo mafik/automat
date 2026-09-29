@@ -152,8 +152,8 @@ ui::Font& LabelFont() {
 }  // namespace
 
 File::File() {
-  toc = ToC::MakeOnHeap(2).release();
-  (*toc)[1] = &toggle_filename_tbl;
+  toc = ToC::MakeOnHeap(2);
+  toc[1] = &toggle_filename_tbl;
 }
 
 File::File(const File& o) : File() {
@@ -172,7 +172,6 @@ File::~File() {
     Status status;
     automat::Path(path).Unlink(status, true);
   }
-  ::operator delete(toc);
 }
 
 void File::SerializeState(ObjectSerializer& writer) const {
@@ -248,7 +247,7 @@ void File::SetPath(StrView new_path) {
         size = FitAspect(Vec2(bounds.width(), bounds.height()), 0, kIconSize);
       }
     }
-    (*toc)[0] = image ? &image_provider_tbl : nullptr;
+    toc[0] = image ? &image_provider_tbl : nullptr;
   }
   WakeToys();
 }

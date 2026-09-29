@@ -8,6 +8,7 @@
 #include <functional>
 #include <memory>
 #include <type_traits>
+#include <utility>
 
 #include "casting.hpp"
 #include "control_flow.hpp"
@@ -317,18 +318,38 @@ constexpr Interface::Table MenuTable(StrView name, void (*fill_menu)(Interface, 
 Str ToStr(Interface iface);
 
 struct ToC {
-  int count;
-  Interface::Table* array[];
+  struct Data {
+    int count;
+    bool on_heap;
+    Interface::Table* array[];
+  };
 
-  Interface::Table** begin() { return &array[0]; }
-  Interface::Table** end() { return &array[count]; }
-  Interface::Table*& operator[](int i) { return array[i]; }
+  ToC(Data& data) : data(&data) {}
+  ToC(const ToC&);
+  ~ToC() {
+    if (data->on_heap) ::operator delete(data);
+  }
 
-  static std::unique_ptr<ToC> MakeOnHeap(int size);
+  ToC& operator=(ToC other) {
+    std::swap(data, other.data);
+    return *this;
+  }
+
+  static ToC MakeOnHeap(int size);
+
+  int size() const { return data->count; }
+  Interface::Table** begin() { return &data->array[0]; }
+  Interface::Table** end() { return &data->array[data->count]; }
+  Interface::Table*& operator[](int i) { return data->array[i]; }
+
+ private:
+  Data* data;
 };
 
+static_assert(sizeof(ToC) == 8);
+
 template <auto&... tables>
-inline ToC toc_of = {sizeof...(tables), {&tables...}};
+inline ToC::Data toc_of = {sizeof...(tables), false, {&tables...}};
 
 }  // namespace automat
 
@@ -366,7 +387,7 @@ inline ToC toc_of = {sizeof...(tables), {&tables...}};
   } state NO_UNIQUE_ADDRESS;
 
 #define INTERFACES(...) \
-  NO_UNIQUE_ADDRESS ::automat::SetToC toc_initializer { this, &::automat::toc_of<__VA_ARGS__> }
+  NO_UNIQUE_ADDRESS ::automat::SetToC toc_initializer { this, ::automat::toc_of<__VA_ARGS__> }
 
 // Helper for implementing Interfaces within objects. See `Interfaces.md`.
 //

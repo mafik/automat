@@ -69,8 +69,6 @@ struct Instruction : Object, Buffer {
   DEF_END(jump_arg);
 
   Instruction();
-  Instruction(const Instruction&);
-  ~Instruction() override;
 
   void UpdateToC();
 

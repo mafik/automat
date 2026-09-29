@@ -21,7 +21,6 @@ struct TrackBase : Object {
 
   TrackBase(Str name, std::initializer_list<Interface::Table*> tables);
   TrackBase(const TrackBase&);
-  ~TrackBase() override;
 
   InterfaceArgument<Interface>::State arg_state;
   InterfaceArgument<Interface>::Table arg_table;

@@ -119,7 +119,7 @@ struct Object : public ReferenceCounted {
   // Lists interfaces offered by this object.
   //
   // Lifetime of interface tables is at least as long as this object's.
-  ToC* toc = &toc_of<>;
+  ToC toc = toc_of<>;
 
   // Bump the counter to notify Toys that state has changed.
   void WakeToys() { monitor.fetch_add(1, std::memory_order_relaxed); }
@@ -157,7 +157,7 @@ struct Object : public ReferenceCounted {
 
   // Visits all interfaces offered by this object (& possibly its sub-objects).
   virtual LoopControl Interfaces(const std::function<LoopControl(Interface)>& cb) {
-    for (auto* tab : *toc) {
+    for (auto* tab : toc) {
       if (tab == nullptr) continue;
       RETURN_ON_BREAK(cb(Interface(*this, *tab)));
     }
@@ -188,7 +188,7 @@ struct Object : public ReferenceCounted {
 
   template <typename T>
   T InterfaceFromIdx(int toc_idx) {
-    return cast<T>(Interface(this, (*toc)[toc_idx]));
+    return cast<T>(Interface(this, toc[toc_idx]));
   }
 
   virtual Interface InterfaceFromName(StrView name);
@@ -223,7 +223,7 @@ struct Object : public ReferenceCounted {
 };
 
 struct SetToC {
-  SetToC(Object* object, ToC* toc) { object->toc = toc; }
+  SetToC(Object* object, ToC::Data& toc) { object->toc = toc; }
 };
 
 std::unique_ptr<Action> PickUp(ui::Pointer&, Location&, Object&);

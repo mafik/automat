@@ -26,8 +26,6 @@ struct TrackBase : Object {
 
   Timeline* timeline = nullptr;
   Vec<time::Duration> timestamps;
-  string_view Name() const override { return name_str; }
-  virtual string_view Type() const = 0;
   virtual void Splice(time::Duration current_offset, time::Duration splice_to) = 0;
   virtual void UpdateOutput(Location& target, time::SteadyPoint started_at,
                             time::SteadyPoint now) = 0;
@@ -49,7 +47,7 @@ struct OnOffTrack : TrackBase {
   DEF_END(on_off);
 
   OnOffTrack(Str name) : TrackBase(name) {}
-  string_view Type() const override { return "On/Off Track"; }
+  string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   INTERFACES(on_off_tbl);
@@ -66,7 +64,7 @@ struct Vec2Track : TrackBase {
   Vec<Vec2> values;
 
   Vec2Track(Str name) : TrackBase(name) {}
-  string_view Type() const override { return "Vec2 Track"; }
+  string_view Name() const override { return "Vec2 Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Vec2Track, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
@@ -82,7 +80,7 @@ struct Float64Track : TrackBase {
   Vec<double> values;
 
   Float64Track(Str name) : TrackBase(name) {}
-  string_view Type() const override { return "Float64 Track"; }
+  string_view Name() const override { return "Float64 Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Float64Track, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;

@@ -2744,10 +2744,10 @@ void Timeline::SerializeState(ObjectSerializer& writer) const {
   writer.Key("tracks");
   writer.StartObject();
   for (int i = 0; i < tracks.size(); ++i) {
-    writer.Key(tracks[i]->Name().data(), tracks[i]->Name().size());
+    writer.Key(tracks[i]->name_str.data(), tracks[i]->name_str.size());
     writer.StartObject();
     writer.Key("type");
-    auto type = tracks[i]->Type();
+    auto type = tracks[i]->Name();
     writer.String(type.data(), type.size());
     tracks[i]->SerializeState(writer);
     writer.EndObject();

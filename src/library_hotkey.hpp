@@ -21,9 +21,17 @@ struct HotKey : Object, ui::KeyGrabber {
 
   DEF_INTERFACE(HotKey, OnOff, enabled, "Enabled")
   bool IsOn() const { return obj->hotkey != nullptr; }
-  void OnTurnOn() { obj->Enable(); }
-  void OnTurnOff() { obj->Disable(); }
+  static constexpr int TurnOnIdx() { return SlotOf(enable_tbl); }
+  static constexpr int TurnOffIdx() { return SlotOf(disable_tbl); }
   DEF_END(enabled);
+
+  DEF_INTERFACE(HotKey, BasicCommand, enable, "Enable")
+  void OnRun() { obj->Enable(); }
+  DEF_END(enable);
+
+  DEF_INTERFACE(HotKey, BasicCommand, disable, "Disable")
+  void OnRun() { obj->Disable(); }
+  DEF_END(disable);
 
   DEF_INTERFACE(HotKey, NextArg, next, "Next")
   DEF_END(next);
@@ -52,8 +60,8 @@ struct HotKey : Object, ui::KeyGrabber {
   void ToggleModifier(bool& modifier);
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
-  INTERFACES(next_tbl, enabled_tbl, toggle_ctrl_tbl, toggle_alt_tbl, toggle_shift_tbl,
-             toggle_super_tbl, kSelectHotKey);
+  INTERFACES(next_tbl, enabled_tbl, enable_tbl, disable_tbl, toggle_ctrl_tbl, toggle_alt_tbl,
+             toggle_shift_tbl, toggle_super_tbl, kSelectHotKey);
 
   void ReleaseKeyGrab(ui::KeyGrab&) override;
   void KeyGrabberKeyDown(ui::KeyGrab&) override;

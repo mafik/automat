@@ -12,10 +12,18 @@ struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
   DEF_INTERFACE(MacroRecorder, OnOff, recording, "Recording")
 
   bool IsOn() const { return obj->keylogging != nullptr; }
-  void OnTurnOn() { obj->StartRecording(); }
-  void OnTurnOff() { obj->StopRecording(); }
+  static constexpr int TurnOnIdx() { return SlotOf(start_recording_tbl); }
+  static constexpr int TurnOffIdx() { return SlotOf(stop_recording_tbl); }
 
   DEF_END(recording);
+
+  DEF_INTERFACE(MacroRecorder, BasicCommand, start_recording, "Start recording")
+  void OnRun() { obj->StartRecording(); }
+  DEF_END(start_recording);
+
+  DEF_INTERFACE(MacroRecorder, BasicCommand, stop_recording, "Stop recording")
+  void OnRun() { obj->StopRecording(); }
+  DEF_END(stop_recording);
 
   MortalPtr<ui::Keylogging> keylogging;
   MortalPtr<ui::Pointer::Logging> pointer_logging;
@@ -37,7 +45,7 @@ struct MacroRecorder : Object, ui::Keylogger, ui::Pointer::Logger {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  INTERFACES(recording_tbl, timeline_tbl);
+  INTERFACES(recording_tbl, start_recording_tbl, stop_recording_tbl, timeline_tbl);
 
   void KeyloggerKeyDown(ui::Key) override;
   void KeyloggerKeyUp(ui::Key) override;

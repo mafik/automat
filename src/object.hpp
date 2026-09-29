@@ -193,7 +193,7 @@ struct Object : public ReferenceCounted {
     return cast<T>(InterfaceFromIdx(idx));
   }
 
-  int IndexOf(const Interface::Table*);
+  int InterfaceIdx(const Interface::Table*);
 
   virtual Interface InterfaceFromName(StrView name);
 

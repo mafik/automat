@@ -40,7 +40,18 @@ struct Window : public Object, ui::WindowWatcher {
 
   DEF_INTERFACE(Window, OnOff, on_off, "Active")
   bool IsOn() const { return obj->active; }
-  void OnTurnOn() {
+  static constexpr int TurnOnIdx() { return SlotOf(activate_tbl); }
+  static constexpr int TurnOffIdx() { return SlotOf(deactivate_tbl); }
+  void OnSync();
+  void OnUnsync() {
+    if (obj->window_watching) {
+      obj->window_watching->Release();
+    }
+  }
+  DEF_END(on_off);
+
+  DEF_INTERFACE(Window, BasicCommand, activate, "Activate")
+  void OnRun() {
     os::WindowHandle tracked = os::kNoWindow;
     {
       auto lock = std::lock_guard(obj->mutex);
@@ -51,20 +62,16 @@ struct Window : public Object, ui::WindowWatcher {
     os::ActivateWindow(tracked);
     obj->WakeToys();
   }
-  void OnTurnOff() {
+  DEF_END(activate);
+
+  DEF_INTERFACE(Window, BasicCommand, deactivate, "Deactivate")
+  void OnRun() {
     // Note that we're not turning off the active window here!
     // OS-es don't really offer a great way to deactivate a window :(
     obj->active = false;
     obj->WakeToys();
   }
-  void OnSync();
-  void OnUnsync() {
-    if (obj->window_watching) {
-      obj->window_watching->Release();
-      // window_watching is set to nullptr in WindowWatcherOnRelease
-    }
-  }
-  DEF_END(on_off);
+  DEF_END(deactivate);
 
   struct Impl;
   // Private implementation to avoid polluting header with platform-specific defines.
@@ -85,7 +92,8 @@ struct Window : public Object, ui::WindowWatcher {
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
-  INTERFACES(on_off_tbl, capture_tbl, next_tbl, image_provider_tbl, kPickWindow);
+  INTERFACES(on_off_tbl, activate_tbl, deactivate_tbl, capture_tbl, next_tbl, image_provider_tbl,
+             kPickWindow);
 
   // Called after deserialization. Makes the window object attach its native handle to the window
   // with the current title.

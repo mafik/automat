@@ -97,9 +97,17 @@ struct MouseButtonPresser : Object {
 
   DEF_INTERFACE(MouseButtonPresser, OnOff, state, "State")
   bool IsOn() const { return obj->down; }
-  void OnTurnOn() { obj->Press(); }
-  void OnTurnOff() { obj->Release(); }
+  static constexpr int TurnOnIdx() { return SlotOf(press_tbl); }
+  static constexpr int TurnOffIdx() { return SlotOf(release_tbl); }
   DEF_END(state);
+
+  DEF_INTERFACE(MouseButtonPresser, BasicCommand, press, "Press")
+  void OnRun() { obj->Press(); }
+  DEF_END(press);
+
+  DEF_INTERFACE(MouseButtonPresser, BasicCommand, release, "Release")
+  void OnRun() { obj->Release(); }
+  DEF_END(release);
 
   DEF_INTERFACE(MouseButtonPresser, NextArg, next, "Next")
   DEF_END(next);
@@ -109,7 +117,7 @@ struct MouseButtonPresser : Object {
   ~MouseButtonPresser() override;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  INTERFACES(next_tbl, state_tbl, click_tbl);
+  INTERFACES(next_tbl, state_tbl, press_tbl, release_tbl, click_tbl);
   void Click();
   void Press();
   void Release();

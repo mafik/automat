@@ -45,17 +45,25 @@ struct Switch : Object {
 
   DEF_INTERFACE(Switch, OnOff, enabled, "On/Off")
   bool IsOn() const { return obj->current_state; }
-  void OnTurnOn() {
+  static constexpr int TurnOnIdx() { return SlotOf(switch_on_tbl); }
+  static constexpr int TurnOffIdx() { return SlotOf(switch_off_tbl); }
+  DEF_END(enabled);
+
+  DEF_INTERFACE(Switch, BasicCommand, switch_on, "Switch on")
+  void OnRun() {
     obj->current_state = true;
     obj->WakeToys();
   }
-  void OnTurnOff() {
+  DEF_END(switch_on);
+
+  DEF_INTERFACE(Switch, BasicCommand, switch_off, "Switch off")
+  void OnRun() {
     obj->current_state = false;
     obj->WakeToys();
   }
-  DEF_END(enabled);
+  DEF_END(switch_off);
 
-  INTERFACES(enabled_tbl, flip_tbl);
+  INTERFACES(enabled_tbl, switch_on_tbl, switch_off_tbl, flip_tbl);
 
   Switch() = default;
 

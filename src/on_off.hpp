@@ -19,19 +19,18 @@ struct OnOff : Syncable {
     void (*on_turn_on)(OnOff) = nullptr;
     void (*on_turn_off)(OnOff) = nullptr;
 
-    BasicCommand::Table turn_on;
-    BasicCommand::Table turn_off;
+    int turn_on_idx = 0;
+    int turn_off_idx = 0;
 
     static bool DefaultCanSync(Syncable, Syncable other);
 
-    constexpr Table(StrView name, Kind kind = Interface::kOnOff)
-        : Syncable::Table(name, kind), turn_on("Turn on"), turn_off("Turn off") {
+    constexpr Table(StrView name, Kind kind = Interface::kOnOff) : Syncable::Table(name, kind) {
       can_sync = &DefaultCanSync;
       fill_menu = [](Interface self, Menu& menu) {
         Syncable::Table::DefaultFillMenu(self, menu);
         auto on_off = cast<OnOff>(self);
-        menu.Place(ui::Dir::N, Interface(self.object_ptr, on_off.IsOn() ? &on_off.table->turn_off
-                                                                        : &on_off.table->turn_on));
+        int idx = on_off.IsOn() ? on_off.table->turn_off_idx : on_off.table->turn_on_idx;
+        menu.Place(ui::Dir::N, self.object_ptr->InterfaceFromIdx(idx));
       };
       on_idle = [](Syncable self) {
         auto on_off = cast<OnOff>(self);
@@ -42,16 +41,6 @@ struct OnOff : Syncable {
         cast<OnOff>(self).Toggle();
         return std::make_unique<EmptyAction>(pointer);
       };
-      turn_on.activate = [](Interface self, ui::Pointer& pointer,
-                            automat::Toy*) -> std::unique_ptr<Action> {
-        OnOff(self.object_ptr, OUTER_PTR(Table, turn_on, self.table_ptr)).TurnOn();
-        return std::make_unique<EmptyAction>(pointer);
-      };
-      turn_off.activate = [](Interface self, ui::Pointer& pointer,
-                             automat::Toy*) -> std::unique_ptr<Action> {
-        OnOff(self.object_ptr, OUTER_PTR(Table, turn_off, self.table_ptr)).TurnOff();
-        return std::make_unique<EmptyAction>(pointer);
-      };
       cursor = ui::Cursor::Hand;
     }
 
@@ -59,9 +48,16 @@ struct OnOff : Syncable {
     constexpr void FillFrom() {
       Syncable::Table::FillFrom<ImplT>();
       is_on = [](OnOff self) { return static_cast<const ImplT&>(self).IsOn(); };
-      on_turn_on = [](OnOff self) { static_cast<ImplT&>(self).OnTurnOn(); };
-      on_turn_off = [](OnOff self) { static_cast<ImplT&>(self).OnTurnOff(); };
-      turn_on.cursor = turn_off.cursor = cursor;
+      turn_on_idx = ImplT::TurnOnIdx();
+      turn_off_idx = ImplT::TurnOffIdx();
+      on_turn_on = [](OnOff self) {
+        auto turn_on = self.object_ptr->InterfaceFromIdx<BasicCommand>(self.table->turn_on_idx);
+        turn_on.table->on_run(turn_on);
+      };
+      on_turn_off = [](OnOff self) {
+        auto turn_off = self.object_ptr->InterfaceFromIdx<BasicCommand>(self.table->turn_off_idx);
+        turn_off.table->on_run(turn_off);
+      };
     }
   };
 
@@ -111,12 +107,6 @@ struct OnOff : Syncable {
   //   static constexpr StrView kName = "..."sv;
   //   static constexpr int Offset();  // offsetof(Parent, def_member)
   //   bool IsOn() const;
-  //
-  //   // Apply the On/Off state change to THIS object only. Called by the sync infrastructure
-  //   // (from ForwardDo or ForwardNotify). Must NOT call TurnOn/TurnOff/NotifyTurnedOn/
-  //   // NotifyTurnedOff — doing so would create feedback loops.
-  //   void OnTurnOn();
-  //   void OnTurnOff();
   template <typename ImplT>
   struct Def : State, DefBase {
     using Impl = ImplT;

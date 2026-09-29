@@ -18,14 +18,22 @@ struct KeyPresser : Object, ui::Keylogger {
 
   DEF_INTERFACE(KeyPresser, OnOff, monitoring, "Monitoring")
   bool IsOn() const { return obj->keylogging != nullptr; }
-  void OnTurnOn() { obj->StartMonitoring(); }
-  void OnTurnOff() { obj->StopMonitoring(); }
+  static constexpr int TurnOnIdx() { return SlotOf(start_monitoring_tbl); }
+  static constexpr int TurnOffIdx() { return SlotOf(stop_monitoring_tbl); }
   DEF_END(monitoring);
+
+  DEF_INTERFACE(KeyPresser, BasicCommand, start_monitoring, "Start monitoring")
+  void OnRun() { obj->StartMonitoring(); }
+  DEF_END(start_monitoring);
+
+  DEF_INTERFACE(KeyPresser, BasicCommand, stop_monitoring, "Stop monitoring")
+  void OnRun() { obj->StopMonitoring(); }
+  DEF_END(stop_monitoring);
 
   DEF_INTERFACE(KeyPresser, OnOff, state, "State")
   bool IsOn() const { return obj->key_pressed; }
-  void OnTurnOn() { obj->Press(); }
-  void OnTurnOff() { obj->Release(); }
+  static constexpr int TurnOnIdx() { return SlotOf(press_tbl); }
+  static constexpr int TurnOffIdx() { return SlotOf(release_tbl); }
   void OnSync() {
     // Prevent monitoring from being started while object is being deserialized.
     if (obj->suspended) {
@@ -40,6 +48,14 @@ struct KeyPresser : Object, ui::Keylogger {
     obj->monitoring->TurnOff();
   }
   DEF_END(state);
+
+  DEF_INTERFACE(KeyPresser, BasicCommand, press, "Press")
+  void OnRun() { obj->Press(); }
+  DEF_END(press);
+
+  DEF_INTERFACE(KeyPresser, BasicCommand, release, "Release")
+  void OnRun() { obj->Release(); }
+  DEF_END(release);
 
   DEF_INTERFACE(KeyPresser, Command, run, "Run")
   void OnRun() {
@@ -61,7 +77,8 @@ struct KeyPresser : Object, ui::Keylogger {
 
   void SetKey(ui::AnsiKey);
 
-  INTERFACES(state_tbl, monitoring_tbl, run_tbl);
+  INTERFACES(state_tbl, press_tbl, release_tbl, monitoring_tbl, start_monitoring_tbl,
+             stop_monitoring_tbl, run_tbl);
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

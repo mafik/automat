@@ -345,7 +345,7 @@ struct ToC {
   Interface::Table** end() { return &data->array[data->count]; }
   Interface::Table*& operator[](int i) { return data->array[i - 1]; }
 
-  int IndexOf(const Interface::Table* table) {
+  int SlotOf(const Interface::Table* table) {
     for (int i = 1; i <= size(); ++i) {
       if ((*this)[i] == table) return i;
     }
@@ -360,6 +360,15 @@ static_assert(sizeof(ToC) == 8);
 
 template <auto&... tables>
 inline ToC::Data toc_of = {sizeof...(tables), false, {&tables...}};
+
+template <auto&... tables>
+constexpr int SlotOf(const Interface::Table& table) {
+  const Interface::Table* slots[] = {nullptr, &tables...};
+  for (int i = 1; i <= sizeof...(tables); ++i) {
+    if (slots[i] == &table) return i;
+  }
+  return 0;
+}
 
 }  // namespace automat
 
@@ -396,7 +405,10 @@ inline ToC::Data toc_of = {sizeof...(tables), false, {&tables...}};
     State& operator*() const { return *operator->(); }                                             \
   } state NO_UNIQUE_ADDRESS;
 
-#define INTERFACES(...) \
+#define INTERFACES(...)                                                   \
+  static constexpr int SlotOf(const ::automat::Interface::Table& table) { \
+    return ::automat::SlotOf<__VA_ARGS__>(table);                         \
+  }                                                                       \
   NO_UNIQUE_ADDRESS ::automat::SetToC toc_initializer { this, ::automat::toc_of<__VA_ARGS__> }
 
 // Helper for implementing Interfaces within objects. See `Interfaces.md`.

@@ -70,9 +70,19 @@ struct PipeWireNode : Object {
     auto lock = std::lock_guard(obj->mutex);
     return obj->mute;
   }
-  void OnTurnOn() { obj->SetMute(true); }
-  void OnTurnOff() { obj->SetMute(false); }
+  static constexpr int TurnOnIdx() { return SlotOf(mute_on_tbl); }
+  static constexpr int TurnOffIdx() { return SlotOf(mute_off_tbl); }
   DEF_END(muted);
+
+  DEF_INTERFACE(PipeWireNode, BasicCommand, mute_on, "Mute on")
+  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  void OnRun() { obj->SetMute(true); }
+  DEF_END(mute_on);
+
+  DEF_INTERFACE(PipeWireNode, BasicCommand, mute_off, "Mute off")
+  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  void OnRun() { obj->SetMute(false); }
+  DEF_END(mute_off);
 
   DEF_INTERFACE(PipeWireNode, Scalar, level, "Volume")
   double OnGet() {
@@ -88,7 +98,8 @@ struct PipeWireNode : Object {
   void OnSet(StrView name) { obj->SetNodeName(name); }
   DEF_END(name_text);
 
-  INTERFACES(in_stream_tbl, out_stream_tbl, muted_tbl, level_tbl, name_text_tbl);
+  INTERFACES(in_stream_tbl, out_stream_tbl, muted_tbl, mute_on_tbl, mute_off_tbl, level_tbl,
+             name_text_tbl);
 
   PipeWireNode() = default;
   PipeWireNode(const PipeWireNode& o)

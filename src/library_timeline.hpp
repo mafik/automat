@@ -41,13 +41,24 @@ struct TrackBase : Object {
 struct OnOffTrack : TrackBase {
   time::Duration on_at = time::kDurationGuard;
 
+  static constexpr int kTurnOnSlot = 3;
+  static constexpr int kTurnOffSlot = 4;
+
   DEF_INTERFACE(OnOffTrack, OnOff, on_off, "On/Off")
   bool IsOn() const;
-  void OnTurnOn() {}
-  void OnTurnOff() {}
+  static constexpr int TurnOnIdx() { return kTurnOnSlot; }
+  static constexpr int TurnOffIdx() { return kTurnOffSlot; }
   DEF_END(on_off);
 
-  OnOffTrack(Str name) : TrackBase(std::move(name), {&on_off_tbl}) {}
+  DEF_INTERFACE(OnOffTrack, BasicCommand, turn_on, "Turn on")
+  void OnRun() {}
+  DEF_END(turn_on);
+
+  DEF_INTERFACE(OnOffTrack, BasicCommand, turn_off, "Turn off")
+  void OnRun() {}
+  DEF_END(turn_off);
+
+  OnOffTrack(Str name) : TrackBase(std::move(name), {&on_off_tbl, &turn_on_tbl, &turn_off_tbl}) {}
   string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;

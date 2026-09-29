@@ -1117,8 +1117,7 @@ struct MuteZone : ui::ActionZone {
     if (trigger != ui::PointerButton::Left || !face.has_mute_) return {};
     auto node = face.LockObject<PipeWireNode>();
     if (!node) return {};
-    auto& muted = PipeWireNode::muted_tbl;
-    return Interface(*node, face.mute_ ? muted.turn_off : muted.turn_on);
+    return face.mute_ ? node->mute_off.Bind() : node->mute_on.Bind();
   }
 };
 

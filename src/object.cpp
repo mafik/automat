@@ -404,12 +404,12 @@ Interface Object::InterfaceFromIdx(int idx) {
   return Interface(*this, *table);
 }
 
-int Object::IndexOf(const Interface::Table* table) {
+int Object::InterfaceIdx(const Interface::Table* table) {
   if (table == nullptr) return 0;
-  if (int idx = toc.IndexOf(table)) return idx;
-  int global_idx = ToC(global_toc).IndexOf(table);
-  assert(global_idx != 0);
-  return -global_idx;
+  if (int slot = toc.SlotOf(table)) return slot;
+  int global_slot = ToC(global_toc).SlotOf(table);
+  assert(global_slot != 0);
+  return -global_slot;
 }
 
 Interface Object::InterfaceFromName(StrView needle) {

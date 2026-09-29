@@ -74,17 +74,25 @@ struct Lamp : Object {
 
   DEF_INTERFACE(Lamp, OnOff, on_off, "On/Off")
   bool IsOn() const { return obj->on; }
-  void OnTurnOn() {
+  static constexpr int TurnOnIdx() { return SlotOf(switch_on_tbl); }
+  static constexpr int TurnOffIdx() { return SlotOf(switch_off_tbl); }
+  DEF_END(on_off);
+
+  DEF_INTERFACE(Lamp, BasicCommand, switch_on, "Switch on")
+  void OnRun() {
     obj->on = true;
     obj->turned_on.release();
   }
-  void OnTurnOff() {
+  DEF_END(switch_on);
+
+  DEF_INTERFACE(Lamp, BasicCommand, switch_off, "Switch off")
+  void OnRun() {
     obj->on = false;
     obj->turned_off.release();
   }
-  DEF_END(on_off);
+  DEF_END(switch_off);
 
-  INTERFACES(on_off_tbl);
+  INTERFACES(on_off_tbl, switch_on_tbl, switch_off_tbl);
   Ptr<Object> Clone() const override { return MAKE_PTR(Lamp); }
 };
 

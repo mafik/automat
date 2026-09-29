@@ -14,13 +14,36 @@ struct Command : OnOff {
 
     bool schedules_next = true;
 
-    constexpr Table(StrView name) : OnOff::Table(name, Interface::kCommand) {
+    BasicCommand::Table turn_on;
+    BasicCommand::Table turn_off;
+
+    constexpr Table(StrView name)
+        : OnOff::Table(name, Interface::kCommand), turn_on("Turn on"), turn_off("Turn off") {
+      fill_menu = [](Interface self, Menu& menu) {
+        Syncable::Table::DefaultFillMenu(self, menu);
+        auto command = cast<Command>(self);
+        menu.Place(ui::Dir::N,
+                   Interface(self.object_ptr,
+                             command.IsOn() ? &command.table->turn_off : &command.table->turn_on));
+      };
       on_idle = [](Syncable self) { cast<Command>(self).ContinueIfWaiting(); };
+      turn_on.activate = [](Interface self, ui::Pointer& pointer,
+                            automat::Toy*) -> std::unique_ptr<Action> {
+        Command(self.object_ptr, OUTER_PTR(Command::Table, turn_on, self.table_ptr)).TurnOn();
+        return std::make_unique<EmptyAction>(pointer);
+      };
+      turn_off.activate = [](Interface self, ui::Pointer& pointer,
+                             automat::Toy*) -> std::unique_ptr<Action> {
+        Command(self.object_ptr, OUTER_PTR(Command::Table, turn_off, self.table_ptr)).TurnOff();
+        return std::make_unique<EmptyAction>(pointer);
+      };
     }
 
     template <typename ImplT>
     constexpr void FillFrom() {
       struct FullImpl : ImplT {
+        static constexpr int TurnOnIdx() { return 0; }
+        static constexpr int TurnOffIdx() { return 0; }
         bool IsOn() const { return this->IsRunning(); }
         void OnTurnOn() {
           if constexpr (requires(ImplT& i) { i.OnRun(); }) {
@@ -34,6 +57,9 @@ struct Command : OnOff {
         }
       };
       OnOff::Table::FillFrom<FullImpl>();
+      on_turn_on = [](OnOff self) { static_cast<FullImpl&>(self).OnTurnOn(); };
+      on_turn_off = [](OnOff self) { static_cast<FullImpl&>(self).OnTurnOff(); };
+      turn_on.cursor = turn_off.cursor = cursor;
       if constexpr (requires { ImplT::kSchedulesNext; }) schedules_next = ImplT::kSchedulesNext;
       if constexpr (requires(ImplT& i) { i.OnCancel(); })
         on_cancel = [](Command self) { static_cast<ImplT&>(self).OnCancel(); };

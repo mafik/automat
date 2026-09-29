@@ -39,14 +39,24 @@ interfaces, and the widgets only map triggers to those interfaces:
   clone under the toy it receives, which is why the toolbar's `PrototypeButton` and the
   `ShelfButton` are Toys of the prototype they display, and `pick` places the card's toy at the
   front of the deck.
-- Sub-options of an interface are tables nested inside its table (`sync` and `unsync` in
-  `Syncable::Table`, `turn_on` and `turn_off` in `OnOff::Table`, all four BasicCommand tables). The
-  interface lays them out itself: `fill_menu` in its table places them in the menu. A derived table
-  calls the filler of its base first and then places its own: `Syncable::Table::DefaultFillMenu`
-  (src/sync.cpp) places `sync` at E and `unsync` at W while synced, and the OnOff table
-  (src/on_off.hpp) calls it and then places `turn_on` or `turn_off` by state at N. The primary
-  action stays in `activate` (an OnOff toggles); an interface without `activate` opens its
-  sub-options when activated.
+- Sub-options of an interface are either tables nested inside its table (`sync` and `unsync` in
+  `Syncable::Table`, `turn_on` and `turn_off` in `Command::Table`, all four BasicCommand tables)
+  or other interfaces of the same object, named by interface index (`Object::InterfaceFromIdx`,
+  src/object.hpp). An `OnOff::Table` holds `turn_on_idx` and `turn_off_idx`, the interface indices
+  of two BasicCommands that the object's class declares next to its OnOff (HotKey's `enable` and
+  `disable`, src/library_hotkey.hpp), so each class names its own on and off commands. `TurnOn`
+  and `TurnOff` run the `OnRun` of the BasicCommand at the matching index on the object and on
+  every synced peer. Activated from a menu, the BasicCommand runs like any other BasicCommand and
+  changes only its own object. The indices are computed at compile time by `SlotOf`, which
+  `INTERFACES()` defines in the class (src/interface.hpp), so the OnOff table stays
+  constant-initialized; `OnOffTrack`, whose table of contents is built at run time, states its
+  slots as constants. The interface lays its sub-options out itself: `fill_menu` in its table
+  places them in the menu. A derived table calls the filler of its base first and then places its
+  own: `Syncable::Table::DefaultFillMenu` (src/sync.cpp) places `sync` at E and `unsync` at W while
+  synced, the OnOff table (src/on_off.hpp) calls it and then places the interface at `turn_on_idx`
+  or `turn_off_idx` by state at N, and the Command table (src/command.hpp) calls it and then places
+  its nested `turn_on` or `turn_off` by state at N. The primary action stays in `activate` (an OnOff
+  toggles); an interface without `activate` opens its sub-options when activated.
 - Parameters: an enum-valued option is one table per value (Timer `next_range` and
   `prev_range`); an indexed or continuous one is derived from the pointer position and the Toy
   inside `OnActivate`.
@@ -153,7 +163,7 @@ needs to know the final shape, because the sectors follow from the final list.
 A node that only groups other options is a table of kind `kMenu`, made by `MenuTable(name,
 fill_menu)` (src/interface.hpp): it has `fill_menu` and a name, but no `activate`, no state and no
 methods, so no cast accepts it and `MakeController` returns nothing for it. The Object type that
-offers such a table lists it in `INTERFACES()`, so that each menu has an index in the object's table
+offers such a table lists it in `INTERFACES()`, so that each menu has a slot in the object's table
 of contents (`Object::toc`, src/object.hpp) like the object's other interfaces: `Camera` lists the
 camera menu (src/root_widget.cpp), `ClientWindow` lists the decoration menu (src/window_frame.cpp)
 for the X11, Wayland and Windows window objects, `BetaShelf` lists the shelf categories
@@ -176,8 +186,9 @@ Three hierarchies meet in a menu and must not compete for directions:
   lies below.
 
 Conventions: S is the parent, NW is destructive, N is the primary action. Availability may vary with
-state (an OnOff places `turn_on` or `turn_off` at N depending on whether it is on), the meaning of
-a slot may not. Sub-menus opened from an interface's sub-options are leaves and reserve no S.
+state (an OnOff places the BasicCommand at `turn_on_idx` or at `turn_off_idx` at N depending on
+whether it is on), the meaning of a slot may not. Sub-menus opened from an interface's sub-options
+are leaves and reserve no S.
 
 The generic layer provides only the slots that mean the same on every object. `ObjectToy::FillMenu`
 (src/object.cpp) places the object's first Command, or `kThisIsFine` while the object shows an error, at

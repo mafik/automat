@@ -158,8 +158,7 @@ struct Object : public ReferenceCounted {
   // Visits all interfaces offered by this object (& possibly its sub-objects).
   virtual LoopControl Interfaces(const std::function<LoopControl(Interface)>& cb) {
     for (auto* tab : *toc) {
-      auto then = cb(Interface(*this, *tab));
-      if (then == LoopControl::Break) return then;
+      RETURN_ON_BREAK(cb(Interface(*this, *tab)));
     }
     return LoopControl::Continue;
   }

@@ -1911,9 +1911,9 @@ std::unique_ptr<ObjectToy> Timeline::MakeToy(ui::Widget* parent) {
 }
 
 LoopControl Timeline::Interfaces(const function<LoopControl(Interface)>& cb) {
-  if (LoopControl::Break == Object::Interfaces(cb)) return LoopControl::Break;
+  RETURN_ON_BREAK(Object::Interfaces(cb));
   for (auto& track : tracks) {
-    if (LoopControl::Break == cb(Interface(*track, track->arg_table))) return LoopControl::Break;
+    RETURN_ON_BREAK(cb(Interface(*track, track->arg_table)));
   }
   return LoopControl::Continue;
 }

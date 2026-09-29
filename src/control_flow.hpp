@@ -9,6 +9,9 @@ enum class LoopControl : char {
   Break = 1,     // Stop iteration immediately.
 };
 
+#define RETURN_ON_BREAK(test) \
+  if (LoopControl::Break == test) return LoopControl::Break;
+
 // Mechanism for controlling various search loops.
 enum class ControlFlow : char {
   Continue = 0,  // Continue the search but don't visit the children of the current element.

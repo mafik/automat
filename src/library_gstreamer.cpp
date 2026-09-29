@@ -252,12 +252,12 @@ void GStreamerElement::InitPorts() {
 }
 
 LoopControl GStreamerElement::Interfaces(const std::function<LoopControl(Interface)>& cb) {
-  if (Object::Interfaces(cb) == LoopControl::Break) return LoopControl::Break;
+  RETURN_ON_BREAK(Object::Interfaces(cb));
   for (int i = 0; i < n_extra_out; ++i) {
-    if (cb(Interface(*this, extra_out[i].table)) == LoopControl::Break) return LoopControl::Break;
+    RETURN_ON_BREAK(cb(Interface(*this, extra_out[i].table)));
   }
   for (int i = 0; i < n_extra_in; ++i) {
-    if (cb(Interface(*this, extra_in[i].table)) == LoopControl::Break) return LoopControl::Break;
+    RETURN_ON_BREAK(cb(Interface(*this, extra_in[i].table)));
   }
   return LoopControl::Continue;
 }

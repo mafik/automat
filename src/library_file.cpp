@@ -171,7 +171,7 @@ File::~File() {
 }
 
 LoopControl File::Interfaces(const std::function<LoopControl(Interface)>& cb) {
-  if (IsImage() && cb(image_provider.Bind()) == LoopControl::Break) return LoopControl::Break;
+  if (IsImage()) RETURN_ON_BREAK(cb(image_provider.Bind()));
   return Object::Interfaces(cb);
 }
 

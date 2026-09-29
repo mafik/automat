@@ -32,6 +32,7 @@
 #include "argument.hpp"
 #include "automat.hpp"
 #include "color.hpp"
+#include "control_flow.hpp"
 #include "embedded.hpp"
 #include "font.hpp"
 #include "hex.hpp"
@@ -188,16 +189,16 @@ static Assembler* FindOrCreateAssembler(Object& start) {
 }
 
 LoopControl Instruction::Interfaces(const std::function<LoopControl(Interface)>& cb) {
-  if (LoopControl::Break == Object::Interfaces(cb)) return LoopControl::Break;
+  RETURN_ON_BREAK(Object::Interfaces(cb));
   auto opcode = mc_inst.getOpcode();
   auto& assembler_info = LLVM_Assembler::Get();
   auto& info = assembler_info.mc_instr_info->get(opcode);
   bool is_terminal = (opcode == X86::JMP_1 || opcode == X86::JMP_4 || info.isReturn());
   if (!is_terminal) {
-    if (LoopControl::Break == cb(next.Bind())) return LoopControl::Break;
+    RETURN_ON_BREAK(cb(next.Bind()));
   }
   if (info.isBranch() || info.isCall()) {
-    if (LoopControl::Break == cb(jump_arg.Bind())) return LoopControl::Break;
+    RETURN_ON_BREAK(cb(jump_arg.Bind()));
   }
   if (auto* as = FindAssembler(*this)) {
     return cb(as->running.Bind());

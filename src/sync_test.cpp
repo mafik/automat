@@ -252,7 +252,7 @@ TEST_F(SyncTest, CompletionCancelsCommandsTurnsOffOnOffsAndContinues) {
   gear->FullSync(other->run.Bind());
   gear->FullSync(lamp->on_off.Bind());
 
-  RunCascade(AcquireLocked(job->run.Bind()));
+  RunLoop(AcquireLocked(job->run.Bind()));
   EXPECT_TRUE(job->is_running);
   EXPECT_TRUE(other->is_running);
   EXPECT_TRUE(lamp->on);
@@ -270,7 +270,7 @@ TEST_F(SyncTest, InstantCommandCancelsTheJobItStarts) {
   gear->FullSync(step->run.Bind());
   gear->FullSync(job->run.Bind());
 
-  RunCascade(AcquireLocked(step->run.Bind()));
+  RunLoop(AcquireLocked(step->run.Bind()));
   EXPECT_TRUE(step->ran.try_acquire_for(0s));
   EXPECT_TRUE(job->began.try_acquire_for(0s));
   EXPECT_TRUE(job->cancelled.try_acquire_for(0s));

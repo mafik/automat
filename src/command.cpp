@@ -44,7 +44,7 @@ void Command::Done() const {
   if (auto next = NextCommand()) next.ScheduleRun();
 }
 
-void RunCascade(Locked<Command> cmd) {
+void RunLoop(Locked<Command> cmd) {
   while (cmd) cmd = cmd.Run();
 }
 

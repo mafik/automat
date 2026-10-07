@@ -47,14 +47,14 @@ struct OnOff : Command {
   bool IsOn() const { return table->is_on(*this); }
 
   void TurnOn() const {
-    RunCascade(AcquireLocked(object_ptr->InterfaceFromIdx<Command>(table->turn_on_idx)));
+    RunLoop(AcquireLocked(object_ptr->InterfaceFromIdx<Command>(table->turn_on_idx)));
   }
 
   void TurnOff() const {
-    RunCascade(AcquireLocked(object_ptr->InterfaceFromIdx<Command>(table->turn_off_idx)));
+    RunLoop(AcquireLocked(object_ptr->InterfaceFromIdx<Command>(table->turn_off_idx)));
   }
 
-  void Toggle() const { RunCascade(AcquireLocked<Command>(*this)); }
+  void Toggle() const { RunLoop(AcquireLocked<Command>(*this)); }
 
   void NotifyTurnedOn() const {
     if (auto suspend = Suspend(*object_ptr)) TurnOn();

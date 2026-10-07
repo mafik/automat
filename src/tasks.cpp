@@ -205,7 +205,7 @@ void RunTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("RunTask");
   auto object = target.lock();
   if (!object) return;
-  RunCascade(AdoptLocked(Command(object.Release(), cast<Command::Table>(command))));
+  RunLoop(AdoptLocked(Command(object.Release(), cast<Command::Table>(command))));
 }
 
 std::string UpdateTask::Format() { return f("UpdateTask({}, {})", Name(target), Name(updated)); }

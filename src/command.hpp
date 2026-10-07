@@ -70,7 +70,7 @@ struct Command : Interface {
   };
 };
 
-void RunCascade(Locked<Command>);
+void RunLoop(Locked<Command>);
 
 extern Command::Table kThisIsFine;
 extern Interface::Table kRun;

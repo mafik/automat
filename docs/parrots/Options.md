@@ -28,7 +28,7 @@ commands as interfaces, and the widgets only map triggers to those interfaces:
   so that a Command that works for a long time never blocks the UI thread (an Instruction's `run`
   executes machine code until the code exits, src/library_instruction.hpp); a command whose
   activation is a gesture overrides it with `OnActivate` and has no `OnRun` (`kSplice` in
-  src/library_timeline.cpp). `Command::Run` returns the next Command. `RunCascade`
+  src/library_timeline.cpp). `Command::Run` returns the next Command. `RunLoop`
   (src/command.cpp) runs a Command and then the returned Commands one after another until one
   returns nothing. `RunTask::OnExecute` (src/tasks.cpp) runs a scheduled Command through it, so a
   chain of synchronous commands runs within one task. When `OnRun` returns nothing, the generated
@@ -46,7 +46,7 @@ commands as interfaces, and the widgets only map triggers to those interfaces:
   Its `on_run` (`OnOff::Table::DefaultOnRun`, src/on_off.cpp) does not change the object. It
   returns the Command at `turn_off_idx` while the object is on and the Command at `turn_on_idx`
   while it is off, so running an OnOff toggles the object through that Command, and the run
-  continues with the next Command of that Command. `Toggle` runs the OnOff through `RunCascade`,
+  continues with the next Command of that Command. `Toggle` runs the OnOff through `RunLoop`,
   and `TurnOn` and `TurnOff` run the Command at the matching index the same way, on the calling
   thread. Their callers are an object's own Commands (the Switch's `flip`), the loading of saved
   state and the OnOff track of a Timeline. `NotifyTurnedOn` and `NotifyTurnedOff` tell the synced

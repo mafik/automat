@@ -34,7 +34,6 @@
 #include "prototypes.hpp"
 #include "ptr.hpp"
 #include "renderer.hpp"
-#include "sync.hpp"
 #include "textures.hpp"
 #include "thread_name.hpp"
 #include "time.hpp"
@@ -575,20 +574,21 @@ std::unique_ptr<Action> Camera::right_Impl::OnActivate(Pointer& p, automat::Toy*
 
 constinit Command::Table kDragCamera = [] {
   Command::Table t("Drag camera");
-  t.activate = [](Interface, Pointer& pointer, Toy*) -> std::unique_ptr<Action> {
+  t.activate = [](Span<Interface>, Pointer& pointer, Toy*) -> std::unique_ptr<Action> {
     return std::make_unique<DragCameraAction>(pointer, pointer.root_widget);
   };
   return t;
 }();
 
-constinit Interface::Table kCameraMenu = MenuTable("Camera", [](Interface self, Menu& menu) {
-  using enum Dir;
-  auto& camera = static_cast<Camera&>(*self.object_ptr);
-  menu.Place(N, camera.up.Bind());
-  menu.Place(S, camera.down.Bind());
-  menu.Place(W, camera.left.Bind());
-  menu.Place(E, camera.right.Bind());
-});
+constinit Interface::Table kCameraMenu =
+    MenuTable("Camera", [](Interface self, Interface::Table&, Menu& menu) {
+      using enum Dir;
+      auto& camera = static_cast<Camera&>(*self.object_ptr);
+      menu.Place(N, camera.up.Bind());
+      menu.Place(S, camera.down.Bind());
+      menu.Place(W, camera.left.Bind());
+      menu.Place(E, camera.right.Bind());
+    });
 
 Interface RootWidget::FindOption(Pointer&, ActionTrigger trigger) {
   if (trigger == PointerButton::Middle) return Interface(*camera, kDragCamera);

@@ -142,6 +142,37 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
                 d.Skip();
               }
             }
+          } else if (field == "hooks") {
+            // (BEGIN) TODO: fix hook serialization
+            for (auto i : ArrayView(d, status)) {
+              Str gear_name, interface_name;
+              bool sink = true, source = true;
+              for (auto& key : ObjectView(d, status)) {
+                if (key == "gear") {
+                  d.Get(gear_name, status);
+                } else if (key == "interface") {
+                  d.Get(interface_name, status);
+                } else if (key == "sink") {
+                  d.Get(sink, status);
+                } else if (key == "source") {
+                  d.Get(source, status);
+                } else {
+                  d.Skip();
+                }
+              }
+              auto* gear = dynamic_cast<Gear*>(d.LookupObject(gear_name));
+              auto command = dyn_cast<Command>(object->InterfaceFromName(interface_name));
+              if (gear && command && command.object_ptr == object) {
+                if (sink && source) {
+                  gear->FullSync(command);
+                } else if (sink) {
+                  gear->AddSink(command);
+                } else if (source) {
+                  gear->AddSource(command);
+                }
+              }
+            }
+            // (END) TODO: fix hook serialization
           } else if (!object->DeserializeKey(d, field)) {
             d.Skip();  // Unknown field, skip it
           }

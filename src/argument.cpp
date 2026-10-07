@@ -52,12 +52,12 @@ std::unique_ptr<Argument::Toy> Argument::MakeToy(ui::Widget* parent) {
     case Style::Stream:
       return std::make_unique<ui::StreamPipeWidget>(parent, *object_ptr, *table);
     case Style::Belt:
-      return std::make_unique<SyncBelt>(parent, *object_ptr, *cast<Syncable::Table>(table_ptr));
+      return std::make_unique<SyncBelt>(parent, *object_ptr, *table);
   }
   return nullptr;
 }
 
-std::unique_ptr<Action> Argument::Table::DefaultActivate(Interface, ui::Pointer& pointer,
+std::unique_ptr<Action> Argument::Table::DefaultActivate(Span<Interface>, ui::Pointer& pointer,
                                                          automat::Toy* toy) {
   auto* widget = dynamic_cast<ui::ConnectionWidget*>(toy);
   return widget ? std::make_unique<ui::DragConnectionAction>(pointer, *widget) : nullptr;

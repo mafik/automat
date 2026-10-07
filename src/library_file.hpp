@@ -32,9 +32,13 @@ struct File : Object {
   void OnRun() { obj->ToggleFilename(); }
   DEF_END(toggle_filename);
 
+  mutable HeapToC base_toc{2};
+
   File();
   File(const File&);
   ~File() override;
+
+  ToC* BaseToc() const override { return &base_toc; }
 
   StrView Name() const override { return "File"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(File, *this); }

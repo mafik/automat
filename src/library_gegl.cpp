@@ -920,7 +920,9 @@ struct PropScalarTable : Scalar::Table {
       static_cast<GeglOperation&>(*self.object_ptr)
           .SetProp(table.info.name, FormatPropNumber(value, table.info.integer));
     };
-    activate = [](Interface self, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
+    activate = [](Span<Interface> chain, ui::Pointer& pointer,
+                  Toy* toy) -> std::unique_ptr<Action> {
+      Interface self = chain.back();
       auto* widget = dynamic_cast<GeglOperationToy*>(toy);
       if (!widget) return nullptr;
       int index = static_cast<PropScalarTable&>(*self.table_ptr).index;
@@ -934,8 +936,8 @@ struct PropCommandTable : Command::Table {
   PropCommandTable(const PropInfo& info) : Command::Table(""), info(info) {
     name = this->info.name;
     cursor = ui::Cursor::Hand;
-    on_run = [](Command self) -> Locked<Command> {
-      auto& table = static_cast<PropCommandTable&>(*self.table_ptr);
+    on_run = [](Command self, Command::Table& true_self) -> Locked<Command> {
+      auto& table = static_cast<PropCommandTable&>(true_self);
       auto& gegl = static_cast<GeglOperation&>(*self.object_ptr);
       Str value = PropValue(gegl, table.info);
       if (table.info.kind == PropInfo::kBool) {

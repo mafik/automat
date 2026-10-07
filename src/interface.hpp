@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright 2026 Automat Authors
 // SPDX-License-Identifier: MIT
 
+#include <atomic>
 #include <concepts>
 #include <cstdint>
 #include <cstring>
@@ -14,6 +15,7 @@
 #include "control_flow.hpp"
 #include "ptr.hpp"
 #include "str.hpp"
+#include "vec.hpp"
 
 namespace automat {
 
@@ -65,13 +67,13 @@ struct Interface {
     kNextArg,    // sub-kind of InterfaceArgument
     kStreamArg,  // sub-kind of InterfaceArgument; connects to a StreamInput
     kLastInterfaceArgument = kStreamArg,
-    kSyncable,  // also an Argument (via Syncable)
-    kOnOff,     // also a Syncable
-    kLastOnOff = kOnOff,
-    kLastSyncable = kLastOnOff,
-    kLastArgument = kLastSyncable,
+    kSyncArgument,
+    kLastArgument = kSyncArgument,
     // Standalone interfaces
     kCommand,
+    kOnOff,
+    kLastCommand = kOnOff,
+    kSyncable,
     kImageProvider,
     kResizable,
     kStreamInput,
@@ -87,8 +89,8 @@ struct Interface {
     int state_off = 0;  // byte offset from Object* to Interface::State
     StrView name;
     ui::Cursor cursor = {};
-    std::unique_ptr<Action> (*activate)(Interface, ui::Pointer&, Toy*) = nullptr;
-    void (*fill_menu)(Interface, Menu&) = nullptr;
+    std::unique_ptr<Action> (*activate)(Span<Interface>, ui::Pointer&, Toy*) = nullptr;
+    void (*fill_menu)(Interface, Table& true_self, Menu&) = nullptr;
     std::unique_ptr<ui::Widget> (*make_icon)(Interface, ui::Widget* parent) = &DefaultMakeIcon;
 
     constexpr Table(Kind kind, StrView name, int state_off = 0)
@@ -109,24 +111,28 @@ struct Interface {
             requires(ImplT& i, ui::Pointer& p, Toy* t) { i.OnActivate(p, t); },
             "OnActivate must take (ui::Pointer&, automat::Toy*)");
       if constexpr (requires(ImplT& i, ui::Pointer& p, Toy* t) { i.OnActivate(p, t); })
-        activate = [](Interface self, ui::Pointer& p, Toy* t) -> std::unique_ptr<Action> {
-          return static_cast<ImplT&>(self).OnActivate(p, t);
+        activate = [](Span<Interface> chain, ui::Pointer& p, Toy* t) -> std::unique_ptr<Action> {
+          return static_cast<ImplT&>(chain.back()).OnActivate(p, t);
         };
       if constexpr (requires(ImplT& i, ui::Widget* p) { i.OnMakeIcon(p); })
         make_icon = [](Interface self, ui::Widget* p) -> std::unique_ptr<ui::Widget> {
           return static_cast<ImplT&>(self).OnMakeIcon(p);
         };
       if constexpr (requires(ImplT& i, Menu& m) { i.OnFillMenu(m); })
-        fill_menu = [](Interface self, Menu& m) { static_cast<ImplT&>(self).OnFillMenu(m); };
+        fill_menu = [](Interface self, Table&, Menu& m) {
+          static_cast<ImplT&>(self).OnFillMenu(m);
+        };
     }
   };
 
   struct DefBase {
     template <typename T>
     typename T::Bound Bind(this const T& self) {
-      auto* obj = reinterpret_cast<Object*>(reinterpret_cast<char*>(const_cast<T*>(&self)) -
-                                            T::Impl::Offset());
-      return typename T::Bound(*obj, T::tbl);
+      constexpr int slot = T::Impl::Parent::SlotOf(T::tbl);
+      static_assert(slot != 0);
+      auto* obj = reinterpret_cast<decltype(T::Bound::object_ptr)>(
+          reinterpret_cast<char*>(const_cast<T*>(&self)) - T::Impl::Offset());
+      return obj->template InterfaceFromIdx<typename T::Bound>(slot);
     }
 
     // Arrow operator for accessing Bound methods: `def->IsOn()`, `def->TurnOn()`, etc.
@@ -183,7 +189,6 @@ struct Interface {
 
   std::unique_ptr<Action> Activate(ui::Pointer&, Toy* toy = nullptr) const;
   void FillMenu(Menu&) const;
-  std::unique_ptr<Action> OpenMenu(ui::Pointer&, Toy* toy) const;
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) const;
 
   // TODO: make this a Table's function pointer
@@ -192,19 +197,37 @@ struct Interface {
   std::unique_ptr<Action> DragNewController(ui::Pointer&, ui::Widget& birthplace) const;
 };
 
+template <typename T>
+static inline void SafeIncrementTocRefs(T* obj) {
+  if (obj) obj->toc_refs.fetch_add(1, std::memory_order_acquire);
+}
+
+template <typename T>
+static inline void SafeDecrementTocRefs(T* obj) {
+  if (obj) obj->DecrementTocRefs();
+}
+
 // Ref-counted wrapper for bound interface types. Keeps the owner Object alive.
 // Inherits from T so it IS-A T (e.g. Locked<Argument> is an Argument).
-template <typename T>
+template <typename T = Interface>
 struct Locked : T {
   Locked() = default;
-  ~Locked() { SafeDecrementOwningRefs(this->object_ptr); }
-  Locked(const Locked& o) : T(o) { SafeIncrementOwningRefs(this->object_ptr); }
+  ~Locked() {
+    SafeDecrementTocRefs(this->object_ptr);
+    SafeDecrementOwningRefs(this->object_ptr);
+  }
+  Locked(const Locked& o) : T(o) {
+    SafeIncrementOwningRefs(this->object_ptr);
+    SafeIncrementTocRefs(this->object_ptr);
+  }
   Locked(Locked&& o) : T(o) {
     o.object_ptr = nullptr;
     o.table_ptr = nullptr;
   }
   Locked& operator=(const Locked& o) {
     SafeIncrementOwningRefs(o.object_ptr);
+    SafeIncrementTocRefs(o.object_ptr);
+    SafeDecrementTocRefs(this->object_ptr);
     SafeDecrementOwningRefs(this->object_ptr);
     this->object_ptr = o.object_ptr;
     this->table_ptr = o.table_ptr;
@@ -212,6 +235,7 @@ struct Locked : T {
   }
   Locked& operator=(Locked&& o) {
     if (this != &o) {
+      SafeDecrementTocRefs(this->object_ptr);
       SafeDecrementOwningRefs(this->object_ptr);
       this->object_ptr = o.object_ptr;
       this->table_ptr = o.table_ptr;
@@ -227,12 +251,22 @@ struct Locked : T {
 
   template <typename U>
   friend Locked<U> AdoptLocked(U bound);
+
+  template <typename To, typename From>
+  friend Locked<To> cast(Locked<From>&& from);
 };
 
 // Construct a Locked<T> that adopts an existing owning ref (caller has already incremented).
 template <typename T>
 Locked<T> AdoptLocked(T bound) {
+  SafeIncrementTocRefs(bound.object_ptr);
   return Locked<T>(bound, {});
+}
+
+template <typename T>
+Locked<T> AcquireLocked(T bound) {
+  bound.object_ptr->IncrementOwningRefs();
+  return AdoptLocked(bound);
 }
 
 template <typename To, typename From>
@@ -241,7 +275,7 @@ template <typename To, typename From>
   To bound(from.object_ptr, static_cast<typename To::Table*>(from.table_ptr));
   from.object_ptr = nullptr;
   from.table_ptr = nullptr;
-  return AdoptLocked(bound);
+  return Locked<To>(bound, {});
 }
 
 template <typename To, typename From>
@@ -250,65 +284,89 @@ template <typename To, typename From>
   return cast<To>(std::move(from));
 }
 
-template <typename T = Interface>
-struct Linked : private T {
-  Linked() = default;
-  ~Linked() { SafeDecrementWeakRefs(this->object_ptr); }
-  Linked(std::nullptr_t) {}
-  Linked(T bound) : T(bound) { SafeIncrementWeakRefs(this->object_ptr); }
+std::unique_ptr<Action> Activate(Vec<Locked<>> chain, ui::Pointer&, Toy*);
 
-  template <typename U>
-  Linked(const WeakPtr<U>& owner, typename T::Table* table) : T(owner.GetUnsafe(), table) {
-    SafeIncrementWeakRefs(this->object_ptr);
+template <typename T = Interface>
+struct Linked {
+  decltype(T::object_ptr) object_ptr = nullptr;
+  int toc_idx = 0;
+
+  Linked() = default;
+  ~Linked() { SafeDecrementWeakRefs(object_ptr); }
+  Linked(std::nullptr_t) {}
+  Linked(T bound) : object_ptr(bound.object_ptr) {
+    if (object_ptr == nullptr) return;
+    toc_idx = object_ptr->InterfaceIdx(bound.table_ptr);
+    SafeIncrementWeakRefs(object_ptr);
   }
 
-  Linked(const Linked& o) : T(o) { SafeIncrementWeakRefs(this->object_ptr); }
-  Linked(Linked&& o) : T(o) {
+  template <typename U>
+  Linked(const WeakPtr<U>& owner, typename T::Table* table) : object_ptr(owner.GetUnsafe()) {
+    if (object_ptr == nullptr) return;
+    toc_idx = object_ptr->InterfaceIdx(table);
+    SafeIncrementWeakRefs(object_ptr);
+  }
+
+  Linked(const Linked& o) : object_ptr(o.object_ptr), toc_idx(o.toc_idx) {
+    SafeIncrementWeakRefs(object_ptr);
+  }
+  Linked(Linked&& o) : object_ptr(o.object_ptr), toc_idx(o.toc_idx) {
     o.object_ptr = nullptr;
-    o.table_ptr = nullptr;
+    o.toc_idx = 0;
   }
   Linked& operator=(const Linked& o) {
     SafeIncrementWeakRefs(o.object_ptr);
-    SafeDecrementWeakRefs(this->object_ptr);
-    this->object_ptr = o.object_ptr;
-    this->table_ptr = o.table_ptr;
+    SafeDecrementWeakRefs(object_ptr);
+    object_ptr = o.object_ptr;
+    toc_idx = o.toc_idx;
     return *this;
   }
   Linked& operator=(Linked&& o) {
     if (this != &o) {
-      SafeDecrementWeakRefs(this->object_ptr);
-      this->object_ptr = o.object_ptr;
-      this->table_ptr = o.table_ptr;
+      SafeDecrementWeakRefs(object_ptr);
+      object_ptr = o.object_ptr;
+      toc_idx = o.toc_idx;
       o.object_ptr = nullptr;
-      o.table_ptr = nullptr;
+      o.toc_idx = 0;
     }
     return *this;
   }
 
   Locked<T> Lock() const {
-    if (this->object_ptr == nullptr) return {};
-    if (!this->object_ptr->IncrementOwningRefsNonZero()) return {};
-    return AdoptLocked(static_cast<const T&>(*this));
+    if (object_ptr == nullptr) return {};
+    if (!object_ptr->IncrementOwningRefsNonZero()) return {};
+    {
+      typename std::remove_pointer_t<decltype(T::object_ptr)>::TocGuard guard(*object_ptr);
+      Interface iface = object_ptr->InterfaceFromIdx(toc_idx);
+      if (iface.has_object()) {
+        return AdoptLocked(T(iface.object_ptr, static_cast<typename T::Table*>(iface.table_ptr)));
+      }
+    }
+    SafeDecrementOwningRefs(object_ptr);
+    return {};
   }
 
-  Interface Unsafe() const { return static_cast<const Interface&>(*this); }
+  Interface Unsafe() const {
+    if (IsExpired()) return {};
+    return object_ptr->InterfaceFromIdx(toc_idx);
+  }
 
   bool IsExpired() const {
-    return this->object_ptr == nullptr ||
-           this->object_ptr->owning_refs.load(std::memory_order_relaxed) == 0;
+    return object_ptr == nullptr || object_ptr->owning_refs.load(std::memory_order_relaxed) == 0;
   }
 
   void Reset() {
-    SafeDecrementWeakRefs(this->object_ptr);
-    this->object_ptr = nullptr;
-    this->table_ptr = nullptr;
+    SafeDecrementWeakRefs(object_ptr);
+    object_ptr = nullptr;
+    toc_idx = 0;
   }
 
-  explicit operator bool() const { return this->object_ptr && this->table_ptr; }
+  explicit operator bool() const { return object_ptr && toc_idx; }
   bool operator==(const Linked&) const = default;
 };
 
-constexpr Interface::Table MenuTable(StrView name, void (*fill_menu)(Interface, Menu&)) {
+constexpr Interface::Table MenuTable(StrView name,
+                                     void (*fill_menu)(Interface, Interface::Table&, Menu&)) {
   Interface::Table t(Interface::kMenu, name);
   t.fill_menu = fill_menu;
   return t;
@@ -320,29 +378,13 @@ Str ToStr(Interface iface);
 //
 // WARNING: Indexing is 1-based! Index 0 is reserved for "whole-object" linking.
 struct ToC {
-  struct Data {
-    int count;
-    bool on_heap;
-    Interface::Table* array[];
-  };
+  virtual ~ToC() = default;
+  std::span<Interface::Table*> array;
 
-  ToC(Data& data) : data(&data) {}
-  ToC(const ToC&);
-  ~ToC() {
-    if (data->on_heap) ::operator delete(data);
-  }
-
-  ToC& operator=(ToC other) {
-    std::swap(data, other.data);
-    return *this;
-  }
-
-  static ToC MakeOnHeap(int size);
-
-  int size() const { return data->count; }
-  Interface::Table** begin() { return &data->array[0]; }
-  Interface::Table** end() { return &data->array[data->count]; }
-  Interface::Table*& operator[](int i) { return data->array[i - 1]; }
+  int size() { return array.size(); }
+  Interface::Table** begin() { return &array[0]; }
+  Interface::Table** end() { return &array[array.size()]; }
+  Interface::Table*& operator[](int i) { return array[i - 1]; }
 
   int SlotOf(const Interface::Table* table) {
     for (int i = 1; i <= size(); ++i) {
@@ -350,15 +392,24 @@ struct ToC {
     }
     return 0;
   }
-
- private:
-  Data* data;
 };
 
-static_assert(sizeof(ToC) == 8);
+template <auto&... tables>
+struct StaticToC : ToC {
+  Interface::Table* buffer[sizeof...(tables)] = {&tables...};
+  constexpr StaticToC() { array = std::span<Interface::Table*>(buffer, sizeof...(tables)); }
+};
+
+struct HeapToC : ToC {
+  std::vector<Interface::Table*> buffer;
+  explicit HeapToC(int size) : buffer(size) { array = buffer; }
+  HeapToC(const HeapToC& other) : buffer(other.buffer) { array = buffer; }
+};
+
+static_assert(sizeof(ToC) == 24);
 
 template <auto&... tables>
-inline ToC::Data toc_of = {sizeof...(tables), false, {&tables...}};
+inline StaticToC<tables...> toc_of = {};
 
 template <auto&... tables>
 constexpr int SlotOf(const Interface::Table& table) {
@@ -408,7 +459,9 @@ constexpr int SlotOf(const Interface::Table& table) {
   static constexpr int SlotOf(const ::automat::Interface::Table& table) { \
     return ::automat::SlotOf<__VA_ARGS__>(table);                         \
   }                                                                       \
-  NO_UNIQUE_ADDRESS ::automat::SetToC toc_initializer { this, ::automat::toc_of<__VA_ARGS__> }
+  static constexpr ToC& base_toc = ::automat::toc_of<__VA_ARGS__>;        \
+  ToC* BaseToc() const override { return &base_toc; }                     \
+  NO_UNIQUE_ADDRESS ::automat::SetToc toc_initializer { this, base_toc }
 
 // Helper for implementing Interfaces within objects. See `Interfaces.md`.
 //
@@ -429,6 +482,7 @@ constexpr int SlotOf(const Interface::Table& table) {
 #define DEF_INTERFACE(ParentType, InterfaceType, member_name, display_name)        \
   struct member_name##_Impl : InterfaceType {                                      \
     using IFaceT = InterfaceType;                                                  \
+    using Parent = ParentType;                                                     \
     static constexpr StrView kName = display_name;                                 \
     static constexpr int Offset() { return offsetof(ParentType, member_name); }    \
     struct ObjRef {                                                                \

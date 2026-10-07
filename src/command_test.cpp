@@ -183,14 +183,25 @@ TEST_F(CommandTest, OnOffOverRunAndCancelTogglesTheRunningFlag) {
   EXPECT_FALSE(job->running->IsOn());
 }
 
-TEST_F(CommandTest, OnOffSchedulesTheNextCommand) {
+TEST_F(CommandTest, TurnOnRunsTheCommandAndItsNextOnTheCallingThread) {
   auto lamp = MAKE_PTR(Lamp);
   auto step = MAKE_PTR(Step);
   lamp->next->Connect(step->run.Bind());
 
   lamp->on_off->TurnOn();
   EXPECT_TRUE(lamp->on);
+  ASSERT_TRUE(step->ran.try_acquire_for(0s));
+  EXPECT_EQ(step->ran_on, std::this_thread::get_id());
+}
+
+TEST_F(CommandTest, ScheduledOnOffTogglesOnAWorker) {
+  auto lamp = MAKE_PTR(Lamp);
+  auto step = MAKE_PTR(Step);
+  lamp->next->Connect(step->run.Bind());
+
+  lamp->on_off->ScheduleRun();
   ASSERT_TRUE(step->ran.try_acquire_for(5s));
+  EXPECT_TRUE(lamp->on);
   EXPECT_NE(step->ran_on, std::this_thread::get_id());
 }
 

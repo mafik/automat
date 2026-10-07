@@ -248,8 +248,9 @@ void TextFieldBase::KeyUp(Caret&, Key) {}
 
 namespace automat {
 
-std::unique_ptr<Action> Text::Table::DefaultActivate(Interface self, ui::Pointer& pointer,
+std::unique_ptr<Action> Text::Table::DefaultActivate(Span<Interface> chain, ui::Pointer& pointer,
                                                      Toy* toy) {
+  Interface self = chain.back();
   auto* field = toy ? dynamic_cast<ui::TextFieldBase*>(toy->FindWidget(self.table_ptr)) : nullptr;
   if (!field) return nullptr;
   return std::make_unique<ui::TextSelectAction>(pointer, *field);

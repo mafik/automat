@@ -1134,8 +1134,8 @@ struct RegisterFilterTable : Command::Table {
         label((read ? "Read " : "Write ") + kRegisters[reg].name) {
     name = label;
     cursor = ui::Cursor::Hand;
-    on_run = [](Command self) -> Locked<Command> {
-      auto& table = static_cast<RegisterFilterTable&>(*self.table_ptr);
+    on_run = [](Command self, Command::Table& true_self) -> Locked<Command> {
+      auto& table = static_cast<RegisterFilterTable&>(true_self);
       auto& library = static_cast<InstructionLibrary&>(*self.object_ptr);
       auto lock = std::lock_guard(library.mutex);
       auto& queue = table.read ? library.read_from : library.write_to;
@@ -1167,8 +1167,8 @@ struct CategoryTable : Command::Table {
         category(category),
         group(group) {
     cursor = ui::Cursor::Hand;
-    on_run = [](Command self) -> Locked<Command> {
-      auto& table = static_cast<CategoryTable&>(*self.table_ptr);
+    on_run = [](Command self, Command::Table& true_self) -> Locked<Command> {
+      auto& table = static_cast<CategoryTable&>(true_self);
       auto& library = static_cast<InstructionLibrary&>(*self.object_ptr);
       auto lock = std::lock_guard(library.mutex);
       if (table.group < 0) {

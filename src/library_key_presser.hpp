@@ -4,6 +4,7 @@
 
 #include "base.hpp"
 #include "keyboard.hpp"
+#include "syncable.hpp"
 #include "time.hpp"
 
 namespace automat::library {
@@ -34,6 +35,10 @@ struct KeyPresser : Object, ui::Keylogger {
   bool IsOn() const { return obj->key_pressed; }
   static constexpr int TurnOnIdx() { return SlotOf(press_tbl); }
   static constexpr int TurnOffIdx() { return SlotOf(release_tbl); }
+  static constexpr int SyncableIdx() { return SlotOf(syncable_tbl); }
+  DEF_END(state);
+
+  DEF_INTERFACE(KeyPresser, Syncable, syncable, "Syncable")
   void OnSync() {
     // Prevent monitoring from being started while object is being deserialized.
     if (obj->suspended) {
@@ -47,7 +52,7 @@ struct KeyPresser : Object, ui::Keylogger {
     }
     obj->monitoring->TurnOff();
   }
-  DEF_END(state);
+  DEF_END(syncable);
 
   DEF_INTERFACE(KeyPresser, Command, press, "Press")
   void OnRun() { obj->Press(); }
@@ -75,7 +80,7 @@ struct KeyPresser : Object, ui::Keylogger {
   void SetKey(ui::AnsiKey);
 
   INTERFACES(run_tbl, state_tbl, press_tbl, release_tbl, monitoring_tbl, start_monitoring_tbl,
-             stop_monitoring_tbl);
+             stop_monitoring_tbl, syncable_tbl);
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;

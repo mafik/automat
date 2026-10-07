@@ -22,6 +22,6 @@ struct Menu {
   void Place(ui::Dir dir, Interface option);
 };
 
-std::unique_ptr<Action> MakeMenuAction(ui::Pointer&, const Menu&, Toy* toy);
+std::unique_ptr<Action> MakeMenuAction(ui::Pointer&, const Menu&, Toy* toy, Vec<Locked<>> chain);
 
 }  // namespace automat

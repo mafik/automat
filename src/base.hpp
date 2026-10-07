@@ -28,7 +28,6 @@
 #include "prototypes.hpp"
 #include "ptr.hpp"
 #include "run_button.hpp"
-#include "sync.hpp"
 #include "tasks.hpp"
 #include "widget.hpp"
 
@@ -97,7 +96,7 @@ struct Text : Interface {
     Str (*get)(Text) = nullptr;
     void (*set)(Text, StrView) = nullptr;
 
-    static std::unique_ptr<Action> DefaultActivate(Interface, ui::Pointer&, Toy*);
+    static std::unique_ptr<Action> DefaultActivate(Span<Interface>, ui::Pointer&, Toy*);
 
     constexpr Table(StrView name) : Interface::Table(Interface::kText, name) {
       cursor = ui::Cursor::IBeam;

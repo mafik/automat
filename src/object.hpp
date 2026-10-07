@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
 
+#include <atomic>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -86,6 +87,23 @@ struct Owned : OwnerLink {
   bool operator==(const T* that) const { return ptr == that; }
 };
 
+struct Hook : ToC {
+  ToC* tail = nullptr;
+  std::vector<Interface::Table*> buffer;
+
+  ~Hook();
+
+  // Add this Hook to the Object's hooks stack.
+  //
+  // Caller must ensure that this hook wasn't part of hooks on that object + toc_index before
+  virtual void Attach(Object&, int toc_idx) = 0;
+
+  // Remove this Hook from the Object's hooks stack, returning `toc_idx`
+  //
+  // Caller guarantees that this hook is the last hook for that object.
+  virtual int Detach(Object&) = 0;
+};
+
 // Objects are interactive pieces of data & behavior.
 //
 // Instances of this class provide their logic.
@@ -112,21 +130,26 @@ struct Object : public ReferenceCounted {
   }
 
   SpinLock owners_lock;
+  SpinLock hooks_lock;
+  uint8_t hook_count = 0;
 
-  // Note: 2 bytes of padding here
   OwnerLink* owners = nullptr;
 
   // Lists interfaces offered by this object.
-  //
-  // Lifetime of interface tables is at least as long as this object's.
-  ToC toc = toc_of<>;
+  std::atomic<ToC*> toc = &toc_of<>;
+
+  virtual ToC* BaseToc() const { return &toc_of<>; }
+
+  std::atomic<int> toc_refs = 0;
+
+  std::atomic<ToC*> garbage = nullptr;
 
   // Bump the counter to notify Toys that state has changed.
   void WakeToys() { monitor.fetch_add(1, std::memory_order_relaxed); }
 
   Object() = default;
 
-  Object(const Object& other) : ReferenceCounted(), monitor(0), toc(other.toc) {}
+  Object(const Object& other);
 
   // Create a copy of this object.
   //
@@ -155,9 +178,25 @@ struct Object : public ReferenceCounted {
 
   virtual Container* AsContainer() { return nullptr; }
 
+  void DecrementTocRefs();
+
+  void RemoveHook(Hook&);
+
+  // After base ToC changes, all dependent (Hook) ToCs need to be updated.
+  void ReattachHooks();
+
+  struct TocGuard {
+    Object& object;
+    TocGuard(Object& object) : object(object) {
+      object.toc_refs.fetch_add(1, std::memory_order_acquire);
+    }
+    ~TocGuard() { object.DecrementTocRefs(); }
+  };
+
   // Visits all interfaces offered by this object (& possibly its sub-objects).
   virtual LoopControl Interfaces(const std::function<LoopControl(Interface)>& cb) {
-    for (auto* tab : toc) {
+    TocGuard guard(*this);
+    for (auto* tab : *toc.load(std::memory_order_acquire)) {
       if (tab == nullptr) continue;
       RETURN_ON_BREAK(cb(Interface(*this, *tab)));
     }
@@ -193,6 +232,8 @@ struct Object : public ReferenceCounted {
     return cast<T>(InterfaceFromIdx(idx));
   }
 
+  // Slightly more general version of SlotOf - works by scanning the ToC at run-time (also
+  // global_toc!).
   int InterfaceIdx(const Interface::Table*);
 
   virtual Interface InterfaceFromName(StrView name);
@@ -226,10 +267,22 @@ struct Object : public ReferenceCounted {
   Ptr<Location> HomeLocation();
 };
 
-extern ToC::Data& global_toc;
+extern ToC& global_toc;
 
-struct SetToC {
-  SetToC(Object* object, ToC::Data& toc) { object->toc = toc; }
+struct SetToc {
+  SetToc(Object* object, ToC& toc) { object->toc.store(&toc, std::memory_order_relaxed); }
+};
+
+struct Suspend {
+  Object* const object;
+  Suspend(Object& obj) : object(obj.suspended ? nullptr : &obj) {
+    if (object) object->suspended = true;
+  }
+  Suspend(const Suspend&) = delete;
+  ~Suspend() {
+    if (object) object->suspended = false;
+  }
+  explicit operator bool() const { return object != nullptr; }
 };
 
 std::unique_ptr<Action> PickUp(ui::Pointer&, Location&, Object&);

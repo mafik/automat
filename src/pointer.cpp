@@ -224,7 +224,7 @@ void Pointer::ButtonDown(PointerButton btn) {
     }
     if (action == nullptr && btn == PointerButton::Right) {
       for (Widget* w = hover; w && !action; w = w->parent) {
-        action = w->OpenMenu(*this);
+        action = w->OpenMenu(*this, {});
       }
     }
     if (action) {

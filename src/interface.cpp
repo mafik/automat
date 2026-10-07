@@ -16,29 +16,35 @@
 namespace automat {
 
 std::unique_ptr<Action> Interface::Activate(ui::Pointer& pointer, Toy* toy) const {
-  if (table_ptr == nullptr) {
+  if (object_ptr == nullptr) return nullptr;
+  Vec<Locked<>> chain;
+  chain.push_back(AcquireLocked(*this));
+  return automat::Activate(std::move(chain), pointer, toy);
+}
+
+std::unique_ptr<Action> Activate(Vec<Locked<>> chain, ui::Pointer& pointer, Toy* toy) {
+  Interface option = chain.back();
+  if (option.table_ptr == nullptr) {
     for (ui::Widget* widget = toy; widget; widget = widget->parent) {
       auto* candidate = dynamic_cast<Toy*>(widget);
-      if (candidate && candidate->owner.GetUnsafe() == object_ptr) {
-        return candidate->OpenMenu(pointer);
+      if (candidate && candidate->owner.GetUnsafe() == option.object_ptr) {
+        return candidate->OpenMenu(pointer, std::move(chain));
       }
     }
     return nullptr;
   }
-  if (table_ptr->activate) return table_ptr->activate(*this, pointer, toy);
-  return OpenMenu(pointer, toy);
+  if (option.table_ptr->activate) {
+    Vec<Interface> interfaces(chain.begin(), chain.end());
+    return option.table_ptr->activate(interfaces, pointer, toy);
+  }
+  Menu menu;
+  option.FillMenu(menu);
+  return MakeMenuAction(pointer, menu, toy, std::move(chain));
 }
 
 void Interface::FillMenu(Menu& menu) const {
   if (table_ptr == nullptr || table_ptr->fill_menu == nullptr) return;
-  table_ptr->fill_menu(*this, menu);
-}
-
-std::unique_ptr<Action> Interface::OpenMenu(ui::Pointer& pointer, Toy* toy) const {
-  if (table_ptr == nullptr || table_ptr->fill_menu == nullptr) return nullptr;
-  Menu menu;
-  table_ptr->fill_menu(*this, menu);
-  return MakeMenuAction(pointer, menu, toy);
+  table_ptr->fill_menu(*this, *table_ptr, menu);
 }
 
 std::unique_ptr<ui::Widget> Interface::MakeIcon(ui::Widget* parent) const {
@@ -69,27 +75,6 @@ Str ToStr(Interface iface) {
   auto obj_name = iface.has_object() ? Str(iface.object_ptr->Name()) : "null";
   auto iface_name = iface.has_table() ? Str(iface.Name()) : "null";
   return obj_name + "." + iface_name;
-}
-
-static ToC::Data* AllocateOnHeap(int count) {
-  auto* data = static_cast<ToC::Data*>(
-      ::operator new(sizeof(ToC::Data) + count * sizeof(Interface::Table*)));
-  data->count = count;
-  data->on_heap = true;
-  return data;
-}
-
-ToC::ToC(const ToC& other) : data(other.data) {
-  if (data->on_heap) {
-    data = AllocateOnHeap(other.size());
-    std::copy_n(other.data->array, other.size(), data->array);
-  }
-}
-
-ToC ToC::MakeOnHeap(int size) {
-  auto* data = AllocateOnHeap(size);
-  std::fill_n(data->array, size, nullptr);
-  return ToC(*data);
 }
 
 }  // namespace automat

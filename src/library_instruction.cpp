@@ -189,9 +189,21 @@ static Assembler* FindOrCreateAssembler(Object& start) {
 }
 
 Instruction::Instruction() {
-  toc = ToC::MakeOnHeap(4);
-  toc[1] = &run_tbl;
-  toc[2] = &assembler_arg_tbl;
+  base_toc[1] = &run_tbl;
+  base_toc[2] = &assembler_arg_tbl;
+  toc.store(&base_toc, std::memory_order_relaxed);
+}
+
+Instruction::Instruction(const Instruction& other)
+    : Object(other),
+      Buffer(other),
+      mc_inst(other.mc_inst),
+      assembler_weak(other.assembler_weak),
+      next(other.next),
+      jump_arg(other.jump_arg),
+      base_toc(other.base_toc),
+      imm_type(other.imm_type) {
+  toc.store(&base_toc, std::memory_order_relaxed);
 }
 
 void Instruction::UpdateToC() {
@@ -199,8 +211,9 @@ void Instruction::UpdateToC() {
   auto& assembler_info = LLVM_Assembler::Get();
   auto& info = assembler_info.mc_instr_info->get(opcode);
   bool is_terminal = (opcode == X86::JMP_1 || opcode == X86::JMP_4 || info.isReturn());
-  toc[3] = is_terminal ? nullptr : &next_tbl;
-  toc[4] = info.isBranch() || info.isCall() ? &jump_arg_tbl : nullptr;
+  base_toc[3] = is_terminal ? nullptr : &next_tbl;
+  base_toc[4] = info.isBranch() || info.isCall() ? &jump_arg_tbl : nullptr;
+  ReattachHooks();
 }
 
 LoopControl Instruction::Interfaces(const std::function<LoopControl(Interface)>& cb) {
@@ -2758,7 +2771,7 @@ static int ConditionOperand(const mc::Inst& inst) {
 constinit Scalar::Table kConditionCode = [] {
   Scalar::Table t("Condition");
   t.cursor = ui::Cursor::AllScroll;
-  t.activate = [](Interface, ui::Pointer& pointer, Toy* toy) {
+  t.activate = [](Span<Interface>, ui::Pointer& pointer, Toy* toy) {
     return ui::TurnEnumKnob(pointer, toy);
   };
   t.get = [](Scalar self) -> double {
@@ -2779,7 +2792,7 @@ constinit Scalar::Table kConditionCode = [] {
 constinit Scalar::Table kLoopCondition = [] {
   Scalar::Table t("Condition");
   t.cursor = ui::Cursor::AllScroll;
-  t.activate = [](Interface, ui::Pointer& pointer, Toy* toy) {
+  t.activate = [](Span<Interface>, ui::Pointer& pointer, Toy* toy) {
     return ui::TurnEnumKnob(pointer, toy);
   };
   t.get = [](Scalar self) -> double {

@@ -766,7 +766,7 @@ static void SetMode(Command self, AppWindow::Mode mode) {
 
 constinit Command::Table kPopOut = [] {
   Command::Table t("Pop Out");
-  t.on_run = [](Command self) -> Locked<Command> {
+  t.on_run = [](Command self, Command::Table&) -> Locked<Command> {
     SetMode(self, AppWindow::Mode::Connected);
     return {};
   };
@@ -775,7 +775,7 @@ constinit Command::Table kPopOut = [] {
 
 constinit Command::Table kEmbed = [] {
   Command::Table t("Embed");
-  t.on_run = [](Command self) -> Locked<Command> {
+  t.on_run = [](Command self, Command::Table&) -> Locked<Command> {
     SetMode(self, AppWindow::Mode::Embedded);
     return {};
   };

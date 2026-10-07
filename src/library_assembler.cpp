@@ -60,7 +60,7 @@ struct ImageWidget : ui::Widget {
   void Draw(SkCanvas& canvas) const override { image.draw(canvas); }
 };
 
-static void FillRegistersMenu(Interface self, Menu& menu) {
+static void FillRegistersMenu(Interface self, Interface::Table&, Menu& menu) {
   using enum ui::Dir;
   constexpr ui::Dir kSlots[] = {N, NE, E, SE, S, SW, W, NW};
   static_assert(std::size(kSlots) == kGeneralPurposeRegisterCount);
@@ -122,6 +122,7 @@ static ui::Tock RefreshState(Assembler& assembler, time::SteadyPoint now) {
 void Assembler::ExitCallback(mc::CodePoint code_point) {
   WakeToys();
   RefreshState(*this, time::SteadyNow());
+  running->NotifyTurnedOff();
   Instruction* exit_inst = nullptr;
   if (code_point.instruction) {
     auto exit_mc_inst = code_point.instruction->Lock();

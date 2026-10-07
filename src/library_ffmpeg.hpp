@@ -45,6 +45,9 @@ struct MediaFile : Object {
   StreamOutSlot stream_ports[kMaxStreams];
   int n_streams = 0;  // active ports; min(file streams, kMaxStreams)
 
+  mutable HeapToC base_toc{2 + kMaxStreams};
+  ToC* BaseToc() const override { return &base_toc; }
+
   // Runtime, guarded by `mutex`. `fmt` is an AVFormatContext*; queued
   // packets are AVPacket*. The types are erased so FFmpeg headers stay out
   // of this header.

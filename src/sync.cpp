@@ -15,6 +15,7 @@
 #include "animation.hpp"
 #include "argument.hpp"
 #include "automat.hpp"
+#include "board.hpp"
 #include "casting.hpp"
 #include "embedded.hpp"
 #include "font.hpp"
@@ -24,330 +25,387 @@
 #include "menu.hpp"
 #include "root_widget.hpp"
 #include "status.hpp"
+#include "syncable.hpp"
+#include "tasks.hpp"
 #include "textures.hpp"
 #include "time.hpp"
 #include "units.hpp"
 
 namespace automat {
 
-// --- Syncable::Table DefaultX functions ---
-
-void Syncable::Table::DefaultCanConnect(Argument self, Interface end, Status& status) {
-  auto self_sync = cast<Syncable>(self);
-  if (auto other_sync = dyn_cast_if_present<Syncable>(end)) {
-    if (self_sync.table->can_sync(self_sync, other_sync)) {
-      return;
-    } else {
-      AppendErrorMessage(status) += "Can only connect to compatible Syncable";
-    }
-  }
-  if (auto gear = dynamic_cast<Gear*>(end.object_ptr)) {
-    auto lock = std::shared_lock(gear->mutex);
-    if (gear->members.empty()) {
-      return;
-    } else {
-      auto member = gear->members.front().weak.Lock();
-      if (member && self_sync.table->can_sync(self_sync, member)) {
-        return;
-      } else {
-        AppendErrorMessage(status) += "Wrong type of Gear";
-      }
-    }
-  }
-  AppendErrorMessage(status) += "Can only connect to similar parts";
-}
-
-void Syncable::Table::DefaultOnConnect(Argument self, Interface end) {
-  auto* self_obj = self.object_ptr;
-  auto* self_tab = cast<Syncable::Table>(self.table_ptr);
-  Board* board = nullptr;
-  if (auto end_syncable = dyn_cast_if_present<Syncable>(end)) {
-    auto gear = FindGearOrNull(end_syncable);
-    if (gear == nullptr) {
-      gear = FindGearOrMake(Syncable(self_obj, self_tab));
-      auto self_loc = self_obj->HomeLocation();
-      board = self_loc ? self_loc->LockBoard().get() : nullptr;
-      if (!board) board = &DefaultBoard();
-      auto& loc = board->Insert(gear);
-      auto end_loc = board->LocationOrNull(*end.object_ptr);
-      if (self_loc) {
-        loc.placement = Location::PlaceBetween{
-            self_loc->AcquireWeakPtr(),
-            end_loc ? end_loc->AcquireWeakPtr() : self_loc->AcquireWeakPtr()};
-      }
-    }
-    gear->FullSync(Syncable(self_obj, self_tab));
-    gear->FullSync(end_syncable);
-  } else if (auto* gear = dynamic_cast<Gear*>(end.object_ptr)) {
-    gear->FullSync(Syncable(self_obj, self_tab));
-  }
-  if (!board) {
-    if (auto self_loc = self_obj->HomeLocation()) {
-      board = self_loc->LockBoard().get();
-    }
-  }
-  if (board) {
-    board->WakeToys();
+static void Link(Gear& gear, Sync::Table& sync) {
+  auto lock = std::unique_lock(gear.mutex);
+  if (gear.members == nullptr) {
+    sync.prev = sync.next = &sync;
+    gear.members = &sync;
+  } else {
+    sync.prev = gear.members->prev;
+    sync.next = gear.members;
+    sync.prev->next = &sync;
+    sync.next->prev = &sync;
   }
 }
 
-Locked<Interface> Syncable::Table::DefaultFind(Argument self) {
-  auto& syncable = static_cast<Syncable::Table&>(*self.table);
-  if (auto gear = Syncable(*self.object_ptr, syncable).state->LockGear()) {
-    return AdoptLocked(Interface(*gear.Release()));
+static void Unlink(Sync::Table& sync) {
+  Ptr<Gear> gear = std::move(sync.gear);
+  if (!gear) return;
+  auto lock = std::unique_lock(gear->mutex);
+  if (sync.next == &sync) {
+    gear->members = nullptr;
+  } else {
+    sync.prev->next = sync.next;
+    sync.next->prev = sync.prev;
+    if (gear->members == &sync) gear->members = sync.next;
   }
+  sync.prev = sync.next = nullptr;
+}
+
+Syncable Sync::OnOffTable::SyncableOf() {
+  if (wrapper.syncable_idx == 0) return {};
+  return object->InterfaceFromIdx<Syncable>(wrapper.syncable_idx);
+}
+
+static void NotifySync(Sync::Table& sync) {
+  if (auto syncable = sync.SyncableOf(); syncable && syncable.table->on_sync) {
+    syncable.table->on_sync(syncable);
+  }
+}
+
+static void NotifyUnsync(Sync::Table& sync) {
+  if (auto syncable = sync.SyncableOf(); syncable && syncable.table->on_unsync) {
+    syncable.table->on_unsync(syncable);
+  }
+}
+
+static void Leave(Sync::Table& sync) {
+  if (!sync.gear) return;
+  sync.gear->WakeToys();
+  if (sync.source) NotifyUnsync(sync);
+  Unlink(sync);
+  sync.object->WakeToys();
+}
+
+static void Join(Sync::Table& sync, Gear& gear) {
+  if (sync.gear.Get() == &gear) return;
+  Leave(sync);
+  Link(gear, sync);
+  sync.gear = gear.AcquirePtr();
+  if (sync.source) NotifySync(sync);
+  gear.WakeToys();
+  sync.object->WakeToys();
+}
+
+static Locked<Command> CallBelow(Sync::Table& partner, int idx, Command::Table& wrapper) {
+  if (partner.tail == nullptr || idx == 0) return {};
+  auto* below = dyn_cast_if_present<Command::Table>((*partner.tail)[idx]);
+  if (below == nullptr) return {};
+  return below->on_run(Command(*partner.object, wrapper), *below);
+}
+
+Locked<Command> Sync::CommandTable::Start() {
+  return CallBelow(*this, attached_toc_idx, cmd_wrapper);
+}
+
+Locked<Command> Sync::CommandTable::End() {
+  return CallBelow(*this, cmd_wrapper.cancel_idx, cancel_wrapper);
+}
+
+Locked<Command> Sync::OnOffTable::Start() {
+  return CallBelow(*this, wrapper.turn_on_idx, on_wrapper);
+}
+
+Locked<Command> Sync::OnOffTable::End() {
+  return CallBelow(*this, wrapper.turn_off_idx, off_wrapper);
+}
+
+static void CallPartners(Sync::Table& sync, Gear& gear, Locked<Command> (Sync::Table::*call)()) {
+  SmallVec<Locked<Sync>, 8> partners;
+  {
+    auto lock = std::shared_lock(gear.mutex);
+    for (auto* partner = sync.next; partner && partner != &sync; partner = partner->next) {
+      if (!partner->sink || !partner->object->IncrementOwningRefsNonZero()) continue;
+      partners.push_back(AdoptLocked(Sync(*partner->object, *partner)));
+    }
+  }
+  --sync.sync_balance;
+  sync.object->WakeToys();
+  gear.WakeToys();
+  for (auto& partner : partners) {
+    Sync::Table& partner_sync = *partner.table;
+    if (auto next = (partner_sync.*call)()) next.ScheduleRun();
+    ++partner_sync.sync_balance;
+    partner.object_ptr->WakeToys();
+  }
+}
+
+static Locked<Command> Forward(Sync::Table& sync, Command self, Command::Table& below,
+                               Locked<Command> (Sync::Table::*call)()) {
+  Ptr<Gear> gear = sync.gear;
+  if (sync.source && gear) {
+    if (auto suspend = Suspend(*gear)) {
+      CallPartners(sync, *gear, call);
+      return below.on_run(self, below);
+    }
+  }
+  return below.on_run(self, below);
+}
+
+static Locked<Command> RunOwn(Command self, Command::Table& true_self) {
+  auto& sync = OUTER_REF(Sync::CommandTable, cmd_wrapper, true_self);
+  auto& below = *cast<Command::Table>((*sync.tail)[sync.attached_toc_idx]);
+  return Forward(sync, self, below, &Sync::Table::Start);
+}
+
+static Locked<Command> RunCancel(Command self, Command::Table& true_self) {
+  auto& sync = OUTER_REF(Sync::CommandTable, cancel_wrapper, true_self);
+  auto& below = *cast<Command::Table>((*sync.tail)[sync.cmd_wrapper.cancel_idx]);
+  return Forward(sync, self, below, &Sync::Table::End);
+}
+
+static Locked<Command> RunCompleted(Command self, Command::Table& true_self) {
+  auto& sync = OUTER_REF(Sync::CommandTable, completion_detector, true_self);
+  if (sync.tail == nullptr) return {};
+  Ptr<Gear> gear = sync.gear;
+  if (sync.source && gear) {
+    if (auto suspend = Suspend(*gear)) CallPartners(sync, *gear, &Sync::Table::End);
+  }
+  auto& below = *cast<Command::Table>((*sync.tail)[sync.attached_toc_idx]);
+  if (below.next_idx == 0) return {};
+  auto* next = dyn_cast_if_present<Argument::Table>((*sync.tail)[below.next_idx]);
+  if (next == nullptr) return {};
+  return FollowArgument(Argument(*self.object_ptr, *next));
+}
+
+static Locked<Interface> FindCompleted(Argument self) {
+  auto& sync = OUTER_REF(Sync::CommandTable, completion_arg, *self.table_ptr);
+  return AcquireLocked(Interface(*self.object_ptr, sync.completion_detector));
+}
+
+static Locked<Command> RunOn(Command self, Command::Table& true_self) {
+  auto& sync = OUTER_REF(Sync::OnOffTable, on_wrapper, true_self);
+  auto& below = *cast<Command::Table>((*sync.tail)[sync.wrapper.turn_on_idx]);
+  return Forward(sync, self, below, &Sync::Table::Start);
+}
+
+static Locked<Command> RunOff(Command self, Command::Table& true_self) {
+  auto& sync = OUTER_REF(Sync::OnOffTable, off_wrapper, true_self);
+  auto& below = *cast<Command::Table>((*sync.tail)[sync.wrapper.turn_off_idx]);
+  return Forward(sync, self, below, &Sync::Table::End);
+}
+
+static Sync::Table& HookOf(Interface::Table& table) {
+  if (isa<OnOff::Table>(&table)) return OUTER_REF(Sync::OnOffTable, wrapper, table);
+  return OUTER_REF(Sync::CommandTable, cmd_wrapper, table);
+}
+
+static void OwnFillMenu(Interface self, Interface::Table& true_self, Menu& menu) {
+  auto& sync = HookOf(true_self);
+  auto* below = (*sync.tail)[sync.attached_toc_idx];
+  if (below->fill_menu) below->fill_menu(self, *below, menu);
+  menu.Place(ui::Dir::E, Interface(*self.object_ptr, sync));
+}
+
+Sync::CommandTable::CommandTable() {
+  completion_arg.style = Style::Invisible;
+  completion_arg.visible_when_disconnected = false;
+  completion_arg.is_connected = [](Argument) { return false; };
+  completion_arg.find = &FindCompleted;
+  completion_detector.on_run = &RunCompleted;
+}
+
+void Sync::CommandTable::Attach(Object& obj, int toc_idx) {
+  assert(tail == nullptr);
+  assert(attached_toc_idx == 0);
+  attached_toc_idx = toc_idx;
+  object = &obj;
+  auto* old = obj.toc.load(std::memory_order_relaxed);
+  do {
+    buffer.assign(old->begin(), old->end());
+    cmd_wrapper = *cast<Command::Table>((*old)[toc_idx]);
+    cmd_wrapper.on_run = &RunOwn;
+    cmd_wrapper.fill_menu = &OwnFillMenu;
+    cmd_wrapper.next_idx = buffer.size() + 2;
+    buffer[toc_idx - 1] = &cmd_wrapper;
+    if (cmd_wrapper.cancel_idx) {
+      cancel_wrapper = *cast<Command::Table>((*old)[cmd_wrapper.cancel_idx]);
+      cancel_wrapper.on_run = &RunCancel;
+      buffer[cmd_wrapper.cancel_idx - 1] = &cancel_wrapper;
+    }
+    buffer.push_back(this);
+    buffer.push_back(&completion_arg);
+    buffer.push_back(&completion_detector);
+    array = buffer;
+    tail = old;
+  } while (!obj.toc.compare_exchange_weak(old, this, std::memory_order_release,
+                                          std::memory_order_relaxed));
+  ++obj.hook_count;
+}
+
+void Sync::OnOffTable::Attach(Object& obj, int toc_idx) {
+  assert(tail == nullptr);
+  assert(attached_toc_idx == 0);
+  attached_toc_idx = toc_idx;
+  object = &obj;
+  auto* old = obj.toc.load(std::memory_order_relaxed);
+  do {
+    buffer.assign(old->begin(), old->end());
+    wrapper = *cast<OnOff::Table>((*old)[toc_idx]);
+    wrapper.fill_menu = &OwnFillMenu;
+    buffer[toc_idx - 1] = &wrapper;
+    if (wrapper.turn_on_idx) {
+      on_wrapper = *cast<Command::Table>((*old)[wrapper.turn_on_idx]);
+      on_wrapper.on_run = &RunOn;
+      buffer[wrapper.turn_on_idx - 1] = &on_wrapper;
+    }
+    if (wrapper.turn_off_idx) {
+      off_wrapper = *cast<Command::Table>((*old)[wrapper.turn_off_idx]);
+      off_wrapper.on_run = &RunOff;
+      buffer[wrapper.turn_off_idx - 1] = &off_wrapper;
+    }
+    buffer.push_back(this);
+    array = buffer;
+    tail = old;
+  } while (!obj.toc.compare_exchange_weak(old, this, std::memory_order_release,
+                                          std::memory_order_relaxed));
+  ++obj.hook_count;
+}
+
+int Sync::Table::Detach(Object& obj) {
+  int toc_idx = attached_toc_idx;
+  obj.toc.store(tail, std::memory_order_release);
+  tail = nullptr;
+  attached_toc_idx = 0;
+  --obj.hook_count;
+  return toc_idx;
+}
+
+Sync::Table::~Table() { Unlink(*this); }
+
+static Sync::Table& FindOrMakeSyncTable(Command command) {
+  Object& object = *command.object_ptr;
+  auto lock = std::lock_guard(object.hooks_lock);
+  int idx = object.InterfaceIdx(command.table_ptr);
+  assert(idx > 0);
+  auto* current = (*object.toc.load(std::memory_order_relaxed))[idx];
+  if (current->fill_menu == &OwnFillMenu) return HookOf(*current);
+  Sync::Table* sync;
+  if (isa<OnOff::Table>(current)) {
+    sync = new Sync::OnOffTable();
+  } else {
+    sync = new Sync::CommandTable();
+  }
+  sync->Attach(object, idx);
+  return *sync;
+}
+
+static Ptr<Gear> MakeGearBetween(Object& object, Object& other) {
+  auto gear = MAKE_PTR(Gear);
+  auto home = object.HomeLocation();
+  Ptr<Board> board = home ? home->LockBoard() : nullptr;
+  if (!board) board = DefaultBoard().AcquirePtr();
+  auto& location = board->Insert(gear);
+  if (home) {
+    auto other_home = board->LocationOrNull(other);
+    location.placement = Location::PlaceBetween{home->AcquireWeakPtr(),
+                                                (other_home ? other_home : home)->AcquireWeakPtr()};
+  }
+  board->WakeToys();
+  return gear;
+}
+
+void Sync::Table::DefaultCanConnect(Argument self, Interface end, Status& status) {
+  if (end.object_ptr == self.object_ptr) {
+    AppendErrorMessage(status) += "Can only sync with another object";
+    return;
+  }
+  if (dynamic_cast<Gear*>(end.object_ptr)) return;
+  auto* command = dyn_cast_if_present<Command::Table>(end.table_ptr);
+  if (command && command->on_run != &RunCompleted) return;
+  AppendErrorMessage(status) += "Can only sync with a Command";
+}
+
+void Sync::Table::DefaultOnConnect(Argument self, Interface end) {
+  auto& sync = static_cast<Sync::Table&>(*self.table);
+  if (!end.has_object()) {
+    Leave(sync);
+    return;
+  }
+  if (auto* gear = dynamic_cast<Gear*>(end.object_ptr)) {
+    Join(sync, *gear);
+    return;
+  }
+  auto& end_sync = FindOrMakeSyncTable(cast<Command>(end));
+  if (end_sync.gear) {
+    Join(sync, *end_sync.gear);
+    return;
+  }
+  auto gear = MakeGearBetween(*self.object_ptr, *end.object_ptr);
+  Join(end_sync, *gear);
+  Join(sync, *gear);
+}
+
+Locked<Interface> Sync::Table::DefaultFind(Argument self) {
+  auto& sync = static_cast<Sync::Table&>(*self.table);
+  if (Ptr<Gear> gear = sync.gear) return AdoptLocked(Interface(*gear.Release()));
   return {};
 }
 
-// --- Syncable::Unsync ---
+std::unique_ptr<Action> Sync::Table::SyncActivate(Span<Interface> chain, ui::Pointer& pointer,
+                                                  automat::Toy* toy) {
+  return std::make_unique<SyncAction>(pointer, chain.back(), toy);
+}
 
-void Syncable::Unsync() { state->Unsync(*object_ptr, *table); }
+static std::unique_ptr<Action> SyncCaller(Span<Interface> chain, ui::Pointer& pointer, Toy* toy) {
+  if (chain.size() < 2) return nullptr;
+  return std::make_unique<SyncAction>(pointer, chain[chain.size() - 2], toy);
+}
 
-void Syncable::Table::DefaultFillMenu(Interface self, Menu& menu) {
-  using enum ui::Dir;
-  auto* table = static_cast<Table*>(self.table_ptr);
-  menu.Place(E, Interface(self.object_ptr, &table->sync));
-  if (Syncable(self.object_ptr, table).state->HasGear()) {
-    menu.Place(W, Interface(self.object_ptr, &table->unsync));
+constinit Interface::Table kSync = [] {
+  Interface::Table t(Interface::kMenu, "Sync");
+  t.activate = &SyncCaller;
+  return t;
+}();
+
+std::unique_ptr<SyncBelt> Sync::MakeToy(ui::Widget* parent) {
+  return std::make_unique<SyncBelt>(parent, *object_ptr, *table);
+}
+
+Gear::~Gear() { assert(members == nullptr); }
+
+static void AddSinkTable(Gear& gear, Sync::Table& sync) {
+  if (sync.gear.Get() == &gear) {
+    auto lock = std::unique_lock(gear.mutex);
+    sync.sink = true;
+    return;
   }
+  sync.sink = true;
+  sync.source = false;
+  Join(sync, gear);
 }
 
-std::unique_ptr<Action> Syncable::Table::SyncActivate(Interface self, ui::Pointer& pointer,
-                                                      automat::Toy* toy) {
-  auto& table = OUTER_REF(Table, sync, *self.table_ptr);
-  return std::make_unique<SyncAction>(pointer, Syncable(self.object_ptr, &table), toy);
-}
-
-std::unique_ptr<Action> Syncable::Table::UnsyncActivate(Interface self, ui::Pointer& pointer,
-                                                        automat::Toy*) {
-  auto& table = OUTER_REF(Table, unsync, *self.table_ptr);
-  Syncable(self.object_ptr, &table).Unsync();
-  return std::make_unique<EmptyAction>(pointer);
-}
-
-void Syncable::State::Unsync(Object& self, Syncable::Table& table) {
-  auto gear = LockGear();
-  if (!gear) return;
-  {
-    auto lock = std::unique_lock(gear->mutex);
-    auto& members = gear->members;
-    for (int i = 0; i < (int)members.size(); ++i) {
-      // Compare both the interface pointer and the owner
-      auto member_iface = members[i].weak.Unsafe();
-      if (member_iface.table_ptr == &table && member_iface.object_ptr == &self) {
-        members.erase(members.begin() + i);
-        break;
-      }
+static void AddSourceTable(Gear& gear, Sync::Table& sync) {
+  if (sync.gear.Get() == &gear) {
+    if (sync.source) return;
+    {
+      auto lock = std::unique_lock(gear.mutex);
+      sync.source = true;
     }
+    NotifySync(sync);
+    return;
   }
-
-  Clear();
-  auto syncable = Syncable(self, table);
-  if (table.on_unsync) table.on_unsync(syncable);
-  syncable.WakeToys();
+  sync.sink = false;
+  sync.source = true;
+  Join(sync, gear);
 }
 
-static constexpr uintptr_t kGearBits = Syncable::State::kSource | Syncable::State::kRunning;
+void Gear::AddSink(Command command) { AddSinkTable(*this, FindOrMakeSyncTable(command)); }
 
-static_assert(alignof(Gear) > kGearBits);
+void Gear::AddSource(Command command) { AddSourceTable(*this, FindOrMakeSyncTable(command)); }
 
-static Gear* GearOf(uintptr_t bits) { return reinterpret_cast<Gear*>(bits & ~kGearBits); }
-
-static void NotifyIdle(Gear& gear) {
-  auto lock = std::shared_lock(gear.mutex);
-  Locked<Syncable> sinks[gear.members.size()];
-  int sink_count = 0;
-  for (auto& member : gear.members) {
-    if (!member.sink) continue;
-    auto locked = member.weak.Lock();
-    if (!locked) continue;
-    sinks[sink_count++] = std::move(locked);
-  }
-  lock.unlock();
-  for (int i = 0; i < sink_count; ++i) {
-    Syncable& sink = sinks[i];
-    if (sink.table->on_idle) sink.table->on_idle(sink);
-  }
-}
-
-static bool CountDown(Gear& gear) {
-  if (--gear.running != 0) return false;
-  gear.running |= Gear::kNoMemberStopped;
-  return true;
-}
-
-static void CountOut(Gear& gear) {
-  gear.running &= ~Gear::kNoMemberStopped;
-  if (!CountDown(gear)) return;
-  if (!gear.IncrementOwningRefsNonZero()) return;
-  Ptr<Gear> locked(&gear);
-  NotifyIdle(gear);
-}
-
-bool Syncable::State::HasGear() const {
-  Gear* locked = GearOf(gear.load(std::memory_order_relaxed));
-  return locked && locked->owning_refs.load(std::memory_order_relaxed) != 0;
-}
-
-Ptr<Gear> Syncable::State::LockGear() const {
-  Gear* locked = GearOf(gear.load(std::memory_order_acquire));
-  if (locked && !locked->IncrementOwningRefsNonZero()) locked = nullptr;
-  return Ptr<Gear>(locked);
-}
-
-void Syncable::State::SetGear(Gear* new_gear) {
-  SafeIncrementWeakRefs(new_gear);
-  uintptr_t bits = gear.load(std::memory_order_relaxed);
-  uintptr_t new_bits;
-  do {
-    new_bits = reinterpret_cast<uintptr_t>(new_gear) | (bits & kGearBits);
-  } while (!gear.compare_exchange_weak(bits, new_bits, std::memory_order_release,
-                                       std::memory_order_relaxed));
-  Gear* old_gear = GearOf(bits);
-  if (bits & kRunning) {
-    if (new_gear) ++new_gear->running;
-    if (old_gear) CountDown(*old_gear);
-  }
-  SafeDecrementWeakRefs(old_gear);
-}
-
-void Syncable::State::SetSource(bool source) {
-  if (source) {
-    gear.fetch_or(kSource, std::memory_order_release);
-  } else {
-    gear.fetch_and(~kSource, std::memory_order_release);
-  }
-}
-
-void Syncable::State::Clear() {
-  uintptr_t bits = gear.fetch_and(kRunning, std::memory_order_acq_rel);
-  Gear* old_gear = GearOf(bits);
-  if (old_gear && (bits & kRunning)) CountOut(*old_gear);
-  SafeDecrementWeakRefs(old_gear);
-}
-
-bool Syncable::State::StartRunning() {
-  uintptr_t bits = gear.fetch_or(kRunning, std::memory_order_acq_rel);
-  if (bits & kRunning) return false;
-  if (Gear* counted_in = GearOf(bits)) ++counted_in->running;
-  return true;
-}
-
-bool Syncable::State::StopRunning() {
-  uintptr_t bits = gear.fetch_and(~kRunning, std::memory_order_acq_rel);
-  if (!(bits & kRunning)) return false;
-  if (Gear* counted_in = GearOf(bits)) CountOut(*counted_in);
-  return true;
-}
-
-bool Syncable::StopRunning() const {
-  if (!state->StopRunning()) return false;
-  if (!state->HasGear() && table->on_idle) table->on_idle(*this);
-  return true;
-}
-
-Syncable::State::~State() { Clear(); }
-
-// --- FindGearOrMake / FindGearOrNull ---
-
-Ptr<Gear> FindGearOrMake(Syncable source) {
-  auto sync_block = source.state->LockGear();
-  if (!sync_block) {
-    sync_block = MAKE_PTR(Gear);
-    sync_block->AddSource(source);
-  }
-  return sync_block;
-}
-
-Ptr<Gear> FindGearOrNull(Syncable source) {
-  auto sync_block = source.state->LockGear();
-  if (!sync_block) {
-    return nullptr;
-  }
-  return sync_block;
-}
-
-// --- Gear methods ---
-
-Gear::~Gear() {
-  auto lock = std::unique_lock(mutex);
-  while (!members.empty()) {
-    auto& back = members.back();
-    if (auto syncable = back.weak.Lock()) {
-      auto* table = syncable.table.operator->();
-      auto& state = *syncable.state;
-      if (state.IsSource()) {
-        state.SetSource(false);
-        if (table->on_unsync) table->on_unsync(syncable);
-      }
-      syncable.WakeToys();
-    }
-    members.pop_back();
-  }
-}
-
-Gear::RunningGuard::RunningGuard(Ptr<Gear> gear) : gear(std::move(gear)) {
-  if (this->gear) ++this->gear->running;
-}
-
-Gear::RunningGuard::~RunningGuard() {
-  if (gear && CountDown(*gear)) NotifyIdle(*gear);
-}
-
-void Gear::AddSink(Syncable syncable) {
-  auto guard = std::unique_lock(mutex);
-  Linked<Syncable> weak(syncable);
-  for (int i = 0; i < (int)members.size(); ++i) {
-    if (members[i].weak == weak) {
-      members[i].sink = true;
-      return;
-    }
-  }
-  members.emplace_back(std::move(weak), true);
-}
-
-void Gear::AddSource(Syncable syncable) {
-  auto& state = *syncable.state;
-  auto old_gear = state.LockGear();
-  bool was_source = state.IsSource();
-  if (old_gear.Get() != this) {
-    state.SetGear(this);
-    if (old_gear) {
-      auto lock = std::scoped_lock(mutex, old_gear->mutex);
-      while (!old_gear->members.empty()) {
-        // stealing all of the members from the old gear
-        members.emplace_back(old_gear->members.back());
-        old_gear->members.pop_back();
-
-        // redirecting the members' sync state to this gear
-        if (auto member = members.back().weak.Lock()) {
-          member.state->SetGear(this);
-        }
-      }
-    } else {
-      auto lock = std::unique_lock(mutex);
-      Linked<Syncable> weak(syncable);
-      bool found = false;
-      for (int i = 0; i < (int)members.size(); ++i) {
-        if (members[i].weak == weak) {
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        members.emplace_back(std::move(weak), false);
-      }
-    }
-  }
-  if (!was_source) {
-    state.SetSource(true);
-    if (syncable.table->on_sync) syncable.table->on_sync(syncable);
-  }
-}
-
-void Gear::FullSync(Syncable syncable) {
-  AddSink(syncable);
-  AddSource(syncable);
+void Gear::FullSync(Command command) {
+  auto& sync = FindOrMakeSyncTable(command);
+  AddSinkTable(*this, sync);
+  AddSourceTable(*this, sync);
 }
 
 // --- Gear rendering ---
@@ -449,8 +507,8 @@ struct GearWidget : ObjectToy {
   Optional<Rect> DrawBounds() const override { return Shape().getBounds(); }
 };
 
-SyncBelt::SyncBelt(Widget* parent, Object& object, Syncable::Table& syncable)
-    : ArgumentToy(parent, object, syncable) {}
+SyncBelt::SyncBelt(Widget* parent, Object& object, Argument::Table& table)
+    : ArgumentToy(parent, object, table) {}
 
 SkPath SyncBelt::Shape() const {
   return SkPath::Circle(pinion.x, pinion.y, kSecondaryGearRadius + kTeethAmplitude);
@@ -458,8 +516,11 @@ SkPath SyncBelt::Shape() const {
 
 Interface SyncBelt::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
   if (trigger != ui::PointerButton::Left) return {};
-  auto syncable = LockBind<Syncable>();
-  return syncable ? Interface(syncable.object_ptr, &syncable.table->sync) : Interface();
+  auto object = LockOwner();
+  if (!object) return {};
+  Object::TocGuard guard(*object);
+  if (!object->toc.load(std::memory_order_acquire)->SlotOf(iface)) return {};
+  return Interface(*object, *iface);
 }
 
 ui::Tock SyncBelt::Tick(time::Timer& t) {
@@ -467,8 +528,10 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
   auto& toy_store = ToyScope();
 
   // Check if the object of this connection still exists.
-  auto syncable = LockBind<Syncable>();
-  if (!syncable) {
+  auto object = LockOwner();
+  Optional<Object::TocGuard> guard;
+  if (object) guard.emplace(*object);
+  if (!object || !object->toc.load(std::memory_order_acquire)->SlotOf(iface)) {
     tock.drawing |=
         animation::LowLevelSpringTowards(pinion.x, t.d, 0.3, 0.05, origin.x, origin_velocity.x);
     tock.drawing |=
@@ -478,8 +541,9 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
     }
     return tock;
   }
+  auto& sync = static_cast<Sync::Table&>(*iface);
 
-  auto sync_balance = syncable.state->sync_balance;
+  auto sync_balance = sync.sync_balance;
   if (sync_balance != last_sync_balance) {
     int32_t diff = (int)(sync_balance - last_sync_balance) > 0 ? 1 : -1;
     target_scroll_ratio += (float)(diff) / kPrimaryGearCount / 2;
@@ -496,7 +560,7 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
   }
 
   // Find the owner object widget
-  auto* owner_widget = toy_store.FindOrNull(*syncable.object_ptr);
+  auto* owner_widget = toy_store.FindOrNull(*object);
   if (!owner_widget) return Tock::Draw;
 
   auto origin_shape = owner_widget->Shape().makeTransform(TransformBetween(*owner_widget, *this));
@@ -505,7 +569,7 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
     initialized = true;
     pinion = origin;
   }
-  if (auto new_label = syncable.Name(); label != new_label) {
+  if (auto new_label = object->InterfaceFromIdx(sync.attached_toc_idx).Name(); label != new_label) {
     label = new_label;
 
     auto typeface = ui::Font::GetPbio();
@@ -539,9 +603,7 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
                                             SkFilterMode::kLinear, nullptr, nullptr);
   }
 
-  // Find the gear via the syncable's sync state
-  auto& state = syncable.state;
-  auto gear = state->LockGear();
+  Ptr<Gear> gear = sync.gear;
   auto* gear_widget = gear ? toy_store.FindOrNull(*gear) : nullptr;
   if (gear && !gear_widget) {
     tock.drawing |=
@@ -673,53 +735,18 @@ std::unique_ptr<ObjectToy> Gear::MakeToy(ui::Widget* parent) {
   return std::make_unique<GearWidget>(parent, *this);
 }
 
-std::unique_ptr<SyncBelt> Syncable::MakeToy(ui::Widget* parent) {
-  return std::make_unique<SyncBelt>(parent, *object_ptr, *table);
-}
-
-// --- Gear serialization ---
-
-void Gear::SerializeState(ObjectSerializer& writer) const {
-  writer.Key("members");
-  writer.StartObject();
-  for (auto& member : members) {
-    auto ptr = member.weak.Lock();
-    if (!ptr) continue;
-    writer.Key(writer.ResolveName(*ptr.object_ptr, ptr.table_ptr));
-    writer.Bool(member.sink);
+SyncAction::SyncAction(ui::Pointer& pointer, Interface& iface, Toy* toy) : Action(pointer) {
+  Object& obj = *iface.object_ptr;
+  if (auto* existing = dyn_cast_if_present<Sync::Table>(iface.table_ptr)) {
+    sync = AcquireLocked(Sync(obj, *existing));
+  } else {
+    sync = AcquireLocked(Sync(obj, FindOrMakeSyncTable(cast<Command>(iface))));
   }
-  writer.EndObject();
-}
-
-bool Gear::DeserializeKey(ObjectDeserializer& d, StrView key) {
-  if (key == "members") {
-    Status status;
-    for (auto& member_name : ObjectView(d, status)) {
-      bool is_sink;
-      d.Get(is_sink, status);
-      if (!OK(status)) {
-        // the value is not a boolean - just skip it
-        status.Reset();
-      }
-      if (!is_sink) continue;
-      auto target = d.LookupInterface(member_name);
-      if (auto syncable = dyn_cast_if_present<Syncable>(target)) {
-        AddSink(syncable);
-        AddSource(syncable);
-      }
-    }
-    return true;
-  }
-  return false;
-}
-
-SyncAction::SyncAction(ui::Pointer& pointer, Syncable syncable, Toy* toy) : Action(pointer) {
-  syncable.Unsync();
-  weak = Linked<Syncable>(syncable);
+  Leave(*sync.table);
   if (toy) board_widget = BoardOrNull(*toy);
   if (auto* bw = board_widget.Get()) {
-    if (bw->toys.FindOrNull(*syncable.object_ptr)) {
-      auto& sync_widget = bw->toys.FindOrMake(syncable, bw);
+    if (bw->toys.FindOrNull(obj)) {
+      auto& sync_widget = bw->toys.FindOrMake(sync, bw);
       sync_widget.is_dragged = true;
       sync_widget.WakeAnimation();
       bw->WakeAnimation();
@@ -728,49 +755,44 @@ SyncAction::SyncAction(ui::Pointer& pointer, Syncable syncable, Toy* toy) : Acti
   Update();
   pointer.root_widget.WakeAnimation();
 }
+
 SyncAction::~SyncAction() {
   // Check if the pointer is over a compatible Syncable
-  auto* bw = board_widget.Get();
-  if (!bw) return;
-  if (auto syncable = weak.Lock()) {
-    auto* sync_widget = bw->toys.FindOrNull(syncable);
-    if (sync_widget) {
+  if (auto* bw = board_widget.Get()) {
+    if (auto* sync_widget = bw->toys.FindOrNull(sync)) {
       sync_widget->is_dragged = false;
       sync_widget->WakeAnimation();
-      bw->ConnectAtPoint(syncable, sync_widget->pinion);
+      bw->ConnectAtPoint(sync, sync_widget->pinion);
       // TODO: animate towards the true target rather than origin
       sync_widget->pinion_deflection.SmoothTargetUpdate(sync_widget->pinion, sync_widget->origin);
     }
   }
+  if (sync.table->gear == nullptr) sync.object_ptr->RemoveHook(*sync.table);
 }
+
 void SyncAction::Update() {
-  if (auto syncable = weak.Lock()) {
-    auto* bw = board_widget.Get();
-    if (!bw) return;
-    auto* origin_widget = bw->toys.FindOrNull(*syncable.object_ptr);
-    if (!origin_widget) return;
-    auto* sync_widget = bw->toys.FindOrNull(syncable);
-    if (!sync_widget) return;
-    auto start_local = origin_widget->Shape().getBounds().center();
-    auto start = TransformBetween(*origin_widget, *bw).mapPoint(start_local);
-    auto pointer_pos = pointer.PositionWithin(*bw);
-    sync_widget->origin = start;
-    if (!sync_widget->initialized) {
-      sync_widget->initialized = true;
-      sync_widget->pinion = start;
-      sync_widget->pinion_deflection.SmoothTargetUpdate(sync_widget->pinion, pointer_pos);
-    } else {
-      sync_widget->pinion_deflection.InteractiveTargetUpdate(sync_widget->pinion, pointer_pos);
-    }
-    sync_widget->WakeAnimation();
+  auto* bw = board_widget.Get();
+  if (!bw) return;
+  auto* origin_widget = bw->toys.FindOrNull(*sync.object_ptr);
+  if (!origin_widget) return;
+  auto* sync_widget = bw->toys.FindOrNull(sync);
+  if (!sync_widget) return;
+  auto start_local = origin_widget->Shape().getBounds().center();
+  auto start = TransformBetween(*origin_widget, *bw).mapPoint(start_local);
+  auto pointer_pos = pointer.PositionWithin(*bw);
+  sync_widget->origin = start;
+  if (!sync_widget->initialized) {
+    sync_widget->initialized = true;
+    sync_widget->pinion = start;
+    sync_widget->pinion_deflection.SmoothTargetUpdate(sync_widget->pinion, pointer_pos);
   } else {
-    pointer.ReplaceAction(*this, nullptr);
+    sync_widget->pinion_deflection.InteractiveTargetUpdate(sync_widget->pinion, pointer_pos);
   }
+  sync_widget->WakeAnimation();
 }
-bool SyncAction::Highlight(Interface end) const {
-  auto syncable = weak.Lock();
-  return syncable && syncable.CanConnect(end);
-}
+
+bool SyncAction::Highlight(Interface end) const { return sync.CanConnect(end); }
+
 ui::Widget* SyncAction::Widget() { return nullptr; }
 
 }  // namespace automat

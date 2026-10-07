@@ -38,7 +38,7 @@ void SetDecoration(Command self, DecorationPreference pref) {
 
 constinit Command::Table kDecorationAuto = [] {
   Command::Table t("Auto");
-  t.on_run = [](Command self) -> Locked<Command> {
+  t.on_run = [](Command self, Command::Table&) -> Locked<Command> {
     SetDecoration(self, DecorationPreference::Auto);
     return {};
   };
@@ -47,7 +47,7 @@ constinit Command::Table kDecorationAuto = [] {
 
 constinit Command::Table kDecorationServerSide = [] {
   Command::Table t("Automat");
-  t.on_run = [](Command self) -> Locked<Command> {
+  t.on_run = [](Command self, Command::Table&) -> Locked<Command> {
     SetDecoration(self, DecorationPreference::ServerSide);
     return {};
   };
@@ -56,14 +56,14 @@ constinit Command::Table kDecorationServerSide = [] {
 
 constinit Command::Table kDecorationClientSide = [] {
   Command::Table t("App");
-  t.on_run = [](Command self) -> Locked<Command> {
+  t.on_run = [](Command self, Command::Table&) -> Locked<Command> {
     SetDecoration(self, DecorationPreference::ClientSide);
     return {};
   };
   return t;
 }();
 
-void FillDecorationMenu(Interface self, Menu& menu) {
+void FillDecorationMenu(Interface self, Interface::Table&, Menu& menu) {
   using enum ui::Dir;
   menu.Place(S, Interface(self.object_ptr, &kDecorationAuto));
   menu.Place(W, Interface(self.object_ptr, &kDecorationServerSide));
@@ -72,7 +72,7 @@ void FillDecorationMenu(Interface self, Menu& menu) {
 
 constinit Command::Table kClientPress = [] {
   Command::Table t("Press");
-  t.activate = [](Interface, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
+  t.activate = [](Span<Interface>, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
     auto* window = dynamic_cast<ClientWindowToy*>(toy);
     return window ? window->BeginClientPress(pointer) : nullptr;
   };

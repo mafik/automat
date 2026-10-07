@@ -144,8 +144,8 @@ constinit std::array<Command::Table, 10> kDigits = [] {
       Command::Table("4"), Command::Table("5"), Command::Table("6"), Command::Table("7"),
       Command::Table("8"), Command::Table("9")};
   for (auto& t : tables) {
-    t.on_run = [](Command self) -> Locked<Command> {
-      int digit = cast<Command::Table>(self.table_ptr) - kDigits.data();
+    t.on_run = [](Command self, Command::Table& true_self) -> Locked<Command> {
+      int digit = &true_self - kDigits.data();
       Str text = self.object_ptr->GetText();
       if (text == "0") text.clear();
       text += '0' + digit;
@@ -158,7 +158,7 @@ constinit std::array<Command::Table, 10> kDigits = [] {
 
 constinit Command::Table kDot = [] {
   Command::Table t(".");
-  t.on_run = [](Command self) -> Locked<Command> {
+  t.on_run = [](Command self, Command::Table&) -> Locked<Command> {
     Str text = self.object_ptr->GetText();
     if (text.empty()) {
       text = "0";
@@ -177,7 +177,7 @@ constinit Command::Table kDot = [] {
 
 constinit Command::Table kBackspace = [] {
   Command::Table t("Backspace");
-  t.on_run = [](Command self) -> Locked<Command> {
+  t.on_run = [](Command self, Command::Table&) -> Locked<Command> {
     Str text = self.object_ptr->GetText();
     if (!text.empty()) text.pop_back();
     if (text.empty()) text = "0";

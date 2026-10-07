@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "base.hpp"
-#include "color.hpp"
 #include "command.hpp"
-#include "sync.hpp"
 #include "time.hpp"
 #include "timer_thread.hpp"
 

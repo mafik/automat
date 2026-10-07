@@ -28,16 +28,19 @@ namespace automat::library {
 void KeyPresser::StartMonitoring() {
   if (keylogging == nullptr) {
     ui::root_widget->window->BeginLogging(this, &keylogging, nullptr, nullptr);
+    WakeToys();
   }
 }
 
 void KeyPresser::StopMonitoring() {
   if (keylogging) {
     keylogging->Release();
+    WakeToys();
   }
 }
 
 void KeyPresser::Press() {
+  if (suspended) return;
   audio::Play(embedded::assets_SFX_key_down_wav);
   if (key_pressed) return;
   key_pressed = true;
@@ -46,6 +49,7 @@ void KeyPresser::Press() {
   WakeToys();
 }
 void KeyPresser::Release() {
+  if (suspended) return;
   audio::Play(embedded::assets_SFX_key_up_wav);
   if (!key_pressed) return;
   key_pressed = false;
@@ -194,7 +198,9 @@ static std::unique_ptr<Action> DragKeyPresser(ui::Pointer& p, KeyPresserWidget& 
   return PickUp(p, *loc, *key_presser);
 }
 
-static std::unique_ptr<Action> PressKeyActivate(Interface self, ui::Pointer& pointer, Toy* toy) {
+static std::unique_ptr<Action> PressKeyActivate(Span<Interface> chain, ui::Pointer& pointer,
+                                                Toy* toy) {
+  Interface self = chain.back();
   auto* widget = dynamic_cast<KeyPresserWidget*>(toy);
   if (!widget) return nullptr;
   WeakPtr<Object> weak = self.object_ptr->AcquireWeakPtr();
@@ -204,7 +210,7 @@ static std::unique_ptr<Action> PressKeyActivate(Interface self, ui::Pointer& poi
       });
 }
 
-static std::unique_ptr<Action> SetKeyActivate(Interface, ui::Pointer& pointer, Toy* toy) {
+static std::unique_ptr<Action> SetKeyActivate(Span<Interface>, ui::Pointer& pointer, Toy* toy) {
   auto* widget = dynamic_cast<KeyPresserWidget*>(toy);
   if (!widget) return nullptr;
   MortalPtr<KeyPresserWidget> target = widget;

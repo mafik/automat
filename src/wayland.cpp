@@ -2220,7 +2220,8 @@ struct ClientButtonTable : Command::Table {
   ui::PointerButton button;
   constexpr ClientButtonTable(StrView name, ui::PointerButton button)
       : Command::Table(name), button(button) {
-    activate = [](Interface self, ui::Pointer& p, Toy* toy) -> std::unique_ptr<Action> {
+    activate = [](Span<Interface> chain, ui::Pointer& p, Toy* toy) -> std::unique_ptr<Action> {
+      Interface self = chain.back();
       auto* surface = dynamic_cast<WaylandSurfaceToy*>(toy);
       auto& table = static_cast<ClientButtonTable&>(*self.table_ptr);
       if (surface == nullptr) return nullptr;

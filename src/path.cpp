@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 
 #if defined(__linux__)
+#include <linux/limits.h>
 #include <pwd.h>
 #include <unistd.h>
 #endif  // defined(__linux__)

@@ -14,6 +14,7 @@
 #include "root_widget.hpp"
 #ifdef __linux__
 #include <sdbus-c++/sdbus-c++.h>
+#include <unistd.h>
 
 #include "../build/generated/com.canonical.dbusmenu_adaptor.hpp"
 #include "../build/generated/org.kde.StatusNotifierItem_adaptor.hpp"

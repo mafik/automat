@@ -70,6 +70,7 @@ struct GStreamerElement : Object {
   // Each slot's name is its gst pad name.
   StreamOutSlot extra_out[kMaxExtraPorts];
   StreamInSlot extra_in[kMaxExtraPorts];
+  mutable HeapToC base_toc{6 + 2 * kMaxExtraPorts};
   int n_extra_out = 0;
   int n_extra_in = 0;
   PadMode out_mode = PadMode::kNone;  // the primary src template's presence
@@ -100,9 +101,9 @@ struct GStreamerElement : Object {
     uint64_t counter = 0;  // bumped per frame; the toy polls it
   };
 
-  static constexpr int kRunSlot = 1;
   static constexpr int kNextSlot = 2;
   static constexpr int kCancelSlot = 5;
+  static constexpr int kRunSlot = 6;
 
   std::atomic<bool> is_running = false;
 
@@ -149,9 +150,16 @@ struct GStreamerElement : Object {
   DEF_INTERFACE(GStreamerElement, StreamInput, in_stream, "sink")
   DEF_END(in_stream);
 
+  static constexpr int SlotOf(const Interface::Table& table) {
+    return automat::SlotOf<running_tbl, next_tbl, out_stream_tbl, in_stream_tbl, cancel_tbl,
+                           run_tbl>(table);
+  }
+
   GStreamerElement(StrView factory);
   GStreamerElement(const GStreamerElement&);
   ~GStreamerElement() override;
+
+  ToC* BaseToc() const override { return &base_toc; }
 
   StrView Name() const override { return factory; }
   Ptr<Object> Clone() const override { return MAKE_PTR(GStreamerElement, *this); }
@@ -237,7 +245,7 @@ struct AppSinkBoundary : GStreamerElement {
   void OnRun() { obj->StepOne(); }
   DEF_END(step);
 
-  INTERFACES(run_tbl, next_tbl, step_tbl, in_stream_tbl, cancel_tbl, running_tbl,
+  INTERFACES(running_tbl, next_tbl, step_tbl, in_stream_tbl, cancel_tbl, run_tbl,
              image_provider_tbl);
 
   AppSinkBoundary() : GStreamerElement("appsink") {}
@@ -275,7 +283,7 @@ struct AppSrcBoundary : GStreamerElement {
   void OnRun() { obj->StepOne(); }
   DEF_END(step);
 
-  INTERFACES(run_tbl, next_tbl, out_stream_tbl, step_tbl, cancel_tbl, running_tbl, image_tbl);
+  INTERFACES(running_tbl, next_tbl, out_stream_tbl, step_tbl, cancel_tbl, run_tbl, image_tbl);
 
   AppSrcBoundary() : GStreamerElement("appsrc") {}
   AppSrcBoundary(const AppSrcBoundary& o) : GStreamerElement(o), image(o.image) {}

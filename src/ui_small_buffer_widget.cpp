@@ -129,7 +129,7 @@ constinit automat::Text::Table kBufferText = [] {
 
 constinit Command::Table kCycleBufferType = [] {
   Command::Table t("Cycle type");
-  t.on_run = [](Command self) -> Locked<Command> {
+  t.on_run = [](Command self, Command::Table&) -> Locked<Command> {
     auto& buffer = dynamic_cast<Buffer&>(*self.object_ptr);
     auto next = (Buffer::Type)(((int)buffer.GetBufferType() + 1) % (int)Buffer::Type::TypeCount);
     buffer.SetBufferType(next);

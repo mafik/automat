@@ -151,6 +151,7 @@ struct Assembler : Object {
 
   DEF_INTERFACE(Assembler, Command, cancel, "Cancel")
   void OnRun() {
+    if (obj->suspended) return;
     Status status;
     obj->mc_controller->Cancel(status);
     if (!OK(status)) {

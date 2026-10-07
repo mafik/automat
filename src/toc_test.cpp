@@ -48,7 +48,7 @@ TEST(TocTest, GlobalInterfacesAreNegative) {
 
 TEST(TocTest, IndicesRoundTrip) {
   auto number = MAKE_PTR(Number);
-  for (int i = -global_toc.count; i <= number->toc.size(); ++i) {
+  for (int i = -global_toc.size(); i <= number->toc.load(std::memory_order_relaxed)->size(); ++i) {
     EXPECT_EQ(number->InterfaceIdx(number->InterfaceFromIdx(i).table_ptr), i);
   }
 }
@@ -66,8 +66,9 @@ TEST(TocTest, StaticSlotOfMatchesToC) {
   static_assert(Number::SlotOf(kBackspace) == 13);
   static_assert(Number::SlotOf(kThisIsFine) == 0);
   auto number = MAKE_PTR(Number);
-  for (auto* table : number->toc) {
-    EXPECT_EQ(number->toc.SlotOf(table), Number::SlotOf(*table));
+  ToC& toc = *number->toc.load(std::memory_order_relaxed);
+  for (auto* table : toc) {
+    EXPECT_EQ(toc.SlotOf(table), Number::SlotOf(*table));
     EXPECT_EQ(number->InterfaceIdx(table), Number::SlotOf(*table));
   }
 }
@@ -93,15 +94,24 @@ Interface OptionAt(const Menu& menu, SinCos angle) {
   return {};
 }
 
-TEST(TocTest, OnOffMenuPlacesItsCommandAtNorth) {
+TEST(TocTest, CommandMenuHasRunAndSync) {
   auto sw = MAKE_PTR(Switch);
-  Menu off_menu;
-  sw->enabled.Bind().FillMenu(off_menu);
-  EXPECT_EQ(OptionAt(off_menu, 90_deg).table_ptr, &Switch::switch_on_tbl);
-  sw->enabled->TurnOn();
-  Menu on_menu;
-  sw->enabled.Bind().FillMenu(on_menu);
-  EXPECT_EQ(OptionAt(on_menu, 90_deg).table_ptr, &Switch::switch_off_tbl);
+  Menu menu;
+  sw->switch_on.Bind().FillMenu(menu);
+  EXPECT_EQ(menu.slots.size(), 2u);
+  EXPECT_EQ(OptionAt(menu, 90_deg).table_ptr, &kRun);
+  EXPECT_EQ(OptionAt(menu, 0_deg).table_ptr, &kSync);
+}
+
+TEST(TocTest, OnOffMenuHasToggleSyncOnAndOff) {
+  auto sw = MAKE_PTR(Switch);
+  Menu menu;
+  sw->enabled.Bind().FillMenu(menu);
+  EXPECT_EQ(menu.slots.size(), 4u);
+  EXPECT_EQ(OptionAt(menu, 90_deg).table_ptr, &kToggle);
+  EXPECT_EQ(OptionAt(menu, 0_deg).table_ptr, &kSync);
+  EXPECT_EQ(OptionAt(menu, 180_deg).table_ptr, &Switch::switch_on_tbl);
+  EXPECT_EQ(OptionAt(menu, 270_deg).table_ptr, &Switch::switch_off_tbl);
 }
 
 TEST(TocTest, OnOffTrackSlotsMatchItsHeapToC) {

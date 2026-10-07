@@ -161,7 +161,10 @@ static void TeardownChain(GstChain& chain) {
       m->state_word = "NULL";
       m->OnChainStopped();
     }
-    if (m->is_running.exchange(false)) m->run->Done();
+    if (m->is_running.exchange(false, std::memory_order_relaxed)) {
+      m->running->NotifyTurnedOff();
+      m->run->Done();
+    }
     m->WakeToys();
   }
 }
@@ -179,13 +182,13 @@ static Str ExpandPadName(StrView name_template, int port) {
 }
 
 void GStreamerElement::InitPorts() {
-  toc = ToC::MakeOnHeap(6 + 2 * kMaxExtraPorts);
-  toc[1] = &run_tbl;
-  toc[2] = &next_tbl;
-  toc[3] = &out_stream_tbl;
-  toc[4] = &in_stream_tbl;
-  toc[5] = &cancel_tbl;
-  toc[6] = &running_tbl;
+  base_toc[1] = &running_tbl;
+  base_toc[2] = &next_tbl;
+  base_toc[3] = &out_stream_tbl;
+  base_toc[4] = &in_stream_tbl;
+  base_toc[5] = &cancel_tbl;
+  base_toc[6] = &run_tbl;
+  toc.store(&base_toc, std::memory_order_relaxed);
   n_extra_out = n_extra_in = 0;
   out_mode = in_mode = PadMode::kNone;
   out_pad_names.clear();
@@ -250,13 +253,13 @@ void GStreamerElement::InitPorts() {
       auto* elem = static_cast<GStreamerElement*>(self.object_ptr);
       return elem->PortStats(1 + elem->OutSlotOf(self.table_ptr));
     };
-    toc[7 + i] = &p.table;
+    base_toc[7 + i] = &p.table;
   }
   for (int i = 0; i < n_extra_in; ++i) {
     auto& p = extra_in[i];
     p.Init(in_pad_names[i + 1], int(offsetof(GStreamerElement, extra_in) +
                                     i * sizeof(StreamInSlot) + offsetof(StreamInSlot, state)));
-    toc[7 + kMaxExtraPorts + i] = &p.table;
+    base_toc[7 + kMaxExtraPorts + i] = &p.table;
   }
 }
 
@@ -937,7 +940,7 @@ bool GStreamerElement::Start() {
       m->chain = chain_sp;
       m->element = gst_object_ref(elems[i]);
       m->chain_index = i;
-      if (!m->is_running.exchange(true)) m->running->NotifyTurnedOn();
+      if (!m->is_running.exchange(true, std::memory_order_relaxed)) m->running->NotifyTurnedOn();
     }
     m->ClearOwnError();
   }
@@ -976,7 +979,10 @@ void GStreamerElement::Stop() {
       OnChainStopped();
     }
   }
-  if (is_running.exchange(false)) run->Done();
+  if (is_running.exchange(false, std::memory_order_relaxed)) {
+    running->NotifyTurnedOff();
+    run->Done();
+  }
   WakeToys();
 }
 
@@ -1392,7 +1398,7 @@ struct GStreamerToy : ui::beta::ObjectToy {
 
   GStreamerToy(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {
     button = std::make_unique<ui::beta::RunButton>(
-        this, Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::run_tbl),
+        this, Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::running_tbl),
         Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::cancel_tbl), Seed(0x31));
     if (auto elem = LockObject<GStreamerElement>()) {
       factory_ = elem->factory;
@@ -1719,7 +1725,9 @@ struct PropScalarTable : Scalar::Table {
       static_cast<GStreamerElement&>(*self.object_ptr)
           .SetProp(table.info.name, FormatPropNumber(value, table.info.integer));
     };
-    activate = [](Interface self, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
+    activate = [](Span<Interface> chain, ui::Pointer& pointer,
+                  Toy* toy) -> std::unique_ptr<Action> {
+      Interface self = chain.back();
       auto* widget = dynamic_cast<GStreamerToy*>(toy);
       if (!widget) return nullptr;
       int index = static_cast<PropScalarTable&>(*self.table_ptr).index;
@@ -1733,8 +1741,8 @@ struct PropCommandTable : Command::Table {
   PropCommandTable(const PropInfo& info) : Command::Table(""), info(info) {
     name = this->info.name;
     cursor = ui::Cursor::Hand;
-    on_run = [](Command self) -> Locked<Command> {
-      auto& table = static_cast<PropCommandTable&>(*self.table_ptr);
+    on_run = [](Command self, Command::Table& true_self) -> Locked<Command> {
+      auto& table = static_cast<PropCommandTable&>(true_self);
       auto& element = static_cast<GStreamerElement&>(*self.object_ptr);
       Str value = PropValue(element, table.info);
       if (table.info.kind == PropInfo::kBool) {
@@ -2034,7 +2042,7 @@ struct StepZone : ui::ActionZone {
 BoundaryToy::BoundaryToy(ui::Widget* parent, Object& obj, bool is_sink)
     : ui::beta::ObjectToy(parent, obj), is_sink(is_sink), step_zone(new StepZone(this)) {
   button = std::make_unique<ui::beta::RunButton>(
-      this, Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::run_tbl),
+      this, Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::running_tbl),
       Linked<>(obj.AcquireWeakPtr(), &GStreamerElement::cancel_tbl), Seed(0x77));
   if (auto elem = LockObject<GStreamerElement>()) {
     factory_ = elem->factory;

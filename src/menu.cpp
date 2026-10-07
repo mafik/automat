@@ -52,7 +52,7 @@ struct MenuAction;
 struct MenuWidget : ui::Widget {
   struct Slot {
     SinCos angle;
-    Linked<> option;
+    Locked<> option;
     std::unique_ptr<ui::Widget> icon;
     animation::SpringV2<Vec2> offset;
   };
@@ -77,9 +77,11 @@ struct MenuWidget : ui::Widget {
 struct MenuAction : Action {
   std::unique_ptr<MenuWidget> menu_widget;
   MortalPtr<Toy> toy;
+  Vec<Locked<>> chain;
   int last_slot = -1;
   Vec2 last_pos;
-  MenuAction(ui::Pointer& pointer) : Action(pointer) {}
+  MenuAction(ui::Pointer& pointer, Vec<Locked<>> chain)
+      : Action(pointer), chain(std::move(chain)) {}
   void Update() override {
     auto pos = pointer.PositionWithin(*menu_widget);
     float length = Length(pos);
@@ -103,7 +105,7 @@ MenuWidget::MenuWidget(ui::Widget* parent, const Menu& menu, MenuAction* action)
   local_to_parent = SkM44::Translate(pos.x, pos.y);
   WakeAnimation();
   for (auto& [angle, option] : menu.slots) {
-    auto& slot = slots.emplace_back(angle, option, option.MakeIcon(this));
+    auto& slot = slots.emplace_back(angle, AcquireLocked(option), option.MakeIcon(this));
     if (slot.icon) layers.OrderInside(slot.icon.get());
   }
 }
@@ -118,15 +120,19 @@ int MenuWidget::PointerSlot(SinCos pointer_dir) const {
 
 std::unique_ptr<Action> MenuWidget::Activate(int i, ui::Pointer& pointer) {
   auto& slot = slots[i];
-  auto option = slot.option.Lock();
-  if (!option.has_object()) return nullptr;
+  auto& option = slot.option;
   Toy* source = dynamic_cast<Toy*>(slot.icon.get());
   if (source == nullptr && action) source = action->toy.Get();
   if (pointer.root_widget.control->current_state) {
     if (auto drag = option.DragNewController(pointer, *slot.icon)) return drag;
   }
-  if (auto sub_menu = option.OpenMenu(pointer, source)) return sub_menu;
-  return option.Activate(pointer, source);
+  Vec<Locked<>> chain;
+  if (action) chain = action->chain;
+  chain.push_back(option);
+  Menu sub_menu;
+  option.FillMenu(sub_menu);
+  if (!sub_menu.slots.empty()) return MakeMenuAction(pointer, sub_menu, source, std::move(chain));
+  return automat::Activate(std::move(chain), pointer, source);
 }
 
 void MenuWidget::Draw(SkCanvas& canvas) const {
@@ -221,21 +227,25 @@ ui::Tock MenuWidget::Tick(time::Timer& timer) {
   return Tock::Drawing;
 }
 
-std::unique_ptr<Action> MakeMenuAction(ui::Pointer& pointer, const Menu& menu, Toy* toy) {
+std::unique_ptr<Action> MakeMenuAction(ui::Pointer& pointer, const Menu& menu, Toy* toy,
+                                       Vec<Locked<>> chain) {
   if (menu.slots.empty()) return nullptr;
-  auto action = std::make_unique<MenuAction>(pointer);
+  auto action = std::make_unique<MenuAction>(pointer, std::move(chain));
   action->toy = toy;
   action->menu_widget = std::make_unique<MenuWidget>(pointer.GetWidget(), menu, action.get());
   return action;
 }
 
-std::unique_ptr<Action> OptionsProvider::OpenMenu(ui::Pointer& pointer) {
+std::unique_ptr<Action> OptionsProvider::OpenMenu(ui::Pointer& pointer, Vec<Locked<>> chain) {
   // TODO: Closest<Toy> is very strange here. OptionsProvider shouldn't have to depend on its
   // parents!
   Toy* toy = ui::Closest<Toy>(static_cast<ui::Widget&>(*this));
+  if (chain.empty() && toy) {
+    if (auto owner = toy->owner.Lock()) chain.push_back(AdoptLocked(Interface(*owner.Release())));
+  }
   Menu menu;
   FillMenu(pointer, menu);
-  return MakeMenuAction(pointer, menu, toy);
+  return MakeMenuAction(pointer, menu, toy, std::move(chain));
 }
 
 }  // namespace automat

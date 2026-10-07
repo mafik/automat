@@ -15,7 +15,6 @@
 #include "key_button.hpp"
 #include "keyboard.hpp"
 #include "math.hpp"
-#include "menu.hpp"
 #include "root_widget.hpp"
 #include "ui_constants.hpp"
 #include "widget.hpp"
@@ -60,7 +59,7 @@ void HotKey::ToggleModifier(bool& modifier) {
   WakeToys();
 }
 
-static std::unique_ptr<Action> SelectHotKeyActivate(Interface, ui::Pointer&, Toy*);
+static std::unique_ptr<Action> SelectHotKeyActivate(Span<Interface>, ui::Pointer&, Toy*);
 
 constinit Command::Table kSelectHotKey = [] {
   Command::Table t("Select key");
@@ -185,12 +184,6 @@ bool HotKey::DeserializeKey(ObjectDeserializer& d, StrView keyName) {
 // HotKeyWidget
 
 struct HotKeyWidget : ObjectToy {
-  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
-    ObjectToy::FillMenu(pointer, menu);
-    auto object = LockObject<HotKey>();
-    if (!object) return;
-    menu.Place(ui::Dir::N, object->enabled.Bind());
-  }
   unique_ptr<ui::PowerButton> power_button;
   unique_ptr<KeyButton> ctrl_button;
   unique_ptr<KeyButton> alt_button;
@@ -388,7 +381,8 @@ struct HotKeyWidget : ObjectToy {
   }
 };
 
-static std::unique_ptr<Action> SelectHotKeyActivate(Interface, ui::Pointer& pointer, Toy* toy) {
+static std::unique_ptr<Action> SelectHotKeyActivate(Span<Interface>, ui::Pointer& pointer,
+                                                    Toy* toy) {
   if (auto* widget = dynamic_cast<HotKeyWidget*>(toy)) widget->SelectHotKey(pointer);
   return std::make_unique<EmptyAction>(pointer);
 }

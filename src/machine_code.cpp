@@ -18,6 +18,7 @@
 #include <sys/mman.h>  // For mmap related functions and constants
 #include <sys/prctl.h>
 #include <sys/ptrace.h>
+#include <sys/syscall.h>
 #include <sys/user.h>
 #include <sys/wait.h>
 #include <ucontext.h>

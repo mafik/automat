@@ -104,7 +104,7 @@ struct Menu;
 struct OptionsProvider {
   virtual Interface FindOption(ui::Pointer&, ui::ActionTrigger) { return {}; }
   virtual void FillMenu(ui::Pointer&, Menu&) {}
-  std::unique_ptr<Action> OpenMenu(ui::Pointer&);
+  std::unique_ptr<Action> OpenMenu(ui::Pointer&, Vec<Locked<>> chain);
 };
 }  // namespace automat
 

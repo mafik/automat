@@ -7,6 +7,7 @@
 #include "on_off.hpp"
 #include "os_window.hpp"
 #include "str.hpp"
+#include "syncable.hpp"
 #include "time.hpp"
 #include "window_watch.hpp"
 
@@ -40,16 +41,21 @@ struct Window : public Object, ui::WindowWatcher {
   bool IsOn() const { return obj->active; }
   static constexpr int TurnOnIdx() { return SlotOf(activate_tbl); }
   static constexpr int TurnOffIdx() { return SlotOf(deactivate_tbl); }
+  static constexpr int SyncableIdx() { return SlotOf(syncable_tbl); }
+  DEF_END(on_off);
+
+  DEF_INTERFACE(Window, Syncable, syncable, "Syncable")
   void OnSync();
   void OnUnsync() {
     if (obj->window_watching) {
       obj->window_watching->Release();
     }
   }
-  DEF_END(on_off);
+  DEF_END(syncable);
 
   DEF_INTERFACE(Window, Command, activate, "Activate")
   void OnRun() {
+    if (obj->suspended) return;
     os::WindowHandle tracked = os::kNoWindow;
     {
       auto lock = std::lock_guard(obj->mutex);
@@ -64,6 +70,7 @@ struct Window : public Object, ui::WindowWatcher {
 
   DEF_INTERFACE(Window, Command, deactivate, "Deactivate")
   void OnRun() {
+    if (obj->suspended) return;
     // Note that we're not turning off the active window here!
     // OS-es don't really offer a great way to deactivate a window :(
     obj->active = false;
@@ -85,13 +92,14 @@ struct Window : public Object, ui::WindowWatcher {
   static constexpr time::Duration kActivationInhibitDuration = 50ms;
 
   Window();
+  ~Window() override;
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
   INTERFACES(capture_tbl, on_off_tbl, activate_tbl, deactivate_tbl, next_tbl, image_provider_tbl,
-             kPickWindow);
+             kPickWindow, syncable_tbl);
 
   // Called after deserialization. Makes the window object attach its native handle to the window
   // with the current title.

@@ -99,7 +99,7 @@ struct Argument : Interface {
     };
 
     static std::unique_ptr<ui::Widget> DefaultMakeIcon(Interface, ui::Widget* parent);
-    static std::unique_ptr<Action> DefaultActivate(Interface, ui::Pointer&, automat::Toy*);
+    static std::unique_ptr<Action> DefaultActivate(Span<Interface>, ui::Pointer&, automat::Toy*);
 
     constexpr Table(StrView name, Kind kind = Interface::kArgument) : Interface::Table(kind, name) {
       make_icon = &DefaultMakeIcon;

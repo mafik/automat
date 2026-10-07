@@ -24,6 +24,9 @@ struct TrackBase : Object {
 
   InterfaceArgument<Interface>::State arg_state;
   InterfaceArgument<Interface>::Table arg_table;
+  mutable HeapToC base_toc;
+
+  ToC* BaseToc() const override { return &base_toc; }
 
   Timeline* timeline = nullptr;
   Vec<time::Duration> timestamps;

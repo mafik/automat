@@ -192,7 +192,10 @@ Ptr<Object> Timer::Clone() const { return MAKE_PTR(Timer, *this); }
 
 void Timer::OnTimerNotification(Location& here2, time::SteadyPoint) {
   auto lock = std::lock_guard(mtx);
-  if (start_time.exchange(kStopped, std::memory_order_relaxed) != kStopped) run->Done();
+  if (start_time.exchange(kStopped, std::memory_order_relaxed) != kStopped) {
+    running->NotifyTurnedOff();
+    run->Done();
+  }
 }
 
 void Timer::Updated(WeakPtr<Object>& updated) {

@@ -7,7 +7,6 @@
 
 #include "embedded.hpp"
 #include "log.hpp"
-#include "menu.hpp"
 #include "path.hpp"
 #include "textures.hpp"
 #include "virtual_fs.hpp"
@@ -61,12 +60,6 @@ void Sources::extract_files_Impl::OnRun() {
 }
 
 struct SourcesWidget : ObjectToy {
-  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
-    ObjectToy::FillMenu(pointer, menu);
-    auto object = LockObject<Sources>();
-    if (!object) return;
-    menu.Place(ui::Dir::N, object->extract_files.Bind());
-  }
   SourcesWidget(ui::Widget* parent, Object& sources) : ObjectToy(parent, sources) {}
 
   Ptr<Sources> LockSources() const { return LockObject<Sources>(); }

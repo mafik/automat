@@ -296,7 +296,7 @@ static SkPath GetRecPath() {
 static constexpr SkColor4f kTimelineButtonBackground = "#fdfcfb"_color4f;
 
 TrackBase::TrackBase(Str name_arg, std::initializer_list<Interface::Table*> tables)
-    : name_str(std::move(name_arg)), arg_table(name_str) {
+    : name_str(std::move(name_arg)), arg_table(name_str), base_toc(1 + tables.size()) {
   arg_table.tint = "#17aeb7"_color4f;
   arg_table.light = "#17aeb7"_color4f;
   arg_table.can_connect = [](Argument, Interface, Status&) {};
@@ -311,12 +311,12 @@ TrackBase::TrackBase(Str name_arg, std::initializer_list<Interface::Table*> tabl
     return std::make_unique<TextWidget>(parent, Str(self.Name()));
   };
   arg_table.state_off = offsetof(TrackBase, arg_state);
-  toc = ToC::MakeOnHeap(1 + tables.size());
-  toc[1] = &arg_table;
+  base_toc[1] = &arg_table;
   int i = 2;
   for (auto* table : tables) {
-    toc[i++] = table;
+    base_toc[i++] = table;
   }
+  toc.store(&base_toc, std::memory_order_relaxed);
 }
 
 TrackBase::TrackBase(const TrackBase& other)
@@ -324,10 +324,12 @@ TrackBase::TrackBase(const TrackBase& other)
       name_str(other.name_str),
       arg_state(other.arg_state),
       arg_table(other.arg_table),
+      base_toc(other.base_toc),
       timeline(other.timeline),
       timestamps(other.timestamps) {
   arg_table.name = name_str;
-  toc[1] = &arg_table;
+  base_toc[1] = &arg_table;
+  toc.store(&base_toc, std::memory_order_relaxed);
 }
 
 bool OnOffTrack::on_off_Impl::IsOn() const {
@@ -1830,7 +1832,7 @@ std::unique_ptr<Action> Timeline::zoom_Impl::OnActivate(ui::Pointer& pointer, au
 constinit Command::Table kSplice = [] {
   Command::Table t("Splice");
   t.cursor = ui::Cursor::ResizeHorizontal;
-  t.activate = [](Interface, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
+  t.activate = [](Span<Interface>, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
     auto* widget = toy ? ui::Closest<TimelineWidget>(*toy) : nullptr;
     if (!widget || widget->splice_action) return nullptr;
     return make_unique<SpliceAction>(pointer, *widget);
@@ -2710,6 +2712,7 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
   if (now >= end_at) {
     state = kPaused;
     paused = {.playback_offset = MaxTrackLength()};
+    running->NotifyTurnedOff();
     run->Done();
     WakeRunButton(*this);
   }

@@ -107,9 +107,10 @@ The icon can be dragged off the plate. Dragging extracts the launch
 ends without cancelling the child and without scheduling `next`, and the
 launch becomes a board object under the pointer. This is how one Program Launcher
 runs several instances at once — extract the running one, run again — while
-the Program Launcher itself keeps strict one-instance semantics (RUN while running is
-refused; a Timer firing into a busy Program Launcher is skipped, which is the safe
-scheduling default). Deleting a launch that sits on a Board SIGTERMs a
+the Program Launcher itself keeps strict one-instance semantics (`run` refuses a
+second start while the child runs; a `Next` cable dropped on the Program Launcher
+connects to its `running` OnOff, so a Timer firing into a busy Program Launcher
+stops it). Deleting a launch that sits on a Board SIGTERMs a
 child that has not exited and has produced no window; a child with a window is terminated
 through the window's own close path instead, and deleting the launch of an
 already-exited run deletes only the record.

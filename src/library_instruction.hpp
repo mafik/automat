@@ -70,7 +70,16 @@ struct Instruction : Object, Buffer {
   std::unique_ptr<ui::Widget> OnMakeIcon(ui::Widget* parent);
   DEF_END(jump_arg);
 
+  static constexpr int SlotOf(const Interface::Table& table) {
+    return automat::SlotOf<run_tbl, assembler_arg_tbl, next_tbl, jump_arg_tbl>(table);
+  }
+
+  mutable HeapToC base_toc{4};
+
   Instruction();
+  Instruction(const Instruction&);
+
+  ToC* BaseToc() const override { return &base_toc; }
 
   void UpdateToC();
 

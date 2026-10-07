@@ -299,7 +299,7 @@ static void FillButtonEventMenu(Menu& menu, bool down) {
   PlaceButtons(menu, down ? down_events : up_events);
 }
 
-static void FillPresserMenu(Interface, Menu& menu) {
+static void FillPresserMenu(Interface, Interface::Table&, Menu& menu) {
   using enum ui::PointerButton;
   static const Ptr<Object> pressers[5] = {
       MAKE_PTR(MouseButtonPresser, Left), MAKE_PTR(MouseButtonPresser, Middle),
@@ -308,7 +308,7 @@ static void FillPresserMenu(Interface, Menu& menu) {
   PlaceButtons(menu, pressers);
 }
 
-static void FillScrollMenu(Interface, Menu& menu) {
+static void FillScrollMenu(Interface, Interface::Table&, Menu& menu) {
   using enum ui::Dir;
   static const Ptr<Object> scroll_x = MAKE_PTR(MouseScrollX);
   static const Ptr<Object> scroll_y = MAKE_PTR(MouseScrollY);
@@ -317,13 +317,15 @@ static void FillScrollMenu(Interface, Menu& menu) {
 }
 
 constinit Interface::Table kMouseDownMenu = [] {
-  auto t = MenuTable("Down", [](Interface, Menu& menu) { FillButtonEventMenu(menu, true); });
+  auto t = MenuTable(
+      "Down", [](Interface, Interface::Table&, Menu& menu) { FillButtonEventMenu(menu, true); });
   t.make_icon = [](Interface, ui::Widget* p) { return MakeMouseMenuIcon(p, true, false); };
   return t;
 }();
 
 constinit Interface::Table kMouseUpMenu = [] {
-  auto t = MenuTable("Up", [](Interface, Menu& menu) { FillButtonEventMenu(menu, false); });
+  auto t = MenuTable(
+      "Up", [](Interface, Interface::Table&, Menu& menu) { FillButtonEventMenu(menu, false); });
   t.make_icon = [](Interface, ui::Widget* p) { return MakeMouseMenuIcon(p, false, false); };
   return t;
 }();
@@ -898,7 +900,7 @@ bool MouseButtonPresser::DeserializeKey(ObjectDeserializer& d, StrView key) {
 
 MouseButtonPresser::~MouseButtonPresser() {
   if (state->IsOn()) {
-    state->TurnOff();
+    Release();
   }
 }
 

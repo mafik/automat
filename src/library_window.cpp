@@ -111,6 +111,12 @@ struct Window::Impl {
 
 Window::Window() { impl = std::make_unique<Impl>(); }
 
+Window::~Window() {
+  if (window_watching) {
+    window_watching->Release();
+  }
+}
+
 Ptr<Object> Window::Clone() const {
   auto ret = MAKE_PTR(Window);
   ret->captured_image = captured_image;
@@ -127,7 +133,7 @@ constexpr static float kTitleButtonSize = kTitleHeight - 2 * kContentMargin;
 
 struct WindowWidget;
 
-static std::unique_ptr<Action> PickWindowActivate(Interface, ui::Pointer&, Toy*);
+static std::unique_ptr<Action> PickWindowActivate(Span<Interface>, ui::Pointer&, Toy*);
 
 constinit Command::Table kPickWindow = [] {
   Command::Table t("Pick window");
@@ -408,7 +414,7 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
   }
 };
 
-static std::unique_ptr<Action> PickWindowActivate(Interface, ui::Pointer& pointer, Toy* toy) {
+static std::unique_ptr<Action> PickWindowActivate(Span<Interface>, ui::Pointer& pointer, Toy* toy) {
   auto* widget = dynamic_cast<WindowWidget*>(toy);
   if (!widget) return nullptr;
   pointer.EndAllActions();
@@ -667,10 +673,11 @@ bool Window::DeserializeKey(ObjectDeserializer& d, StrView key) {
   return true;
 }
 
-void Window::on_off_Impl::OnSync() {
+void Window::syncable_Impl::OnSync() {
   if (obj->window_watching) return;  // Already watching
   if (obj->HomeLocation()) {
     ui::root_widget->window->BeginWindowWatching(&*obj, &obj->window_watching);
   }
 }
+
 }  // namespace automat::library

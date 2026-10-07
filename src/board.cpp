@@ -595,7 +595,7 @@ Vec<Ptr<Location>> BoardWidget::CloneStack(Location& base, Vec<std::unique_ptr<T
       auto* target_owner = target.object_ptr;
       auto it = orig_to_clone.find(target_owner);
       if (it != orig_to_clone.end()) {
-        arg.Connect(Interface(it->second, target.table_ptr));
+        arg.Connect(it->second->InterfaceFromIdx(target_owner->InterfaceIdx(target.table_ptr)));
       }
       return LoopControl::Continue;
     });

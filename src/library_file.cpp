@@ -14,7 +14,6 @@
 #include "deserializer.hpp"
 #include "file_import.hpp"
 #include "font.hpp"
-#include "menu.hpp"
 #include "object.hpp"
 #include "root_widget.hpp"
 #include "textures.hpp"
@@ -152,8 +151,8 @@ ui::Font& LabelFont() {
 }  // namespace
 
 File::File() {
-  toc = ToC::MakeOnHeap(2);
-  toc[2] = &toggle_filename_tbl;
+  base_toc[2] = &toggle_filename_tbl;
+  toc.store(&base_toc, std::memory_order_relaxed);
 }
 
 File::File(const File& o) : File() {
@@ -247,7 +246,8 @@ void File::SetPath(StrView new_path) {
         size = FitAspect(Vec2(bounds.width(), bounds.height()), 0, kIconSize);
       }
     }
-    toc[1] = image ? &image_provider_tbl : nullptr;
+    base_toc[1] = image ? &image_provider_tbl : nullptr;
+    ReattachHooks();
   }
   WakeToys();
 }
@@ -296,12 +296,6 @@ Vec2 File::Size() const {
 }
 
 struct FileToy : automat::ObjectToy {
-  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
-    automat::ObjectToy::FillMenu(pointer, menu);
-    auto object = LockObject<File>();
-    if (!object) return;
-    menu.Place(ui::Dir::N, object->toggle_filename.Bind());
-  }
   sk_sp<SkImage> image;
   sk_sp<SkPicture> icon;
   Vec2 size;

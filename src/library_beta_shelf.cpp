@@ -24,19 +24,19 @@ Interface Proto(StrView name) {
   return proto ? Interface(*proto, kMakeObject) : Interface();
 }
 
-void FillFfmpegMenu(Interface, Menu& menu) {
+void FillFfmpegMenu(Interface, Interface::Table&, Menu& menu) {
   using enum ui::Dir;
   menu.Place(N, Proto("avformat"));
   menu.Place(S, Proto("avcodec"));
 }
 
-void FillTensorFlowMenu(Interface, Menu& menu) {
+void FillTensorFlowMenu(Interface, Interface::Table&, Menu& menu) {
   using enum ui::Dir;
   menu.Place(N, Proto("tf:tensor"));
   menu.Place(S, Proto("Square"));
 }
 
-void FillPipelinesMenu(Interface self, Menu& menu) {
+void FillPipelinesMenu(Interface self, Interface::Table&, Menu& menu) {
   using enum ui::Dir;
   menu.Place(NW, Proto("GStreamer"));
   menu.Place(N, Interface(self.object_ptr, &kFfmpegMenu));

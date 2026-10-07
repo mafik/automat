@@ -53,7 +53,10 @@ struct ProgramLauncher : Object, Container {
 
   DEF_INTERFACE(ProgramLauncher, Command, cancel, "Cancel")
   void OnRun() {
-    if (obj->is_running.exchange(false)) obj->Terminate(true);
+    if (obj->is_running.exchange(false)) {
+      obj->Terminate(true);
+      obj->WakeToys();
+    }
   }
   DEF_END(cancel);
 
@@ -81,7 +84,7 @@ struct ProgramLauncher : Object, Container {
   Str OnFormat() { return "bytes"; }
   DEF_END(in_stream);
 
-  INTERFACES(running_tbl, run_tbl, cancel_tbl, next_tbl, out_stream_tbl, in_stream_tbl, stop_tbl,
+  INTERFACES(run_tbl, running_tbl, cancel_tbl, next_tbl, out_stream_tbl, in_stream_tbl, stop_tbl,
              text_tbl);
 
   ProgramLauncher() = default;

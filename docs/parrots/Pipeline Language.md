@@ -379,7 +379,9 @@ instead of hiding it:
   Automat's control flow drives blocks through Command interfaces
   (src/command.hpp). The starting signal is the block's `run` Command,
   and it ignores a second start while the block's running flag is set,
-  because a running thing is not started twice. A step
+  because a running thing is not started twice. A `Next` cable dropped
+  on the block connects to its `running` OnOff instead, which starts a
+  stopped block and stops a running one. A step
   signal is a separate Command, so it is delivered while the stream
   runs, because it performs one bounded unit of work. This is what lets a
   Timer or a Next chain drive a boundary block's Pull or Push during

@@ -1,118 +1,82 @@
 # Synchronization
 
-Within Automat's (multithreaded) Engine, Objects can connect to Interfaces using any of these modes:
+The point of synchronization is to "fuse" some aspect of two objects - to make them act as one. Whenever something happens to one object - it would be also applied to all the others.
 
-- **Lazy observers** - store a `Linked<T>` (weak pointer which keeps the other end in memory - although allows destruction) and every now and then locking the pointer to check the state of the linked interface. This kind of synchronization resembles a popular "pull" update model.
-- **Monitoring observers** - store a weak pointer and periodically poll its `monitor` property. When `monitor` changes - it's a signal that it should be properly locked & checked for updates. This is how UI (Toys) follow object updates (`Poll()` checks monitors & `Tick()` properly locks & checks for updates). This kind of synchronization resembles a "parallel computers" update model.
-- **Synchronized observers** - they explicitly register themselves in the other interface which then allows them to be called synchronously whenever an update happens. This kind of synchronization resembles a "push" update model.
-- All of these modes allow concurrent destruction of linked interface (while it's not locked). *Is there a kind of synchronization which also OWNS the related object?*
+## Interaction models
 
-## `Syncable`
+**Direct.** Within Automat's (multithreaded) Engine, Objects generally refer to one another using `Linked<T>` (weak pointer which keeps the other end in memory - although allows destruction). The main example is the "next cable" which passes control flow to the next object. Under this model, all interactions require some object to wake up and explicitly push or pull some data.
 
-The main file which controls how synchronization works is `sync.hpp` and its `Syncable` interface.
+**Monitoring.** Another mechanism for fetching data relies on storing a weak pointer (just like above) and periodically polling its `monitor` property. When `monitor` changes - it's a signal that it should be properly locked & checked for updates. This is how UI (Toys) follow object updates (`Poll()` checks monitors & `Tick()` properly locks & checks for updates). This kind of synchronization resembles a "parallel computers" update model - all machines must be "alive": to periodically bump their monitors & check the monitors of others.
 
-Every `Syncable` interface can point to a `Gear` which then points to more synchronized objects.
+**Hooking** allows one Object to modify the ToC (the list of supported interfaces) of another object. It may add & replace arbitrary interfaces (as long as they stay compatible). This can be used to arbitrarily modify the behavior of another object - possibly even replacing some of its functions with Automat-hosted implementations that use machine-code!
 
-Note: *Direct synchronization*. It should be possible to synchronize two objects without a `Gear` in between. BUT it's really an optimization that only makes many-to-many synchronization harder. For this reason this design has been abandoned (may be revisited later).
+The main problem with Synchronization is that it might be applied at many levels within object logic, so *Direct* approach would result with lots of unused "hook pointers". *Monitoring* approach would require constant polling (acceptable for the UI - but not so much for headless operation). That leaves *hooking* as the main mechanism of synchronization.
 
-### Hidden Gears (loose idea)
+When some interface is being synchronized, then that interface (and/or its linked-interfaces) are replaced with stubs that propagate the events to other linked objects.
 
-If we assume that Gear is *always* present when a sync relation is active then instead of storing gears as weak ptrs - they could be stored as proper `Ptr`! Gear could still be placed within a `Location` but it could also exist in a *detached* state - where it's not visible but is accessible to objects.
+## Gear
 
-### One-way sync
+Every synchronized interface adds a `Ptr<Gear>` argument to the hooked Object. `Gear` serves as a concurrency synchronization point and as a storage for all the other linked members. This kind of argument differs from most others - which store `Linked<T>`. The assumption is that synchronization will become very commonplace and leaving gears all over the place would lead to visual mess. `Ptr` allows Gear to exist in a *detached* state - where it's not visible but is still accessible to objects.
 
-Syncables may wish to:
+**Note: Direct synchronization.** It should be possible to synchronize two objects without a `Gear` in between. BUT it's really an optimization that only makes many-to-many synchronization harder. For this reason this design has been abandoned (may be revisited later).
 
-- be notified that an event has happened
-- notify other Syncables that an event has happened
+## Notifications & suspension
 
-Currently sync implies both of those, but for some situations it may be good to limit this.
+Objects may control the direction of the synchronization by setting their `suspended` bool. That bool is a part of every Object! The idea behind it is that when an object is woken up, it should raise its `suspended` bit. Failure to do so (`suspended` was already true) means that the Object has already done its work and should not do it again.
 
-- **Sink** - can be notified of events from other Syncables.
-- **Source** - notifies other Syncables that an event has happened.
+`suspended` allows objects to invoke their own methods as notifications. `suspension` is the mechanism that *Object's implementations* use to prevent backflow of signals. The user-visible mechanism is the *sources & sinks*:
 
-Within Syncable this information is stored in the last bit of `gear_weak` pointer. If an interface is not marked as a sync *Source* then it may skip the whole synchronization code.
+## Sources & sinks
+
+For some situations it may be good to be able to control how a particular Interface is synchronized:
+
+- **Sink** - can be notified of events from other Interfaces.
+- **Source** - notifies other Interfaces that an event has happened.
 
 On the Gear side this information is stored in the explicit `sink` boolean - which then allows to skip non-sinks during updates.
 
-TODO: If / when interfaces (objects?) can store reverse-link information then it might be possible to instead set `gear_weak` to nullptr & omit the non-sinks from the Gear's list.
-
 TODO: User Interface for sync directions
 
-### Async execution (early design)
+## Concurrency
 
-When something happens, we typically (in the code) receive control flow (an attention of a CPU core / a thread of execution).
+Interfaces are allowed to block the worker threads for arbitrary periods of time. Because of this synchronization requires all of the synchronized interfaces to be executed in parallel.
 
-Sometimes when we receive it, we are also expected to give it back eventually (maybe returning some value).
+**Not single-threaded.** In some cases serial execution might be better (for example synchronization of very fast, tiny actions) - but for those there might be better, dedicated primitives. Synchronization will take care of the higher-level stuff.
 
-The default should be simple to understand (everything executes synchronously) but it should also be possible to execute stuff concurrently. Essentially a Gear needs to maintain the "execute in parallel" bit. When it's set, then instead of executing that code immediately, it would schedule it for another thread.
+The completion of synchronized actions must also be synchronized! To facilitate this, Gear must count & delay the execution of the 'next' argument of synchronized actions. It must also properly handle cancellation.
 
-As long as we retain control flow, the chained calls should not grow the stack - tail calls are required and *suspended* must also be disabled before tail-call.
+Cancellation of one of the synchronized interfaces should probably also cancel the other.
 
-TODO: implement this
-
-### Command - how would it look if it was a "Syncable" interface?
-
-The LongRunning / Runnable interfaces might then not be needed.
-
-#### Goal: no blocking
-
-Worker threads are meant to do actual work. There should be no "park this thread until work is done" in the design. It wastes a CPU thread. Instead the design should allow external wakeup when the work is done.
-
-IF work requires actualy CPU work - then it's perfectly fine to block a worker thread - to do this work.
-
-Otherwise the worker should return to the pool of workers.
-
-#### Goal: blocking work == background work for the user, bot not for workers
-
-Simple commands (executed atomically on the worker thread) and long-running (executed on some background thread / external work) should behave identically from user's perspective. The only difference is that the blocking command may temporarily occupy a worker thread.
-
-Synchronizing blocking & background commands in all combinations should produce the same predictable results.
-
-#### Goal: granular events
-
-Synchronization should be possible at a more granular level (maybe through nested interfaces). Something like "work started" / "work finished" / "work cancelled" could be exposed as more primitive signals that can be hooked together to achieve some specific behaviors.
-
-#### Goal: "Synchronized commands" make sense
-
-The behavior that user probably expects from synchronization is that:
-* start of either object starts the other
-* cancel on either also cancels the other
-* (blocking sync) execution continues only after both synchronized commands finished
-* (asynchronous sync) execution continues on either end when that ends is done
-
-This ideal behavior would probably require some dedicated code *somewhere* (where??).
-
-#### Goal: "Synchronized on/off" make sense
-
-The behavior that user probably expects from on/off is that:
-* on on either object turns the other also on
-* off on either object turns the other also off
-
-#### Goal: "Synchronized Commands-On/Off" make sense
-
-The behavior that user probably expects from on/off - Command sync is that:
-* on/start on either object turns the other also on
-* off/cancel/finish causes other objects to be turned off/cancelled
-* directions (source / sink) may be used to:
-  * have on/off control the command, without command affecting the on/off
-  * have command control the on/off, without on/off affecting the command
-
-#### Goal: Gear is Interface-agnostic
+## Goal: Gear is Interface-agnostic
 
 Gear should stay as interface-agnostic as possible. It may store some extra data but it should not be interface-specific.
 
-## TODO: How would the *Next* relation work? *scary thought because it replaces cables*
+## On/Off synchronization
 
-* The "begin" & "finish" become events / signals
-* "Finish" on one command is connected to a "Begin" on the next one
+There are some Objects in Automat that offer various On/Off-type interfaces. Those interfaces might be synchronized with other On/Off interfaces and should then work as if their `on` & `off` methods were synchronized.
 
-"Next" becomes a special kind of argument that manages this kind of relation.
+On/Off itself is a combination of three different commands: `on`, `off` & `toggle`. This makes simple 1:1 synchronization with Commands difficult. To allow it, the Switch object (which may function as an "On/Off controller") is going to expose "command adapters":
 
-Cable is only shown when the Gear is in a "Hidden mode" (no Gear widget on current Board but the other end has a Widget).
+* **Start/Stop adapter**: Command execution is synchronized with On/Off's "on" command BUT once all of the commands complete, the "off" is executed (as if it was the "done" signal). Explicit "off" may be used to cancel execution.
+* **Wait adapter**: Command execution is synchronized with On/Off's "on+off". On runs immediately, and other Commands wait for the "off" to be executed. Explicit "off" is not cancellation - it only allows the control to proceed. Wait adapters may be useful in extending the runtime of other Commands.
 
-This is strictly better than our current cables because:
-- the Finish=>Begin connection can be marked as parallel
-  - allows early return, background execution & precise threading control
-- alternative Begin=>Begin sync can be created to make two objects execute in parallel
+These command adapters will only be accessible through the synchronization mechanism.
 
+## Menu structure
+
+Menu is structured to present the most important options first (start/stop sync, wait sync) while hiding confusing options like "toggle sync" deeper.
+
+### Every On/Off interface
+
+(ctrl + pull creates a Switch controller)
+
+1. On => Command interface sub-menu (Run/Sync/Controller options)
+2. Off => Command interface sub-menu (Run/Sync/Controller options)
+3. Toggle => Command interface sub-menu (Run/Sync/Controller options)
+4. Controller => Creates a Switch controller for this interface
+
+### Switch's top-level menu
+
+1. State => On/Off interface sub-menu (On/Off/Toggle commands)
+2. "Start/Stop (Sync)" => synchronizes the "Stop" command adapter within Switch
+3. "Wait (Sync)"=> synchronizes the "Wait" command adapter within Switch

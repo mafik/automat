@@ -173,7 +173,9 @@ constinit ObjectSource::Table kMakeObject = [] {
   ObjectSource::Table t("New");
   t.cursor = ui::Cursor::Hand;
   t.take = [](ObjectSource self) { return self.object_ptr->Clone(); };
-  t.activate = [](Interface self, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
+  t.activate = [](Span<Interface> chain, ui::Pointer& pointer,
+                  Toy* toy) -> std::unique_ptr<Action> {
+    Interface self = chain.back();
     if (toy == nullptr) return nullptr;
     auto object = cast<ObjectSource>(self).Take();
     auto new_toy = object->MakeToy(toy);
@@ -285,9 +287,70 @@ Vec2AndDir ObjectToy::ArgStart(const Interface::Table& arg, ui::Widget* coordina
   return pos_dir;
 }
 
+Object::Object(const Object& other) : ReferenceCounted(), monitor(0), toc(other.BaseToc()) {}
+
 Object::~Object() {
   assert(owners == nullptr);
+  assert(toc_refs.load(std::memory_order_relaxed) == 0);
+  if (auto x = garbage.load(std::memory_order_relaxed)) delete x;
+  while (hook_count) {
+    auto* hook = static_cast<Hook*>(toc.load(std::memory_order_relaxed));
+    hook->Detach(*this);
+    delete hook;
+  }
   LifetimeObserver::CheckDestroyNotified(*this);
+}
+
+Hook::~Hook() {
+  if (tail) {
+    if (auto* tail_hook = dynamic_cast<Hook*>(tail)) {
+      delete tail_hook;
+    }
+  }
+}
+
+void Object::DecrementTocRefs() {
+  if (toc_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+    if (garbage.load(std::memory_order_relaxed)) {
+      ToC* top_garbage = garbage.exchange(nullptr, std::memory_order_acquire);
+      delete top_garbage;
+    }
+  }
+}
+
+void Object::RemoveHook(Hook& target) {
+  auto lock = std::lock_guard(hooks_lock);
+  // Detach ToCs until we hit `target` (also pop it)
+  SmallVec<std::pair<Hook*, int>, 4> stack;
+  while (true) {
+    assert(hook_count > 0);
+    auto* top = static_cast<Hook*>(toc.load(std::memory_order_relaxed));
+    int toc_idx = top->Detach(*this);
+    if (top == &target) break;
+    stack.push_back({top, toc_idx});
+  }
+  // Re-attach those ToCs (except `target`)
+  for (auto [hook, toc_idx] : std::ranges::reverse_view(stack)) {
+    hook->Attach(*this, toc_idx);
+  }
+  //  Attach `target` as the new `garbage` instead
+  ToC* head = garbage.load(std::memory_order_relaxed);
+  do {
+    target.tail = head;
+  } while (!garbage.compare_exchange_weak(head, &target, std::memory_order_release,
+                                          std::memory_order_relaxed));
+}
+
+void Object::ReattachHooks() {
+  auto lock = std::lock_guard(hooks_lock);
+  SmallVec<std::pair<Hook*, int>, 4> stack;
+  while (hook_count) {
+    auto* top = static_cast<Hook*>(toc.load(std::memory_order_relaxed));
+    stack.push_back({top, top->Detach(*this)});
+  }
+  for (auto [hook, toc_idx] : std::ranges::reverse_view(stack)) {
+    hook->Attach(*this, toc_idx);
+  }
 }
 
 bool ObjectToy::AllowChildPointerEvents(ui::Widget&) const { return iconified <= 0.5f; }
@@ -390,24 +453,25 @@ Ptr<Location> Object::HomeLocation() {
   return owner->HomeLocation();
 }
 
-constinit ToC::Data& global_toc = toc_of<kMakeObject, kThisIsFine>;
+constinit ToC& global_toc = toc_of<kMakeObject, kThisIsFine, kRun, kToggle, kSync>;
 
 Interface Object::InterfaceFromIdx(int idx) {
   if (idx < 0) {
-    assert(~idx < global_toc.count);
+    assert(~idx < global_toc.size());
     return Interface(*this, *global_toc.array[~idx]);
   }
   if (idx == 0) return Interface(*this);
-  assert(idx <= toc.size());
-  auto* table = toc[idx];
+  ToC& tables = *toc.load(std::memory_order_acquire);
+  assert(idx <= tables.size());
+  auto* table = tables[idx];
   if (table == nullptr) return Interface();
   return Interface(*this, *table);
 }
 
 int Object::InterfaceIdx(const Interface::Table* table) {
   if (table == nullptr) return 0;
-  if (int slot = toc.SlotOf(table)) return slot;
-  int global_slot = ToC(global_toc).SlotOf(table);
+  if (int slot = toc.load(std::memory_order_acquire)->SlotOf(table)) return slot;
+  int global_slot = global_toc.SlotOf(table);
   assert(global_slot != 0);
   return -global_slot;
 }
@@ -475,7 +539,7 @@ void ObjectSerializer::Serialize(Object& start) {
     {  // Serialize object parts
       // ATM we only serialize Args
       bool args_opened = false;  // used to lazily call StartObject
-      for (auto* tab : o->toc) {
+      for (auto* tab : *o->BaseToc()) {
         Argument arg = dyn_cast<Argument>(Interface(o, tab));
         if (!arg || !arg.IsConnected()) continue;
         auto end = arg.Find();
@@ -496,6 +560,31 @@ void ObjectSerializer::Serialize(Object& start) {
         EndObject();
       }
     }
+    // (BEGIN) TODO: fix hook serialization
+    Object::TocGuard guard(*o);
+    bool hooks_opened = false;
+    for (auto* tab : *o->toc.load(std::memory_order_acquire)) {
+      auto* sync = dyn_cast_if_present<Sync::Table>(tab);
+      if (sync == nullptr || sync->gear == nullptr) continue;
+      if (!hooks_opened) {
+        hooks_opened = true;
+        Key("hooks");
+        StartArray();
+      }
+      StartObject();
+      Key("gear");
+      String(ResolveName(*sync->gear));
+      Key("interface");
+      auto interface_name = o->InterfaceFromIdx(sync->attached_toc_idx).Name();
+      String(interface_name.data(), interface_name.size());
+      Key("sink");
+      Bool(sync->sink);
+      Key("source");
+      Bool(sync->source);
+      EndObject();
+    }
+    if (hooks_opened) EndArray();
+    // (END) TODO: fix hook serialization
     EndObject();
   }
 }
@@ -533,8 +622,7 @@ Locked<Interface> ObjectDeserializer::LookupInterface(StrView name) {
   if (iface.object_ptr == nullptr) {
     return {};
   }
-  iface.object_ptr->IncrementOwningRefs();
-  return AdoptLocked(iface);
+  return AcquireLocked(iface);
 }
 
 }  // namespace automat

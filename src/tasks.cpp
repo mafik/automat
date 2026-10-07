@@ -190,8 +190,7 @@ Locked<Command> FollowArgument(Argument arg) {
       command = obj->Find<Command>();
     }
     if (command) {
-      command.object_ptr->IncrementOwningRefs();
-      target = AdoptLocked(command);
+      target = AcquireLocked(command);
     }
   }
   arg.WakeToys();
@@ -206,8 +205,7 @@ void RunTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("RunTask");
   auto object = target.lock();
   if (!object) return;
-  auto cmd = AdoptLocked(Command(object.Release(), cast<Command::Table>(command)));
-  while (cmd) cmd = cmd.Run();
+  RunCascade(AdoptLocked(Command(object.Release(), cast<Command::Table>(command))));
 }
 
 std::string UpdateTask::Format() { return f("UpdateTask({}, {})", Name(target), Name(updated)); }

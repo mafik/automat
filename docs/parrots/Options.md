@@ -43,13 +43,17 @@ commands as interfaces, and the widgets only map triggers to those interfaces:
 - A part of an object that is either on or off is an `OnOff` (src/on_off.hpp). An OnOff is a
   Command: `OnOff::Table` extends `Command::Table` with `is_on`, `turn_on_idx`, `turn_off_idx` and
   `syncable_idx`, the interface index of the `Syncable` interface that a Gear notifies.
-  Its `on_run` (`OnOff::Table::DefaultOnRun`, src/on_off.cpp) does not change the object. It
-  returns the Command at `turn_off_idx` while the object is on and the Command at `turn_on_idx`
-  while it is off, so running an OnOff toggles the object through that Command, and the run
-  continues with the next Command of that Command. `Toggle` runs the OnOff through `RunLoop`,
-  and `TurnOn` and `TurnOff` run the Command at the matching index the same way, on the calling
-  thread. Their callers are an object's own Commands (the Switch's `flip`), the loading of saved
-  state and the OnOff track of a Timeline. `NotifyTurnedOn` and `NotifyTurnedOff` tell the synced
+  Its `on_run` is `OnOff::Table::DefaultOnRun` (src/on_off.cpp) unless the implementation
+  defines `OnRun`, which `OnOff::Table::FillFrom` installs the way `Command::Table::FillFrom`
+  does. `DefaultOnRun` does not change the object. It returns the Command at `turn_off_idx` while
+  the object is on and the Command at `turn_on_idx` while it is off, so running an OnOff toggles
+  the object through that Command, and the run continues with the next Command of that Command.
+  The On/Off of a Switch defines `OnRun` to run the Switch's `flip` Command instead, and `flip`
+  turns the Switch on or off through `TurnOn` and `TurnOff`, so a hook on Flip sees every toggle
+  of the Switch (src/library_switch.hpp). `Toggle` runs the OnOff through `RunLoop`, and `TurnOn`
+  and `TurnOff` run the Command at the matching index the same way, on the calling thread. Their
+  callers are an object's own Commands (the Switch's `flip`), the loading of saved state and the
+  OnOff track of a Timeline. `NotifyTurnedOn` and `NotifyTurnedOff` tell the synced
   partners about a change that the object made on its own (docs/parrots/Hooks.md, section
   "Notifications"). The activation of an OnOff is the default activation of
   a Command: it clears the object's own Error and schedules a `RunTask`, which toggles the object on

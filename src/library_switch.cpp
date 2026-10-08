@@ -87,6 +87,7 @@ struct SwitchToy : ObjectToy {
   void FillMenu(ui::Pointer& pointer, Menu& menu) override {
     ObjectToy::FillMenu(pointer, menu);
     menu.Place(ui::Dir::E, rocker->target.Lock());
+    menu.Place(ui::Dir::N, LockObject<Switch>()->flip.Bind());
   }
 
   float GetBaseScale() const override { return 1.0f; }

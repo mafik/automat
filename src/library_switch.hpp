@@ -35,14 +35,11 @@ struct LinkedSwitch : Object {
 struct Switch : Object {
   bool current_state = false;
 
-  DEF_INTERFACE(Switch, Command, flip, "Flip")
-  void OnRun() { obj->enabled->Toggle(); }
-  DEF_END(flip);
-
   DEF_INTERFACE(Switch, OnOff, enabled, "On/Off")
   bool IsOn() const { return obj->current_state; }
   static constexpr int TurnOnIdx() { return SlotOf(switch_on_tbl); }
   static constexpr int TurnOffIdx() { return SlotOf(switch_off_tbl); }
+  Locked<Command> OnRun() { return obj->flip->Run(); }
   DEF_END(enabled);
 
   DEF_INTERFACE(Switch, Command, switch_on, "Switch on")
@@ -59,7 +56,18 @@ struct Switch : Object {
   }
   DEF_END(switch_off);
 
-  INTERFACES(flip_tbl, enabled_tbl, switch_on_tbl, switch_off_tbl);
+  DEF_INTERFACE(Switch, Command, flip, "Flip")
+  void OnRun() {
+    auto on_off = obj->enabled.Bind();
+    if (on_off.IsOn()) {
+      on_off.TurnOff();
+    } else {
+      on_off.TurnOn();
+    }
+  }
+  DEF_END(flip);
+
+  INTERFACES(enabled_tbl, switch_on_tbl, switch_off_tbl, flip_tbl);
 
   Switch() = default;
 

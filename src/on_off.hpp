@@ -33,12 +33,16 @@ struct OnOff : Command {
 
     template <typename ImplT>
     constexpr void FillFrom() {
-      Interface::Table::FillFrom<ImplT>();
+      if constexpr (requires(ImplT& i) { i.OnRun(); }) {
+        Command::Table::FillFrom<ImplT>();
+      } else {
+        Interface::Table::FillFrom<ImplT>();
+        on_run = &DefaultOnRun;
+      }
       is_on = [](OnOff self) { return static_cast<const ImplT&>(self).IsOn(); };
       turn_on_idx = ImplT::TurnOnIdx();
       turn_off_idx = ImplT::TurnOffIdx();
       if constexpr (requires { ImplT::SyncableIdx(); }) syncable_idx = ImplT::SyncableIdx();
-      on_run = &DefaultOnRun;
     }
   };
 

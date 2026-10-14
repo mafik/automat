@@ -33,6 +33,8 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
+#include "build_variant.hpp"
+
 #if defined(__linux__)
 #include <drm/drm_fourcc.h>
 #include <fcntl.h>
@@ -297,7 +299,7 @@ void Instance::Init(Status& status) {
                                         system_info.available_extensions.size(), extensions);
 
   vkb::InstanceBuilder builder;
-  builder.request_validation_layers();
+  builder.request_validation_layers(build_variant::NotRelease);
   builder.require_api_version(kMinimumVulkanVersion);
   builder.enable_extensions(extensions);
   auto result = builder.build();
@@ -1373,8 +1375,8 @@ void ReleaseImportedTexture(void* context) {
 
 bool AdapterLuid(uint8_t out[8]) {
   VkPhysicalDeviceIDProperties id = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES};
-  VkPhysicalDeviceProperties2 properties = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &id};
+  VkPhysicalDeviceProperties2 properties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+                                            .pNext = &id};
   vkGetPhysicalDeviceProperties2(physical_device, &properties);
   if (!id.deviceLUIDValid) return false;
   memcpy(out, id.deviceLUID, VK_LUID_SIZE);
@@ -1430,8 +1432,8 @@ sk_sp<SkImage> ImportSharedTexture(void* shared_handle, int width, int height, S
     AppendErrorMessage(status) += "vkGetMemoryWin32HandleProperties: " + ToStr(res);
     return nullptr;
   }
-  uint32_t type_bits = requirements.memoryRequirements.memoryTypeBits &
-                       handle_properties.memoryTypeBits;
+  uint32_t type_bits =
+      requirements.memoryRequirements.memoryTypeBits & handle_properties.memoryTypeBits;
   if (type_bits == 0) {
     vkDestroyImage(device, image, nullptr);
     AppendErrorMessage(status) += "No memory type can hold the shared texture.";
@@ -1467,10 +1469,9 @@ sk_sp<SkImage> ImportSharedTexture(void* shared_handle, int width, int height, S
     return nullptr;
   }
 
-  graphite::VulkanTextureInfo texture_info(VK_SAMPLE_COUNT_1_BIT, skgpu::Mipmapped::kNo, 0, kFormat,
-                                           VK_IMAGE_TILING_OPTIMAL, kUsage,
-                                           VK_SHARING_MODE_EXCLUSIVE, VK_IMAGE_ASPECT_COLOR_BIT,
-                                           skgpu::VulkanYcbcrConversionInfo());
+  graphite::VulkanTextureInfo texture_info(
+      VK_SAMPLE_COUNT_1_BIT, skgpu::Mipmapped::kNo, 0, kFormat, VK_IMAGE_TILING_OPTIMAL, kUsage,
+      VK_SHARING_MODE_EXCLUSIVE, VK_IMAGE_ASPECT_COLOR_BIT, skgpu::VulkanYcbcrConversionInfo());
   auto backend_texture = graphite::BackendTextures::MakeVulkan(
       {width, height}, texture_info, VK_IMAGE_LAYOUT_GENERAL, device.graphics_queue_index, image,
       skgpu::VulkanAlloc());

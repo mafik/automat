@@ -381,10 +381,14 @@ void BoardWidget::Draw(SkCanvas& canvas) const {
   border_paint.setColor("#404040"_color);
   if (frame_width == 0) {
     border_paint.setStyle(SkPaint::kStroke_Style);
+    border_paint.setStrokeWidth(0);
+    canvas.drawRect(bg_bounds, border_paint);
+  } else {
+    auto frame_rect = FrameBounds();
+    SetRRectShader(border_paint, frame_rect, "#f7f5c2"_color4f, "#e8b044"_color4f,
+                   "#66370b"_color4f);
+    canvas.drawDRRect(frame_rect, RRect::MakeSimple(bg_bounds, 0), border_paint);
   }
-  auto frame_rect = FrameBounds();
-  SetRRectShader(border_paint, frame_rect, "#f7f5c2"_color4f, "#e8b044"_color4f, "#66370b"_color4f);
-  canvas.drawDRRect(frame_rect, RRect::MakeSimple(bg_bounds, 0), border_paint);
   BakeChildren(canvas);  // nothing gets baked actually
 }
 

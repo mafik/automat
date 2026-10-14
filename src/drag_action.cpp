@@ -87,7 +87,6 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
   }
   if (board) {
     SetRadar(1);
-    board->RedrawThisFrame();  // unbudgeted pick-up frame; other roots' views repaint via the wakes
   }
   auto& root = pointer.root_widget;
   root.drag_action_count++;

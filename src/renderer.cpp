@@ -195,11 +195,14 @@ struct WidgetDrawable : SkDrawableRTTI {
     SkImageInfo image_info;
     float snap_millis = 0;
 
-    ~Rendered() {
+    void Release() {
       if (texture.isValid()) {
         surface->recorder()->deleteBackendTexture(texture);
+        texture = {};
       }
+      surface = nullptr;
     }
+    ~Rendered() { Release(); }
   } frame_a;
 
   // Time spent in insertRecording().
@@ -868,7 +871,10 @@ struct PackedFrame {
     SmallVec<AnchorSnapshot, 2> texture_anchors;
   };
   map<uint32_t, Fresh> fresh;
+  vector<uint32_t> textures_to_release;
 };
+
+constexpr float kSurfaceReuseTolerancePx = 1.f / 16;
 
 void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pack) {
   rw.timer.Tick();
@@ -914,6 +920,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
     float render_area_px2 = 0;      // texture resolution (pixels rasterized if re-rendered)
     float model_render_ms = 0;
     int type_id = -1;
+    Widget::Compositor compositor;
     SkMatrix window_to_local;
     SkIRect surface_bounds_root;  // copied over to Widget, if drawn
     SmallVec<AnchorSnapshot, 2> pack_frame_texture_anchors;
@@ -1092,6 +1099,11 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
       }
       widget->pack_frame_draw_bounds = widget->draw_bounds;
       bool visible = true;
+
+      node.compositor = widget->GetCompositor();
+      if (node.compositor == Widget::Compositor::NO_TEXTURE) {
+        widget->pack_frame_draw_bounds.reset();
+      }
       if (widget->pack_frame_draw_bounds.has_value()) {
         // Note: child widgets are drawn using SkCanvas::drawDrawable(WidgetDrawable),
         // which in turn calls WidgetDrawable::onGetBounds to get the widget's bounds.
@@ -1133,12 +1145,29 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
         node.window_to_local.mapRect(&node.new_visible_bounds.sk, root_bounds);
         if (widget->rendered_bounds.has_value()) {
           Rect& old_rendered_bounds = *widget->rendered_bounds;
-          node.surface_reusable = old_rendered_bounds.Contains(node.new_visible_bounds);
+          float tolerance = node.window_to_local.mapRadius(kSurfaceReuseTolerancePx);
+          node.surface_reusable =
+              old_rendered_bounds.Outset(tolerance).Contains(node.new_visible_bounds);
         } else {
           node.surface_reusable = false;
         }
-      } else if (node.verdict == Verdict::Unknown) {
-        node.SetVerdict(Verdict::Skip_NoTexture);
+      } else {
+        node.compositor = Widget::Compositor::NO_TEXTURE;
+        if (node.verdict == Verdict::Unknown) {
+          node.SetVerdict(Verdict::Skip_NoTexture);
+        }
+        if (widget->rendered_bounds.has_value()) {  // handle widgets that flip-flop
+          widget->rendered_bounds.reset();
+          widget->invalidated = time::SteadyPoint::min();
+          pack.textures_to_release.push_back(widget->ID());
+        }
+        if (widget->draw_bounds.has_value()) {  // widgets without textures can still have bounds!
+          SkRect root_bounds;
+          widget->local_to_window.mapRect(&root_bounds, *widget->draw_bounds);
+          Rect warped_bounds = ExpandByDisplacements(root_bounds, node.anchor_displacements_root);
+          visible = SkRect::Intersects(warped_bounds.sk, root_widget_bounds_px);
+        }
+        widget->pack_frame_draw_bounds.reset();
       }
 
       // Advance the parent to current widget & visit its children.
@@ -1457,7 +1486,7 @@ void PackFrame(RootWidget& rw, const PackFrameRequest& request, PackedFrame& pac
         }
       }
     }
-    update.compositor = widget.GetCompositor();
+    update.compositor = node.compositor;
 
     constexpr bool kSerializeRecording = false;
     if constexpr (kSerializeRecording) {
@@ -1586,6 +1615,12 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
       cached_widget_drawable->warp.map_image = nullptr;
       cached_widget_drawable->shadow_casters.clear();
       cached_widget_drawable->warp_children.clear();
+    }
+  }
+
+  for (uint32_t id : pack.textures_to_release) {
+    if (auto* w = WidgetDrawable::FindOrNull(id)) {
+      w->rendered().Release();
     }
   }
 

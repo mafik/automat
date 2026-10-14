@@ -296,7 +296,7 @@ struct Widget : OptionsProvider {
     WARP,
     // Limit scale using fancy zoom in effect.
     QUANTUM_REALM,
-    // TODO: Add a value that will prevent rendering to separate texture.
+    NO_TEXTURE,
   };
 
   virtual Compositor GetCompositor() const { return Compositor::WARP; }

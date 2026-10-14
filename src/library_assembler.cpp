@@ -797,18 +797,21 @@ void Register::BufferVisit(const BufferVisitor& visitor) {
     return;
   }
   Status status;
+  bool buffer_modified;
   assembler->mc_controller->ChangeState(
       [&](mc::Controller::State& state) {
         uint64_t* ptr = &state.regs[kRegisters[register_index].regs_index];
         char* char_ptr = reinterpret_cast<char*>(ptr);
-        visitor(span<char>(char_ptr, sizeof(state.regs[0])));
+        buffer_modified = visitor(span<char>(char_ptr, sizeof(state.regs[0])));
       },
       status);
   if (!OK(status)) {
     ReportError(status.ToStr());
     return;
   }
-  WakeToys();
+  if (buffer_modified) {
+    WakeToys();
+  }
 }
 
 void Register::SetText(std::string_view text) {

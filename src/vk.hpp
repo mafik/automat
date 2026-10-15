@@ -90,4 +90,19 @@ struct Semaphore {
   operator skgpu::graphite::BackendSemaphore();
 };
 
+struct Fence {
+  VkFence vk_fence = VK_NULL_HANDLE;
+
+  void Create(Status&);
+  void Destroy();
+
+  Fence() = default;
+  Fence(const Fence&) = delete;
+  Fence& operator=(const Fence&) = delete;
+  ~Fence();
+
+  void Submit();
+  void Wait();
+};
+
 }  // namespace automat::vk

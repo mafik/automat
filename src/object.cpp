@@ -10,6 +10,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <ranges>
 
 #include "../build/generated/embedded.hpp"
 #include "automat.hpp"

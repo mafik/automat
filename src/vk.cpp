@@ -98,6 +98,10 @@ PFN_vkGetDeviceProcAddr GetDeviceProcAddr;
   X(DestroyDevice)               \
   X(CreateSemaphore)             \
   X(DestroySemaphore)            \
+  X(CreateFence)                 \
+  X(DestroyFence)                \
+  X(ResetFences)                 \
+  X(WaitForFences)               \
   X(CreateImage)                 \
   X(DestroyImage)                \
   X(CreateCommandPool)           \
@@ -198,6 +202,27 @@ Semaphore::~Semaphore() { Destroy(); }
 Semaphore::operator graphite::BackendSemaphore() {
   return graphite::BackendSemaphores::MakeVulkan(vk_semaphore);
 }
+
+void Fence::Create(Status& status) {
+  static const VkFenceCreateInfo kVkFenceCreateInfo = {.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+                                                       .pNext = nullptr,
+                                                       .flags = VK_FENCE_CREATE_SIGNALED_BIT};
+  if (vk_fence == VK_NULL_HANDLE) {
+    CHECK_RESULT(vkCreateFence(device, &kVkFenceCreateInfo, nullptr, &vk_fence));
+  }
+}
+void Fence::Destroy() {
+  if (vk_fence != VK_NULL_HANDLE) {
+    vkDestroyFence(device, vk_fence, nullptr);
+    vk_fence = VK_NULL_HANDLE;
+  }
+}
+Fence::~Fence() { Destroy(); }
+void Fence::Submit() {
+  vkResetFences(device, 1, &vk_fence);
+  vkQueueSubmit2(device.graphics_queue, 0, nullptr, vk_fence);
+}
+void Fence::Wait() { vkWaitForFences(device, 1, &vk_fence, VK_TRUE, UINT64_MAX); }
 
 std::unique_ptr<graphite::Context> graphite_context, background_context;
 

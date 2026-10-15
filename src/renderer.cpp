@@ -441,9 +441,16 @@ WidgetDrawable::~WidgetDrawable() {
 }
 
 bool renderer_initialized = false;
+int foreground_rendering_jobs = 0;
+vk::Fence render_fence;
 
 void RendererInit() {
   if (renderer_initialized) return;
+  Status status;
+  render_fence.Create(status);
+  if (!OK(status)) {
+    FATAL << "Couldn't create the render fence: " << status;
+  }
   SkFlattenable::Register("WidgetDrawable", WidgetDrawable::CreateProc);
   skgpu::graphite::RecorderOptions options;
   if (image_provider == nullptr) {
@@ -463,7 +470,6 @@ void RendererInit() {
   renderer_initialized = true;
 }
 
-int foreground_rendering_jobs = 0;
 void RendererShutdown() {
   if (!renderer_initialized) return;
 
@@ -486,6 +492,7 @@ void RendererShutdown() {
   global_foreground_recorder.reset();
   vk::graphite_context->submit({skgpu::graphite::SyncToCpu::kYes});
   vk::background_context->submit({skgpu::graphite::SyncToCpu::kYes});
+  render_fence.Destroy();
 
   renderer_initialized = false;
 }
@@ -1543,9 +1550,9 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
     debug_render_events += to_string(foreground_rendering_jobs);
     debug_render_events += " fg jobs) ";
   }
-  {  // Spinlock while GPU is working:
-    ZoneScopedN("checkAsyncWorkCompletion");
-
+  {
+    ZoneScopedN("Wait for GPU");
+    render_fence.Wait();
     while (foreground_rendering_jobs) {
       vk::graphite_context->checkAsyncWorkCompletion();
     }
@@ -1746,6 +1753,7 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
       w->signal_semaphore = false;
     }
   }
+  render_fence.Submit();
 
   if constexpr (kDebugRendering) {
     static bool saved = false;

@@ -6,6 +6,7 @@ uniform shader background_thumb;
 
 const float3 kDotsColor = float3(0.5, 0.5, 0.5);
 const float kPi = 3.1415926535897932384626433832795;
+const float k8BitColorStep = 1.0 / 255;
 
 float grid(vec2 coord_m, float dots_per_m, float r_px) {
   float r = r_px / px_per_m;
@@ -57,14 +58,14 @@ half4 main(vec2 coord_m) {
 
   float3 background_val = background_image.eval(coord_m + 0.5).rgb;
 
+  // halftone pattern appears at `background_px` and is in full effect at `background_px * 4`
+  float halftone_blend = smoothstep(background_px, background_px * 4, px_per_m);
+
   // background dimensions are 1x1 m so if thre are more px in a meter than bg dimension, then we need to dither
-  if (px_per_m > background_px) {
+  if (halftone_blend >= k8BitColorStep) {
     float3 background_blur = background_thumb.eval(coord_m + 0.5).rgb;
 
     float3 background_halftone = halftone(background_blur, background_val, coord_m * background_px);
-
-    // halftone pattern appears at `background_px` and is in full effect at `background_px * 4`
-    float halftone_blend = smoothstep(background_px, background_px * 4, px_per_m);
 
     background_val = mix(background_val, background_halftone, halftone_blend);
   }

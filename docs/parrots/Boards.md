@@ -118,12 +118,13 @@ under it still owns the object. Extraction reaches this state when some other bo
 the object.
 
 The drop merges: the dragged Location is destroyed at the drop, but the dragged widget survives
-it as a ghost (`LocationWidget::ghost`, src/location.hpp). Its location reference is repointed
+it as a ghost (`LocationWidget::merging`, src/location.hpp). Its location reference is repointed
 at the resident Location, the pointer widget keeps it alive as a zombie, and its snapped pose
-springs towards the resident's position while the widget fades out; it dies on arrival. The
-target is read from the resident every frame, so the ghost keeps converging even when the
-resident moves mid-animation, and several quick drops run several ghosts. No resting widget
-changes position.
+eases towards the resident's position while the widget fades out; it dies on arrival. The
+ghost passes no pointer events to its toy (`LocationWidget::AllowChildPointerEvents`), so a
+click during the flight reaches the widgets under it. The target is read from the resident
+every frame, so the ghost keeps converging even when the resident moves mid-animation, and
+several quick drops run several ghosts. No resting widget changes position.
 
 Two alternatives were rejected. Moving the resident widget to the drop point would move a
 widget the user did not pick up and would disturb the arrangement around it. Rejecting the
@@ -171,10 +172,8 @@ of it is in hand.
 The grab point is a position in the coordinates of the base toy, the toy of the bottom location
 of the dragged stack. By default `DragLocationAction` reads it at pick-up from the pointer
 position, clamped to the nearest point within the toy's coarse bounds (`RRect::Clamp`,
-src/math.hpp), so the stretched texture is always ink. A caller whose new object starts away
-from the pointer passes the grab point to the constructor instead: the "New..." menu and an
-external drag entering the window hold the new object by the point of its bounds nearest to
-its origin (src/make_object_option.cpp, src/library_data_offer.cpp). The snapped pose places the grab
+src/math.hpp), so the stretched texture is always ink. A caller that wants the object held by
+another point passes the grab point to the constructor instead. The snapped pose places the grab
 point under the pointer, and the anchor pulls the grab point to the pointer with no offset, so
 both follow from the same point and a converged pose shows no stretch. Neither is derived from
 the widget's current transform, which is transient at pick-up: an anchor offset computed from
@@ -193,3 +192,106 @@ A connection is drawn on a board only when that board owns both of its endpoint 
 board that owns both ends draws the connection, each with its own connection widget from its
 own ToyScope. A board that owns only one end draws nothing for the connection, even though the
 connection still exists in the Engine.
+
+## Wallpaper
+
+A board may show the image of a `File` (src/library_file.hpp) in place of the default board
+texture. The Board owns that File through `Board::wallpaper`, an `Owned<library::File>` link
+(docs/parrots/Object Ownership.md) guarded by `Board::wallpaper_mutex`. The lock order is
+`engine.mutex` before `wallpaper_mutex`, and nothing takes `engine.mutex` while holding
+`wallpaper_mutex`; `Board::SetWallpaper` (src/board.cpp) therefore extracts the File's Location
+from the board before it takes the mutex. The File leaves the board when it becomes the
+wallpaper: on one board the same object is either placed or drawn as the background, never
+both, so pulling the wallpaper back out (below) does not duplicate it. A File may be the
+wallpaper of several boards, and the wallpaper of one board while placed on another.
+
+Three paths lead to `Board::SetWallpaper`: the "Set Wallpaper" option, the drop of exactly one
+image File onto the starfield (`DragLocationAction::Drop`, src/drag_action.cpp, after the new
+board has been entered, so the File's toy fades out in place), and the `wallpaper` key of a
+saved board. Several objects dropped at once, or a File that is not an image, are placed as
+objects.
+
+"Set Wallpaper" is `kSetWallpaper` (src/board.cpp), an option table with only an activation,
+built like `kRun` (docs/parrots/Options.md). `FileToy::FillMenu` (src/library_file.cpp) places
+it at E when the toy shows an image and has a `BoardWidget` ancestor, and the activation acts on
+that board, found through the toy it was activated from. The File class declares nothing for
+it: no interface and no table-of-contents slot. A File dragged by the pointer has no board above
+its toy and shows no such option.
+
+"Wallpaper" is `Board::take_wallpaper` (src/board.hpp), an `ObjectSource` placed at W of the
+board menu while a wallpaper is set. Its icon is the File's own toy, so the slot shows the
+picture. Taking it releases the link, restores the default texture and hands the File to
+`DragNew`, so the File is dragged like any object and may be dropped on a board or on the
+starfield.
+
+### Animation
+
+The pose in which a File's toy coincides with the wallpaper is `WallpaperTransform`
+(src/board.cpp): the toy centred on the board and scaled so that its shorter side spans the 1 m
+board, which is the placement `BoardWidget::Tick` gives the image shader, expressed for the toy.
+The toy shows the whole image while the wallpaper shows the centred square crop, so for a
+non-square image the cropped parts lie outside the board whenever the toy is in that pose.
+
+Setting a wallpaper is not animated. `Board::SetWallpaper` extracts the File's Location, which
+destroys it, and the board draws the new wallpaper from the next frame. The resident widget
+finds its Location dead, fades out in place and dies (`LocationWidget::Tick`). The wallpaper
+appears at once while the toy fades, so a flight of the toy into the wallpaper pose would start
+after the picture it lands on is already there. A location widget whose Location is dead passes
+no pointer events to its toy (`LocationWidget::AllowChildPointerEvents`), so a click on the
+fading toy opens the board menu and not the menu of the File.
+
+Taking a wallpaper grabs the toy out of the board. `Board::take_wallpaper` makes the new toy a
+child of the board widget with `WallpaperTransform` as its transform before handing it to
+`DragNew`, so the drag's pose animation starts from where the wallpaper is drawn and the image
+shrinks into the hand. The default grab point, the image point under the pointer, stays under
+the pointer throughout, so the shrink is centred on the hand.
+
+While the toy is larger than the board, the parts of the image that the wallpaper cropped would
+show past the board's edges. `Board::take_wallpaper` puts the new location widget into the
+`Baked` range of the board's layer stack once, after the drag has entered the board, and
+`BoardWidget::Draw` clips its baked children to the board, so the toy is drawn within the board
+and under the board's other objects, where the wallpaper was. `BoardWidget::Tick` orders every
+location above the board except a dragged one whose toy does not fit within the board, which it
+leaves where it is; once the toy fits, the ordering places the widget at the top of the stack.
+Leaving the board with the pointer extracts the location, which removes its widget from the
+board's stack.
+
+`LocationWidget::Tick` (src/location.cpp) animates a toy's scale with a damped spring in the
+logarithm of the scale and maps the result back through the exponential. The spring overshoots
+in that domain, and every value of the domain, negative ones included, maps to a positive scale,
+so a shrink undershoots to a fraction of its final size and rebounds: for the twentyfold ratio
+of the wallpaper pose the fraction is 0.69, for the 1.2 ratio of a toy's appearance it is 0.98.
+The half-time of the spring (`LocationWidget::kSpringHalfTime`, src/location.hpp) sets the
+rebound to about 12 percent for the ratio 2.5 of a toolbar pick-up and 19 percent for the ratio
+4 of a deiconified toy. A spring on the scale itself passes through zero and negative scales
+for large ratios. The position keeps its cosine ease.
+
+`BoardWidget::Tick` (src/board.cpp) reads the File's lazy image (`File::Image()`) and builds the
+inputs of `assets/bg.sksl` from it: the image shader, scaled uniformly so that the shorter side
+spans the 1 m board and the longer side is cropped symmetrically (pixels stay square); a 64 × 64
+thumbnail shader for the base tone of the halftone; and `background_px`, the image's pixels per
+metre on the board, which the shader uses both as the halftone threshold and as the dot pitch,
+as it uses 3840 for the default texture. The widget rebuilds the inputs only when the image
+changes.
+
+Automat holds no decoded pixels. Graphite decodes the lazy image the first time a frame draws
+it, inside `AutomatImageProvider::findOrCreate` (src/textures.cpp) on a Vk recorder thread, and
+keeps only the GPU texture, in the provider's cache keyed by the image's `uniqueID`. The File's
+toy draws the same `SkImage`, so a File that was on screen before it became a wallpaper is not
+decoded again. The thumbnail is a picture-backed deferred image (`SkImages::DeferredFromPicture`)
+of the cropped square: Graphite renders it on the GPU from the cached texture the first time the
+shader samples it, replaying the picture inside the outer `findOrCreate`, which calls
+`findOrCreate` again for the image inside the picture; `AutomatImageProvider::mutex` is recursive
+for that reason. The default texture's thumbnail is made the same way.
+
+A wallpaper File without an image (its file was deleted or replaced by a non-image) is not drawn:
+the board shows the default texture, and the "Wallpaper" option still offers the File.
+
+Saving writes the File's name under the board's `wallpaper` key; the File is saved like any
+other object. At shutdown `automat::Main` (src/automat.cpp) suspends the wallpaper File together
+with the objects on the boards, because `File::~File` deletes the disk file of an unsuspended
+File that owns it.
+
+Not covered: a Data Offer transfer that is still running when the card is dropped on the
+starfield (the File is placed on the new board when it arrives, docs/parrots/Data Offer.md);
+image data that fails to decode after a valid header (Skia draws nothing for it); transparency (the shader uses the decoded colour).

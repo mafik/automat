@@ -158,7 +158,7 @@ ui::Tock Wave1D::Tick(time::Timer& timer) {
   AccumulateEstimate(dt / 6.0);
 
   if (damping_half_time > 0) {
-    float damping_factor = expf(-dt / damping_half_time * kLog2e);
+    float damping_factor = expf(-dt / damping_half_time * kLn2);
     for (int i = 0; i < n; ++i) {
       velocity[i] *= damping_factor;
     }

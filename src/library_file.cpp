@@ -11,9 +11,11 @@
 #include <algorithm>
 #include <cctype>
 
+#include "board.hpp"
 #include "deserializer.hpp"
 #include "file_import.hpp"
 #include "font.hpp"
+#include "menu.hpp"
 #include "object.hpp"
 #include "root_widget.hpp"
 #include "textures.hpp"
@@ -345,6 +347,14 @@ struct FileToy : automat::ObjectToy {
   Tock Tick(time::Timer&) override {
     Pull();
     return Tock::Draw;
+  }
+
+  void FillMenu(ui::Pointer& pointer, Menu& menu) override {
+    ObjectToy::FillMenu(pointer, menu);
+    auto file = LockObject<File>();
+    if (file && image && BoardOrNull(*this)) {
+      menu.Place(ui::Dir::E, Interface(*file, kSetWallpaper));
+    }
   }
 
   void Draw(SkCanvas& canvas) const override {

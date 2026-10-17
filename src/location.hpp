@@ -249,7 +249,7 @@ struct Location : Object {
 struct LocationWidget : ObjectToy {
   constexpr static float kPositionSpringPeriod = 0.2;
   constexpr static float kScaleSpringPeriod = 0.3;
-  constexpr static float kSpringHalfTime = kScaleSpringPeriod / 4;
+  constexpr static float kSpringHalfTime = 0.05;
 
   // Animation state (moved from Location)
   animation::SpringV2<float> elevation;
@@ -293,6 +293,7 @@ struct LocationWidget : ObjectToy {
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   Optional<Rect> DrawBounds() const override;
+  bool AllowChildPointerEvents(ui::Widget&) const override;
   Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
   void FillMenu(ui::Pointer&, Menu&) override;
 

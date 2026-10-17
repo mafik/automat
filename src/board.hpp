@@ -2,6 +2,10 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
 
+#include <include/core/SkShader.h>
+
+#include <mutex>
+
 #include "animation.hpp"
 #include "base.hpp"
 #include "engine.hpp"
@@ -12,11 +16,18 @@
 
 namespace automat {
 
+namespace library {
+struct File;
+}
+
 struct BoardWidget;
+
+extern Interface::Table kSetWallpaper;
 
 // 2D Canvas holding objects & a spaghetti of connections.
 struct Board : Object {
   Board();
+  ~Board() override;
 
   // Center of the board in RootWidget's coordinates.
   Vec2 position = {0, 0};
@@ -25,9 +36,12 @@ struct Board : Object {
 
   bool frame_visible = false;
 
-  // TODO: Board background styling
+  mutable std::mutex wallpaper_mutex;
+  Owned<library::File> wallpaper{*this};
 
-  // Locked<ImageProvider> background;  // uses default background if null
+  void SetWallpaper(Ptr<library::File>);
+
+  // TODO: Board background styling
 
   // enum class BackgroundSizing {
   //   Natural,
@@ -125,7 +139,13 @@ struct Board : Object {
   }
   DEF_END(toggle_frame);
 
-  INTERFACES(move_tbl, toggle_frame_tbl, resizable_tbl);
+  DEF_INTERFACE(Board, ObjectSource, take_wallpaper, "Wallpaper")
+  Ptr<Object> OnTake();
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  std::unique_ptr<ui::Widget> OnMakeIcon(ui::Widget* parent);
+  DEF_END(take_wallpaper);
+
+  INTERFACES(move_tbl, toggle_frame_tbl, resizable_tbl, take_wallpaper_tbl);
 };
 
 // UI widget for Board. Handles drawing, drop target, and spatial queries.
@@ -134,6 +154,11 @@ struct BoardWidget : ObjectToy, ui::DropTarget {
 
   animation::SpringV2<Vec2> size;
   animation::SpringV2<float> frame_width;
+
+  sk_sp<SkShader> background_image;
+  sk_sp<SkShader> background_thumb;
+  float background_px = 0;
+  uint32_t wallpaper_image_id = 0;
 
   BoardWidget(ui::Widget* parent, Board& board);
 

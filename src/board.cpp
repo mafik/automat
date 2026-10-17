@@ -4,9 +4,11 @@
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkColor.h>
+#include <include/core/SkColorSpace.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPath.h>
+#include <include/core/SkPictureRecorder.h>
 #include <include/effects/SkRuntimeEffect.h>
 #include <include/pathops/SkPathOps.h>
 
@@ -21,6 +23,7 @@
 #include "embedded.hpp"
 #include "engine.hpp"
 #include "global_resources.hpp"
+#include "library_file.hpp"
 #include "location.hpp"
 #include "math.hpp"
 #include "menu.hpp"
@@ -34,6 +37,8 @@ using namespace std;
 namespace automat {
 
 Board::Board() {}
+
+Board::~Board() {}
 
 std::unique_ptr<ObjectToy> Board::MakeToy(ui::Widget* parent) {
   return std::make_unique<BoardWidget>(parent, *this);
@@ -52,6 +57,15 @@ void Board::SerializeState(ObjectSerializer& writer) const {
   writer.EndArray();
   writer.Key("frame_visible");
   writer.Bool(frame_visible);
+  Ptr<library::File> file;
+  {
+    auto lock = std::lock_guard(wallpaper_mutex);
+    file = wallpaper;
+  }
+  if (file) {
+    writer.Key("wallpaper");
+    writer.String(writer.ResolveName(*file));
+  }
   if (!locations.empty()) {
     writer.Key("locations");
     writer.StartObject();
@@ -98,6 +112,12 @@ bool Board::DeserializeKey(ObjectDeserializer& d, StrView key) {
     if (!OK(status)) {
       d.Skip();
       frame_visible = false;
+    }
+  } else if (key == "wallpaper") {
+    Str name;
+    d.Get(name, status);
+    if (auto* file = dynamic_cast<library::File*>(d.LookupObject(name))) {
+      SetWallpaper(file->AcquirePtr());
     }
   } else if (key == "locations") {
     for (auto& object_name : ObjectView(d, status)) {
@@ -200,6 +220,72 @@ Location& Board::CreateEmpty() {
   return *h;
 }
 
+void Board::SetWallpaper(Ptr<library::File> file) {
+  if (auto location = LocationOrNull(*file)) {
+    Extract(*location);
+  }
+  {
+    auto lock = std::lock_guard(wallpaper_mutex);
+    wallpaper = std::move(file);
+  }
+  WakeToys();
+}
+
+static SkMatrix WallpaperTransform(const library::File& file) {
+  Vec2 size = file.Size();
+  float scale = 1_m / std::min(size.x, size.y);
+  return SkMatrix::Scale(scale, scale);
+}
+
+constinit Interface::Table kSetWallpaper = [] {
+  Interface::Table t(Interface::kMenu, "Set Wallpaper");
+  t.activate = [](Span<Interface> chain, ui::Pointer&, Toy* toy) -> std::unique_ptr<Action> {
+    auto* board_widget = toy ? BoardOrNull(*toy) : nullptr;
+    auto board = board_widget ? board_widget->LockBoard() : nullptr;
+    if (board) {
+      board->SetWallpaper(static_cast<library::File&>(*chain.back().object_ptr).AcquirePtr());
+    }
+    return nullptr;
+  };
+  return t;
+}();
+
+Ptr<Object> Board::take_wallpaper_Impl::OnTake() {
+  Ptr<library::File> file;
+  {
+    auto lock = std::lock_guard(obj->wallpaper_mutex);
+    file = obj->wallpaper.Release();
+  }
+  obj->WakeToys();
+  return file;
+}
+
+std::unique_ptr<Action> Board::take_wallpaper_Impl::OnActivate(ui::Pointer& pointer,
+                                                               automat::Toy*) {
+  auto* board_widget = pointer.root_widget.toys.FindOrNull(*obj);
+  if (board_widget == nullptr) return nullptr;
+  auto file = cast_if_present<library::File>(Take());
+  if (!file) return nullptr;
+  auto new_toy = file->MakeToy(board_widget);
+  new_toy->local_to_parent = SkM44(WallpaperTransform(*file));
+  auto* toy = new_toy.get();
+  auto drag = DragNew(pointer, std::move(file), std::move(new_toy));
+  auto* lw = ui::Closest<LocationWidget>(*toy);
+  if (lw->parent == board_widget) {
+    board_widget->layers.OrderInside(lw);
+  }
+  return drag;
+}
+
+std::unique_ptr<ui::Widget> Board::take_wallpaper_Impl::OnMakeIcon(ui::Widget* parent) {
+  Ptr<library::File> file;
+  {
+    auto lock = std::lock_guard(obj->wallpaper_mutex);
+    file = obj->wallpaper;
+  }
+  return file ? file->MakeToy(parent) : nullptr;
+}
+
 BoardWidget::BoardWidget(ui::Widget* parent, Board& board) : ObjectToy(parent, board) {
   parent->layers.OrderInside(this);
   size.value = board.size;
@@ -220,36 +306,21 @@ SkPath BoardWidget::SubtreeShape() const { return shape; }
 // Turns the background green - to make it easier to isolate elements of Automat in screenshots.
 constexpr bool kGreenScreen = false;
 
-SkPaint& GetBackgroundPaint(float px_per_m) {
-  if constexpr (kGreenScreen) {
-    static SkPaint paint;
-    paint.setColor(SK_ColorGREEN);
-    return paint;
-  }
-  static PersistentImage bg =
-      PersistentImage::MakeFromAsset(embedded::assets_bg_webp, PersistentImage::MakeArgs{
-                                                                   .height = 100_cm,
-                                                               });
-  Status status;
-  static auto shader = resources::CompileShader(embedded::assets_bg_sksl, status);
-  if (!OK(status)) {
-    ERROR << status;
-    return bg.paint;
-  }
-  static SkPaint paint;
-  SkRuntimeEffectBuilder builder(shader);
-  builder.uniform("px_per_m") = px_per_m;
-  builder.uniform("background_px") = (float)bg.heightPx();
-  builder.child("background_image") = *bg.shader;
-  const int kThumbSize = 64;
-  auto thumb_info = (*bg.image)->imageInfo().makeWH(kThumbSize, kThumbSize);
-  static auto thumb_image = (*bg.image)->makeScaled(thumb_info, kDefaultSamplingOptions);
-  static auto thumb_shader = thumb_image->makeShader(
+constexpr int kThumbSize = 64;
+
+static sk_sp<SkShader> Thumbnail(const sk_sp<SkImage>& image) {
+  float m = std::min(image->width(), image->height());
+  SkRect crop = SkRect::MakeXYWH((image->width() - m) / 2, (image->height() - m) / 2, m, m);
+  SkPictureRecorder recorder;
+  recorder.beginRecording(kThumbSize, kThumbSize)
+      ->drawImageRect(image, crop, SkRect::MakeWH(kThumbSize, kThumbSize), kDefaultSamplingOptions,
+                      nullptr, SkCanvas::kStrict_SrcRectConstraint);
+  auto thumb = SkImages::DeferredFromPicture(recorder.finishRecordingAsPicture(),
+                                             {kThumbSize, kThumbSize}, nullptr, nullptr,
+                                             SkImages::BitDepth::kU8, SkColorSpace::MakeSRGB());
+  return thumb->makeShader(
       kDefaultSamplingOptions,
-      SkMatrix::Scale(1. / kThumbSize, -1. / kThumbSize).postTranslate(0, 1));
-  builder.child("background_thumb") = thumb_shader;
-  paint.setShader(builder.makeShader());
-  return paint;
+      SkMatrix::Scale(1.f / kThumbSize, -1.f / kThumbSize).postTranslate(0, 1));
 }
 
 ui::Tock BoardWidget::Tick(time::Timer& timer) {
@@ -261,10 +332,43 @@ ui::Tock BoardWidget::Tick(time::Timer& timer) {
   tock.shaping |= frame_width.SineTowards(board->frame_visible ? 1_cm : 0, timer.d, 0.4);
   tock.shaping |= size.SineTowards(board->size, timer.d, 0.4);
 
+  Ptr<library::File> file;
+  {
+    auto wallpaper_lock = std::lock_guard(board->wallpaper_mutex);
+    file = board->wallpaper;
+  }
+  sk_sp<SkImage> image = file ? file->Image() : nullptr;
+  uint32_t image_id = image ? image->uniqueID() : 0;
+  if (file && file->suspended) {
+    tock |= Tock::Ing;
+  } else if (image_id != wallpaper_image_id || !background_image) {
+    wallpaper_image_id = image_id;
+    if (image) {
+      float m = std::min(image->width(), image->height());
+      float s = 1_m / m;
+      background_image =
+          image->makeShader(SkTileMode::kClamp, SkTileMode::kClamp, kDefaultSamplingOptions,
+                            SkMatrix::Scale(s, -s).postTranslate(0.5f - image->width() * s / 2,
+                                                                 0.5f + image->height() * s / 2));
+      background_thumb = Thumbnail(image);
+      background_px = m;
+    } else {
+      static PersistentImage bg =
+          PersistentImage::MakeFromAsset(embedded::assets_bg_webp, PersistentImage::MakeArgs{
+                                                                       .height = 100_cm,
+                                                                   });
+      static sk_sp<SkShader> bg_thumb = Thumbnail(*bg.image);
+      background_image = *bg.shader;
+      background_thumb = bg_thumb;
+      background_px = bg.heightPx();
+    }
+    tock |= Tock::Draw;
+  }
+
   for (auto& loc : board->locations) {
     auto& lw = toys.FindOrMake(*loc, this);
     lw.local_to_parent = SkM44();
-    lw.ToyForObject();
+    auto& toy = lw.ToyForObject();
     loc->object->Each<Argument>([&](Argument arg) {
       bool visible = arg.table->visible_when_disconnected;
       if (arg.IsConnected()) {
@@ -276,6 +380,10 @@ ui::Tock BoardWidget::Tick(time::Timer& timer) {
       }
       return LoopControl::Continue;
     });
+    if (IsDragged(lw) && std::ranges::contains(layers.Baked(), &lw) &&
+        !BgBounds().Contains(toy.local_to_parent.asM33().mapRect(toy.CoarseBounds().rect))) {
+      continue;
+    }
     layers.OrderAbove(&lw);
   }
 
@@ -374,8 +482,26 @@ void BoardWidget::RebuildOverlaps(Board& board) {
 
 void BoardWidget::Draw(SkCanvas& canvas) const {
   Rect bg_bounds = BgBounds();
-  float px_per_m = canvas.getLocalToDeviceAs3x3().mapRadius(1);
-  SkPaint background_paint = GetBackgroundPaint(px_per_m);
+  SkPaint background_paint;
+  if constexpr (kGreenScreen) {
+    background_paint.setColor(SK_ColorGREEN);
+  } else {
+    Status status;
+    static auto effect = resources::CompileShader(embedded::assets_bg_sksl, status);
+    if (!OK(status)) {
+      ERROR << status;
+    }
+    if (effect) {
+      SkRuntimeEffectBuilder builder(effect);
+      builder.uniform("px_per_m") = canvas.getLocalToDeviceAs3x3().mapRadius(1);
+      builder.uniform("background_px") = background_px;
+      builder.child("background_image") = background_image;
+      builder.child("background_thumb") = background_thumb;
+      background_paint.setShader(builder.makeShader());
+    } else {
+      background_paint.setShader(background_image);
+    }
+  }
   canvas.drawRect(bg_bounds, background_paint);
   SkPaint border_paint;
   border_paint.setColor("#404040"_color);
@@ -389,7 +515,10 @@ void BoardWidget::Draw(SkCanvas& canvas) const {
                    "#66370b"_color4f);
     canvas.drawDRRect(frame_rect, RRect::MakeSimple(bg_bounds, 0), border_paint);
   }
-  BakeChildren(canvas);  // nothing gets baked actually
+  canvas.save();
+  canvas.clipRect(bg_bounds);
+  BakeChildren(canvas);
+  canvas.restore();
 }
 
 SkMatrix BoardWidget::DropSnap(const Rect& rect_ref, Vec2 bounds_origin, Vec2* fixed_point) {
@@ -673,6 +802,14 @@ void BoardWidget::FillMenu(ui::Pointer&, Menu& menu) {
   if (!board) return;
   menu.Place(N, board->move.Bind());
   menu.Place(NE, board->toggle_frame.Bind());
+  bool has_wallpaper;
+  {
+    auto lock = std::lock_guard(board->wallpaper_mutex);
+    has_wallpaper = (bool)board->wallpaper;
+  }
+  if (has_wallpaper) {
+    menu.Place(W, board->take_wallpaper.Bind());
+  }
   menu.Place(S, Interface(*FindRootWidget().camera, ui::kCameraMenu));
 }
 

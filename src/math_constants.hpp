@@ -7,4 +7,4 @@
 constexpr float kMetersPerInch = 0.0254f;
 constexpr float kPi = M_PI;
 constexpr float kSqrt1_2 = M_SQRT1_2;
-constexpr float kLog2e = M_LOG2E;
+constexpr float kLn2 = M_LN2;

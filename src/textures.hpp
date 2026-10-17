@@ -108,7 +108,7 @@ struct AutomatImageProvider : public skgpu::graphite::ImageProvider {
   };
   std::unordered_map<uint32_t, CacheEntry> cache;
   time::SteadyPoint last_tick = time::kZeroSteady;
-  std::mutex mutex;
+  std::recursive_mutex mutex;
 
   sk_sp<SkImage> findOrCreate(skgpu::graphite::Recorder* recorder, const SkImage* image,
                               SkImage::RequiredProperties) override;

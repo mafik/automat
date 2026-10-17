@@ -252,6 +252,10 @@ SkPath LocationWidget::Shape() const {
 
 Optional<Rect> LocationWidget::DrawBounds() const { return nullopt; }
 
+bool LocationWidget::AllowChildPointerEvents(ui::Widget&) const {
+  return !merging && !owner.IsExpired();
+}
+
 ui::Tock LocationWidget::Tick(time::Timer& timer) {
   Tock tock;
   auto loc = LockLocation();
@@ -309,8 +313,10 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
       target_position = loc->Position(*this);
       target_scale = loc->Scale(*this);
     }
+    float log_scale = logf(snap_scale);
     auto scale_progress = animation::LowLevelSpringTowards(
-        target_scale, timer.d, kScaleSpringPeriod, kSpringHalfTime, snap_scale, scale_vel);
+        logf(target_scale), timer.d, kScaleSpringPeriod, kSpringHalfTime, log_scale, scale_vel);
+    snap_scale = scale_progress.settled ? target_scale : expf(log_scale);
     auto x_progress = animation::LowLevelSineTowards(
         target_position.x, timer.d, kPositionSpringPeriod, snap_position.x, position_vel.x);
     auto y_progress = animation::LowLevelSineTowards(
@@ -695,7 +701,6 @@ void LocationWidget::OnReparent(ui::Widget& new_parent, SkM44& fix) {
   toy.local_to_parent.postConcat(fix);
   auto fix33 = fix.asM33();
   fix33.mapVector(position_vel);
-  fix33.mapRadius(scale_vel);
 }
 
 void LocationWidget::OnChildReparentedAway(ui::Widget& child) {

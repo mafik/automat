@@ -113,7 +113,7 @@ struct Spring : Base<T> {
     float t;
     float amplitude;
     if (fabsf(D) > 1e-6f) {
-      t = -atanf((D * kLog2e + V * H) / (D * H * Q)) / Q;
+      t = -atanf((D * kLn2 + V * H) / (D * H * Q)) / Q;
       amplitude = D / powf(2, -t / H) / cosf(t * Q);
     } else {
       if (fabsf(V) < 1e-6f) {
@@ -129,7 +129,7 @@ struct Spring : Base<T> {
     float t2 = t + dt;
     value = target + amplitude * cosf(t2 * Q) * powf(2, -t2 / H);
     velocity =
-        (-(amplitude * kLog2e * cosf(t2 * Q)) / H - amplitude * Q * sinf(t2 * Q)) / powf(2, t2 / H);
+        (-(amplitude * kLn2 * cosf(t2 * Q)) / H - amplitude * Q * sinf(t2 * Q)) / powf(2, t2 / H);
     return {.value_changed = value != before, .settled = false};
   }
 

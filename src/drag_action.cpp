@@ -12,6 +12,7 @@
 #include "action.hpp"
 #include "board.hpp"
 #include "embedded.hpp"
+#include "library_file.hpp"
 #include "math.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
@@ -342,6 +343,12 @@ void DragLocationAction::Drop() {
       new_bw.local_to_parent = board_transform;
       Enter(new_bw, *new_board);
       engine.WakeToys();
+      if (locations.size() == 1) {
+        auto file = dyn_cast<library::File>(locations[0]->object.ptr);
+        if (file && file->IsImage()) {
+          new_board->SetWallpaper(std::move(file));
+        }
+      }
     }
   }
   if (board_widget) {

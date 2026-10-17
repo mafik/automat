@@ -40,8 +40,8 @@ board, or of the containing object when the first owner is not a Location. After
 boards are loaded, `LoadState` (src/persistence.cpp) rotates each owner list back to the recorded
 home.
 
-The structural holders are `Location::object`, `Board::locations`, `Timeline::tracks` and
-`ProgramLauncher::launch`. Every other reference to an Object stays a `Ptr`: locals, task
+The structural holders are `Location::object`, `Board::locations`, `Board::wallpaper`
+(docs/parrots/Boards.md), `Timeline::tracks` and `ProgramLauncher::launch`. Every other reference to an Object stays a `Ptr`: locals, task
 targets, the locations dragged by a pointer, prototypes, the results of an owner walk. A `Ptr`
 keeps an object alive without becoming its owner, so an object held only by temporaries reports
 no owners. A holder becomes an `Owned` link exactly when a query for the object's owners should

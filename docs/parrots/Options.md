@@ -74,8 +74,9 @@ commands as interfaces, and the widgets only map triggers to those interfaces:
 - Text is a `Text` interface (src/base.hpp); text fields are Toys of it (src/text_field.hpp).
 - An object that hands out objects is an `ObjectSource` (src/object_source.hpp): `Take()` returns
   the object, the activation starts the drag. Location `move`, `copy` and `clone`, the prototypes'
-  `kMakeObject` (src/object.cpp) and the instruction library's `pick` (its front card) are the
-  tables. The activation makes the new object's toy where the object is born and hands the object
+  `kMakeObject` (src/object.cpp), the instruction library's `pick` (its front card) and the
+  Board's `take_wallpaper`, which hands out the board's wallpaper File (docs/parrots/Boards.md),
+  are the tables. The activation makes the new object's toy where the object is born and hands the object
   and its toy to `DragNew`, whose drag springs that toy to the pointer: `kMakeObject` births the
   clone under the toy it receives, which is why the toolbar's `PrototypeButton` and the
   `ShelfButton` are Toys of the prototype they display, and `pick` places the card's toy at the
@@ -251,8 +252,8 @@ Timer, the `enabled` OnOff of HotKey); KeyPresser, which has two, lists `state` 
 `LocationWidget::FindOption` (src/location.cpp), which answers it with move.
 `LocationWidget::FillMenu` places move at N, delete at NW, iconify or deiconify at NE, copy at E,
 clone at W, make home at SE when the Location is not the object's home, and the Board at S.
-`BoardWidget::FillMenu` (src/board.cpp) places move at N, toggle frame at NE and the camera menu at
-S.
+`BoardWidget::FillMenu` (src/board.cpp) places move at N, toggle frame at NE, the camera menu at
+S and, while the board has a wallpaper, `take_wallpaper` at W.
 `RootWidget::FindOption` (src/root_widget.cpp) maps the W, A, S and D keys to the `Camera` object's
 nudge commands and the middle button to the camera drag; `RootWidget::FillMenu` fills the same
 camera menu that the Board's S slot opens. An object with more commands overrides `FillMenu`, calls
@@ -261,5 +262,9 @@ by enumeration order, because adding an interface would then shift every directi
 may place the object's first Command at another angle as well, in addition to N: the Switch toy
 places its OnOff at E, the Assembler, Program Launcher, Window, Mouse Button Presser and Key Presser
 toys place theirs at NE, and the PipeWire node toy places `muted` at W. A toy does not repeat a
-placement of the base, so the HotKey, Macro Recorder, File and Sources toys place nothing of their
-own.
+placement of the base, so the HotKey, Macro Recorder and Sources toys place nothing of their own.
+The File toy places `kSetWallpaper` (src/board.cpp) at E when it shows an image and has a
+`BoardWidget` ancestor; the table is an option with only an activation, like `kRun`, bound to the
+File by constructing `Interface(*file, kSetWallpaper)`, and the activation acts on the board found
+through the toy it was activated from, so the File class declares nothing for it
+(docs/parrots/Boards.md).

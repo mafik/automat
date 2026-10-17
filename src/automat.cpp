@@ -23,6 +23,7 @@
 #include "global_resources.hpp"
 #include "keymap.hpp"
 #include "launcher.hpp"
+#include "library_file.hpp"
 #include "loading_animation.hpp"
 #include "mux.hpp"
 #include "persistence.hpp"
@@ -222,6 +223,10 @@ int Main() {
     for (auto& board : engine.boards) {
       for (auto& location : board->locations) {
         location->object->suspended = true;
+      }
+      auto wallpaper_lock = std::lock_guard(board->wallpaper_mutex);
+      if (board->wallpaper) {
+        board->wallpaper->suspended = true;
       }
     }
     for (auto& board : engine.boards) {

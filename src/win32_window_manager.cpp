@@ -128,7 +128,6 @@ static void SetEmbedded(AppWindow* window, HWND hwnd, bool embedded) {
         },
         0);
   }
-  HRESULT init = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
   ComPtr<ITaskbarList> taskbar;
   if (SUCCEEDED(
           CoCreateInstance(__uuidof(TaskbarList), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&taskbar))) &&
@@ -139,7 +138,6 @@ static void SetEmbedded(AppWindow* window, HWND hwnd, bool embedded) {
       taskbar->AddTab(hwnd);
     }
   }
-  if (SUCCEEDED(init)) CoUninitialize();
 }
 
 static bool ProcessAlive(DWORD pid) {

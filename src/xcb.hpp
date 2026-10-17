@@ -7,6 +7,7 @@
 #include <xcb/xproto.h>
 
 #include <atomic>
+#include <cstring>
 #include <span>
 
 #include "status.hpp"
@@ -68,6 +69,7 @@ namespace atom {
   ATOM_FROM_IDENTIFIER(XdndActionDescription)                \
   ATOM_FROM_IDENTIFIER(XdndActionDirectSave)                 \
   ATOM_FROM_IDENTIFIER(XdndDirectSave0)                      \
+  ATOM_FROM_IDENTIFIER(AUTOMAT_POSTED_FUNCTION)              \
   ATOM(text_plain, "text/plain")                             \
   ATOM(application_octet_stream, "application/octet-stream") \
   ATOM(text_uri_list, "text/uri-list")
@@ -83,6 +85,18 @@ automat::Str ToStr(xcb_atom_t);
 void Connect(automat::Status& status);
 
 inline void flush() { xcb_flush(connection); }
+
+inline void SendClientMessage(xcb_window_t window, xcb_atom_t type, const uint32_t data32[5]) {
+  xcb_client_message_event_t event = {
+      .response_type = XCB_CLIENT_MESSAGE,
+      .format = 32,
+      .window = window,
+      .type = type,
+  };
+  memcpy(event.data.data32, data32, sizeof(uint32_t) * 5);
+  xcb_send_event(connection, false, window, XCB_EVENT_MASK_NO_EVENT, (const char*)&event);
+  flush();
+}
 
 inline std::unique_ptr<xcb_input_xi_query_device_reply_t, automat::DeleteWithFree>
 input_xi_query_device(xcb_input_device_id_t deviceid) {

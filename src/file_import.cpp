@@ -6,6 +6,7 @@
 
 #include <sys/stat.h>
 
+#include <algorithm>
 #include <cctype>
 #include <cerrno>
 #include <cstdio>
@@ -29,15 +30,8 @@ namespace automat {
 
 Path AutomatDir() { return Path::ExecutablePath().Parent(); }
 
-static bool Exists(const Path& p) {
-  struct stat st;
-  return stat(p.c_str(), &st) == 0;
-}
-
-Path UniqueNameIn(const Path& dir, StrView basename) {
+Path CreateUniqueFile(const Path& dir, StrView basename, Status& status) {
   Path candidate = dir / basename;
-  if (!Exists(candidate)) return candidate;
-
   Str stem = Path(Str(basename)).Stem();
   Str ext = candidate.str.substr(stem.size() + (dir.str.size() + 1));  // trailing ".ext" or ""
 
@@ -47,9 +41,30 @@ Path UniqueNameIn(const Path& dir, StrView basename) {
   Str prefix = stem.substr(0, digits);
 
   while (true) {
+#if defined(_WIN32)
+    HANDLE file = CreateFileA(candidate.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                              FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file != INVALID_HANDLE_VALUE) {
+      CloseHandle(file);
+      return candidate;
+    }
+    if (GetLastError() != ERROR_FILE_EXISTS) {
+      AppendErrorMessage(status) += f("CreateFile({}): error {}", candidate.str, GetLastError());
+      return Path();
+    }
+#else
+    int fd = open(candidate.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
+    if (fd >= 0) {
+      close(fd);
+      return candidate;
+    }
+    if (errno != EEXIST) {
+      AppendErrorMessage(status) += f("open({}): {}", candidate.str, strerror(errno));
+      return Path();
+    }
+#endif
     ++number;
     candidate = dir / f("{}{}{}", prefix, number, ext);
-    if (!Exists(candidate)) return candidate;
   }
 }
 
@@ -65,16 +80,24 @@ uint64_t FileSize(const Path& p) {
   return stat(p.c_str(), &st) == 0 ? (uint64_t)st.st_size : 0;
 }
 
-void CopyInto(const Path& src, const Path& dst, Status& status, std::atomic<uint64_t>* progress) {
+void CopyInto(const Path& src, const Path& dst, Status& status, std::atomic<uint64_t>* progress,
+              const std::atomic<bool>* cancelled) {
 #if defined(_WIN32)
-  auto report = [](LARGE_INTEGER, LARGE_INTEGER transferred, LARGE_INTEGER, LARGE_INTEGER, DWORD,
-                   DWORD, HANDLE, HANDLE, LPVOID data) -> DWORD {
-    if (auto* progress = static_cast<std::atomic<uint64_t>*>(data)) {
-      progress->store(transferred.QuadPart, std::memory_order_relaxed);
+  struct Report {
+    std::atomic<uint64_t>* progress;
+    const std::atomic<bool>* cancelled;
+  } report = {progress, cancelled};
+  auto callback = [](LARGE_INTEGER, LARGE_INTEGER transferred, LARGE_INTEGER, LARGE_INTEGER, DWORD,
+                     DWORD, HANDLE, HANDLE, LPVOID data) -> DWORD {
+    auto& report = *static_cast<Report*>(data);
+    if (report.progress) report.progress->store(transferred.QuadPart, std::memory_order_relaxed);
+    if (report.cancelled && report.cancelled->load(std::memory_order_relaxed)) {
+      return PROGRESS_CANCEL;
     }
     return PROGRESS_CONTINUE;
   };
-  if (!CopyFileExA(src.c_str(), dst.c_str(), report, progress, nullptr, 0)) {
+  if (!CopyFileExA(src.c_str(), dst.c_str(), callback, &report, nullptr, 0) &&
+      GetLastError() != ERROR_REQUEST_ABORTED) {
     AppendErrorMessage(status) +=
         f("CopyFileEx({}, {}): error {}", src.str, dst.str, GetLastError());
   }
@@ -101,8 +124,9 @@ void CopyInto(const Path& src, const Path& dst, Status& status, std::atomic<uint
 #endif
   char buf[1 << 16];
   uint64_t done = 0;
-  ssize_t n;
-  while ((n = read(in, buf, sizeof(buf))) > 0) {
+  ssize_t n = 0;
+  while (!(cancelled && cancelled->load(std::memory_order_relaxed)) &&
+         (n = read(in, buf, sizeof(buf))) > 0) {
     ssize_t written = 0;
     while (written < n) {
       ssize_t w = write(out, buf + written, n - written);
@@ -154,7 +178,7 @@ static Str UriDecode(StrView s) {
 
 static Str UriEncode(StrView s) {
   constexpr StrView kUnreserved =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.~/";
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.~/:";
   Str out;
   for (char c : s) {
     if (kUnreserved.find(c) != StrView::npos) {
@@ -168,33 +192,34 @@ static Str UriEncode(StrView s) {
   return out;
 }
 
-static Str Hostname() {
-  char name[256] = {};
-#if defined(_WIN32)
-  DWORD size = sizeof(name);
-  GetComputerNameA(name, &size);
-#else
-  gethostname(name, sizeof(name) - 1);
-#endif
-  return name;
-}
-
 Path PathFromFileURI(StrView uri, Status& status) {
   constexpr StrView kScheme = "file://";
   if (!uri.starts_with(kScheme)) {
     return Path(UriDecode(uri));  // plain or relative path
   }
   StrView rest = uri.substr(kScheme.size());
-  size_t slash = rest.find('/');
-  StrView host = slash == StrView::npos ? rest : rest.substr(0, slash);
-  StrView path = slash == StrView::npos ? StrView() : rest.substr(slash);
-  if (!host.empty() && host != "localhost" && host != Hostname()) {
-    AppendErrorMessage(status) += f("file lives on another host: {}", host);
+  if (!rest.starts_with('/')) {
+    // IDEA: it would be cool to support host-based file:// URLs
+    AppendErrorMessage(status) += f("host-based file:// URLs are not supported: {}", uri);
     return Path();
   }
-  return Path(UriDecode(path));
+#if defined(_WIN32)
+  Str path = UriDecode(rest.substr(1));
+  std::replace(path.begin(), path.end(), '/', '\\');
+  return Path(path);
+#else
+  return Path(UriDecode(rest));
+#endif
 }
 
-Str FileURIFromPath(StrView path) { return f("file://{}{}", Hostname(), UriEncode(path)); }
+Str FileURIFromPath(StrView path) {
+#if defined(_WIN32)
+  Str slashes(path);
+  std::replace(slashes.begin(), slashes.end(), '\\', '/');
+  return f("file:///{}", UriEncode(slashes));
+#else
+  return f("file://{}", UriEncode(path));
+#endif
+}
 
 }  // namespace automat

@@ -22,6 +22,14 @@
 #include "time.hpp"
 #include "ui_connection_widget.hpp"
 
+#if defined(_WIN32)
+#include <objbase.h>
+
+#include "win32.hpp"
+
+#pragma comment(lib, "ole32.lib")
+#endif
+
 namespace automat {
 
 moodycamel::BlockingConcurrentQueue<Task*> queue;
@@ -34,6 +42,9 @@ struct NoopTask : Task {
 static void AutomatLoop(std::stop_token stop_token) {
   SetThreadName("Automat Loop");
   error_recovery::SignalStack signal_stack;
+#if defined(_WIN32)
+  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+#endif
   while (!stop_token.stop_requested()) {
     Task* task;
     {
@@ -101,6 +112,9 @@ static void AutomatLoop(std::stop_token stop_token) {
       }
     }
   }
+#if defined(_WIN32)
+  CoUninitialize();
+#endif
 }
 
 std::vector<std::jthread> worker_threads;

@@ -166,7 +166,7 @@ KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctr
   key_grab.cb = new KeyGrab::RegistrationCallback(&key_grab, std::move(cb));
 
   auto& win32_window = dynamic_cast<Win32Window&>(*root_widget->window);
-  win32_window.PostToMainLoop(
+  win32_window.RunOnMainLoop(
       [id = key_grab.id, modifiers, vk, cb = key_grab.cb, hwnd = win32_window.hwnd]() {
         bool success = RegisterHotKey(hwnd, id, modifiers, vk);
         if (!success) {
@@ -759,7 +759,7 @@ void KeyGrab::Release() {
     cb = nullptr;
   }
   auto& win32_window = dynamic_cast<Win32Window&>(*root_widget->window);
-  win32_window.PostToMainLoop([id = id, hwnd = win32_window.hwnd]() {
+  win32_window.RunOnMainLoop([id = id, hwnd = win32_window.hwnd]() {
     bool success = UnregisterHotKey(hwnd, id);
     if (!success) {
       ERROR << win32::GetLastErrorStr();

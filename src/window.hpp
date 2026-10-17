@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
 
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <stop_token>
@@ -50,6 +51,8 @@ struct Window {
   virtual void RequestMaximize(bool maximize_horizontally, bool maximize_vertically) = 0;
   virtual void RequestMinimizeToTray() = 0;
   virtual void RequestRestoreFromTray() = 0;
+
+  virtual void RunOnMainLoop(std::function<void()>) = 0;
 
   std::lock_guard<std::mutex> Lock();
 

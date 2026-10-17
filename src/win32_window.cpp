@@ -3,15 +3,18 @@
 #include "win32_window.hpp"
 
 #include <imm.h>
+#include <ole2.h>
 #include <winuser.h>
 #include <xkbcommon/xkbcommon.h>
 
 #pragma comment(lib, "imm32.lib")
+#pragma comment(lib, "ole32.lib")
 
 #include "automat.hpp"
 #include "hid.hpp"
 #include "key.hpp"
 #include "keymap.hpp"
+#include "library_data_offer.hpp"
 #include "log.hpp"
 #include "optional.hpp"
 #include "root_widget.hpp"
@@ -234,6 +237,77 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
   return CallNextHookEx(global_mouse_hook, nCode, wParam, lParam);
 }
 
+struct OleDropTarget : IDropTarget {
+  Win32Window& window;
+  ULONG refs = 1;
+  Ptr<library::DataOffer> offer;
+
+  OleDropTarget(Win32Window& window) : window(window) {}
+
+  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** out) override {
+    if (riid == __uuidof(IUnknown) || riid == __uuidof(IDropTarget)) {
+      *out = this;
+      AddRef();
+      return S_OK;
+    }
+    *out = nullptr;
+    return E_NOINTERFACE;
+  }
+  ULONG STDMETHODCALLTYPE AddRef() override { return ++refs; }
+  ULONG STDMETHODCALLTYPE Release() override {
+    ULONG left = --refs;
+    if (left == 0) delete this;
+    return left;
+  }
+
+  void MovePointer(POINTL pt) {
+    window.mouse_position = Vec2(pt.x, pt.y);
+    window.GetMouse().Move(window.ScreenToWindowPx(window.mouse_position));
+  }
+
+  HRESULT STDMETHODCALLTYPE DragEnter(IDataObject* data, DWORD, POINTL pt, DWORD* effect) override {
+    *effect = DROPEFFECT_NONE;
+    auto lock = window.Lock();
+    offer = MAKE_PTR(library::DataOffer);
+    if (!offer->Receive(*data)) {
+      offer.reset();
+      return S_OK;
+    }
+    MovePointer(pt);
+    offer->BeginDragAction(window.GetMouse());
+    *effect = DROPEFFECT_COPY;
+    return S_OK;
+  }
+
+  HRESULT STDMETHODCALLTYPE DragOver(DWORD, POINTL pt, DWORD* effect) override {
+    *effect = DROPEFFECT_NONE;
+    if (!offer) return S_OK;
+    auto lock = window.Lock();
+    MovePointer(pt);
+    *effect = DROPEFFECT_COPY;
+    return S_OK;
+  }
+
+  HRESULT STDMETHODCALLTYPE DragLeave() override {
+    if (!offer) return S_OK;
+    auto lock = window.Lock();
+    offer->CancelDragAction(window.GetMouse());
+    offer.reset();
+    return S_OK;
+  }
+
+  HRESULT STDMETHODCALLTYPE Drop(IDataObject*, DWORD, POINTL pt, DWORD* effect) override {
+    *effect = DROPEFFECT_NONE;
+    if (!offer) return S_OK;
+    auto lock = window.Lock();
+    MovePointer(pt);
+    offer->EndDragAction(window.GetMouse());
+    if (!offer->Done() || offer->Accepted()) *effect = DROPEFFECT_COPY;
+    offer.reset();
+    return S_OK;
+  }
+};
+
 Win32Window::Win32Window(automat::ui::RootWidget& root) : automat::ui::Window(root) {}
 
 Win32Window::~Win32Window() {
@@ -242,9 +316,11 @@ Win32Window::~Win32Window() {
     win_event_hook = nullptr;
   }
   if (hwnd) {
+    RevokeDragDrop(hwnd);
     hwnd_to_window.erase(hwnd);
     hwnd = nullptr;
   }
+  OleUninitialize();
 }
 
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -656,6 +732,9 @@ static WNDCLASSEX& GetWindowClass() {
 }
 
 unique_ptr<Window> Win32Window::Make(RootWidget& root, Status& status) {
+  if (HRESULT hr = OleInitialize(nullptr); FAILED(hr)) {
+    ERROR << f("OleInitialize: {:#x}", (uint32_t)hr);
+  }
   if (!RegisterClassEx(&GetWindowClass())) {
     AppendErrorMessage(status) += "Failed to register window class.";
     return nullptr;
@@ -674,6 +753,11 @@ unique_ptr<Window> Win32Window::Make(RootWidget& root, Status& status) {
     return nullptr;
   }
   hwnd_to_window[window->hwnd] = window.get();
+  auto* drop_target = new OleDropTarget(*window);
+  if (HRESULT hr = RegisterDragDrop(window->hwnd, drop_target); FAILED(hr)) {
+    ERROR << f("RegisterDragDrop: {:#x}", (uint32_t)hr);
+  }
+  drop_target->Release();
   root.DisplayPixelDensity(win32::caps.px_per_meter);
 
   // Restore the position of the client area.
@@ -725,7 +809,7 @@ void Win32Window::MainLoop(std::stop_token) {
   }
 }
 
-void Win32Window::PostToMainLoop(function<void()> f) {
+void Win32Window::RunOnMainLoop(function<void()> f) {
   if (this_thread::get_id() == automat::main_thread_id) {
     f();
     return;

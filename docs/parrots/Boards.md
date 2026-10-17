@@ -107,7 +107,7 @@ and entry switch these members in place, so a mode change never touches the poin
 drag count or the grab anchors. The action never holds an empty
 stack: it is constructed with at least one location, and removing the last member
 (`DragLocationAction::RemoveFromGroup`) ends the action through `Pointer::ReplaceAction`.
-Drags that arrive from outside the process, such as X11 drag and drop (src/xcb_window.cpp),
+Drags that arrive from outside the process (`DataOffer::BeginDragAction`, src/library_data_offer.cpp)
 are ordinary pointer actions in the mouse pointer's left-button slot and end with a
 synthesized button release.
 
@@ -173,8 +173,8 @@ of the dragged stack. By default `DragLocationAction` reads it at pick-up from t
 position, clamped to the nearest point within the toy's coarse bounds (`RRect::Clamp`,
 src/math.hpp), so the stretched texture is always ink. A caller whose new object starts away
 from the pointer passes the grab point to the constructor instead: the "New..." menu and an
-external X11 drag entering the window hold the new object by the point of its bounds nearest to
-its origin (src/make_object_option.cpp, src/xcb_window.cpp). The snapped pose places the grab
+external drag entering the window hold the new object by the point of its bounds nearest to
+its origin (src/make_object_option.cpp, src/library_data_offer.cpp). The snapped pose places the grab
 point under the pointer, and the anchor pulls the grab point to the pointer with no offset, so
 both follow from the same point and a converged pose shows no stretch. Neither is derived from
 the widget's current transform, which is transient at pick-up: an anchor offset computed from

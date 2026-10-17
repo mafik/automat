@@ -33,10 +33,10 @@ struct Win32Window : automat::ui::Window {
   void RequestMaximize(bool horizontal, bool vertical) override;
   void RequestMinimizeToTray() override;
   void RequestRestoreFromTray() override;
+  void RunOnMainLoop(std::function<void()>) override;
 
   // Windows-specific functions
 
-  void PostToMainLoop(std::function<void()>);
   void OnRegisterInput(bool keylogging, bool pointerlogging) override;
   void OnWindowWatchingChanged() override;
 

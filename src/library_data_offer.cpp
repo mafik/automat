@@ -26,7 +26,6 @@
 #include "board.hpp"
 #include "drag_action.hpp"
 #include "engine.hpp"
-#include "file_import.hpp"
 #include "format.hpp"
 #include "library_data_offer.hpp"
 #include "library_file.hpp"
@@ -37,6 +36,7 @@
 #include "textures.hpp"
 #include "ui_beta.hpp"
 #include "units.hpp"
+#include "virtual_fs.hpp"
 #include "xdg_icon.hpp"
 
 #if defined(__linux__)
@@ -116,9 +116,7 @@ static void ScheduleRead(DataOffer& offer, DataOffer::Entry& e, FORMATETC format
     auto& offer = static_cast<DataOffer&>(o);
     if (offer.cancelled.load(std::memory_order_relaxed)) return;
     Status status;
-    e.dst = CreateUniqueFile(AutomatDir(), e.name, status);
-    ComPtr<IDataObject> data;
-    if (OK(status)) data = Source(offer, status);
+    ComPtr<IDataObject> data = Source(offer, status);
     FORMATETC request = format;
     STGMEDIUM medium = {};
     if (data) {
@@ -154,7 +152,7 @@ static void ScheduleRead(DataOffer& offer, DataOffer::Entry& e, FORMATETC format
         file += dib;
         GlobalUnlock(medium.hGlobal);
         e.bytes_total.store(file.size(), std::memory_order_relaxed);
-        WriteInto(e.dst, file, status);
+        e.file->Append(file);
         e.bytes_done.store(file.size(), std::memory_order_relaxed);
       }
     } else if (OK(status) && medium.tymed == TYMED_ISTREAM) {
@@ -165,31 +163,19 @@ static void ScheduleRead(DataOffer& offer, DataOffer::Entry& e, FORMATETC format
           e.bytes_total.store(stat.cbSize.QuadPart, std::memory_order_relaxed);
         }
       }
-      HANDLE file = CreateFileA(e.dst.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
-                                FILE_ATTRIBUTE_NORMAL, nullptr);
-      if (file == INVALID_HANDLE_VALUE) {
-        AppendErrorMessage(status) += f("CreateFile({}): {}", e.dst.str, win32::GetLastErrorStr());
-      } else {
-        char buf[1 << 16];
-        uint64_t done = 0;
-        while (!offer.cancelled.load(std::memory_order_relaxed)) {
-          ULONG n = 0;
-          HRESULT hr = stream.Read(buf, sizeof(buf), &n);
-          if (FAILED(hr)) {
-            AppendErrorMessage(status) += f("IStream::Read: {:#x}", (uint32_t)hr);
-            break;
-          }
-          if (n == 0) break;
-          DWORD written = 0;
-          if (!WriteFile(file, buf, n, &written, nullptr) || written != n) {
-            AppendErrorMessage(status) +=
-                f("WriteFile({}): {}", e.dst.str, win32::GetLastErrorStr());
-            break;
-          }
-          done += n;
-          e.bytes_done.store(done, std::memory_order_relaxed);
+      char buf[1 << 16];
+      uint64_t done = 0;
+      while (!offer.cancelled.load(std::memory_order_relaxed)) {
+        ULONG n = 0;
+        HRESULT hr = stream.Read(buf, sizeof(buf), &n);
+        if (FAILED(hr)) {
+          AppendErrorMessage(status) += f("IStream::Read: {:#x}", (uint32_t)hr);
+          break;
         }
-        CloseHandle(file);
+        if (n == 0) break;
+        e.file->Append(StrView(buf, n));
+        done += n;
+        e.bytes_done.store(done, std::memory_order_relaxed);
       }
     } else if (OK(status)) {
       AppendErrorMessage(status) += f("Unsupported storage medium {}", medium.tymed);
@@ -302,6 +288,7 @@ DataOffer::Entry* DataOffer::Add(StrView name) {
   uint32_t n = entry_count.load(std::memory_order_relaxed);
   if (n >= kMaxEntries) return nullptr;
   entries[n].name = Str(name);
+  entries[n].file = MAKE_PTR(File, name);
   entry_count.store(n + 1, std::memory_order_release);
   WakeToys();
   return &entries[n];
@@ -315,22 +302,26 @@ void DataOffer::AddPath(const Path& source) {
     auto& offer = static_cast<DataOffer&>(o);
     if (offer.cancelled.load(std::memory_order_relaxed)) return;
     Status status;
-    e->dst = CreateUniqueFile(AutomatDir(), e->name, status);
-    if (OK(status)) {
-      e->bytes_total.store(FileSize(e->source_path), std::memory_order_relaxed);
-      CopyInto(e->source_path, e->dst, status, &e->bytes_done, &offer.cancelled);
-    }
+    fs::real.Map(
+        e->source_path,
+        [&](StrView content) {
+          e->bytes_total.store(content.size(), std::memory_order_relaxed);
+          while (!content.empty() && !offer.cancelled.load(std::memory_order_relaxed)) {
+            StrView slice = content.substr(0, 1 << 16);
+            e->file->Append(slice);
+            content.remove_prefix(slice.size());
+            e->bytes_done.fetch_add(slice.size(), std::memory_order_relaxed);
+          }
+        },
+        status);
     offer.EntryWriteOver(*e, status);
   }))->Schedule();
 }
 
 void DataOffer::EntryWriteOver(Entry& e, Status& status) {
-  if (cancelled.load(std::memory_order_relaxed)) {
-    e.dst.Unlink(status, true);
-    return;
-  }
+  if (cancelled.load(std::memory_order_relaxed)) return;
+  if (OK(status)) e.file->FlushToFilesystem(status);
   if (!OK(status)) {
-    e.dst.Unlink(status, true);
     e.failed.store(true, std::memory_order_relaxed);
     ReportError(status.ToStr());
   }
@@ -372,15 +363,6 @@ void DataOffer::CancelDragAction(ui::Pointer& mouse) {
   while (auto* drag = DragOf(mouse)) {
     if (!drag->RemoveFromGroup(*drag->locations.front())) break;
   }
-  (new FunctionTask(AcquireWeakPtr(), [self = AcquirePtr()](Object&) {
-    int n = self->EntryCount();
-    for (int i = 0; i < n; ++i) {
-      Entry& e = self->entries[i];
-      if (e.spawned || !e.done.load(std::memory_order_acquire)) continue;
-      Status status;
-      e.dst.Unlink(status, true);
-    }
-  }))->Schedule();
 #if defined(_WIN32)
   ReleaseSource(*this);
 #endif
@@ -413,13 +395,12 @@ void DataOffer::TryFinishDrop() {
   int n = EntryCount();
   for (int i = 0; i < n; ++i) {
     Entry& e = entries[i];
-    if (e.spawned || !e.done.load(std::memory_order_acquire) ||
+    if (!e.file || !e.done.load(std::memory_order_acquire) ||
         e.failed.load(std::memory_order_relaxed)) {
       continue;
     }
-    e.spawned = true;
-    auto file = MAKE_PTR(File);
-    file->SetPath(e.dst.str);
+    auto file = std::move(e.file);
+    file->Analyze();
     auto loc = MAKE_PTR(Location);
     loc->InsertHere(std::move(file));
     if (drag) {

@@ -22,15 +22,11 @@
 
 namespace automat {
 
-// Load an image from static (never deallocated) memory
 sk_sp<SkImage> DecodeStaticImage(StrView content) {
   auto data = SkData::MakeWithoutCopy(content.data(), content.size());
   return SkImages::DeferredFromEncodedData(data);
 }
 
-// Load an image from an ephemeral (may be deallocated) memory
-//
-// It makes a copy of the image content for later decoding
 sk_sp<SkImage> DecodeTemporaryImage(StrView content) {
   auto data = SkData::MakeWithCopy(content.data(), content.size());
   return SkImages::DeferredFromEncodedData(data);

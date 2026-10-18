@@ -4,8 +4,6 @@
 // Warning: coded with a stochastic parrot
 #include "file_import.hpp"
 
-#include <sys/stat.h>
-
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -18,13 +16,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #endif
-#if defined(__linux__)
-#include <linux/fs.h>
-#include <sys/ioctl.h>
-#endif
 
 #include "format.hpp"
-#include "virtual_fs.hpp"
 
 namespace automat {
 
@@ -66,91 +59,6 @@ Path CreateUniqueFile(const Path& dir, StrView basename, Status& status) {
     ++number;
     candidate = dir / f("{}{}{}", prefix, number, ext);
   }
-}
-
-bool SameFilesystem(const Path& a, const Path& b) {
-  struct stat sa, sb;
-  if (stat(a.c_str(), &sa) != 0) return false;
-  if (stat(b.c_str(), &sb) != 0) return false;
-  return sa.st_dev == sb.st_dev;
-}
-
-uint64_t FileSize(const Path& p) {
-  struct stat st;
-  return stat(p.c_str(), &st) == 0 ? (uint64_t)st.st_size : 0;
-}
-
-void CopyInto(const Path& src, const Path& dst, Status& status, std::atomic<uint64_t>* progress,
-              const std::atomic<bool>* cancelled) {
-#if defined(_WIN32)
-  struct Report {
-    std::atomic<uint64_t>* progress;
-    const std::atomic<bool>* cancelled;
-  } report = {progress, cancelled};
-  auto callback = [](LARGE_INTEGER, LARGE_INTEGER transferred, LARGE_INTEGER, LARGE_INTEGER, DWORD,
-                     DWORD, HANDLE, HANDLE, LPVOID data) -> DWORD {
-    auto& report = *static_cast<Report*>(data);
-    if (report.progress) report.progress->store(transferred.QuadPart, std::memory_order_relaxed);
-    if (report.cancelled && report.cancelled->load(std::memory_order_relaxed)) {
-      return PROGRESS_CANCEL;
-    }
-    return PROGRESS_CONTINUE;
-  };
-  if (!CopyFileExA(src.c_str(), dst.c_str(), callback, &report, nullptr, 0) &&
-      GetLastError() != ERROR_REQUEST_ABORTED) {
-    AppendErrorMessage(status) +=
-        f("CopyFileEx({}, {}): error {}", src.str, dst.str, GetLastError());
-  }
-#else
-  uint64_t total = FileSize(src);
-  int in = open(src.c_str(), O_RDONLY | O_CLOEXEC);
-  if (in < 0) {
-    AppendErrorMessage(status) += f("open({}): {}", src.str, strerror(errno));
-    return;
-  }
-  int out = open(dst.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-  if (out < 0) {
-    AppendErrorMessage(status) += f("open({}): {}", dst.str, strerror(errno));
-    close(in);
-    return;
-  }
-#if defined(__linux__)
-  if (ioctl(out, FICLONE, in) == 0) {
-    if (progress) progress->store(total, std::memory_order_relaxed);
-    close(in);
-    close(out);
-    return;
-  }
-#endif
-  char buf[1 << 16];
-  uint64_t done = 0;
-  ssize_t n = 0;
-  while (!(cancelled && cancelled->load(std::memory_order_relaxed)) &&
-         (n = read(in, buf, sizeof(buf))) > 0) {
-    ssize_t written = 0;
-    while (written < n) {
-      ssize_t w = write(out, buf + written, n - written);
-      if (w < 0) {
-        AppendErrorMessage(status) += f("write({}): {}", dst.str, strerror(errno));
-        close(in);
-        close(out);
-        return;
-      }
-      written += w;
-    }
-    done += (uint64_t)n;
-    if (progress) progress->store(done, std::memory_order_relaxed);
-  }
-  if (n < 0) {
-    AppendErrorMessage(status) += f("read({}): {}", src.str, strerror(errno));
-  }
-  close(in);
-  close(out);
-#endif
-}
-
-void WriteInto(const Path& dst, StrView bytes, Status& status) {
-  fs::real.Write(dst, bytes, status);
 }
 
 static Str UriDecode(StrView s) {

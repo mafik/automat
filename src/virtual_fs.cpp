@@ -62,6 +62,10 @@ StrView RealFS::MapFile(const Path& path, Status& status) {
     close(f);
     return {};
   }
+  if (S_ISREG(buffer.st_mode) && buffer.st_size == 0) {
+    close(f);
+    return {};
+  }
   void* ptr = mmap(nullptr, buffer.st_size, PROT_READ, MAP_PRIVATE, f, 0);
   close(f);
   if (ptr == MAP_FAILED) {
@@ -71,11 +75,14 @@ StrView RealFS::MapFile(const Path& path, Status& status) {
   return StrView((char*)ptr, buffer.st_size);
 }
 
-void RealFS::UnmapFile(StrView mapped) { munmap((void*)mapped.data(), mapped.size()); }
+void RealFS::UnmapFile(StrView mapped) {
+  if (mapped.empty()) return;
+  munmap((void*)mapped.data(), mapped.size());
+}
 #elif defined(_WIN32)
 StrView RealFS::MapFile(const Path& path, Status& status) {
   HANDLE hFile = CreateFileA(path.str.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
-                             OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
   if (hFile == INVALID_HANDLE_VALUE) {
     AppendErrorMessage(status) += f("Couldn't open {}\n", path.str);
     return {};
@@ -87,6 +94,10 @@ StrView RealFS::MapFile(const Path& path, Status& status) {
     AppendErrorMessage(status) += f("Couldn't get size of {}\n", path.str);
     return {};
   };
+  if (size.QuadPart == 0) {
+    CloseHandle(hFile);
+    return {};
+  }
 
   HANDLE hMapping = CreateFileMappingA(hFile, nullptr, PAGE_READONLY, 0, 0, nullptr);
   if (hMapping == nullptr) {
@@ -105,7 +116,10 @@ StrView RealFS::MapFile(const Path& path, Status& status) {
   return StrView(data, size.QuadPart);
 }
 
-void RealFS::UnmapFile(StrView mapped) { UnmapViewOfFile(mapped.data()); }
+void RealFS::UnmapFile(StrView mapped) {
+  if (mapped.empty()) return;
+  UnmapViewOfFile(mapped.data());
+}
 #endif
 
 void RealFS::Map(const Path& path, Fn<void(StrView)> callback, Status& status) {

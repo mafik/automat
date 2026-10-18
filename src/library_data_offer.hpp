@@ -8,6 +8,7 @@
 #include <cstdint>
 
 #include "base.hpp"
+#include "library_file.hpp"
 #include "path.hpp"
 #include "status.hpp"
 #include "str.hpp"
@@ -23,9 +24,8 @@ struct DataOffer : Object {
   struct Entry {
     Str name;  // immutable once published; the only field the UI thread reads
 
-    Path source_path;      // local file backing a uri copy/move, empty for octet
-    Path dst;              // destination inside AutomatDir
-    bool spawned = false;  // a File has been created for this entry
+    Path source_path;  // local file backing a uri copy/move, empty for octet
+    Ptr<File> file;
 
     std::atomic<uint64_t> bytes_done{0};
     std::atomic<uint64_t> bytes_total{0};  // 0 => indeterminate
@@ -36,7 +36,6 @@ struct DataOffer : Object {
     uint32_t type = 0;
     uint32_t property = 0;
     uint32_t time = 0;
-    Str data;  // accumulating octet-stream bytes
     bool incremental = false;
 #endif
 

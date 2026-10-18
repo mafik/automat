@@ -9,6 +9,7 @@
 #include <include/core/SkShader.h>
 #include <include/core/SkTileMode.h>
 #include <include/gpu/graphite/ImageProvider.h>
+
 #include <mutex>
 
 #include "math.hpp"
@@ -95,7 +96,13 @@ struct PersistentImage {
   static void ReleaseAll();
 };
 
+// Load an image from static (never deallocated) memory
 sk_sp<SkImage> DecodeImage(fs::VFile& asset);
+
+// Load an image from an ephemeral (may be deallocated) memory
+//
+// It makes a copy of the image content for later decoding
+sk_sp<SkImage> DecodeTemporaryImage(StrView content);
 
 // Caching strategy:
 // - If an image was used during the last frame, keep it in the cache

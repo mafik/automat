@@ -5,6 +5,7 @@
 #include "library_file.hpp"
 
 #include <include/core/SkCanvas.h>
+#include <include/core/SkData.h>
 #include <include/pathops/SkPathOps.h>
 #include <include/private/SkExif.h>
 
@@ -15,9 +16,11 @@
 #include "deserializer.hpp"
 #include "file_import.hpp"
 #include "font.hpp"
+#include "log.hpp"
 #include "menu.hpp"
 #include "object.hpp"
 #include "root_widget.hpp"
+#include "tasks.hpp"
 #include "textures.hpp"
 #include "units.hpp"
 #include "virtual_fs.hpp"
@@ -157,25 +160,42 @@ File::File() {
   toc.store(&base_toc, std::memory_order_relaxed);
 }
 
-File::File(const File& o) : File() {
-  Str o_path;
-  {
-    auto lock = std::lock_guard(o.mutex);
-    o_path = o.path;
-    owns_file = o.owns_file;
-    show_filename = o.show_filename;
-  }
-  SetPath(o_path);
+File::File(StrView name) : File() {
+  Status status;
+  path = CreateUniqueFile(AutomatDir(), name, status).str;
+  if (!OK(status)) ReportError(status.ToStr());
 }
 
 File::~File() {
-  if (owns_file && !suspended && !path.empty()) {
+  if (!suspended && !path.empty()) {
     Status status;
     automat::Path(path).Unlink(status, true);
   }
 }
 
+Ptr<Object> File::Clone() const {
+  auto lock = std::lock_guard(mutex);
+  if (path.empty()) return MAKE_PTR(File);
+  auto copy = MAKE_PTR(File, Basename(path));
+  copy->Append(contents);
+  copy->image = image;
+  copy->icon = icon;
+  copy->size = size;
+  copy->show_filename = show_filename;
+  copy->base_toc[1] = base_toc[1];
+  (new FunctionTask(copy->AcquireWeakPtr(), [](Object& o) {
+    auto& file = static_cast<File&>(o);
+    Status status;
+    file.FlushToFilesystem(status);
+    if (!OK(status)) file.ReportError(status.ToStr());
+  }))->Schedule();
+  return copy;
+}
+
 void File::SerializeState(ObjectSerializer& writer) const {
+  Status status;
+  FlushToFilesystem(status);
+  if (!OK(status)) ERROR << status.ToStr();
   auto lock = std::lock_guard(mutex);
   if (!path.empty()) {
     Str uri = FileURIFromPath(path);
@@ -196,7 +216,13 @@ bool File::DeserializeKey(ObjectDeserializer& d, StrView key) {
     if (!OK(status)) return true;
     automat::Path p = PathFromFileURI(uri, status);
     if (OK(status)) {
-      SetPath(p.str);
+      Str new_contents = fs::real.Read(p, status);
+      {
+        auto lock = std::lock_guard(mutex);
+        path = p.str;
+        contents = std::move(new_contents);
+      }
+      Analyze();
     } else {
       ReportError(status.ToStr());
     }
@@ -215,32 +241,27 @@ bool File::DeserializeKey(ObjectDeserializer& d, StrView key) {
   return false;
 }
 
-void File::SetPath(StrView new_path) {
+void File::Append(StrView bytes) {
   {
     auto lock = std::lock_guard(mutex);
-    path = new_path;
-    contents = nullptr;
-    image = nullptr;
+    contents += bytes;
+    ++contents_monitor;
+  }
+  WakeToys();
+}
+
+void File::Analyze() {
+  {
+    auto lock = std::lock_guard(mutex);
+    image = DecodeTemporaryImage(contents);
     icon = nullptr;
-    Status status;
-    StrView mapped = fs::real.MapFile(automat::Path(path), status);
-    if (OK(status)) {
-      contents = SkData::MakeWithProc(
-          mapped.data(), mapped.size(),
-          [](const void* ptr, void* size) {
-            fs::real.UnmapFile(StrView((const char*)ptr, (size_t)size));
-          },
-          (void*)mapped.size());
-      image = SkImages::DeferredFromEncodedData(contents);
-    }
     if (image) {
       image = image->withDefaultMipmaps();
       float screen = ui::root_widget->display_pixels_per_meter;
-      Vec2 pixels_per_meter = PixelsPerMeter(mapped).value_or(Vec2(screen, screen));
+      Vec2 pixels_per_meter = PixelsPerMeter(contents).value_or(Vec2(screen, screen));
       size =
           FitAspect(Vec2(image->width(), image->height()) / pixels_per_meter, kMinSize, kMaxSize);
     } else {
-      contents = nullptr;
       icon = IconForExtension(ExtensionOf(path));
       size = Vec2(kIconSize, kIconSize);
       if (icon) {
@@ -252,6 +273,13 @@ void File::SetPath(StrView new_path) {
     ReattachHooks();
   }
   WakeToys();
+}
+
+void File::FlushToFilesystem(Status& status) const {
+  auto lock = std::lock_guard(mutex);
+  if (path.empty() || contents_monitor == flushed_monitor) return;
+  fs::real.Write(automat::Path(path), contents, status);
+  if (OK(status)) flushed_monitor = contents_monitor;
 }
 
 void File::ToggleFilename() {

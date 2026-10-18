@@ -289,8 +289,8 @@ the board shows the default texture, and the "Wallpaper" option still offers the
 
 Saving writes the File's name under the board's `wallpaper` key; the File is saved like any
 other object. At shutdown `automat::Main` (src/automat.cpp) suspends the wallpaper File together
-with the objects on the boards, because `File::~File` deletes the disk file of an unsuspended
-File that owns it.
+with the objects on the boards, because `File::~File` deletes the disk file of a File that is
+not suspended.
 
 Not covered: a Data Offer transfer that is still running when the card is dropped on the
 starfield (the File is placed on the new board when it arrives, docs/parrots/Data Offer.md);

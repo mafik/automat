@@ -746,9 +746,6 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
     (new FunctionTask(found.offer->AcquireWeakPtr(), [e = found.entry](Object& o) {
       auto& offer = static_cast<DataOffer&>(o);
       Status status;
-      e->dst = CreateUniqueFile(AutomatDir(), e->name, status);
-      if (OK(status)) WriteInto(e->dst, e->data, status);
-      e->data = Str();
       offer.EntryWriteOver(*e, status);
     }))->Schedule();
   };
@@ -874,8 +871,8 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
             found.entry->incremental = true;
             break;
           }
-          found.entry->data = std::move(data);
-          found.entry->bytes_done.store(found.entry->data.size(), std::memory_order_relaxed);
+          found.entry->file->Append(data);
+          found.entry->bytes_done.store(data.size(), std::memory_order_relaxed);
           EndInMemoryTransfer(found);
           break;
         }
@@ -890,8 +887,8 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
               if (chunk.empty()) {
                 EndInMemoryTransfer(found);
               } else {
-                found.entry->data += chunk;
-                found.entry->bytes_done.store(found.entry->data.size(), std::memory_order_relaxed);
+                found.entry->file->Append(chunk);
+                found.entry->bytes_done.fetch_add(chunk.size(), std::memory_order_relaxed);
                 found.offer->WakeToys();
               }
               break;

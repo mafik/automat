@@ -14,7 +14,7 @@
 #include <include/core/SkPathBuilder.h>
 #include <include/core/SkPathMeasure.h>
 #include <include/core/SkTypeface.h>
-#include <src/base/SkUTF.h>
+#include <src/core/SkUTF.h>
 
 #include <algorithm>
 #include <cstdlib>

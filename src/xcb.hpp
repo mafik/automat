@@ -113,6 +113,13 @@ input_xi_query_version(uint16_t major_version, uint16_t minor_version) {
           nullptr));
 }
 
+inline std::unique_ptr<xcb_query_extension_reply_t, automat::DeleteWithFree> query_extension(
+    automat::StrView name) {
+  return std::unique_ptr<xcb_query_extension_reply_t, automat::DeleteWithFree>(
+      xcb_query_extension_reply(
+          connection, xcb_query_extension(connection, name.size(), name.data()), nullptr));
+}
+
 inline std::unique_ptr<xcb_query_pointer_reply_t, automat::DeleteWithFree> query_pointer() {
   return std::unique_ptr<xcb_query_pointer_reply_t, automat::DeleteWithFree>(
       xcb_query_pointer_reply(connection, xcb_query_pointer(connection, screen->root), nullptr));

@@ -13,7 +13,7 @@ std::vector<TouchPad*> touchpads;
 
 #if defined(_WIN32)
 
-#include <src/base/SkUTF.h>
+#include <src/core/SkUTF.h>
 #include <stdint.h>
 
 #include <vector>

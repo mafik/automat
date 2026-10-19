@@ -3,7 +3,7 @@
 #include "format.hpp"
 
 #include <fmt/format.h>
-#include <src/base/SkUTF.h>
+#include <src/core/SkUTF.h>
 
 #include <cstring>
 #include <ranges>

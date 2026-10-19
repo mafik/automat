@@ -7,7 +7,7 @@ from sys import platform
 import subprocess
 
 skia = ExtensionHelper('Skia', globals())
-skia.FetchFromGit('https://skia.googlesource.com/skia.git', 'chrome/m148')
+skia.FetchFromGit('https://skia.googlesource.com/skia.git', 'chrome/m157')
 skia.ConfigureWithGN(skia.build_dir / build.libname('skia'))
 skia.ninja_target = 'all'
 skia.ConfigureOptions(
@@ -21,7 +21,8 @@ skia.ConfigureOptions(
   skia_use_system_zlib='false',
   skia_use_system_harfbuzz='false',
   skia_enable_ganesh='false',
-  skia_enable_graphite='true')
+  skia_enable_graphite='true',
+  skia_use_partition_alloc='false') # TODO: try to enable (currently fails on windows)
 
 if build.fast or build_variant.tsan:
   # SK_RELEASE:
@@ -87,3 +88,142 @@ def skia_git_sync_with_deps(marker):
   subprocess.run(['python', 'tools/git-sync-deps'], cwd=skia.src_dir, check=True)
   marker.touch()
 skia.PatchSources(skia_git_sync_with_deps)
+
+# Remove when Skia Graphite binds image and buffer memory through VMA instead of raw
+# vkBind*Memory (not fixed as of chrome/m157).
+skia.PatchSources('''--- include/gpu/vk/VulkanMemoryAllocator.h
++++ include/gpu/vk/VulkanMemoryAllocator.h
+@@ -64,6 +64,10 @@
+                                           uint32_t allocationPropertyFlags,
+                                           skgpu::VulkanBackendMemory* memory) = 0;
+ 
++    virtual VkResult bindImageMemory(VkImage image, const skgpu::VulkanBackendMemory&) = 0;
++
++    virtual VkResult bindBufferMemory(VkBuffer buffer, const skgpu::VulkanBackendMemory&) = 0;
++
+     // Fills out the passed in skgpu::VulkanAlloc struct for the passed in
+     // skgpu::VulkanBackendMemory.
+     virtual void getAllocInfo(const skgpu::VulkanBackendMemory&, skgpu::VulkanAlloc*) const = 0;
+--- src/gpu/graphite/vk/VulkanBuffer.cpp
++++ src/gpu/graphite/vk/VulkanBuffer.cpp
+@@ -161,11 +161,8 @@
+     }
+ 
+     // Bind buffer
+-    VULKAN_CALL_RESULT(
+-            sharedContext,
+-            result,
+-            BindBufferMemory(sharedContext->device(), buffer, alloc.fMemory, alloc.fOffset));
+-    if (result != VK_SUCCESS) {
++    result = allocator->bindBufferMemory(buffer, alloc.fBackendMemory);
++    if (!sharedContext->checkVkResult(result)) {
+         skgpu::VulkanMemory::FreeBufferMemory(allocator, alloc);
+         VULKAN_CALL(sharedContext->interface(),
+                     DestroyBuffer(sharedContext->device(),
+--- src/gpu/graphite/vk/VulkanTexture.cpp
++++ src/gpu/graphite/vk/VulkanTexture.cpp
+@@ -142,12 +142,8 @@
+         }
+     }
+ 
+-    VULKAN_CALL_RESULT(
+-            sharedContext,
+-            result,
+-            BindImageMemory(
+-                    device, image, outInfo->fMemoryAlloc.fMemory, outInfo->fMemoryAlloc.fOffset));
+-    if (result != VK_SUCCESS) {
++    result = allocator->bindImageMemory(image, outInfo->fMemoryAlloc.fBackendMemory);
++    if (!sharedContext->checkVkResult(result)) {
+         skgpu::VulkanMemory::FreeImageMemory(allocator, outInfo->fMemoryAlloc);
+         VULKAN_CALL(sharedContext->interface(), DestroyImage(device, image, nullptr));
+         return false;
+--- src/gpu/vk/vulkanmemoryallocator/VulkanAMDMemoryAllocator.cpp
++++ src/gpu/vk/vulkanmemoryallocator/VulkanAMDMemoryAllocator.cpp
+@@ -211,6 +211,20 @@
+     return result;
+ }
+ 
++VkResult VulkanAMDMemoryAllocator::bindImageMemory(VkImage image,
++                                                   const VulkanBackendMemory& memoryHandle) {
++    TRACE_EVENT0("skia.gpu", TRACE_FUNC);
++    const VmaAllocation allocation = (VmaAllocation)memoryHandle;
++    return vmaBindImageMemory(fAllocator, allocation, image);
++}
++
++VkResult VulkanAMDMemoryAllocator::bindBufferMemory(VkBuffer buffer,
++                                                    const VulkanBackendMemory& memoryHandle) {
++    TRACE_EVENT0("skia.gpu", TRACE_FUNC);
++    const VmaAllocation allocation = (VmaAllocation)memoryHandle;
++    return vmaBindBufferMemory(fAllocator, allocation, buffer);
++}
++
+ void VulkanAMDMemoryAllocator::freeMemory(const VulkanBackendMemory& memoryHandle) {
+     TRACE_EVENT0("skia.gpu", TRACE_FUNC);
+     const VmaAllocation allocation = (VmaAllocation)memoryHandle;
+--- src/gpu/vk/vulkanmemoryallocator/VulkanAMDMemoryAllocator.h
++++ src/gpu/vk/vulkanmemoryallocator/VulkanAMDMemoryAllocator.h
+@@ -44,6 +44,10 @@
+                                   uint32_t allocationPropertyFlags,
+                                   skgpu::VulkanBackendMemory*) override;
+ 
++    VkResult bindImageMemory(VkImage image, const VulkanBackendMemory&) override;
++
++    VkResult bindBufferMemory(VkBuffer buffer, const VulkanBackendMemory&) override;
++
+     void freeMemory(const VulkanBackendMemory&) override;
+ 
+     void getAllocInfo(const VulkanBackendMemory&, VulkanAlloc*) const override;
+--- tools/gpu/vk/VkTestMemoryAllocator.cpp
++++ tools/gpu/vk/VkTestMemoryAllocator.cpp
+@@ -196,6 +196,20 @@
+     return result;
+ }
+ 
++VkResult VkTestMemoryAllocator::bindImageMemory(VkImage image,
++                                                const skgpu::VulkanBackendMemory& memoryHandle) {
++    TRACE_EVENT0("skia.gpu", TRACE_FUNC);
++    const VmaAllocation allocation = (VmaAllocation)memoryHandle;
++    return vmaBindImageMemory(fAllocator, allocation, image);
++}
++
++VkResult VkTestMemoryAllocator::bindBufferMemory(VkBuffer buffer,
++                                                 const skgpu::VulkanBackendMemory& memoryHandle) {
++    TRACE_EVENT0("skia.gpu", TRACE_FUNC);
++    const VmaAllocation allocation = (VmaAllocation)memoryHandle;
++    return vmaBindBufferMemory(fAllocator, allocation, buffer);
++}
++
+ void VkTestMemoryAllocator::freeMemory(const skgpu::VulkanBackendMemory& memoryHandle) {
+     TRACE_EVENT0("skia.gpu", TRACE_FUNC);
+     const VmaAllocation allocation = (VmaAllocation)memoryHandle;
+--- tools/gpu/vk/VkTestMemoryAllocator.h
++++ tools/gpu/vk/VkTestMemoryAllocator.h
+@@ -50,6 +50,10 @@
+                                   uint32_t allocationPropertyFlags,
+                                   skgpu::VulkanBackendMemory*) override;
+ 
++    VkResult bindImageMemory(VkImage image, const skgpu::VulkanBackendMemory&) override;
++
++    VkResult bindBufferMemory(VkBuffer buffer, const skgpu::VulkanBackendMemory&) override;
++
+     void freeMemory(const skgpu::VulkanBackendMemory&) override;
+ 
+     void getAllocInfo(const skgpu::VulkanBackendMemory&, skgpu::VulkanAlloc*) const override;
+''')
+
+# Remove when Skia's vkCreateRenderPass2 path sets the sam rasterization order subpass flag as
+# its pipelines use (not fixed as of chrome/m157).
+skia.PatchSources('''--- src/gpu/graphite/vk/VulkanRenderPass.cpp
++++ src/gpu/graphite/vk/VulkanRenderPass.cpp
+@@ -422,6 +422,10 @@
+         mainSubpassDesc.sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2;
+         populate_main_subpass_desc(
+                 context->vulkanCaps(), mainSubpassDesc, colorRef, resolveRef, depthStencilRef);
++        if (context->vulkanCaps().supportsRasterizationOrderColorAttachmentAccess()) {
++            mainSubpassDesc.flags =
++                    VK_SUBPASS_DESCRIPTION_RASTERIZATION_ORDER_ATTACHMENT_COLOR_ACCESS_BIT_EXT;
++        }
+ 
+         // Enable multisampled render to single-sampled with the render pass's sample count.
+         VkMultisampledRenderToSingleSampledInfoEXT msrtss = {};
+''')

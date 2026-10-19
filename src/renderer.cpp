@@ -480,6 +480,9 @@ void RendererShutdown() {
     vk_recorder_threads[i].join();
   }
 
+  vk::graphite_context->submit({skgpu::graphite::SyncToCpu::kYes});
+  vk::background_context->submit({skgpu::graphite::SyncToCpu::kYes});
+
   {
     auto lock = std::lock_guard(cached_widget_drawables_mutex);
     cached_widget_drawables.clear();
@@ -490,8 +493,6 @@ void RendererShutdown() {
   }
 
   global_foreground_recorder.reset();
-  vk::graphite_context->submit({skgpu::graphite::SyncToCpu::kYes});
-  vk::background_context->submit({skgpu::graphite::SyncToCpu::kYes});
   render_fence.Destroy();
 
   renderer_initialized = false;

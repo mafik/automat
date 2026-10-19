@@ -51,9 +51,10 @@ TEST(BlobSummary, Utf16) {
   EXPECT_EQ(BlobSummary(StrView(s2, 6)),
             "(utf-16 6 B) \xEF\xBB\xBF"
             "ał");
-  EXPECT_EQ(BlobSummary("a\0"
-                        "\x3D\xD8\x00\xDE"sv),
-            "(utf-16 6 B) a😀");
+  alignas(2) const char s3[] =
+      "a\0"
+      "\x3D\xD8\x00\xDE";
+  EXPECT_EQ(BlobSummary(StrView(s3, 6)), "(utf-16 6 B) a😀");
   EXPECT_EQ(BlobSummary("\xFF\xFE"sv), "(blob 2 B) ..  fffe");
 }
 

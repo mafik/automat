@@ -20,8 +20,8 @@
 #include <include/gpu/graphite/Image.h>
 #include <include/gpu/graphite/Recorder.h>
 #include <include/gpu/graphite/Surface.h>
+#include <include/gpu/graphite/vk/VulkanGraphiteContext.h>
 #include <include/gpu/graphite/vk/VulkanGraphiteTypes.h>
-#include <include/gpu/graphite/vk/VulkanGraphiteUtils.h>
 #include <include/gpu/vk/VulkanBackendContext.h>
 #include <include/gpu/vk/VulkanExtensions.h>
 #include <include/gpu/vk/VulkanMemoryAllocator.h>

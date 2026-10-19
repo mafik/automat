@@ -675,6 +675,8 @@ ui::Tock SyncBelt::Tick(time::Timer& t) {
 }
 
 void SyncBelt::Draw(SkCanvas& canvas) const {
+  // TODO: fix the mismatch between what gets ticked & what gets drawn
+  if (!label_shader) return;  // workaround the mismatch
   auto& effect = GearShader();
   auto& color = RubberColor();
   auto& normal = RubberNormal();

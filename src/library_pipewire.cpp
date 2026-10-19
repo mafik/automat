@@ -185,6 +185,17 @@ struct PwHost {
   static void OnNodeInfo(void* data, const pw_node_info* info) {
     auto& node = *(MirrorNode*)data;
     auto& host = *node.host;
+    if (info->change_mask & PW_NODE_CHANGE_MASK_PARAMS) {
+      Vec<uint32_t> ids;
+      for (uint32_t i = 0; i < info->n_params; ++i) {
+        const spa_param_info& param = info->params[i];
+        if ((param.id == SPA_PARAM_Props || param.id == SPA_PARAM_Format) &&
+            (param.flags & SPA_PARAM_INFO_READ)) {
+          ids.push_back(param.id);
+        }
+      }
+      pw_node_subscribe_params((pw_node*)node.proxy, ids.data(), ids.size());
+    }
     auto lock = std::lock_guard(host.mirror_mutex);
     node.state = pw_node_state_as_string(info->state);
     if (info->props) {
@@ -254,8 +265,6 @@ struct PwHost {
             .param = OnNodeParam,
         };
         pw_node_add_listener((pw_node*)node->proxy, &node->listener, &node_events, node.get());
-        uint32_t ids[] = {SPA_PARAM_Props, SPA_PARAM_Format};
-        pw_node_subscribe_params((pw_node*)node->proxy, ids, 2);
       }
       auto lock = std::lock_guard(host.mirror_mutex);
       host.nodes.push_back(std::move(node));
@@ -651,12 +660,11 @@ static void CreateVuStreamLocked(PipeWireNode& obj, const Str& target) {
 // ============================================================================
 
 PipeWireNode::~PipeWireNode() {
+  if (!stream) return;
   auto& host = PwHost::Get();
-  if (host.loop && stream) {
-    pw_thread_loop_lock(host.loop);
-    DestroyVuStreamLocked(*this);
-    pw_thread_loop_unlock(host.loop);
-  }
+  pw_thread_loop_lock(host.loop);
+  DestroyVuStreamLocked(*this);
+  pw_thread_loop_unlock(host.loop);
 }
 
 void PipeWireNode::SerializeState(ObjectSerializer& writer) const {

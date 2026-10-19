@@ -670,6 +670,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
   // TODO: maybe use unique_ptr here
   xcb_generic_event_t *event, *peeked_event = nullptr;
   bool keys_down[256] = {0};
+  auto present_extension = query_extension("Present");
 
   std::stop_callback on_automat_stop(stop_token, [&] {
     xcb_client_message_event_t ev = {};
@@ -1268,6 +1269,10 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
                 break;
               }
             }
+          } else if (present_extension && ev->extension == present_extension->major_opcode) {
+            // While Vulkan swapchain is being recreated we might sometimes get one of the present
+            // notifications from the destroyed swapchain. Normally they're hidden from the event
+            // loop but under some conditions they might appear here. They're generally harmless.
           } else {
             LOG << "Unknown XCB_GE_GENERIC event (extension=" << ev->extension
                 << ", event_type=" << ev->event_type << ")";

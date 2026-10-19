@@ -26,7 +26,6 @@ SkPath PathFromSVG(const char svg[], SVGUnit unit) {
   } else if (unit == SVGUnit_Millimeters) {
     path = path.makeScale(kScaleMilimeters, -kScaleMilimeters);
   }
-  path.updateBoundsCache();
   return path;
 }
 

@@ -5,7 +5,7 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkFontTypes.h>
 #include <include/core/SkMatrix.h>
-#include <src/base/SkUTF.h>
+#include <src/core/SkUTF.h>
 
 #include <memory>
 #include <optional>

@@ -12,7 +12,7 @@
 #include <modules/skshaper/include/SkShaper_harfbuzz.h>
 #include <modules/skshaper/include/SkShaper_skunicode.h>
 #include <modules/skunicode/include/SkUnicode_icu.h>
-#include <src/base/SkUTF.h>
+#include <src/core/SkUTF.h>
 
 #if defined(_WIN32)
 #include <include/ports/SkTypeface_win.h>

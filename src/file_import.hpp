@@ -18,4 +18,8 @@ Path PathFromFileURI(StrView uri, Status&);
 
 Str FileURIFromPath(StrView path);
 
+Str GetSerializablePath(StrView path);
+
+Path DeserializePath(StrView serialized, Status&);
+
 }  // namespace automat

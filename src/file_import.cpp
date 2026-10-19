@@ -130,4 +130,23 @@ Str FileURIFromPath(StrView path) {
 #endif
 }
 
+Str GetSerializablePath(StrView path) {
+  Str dir = AutomatDir().str + Path::kSeparator;
+  if (!path.starts_with(dir)) return FileURIFromPath(path);
+  Str relative(path.substr(dir.size()));
+#if defined(_WIN32)
+  std::replace(relative.begin(), relative.end(), '\\', '/');
+#endif
+  return UriEncode(relative);
+}
+
+Path DeserializePath(StrView serialized, Status& status) {
+  if (serialized.starts_with("file://")) return PathFromFileURI(serialized, status);
+  Str relative = UriDecode(serialized);
+#if defined(_WIN32)
+  std::replace(relative.begin(), relative.end(), '/', '\\');
+#endif
+  return AutomatDir() / relative;
+}
+
 }  // namespace automat

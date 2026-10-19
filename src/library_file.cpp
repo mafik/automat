@@ -198,9 +198,9 @@ void File::SerializeState(ObjectSerializer& writer) const {
   if (!OK(status)) ERROR << status.ToStr();
   auto lock = std::lock_guard(mutex);
   if (!path.empty()) {
-    Str uri = FileURIFromPath(path);
+    Str serialized = GetSerializablePath(path);
     writer.Key("path");
-    writer.String(uri.data(), uri.size());
+    writer.String(serialized.data(), serialized.size());
   }
   if (show_filename) {
     writer.Key("show_filename");
@@ -211,10 +211,10 @@ void File::SerializeState(ObjectSerializer& writer) const {
 bool File::DeserializeKey(ObjectDeserializer& d, StrView key) {
   if (key == "path") {
     Status status;
-    Str uri;
-    d.Get(uri, status);
+    Str serialized;
+    d.Get(serialized, status);
     if (!OK(status)) return true;
-    automat::Path p = PathFromFileURI(uri, status);
+    automat::Path p = DeserializePath(serialized, status);
     if (OK(status)) {
       Str new_contents = fs::real.Read(p, status);
       {

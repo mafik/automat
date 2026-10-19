@@ -466,14 +466,11 @@ void RootWidget::Poll() {
   uint32_t camera_wake = camera->monitor.load(std::memory_order_relaxed);
   if (camera_wake != camera_observed) {
     camera_observed = camera_wake;
-    Vec2 delta;
-    {
-      auto lock = std::lock_guard(camera->mutex);
-      delta = camera->nudge;
-      camera->nudge = Vec2(0, 0);
-    }
-    camera_target += delta;
-    inertia = false;
+    move_velocity = Vec2(0, 0);
+    if (camera->moving_up) move_velocity += Vec2(0, 10_cm);
+    if (camera->moving_down) move_velocity += Vec2(0, -10_cm);
+    if (camera->moving_left) move_velocity += Vec2(-10_cm, 0);
+    if (camera->moving_right) move_velocity += Vec2(10_cm, 0);
     WakeAnimation();
   }
 }
@@ -506,17 +503,12 @@ void RootWidget::Draw(SkCanvas& canvas) const {
 }
 
 struct MoveCameraAction : Action {
-  RootWidget& root;
-  Vec2 delta;
-  MoveCameraAction(Pointer& pointer, RootWidget& root, Vec2 delta)
-      : Action(pointer), root(root), delta(delta) {
-    root.move_velocity += delta;
-    root.WakeAnimation();
+  Locked<OnOff> direction;
+  MoveCameraAction(Pointer& pointer, OnOff on_off)
+      : Action(pointer), direction(AcquireLocked(on_off)) {
+    direction.TurnOn();
   }
-  ~MoveCameraAction() {
-    root.move_velocity -= delta;
-    root.WakeAnimation();
-  }
+  ~MoveCameraAction() { direction.TurnOff(); }
   void Update() override {}
 };
 
@@ -552,24 +544,20 @@ struct DragCameraAction : Action {
   }
 };
 
-static std::unique_ptr<Action> MoveCamera(Pointer& pointer, Vec2 delta) {
-  return std::make_unique<MoveCameraAction>(pointer, pointer.root_widget, delta);
-}
-
 std::unique_ptr<Action> Camera::up_Impl::OnActivate(Pointer& p, automat::Toy*) {
-  return MoveCamera(p, kDelta);
+  return std::make_unique<MoveCameraAction>(p, *this);
 }
 
 std::unique_ptr<Action> Camera::down_Impl::OnActivate(Pointer& p, automat::Toy*) {
-  return MoveCamera(p, kDelta);
+  return std::make_unique<MoveCameraAction>(p, *this);
 }
 
 std::unique_ptr<Action> Camera::left_Impl::OnActivate(Pointer& p, automat::Toy*) {
-  return MoveCamera(p, kDelta);
+  return std::make_unique<MoveCameraAction>(p, *this);
 }
 
 std::unique_ptr<Action> Camera::right_Impl::OnActivate(Pointer& p, automat::Toy*) {
-  return MoveCamera(p, kDelta);
+  return std::make_unique<MoveCameraAction>(p, *this);
 }
 
 constinit Command::Table kDragCamera = [] {

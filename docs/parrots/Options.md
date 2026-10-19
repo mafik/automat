@@ -52,8 +52,8 @@ commands as interfaces, and the widgets only map triggers to those interfaces:
   turns the Switch on or off through `TurnOn` and `TurnOff`, so a hook on Flip sees every toggle
   of the Switch (src/library_switch.hpp). `Toggle` runs the OnOff through `RunLoop`, and `TurnOn`
   and `TurnOff` run the Command at the matching index the same way, on the calling thread. Their
-  callers are an object's own Commands (the Switch's `flip`), the loading of saved state and the
-  OnOff track of a Timeline. `NotifyTurnedOn` and `NotifyTurnedOff` tell the synced
+  callers are an object's own Commands (the Switch's `flip`), the loading of saved state, the
+  OnOff track of a Timeline and `MoveCameraAction` (src/root_widget.cpp). `NotifyTurnedOn` and `NotifyTurnedOff` tell the synced
   partners about a change that the object made on its own (docs/parrots/Hooks.md, section
   "Notifications"). The activation of an OnOff is the default activation of
   a Command: it clears the object's own Error and schedules a `RunTask`, which toggles the object on
@@ -61,7 +61,13 @@ commands as interfaces, and the widgets only map triggers to those interfaces:
   they change its state, so a toy shows the new state on its next tick. An OnOff is not an
   Argument. The menu of an OnOff holds Toggle at N, Sync at E, the Command at `turn_on_idx` at W
   and the Command at `turn_off_idx` at S; those two open their own Command menus. A Gear
-  synchronizes an OnOff through those two Commands (docs/parrots/Hooks.md).
+  synchronizes an OnOff through those two Commands (docs/parrots/Hooks.md). The four directions
+  of the `Camera` (src/root_widget.hpp) are OnOffs with their own activation: `OnActivate`
+  returns a `MoveCameraAction`, which turns the direction on and turns it off when the key or the
+  pointer button is released, and `RootWidget::Poll` sets the camera velocity from the directions
+  that are on. Their `OnFillMenu` places nothing, so a swipe onto a direction in the camera menu
+  moves the camera for as long as the pointer button is held, and the rocker of a `LinkedSwitch`
+  made for a direction moves the camera only while it is pressed.
 - A command that runs for a while and shows it (Timer, Timeline, Program Launcher, the GStreamer
   elements, Assembler) declares an `OnOff` named `running` over its `run` and `cancel` Commands
   (src/library_timer.hpp). Each of them keeps its own running flag, except the Assembler. The
@@ -254,8 +260,8 @@ Timer, the `enabled` OnOff of HotKey); KeyPresser, which has two, lists `state` 
 clone at W, make home at SE when the Location is not the object's home, and the Board at S.
 `BoardWidget::FillMenu` (src/board.cpp) places move at N, toggle frame at NE, the camera menu at
 S and, while the board has a wallpaper, `take_wallpaper` at W.
-`RootWidget::FindOption` (src/root_widget.cpp) maps the W, A, S and D keys to the `Camera` object's
-nudge commands and the middle button to the camera drag; `RootWidget::FillMenu` fills the same
+`RootWidget::FindOption` (src/root_widget.cpp) maps the W, A, S and D keys to the direction OnOffs
+of the `Camera` object and the middle button to the camera drag; `RootWidget::FillMenu` fills the same
 camera menu that the Board's S slot opens. An object with more commands overrides `FillMenu`, calls
 the base and places each command by hand (`TimerWidget` in src/library_timer.cpp); nothing is placed
 by enumeration order, because adding an interface would then shift every direction after it. A toy

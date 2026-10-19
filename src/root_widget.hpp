@@ -42,44 +42,42 @@ extern unique_ptr<RootWidget> root_widget;
 
 extern constinit Interface::Table kCameraMenu;
 
-struct Camera : Object {
-  std::mutex mutex;
-  Vec2 nudge;
+#define DEF_CAMERA_DIRECTION(direction)                                        \
+  bool moving_##direction = false;                                             \
+  DEF_INTERFACE(Camera, OnOff, direction, "Camera " #direction)                \
+  bool IsOn() const { return obj->moving_##direction; }                        \
+  static constexpr int TurnOnIdx() { return SlotOf(direction##_on_tbl); }      \
+  static constexpr int TurnOffIdx() { return SlotOf(direction##_off_tbl); }    \
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);             \
+  void OnFillMenu(Menu&) {}                                                    \
+  DEF_END(direction);                                                          \
+  DEF_INTERFACE(Camera, Command, direction##_on, "Camera " #direction " on")   \
+  void OnRun() {                                                               \
+    obj->moving_##direction = true;                                            \
+    obj->WakeToys();                                                           \
+  }                                                                            \
+  DEF_END(direction##_on);                                                     \
+  DEF_INTERFACE(Camera, Command, direction##_off, "Camera " #direction " off") \
+  void OnRun() {                                                               \
+    obj->moving_##direction = false;                                           \
+    obj->WakeToys();                                                           \
+  }                                                                            \
+  DEF_END(direction##_off)
 
+struct Camera : Object {
   StrView Name() const override { return "Camera"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Camera); }
 
-  void Move(Vec2 delta) {
-    {
-      auto lock = std::lock_guard(mutex);
-      nudge += delta;
-    }
-    WakeToys();
-  }
+  DEF_CAMERA_DIRECTION(up);
+  DEF_CAMERA_DIRECTION(down);
+  DEF_CAMERA_DIRECTION(left);
+  DEF_CAMERA_DIRECTION(right);
 
-  DEF_INTERFACE(Camera, Command, up, "Camera up")
-  static constexpr Vec2 kDelta = Vec2(0, 10_cm);
-  void OnRun() { obj->Move(kDelta); }
-  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
-  DEF_END(up);
-  DEF_INTERFACE(Camera, Command, down, "Camera down")
-  static constexpr Vec2 kDelta = Vec2(0, -10_cm);
-  void OnRun() { obj->Move(kDelta); }
-  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
-  DEF_END(down);
-  DEF_INTERFACE(Camera, Command, left, "Camera left")
-  static constexpr Vec2 kDelta = Vec2(-10_cm, 0);
-  void OnRun() { obj->Move(kDelta); }
-  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
-  DEF_END(left);
-  DEF_INTERFACE(Camera, Command, right, "Camera right")
-  static constexpr Vec2 kDelta = Vec2(10_cm, 0);
-  void OnRun() { obj->Move(kDelta); }
-  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
-  DEF_END(right);
-
-  INTERFACES(up_tbl, down_tbl, left_tbl, right_tbl, kCameraMenu);
+  INTERFACES(up_tbl, up_on_tbl, up_off_tbl, down_tbl, down_on_tbl, down_off_tbl, left_tbl,
+             left_on_tbl, left_off_tbl, right_tbl, right_on_tbl, right_off_tbl, kCameraMenu);
 };
+
+#undef DEF_CAMERA_DIRECTION
 
 extern Command::Table kDragCamera;
 

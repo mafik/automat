@@ -96,14 +96,7 @@ void RefreshTrayIcon() {
   system_tray::Action quit_action{
       .name = "Quit",
       .icon = quit_icon,
-      .on_click =
-          []() {
-#ifdef _WIN32
-            PostQuitMessage(0);
-#else
-            stop_source.request_stop();
-#endif
-          },
+      .on_click = []() { stop_source.request_stop(); },
   };
 
   system_tray::Menu root{

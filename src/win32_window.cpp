@@ -790,10 +790,12 @@ unique_ptr<Window> Win32Window::Make(RootWidget& root, Status& status) {
   return window;
 }
 
-void Win32Window::MainLoop(std::stop_token) {
+void Win32Window::MainLoop(std::stop_token stop_token) {
   ShowWindow(hwnd, (root.maximized_horizontally || root.maximized_vertically) ? SW_SHOWMAXIMIZED
                                                                               : SW_SHOW);
   UpdateWindow(hwnd);
+
+  std::stop_callback on_automat_stop(stop_token, [this] { PostMessage(hwnd, WM_CLOSE, 0, 0); });
 
   while (true) {
     MSG msg = {};

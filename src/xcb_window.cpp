@@ -329,9 +329,8 @@ std::unique_ptr<automat::ui::Window> XCBWindow::Make(automat::ui::RootWidget& ro
 }
 
 void XCBWindow::RequestResize(Vec2 new_size) {
-  const static uint32_t values[] = {
-      static_cast<uint32_t>(new_size.x * root.display_pixels_per_meter),
-      static_cast<uint32_t>(new_size.y * root.display_pixels_per_meter)};
+  const uint32_t values[] = {(uint32_t)roundf(new_size.x * root.display_pixels_per_meter),
+                             (uint32_t)roundf(new_size.y * root.display_pixels_per_meter)};
   xcb_configure_window(connection, xcb_window, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
                        values);
   xcb_flush(connection);

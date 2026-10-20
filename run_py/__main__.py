@@ -10,7 +10,7 @@ import sys
 # code page on Windows; degrade to replacement characters instead of crashing.
 for stream in (sys.stdout, sys.stderr):
     if hasattr(stream, 'reconfigure'):
-        stream.reconfigure(errors='replace')
+        stream.reconfigure(errors='replace', line_buffering=True)
 
 from args import args
 from sys import platform, exit, executable

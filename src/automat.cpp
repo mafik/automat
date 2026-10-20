@@ -43,6 +43,10 @@
 #endif
 
 #if defined(__linux__)
+#include <signal.h>
+#include <sys/eventfd.h>
+#include <unistd.h>
+
 #include "library_pipewire.hpp"
 #include "wayland.hpp"
 #endif
@@ -112,6 +116,40 @@ void RefreshTrayIcon() {
   }
 }
 
+#if defined(__linux__)
+
+struct SigtermListener : mux::Epoll::Listener {
+  StrView Name() const override { return "TerminationSignal"sv; }
+  void NotifyRead(Status&) override {
+    uint64_t count;
+    (void)!read(fd, &count, sizeof(count));
+    stop_source.request_stop();
+  }
+};
+
+static SigtermListener sigterm_listener;
+
+static void StopOnSigterm() {
+  sigterm_listener.fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+  mux::epoll.Post([] {
+    Status status;
+    mux::epoll.Add(&sigterm_listener, status);
+    if (!OK(status)) {
+      ERROR << "Couldn't watch the termination signal: " << status;
+    }
+  });
+  struct sigaction action = {};
+  action.sa_handler = [](int) {
+    uint64_t one = 1;
+    (void)!write(sigterm_listener.fd, &one, sizeof(one));
+  };
+  sigemptyset(&action.sa_mask);
+  action.sa_flags = SA_RESETHAND;
+  sigaction(SIGTERM, &action, nullptr);
+}
+
+#endif
+
 static int argc;
 static char** argv;
 
@@ -163,6 +201,7 @@ int Main() {
     status.Reset();
   }
 #if defined(__linux__)
+  StopOnSigterm();
   wayland::Start(mux::epoll, status);
   if (!OK(status)) {
     ERROR << "Couldn't start the Wayland compositor: " << status;

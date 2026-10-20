@@ -450,7 +450,7 @@ class Recipe:
                 windows.close_window(pid=task.pid)
         else:
             for task in active:
-                task.send_signal(signal.SIGINT)
+                task.send_signal(signal.SIGTERM)
         for task in active:
             time_left = deadline - time.time()
             if time_left > 0:

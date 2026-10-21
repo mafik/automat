@@ -145,6 +145,9 @@ struct InstructionLibrary : Object {
 
     std::string_view Name() const override { return "Instruction Library Widget"; }
     SkPath Shape() const override;
+    SkPath SubtreeShape() const override { return shape; }
+    bool CenteredAtZero() const override { return true; }
+    void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override;
     Tock Tick(time::Timer&) override;
     void Draw(SkCanvas&) const override;
 

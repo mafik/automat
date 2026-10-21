@@ -5,7 +5,10 @@
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkColor.h>
 #include <include/core/SkPathBuilder.h>
+#include <include/core/SkPathIter.h>
 #include <include/core/SkPathMeasure.h>
+#include <include/core/SkPathUtils.h>
+#include <include/pathops/SkPathOps.h>
 #include <llvm/MC/MCInstBuilder.h>
 #include <llvm/MC/MCInstrInfo.h>
 #include <llvm/MC/MCRegisterInfo.h>
@@ -33,10 +36,7 @@ using namespace llvm;
 
 namespace automat::library {
 
-InstructionLibrary::InstructionLibrary() {
-  Filter();
-  selected_category = 1;
-}
+InstructionLibrary::InstructionLibrary() { Filter(); }
 
 void InstructionLibrary::Filter() {
   instructions.clear();
@@ -165,14 +165,20 @@ string_view InstructionLibrary::Name() const { return "Instruction Library"; }
 
 Ptr<Object> InstructionLibrary::Clone() const { return MAKE_PTR(InstructionLibrary); }
 
-SkPath InstructionLibrary::Widget::Shape() const { return SkPath::Circle(0, 0, 10_cm); }
-
 constexpr float kRoseFanDegrees = 180;
 constexpr float kStartDist = 0;  // distance from the center, at which stalk starts
 constexpr float kCornerDist = Instruction::Widget::kDiagonal / 2;
 constexpr float kRoseDist = 8_cm;
 constexpr static Rect kFrontInstructionRect =
     Instruction::Widget::kRect.MoveBy(-Instruction::Widget::kRect.Size() / 2);
+constexpr static Rect kBackInstructionRect =
+    Rect::MakeAtZero(Instruction::Widget::kHeight, Instruction::Widget::kWidth);
+
+void InstructionLibrary::Widget::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
+  float corner_y = (kFrontInstructionRect.top + kBackInstructionRect.top) / 2;
+  out_positions.push_back({.pos = {kBackInstructionRect.right, corner_y}, .dir = 180_deg});
+  out_positions.push_back({.pos = {kBackInstructionRect.left, -corner_y}, .dir = 0_deg});
+}
 
 static SkPathMeasure CategoryPathMeasure(int i, int n) {
   float branch_dir =
@@ -425,7 +431,7 @@ ui::Tock InstructionLibrary::Widget::Tick(time::Timer& timer) {
     if (i == library->selected_category) {
       target_length = 1;
     }
-    tock.drawing |= category_state.growth.SineTowards(target_length, timer.d, 1);
+    tock.shaping |= category_state.growth.SineTowards(target_length, timer.d, 1);
     tock.drawing |= category_state.shake.SpringTowards(0, timer.d, 0.2, 0.5);
 
     for (int j = 0; j < category.groups.size(); ++j) {
@@ -445,7 +451,7 @@ ui::Tock InstructionLibrary::Widget::Tick(time::Timer& timer) {
           target_hue_rotate = -0.15;
         }
       }
-      tock.drawing |=
+      tock.shaping |=
           leaf_state.growth.SineTowards(target_growth, timer.d, animation_period_seconds);
       tock.drawing |=
           animation::LinearApproach(target_hue_rotate, timer.d, 0.3, leaf_state.hue_rotate);
@@ -492,7 +498,7 @@ ui::Tock InstructionLibrary::Widget::Tick(time::Timer& timer) {
     if (card.throw_t >= 0.5) layers.OrderAbove(card.widget.get());
   }
 
-  if (tock.draw) rose_zone->WakeAnimation();
+  if (tock.shape) rose_zone->WakeAnimation();
   return tock;
 }
 
@@ -518,6 +524,9 @@ PersistentImage rose6 = PersistentImage::MakeFromAsset(embedded::assets_rose_6_w
                                                        PersistentImage::MakeArgs{.width = 3_cm});
 
 PersistentImage* rose_images[] = {&rose0, &rose1, &rose2, &rose3, &rose4, &rose5, &rose6};
+
+constexpr float kSmallRoseRadius = 6_mm;
+constexpr float kLargeRoseRadius = 12_mm;
 
 PersistentImage stalk = PersistentImage::MakeFromAsset(embedded::assets_stalk_png,
                                                        PersistentImage::MakeArgs{.width = 1_cm});
@@ -860,6 +869,65 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
   }
 
   BakeChildren(canvas);
+}
+
+static SkPath OuterContour(const SkPath& path) {
+  optional<SkPathContourIter::Rec> outer;
+  float outer_area = 0;
+  SkPathContourIter contours(path.points(), path.verbs(), path.conicWeights());
+  while (auto contour = contours.next()) {
+    float area = Rect(SkRect::BoundsOrEmpty(contour->fPoints)).Area();
+    if (area > outer_area) {
+      outer = contour;
+      outer_area = area;
+    }
+  }
+  if (!outer) return SkPath();
+  return SkPath::Raw(outer->fPoints, outer->fVerbs, outer->fConics, SkPathFillType::kWinding);
+}
+
+SkPath InstructionLibrary::Widget::Shape() const {
+  constexpr int kCategoryCount = std::size(x86::kCategories);
+  Vec2 rose_centers[kCategoryCount];
+  SkPathBuilder stalks;
+  for (int i = 0; i < kCategoryCount; ++i) {
+    float growth = category_states[i].growth;
+    SkPathMeasure path_measure = CategoryPathMeasure(i, kCategoryCount);
+    StalkMetrics stalk_metrics(path_measure, growth);
+    auto [rose_pos, final_rose_dir] = RosePosition(path_measure, growth);
+    rose_centers[i] = rose_pos + Vec2::Polar(final_rose_dir, 8_mm);
+    path_measure.getSegment(0, stalk_metrics.kStalkTipDistance, &stalks, true);
+    stalks.lineTo(rose_centers[i]);
+  }
+  SkPaint stalk_paint;
+  stalk_paint.setStyle(SkPaint::kStroke_Style);
+  stalk_paint.setStrokeWidth(2_mm);
+
+  SkOpBuilder builder;
+  builder.add(skpathutils::FillPathWithPaint(stalks.detach(), stalk_paint), kUnion_SkPathOp);
+  builder.add(SkPath::Circle(0, 0, kCornerDist), kUnion_SkPathOp);
+  Rect register_table_and_icons = kRegisterTableRect;
+  register_table_and_icons.top += kRegisterIconWidth;
+  builder.add(SkPath::Rect(register_table_and_icons), kUnion_SkPathOp);
+  for (int i = 0; i < kCategoryCount; ++i) {
+    auto& category_state = category_states[i];
+    float growth = category_state.growth;
+    builder.add(SkPath::Circle(rose_centers[i].x, rose_centers[i].y,
+                               lerp(kSmallRoseRadius, kLargeRoseRadius, growth)),
+                kUnion_SkPathOp);
+    float label_width = LightFont().MeasureText(x86::kCategories[i].name);
+    builder.add(SkPath::Rect(Rect::MakeCenter(rose_centers[i], label_width, kCategoryLetterSize)),
+                kUnion_SkPathOp);
+    for (auto& leaf_state : category_state.leaves) {
+      if (leaf_state.growth > 0) {
+        builder.add(
+            SkPath::Circle(leaf_state.position.x, leaf_state.position.y, 1_cm * leaf_state.growth),
+            kUnion_SkPathOp);
+      }
+    }
+  }
+  if (auto resolved = builder.resolve()) return OuterContour(*resolved);
+  return shape;
 }
 
 struct RegisterFilterButton {

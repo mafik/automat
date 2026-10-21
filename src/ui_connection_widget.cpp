@@ -445,7 +445,7 @@ static Optional<Tock> TickLifecycle(ConnectionWidget& w, ConnectionWidgetLocker&
 
 static void UpdateShapes(ConnectionWidget& w, ConnectionWidgetLocker& a) {
   auto* start_base_widget = a.start_widget->BaseToy();
-  w.from_shape = start_base_widget->Shape();
+  w.from_shape = start_base_widget->shape;
   if (a.board_widget) {
     auto transform_from_to_board = TransformBetween(*start_base_widget, *a.board_widget);
     w.from_shape = w.from_shape.makeTransform(transform_from_to_board);
@@ -454,7 +454,7 @@ static void UpdateShapes(ConnectionWidget& w, ConnectionWidgetLocker& a) {
   UpdateEndpoints(w, a);
 
   if (a.end_iface && a.end_widget) {
-    w.to_shape = a.end_widget->Shape().makeTransform(a.end_transform);
+    w.to_shape = a.end_widget->shape.makeTransform(a.end_transform);
   } else {
     w.to_shape.reset();
   }

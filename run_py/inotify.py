@@ -50,12 +50,13 @@ elif sys.platform == 'win32':
 
   semaphore = threading.Semaphore(0)
 
+  HandlerRoutine = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_uint)
+
   def SetConsoleCtrlHandler(handler, add):
     func = ctypes.windll.kernel32.SetConsoleCtrlHandler
-    callback = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_uint)
-    func.argtypes = [callback, ctypes.c_bool]
+    func.argtypes = [HandlerRoutine, ctypes.c_bool]
     func.restype = ctypes.c_bool
-    return func(callback(handler), add)
+    return func(handler, add)
 
   # Windows API constants
   GENERIC_READ = 0x80000000
@@ -70,7 +71,7 @@ elif sys.platform == 'win32':
   WAIT_TIMEOUT = 0x00000102
   WAIT_ABANDONED = 0x00000080
   WAIT_FAILED = 0xFFFFFFFF
-  INVALID_HANDLE_VALUE = -1
+  INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 
   # Define Windows structures
   class OVERLAPPED(ctypes.Structure):
@@ -140,7 +141,8 @@ elif sys.platform == 'win32':
       offset += info.NextEntryOffset
     return results
 
-  SetConsoleCtrlHandler(lambda x: semaphore.release(), True)
+  console_handler = HandlerRoutine(lambda event: semaphore.release())
+  SetConsoleCtrlHandler(console_handler, True)
 
   def watch_thread():
     # Setup watches for all directories

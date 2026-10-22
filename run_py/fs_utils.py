@@ -5,6 +5,7 @@
 import os
 import shutil
 import stat
+import time
 from pathlib import Path
 from sys import platform
 
@@ -27,3 +28,15 @@ def wipe(path):
     shutil.rmtree(path, onexc=lambda f, p, _: (os.chmod(p, stat.S_IWRITE), f(p)))
   else:
     path.unlink(missing_ok=True)
+
+
+def move_aside(path):
+  for stale in path.parent.glob(f'{path.name}.*.old'):
+    try:
+      stale.unlink()
+    except PermissionError:
+      pass
+  if path.exists():
+    aside = path.with_name(f'{path.name}.{time.time_ns()}.old')
+    path.rename(aside)
+    return aside

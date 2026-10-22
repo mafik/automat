@@ -319,7 +319,7 @@ class Recipe:
 
         self.steps = new_steps
 
-    def execute(self, watcher):
+    def execute(self, watcher, active_recipe):
         start_time = time.time()
         desired_parallelism = multiprocessing.cpu_count()
         ready_steps = []
@@ -375,6 +375,10 @@ class Recipe:
                 while True:
                     pid, status = wait_for_pid()
                     if watcher and pid == watcher.pid:
+                        nothing_is_waiting = len(ready_steps) == 0
+                        only_targets_are_running = all(len(step.outputs) == 0 for step in self.pid_to_step.values())
+                        if nothing_is_waiting and only_targets_are_running:
+                            return True
                         print('Sources have been modified. Interrupting the build process...')
                         self.interrupt()
                         return False
@@ -415,6 +419,8 @@ class Recipe:
                 on_step_finished(step)
             else:
                 next = ready_steps.pop()
+                if active_recipe and not next.outputs:
+                    active_recipe.interrupt(restart=True)
                 try:
                     builder = next.build_if_needed()
                     if builder:
@@ -439,7 +445,7 @@ class Recipe:
         )
         return True
 
-    def interrupt(self):
+    def interrupt(self, restart=False):
         start_time = time.time()
         deadline = start_time + 3
         active = [step.builder for step in self.steps if step.builder]
@@ -447,10 +453,14 @@ class Recipe:
             # Plan:
             # For each process, get its PID. Then find it's HWND and send a WM_CLOSE message.
             for task in active:
-                windows.close_window(pid=task.pid)
+                if restart:
+                    windows.post_to_main_windows(task.pid, windows.RESTART_NOTICE)
+                    windows.post_to_main_windows(task.pid, windows.WM_CLOSE)
+                else:
+                    windows.close_window(pid=task.pid)
         else:
             for task in active:
-                task.send_signal(signal.SIGTERM)
+                task.send_signal(signal.SIGUSR2 if restart else signal.SIGTERM)
         for task in active:
             time_left = deadline - time.time()
             if time_left > 0:

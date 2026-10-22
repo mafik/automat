@@ -344,6 +344,8 @@ static void RecordOutputDevicePosition(Win32Window& window) {
   }
 }
 
+static const UINT kRestartNotice = RegisterWindowMessageW(L"RestartNotice");
+
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   auto window_it = hwnd_to_window.find(hWnd);
   if (window_it == hwnd_to_window.end()) {
@@ -353,6 +355,10 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
   if (std::optional<LRESULT> result = touchpad::ProcessEvent(hWnd, uMsg, wParam, lParam)) {
     return *result;
+  }
+  if (uMsg == kRestartNotice) {
+    restarting.store(true, std::memory_order_relaxed);
+    return 0;
   }
   switch (uMsg) {
     case WM_SIZE: {

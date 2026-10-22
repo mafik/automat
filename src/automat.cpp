@@ -58,6 +58,8 @@ namespace automat {
 
 std::stop_source stop_source;
 
+std::atomic<bool> restarting = false;
+
 std::thread::id main_thread_id;
 
 static std::optional<system_tray::Icon> tray_icon;
@@ -148,6 +150,18 @@ static void StopOnSigterm() {
   sigaction(SIGTERM, &action, nullptr);
 }
 
+static void StopForRestartOnSigusr2() {
+  struct sigaction action = {};
+  action.sa_handler = [](int) {
+    restarting.store(true, std::memory_order_relaxed);
+    uint64_t one = 1;
+    (void)!write(sigterm_listener.fd, &one, sizeof(one));
+  };
+  sigemptyset(&action.sa_mask);
+  action.sa_flags = SA_RESETHAND;
+  sigaction(SIGUSR2, &action, nullptr);
+}
+
 #endif
 
 static int argc;
@@ -202,6 +216,7 @@ int Main() {
   }
 #if defined(__linux__)
   StopOnSigterm();
+  StopForRestartOnSigusr2();
   wayland::Start(mux::epoll, status);
   if (!OK(status)) {
     ERROR << "Couldn't start the Wayland compositor: " << status;

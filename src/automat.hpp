@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
 
+#include <atomic>
 #include <thread>
 
 #include "base.hpp"  // IWYU pragma: export
@@ -12,6 +13,8 @@
 namespace automat {
 
 extern std::stop_source stop_source;
+
+extern std::atomic<bool> restarting;
 
 extern std::thread::id main_thread_id;
 

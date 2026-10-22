@@ -15,6 +15,7 @@
 
 #include <unordered_map>
 
+#include "automat.hpp"
 #include "board.hpp"
 #include "engine.hpp"
 #include "keyboard.hpp"
@@ -831,7 +832,8 @@ void Stop() {
       popups.swap(window->popups);
     }
     popups.clear();
-    if (window->mode.load(std::memory_order_relaxed) == AppWindow::Mode::Embedded) {
+    if (!restarting.load(std::memory_order_relaxed) &&
+        window->mode.load(std::memory_order_relaxed) == AppWindow::Mode::Embedded) {
       SetEmbedded(window.Get(), hwnd, false);
       PostMessageW(hwnd, WM_CLOSE, 0, 0);
     }
@@ -875,7 +877,7 @@ AppWindow::AppWindow(const AppWindow& o) : ClientWindow(o) {
 
 AppWindow::~AppWindow() {
   capture.reset();
-  if (HWND hwnd = this->hwnd.load()) {
+  if (HWND hwnd = this->hwnd.load(); hwnd && !restarting.load(std::memory_order_relaxed)) {
     if (mode.load(std::memory_order_relaxed) == Mode::Embedded) {
       win32_wm::SetEmbedded(this, hwnd, false);
       PostMessageW(hwnd, WM_CLOSE, 0, 0);

@@ -54,12 +54,10 @@ while True:
         watcher = None
 
     try:
-        ok = recipe.execute(watcher)
+        ok = recipe.execute(watcher, active_recipe)
     except KeyboardInterrupt:
         exit(2)
     if ok:
-        if active_recipe:
-            active_recipe.interrupt()
         active_recipe = recipe
     if watcher:
         try:

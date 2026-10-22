@@ -16,7 +16,15 @@ EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.POINTER(ctypes.c_int)
 GetWindowText = user32.GetWindowTextW
 GetWindowTextLength = user32.GetWindowTextLengthW
 GetParent = user32.GetParent
+GetWindow = user32.GetWindow
+GetWindowLong = user32.GetWindowLongW
 IsWindowVisible = user32.IsWindowVisible
+
+GW_OWNER = 4
+GWL_STYLE = -16
+WS_SYSMENU = 0x80000
+WM_CLOSE = 0x0010
+RESTART_NOTICE = user32.RegisterWindowMessageW('RestartNotice')
 
 
 def is_main(hwnd):
@@ -55,6 +63,16 @@ def close_window(pid):
     hwnd = hwnds[0]
     user32.PostMessageW(hwnd, 0x0010, 0, 0)
     return True
+
+
+def post_to_main_windows(pid, message):
+    def foreach_window(hwnd, lParam):
+        owned = GetWindow(hwnd, GW_OWNER)
+        closable = GetWindowLong(hwnd, GWL_STYLE) & WS_SYSMENU
+        if get_pid(hwnd) == pid and not owned and closable:
+            user32.PostMessageW(hwnd, message, 0, 0)
+        return True
+    EnumWindows(EnumWindowsProc(foreach_window), 0)
 
 
 def _redirection_guard_enforced():

@@ -288,6 +288,24 @@ if args.verbose:
     compile_args.append('-v')
 
 @dataclass
+class Link:
+    binary: Path
+    pargs: list
+    aside: Path | None = None
+
+    def run(self):
+        # Windows prevents overwriting of running executables
+        # but not renaming.
+        if args.live and platform == 'win32':
+            self.aside = fs_utils.move_aside(self.binary)
+        return make.Popen(self.pargs)
+
+    def move_back(self):
+        if self.aside:
+            self.aside.replace(self.binary)
+
+
+@dataclass
 class CompilationEntry:
     file: str
     output: str
@@ -362,12 +380,13 @@ def recipe() -> make.Recipe:
             pargs.append(f'-Wl,/MAP:{map_path}')
             r.generated.add(str(map_path))
         pargs += ['-o', str(bin.path)]
-        builder = functools.partial(make.Popen, pargs)
-        r.add_step(builder,
+        link = Link(bin.path, pargs)
+        r.add_step(link.run,
                    outputs=[bin.path],
                    inputs=bin.objects,
                    desc=f'Linking {bin.path.name}',
-                   shortcut=f'link {bin.path.stem}')
+                   shortcut=f'link {bin.path.stem}',
+                   cleanup=link.move_back)
         r.generated.add(str(bin.path))
 
         # if platform == 'win32':

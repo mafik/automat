@@ -93,6 +93,12 @@ static void Uncloak(HWND hwnd, HWND restored_owner) {
   DestroyWindow(reveal);
 }
 
+static bool Cloaked(HWND hwnd) {
+  DWORD cloaked = 0;
+  return SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) &&
+         cloaked != 0;
+}
+
 static void SetEmbedded(AppWindow* window, HWND hwnd, bool embedded) {
   if (!IsWindow(hwnd)) return;
   HWND old_owner = (HWND)GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT);
@@ -104,9 +110,7 @@ static void SetEmbedded(AppWindow* window, HWND hwnd, bool embedded) {
   } else {
     HWND restored = window ? (HWND)window->prev_owner : nullptr;
     if (window) window->prev_owner = nullptr;
-    if (old_owner != restored && (old_owner == hidden_owner || !IsWindow(old_owner))) {
-      Uncloak(hwnd, restored);
-    }
+    if (old_owner == hidden_owner || Cloaked(hwnd)) Uncloak(hwnd, restored);
   }
   DWORD thread = GetWindowThreadProcessId(hwnd, nullptr);
   if (embedded) {
@@ -359,6 +363,7 @@ static void RecoverOrphans() {
     } else {
       LOG << "Revealing " << WindowTitle(hwnd) << " - left behind by an Automat that is gone.";
       SetEmbedded(nullptr, hwnd, false);
+      RemovePropW(hwnd, kAutomatPID);
     }
   }
 }

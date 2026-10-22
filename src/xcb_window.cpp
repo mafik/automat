@@ -257,6 +257,19 @@ std::unique_ptr<automat::ui::Window> XCBWindow::Make(automat::ui::RootWidget& ro
   xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window->xcb_window, atom::WM_PROTOCOLS,
                       XCB_ATOM_ATOM, 32, 1, &atom::WM_DELETE_WINDOW);
 
+  struct WmSizeHints {
+    uint32_t flags;
+    uint32_t position_and_size[4];
+    uint32_t min_size[2], max_size[2], resize_increments[2], min_aspect[2], max_aspect[2];
+    uint32_t base_size[2];
+    uint32_t win_gravity;
+  };
+  constexpr uint32_t kPWinGravity = 1 << 9;
+  WmSizeHints normal_hints = {.flags = kPWinGravity, .win_gravity = XCB_GRAVITY_STATIC};
+  xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window->xcb_window,
+                      XCB_ATOM_WM_NORMAL_HINTS, XCB_ATOM_WM_SIZE_HINTS, 32,
+                      sizeof(normal_hints) / sizeof(uint32_t), &normal_hints);
+
   ReplaceProperty32(window->xcb_window, atom::XdndAware, XCB_ATOM_ATOM, 5);
 
   // Setting user time to 0 indicates that the window wasn't created as a result of a user action
@@ -264,27 +277,6 @@ std::unique_ptr<automat::ui::Window> XCBWindow::Make(automat::ui::RootWidget& ro
   ReplaceProperty32(window->xcb_window, atom::_NET_WM_USER_TIME, XCB_ATOM_CARDINAL, 0);
 
   xcb_map_window(connection, window->xcb_window);
-
-  if (!isnan(root.output_device_x) && !root.maximized_horizontally) {
-    uint32_t x = 0;
-    if (root.output_device_x >= 0) {
-      x = roundf(root.output_device_x * DisplayPxPerMeter());
-    } else {
-      x = roundf(screen->width_in_pixels + root.output_device_x * DisplayPxPerMeter() -
-                 window->client_width);
-    }
-    xcb_configure_window(connection, window->xcb_window, XCB_CONFIG_WINDOW_X, &x);
-  }
-  if (!isnan(root.output_device_y) && !root.maximized_vertically) {
-    uint32_t y = 0;
-    if (root.output_device_y >= 0) {
-      y = roundf(root.output_device_y * DisplayPxPerMeter());
-    } else {
-      y = roundf(screen->height_in_pixels + root.output_device_y * DisplayPxPerMeter() -
-                 window->client_height);
-    }
-    xcb_configure_window(connection, window->xcb_window, XCB_CONFIG_WINDOW_Y, &y);
-  }
 
   xcb_flush(connection);
 
@@ -335,6 +327,21 @@ void XCBWindow::RequestResize(Vec2 new_size) {
                        values);
   xcb_flush(connection);
   root.Resized(new_size);
+}
+
+void XCBWindow::RequestMove(Vec2 output_device_position) {
+  float px_per_meter = DisplayPxPerMeter();
+  float x = output_device_position.x * px_per_meter;
+  if (signbit(output_device_position.x)) {
+    x += screen->width_in_pixels - root.size.width * px_per_meter;
+  }
+  float y = output_device_position.y * px_per_meter;
+  if (signbit(output_device_position.y)) {
+    y += screen->height_in_pixels - root.size.height * px_per_meter;
+  }
+  uint32_t values[] = {(uint32_t)(int32_t)roundf(x), (uint32_t)(int32_t)roundf(y)};
+  xcb_configure_window(connection, xcb_window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, values);
+  xcb_flush(connection);
 }
 
 void XCBWindow::RequestMaximize(bool horizontally, bool vertically) {
@@ -800,21 +807,23 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
           window_position_on_screen.x = reply->dst_x;
           window_position_on_screen.y = reply->dst_y;
 
-          if (window_position_on_screen.x <= screen->width_in_pixels / 2.f) {
-            root.output_device_x = window_position_on_screen.x / DisplayPxPerMeter();
+          float left = window_position_on_screen.x / DisplayPxPerMeter();
+          float right = (screen->width_in_pixels - window_position_on_screen.x - client_width) /
+                        DisplayPxPerMeter();
+          if (left >= 0 && (right < 0 || left < right)) {
+            root.output_device_x = left;
           } else {
             // store the distance from the right screen edge, as a negative number
-            root.output_device_x =
-                (window_position_on_screen.x + client_width - (int)screen->width_in_pixels) /
-                DisplayPxPerMeter();
+            root.output_device_x = -std::max(right, 0.f);
           }
-          if (window_position_on_screen.y <= screen->height_in_pixels / 2.f) {
-            root.output_device_y = window_position_on_screen.y / DisplayPxPerMeter();
+          float top = window_position_on_screen.y / DisplayPxPerMeter();
+          float bottom = (screen->height_in_pixels - window_position_on_screen.y - client_height) /
+                         DisplayPxPerMeter();
+          if (top >= 0 && (bottom < 0 || top < bottom)) {
+            root.output_device_y = top;
           } else {
             // store the distance from the bottom screen edge, as a negative number
-            root.output_device_y =
-                (window_position_on_screen.y + client_height - (int)screen->height_in_pixels) /
-                DisplayPxPerMeter();
+            root.output_device_y = -std::max(bottom, 0.f);
           }
           break;
         }

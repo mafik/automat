@@ -323,6 +323,27 @@ Win32Window::~Win32Window() {
   OleUninitialize();
 }
 
+static void RecordOutputDevicePosition(Win32Window& window) {
+  int screen_x = window.client_x - win32::caps.screen_left_px;
+  int screen_y = window.client_y - win32::caps.screen_top_px;
+  float left = screen_x / win32::caps.px_per_meter;
+  float right =
+      (win32::caps.screen_width_px - screen_x - window.client_width) / win32::caps.px_per_meter;
+  if (left >= 0 && (right < 0 || left < right)) {
+    window.root.output_device_x = left;
+  } else {
+    window.root.output_device_x = -std::max(right, 0.f);
+  }
+  float top = screen_y / win32::caps.px_per_meter;
+  float bottom =
+      (win32::caps.screen_height_px - screen_y - window.client_height) / win32::caps.px_per_meter;
+  if (top >= 0 && (bottom < 0 || top < bottom)) {
+    window.root.output_device_y = top;
+  } else {
+    window.root.output_device_y = -std::max(bottom, 0.f);
+  }
+}
+
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   auto window_it = hwnd_to_window.find(hWnd);
   if (window_it == hwnd_to_window.end()) {
@@ -335,6 +356,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
   }
   switch (uMsg) {
     case WM_SIZE: {
+      if (IsIconic(hWnd)) break;
       auto lock = window.Lock();
       window.client_width = LOWORD(lParam);
       window.client_height = HIWORD(lParam);
@@ -345,34 +367,15 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         bool is_maximized = wParam == SIZE_MAXIMIZED;
         root_widget->Maximized(is_maximized, is_maximized);
       }
+      RecordOutputDevicePosition(window);
       break;
     }
     case WM_MOVE: {
+      if (IsIconic(hWnd)) break;
       auto lock = window.Lock();
-      window.client_x = LOWORD(lParam);
-      window.client_y = HIWORD(lParam);
-      if (root_widget) {
-        float left = std::max<float>(window.client_x / win32::caps.px_per_meter, 0.f);
-        float right =
-            std::min<float>((window.client_x + window.client_width - win32::caps.screen_width_px) /
-                                win32::caps.px_per_meter,
-                            -0.f);
-        if (left < fabsf(right)) {
-          root_widget->output_device_x = left;
-        } else {
-          root_widget->output_device_x = right;
-        }
-        float top = std::max<float>(window.client_y / win32::caps.px_per_meter, 0.f);
-        float bottom = std::min<float>(
-            (window.client_y + window.client_height - win32::caps.screen_height_px) /
-                win32::caps.px_per_meter,
-            -0.f);
-        if (top < fabsf(bottom)) {
-          root_widget->output_device_y = top;
-        } else {
-          root_widget->output_device_y = bottom;
-        }
-      }
+      window.client_x = (int16_t)LOWORD(lParam);
+      window.client_y = (int16_t)HIWORD(lParam);
+      RecordOutputDevicePosition(window);
       break;
     }
     case WM_SETCURSOR: {
@@ -742,7 +745,6 @@ unique_ptr<Window> Win32Window::Make(RootWidget& root, Status& status) {
   // Save the window size and position - those values may be overwritten by WndProc when the
   // window is created.
   auto desired_size = root.size;
-  Vec2 desired_pos = Vec2(root.output_device_x, root.output_device_y);
   bool maximized = root.maximized_horizontally || root.maximized_vertically;
   auto window = std::unique_ptr<Win32Window>(new Win32Window(root));
   window->hwnd =
@@ -759,28 +761,6 @@ unique_ptr<Window> Win32Window::Make(RootWidget& root, Status& status) {
   }
   drop_target->Release();
   root.DisplayPixelDensity(win32::caps.px_per_meter);
-
-  // Restore the position of the client area.
-  if (!maximized && !isnan(desired_pos.x) && !isnan(desired_pos.y)) {
-    int client_x, client_y;
-    if (signbit(desired_pos.x)) {  // desired_pos.x is negative - distance from the right edge
-      client_x = caps.screen_left_px + roundf(caps.screen_width_px +
-                                              (desired_pos.x - desired_size.x) * caps.px_per_meter);
-    } else {
-      client_x = caps.screen_left_px + roundf(desired_pos.x * caps.px_per_meter);
-    }
-    if (signbit(desired_pos.y)) {  // desired_pos.y is negative - distance from the bottom edge
-      client_y = caps.screen_top_px + roundf(caps.screen_height_px +
-                                             (desired_pos.y - desired_size.y) * caps.px_per_meter);
-    } else {
-      client_y = caps.screen_top_px + roundf(desired_pos.y * caps.px_per_meter);
-    }
-    POINT zero = {0, 0};
-    ClientToScreen(window->hwnd, &zero);
-    int delta_x = client_x - zero.x;
-    int delta_y = client_y - zero.y;
-    SetWindowPos(window->hwnd, nullptr, delta_x, delta_y, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
-  }
 
   if (!maximized) {
     root.Resized(desired_size);
@@ -898,6 +878,24 @@ void Win32Window::RequestResize(Vec2 new_size) {
   w += horizontal_frame_adjustment;
   SetWindowPos(hwnd, nullptr, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
   root.Resized(new_size);
+}
+
+void Win32Window::RequestMove(Vec2 output_device_position) {
+  float client_x = caps.screen_left_px + output_device_position.x * caps.px_per_meter;
+  if (signbit(output_device_position.x)) {
+    client_x += caps.screen_width_px - root.size.width * caps.px_per_meter;
+  }
+  float client_y = caps.screen_top_px + output_device_position.y * caps.px_per_meter;
+  if (signbit(output_device_position.y)) {
+    client_y += caps.screen_height_px - root.size.height * caps.px_per_meter;
+  }
+  RECT window_rect = {};
+  GetWindowRect(hwnd, &window_rect);
+  POINT client_origin = {0, 0};
+  ClientToScreen(hwnd, &client_origin);
+  SetWindowPos(hwnd, nullptr, window_rect.left - client_origin.x + (int)roundf(client_x),
+               window_rect.top - client_origin.y + (int)roundf(client_y), 0, 0,
+               SWP_NOZORDER | SWP_NOSIZE);
 }
 
 void Win32Window::RequestMaximize(bool horiz, bool vert) {

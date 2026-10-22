@@ -30,6 +30,7 @@ struct Win32Window : automat::ui::Window {
   Vec2 WindowPxToScreen(Vec2 window) override;
   automat::Optional<Vec2> MousePositionScreenPx() override;
   void RequestResize(Vec2 size) override;
+  void RequestMove(Vec2 output_device_position) override;
   void RequestMaximize(bool horizontal, bool vertical) override;
   void RequestMinimizeToTray() override;
   void RequestRestoreFromTray() override;

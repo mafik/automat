@@ -48,6 +48,7 @@ struct Window {
   virtual Optional<Vec2> MousePositionScreenPx() = 0;
 
   virtual void RequestResize(Vec2 new_size) = 0;
+  virtual void RequestMove(Vec2 output_device_position) = 0;
   virtual void RequestMaximize(bool maximize_horizontally, bool maximize_vertically) = 0;
   virtual void RequestMinimizeToTray() = 0;
   virtual void RequestRestoreFromTray() = 0;

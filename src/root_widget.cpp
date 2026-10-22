@@ -647,6 +647,8 @@ void RootWidget::SerializeState(Serializer& writer) const {
 
 void RootWidget::DeserializeState(Deserializer& d, Status& status) {
   Vec2 new_size = size;
+  float new_output_device_x = output_device_x;
+  float new_output_device_y = output_device_y;
   bool new_maximized_horizontally = maximized_horizontally;
   bool new_maximized_vertically = maximized_vertically;
   for (auto& key : ObjectView(d, status)) {
@@ -659,9 +661,9 @@ void RootWidget::DeserializeState(Deserializer& d, Status& status) {
         }
       }
     } else if (key == "output_device_x") {
-      d.Get(output_device_x, status);
+      d.Get(new_output_device_x, status);
     } else if (key == "output_device_y") {
-      d.Get(output_device_y, status);
+      d.Get(new_output_device_y, status);
     } else if (key == "always_on_top") {
       d.Get(always_on_top, status);
     } else if (key == "width") {
@@ -689,6 +691,9 @@ void RootWidget::DeserializeState(Deserializer& d, Status& status) {
     } else {
       Resized(new_size);
     }
+  }
+  if (window && !isnan(new_output_device_x) && !isnan(new_output_device_y)) {
+    window->RequestMove(Vec2(new_output_device_x, new_output_device_y));
   }
   if ((maximized_horizontally != new_maximized_horizontally) ||
       (maximized_vertically != new_maximized_vertically)) {

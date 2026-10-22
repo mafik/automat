@@ -2907,9 +2907,6 @@ bool Timeline::DeserializeKey(ObjectDeserializer& d, StrView key) {
     d.Get(value, status);
     time::SteadyPoint now = time::SteadyNow();
     playing.started_at = now - time::FromSeconds(value);
-    // We're not updating the outputs because they should be deserialized in a proper state
-    // TimelineUpdateOutputs(l, *this, playing.started_at, now);
-    TimelineScheduleNextAfter(*this, now);
   } else if (key == "recording") {
     state = kRecording;
     double value = 0;
@@ -2924,6 +2921,14 @@ bool Timeline::DeserializeKey(ObjectDeserializer& d, StrView key) {
     ReportError(status.ToStr());
   }
   return true;
+}
+
+void Timeline::OnUnsuspend() {
+  // We're not updating the outputs because they should be deserialized in a proper state
+  // TimelineUpdateOutputs(l, *this, playing.started_at, now);
+  if (state == kPlaying) {
+    TimelineScheduleNextAfter(*this, time::SteadyNow());
+  }
 }
 
 SkRRect SideButton::RRect() const {

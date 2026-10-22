@@ -225,6 +225,7 @@ struct Timeline : Object, TimerNotificationReceiver {
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
+  void OnUnsuspend() override;
 };
 
 }  // namespace automat::library

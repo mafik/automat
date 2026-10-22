@@ -92,6 +92,7 @@ struct Timer : Object, TimerNotificationReceiver {
 
   void SerializeState(ObjectSerializer& writer) const override;
   bool DeserializeKey(ObjectDeserializer& d, StrView key) override;
+  void OnUnsuspend() override;
 };
 
 StrView ToStr(Timer::Range);

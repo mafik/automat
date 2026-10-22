@@ -109,6 +109,7 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
   }
 
   Vec<std::pair<Object*, Str>> homes;
+  Vec<Object*> loaded;
 
   // Second pass: Deserialize object states and connections
   for (auto& key : ObjectView(d, status)) {
@@ -120,6 +121,7 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
       // This is an object - deserialize its state
       auto* object = d.LookupObject(key);
       if (object) {
+        loaded.push_back(object);
         for (auto& field : ObjectView(d, status)) {
           if (field == "type") {
             d.Skip();  // Already handled during object creation in first pass
@@ -192,8 +194,8 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
     }
   }
 
-  for (auto& [key, obj] : d.objects) {
-    obj->suspended = false;
+  for (auto* object : loaded) {
+    if (object->suspended) object->Unsuspend();
   }
 
   // Objects may have been rendered in their incomplete state - re-render them all.

@@ -254,20 +254,11 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
     d.Get(value, status);
     auto start = time::SteadyNow() - time::FromSeconds(value);
     start_time.store(start, std::memory_order_relaxed);
-    if (auto location = HomeLocation()) {
-      ScheduleAt(*location, start + duration_value);
-    }
   } else if (key == "duration_seconds") {
     double value;
     d.Get(value, status);
     if (OK(status)) {
       duration_value = time::FromSeconds(value);
-      auto start = start_time.load(std::memory_order_relaxed);
-      if (start != kStopped) {
-        if (auto location = HomeLocation()) {
-          ScheduleAt(*location, start + duration_value);
-        }
-      }
     }
   } else if (key == "range") {
     Str value;
@@ -282,6 +273,15 @@ bool Timer::DeserializeKey(ObjectDeserializer& d, StrView key) {
     ReportError("Failed to deserialize Timer: " + status.ToStr());
   }
   return true;
+}
+
+void Timer::OnUnsuspend() {
+  auto start = start_time.load(std::memory_order_relaxed);
+  if (start != kStopped) {
+    if (auto location = HomeLocation()) {
+      ScheduleAt(*location, start + duration_value);
+    }
+  }
 }
 
 // ============================================================================

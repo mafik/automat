@@ -19,7 +19,6 @@
 #include "log.hpp"
 #include "menu.hpp"
 #include "object.hpp"
-#include "root_widget.hpp"
 #include "tasks.hpp"
 #include "textures.hpp"
 #include "units.hpp"
@@ -257,8 +256,7 @@ void File::Analyze() {
     icon = nullptr;
     if (image) {
       image = image->withDefaultMipmaps();
-      float screen = ui::root_widget->display_pixels_per_meter;
-      Vec2 pixels_per_meter = PixelsPerMeter(contents).value_or(Vec2(screen, screen));
+      Vec2 pixels_per_meter = PixelsPerMeter(contents).value_or(Vec2(96 / kMetersPerInch));
       size =
           FitAspect(Vec2(image->width(), image->height()) / pixels_per_meter, kMinSize, kMaxSize);
     } else {

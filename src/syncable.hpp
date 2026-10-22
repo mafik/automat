@@ -27,6 +27,9 @@ struct Syncable : Interface {
     }
   };
 
+  void OnSync() { table->on_sync(*this); }
+  void OnUnsync() { table->on_unsync(*this); }
+
   struct State {};
 
   INTERFACE_BOUND(Syncable, Interface)

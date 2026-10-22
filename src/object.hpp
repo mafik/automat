@@ -122,7 +122,7 @@ struct Object : public ReferenceCounted {
   // While an object is suspended, it should not produce any side-effects.
   bool suspended = false;
 
-  void OnUnsuspend() {}
+  virtual void OnUnsuspend() {}
 
   void Unsuspend() {
     suspended = false;

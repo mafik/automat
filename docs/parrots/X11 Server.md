@@ -57,9 +57,17 @@ uses. The listening socket and every client socket are `mux::Epoll::Listener`s. 
 requests are read, dispatched and the replies flushed in one pass; board structure is
 mutated only on the UI thread in `x11::Tick()`, exactly as for Wayland.
 
-On Linux the server listens on a filesystem UNIX socket. On Windows it listens on TCP
-loopback, display number n mapping to port 6000+n, because Windows AF_UNIX sockets cannot
-carry file descriptors. TCP provides no SO_PEERCRED, so the client's process id — the launch-matching
+On Linux the server listens on a filesystem UNIX socket. The display number is reserved
+with the lock-file convention that Xorg, the Xwayland launchers and KWin follow: the server
+creates `/tmp/.X<n>-lock` exclusively, writes its process id into it, and takes the first
+number whose lock file it could create. An existing lock file marks the number as taken
+unless the process named in it has exited; such a stale lock file is removed and the number
+is reused. The Wayland socket's lock file is held with `flock` instead, but that test does
+not work for X displays, because X servers do not lock the file and KWin creates its lock
+files writable, so a held display would look free.
+
+On Windows the server listens on TCP loopback, display number n mapping to port 6000+n,
+because Windows AF_UNIX sockets cannot carry file descriptors. TCP provides no SO_PEERCRED, so the client's process id — the launch-matching
 hint — is recovered from the system TCP table by locating the
 mirrored connection. TCP also carries no file descriptors, so the SHM and DRI3 display
 paths never activate on Windows and clients paint through plain protocol requests.

@@ -324,7 +324,7 @@ struct Client : mux::Epoll::Listener {
 struct Server : mux::Epoll::Listener {
   mux::Epoll& epoll;
   Path socket_path;  // the AF_UNIX path (@/tmp/.X11-unix/X<n>); unlinked on shutdown
-  FD lock_fd;
+  Path lock_path;
   int display_number = -1;
 
   U32 next_client_index = 1;

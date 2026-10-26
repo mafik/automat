@@ -43,7 +43,6 @@
 #undef RemoveProp
 #else
 #include <fcntl.h>
-#include <sys/file.h>
 #include <sys/ipc.h>
 #include <sys/mman.h>
 #include <sys/shm.h>
@@ -2950,7 +2949,7 @@ Server::~Server() {
   if (socket_path) {
     Status ignore;
     socket_path.Unlink(ignore, true);
-    socket_path.WithExt("lock").Unlink(ignore, true);
+    lock_path.Unlink(ignore, true);
   }
 }
 
@@ -2980,6 +2979,18 @@ void Server::NotifyRead(Status&) {
 void Server::FlushAll() {
   for (Client& client : Client::colony) client.Flush();
 }
+
+#if !defined(_WIN32)
+static bool LockHolderExited(const Str& lock) {
+  int fd = open(lock.c_str(), O_RDONLY | O_CLOEXEC);
+  if (fd < 0) return false;
+  char pid[12] = {};
+  (void)!read(fd, pid, sizeof(pid) - 1);
+  close(fd);
+  int holder = atoi(pid);
+  return holder > 0 && kill(holder, 0) != 0 && errno == ESRCH;
+}
+#endif
 
 void Start(mux::Epoll& epoll, Status& status) {
   int chosen = -1;
@@ -3019,35 +3030,31 @@ void Start(mux::Epoll& epoll, Status& status) {
   server->display_number = chosen;
 #else
   int listen_fd = -1;
-  FD lock_fd;
-  Str sock_path;
+  Str lock_path, sock_path;
   for (int n = 1; n <= 32; ++n) {
-    Str lock = f("/tmp/.X{}-lock", n);
-    int lf = open(lock.c_str(), O_CREAT | O_CLOEXEC | O_RDWR, 0644);
-    if (lf < 0) continue;
-    if (flock(lf, LOCK_EX | LOCK_NB) != 0) {
-      close(lf);
-      continue;
+    lock_path = f("/tmp/.X{}-lock", n);
+    {
+      FD lf = open(lock_path.c_str(), O_CREAT | O_EXCL | O_CLOEXEC | O_WRONLY, 0444);
+      if (!lf.Opened() && errno == EEXIST && LockHolderExited(lock_path) &&
+          unlink(lock_path.c_str()) == 0) {
+        lf = open(lock_path.c_str(), O_CREAT | O_EXCL | O_CLOEXEC | O_WRONLY, 0444);
+      }
+      if (!lf.Opened()) continue;
+      Str pid = f("{:>10}\n", getpid());
+      (void)!write(lf, pid.data(), pid.size());
     }
-    Str path = f("/tmp/.X11-unix/X{}", n);
+    sock_path = f("/tmp/.X11-unix/X{}", n);
     int s = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
     sockaddr_un addr{};
     addr.sun_family = AF_UNIX;
-    if (path.size() + 1 > sizeof(addr.sun_path)) {
-      close(s);
-      close(lf);
-      continue;
-    }
-    unlink(path.c_str());
-    std::memcpy(addr.sun_path, path.c_str(), path.size() + 1);
+    unlink(sock_path.c_str());
+    std::memcpy(addr.sun_path, sock_path.c_str(), sock_path.size() + 1);
     if (bind(s, (sockaddr*)&addr, sizeof(addr)) != 0) {
       close(s);
-      close(lf);
+      unlink(lock_path.c_str());
       continue;
     }
     listen_fd = s;
-    lock_fd = FD(lf);
-    sock_path = path;
     chosen = n;
     break;
   }
@@ -3065,7 +3072,7 @@ void Start(mux::Epoll& epoll, Status& status) {
   server = std::make_unique<Server>(epoll);
   server->fd = FD(listen_fd);
   server->socket_path = sock_path;
-  server->lock_fd = std::move(lock_fd);
+  server->lock_path = lock_path;
   server->display_number = chosen;
 #endif
 

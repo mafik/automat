@@ -649,16 +649,17 @@ struct AppWindowToy : ClientWindowToy {
   }
 
   LRESULT HitTest(POINT screen) const {
-    auto win = LockWindow();
-    if (!win) return HTCLIENT;
-    HWND hwnd = win->hwnd.load();
-    if (hwnd == nullptr) return HTCLIENT;
-    DWORD_PTR result = HTCLIENT;
-    if (!SendMessageTimeoutW(hwnd, WM_NCHITTEST, 0, MAKELPARAM((short)screen.x, (short)screen.y),
-                             SMTO_ABORTIFHUNG | SMTO_BLOCK, 100, &result)) {
-      return HTCLIENT;
+    for (HWND hwnd = DeepestChildAt(screen); hwnd != nullptr; hwnd = GetAncestor(hwnd, GA_PARENT)) {
+      DWORD_PTR result = HTCLIENT;
+      if (!SendMessageTimeoutW(hwnd, WM_NCHITTEST, 0, MAKELPARAM((short)screen.x, (short)screen.y),
+                               SMTO_ABORTIFHUNG | SMTO_BLOCK, 100, &result)) {
+        return HTCLIENT;
+      }
+      if ((LRESULT)result != HTTRANSPARENT || GetAncestor(hwnd, GA_ROOT) == hwnd) {
+        return (LRESULT)result;
+      }
     }
-    return (LRESULT)result;
+    return HTCLIENT;
   }
 
   void SendMotion(Vec2 px) override { PostMouse(WM_MOUSEMOVE, buttons_down_, SurfaceToScreen(px)); }

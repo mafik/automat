@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <mutex>
+#include <thread>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -114,12 +115,22 @@ struct Session {
   void Stop() {
     try {
       if (pool) pool.FrameArrived(arrived_token);
-      if (session) session.Close();
-      if (pool) pool.Close();
     } catch (const winrt::hresult_error&) {
     }
-    session = nullptr;
-    pool = nullptr;
+    if (!session && !pool) return;
+    // BUG: pool.Close() sometimes hangs (why??). Throwaway thread turns this into a thread leak
+    // instead of a hang.
+    std::thread([session = std::move(session), pool = std::move(pool)]() mutable {
+      winrt::init_apartment(winrt::apartment_type::multi_threaded);
+      try {
+        if (session) session.Close();
+        if (pool) pool.Close();
+      } catch (const winrt::hresult_error&) {
+      }
+      session = nullptr;
+      pool = nullptr;
+      winrt::uninit_apartment();
+    }).detach();
   }
 
   bool Open(Status& status) {

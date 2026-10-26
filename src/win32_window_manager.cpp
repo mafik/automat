@@ -77,9 +77,16 @@ static bool Transient(HWND hwnd) {
   return false;
 }
 
+static void SetHiddenOwner(HWND hwnd) {
+  SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, (LONG_PTR)hidden_owner);
+  // Undo the input queue merge that Windows performs automatically.
+  AttachThreadInput(GetWindowThreadProcessId(hidden_owner, nullptr),
+                    GetWindowThreadProcessId(hwnd, nullptr), FALSE);
+}
+
 static void CloakPopup(HWND hwnd) {
   if (IsWindow(GetWindow(hwnd, GW_OWNER))) return;
-  SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, (LONG_PTR)hidden_owner);
+  SetHiddenOwner(hwnd);
 }
 
 static void Uncloak(HWND hwnd, HWND restored_owner) {
@@ -106,7 +113,7 @@ static void SetEmbedded(AppWindow* window, HWND hwnd, bool embedded) {
   if (embedded) {
     if (old_owner != hidden_owner) {
       if (window) window->prev_owner = IsWindow(old_owner) ? old_owner : nullptr;
-      SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, (LONG_PTR)hidden_owner);
+      SetHiddenOwner(hwnd);
     }
   } else {
     HWND restored = window ? (HWND)window->prev_owner : nullptr;
@@ -722,6 +729,9 @@ struct AppInputAction : ClientInputActionBase {
     toy.FocusClient(p);
     if (auto win = toy.LockWindow()) LinkWindow(*win);
     toy.grab_ = toy.DeepestChildAt(toy.ScreenAt(p));
+    // Detaching the input queues triggers WM_MOUSELEAVE and some frameworks (Qt) might then ignore
+    // mouse events. Extra WM_MOUSEMOVE helps with that.
+    toy.PostMouse(WM_MOUSEMOVE, toy.buttons_down_, toy.ScreenAt(p));
     toy.buttons_down_ |= button_flag;
     toy.PostMouse(down_message, toy.buttons_down_, toy.ScreenAt(p));
   }

@@ -156,7 +156,7 @@ struct ClientWindow : Object, DecoratedWindow {
   SkISize content_size = {};
 
   DEF_INTERFACE(ClientWindow, ObjectArgument<Object>, launcher, "Launcher")
-  static constexpr auto kStyle = Argument::Style::Cable;
+  static constexpr auto kStyle = Argument::Style::Invisible;
   static constexpr float kAutoconnectRadius = 0.f;
   DEF_END(launcher);
 

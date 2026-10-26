@@ -198,16 +198,6 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
     if (object->suspended) object->Unsuspend();
   }
 
-  // Objects may have been rendered in their incomplete state - re-render them all.
-  {
-    auto lock = std::lock_guard(engine.mutex);
-    for (auto& board : engine.boards) {
-      for (auto& loc : board->locations) {
-        loc->WakeToys();
-      }
-    }
-  }
-
   bool fully_decoded = d.reader.IterativeParseComplete();
   if (!fully_decoded) {
     AppendErrorMessage(status) += "Extra data at the end of the JSON string, " + d.ErrorContext();

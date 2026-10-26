@@ -204,6 +204,7 @@ int Main() {
   status.Reset();
 
   DefaultBoard();  // fresh start: at least one board should exist
+  root_widget->StartRenderThread();
 
   error_recovery::Init();
 

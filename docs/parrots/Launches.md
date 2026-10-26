@@ -151,8 +151,8 @@ per-instance truths. The stream cable remains the pipe's visualization.
   creates the inter-stage pipes and their Pipe records, and calls
   `SpawnStage` per stage, which goes through `Launch::Spawn` with
   `source = the command`.
-- **Restore on load**: `LaunchRestoredWindows` (called at the end of
-  `LoadState`) walks the boards once and creates a launch for every
+- **Restore on load**: `LaunchRestoredWindows` (called by `automat::Main` after `LoadState`, once
+  both display servers listen) walks the boards once and creates a launch for every
   `ClientWindow` that has a recipe and no client — through the linked
   Program Launcher when one is connected and idle (`ProgramLauncher::RunFor`,
   so the launcher owns the child and STOP works), else directly. There is no pending state

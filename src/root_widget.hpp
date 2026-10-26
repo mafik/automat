@@ -110,6 +110,7 @@ struct RootWidget final : Widget {
   BlackHole black_hole;
 
   void Init();
+  void StartRenderThread();
 
   struct ToyScope toys;
   MortalList<Action> active_actions;

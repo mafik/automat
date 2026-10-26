@@ -110,7 +110,8 @@ TEST(Renderer, Construction) {
   root_widget = make_unique<RootWidget>();
   new SlowWidget(root_widget.get());  // parents itself into root_widget's layers
   test_start = time::SteadyNow();
-  root_widget->Init();  // starts the render thread, so SlowWidget must already exist
+  root_widget->Init();
+  root_widget->StartRenderThread();  // starts the render thread, so SlowWidget must already exist
   root_widget->window->MainLoop(automat::stop_source.get_token());
   automat::stop_source.request_stop();
   root_widget.reset();

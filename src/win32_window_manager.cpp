@@ -95,9 +95,14 @@ static void SetHiddenOwner(HWND hwnd) {
                     GetWindowThreadProcessId(hwnd, nullptr), FALSE);
 }
 
-static void CloakPopup(HWND hwnd) {
+// Popups are cloaked by making sure they're attached to their top-level window.
+//
+// For some reason toolkins like Qt don't do this - they create popups as top-level windows.
+//
+// Attaching them to a cloaked parent cloakes them automatically.
+static void CloakPopup(HWND hwnd, HWND owner) {
   if (IsWindow(GetWindow(hwnd, GW_OWNER))) return;
-  SetHiddenOwner(hwnd);
+  SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, (LONG_PTR)owner);
 }
 
 static void Uncloak(HWND hwnd, HWND restored_owner) {
@@ -135,21 +140,21 @@ static void SetEmbedded(AppWindow* window, HWND hwnd, bool embedded) {
   if (embedded) {
     EnumThreadWindows(
         thread,
-        [](HWND popup, LPARAM) -> BOOL {
-          if (Transient(popup)) CloakPopup(popup);
+        [](HWND popup, LPARAM owner) -> BOOL {
+          if (Transient(popup)) CloakPopup(popup, (HWND)owner);
           return TRUE;
         },
-        0);
+        (LPARAM)hwnd);
   } else {
     EnumThreadWindows(
         thread,
-        [](HWND popup, LPARAM) -> BOOL {
-          if (Transient(popup) && GetWindow(popup, GW_OWNER) == hidden_owner) {
+        [](HWND popup, LPARAM owner) -> BOOL {
+          if (Transient(popup) && GetWindow(popup, GW_OWNER) == (HWND)owner) {
             Uncloak(popup, nullptr);
           }
           return TRUE;
         },
-        0);
+        (LPARAM)hwnd);
   }
   ComPtr<ITaskbarList> taskbar;
   if (SUCCEEDED(
@@ -245,7 +250,9 @@ static void MirrorPopup(HWND hwnd) {
     ERROR << "Could not mirror " << WindowTitle(hwnd) << ": " << status.ToStr();
     return;
   }
-  if (window->mode.load(std::memory_order_relaxed) == AppWindow::Mode::Embedded) CloakPopup(hwnd);
+  if (window->mode.load(std::memory_order_relaxed) == AppWindow::Mode::Embedded) {
+    CloakPopup(hwnd, window->hwnd.load(std::memory_order_relaxed));
+  }
   {
     auto lock = std::lock_guard(window->mutex);
     window->popups.push_back({.hwnd = hwnd,

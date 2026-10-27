@@ -26,7 +26,8 @@ Three kinds of objects divide the work:
   pending launch is a Program Launcher.
 - **Launch** (`src/launcher.hpp`) is one running instance: the POSIX child
   (pid, exit status, stream captures) combined with one XDG activation
-  sequence (the token). A Launch is created only by actually spawning; an
+  sequence (the token). A Launch is created only for a running process,
+  either by spawning it or by following the running client of a window; an
   unlaunched Launch does not exist. It is an `Object`, so it is
   reference-counted, thread-safe to point at, and has a widget.
 - **WaylandWindow and X11Window** hold what the display servers report.
@@ -78,6 +79,13 @@ A launch either targets an existing window or produces new ones:
   earlier board scan for a Program Launcher whose child pid matched; the launch
   carries the association directly, and it keeps working after the child
   exits or forwards, which the pid scan could not do.
+
+A launch aimed at a window that already has a running client starts no
+process. This happens on Windows, where a new instance binds again the
+windows of the instance that it replaced (`Live Rebuild.md`). `Launch::Spawn`
+gives such a launch the pid of the client and no `restoring`, because the
+window is already filled, so every further window of the client becomes a
+new window object.
 
 `launched_by` is also what keeps a launch alive: it stays findable for as
 long as the Program Launcher holds it or any window it produced exists, so an
@@ -153,9 +161,10 @@ per-instance truths. The stream cable remains the pipe's visualization.
   `source = the command`.
 - **Restore on load**: `LaunchRestoredWindows` (called by `automat::Main` after `LoadState`, once
   both display servers listen) walks the boards once and creates a launch for every
-  `ClientWindow` that has a recipe and no client — through the linked
+  `ClientWindow` that has a recipe and no launch — through the linked
   Program Launcher when one is connected and idle (`ProgramLauncher::RunFor`,
-  so the launcher owns the child and STOP works), else directly. There is no pending state
+  so the launcher owns the child and STOP works), else directly. A window
+  whose client still runs gets a launch that follows the client. There is no pending state
   and no per-frame pass: launches are created at load, at copy, and at RUN,
   and nowhere else.
 - **Copy of a live window**: `Clone()` returns a new window of the same

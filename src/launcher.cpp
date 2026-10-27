@@ -519,13 +519,26 @@ Ptr<Launch> Launch::Spawn(const Vec<Str>& argv_in, Object* source, ClientWindow*
     return nullptr;
   }
 
-  auto launch = StartProcess(words, fds, status);
-  if (!launch) return nullptr;
+  I64 client_pid = 0;
+  if (restoring) {
+    auto lock = std::lock_guard(restoring->mutex);
+    if (!restoring->client_gone) client_pid = restoring->client_pid;
+  }
+
+  Ptr<Launch> launch;
+  if (client_pid) {
+    launch = MAKE_PTR(Launch);
+    launch->pid = client_pid;
+    launch->window_appeared = true;
+  } else {
+    launch = StartProcess(words, fds, status);
+    if (!launch) return nullptr;
+    if (restoring) launch->restoring = restoring->AcquireWeakPtr();
+  }
 
   launch->when = time::SteadyNow();
   launch->argv = std::move(words);
   if (source) launch->source = source->AcquireWeakPtr();
-  if (restoring) launch->restoring = restoring->AcquireWeakPtr();
   if (fds.in_pipe) fds.in_pipe->reader = launch->AcquireWeakPtr();
   if (fds.out_pipe) launch->stdout_pipe = fds.out_pipe;
 
@@ -852,7 +865,7 @@ void LaunchRestoredWindows() {
         auto* win = dynamic_cast<ClientWindow*>(loc->object.Get());
         if (!win) continue;
         auto win_lock = std::lock_guard(win->mutex);
-        if (win->client_gone && !win->recipe.empty() && !win->launched_by) {
+        if (!win->recipe.empty() && !win->launched_by) {
           pending.push_back(win->AcquirePtr());
         }
       }

@@ -15,7 +15,6 @@
 
 #include <algorithm>
 #include <mutex>
-#include <thread>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -26,6 +25,7 @@
 #include "time.hpp"
 #include "vk.hpp"
 #include "win32.hpp"
+#include "win32_window_manager.hpp"
 
 namespace automat::win32_wm {
 
@@ -84,6 +84,8 @@ static bool EnsureDevice(Status& status) {
   return true;
 }
 
+bool CaptureSupported() { return capture::GraphicsCaptureSession::IsSupported(); }
+
 void ReleaseCaptureDevice() {
   auto lock = std::lock_guard(device_mutex);
   capture_device = nullptr;
@@ -97,11 +99,13 @@ void ReleaseCaptureDevice() {
 struct Session {
   std::mutex mutex;
   std::weak_ptr<Session> self;
+  HWND hwnd = nullptr;
   std::function<void(sk_sp<SkImage>, SkISize)> on_frame;
   capture::GraphicsCaptureItem item{nullptr};
   capture::Direct3D11CaptureFramePool pool{nullptr};
   capture::GraphicsCaptureSession session{nullptr};
   winrt::event_token arrived_token{};
+  winrt::event_token closed_token{};
   bool closed = false;
   bool paused = false;
 
@@ -117,20 +121,16 @@ struct Session {
       if (pool) pool.FrameArrived(arrived_token);
     } catch (const winrt::hresult_error&) {
     }
-    if (!session && !pool) return;
-    // BUG: pool.Close() sometimes hangs (why??). Throwaway thread turns this into a thread leak
-    // instead of a hang.
-    std::thread([session = std::move(session), pool = std::move(pool)]() mutable {
-      winrt::init_apartment(winrt::apartment_type::multi_threaded);
-      try {
-        if (session) session.Close();
-        if (pool) pool.Close();
-      } catch (const winrt::hresult_error&) {
-      }
-      session = nullptr;
-      pool = nullptr;
-      winrt::uninit_apartment();
-    }).detach();
+    try {
+      if (session) session.Close();
+    } catch (const winrt::hresult_error&) {
+    }
+    try {
+      if (pool) pool.Close();
+    } catch (const winrt::hresult_error&) {
+    }
+    session = nullptr;
+    pool = nullptr;
   }
 
   bool Open(Status& status) {
@@ -154,6 +154,8 @@ struct Session {
       session = pool.CreateCaptureSession(item);
       session.IsCursorCaptureEnabled(false);
       session.StartCapture();
+      RedrawWindow(hwnd, nullptr, nullptr,
+                   RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
       return true;
     } catch (const winrt::hresult_error& e) {
       AppendErrorMessage(status) += win32::WideToUtf8(e.message());
@@ -164,10 +166,18 @@ struct Session {
 
   void Close() {
     auto lock = std::lock_guard(mutex);
-    if (closed) return;
     closed = true;
     Stop();
+    try {
+      if (item) item.Closed(closed_token);
+    } catch (const winrt::hresult_error&) {
+    }
     item = nullptr;
+  }
+
+  void ReleaseFrames() {
+    auto lock = std::lock_guard(mutex);
+    closed = true;
     auto device_lock = std::lock_guard(device_mutex);
     image.reset();
     shared_texture.Reset();
@@ -290,23 +300,23 @@ struct SessionHandle : Capture {
   std::shared_ptr<Session> session;
 
   explicit SessionHandle(std::shared_ptr<Session> session) : session(std::move(session)) {}
-  ~SessionHandle() override { session->Close(); }
+  ~SessionHandle() override {
+    if (IsWindowVisible(session->hwnd)) session->Close();
+    session->ReleaseFrames();
+  }
   void Pause(bool wanted) override { session->Pause(wanted); }
 };
 
 std::unique_ptr<Capture> StartCapture(os::WindowHandle hwnd,
                                       std::function<void(sk_sp<SkImage>, SkISize)> on_frame,
                                       Status& status) {
-  if (!capture::GraphicsCaptureSession::IsSupported()) {
-    AppendErrorMessage(status) += "This system cannot capture windows.";
-    return nullptr;
-  }
   {
     auto lock = std::lock_guard(device_mutex);
     if (!EnsureDevice(status)) return nullptr;
   }
   auto session = std::make_shared<Session>();
   session->self = session;
+  session->hwnd = hwnd;
   session->on_frame = std::move(on_frame);
   try {
     auto factory = winrt::get_activation_factory<capture::GraphicsCaptureItem>();
@@ -317,11 +327,16 @@ std::unique_ptr<Capture> StartCapture(os::WindowHandle hwnd,
       AppendErrorMessage(status) += f("This window cannot be captured: {}", win32::ErrorStr(hr));
       return nullptr;
     }
+    session->closed_token =
+        session->item.Closed([session](auto&&, auto&&) { Post([session] { session->Close(); }); });
   } catch (const winrt::hresult_error& e) {
     AppendErrorMessage(status) += f("Window capture: {}", win32::WideToUtf8(e.message()));
     return nullptr;
   }
-  if (!session->Open(status)) return nullptr;
+  if (!session->Open(status)) {
+    session->Close();
+    return nullptr;
+  }
   return std::make_unique<SessionHandle>(std::move(session));
 }
 

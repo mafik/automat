@@ -6,13 +6,19 @@
 #include <windows.h>
 // clang-format on
 
+#include <DispatcherQueue.h>
 #include <dwmapi.h>
 #include <shobjidl.h>
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.System.h>
 #include <wrl/client.h>
 
+#pragma comment(lib, "CoreMessaging.lib")
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "ole32.lib")
 
+#include <latch>
+#include <thread>
 #include <unordered_map>
 
 #include "automat.hpp"
@@ -22,12 +28,11 @@
 #include "log.hpp"
 #include "menu.hpp"
 #include "pointer.hpp"
-#include "root_widget.hpp"
+#include "thread_name.hpp"
 #include "time.hpp"
 #include "unique_ptr.hpp"
 #include "win32.hpp"
 #include "win32_capture.hpp"
-#include "win32_window.hpp"
 #include "win32_window_manager.hpp"
 #include "win_key.hpp"
 #include "window_frame.hpp"
@@ -41,8 +46,7 @@ using Microsoft::WRL::ComPtr;
 constexpr auto kOffScreenPause = std::chrono::milliseconds(500);
 constexpr auto kRepaintRetry = std::chrono::milliseconds(400);
 
-// Everything below runs on the UI thread: the hook is installed there, so its
-// events arrive through the same message loop that drives the board.
+static std::mutex tracked_mutex;
 static std::unordered_map<HWND, WeakPtr<AppWindow>> tracked;
 
 static std::mutex ui_mutex;
@@ -50,6 +54,13 @@ static ClientArrivals ui_arrivals;
 
 static HWINEVENTHOOK object_hook = nullptr;
 static HWINEVENTHOOK move_hook = nullptr;
+
+static std::thread queue_thread;
+static winrt::Windows::System::DispatcherQueueController queue{nullptr};
+
+void Post(std::move_only_function<void()> task) {
+  if (queue) queue.DispatcherQueue().TryEnqueue(std::move(task));
+}
 
 static Str WindowTitle(HWND hwnd) {
   int length = GetWindowTextLengthW(hwnd);
@@ -178,6 +189,7 @@ static bool CanEmbed(HWND hwnd) {
 }
 
 static Ptr<AppWindow> Find(HWND hwnd) {
+  auto lock = std::lock_guard(tracked_mutex);
   auto it = tracked.find(hwnd);
   if (it == tracked.end()) return nullptr;
   auto window = it->second.Lock();
@@ -245,7 +257,7 @@ static void MirrorPopup(HWND hwnd) {
   engine.WakeToys();
 }
 
-static void PopupMoved(HWND hwnd) {
+static void PopupChanged(HWND hwnd) {
   auto it = popup_index.find(hwnd);
   if (it == popup_index.end()) return;
   auto window = it->second.Lock();
@@ -254,12 +266,13 @@ static void PopupMoved(HWND hwnd) {
     return;
   }
   RECT rect = {};
-  if (!GetWindowRect(hwnd, &rect)) return;
+  bool visible = IsWindowVisible(hwnd) && GetWindowRect(hwnd, &rect);
   {
     auto lock = std::lock_guard(window->mutex);
     for (auto& popup : window->popups) {
       if (popup.hwnd == hwnd) {
-        popup.screen_pos = SkIPoint::Make(rect.left, rect.top);
+        popup.visible = visible;
+        if (visible) popup.screen_pos = SkIPoint::Make(rect.left, rect.top);
       }
     }
   }
@@ -321,7 +334,10 @@ static void ApplyMode(AppWindow& window) {
 
 static void Bind(const Ptr<AppWindow>& window, HWND hwnd, DWORD pid) {
   window->hwnd.store(hwnd);
-  tracked[hwnd] = window->AcquireWeakPtr();
+  {
+    auto lock = std::lock_guard(tracked_mutex);
+    tracked[hwnd] = window->AcquireWeakPtr();
+  }
   SetPropW(hwnd, kAutomatPID, (HANDLE)(UINT_PTR)GetCurrentProcessId());
   ApplyMode(*window);
   if (IsIconic(hwnd)) ShowWindow(hwnd, SW_SHOWNOACTIVATE);
@@ -334,7 +350,6 @@ static void Bind(const Ptr<AppWindow>& window, HWND hwnd, DWORD pid) {
     window->content_size = WindowSize(hwnd);
   }
   StartCaptureFor(*window);
-  RequestRepaint(hwnd);
 }
 
 static void RecoverOrphans() {
@@ -365,11 +380,11 @@ static void RecoverOrphans() {
     GetWindowThreadProcessId(hwnd, &pid);
     auto it = saved.find(hwnd);
     if (it != saved.end() && pid != 0) {
-      LOG << "Reconnecting " << WindowTitle(hwnd) << " - left behind by an Automat that is gone.";
+      LOG << "Re-embedding orphaned " << WindowTitle(hwnd) << ".";
       Bind(it->second, hwnd, pid);
       saved.erase(it);
     } else {
-      LOG << "Revealing " << WindowTitle(hwnd) << " - left behind by an Automat that is gone.";
+      LOG << "Uncloaking orphaned " << WindowTitle(hwnd) << ".";
       SetEmbedded(nullptr, hwnd, false);
       RemovePropW(hwnd, kAutomatPID);
     }
@@ -406,13 +421,15 @@ static void Adopt(HWND hwnd) {
 
 static void Drop(HWND hwnd) {
   auto window = Find(hwnd);
-  tracked.erase(hwnd);
+  {
+    auto lock = std::lock_guard(tracked_mutex);
+    tracked.erase(hwnd);
+  }
   if (!window) return;
   if (window->mode.load(std::memory_order_relaxed) == AppWindow::Mode::Embedded) {
     SetEmbedded(window.Get(), hwnd, false);
   }
   window->hwnd.store(nullptr);
-  window->capture.reset();
   {
     auto lock = std::lock_guard(window->mutex);
     window->client_gone = true;
@@ -437,39 +454,48 @@ static void TitleChanged(HWND hwnd) {
   window->WakeToys();
 }
 
-static void CALLBACK OnWindowEvent(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG object_id,
-                                   LONG child_id, DWORD, DWORD) {
-  if (hwnd == nullptr || object_id != OBJID_WINDOW || child_id != CHILDID_SELF) return;
+static void OnWindowEvent(DWORD event, HWND hwnd) {
   switch (event) {
     case EVENT_OBJECT_SHOW:
       Adopt(hwnd);
       MirrorPopup(hwnd);
+      PopupChanged(hwnd);
       break;
     case EVENT_OBJECT_HIDE:
+      Drop(hwnd);
+      PopupChanged(hwnd);
+      break;
     case EVENT_OBJECT_DESTROY:
       Drop(hwnd);
       DropPopup(hwnd);
       break;
     case EVENT_OBJECT_LOCATIONCHANGE:
       MirrorPopup(hwnd);
-      PopupMoved(hwnd);
+      PopupChanged(hwnd);
       break;
     case EVENT_OBJECT_NAMECHANGE:
       TitleChanged(hwnd);
       break;
     case EVENT_SYSTEM_MOVESIZESTART:
       if (auto window = Find(hwnd)) {
-        if (window->input_action) {
-          PostMessageW(hwnd, WM_CANCELMODE, 0, 0);
+        {
           auto lock = std::lock_guard(ui_mutex);
           ui_arrivals.move_requests.push_back(window->AcquireWeakPtr());
         }
+        engine.WakeToys();
       }
       break;
   }
 }
 
+static void CALLBACK PostWindowEvent(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG object_id,
+                                     LONG child_id, DWORD, DWORD) {
+  if (hwnd == nullptr || object_id != OBJID_WINDOW || child_id != CHILDID_SELF) return;
+  Post([event, hwnd] { OnWindowEvent(event, hwnd); });
+}
+
 bool CloseWindowsOf(Launch& launch, bool keep_connected) {
+  auto lock = std::lock_guard(tracked_mutex);
   bool any = false;
   for (auto& [hwnd, weak] : tracked) {
     auto window = weak.Lock();
@@ -541,7 +567,7 @@ struct AppWindowToy : ClientWindowToy {
     if (!win.popups.empty()) {
       POINT origin = MappingOrigin((HWND)win.hwnd.load(), content_size_);
       for (auto& popup : win.popups) {
-        if (!popup.image) continue;
+        if (!popup.visible || !popup.image) continue;
         SkIRect rect =
             SkIRect::MakeXYWH(popup.screen_pos.x() - origin.x, popup.screen_pos.y() - origin.y,
                               popup.size.width(), popup.size.height());
@@ -558,8 +584,10 @@ struct AppWindowToy : ClientWindowToy {
     if (capture_paused_ == paused) return;
     capture_paused_ = paused;
     if (auto win = LockWindow()) {
-      if (win->capture) win->capture->Pause(paused);
-      if (!paused) RequestRepaint(win->hwnd.load());
+      Post([weak = win->AcquireWeakPtr(), paused] {
+        auto window = weak.Lock();
+        if (window && window->capture) window->capture->Pause(paused);
+      });
     }
   }
 
@@ -757,9 +785,7 @@ std::unique_ptr<Action> AppWindowToy::BeginClientPress(ui::Pointer& p) {
 }
 
 static void PostApplyMode(const WeakPtr<AppWindow>& weak) {
-  auto* main_window = dynamic_cast<Win32Window*>(ui::root_widget->window.get());
-  if (main_window == nullptr || main_window->hwnd == nullptr) return;
-  auto* apply = new std::function<void()>([weak = weak.Copy()] {
+  Post([weak = weak.Copy()] {
     auto window = weak.Lock();
     if (!window) return;
     ApplyMode(*window);
@@ -770,7 +796,6 @@ static void PostApplyMode(const WeakPtr<AppWindow>& weak) {
       }
     }
   });
-  PostMessageW(main_window->hwnd, WM_USER, 0, (LPARAM)apply);
 }
 
 static void SetMode(Command self, AppWindow::Mode mode) {
@@ -810,18 +835,35 @@ void AppWindowToy::FillMenu(ui::Pointer& pointer, Menu& menu) {
 // ============================================================================
 
 void Start(Status& status) {
+  if (!CaptureSupported()) {
+    AppendErrorMessage(status) += "This system cannot capture windows.";
+    return;
+  }
   hidden_owner = CreateWindowExW(WS_EX_TOOLWINDOW, L"STATIC", L"", WS_POPUP, 0, 0, 0, 0, nullptr,
                                  nullptr, GetModuleHandleW(nullptr), nullptr);
   BOOL cloak = TRUE;
   if (FAILED(DwmSetWindowAttribute(hidden_owner, DWMWA_CLOAK, &cloak, sizeof(cloak)))) {
     AppendErrorMessage(status) += "Could not cloak the hidden owner window.";
   }
-  RecoverOrphans();
+  std::latch recovered(1);
+  queue_thread = std::thread([&recovered] {
+    SetThreadName("Window Manager");
+    winrt::init_apartment(winrt::apartment_type::multi_threaded);
+    CreateDispatcherQueueController(
+        {sizeof(DispatcherQueueOptions), DQTYPE_THREAD_CURRENT, DQTAT_COM_NONE},
+        (ABI::Windows::System::IDispatcherQueueController**)winrt::put_abi(queue));
+    RecoverOrphans();
+    recovered.count_down();
+    MSG msg;
+    while (GetMessageW(&msg, nullptr, 0, 0) > 0) DispatchMessageW(&msg);
+  });
+  recovered.wait();
   object_hook =
-      SetWinEventHook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_NAMECHANGE, nullptr, OnWindowEvent, 0, 0,
+      SetWinEventHook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_NAMECHANGE, nullptr, PostWindowEvent, 0, 0,
                       WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-  move_hook = SetWinEventHook(EVENT_SYSTEM_MOVESIZESTART, EVENT_SYSTEM_MOVESIZEEND, nullptr,
-                              OnWindowEvent, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+  move_hook =
+      SetWinEventHook(EVENT_SYSTEM_MOVESIZESTART, EVENT_SYSTEM_MOVESIZEEND, nullptr,
+                      PostWindowEvent, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
   if (object_hook == nullptr || move_hook == nullptr) {
     AppendErrorMessage(status) += "Could not watch for new windows.";
   }
@@ -832,6 +874,12 @@ void Stop() {
   if (move_hook) UnhookWinEvent(move_hook);
   object_hook = nullptr;
   move_hook = nullptr;
+  if (queue_thread.joinable()) {
+    if (queue) queue.ShutdownQueueAsync().get();
+    PostThreadMessageW(GetThreadId(queue_thread.native_handle()), WM_QUIT, 0, 0);
+    queue_thread.join();
+    queue = nullptr;
+  }
   for (auto& [hwnd, weak] : tracked) {
     auto window = weak.Lock();
     if (!window) continue;
@@ -872,6 +920,10 @@ void Tick() {
     arrivals.appeared.swap(ui_arrivals.appeared);
     arrivals.disappeared.swap(ui_arrivals.disappeared);
     arrivals.move_requests.swap(ui_arrivals.move_requests);
+  }
+  for (auto& weak : arrivals.move_requests) {
+    auto window = cast_if_present<AppWindow>(weak.Lock());
+    if (window && window->input_action) PostMessageW(window->hwnd.load(), WM_CANCELMODE, 0, 0);
   }
   arrivals.Process();
 }

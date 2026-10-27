@@ -22,6 +22,8 @@ struct Capture {
   virtual void Pause(bool) = 0;
 };
 
+bool CaptureSupported();
+
 std::unique_ptr<Capture> StartCapture(os::WindowHandle,
                                       std::function<void(sk_sp<SkImage>, SkISize)> on_frame,
                                       Status&);

@@ -31,6 +31,7 @@ struct AppWindow : ClientWindow {
     sk_sp<SkImage> image;
     SkISize size = {};
     SkIPoint screen_pos = {};
+    bool visible = true;
   };
   Vec<PopupMirror> popups;
 
@@ -54,6 +55,7 @@ namespace automat::win32_wm {
 void Start(Status&);
 void Stop();
 void Tick();
+void Post(std::move_only_function<void()>);
 
 // Asks every window of `launch` to close; with `keep_connected`, connected
 // windows are left running. Returns false when the launch has no windows.

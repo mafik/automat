@@ -7,6 +7,7 @@
 #include <atomic>
 
 #include "launcher.hpp"
+#include "library_window.hpp"
 #include "os_window.hpp"
 #include "status.hpp"
 
@@ -34,6 +35,8 @@ struct AppWindow : ClientWindow {
     bool visible = true;
   };
   Vec<PopupMirror> popups;
+
+  INTERFACES(launcher_tbl, kDecorationMenu, kPickWindow);
 
   AppWindow();
   AppWindow(const AppWindow&);

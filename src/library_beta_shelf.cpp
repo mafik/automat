@@ -65,6 +65,7 @@ struct BetaShelfToy : ObjectToy {
     auto shelf = LockOwner();
     if (!shelf) return;
     menu.Place(W, Proto("Program Launcher"));
+    menu.Place(NW, Proto("App Window"));
     menu.Place(SW, Proto("File"));
     menu.Place(N, Interface(*shelf, kPipelinesMenu));
   }

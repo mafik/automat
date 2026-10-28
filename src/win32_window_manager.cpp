@@ -547,7 +547,7 @@ static POINT MappingOrigin(HWND hwnd, SkISize content) {
   return origin;
 }
 
-struct AppWindowToy : ClientWindowToy {
+struct AppWindowToy : ClientWindowToy, WindowPicker {
   AppWindow::Mode mode_ = AppWindow::Mode::Embedded;
   mutable time::SteadyPoint last_drawn_ = time::kZeroSteady;
   mutable bool capture_paused_ = false;
@@ -558,6 +558,7 @@ struct AppWindowToy : ClientWindowToy {
   Vec<PopupDraw> popups_;
   uint64_t popups_key_ = 0;
   bool popups_changed_ = false;
+  std::unique_ptr<PickButton> pick_button_;
 
   AppWindowToy(ui::Widget* parent, Object& obj) : ClientWindowToy(parent, obj) {
     last_drawn_ = time::SteadyNow();
@@ -569,6 +570,14 @@ struct AppWindowToy : ClientWindowToy {
   void PullMore(ClientWindow& window) override {
     auto& win = static_cast<AppWindow&>(window);
     mode_ = win.mode.load(std::memory_order_relaxed);
+    if (win.hwnd.load(std::memory_order_relaxed)) {
+      pick_button_.reset();
+    } else if (!pick_button_) {
+      pick_button_ = std::make_unique<PickButton>(this);
+      pick_button_->target = Linked<>(win.AcquireWeakPtr(), &kPickWindow);
+      Vec2 center = Rect(pick_button_->RRect().rect()).Center();
+      pick_button_->local_to_parent = SkM44::Translate(-center.x, -center.y);
+    }
     popups_.clear();
     uint64_t key = 0;
     if (!win.popups.empty()) {
@@ -628,6 +637,8 @@ struct AppWindowToy : ClientWindowToy {
     return bounds;
   }
 
+  SkPath SubtreeShape() const override { return shape; }  // nothing escapes window bounds
+
   void Draw(SkCanvas& canvas) const override {
     last_drawn_ = time::SteadyNow();
     PauseCapture(false);
@@ -640,6 +651,21 @@ struct AppWindowToy : ClientWindowToy {
       canvas.drawImageRect(popup.image, SkRect::MakeWH(dst.Width(), dst.Height()),
                            SkSamplingOptions(SkFilterMode::kLinear));
       canvas.restore();
+    }
+  }
+
+  void OnWindowPicked(HWND hwnd) override {
+    if (auto win = LockWindow()) {
+      Post([weak = win->AcquireWeakPtr(), hwnd] {
+        auto window = weak.Lock();
+        if (!window || win32_wm::Find(hwnd) || !CanEmbed(hwnd)) return;
+        DWORD pid = 0;
+        GetWindowThreadProcessId(hwnd, &pid);
+        if (pid == GetCurrentProcessId()) return;
+        win32_wm::Bind(window, hwnd, pid);
+        window->WakeToys();
+        engine.WakeToys();
+      });
     }
   }
 

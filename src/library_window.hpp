@@ -4,16 +4,39 @@
 
 #include "base.hpp"
 #include "image_provider.hpp"
+#include "keyboard.hpp"
 #include "on_off.hpp"
 #include "os_window.hpp"
 #include "str.hpp"
 #include "syncable.hpp"
+#include "theme_xp.hpp"
 #include "time.hpp"
 #include "window_watch.hpp"
 
 namespace automat::library {
 
-extern constinit Command::Table kPickWindow;
+extern constinit Interface::Table kPickWindow;
+
+struct PickButton : theme::xp::TitleButton {
+  PickButton(ui::Widget* parent);
+  // float Height() const override { return kTitleButtonSize; }
+  SkRRect RRect() const override;
+};
+
+struct WindowPicker : ui::PointerGrabber, ui::KeyGrabber {
+  ui::PointerGrab* pointer_grab = nullptr;
+  ui::KeyGrab* key_grab = nullptr;
+
+  void ReleaseGrabs() {
+    if (pointer_grab) pointer_grab->Release();
+    if (key_grab) key_grab->Release();
+  }
+  void ReleaseGrab(ui::PointerGrab&) override { pointer_grab = nullptr; }
+  void ReleaseKeyGrab(ui::KeyGrab&) override { key_grab = nullptr; }
+  void KeyGrabberKeyDown(ui::KeyGrab&) override { ReleaseGrabs(); }
+  void PointerGrabberButtonDown(ui::PointerGrab& grab, ui::PointerButton) override;
+  virtual void OnWindowPicked(os::WindowHandle) = 0;
+};
 
 struct Window : public Object, ui::WindowWatcher {
   std::mutex mutex;

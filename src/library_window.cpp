@@ -135,26 +135,24 @@ struct WindowWidget;
 
 static std::unique_ptr<Action> PickWindowActivate(Span<Interface>, ui::Pointer&, Toy*);
 
-constinit Command::Table kPickWindow = [] {
-  Command::Table t("Pick window");
+constinit Interface::Table kPickWindow = [] {
+  Interface::Table t(Interface::kMenu, "Pick window");
   t.activate = &PickWindowActivate;
   return t;
 }();
 
-struct PickButton : theme::xp::TitleButton {
-  PickButton(ui::Widget* parent) : theme::xp::TitleButton(parent) {
-    child = ui::MakeShapeWidget(this, PathFromSVG(kPickSVG), "#000000"_color);
-    layers.OrderInside(child.get());
-    UpdateChildTransform();
-    child->local_to_parent.preTranslate(-0.6_mm, 0.6_mm);
-  }
-  // float Height() const override { return kTitleButtonSize; }
-  SkRRect RRect() const override {
-    return RRect::MakeSimple(
-               Rect::MakeAtZero<::LeftX, ::BottomY>({kTitleButtonSize, kTitleButtonSize}), 2_mm)
-        .sk;
-  }
-};
+PickButton::PickButton(ui::Widget* parent) : theme::xp::TitleButton(parent) {
+  child = ui::MakeShapeWidget(this, PathFromSVG(kPickSVG), "#000000"_color);
+  layers.OrderInside(child.get());
+  UpdateChildTransform();
+  child->local_to_parent.preTranslate(-0.6_mm, 0.6_mm);
+}
+
+SkRRect PickButton::RRect() const {
+  return RRect::MakeSimple(
+             Rect::MakeAtZero<::LeftX, ::BottomY>({kTitleButtonSize, kTitleButtonSize}), 2_mm)
+      .sk;
+}
 
 #ifdef __linux__
 using WindowVisitor = std::function<ControlFlow(xcb_window_t window, xcb_window_t parent)>;
@@ -187,7 +185,7 @@ static void SearchWindows(xcb_window_t start, WindowVisitor visitor) {
 }
 #endif
 
-struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
+struct WindowWidget : ObjectToy, WindowPicker {
   void FillMenu(ui::Pointer& pointer, Menu& menu) override {
     ObjectToy::FillMenu(pointer, menu);
     auto object = LockObject<Window>();
@@ -197,9 +195,6 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
   constexpr static float kWidth = 5_cm;
   constexpr static float kCornerRadius = 1_mm;
   constexpr static float kHeight = 5_cm;
-
-  ui::PointerGrab* pointer_grab = nullptr;
-  ui::KeyGrab* key_grab = nullptr;
 
   std::unique_ptr<PickButton> pick_button;
   std::string window_name;
@@ -315,53 +310,12 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
     BakeChildren(canvas);
   }
 
-  void ReleaseGrabs() {
-    if (pointer_grab) pointer_grab->Release();
-    if (key_grab) key_grab->Release();
-  }
-  void ReleaseGrab(ui::PointerGrab&) override { pointer_grab = nullptr; }
-  void ReleaseKeyGrab(ui::KeyGrab&) override { key_grab = nullptr; }
-  void KeyGrabberKeyDown(ui::KeyGrab&) override { ReleaseGrabs(); }
-  void PointerGrabberButtonDown(ui::PointerGrab& grab, ui::PointerButton) override {
-    ReleaseGrabs();
+  void OnWindowPicked(os::WindowHandle found_window) override {
 #ifdef __linux__
-
-    xcb_window_t picked_window = XCB_WINDOW_NONE;
-    {
-      auto query_pointer_reply = xcb::query_pointer();
-      picked_window = query_pointer_reply->child;
-    }
-
-    if (kDebugWindowPicking) {
-      LOG << "Picked window: " << f("{:x}", picked_window);
-      LOG_Indent();
-    }
-
-    // Find the first window that has WM_STATE
-    xcb_window_t found_window = XCB_WINDOW_NONE;
-    SearchWindows(picked_window, [&](xcb_window_t window, xcb_window_t parent) {
-      if (kDebugWindowPicking) {
-        LOG << "Checking for WM_STATE: " << f("{:x}", window);
-      }
-      if (HasWMState(window)) {
-        if (kDebugWindowPicking) {
-          LOG << "Found!";
-        }
-        found_window = window;
-        return ControlFlow::Break;
-      }
-      return ControlFlow::Enter;
-    });
-    if (kDebugWindowPicking) {
-      if (found_window != XCB_WINDOW_NONE) {
-        auto name = xcb::GetPropertyString(found_window, XCB_ATOM_WM_NAME);
-        LOG << "Found window: " << f("{:x}", found_window) << " " << name;
-      } else {
-        LOG << "No window found";
-      }
-      LOG_Unindent();
-    }
     window_name = xcb::GetPropertyString(found_window, XCB_ATOM_WM_NAME);
+#elif defined(_WIN32)
+    window_name = GetWindowTitle(found_window);
+#endif
     WakeAnimation();
     if (auto window = LockWindow()) {
       {
@@ -371,51 +325,85 @@ struct WindowWidget : ObjectToy, ui::PointerGrabber, ui::KeyGrabber {
       }
       window->ClearOwnError();
     }
-#elif defined(_WIN32)
-    POINT cursor_pos;
-    if (!GetCursorPos(&cursor_pos)) {
-      return;
-    }
-
-    HWND picked_window = WindowFromPoint(cursor_pos);
-    if (kDebugWindowPicking) {
-      LOG << "Picked window: " << f("{:x}", reinterpret_cast<uintptr_t>(picked_window));
-    }
-
-    // Find the top-level window
-    HWND found_window = picked_window;
-    while (found_window) {
-      HWND parent = GetParent(found_window);
-      if (!parent) break;
-      found_window = parent;
-    }
-
-    // Ensure it's a valid window
-    if (!IsValidWindow(found_window)) {
-      if (kDebugWindowPicking) {
-        LOG << "Invalid window selected";
-      }
-      return;
-    }
-
-    window_name = GetWindowTitle(found_window);
-    if (kDebugWindowPicking) {
-      LOG << "Found window: " << f("{:x}", reinterpret_cast<uintptr_t>(found_window)) << " "
-          << window_name;
-    }
-
-    WakeAnimation();
-    if (auto window = LockWindow()) {
-      window->handle = found_window;
-      window->title = window_name;
-      window->ClearOwnError();
-    }
-#endif
   }
 };
 
+void WindowPicker::PointerGrabberButtonDown(ui::PointerGrab& grab, ui::PointerButton) {
+  ReleaseGrabs();
+#ifdef __linux__
+
+  xcb_window_t picked_window = XCB_WINDOW_NONE;
+  {
+    auto query_pointer_reply = xcb::query_pointer();
+    picked_window = query_pointer_reply->child;
+  }
+
+  if (kDebugWindowPicking) {
+    LOG << "Picked window: " << f("{:x}", picked_window);
+    LOG_Indent();
+  }
+
+  // Find the first window that has WM_STATE
+  xcb_window_t found_window = XCB_WINDOW_NONE;
+  SearchWindows(picked_window, [&](xcb_window_t window, xcb_window_t parent) {
+    if (kDebugWindowPicking) {
+      LOG << "Checking for WM_STATE: " << f("{:x}", window);
+    }
+    if (HasWMState(window)) {
+      if (kDebugWindowPicking) {
+        LOG << "Found!";
+      }
+      found_window = window;
+      return ControlFlow::Break;
+    }
+    return ControlFlow::Enter;
+  });
+  if (kDebugWindowPicking) {
+    if (found_window != XCB_WINDOW_NONE) {
+      auto name = xcb::GetPropertyString(found_window, XCB_ATOM_WM_NAME);
+      LOG << "Found window: " << f("{:x}", found_window) << " " << name;
+    } else {
+      LOG << "No window found";
+    }
+    LOG_Unindent();
+  }
+#elif defined(_WIN32)
+  POINT cursor_pos;
+  if (!GetCursorPos(&cursor_pos)) {
+    return;
+  }
+
+  HWND picked_window = WindowFromPoint(cursor_pos);
+  if (kDebugWindowPicking) {
+    LOG << "Picked window: " << f("{:x}", reinterpret_cast<uintptr_t>(picked_window));
+  }
+
+  // Find the top-level window
+  HWND found_window = picked_window;
+  while (found_window) {
+    HWND parent = GetParent(found_window);
+    if (!parent) break;
+    found_window = parent;
+  }
+
+  // Ensure it's a valid window
+  if (!IsValidWindow(found_window)) {
+    if (kDebugWindowPicking) {
+      LOG << "Invalid window selected";
+    }
+    return;
+  }
+
+  if (kDebugWindowPicking) {
+    LOG << "Found window: " << f("{:x}", reinterpret_cast<uintptr_t>(found_window)) << " "
+        << GetWindowTitle(found_window);
+  }
+#endif
+  OnWindowPicked(found_window);
+}
+
 static std::unique_ptr<Action> PickWindowActivate(Span<Interface>, ui::Pointer& pointer, Toy* toy) {
-  auto* widget = dynamic_cast<WindowWidget*>(toy);
+  auto* widget = dynamic_cast<WindowPicker*>(toy);
   if (!widget) return nullptr;
   pointer.EndAllActions();
   widget->pointer_grab = &pointer.RequestGlobalGrab(*widget);

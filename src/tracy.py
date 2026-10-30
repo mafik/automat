@@ -16,6 +16,6 @@ tracy.InstallWhenIncluded(r'^tracy/.*')
 tracy.AddCompileArgs('-I', tracy.src_dir / 'public')
 
 if not build.release:
-  tracy.AddCompileArgs('-DTRACY_ENABLE', '-DTRACY_ON_DEMAND')
+  tracy.AddCompileArgs('-DTRACY_ENABLE', '-DTRACY_ON_DEMAND', '-DTRACY_ONLY_LOCALHOST')
   if platform == 'linux':
     tracy.AddCompileArgs('-DTRACY_LIBUNWIND_BACKTRACE')

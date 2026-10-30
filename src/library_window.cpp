@@ -131,8 +131,6 @@ constexpr static float kContentMargin =
 constexpr static float kTitleHeight = theme::xp::kTitleBarHeight;  // height of the title bar
 constexpr static float kTitleButtonSize = kTitleHeight - 2 * kContentMargin;
 
-struct WindowWidget;
-
 static std::unique_ptr<Action> PickWindowActivate(Span<Interface>, ui::Pointer&, Toy*);
 
 constinit Interface::Table kPickWindow = [] {

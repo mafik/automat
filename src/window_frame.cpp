@@ -287,18 +287,19 @@ void ClientArrivals::Process() {
     if (auto win = weak.Lock()) StartClientMove(*win);
   }
   static int spawn_count = 0;
-  for (auto& [w, launch] : appeared) {
+  for (auto& [w, launch, beside] : appeared) {
     auto& win = *w;
     Ptr<Object> source = launch ? launch->source.Lock() : nullptr;
-    Ptr<Location> source_location = source ? source->HomeLocation() : nullptr;
+    if (!beside) beside = source;
+    Ptr<Location> beside_location = beside ? beside->HomeLocation() : nullptr;
     if (source && !win.launcher->IsConnected()) {
       win.launcher->Connect(Interface(source.get(), nullptr));
     }
-    Board* board = source_location ? source_location->LockBoard().get() : nullptr;
+    Board* board = beside_location ? beside_location->LockBoard().get() : nullptr;
     if (!board) board = &DefaultBoard();
     auto& loc = board->CreateEmpty();
-    if (source_location) {
-      loc.placement = Location::PlaceBeside{source_location->AcquireWeakPtr()};
+    if (beside_location) {
+      loc.placement = Location::PlaceBeside{beside_location->AcquireWeakPtr()};
     } else {
       int n = spawn_count++;
       loc.placement = Location::Direct{Vec2(0.01f * (n % 3), -0.02f * (n % 5))};

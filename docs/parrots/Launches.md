@@ -78,7 +78,10 @@ A launch either targets an existing window or produces new ones:
   coordinates — and receives a Launcher cable to it. This replaced the
   earlier board scan for a Program Launcher whose child pid matched; the launch
   carries the association directly, and it keeps working after the child
-  exits or forwards, which the pid scan could not do.
+  exits or forwards, which the pid scan could not do. On Windows, a window
+  that is owned by an embedded window is placed beside the App Window of its
+  owner, and every other window is placed beside `launch.source`'s Location
+  (`Win32 Window Manager.md`).
 
 A launch aimed at a window that already has a running client starts no
 process. This happens on Windows, where a new instance binds again the

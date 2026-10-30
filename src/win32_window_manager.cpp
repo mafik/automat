@@ -202,6 +202,13 @@ static Ptr<AppWindow> Find(HWND hwnd) {
   return window;
 }
 
+static Ptr<AppWindow> OwnerWindow(HWND hwnd) {
+  for (HWND owner = GetWindow(hwnd, GW_OWNER); owner; owner = GetWindow(owner, GW_OWNER)) {
+    if (auto window = Find(owner)) return window;
+  }
+  return nullptr;
+}
+
 static std::unordered_map<HWND, WeakPtr<AppWindow>> popup_index;
 
 static void MirrorPopup(HWND hwnd) {
@@ -209,11 +216,7 @@ static void MirrorPopup(HWND hwnd) {
   if (!IsWindow(hwnd) || !IsWindowVisible(hwnd)) return;
   if (GetAncestor(hwnd, GA_ROOT) != hwnd) return;
   if (!Transient(hwnd)) return;
-  Ptr<AppWindow> window;
-  for (HWND owner = GetWindow(hwnd, GW_OWNER); owner && !window;
-       owner = GetWindow(owner, GW_OWNER)) {
-    window = Find(owner);
-  }
+  Ptr<AppWindow> window = OwnerWindow(hwnd);
   if (!window) {
     DWORD thread = GetWindowThreadProcessId(hwnd, nullptr);
     for (auto& [tracked_hwnd, weak] : tracked) {
@@ -405,22 +408,23 @@ static void Adopt(HWND hwnd) {
   GetWindowThreadProcessId(hwnd, &pid);
   if (pid == 0) return;
   Ptr<Launch> launch = Launch::Find(pid);
-  if (!launch) return;
-  auto window = launch->LockRestoring<AppWindow>();
+  Ptr<AppWindow> owner = OwnerWindow(hwnd);
+  if (!launch && !owner) return;
+  auto window = launch ? launch->LockRestoring<AppWindow>() : nullptr;
   bool restored = (bool)window;
   if (!window) window = MAKE_PTR(AppWindow);
-  if (!restored) {
+  if (launch && !restored) {
     auto lock = std::lock_guard(window->mutex);
     window->recipe = launch->argv;
     window->launched_by = launch;
   }
   Bind(window, hwnd, pid);
-  launch->WindowAppeared();
+  if (launch) launch->WindowAppeared();
   if (restored) {
     launch->RestoredInto(*window);
   } else {
     auto lock = std::lock_guard(ui_mutex);
-    ui_arrivals.appeared.emplace_back(window, launch);
+    ui_arrivals.appeared.emplace_back(window, launch, owner);
   }
   window->WakeToys();
   engine.WakeToys();

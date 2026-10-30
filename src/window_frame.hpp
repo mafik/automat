@@ -135,7 +135,12 @@ struct ClientWindowToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
 };
 
 struct ClientArrivals {
-  Vec<std::pair<Ptr<library::ClientWindow>, Ptr<Launch>>> appeared;
+  struct Appeared {
+    Ptr<library::ClientWindow> window;
+    Ptr<Launch> launch;
+    Ptr<Object> beside;
+  };
+  Vec<Appeared> appeared;
   Vec<Ptr<library::ClientWindow>> disappeared;
   Vec<WeakPtr<library::ClientWindow>> move_requests;
 

@@ -27,41 +27,6 @@ struct Progress {
 };
 inline Progress operator|(Progress a, Progress b) { return a |= b; }
 
-// TODO: delete almost everything from this file (and replace with "LowLevel*Towards" functions)
-
-template <typename T>
-struct Base {
-  T value = {};
-  T target = {};
-};
-
-template <typename T = float>
-struct Approach : Base<T> {
-  float speed = 15;
-  time::SteadyPoint last_tick;
-
-  Approach(T initial = {})
-      : Base<T>{.value = initial, .target = initial}, last_tick(time::SteadyNow()) {}
-  Progress Tick(time::Timer& timer) {
-    float dt = time::ToSeconds(timer.now - last_tick);
-    last_tick = timer.now;
-    if (this->value == this->target) return {.value_changed = false, .settled = true};
-    if (dt <= 0) return {.value_changed = false, .settled = false};
-    T before = this->value;
-    this->value += (this->target - this->value) * (-expm1f(-dt * speed));
-    if (this->value == before || fabsf(this->target - this->value) < 1e-6f) {
-      this->value = this->target;
-    }
-    return {.value_changed = this->value != before, .settled = this->value == this->target};
-  }
-  void Shift(float delta) {
-    this->value += delta;
-    this->target += delta;
-  }
-  float Remaining() const { return this->target - this->value; }
-  operator float() const { return this->value; }
-};
-
 inline Progress ExponentialApproach(float target, float delta_time, float e_time, float& value) {
   if (value == target) return {.value_changed = false, .settled = true};
   if (delta_time <= 0) return {.value_changed = false, .settled = false};
@@ -90,71 +55,6 @@ inline Progress LinearApproach(float target, float delta_time, float speed, floa
   }
   return {.value_changed = value != before, .settled = value == target};
 }
-
-// TODO: remove this and replace with `SpringV2`
-template <typename T>
-struct Spring : Base<T> {
-  T velocity = {};
-  time::Duration period = 100ms;     // how long does it take for one oscillation
-  time::Duration half_life = 100ms;  // how long does it take for the amplitude to decrease by half
-  time::SteadyPoint last_tick;
-  Spring() : last_tick(time::SteadyNow()) {}
-  Spring(T initial_value) : Spring() {
-    this->value = initial_value;
-    this->target = initial_value;
-  }
-
-  Progress TickComponent(float dt, float target, float& value, float& velocity) {
-    float Q = 2 * M_PI / time::ToSeconds(period);
-    float D = value - target;
-    float V = velocity;
-    float H = time::ToSeconds(half_life);
-
-    float t;
-    float amplitude;
-    if (fabsf(D) > 1e-6f) {
-      t = -atanf((D * kLn2 + V * H) / (D * H * Q)) / Q;
-      amplitude = D / powf(2, -t / H) / cosf(t * Q);
-    } else {
-      if (fabsf(V) < 1e-6f) {
-        bool value_changed = value != target || velocity != 0;
-        value = target;
-        velocity = 0;
-        return {.value_changed = value_changed, .settled = true};
-      }
-      t = time::ToSeconds(period) / 4;
-      amplitude = -velocity * powf(2.f, t / H) / Q;
-    }
-    float before = value;
-    float t2 = t + dt;
-    value = target + amplitude * cosf(t2 * Q) * powf(2, -t2 / H);
-    velocity =
-        (-(amplitude * kLn2 * cosf(t2 * Q)) / H - amplitude * Q * sinf(t2 * Q)) / powf(2, t2 / H);
-    return {.value_changed = value != before, .settled = false};
-  }
-
-  template <typename P>
-  Progress TickComponents(float dt) {
-    return TickComponent(dt, this->target, this->value, this->velocity);
-  }
-
-  template <>
-  Progress TickComponents<Vec2>(float dt) {
-    auto x = TickComponent(dt, this->target.x, this->value.x, this->velocity.x);
-    auto y = TickComponent(dt, this->target.y, this->value.y, this->velocity.y);
-    return x | y;
-  }
-
-  Progress Tick(time::Timer& timer) {
-    float dt = time::ToSeconds(timer.now - last_tick);
-    last_tick = timer.now;
-    if (half_life <= 0s || period <= 0s) return {};
-    if (dt <= 0) return {.value_changed = false, .settled = false};
-
-    return TickComponents<T>(dt);
-  }
-  operator T() const { return this->value; }
-};
 
 template <typename T>
 struct SpringV2 {

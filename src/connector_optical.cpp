@@ -937,8 +937,6 @@ CablePhysicsSimulation::CablePhysicsSimulation(Argument arg, Widget& start_widge
       .distance = 0,
       .next_dir_delta = 0_deg,
   });  // dispenser
-  steel_insert_hidden.period = 500ms;
-  steel_insert_hidden.half_life = 200ms;
 }
 
 CablePhysicsSimulation::~CablePhysicsSimulation() {}

@@ -40,7 +40,7 @@ struct ConnectionWidget : ArgumentToy {
   SkColor tint;
   SkPath from_shape;  // board coords
   SkPath to_shape;    // board coords
-  animation::Approach<> cable_width;
+  float cable_width = 0;
   Vec<Vec2AndDir> to_points;
   float transparency = 1;
   bool hidden = false;

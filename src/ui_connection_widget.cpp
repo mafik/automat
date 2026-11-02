@@ -591,12 +591,7 @@ ui::Tock CableWidget::Tick(time::Timer& timer) {
     state->stabilized = false;
   }
 
-  if (a.end_widget) {
-    state->steel_insert_hidden.target = 1;
-  } else {
-    state->steel_insert_hidden.target = 0;
-  }
-  tock.shaping |= state->steel_insert_hidden.Tick(timer);
+  tock.shaping |= state->steel_insert_hidden.SpringTowards(a.end_widget ? 1 : 0, timer.d, 0.5, 0.2);
 
   if (auto* activity = arg.LastActivity()) {
     uint32_t last_activity = activity->load(std::memory_order_relaxed);
@@ -635,9 +630,7 @@ ui::Tock RoutedCableWidget::Tick(time::Timer& timer) {
     length = new_length;
   }
 
-  cable_width.target = a.EndObj() ? 2_mm : 0;
-  cable_width.speed = 5;
-  tock.drawing |= cable_width.Tick(timer);
+  tock.drawing |= animation::ExponentialApproach(a.EndObj() ? 2_mm : 0, timer.d, 0.2, cable_width);
 
   ComputeEndAnchor(*this, a, arcline);
   UpdateTextureAnchors(*this, a);
@@ -648,7 +641,7 @@ ui::Tock RoutedCableWidget::Tick(time::Timer& timer) {
 
 void RoutedCableWidget::Draw(SkCanvas& canvas) const {
   if (cable_width > 0.01_mm && alpha > 0.01f && arcline) {
-    auto color = SkColorSetA(tint, 255 * cable_width.value / 2_mm);
+    auto color = SkColorSetA(tint, 255 * cable_width / 2_mm);
     auto color_filter = color::MakeTintFilter(color, 30);
     auto path = arcline->ToPath(false);
     DrawCable(canvas, path, color_filter, CableTexture::Smooth, cable_width, cable_width);
@@ -711,9 +704,8 @@ ui::Tock StreamPipeWidget::Tick(time::Timer& timer) {
     length = new_length;
   }
 
-  cable_width.target = a.end_iface ? kStreamBore : 1.2_mm;
-  cable_width.speed = 5;
-  tock.shaping |= cable_width.Tick(timer);
+  tock.shaping |=
+      animation::ExponentialApproach(a.end_iface ? kStreamBore : 1.2_mm, timer.d, 0.2, cable_width);
 
   ComputeEndAnchor(*this, a, arcline);
   UpdateTextureAnchors(*this, a);

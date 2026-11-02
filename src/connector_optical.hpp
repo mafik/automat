@@ -56,7 +56,7 @@ struct CablePhysicsSimulation {
   Argument argument;
   MortalPtr<Widget> start_widget;
 
-  animation::Spring<float> steel_insert_hidden;
+  animation::SpringV2<float> steel_insert_hidden;
   bool hidden = false;
 
   float cable_width = 2_mm;

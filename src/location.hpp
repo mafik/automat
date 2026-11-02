@@ -252,7 +252,7 @@ struct LocationWidget : ObjectToy {
   constexpr static float kSpringHalfTime = 0.05;
 
   // Animation state (moved from Location)
-  animation::SpringV2<float> elevation;
+  animation::Kinetic<float> elevation;
   Vec2 position_vel = {};
   float scale_vel = 0;
   MortalPtr<ObjectToy> toy;  // cached Object Toy (auto-nulled on destruction)

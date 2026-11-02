@@ -27,7 +27,7 @@ struct EnumKnobWidget : Toy {
 
   constexpr static time::FloatDuration kClickWigglePeriod = 0.5s;
   constexpr static time::FloatDuration kClickWiggleHalfTime = 0.1s;
-  animation::SpringV2<float> click_wiggle = {};
+  animation::Kinetic<float> click_wiggle = {};
   bool is_dragging = false;
   float cond_code_float = 0;
   int n_options;

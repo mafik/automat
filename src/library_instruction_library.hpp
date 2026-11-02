@@ -83,10 +83,10 @@ struct InstructionLibrary : Object {
 
     std::deque<InstructionCard> instruction_helix;
     XorShift32 rng;
-    animation::SpringV2<float> rotation_offset_t = 0;
+    animation::Kinetic<float> rotation_offset_t = 0;
     float rotation_offset_t_target = 0;
     bool helix_hovered = false;
-    animation::SpringV2<float> helix_hover_tween = 0;
+    animation::Kinetic<float> helix_hover_tween = 0;
     float new_cards_dir_deg = NAN;
 
     // True if the button is pressed
@@ -106,9 +106,9 @@ struct InstructionLibrary : Object {
       struct LeafState {
         bool hovered = false;
 
-        animation::SpringV2<float> growth;
+        animation::Kinetic<float> growth;
         float hue_rotate = 0;
-        animation::SpringV2<float> shake;
+        animation::Kinetic<float> shake;
 
         // Computed and cached in `Tick`, so that MouseMove can be faster
         Vec2 position;
@@ -117,8 +117,8 @@ struct InstructionLibrary : Object {
 
       bool hovered = false;
       std::vector<LeafState> leaves;
-      animation::SpringV2<float> growth;
-      animation::SpringV2<float> shake;
+      animation::Kinetic<float> growth;
+      animation::Kinetic<float> shake;
 
       // Computed and cached in `Tick`, so that MouseMove can be faster
       Vec2 position;

@@ -798,7 +798,7 @@ struct TimelineWidget : ObjectToy {
 
   float zoom = 10;
   float splice_x = 0;
-  animation::SpringV2<float> splice_wiggle;
+  animation::Kinetic<float> splice_wiggle;
   float bridge_wiggle_s = 0;
   bool bridge_snapped = false;
   Timeline::State state;
@@ -2405,8 +2405,8 @@ struct Vec2TrackWidget : TrackBaseWidget {
 };
 
 struct Float64TrackWidget : TrackBaseWidget {
-  animation::SpringV2<float> y_max;
-  animation::SpringV2<float> y_min;
+  animation::Kinetic<float> y_max;
+  animation::Kinetic<float> y_min;
   SkPath trail;
 
   using TrackBaseWidget::TrackBaseWidget;

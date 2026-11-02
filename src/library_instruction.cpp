@@ -2820,8 +2820,8 @@ constinit Scalar::Table kLoopCondition = [] {
 
 struct ConditionCodeWidget : public EnumKnobWidget {
   std::optional<Wave1D> wave;
-  animation::SpringV2<float> water_level;
-  animation::SpringV2<float> spill_tween;
+  animation::Kinetic<float> water_level;
+  animation::Kinetic<float> spill_tween;
   std::optional<Vec2> root_position;
 
   ConditionCodeWidget(ui::Widget* parent, Object& instruction)

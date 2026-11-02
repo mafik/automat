@@ -42,7 +42,7 @@ struct Rocker : Widget {
   float positions[NUM_VERTICAL_POINTS];
 
   bool on = false;
-  animation::SpringV2<float> state = 0;
+  animation::Kinetic<float> state = 0;
   Clickable clickable;
   Linked<OnOff> target;
   std::unique_ptr<Widget> on_icon;

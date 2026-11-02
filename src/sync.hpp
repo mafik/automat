@@ -170,12 +170,12 @@ struct SyncBelt : ArgumentToy {
   sk_sp<SkShader> label_shader;
   float label_rotation_ratio = 0;
   float label_rotation_velocity = 0;
-  Vec2 origin{};                                  // where the rubber belt starts
-  Vec2 pinion{};                                  // where the small gear is located
-  animation::SpringV2<Vec2> pinion_deflection{};  // deflection from the ideal position
+  Vec2 origin{};                                 // where the rubber belt starts
+  Vec2 pinion{};                                 // where the small gear is located
+  animation::Kinetic<Vec2> pinion_deflection{};  // deflection from the ideal position
   // Used for animating belt disappearance
   //
-  // This is stored as a separate variable rather than SpringV2 because animation is only used on
+  // This is stored as a separate variable rather than Kinetic because animation is only used on
   // disappearance.
   Vec2 origin_velocity{};
   float angle = 0;

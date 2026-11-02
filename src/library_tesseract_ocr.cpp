@@ -116,9 +116,9 @@ struct TesseractWidget : ObjectToy, ui::PointerMoveCallback {
   std::unique_ptr<ui::ActionZone> move_zone;
   Rect region_rect;
   Optional<Vec2> iris_target;  // Where the eye is pointing (board coords)
-  animation::SpringV2<Vec2> iris_dir;
+  animation::Kinetic<Vec2> iris_dir;
   std::string ocr_text;
-  animation::SpringV2<float> aspect_ratio = 1.618f;
+  animation::Kinetic<float> aspect_ratio = 1.618f;
   Rect status_rect;
   Optional<float> status_progress_ratio;
   Vec<TesseractOCR::RecognitionResult> status_results;

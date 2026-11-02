@@ -624,7 +624,7 @@ struct MouseScrollYWidget : MouseWidgetBase {
   MouseScrollYWidget(ui::Widget* parent, Object& obj) : MouseWidgetBase(parent, obj) {}
 
   SinCos target;
-  animation::SpringV2<SinCos> rotation;
+  animation::Kinetic<SinCos> rotation;
 
   Tock Tick(time::Timer& t) override {
     if (auto o = LockObject<MouseScrollY>()) {
@@ -693,7 +693,7 @@ struct MouseScrollXWidget : MouseWidgetBase {
   MouseScrollXWidget(ui::Widget* parent, Object& obj) : MouseWidgetBase(parent, obj) {}
 
   SinCos target;
-  animation::SpringV2<SinCos> rotation;
+  animation::Kinetic<SinCos> rotation;
 
   Tock Tick(time::Timer& t) override {
     if (auto o = LockObject<MouseScrollX>()) {

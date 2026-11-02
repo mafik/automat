@@ -415,8 +415,8 @@ struct GlassRunButton : ui::PowerButton {
 
 struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
   struct AnimationState {
-    animation::SpringV2<Vec2> googly_left;
-    animation::SpringV2<Vec2> googly_right;
+    animation::Kinetic<Vec2> googly_left;
+    animation::Kinetic<Vec2> googly_right;
     float eye_rotation_speed = 0;
     float eye_rotation = 0;
     int pointers_over = 0;
@@ -471,7 +471,7 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
     auto& rw = FindRootWidget();
     auto main_pointer_screen = *rw.window->MousePositionScreenPx();
 
-    auto UpdateEye = [&](Vec2 center, animation::SpringV2<Vec2>& googly) -> animation::Progress {
+    auto UpdateEye = [&](Vec2 center, animation::Kinetic<Vec2>& googly) -> animation::Progress {
       auto eye_window = local_to_window.mapPoint(center.sk);
       auto eye_screen = rw.window->WindowPxToScreen(eye_window);
       auto eye_delta = main_pointer_screen - eye_screen;
@@ -498,7 +498,7 @@ struct MacroRecorderWidget : ObjectToy, ui::PointerMoveCallback {
       auto size = sharingan->containerSize();
       float s = 0.9 * kEyeRadius * 2 / size.height();
 
-      auto DrawEye = [&](Vec2 center, animation::SpringV2<Vec2>& googly) {
+      auto DrawEye = [&](Vec2 center, animation::Kinetic<Vec2>& googly) {
         Rect bounds = Rect::MakeCenter(center, kEyeRadius * 2, kEyeRadius * 2);
 
         if (animation_state.eyes_open > 0) {

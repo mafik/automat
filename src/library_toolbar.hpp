@@ -15,7 +15,7 @@ struct PrototypeButton : Toy {
   Ptr<Object> proto;
   MortalPtr<Widget> proto_widget;
   float natural_width;
-  mutable animation::SpringV2<float> width{kToolbarIconSize};
+  mutable animation::Kinetic<float> width{kToolbarIconSize};
 
   PrototypeButton(Widget* parent, Ptr<Object>& proto)
       : Toy(parent, *proto, nullptr, proto->monitor), proto(proto) {}

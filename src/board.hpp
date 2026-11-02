@@ -152,8 +152,8 @@ struct Board : Object {
 struct BoardWidget : ObjectToy, ui::DropTarget {
   struct ToyScope toys;
 
-  animation::SpringV2<Vec2> size;
-  animation::SpringV2<float> frame_width;
+  animation::Kinetic<Vec2> size;
+  animation::Kinetic<float> frame_width;
 
   sk_sp<SkShader> background_image;
   sk_sp<SkShader> background_thumb;

@@ -511,9 +511,9 @@ struct TimerWidget : ObjectToy {
   float start_pusher_depression = 0;
   float left_pusher_depression = 0;
   float right_pusher_depression = 0;
-  animation::SpringV2<float> hand_degrees;
+  animation::Kinetic<float> hand_degrees;
   Ptr<TimerHand> hand = MAKE_PTR(TimerHand);
-  animation::SpringV2<float> range_dial;
+  animation::Kinetic<float> range_dial;
   float duration_handle_rotation = 0;
   std::unique_ptr<ui::NumberTextField> text_field;
   std::unique_ptr<ui::ActionZone> duration_zone;

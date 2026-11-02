@@ -1873,7 +1873,7 @@ struct WaylandSurfaceToy : ui::beta::ObjectToy, ui::PointerMoveCallback {
   }
   void TransformUpdated(time::Timer& t) override { WakeAnimationAt(t.now); }
 
-  ankerl::unordered_dense::map<WaylandSurface*, animation::SpringV2<Vec2>> popup_positions;
+  ankerl::unordered_dense::map<WaylandSurface*, animation::Kinetic<Vec2>> popup_positions;
 
   Tock Tick(time::Timer& timer) override {
     if (!LockSurface()) {

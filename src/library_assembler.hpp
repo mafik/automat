@@ -47,8 +47,8 @@ struct RegisterWidget : public ObjectToy {
   ui::SmallBufferWidget small_buffer_widget;
   std::unique_ptr<RegisterIndexKnobWidget> register_index_knob;
 
-  animation::SpringV2<float> wrap_position_offset;
-  animation::SpringV2<float> size_offset;
+  animation::Kinetic<float> wrap_position_offset;
+  animation::Kinetic<float> size_offset;
   mutable SkPath cached_shape;
 
   // Cached during Tick:

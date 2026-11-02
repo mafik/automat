@@ -51,12 +51,12 @@ struct CablePhysicsSimulation {
 
   // The length of the cable calculated during the last DrawCable call.
   mutable float approx_length = 0;
-  animation::SpringV2<float> connector_scale = 1;
+  animation::Kinetic<float> connector_scale = 1;
 
   Argument argument;
   MortalPtr<Widget> start_widget;
 
-  animation::SpringV2<float> steel_insert_hidden;
+  animation::Kinetic<float> steel_insert_hidden;
   bool hidden = false;
 
   float cable_width = 2_mm;

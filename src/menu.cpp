@@ -54,10 +54,10 @@ struct MenuWidget : ui::Widget {
     SinCos angle;
     Locked<> option;
     std::unique_ptr<ui::Widget> icon;
-    animation::SpringV2<Vec2> offset;
+    animation::Kinetic<Vec2> offset;
   };
   SmallVec<Slot, 8> slots;
-  animation::SpringV2<float> size = 0;
+  animation::Kinetic<float> size = 0;
   MortalPtr<MenuAction> action;
   bool first_tick = true;
 

@@ -63,7 +63,7 @@ struct SwitchToy : ObjectToy {
   std::unique_ptr<ui::Rocker> rocker;
   Str label = "?"s;
   float light = 0;
-  animation::SpringV2<float> iconification;
+  animation::Kinetic<float> iconification;
   uint32_t observed_target_monitor = 0;
 
   constexpr static SkColor4f kBgLight = "#216778"_color4f;

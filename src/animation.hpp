@@ -57,11 +57,11 @@ inline Progress LinearApproach(float target, float delta_time, float speed, floa
 }
 
 template <typename T>
-struct SpringV2 {
+struct Kinetic {
   T value, velocity;
 
-  SpringV2() : value{}, velocity{} {}
-  SpringV2(T initial_value) : value(initial_value), velocity{} {}
+  Kinetic() : value{}, velocity{} {}
+  Kinetic(T initial_value) : value(initial_value), velocity{} {}
 
   Progress SpringTowards(T target, float delta_time, float period_time, float half_time);
 
@@ -95,14 +95,14 @@ Progress LowLevelSpringTowards(float target, float delta_time, float period_time
                                float& value, float& velocity);
 
 template <>
-inline Progress SpringV2<float>::SpringTowards(float target, float delta_time, float period_time,
-                                               float half_time) {
+inline Progress Kinetic<float>::SpringTowards(float target, float delta_time, float period_time,
+                                              float half_time) {
   return LowLevelSpringTowards(target, delta_time, period_time, half_time, value, velocity);
 }
 
 template <>
-inline Progress SpringV2<Vec2>::SpringTowards(Vec2 target, float delta_time, float period_time,
-                                              float half_time) {
+inline Progress Kinetic<Vec2>::SpringTowards(Vec2 target, float delta_time, float period_time,
+                                             float half_time) {
   auto x = LowLevelSpringTowards(target.x, delta_time, period_time, half_time, value.x, velocity.x);
   auto y = LowLevelSpringTowards(target.y, delta_time, period_time, half_time, value.y, velocity.y);
   return x | y;
@@ -112,19 +112,19 @@ Progress LowLevelSineTowards(float target, float delta_time, float period_time, 
                              float& velocity);
 
 template <>
-inline Progress SpringV2<float>::SineTowards(float target, float delta_time, float period_time) {
+inline Progress Kinetic<float>::SineTowards(float target, float delta_time, float period_time) {
   return LowLevelSineTowards(target, delta_time, period_time, value, velocity);
 }
 
 template <>
-inline Progress SpringV2<Vec2>::SineTowards(Vec2 target, float delta_time, float period_time) {
+inline Progress Kinetic<Vec2>::SineTowards(Vec2 target, float delta_time, float period_time) {
   auto x = LowLevelSineTowards(target.x, delta_time, period_time, value.x, velocity.x);
   auto y = LowLevelSineTowards(target.y, delta_time, period_time, value.y, velocity.y);
   return x | y;
 }
 
 template <>
-inline Progress SpringV2<SinCos>::SineTowards(SinCos target, float delta_time, float period_time) {
+inline Progress Kinetic<SinCos>::SineTowards(SinCos target, float delta_time, float period_time) {
   auto velocity_radians = velocity.ToRadians();
   float value_radians = 0;
   float target_radians = (target - value).ToRadians();

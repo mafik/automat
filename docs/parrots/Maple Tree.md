@@ -133,11 +133,12 @@ tree needs no parent pointers, which path copying would make impossible to keep.
 
 ## Reclamation
 
-The tree keeps an epoch number and 64 reader shards (4 KiB). Each shard is a cache line with one
-reader counter per epoch parity. Sixteen reader threads hashed into 16 shards almost always share
-some shards, which made a guard cost about 40 to 50 nanoseconds instead of about 25 with 64
-shards. Memory freed by the tree is only ever node memory, allocated with plain `new` and freed
-with `delete` so that AddressSanitizer sees every use after free.
+The tree keeps an epoch number and 4 reader shards (256 bytes). Each shard is a cache line with one
+reader counter per epoch parity. Four shards suit a few reader threads. With sixteen reader threads,
+a guard cost about 40 to 50 nanoseconds with 16 shards and about 25 with 64 shards, because
+threads that hash to the same shard share its cache line. Memory freed by the tree is only ever node
+memory, allocated with plain `new` and freed with `delete` so that AddressSanitizer sees every use
+after free.
 
 A reader picks a shard from a hash of its thread identity, so that different threads mostly use
 different cache lines. To enter, it loads the epoch `e`, increments the counter of parity `e & 1`,

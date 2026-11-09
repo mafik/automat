@@ -4,6 +4,7 @@
 
 #include "error.hpp"
 #include "interface.hpp"
+#include "pointer.hpp"
 
 namespace automat {
 
@@ -23,6 +24,7 @@ struct Command : Interface {
     constexpr Table(StrView name, Kind kind = Interface::kCommand) : Interface::Table(kind, name) {
       activate = &CommandActivate;
       fill_menu = &CommandFillMenu;
+      cursor = ui::Cursor::Hand;
     }
 
     template <typename ImplT>

@@ -12,6 +12,7 @@
 
 #include "concurrentqueue.hpp"
 #include "embedded.hpp"
+#include "libc.hpp"
 #include "log.hpp"
 #include "math.hpp"
 #include "thread_name.hpp"
@@ -90,7 +91,7 @@ PersistentImage::PersistentImage(sk_sp<SkImage> image, MakeArgs args) : image(im
 
 void PersistentImage::PreloadAll() {
   ZoneScoped;
-  std::vector<std::jthread> workers;
+  std::vector<libc::ChimeraThread> workers;
   struct Task {
     PersistentImage* persistent_image;
     AutomatImageProvider::CacheEntry* cache_entry;
@@ -120,7 +121,7 @@ void PersistentImage::PreloadAll() {
     };
     // Start some extra threads, but also use the current thread to do some processing
     if (i) {
-      workers.emplace_back(std::move(WorkFunc));
+      workers.push_back(libc::StartChimeraThread(std::move(WorkFunc)));
     } else {
       WorkFunc();
     }

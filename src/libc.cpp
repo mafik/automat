@@ -3,10 +3,12 @@
 
 #include "libc.hpp"
 
+#if defined(__linux__)
 #include <dlfcn.h>
 #include <elf.h>
 #include <fcntl.h>
 #include <setjmp.h>
+#include <signal.h>
 #include <sys/auxv.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -18,9 +20,19 @@
 #include <span>
 
 #include "format.hpp"
+#include "linux_syscall.hpp"
 
 #if defined(__COSMOPOLITAN__)
+#include <functional>
+#include <new>
+#include <system_error>
+
+#define _Bool bool
+#include <libc/intrin/cxaatexit.h>
+#include <libc/str/locale.internal.h>
+#include <libc/thread/posixthread.internal.h>
 #include <libc/thread/tls.h>
+#undef _Bool
 #endif
 
 namespace automat::libc {
@@ -57,6 +69,7 @@ enum {
   kAuxExecfn = 31,
   kHelperStackSize = 64 << 10,
   kMaxProgramHeaders = 16,
+  kHostThreadStackSize = 8 << 20,
 };
 
 const unsigned char kHelperImage[] = {
@@ -80,11 +93,6 @@ struct Image {
   char* base;
   Elf64_Ehdr header;
 };
-
-int ProtectionOf(Elf64_Word flags) {
-  return (flags & PF_R ? PROT_READ : 0) | (flags & PF_W ? PROT_WRITE : 0) |
-         (flags & PF_X ? PROT_EXEC : 0);
-}
 
 void MapImage(const Source& source, Image& image, char* interpreter, size_t interpreter_size,
               Status& status) {
@@ -124,20 +132,52 @@ void MapImage(const Source& source, Image& image, char* interpreter, size_t inte
     }
     size_t page_start = header.p_vaddr & -page_size;
     size_t page_end = (header.p_vaddr + header.p_memsz + page_size - 1) & -page_size;
+    int protection = (header.p_flags & PF_R ? PROT_READ : 0) |
+                     (header.p_flags & PF_W ? PROT_WRITE : 0) |
+                     (header.p_flags & PF_X ? PROT_EXEC : 0);
     if (!source.Read(image.base + header.p_vaddr, header.p_filesz, header.p_offset) ||
-        mprotect(image.base + page_start, page_end - page_start, ProtectionOf(header.p_flags))) {
+        mprotect(image.base + page_start, page_end - page_start, protection)) {
       status() += "Couldn't map a segment";
       return;
     }
   }
 }
 
+struct HostThreadFunctions {
+  int (*create)(unsigned long*, const void*, void* (*)(void*), void*);
+  int (*join)(unsigned long, void**);
+  int (*detach)(unsigned long);
+} host_thread;
+
+template <typename Function>
+void FindHostFunction(const char* name, Function& function, Status& status) {
+  function = reinterpret_cast<Function>(FindSymbol(nullptr, name));
+  if (!function) {
+    status() += f("{}: {}", name, LibraryError());
+  }
+}
+
+void LoadHostThreadFunctions(Status& status) {
+  FindHostFunction("pthread_create", host_thread.create, status);
+  FindHostFunction("pthread_join", host_thread.join, status);
+  FindHostFunction("pthread_detach", host_thread.detach, status);
+}
+
+#if defined(__x86_64__)
+enum {
+  kSysArchPrctl = 158,
+  kSysGettid = 186,
+  kArchSetGs = 0x1001,
+  kArchGetGs = 0x1004,
+};
+#endif
+
 #if defined(__COSMOPOLITAN__)
-CosmoTib* SaveThreadState() { return __get_tls(); }
-void RestoreThreadState(CosmoTib* tib) { __set_tls(tib); }
-#else
-void* SaveThreadState() { return nullptr; }
-void RestoreThreadState(void*) {}
+struct ChimeraLaunch {
+  std::move_only_function<void()> body;
+  PosixThread* posix_thread;
+  sigset_t creator_signal_mask;
+};
 #endif
 
 }  // namespace
@@ -145,6 +185,7 @@ void RestoreThreadState(void*) {}
 void Init(Status& status) {
   if (getauxval(kAuxBase)) {
     host = {dlopen, dlsym, dlclose, dlerror};
+    LoadHostThreadFunctions(status);
     return;
   }
   Image program, interpreter;
@@ -227,12 +268,106 @@ void Init(Status& status) {
   *out++ = 0;
   *out++ = 0;
   void* entry = interpreter.base + interpreter.header.e_entry;
-  auto thread_state = SaveThreadState();
+#if defined(__x86_64__)
+  unsigned long gs_base;
+  LinuxSyscall(kSysArchPrctl, kArchGetGs, (long)&gs_base);
+#endif
   if (_setjmp(return_to_init)) {
-    RestoreThreadState(thread_state);
+#if defined(__x86_64__)
+    LinuxSyscall(kSysArchPrctl, kArchSetGs, gs_base);
+#endif
+    LoadHostThreadFunctions(status);
     return;
   }
   asm volatile("mov %1, %%rsp\n\tjmp *%0" : : "r"(entry), "r"(sp) : "memory");
 }
 
+#if defined(__COSMOPOLITAN__)
+ChimeraThread::ChimeraThread(std::move_only_function<void()> body) {
+  auto* posix_thread = (PosixThread*)calloc(1, sizeof(PosixThread));
+  if (!posix_thread) {
+    throw std::bad_alloc();
+  }
+  dll_init(&posix_thread->list);
+  posix_thread->pt_locale = &__global_locale;
+  posix_thread->pt_tls = _mktls(&posix_thread->tib);
+  if (!posix_thread->pt_tls) {
+    free(posix_thread);
+    throw std::bad_alloc();
+  }
+  posix_thread->tib->tib_pthread = (pthread_t)posix_thread;
+  __c11_atomic_store(&posix_thread->tib->tib_sigmask, -1, __ATOMIC_RELAXED);
+  __c11_atomic_store(&posix_thread->pt_status, kPosixThreadDetached, __ATOMIC_RELAXED);
+  auto launch = std::make_unique<ChimeraLaunch>();
+  launch->body = std::move(body);
+  launch->posix_thread = posix_thread;
+  sigset_t all, creator_signal_mask;
+  sigfillset(&all);
+  sigprocmask(SIG_SETMASK, &all, &creator_signal_mask);
+  launch->creator_signal_mask = creator_signal_mask;
+  int error = host_thread.create(
+      &handle, nullptr,
+      [](void* argument) -> void* {
+        auto* launch = (ChimeraLaunch*)argument;
+        PosixThread* posix_thread = launch->posix_thread;
+        LinuxSyscall(kSysArchPrctl, kArchSetGs, (long)posix_thread->tib);
+        int tid = LinuxSyscall(kSysGettid, 0);
+        __c11_atomic_store(&posix_thread->tib->tib_ptid, tid, __ATOMIC_RELAXED);
+        __c11_atomic_store(&posix_thread->tib->tib_ctid, tid, __ATOMIC_RELAXED);
+        _pthread_lock();
+        dll_make_first(&_pthread_list, &posix_thread->list);
+        _pthread_unlock();
+        sigprocmask(SIG_SETMASK, &launch->creator_signal_mask, nullptr);
+        launch->body();
+        delete launch;
+        __cxa_thread_finalize();
+        sigset_t all;
+        sigfillset(&all);
+        sigprocmask(SIG_BLOCK, &all, nullptr);
+        __c11_atomic_store(&posix_thread->pt_status, kPosixThreadZombie, __ATOMIC_RELEASE);
+        _pthread_zombify(posix_thread);
+        __c11_atomic_store(&posix_thread->tib->tib_ctid, 0, __ATOMIC_RELEASE);
+        return nullptr;
+      },
+      launch.get());
+  sigprocmask(SIG_SETMASK, &creator_signal_mask, nullptr);
+  if (error) {
+    handle = 0;
+    free(posix_thread->pt_tls);
+    free(posix_thread);
+    throw std::system_error(error, std::generic_category());
+  }
+  launch.release();
+}
+
+ChimeraThread::ChimeraThread(ChimeraThread&& other) noexcept
+    : handle(std::exchange(other.handle, 0)) {}
+
+ChimeraThread& ChimeraThread::operator=(ChimeraThread&& other) noexcept {
+  if (joinable()) {
+    join();
+  }
+  handle = std::exchange(other.handle, 0);
+  return *this;
+}
+
+ChimeraThread::~ChimeraThread() {
+  if (joinable()) {
+    join();
+  }
+}
+
+void ChimeraThread::join() {
+  host_thread.join(handle, nullptr);
+  handle = 0;
+}
+
+void ChimeraThread::detach() {
+  host_thread.detach(handle);
+  handle = 0;
+}
+#endif
+
 }  // namespace automat::libc
+
+#endif

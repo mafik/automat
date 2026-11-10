@@ -24,6 +24,7 @@
 #include "font.hpp"
 #include "global_resources.hpp"
 #include "key.hpp"
+#include "libc.hpp"
 #include "library_key_presser.hpp"
 #include "library_switch.hpp"
 #include "loading_animation.hpp"
@@ -141,7 +142,6 @@ RootWidget::RootWidget() : Widget(nullptr), keyboard(*this), zoom_warning(this),
 
 RootWidget::~RootWidget() {
   if (render_thread.joinable()) {
-    render_thread.request_stop();
     render_thread.join();
   }
   auto it = std::find(root_widgets.begin(), root_widgets.end(), this);
@@ -190,7 +190,8 @@ void RootWidget::Init() {
 }
 
 void RootWidget::StartRenderThread() {
-  render_thread = std::jthread(RenderThread, std::ref(*this), stop_source.get_token());
+  render_thread = libc::StartChimeraThread(
+      [this, token = stop_source.get_token()] { RenderThread(*this, token); });
 }
 
 ui::Tock RootWidget::ZoomWarning::Tick(time::Timer& timer) {

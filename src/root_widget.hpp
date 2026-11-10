@@ -14,6 +14,7 @@
 #include "deserializer.hpp"
 #include "drag_action.hpp"
 #include "keyboard.hpp"
+#include "libc.hpp"
 #include "library_key_presser.hpp"
 #include "library_switch.hpp"
 #include "library_toolbar.hpp"
@@ -88,7 +89,7 @@ struct RootWidget final : Widget {
   // true when Wayland windows should receive input before Automat
   constexpr static bool kWaylandLock = false;
 
-  std::jthread render_thread;
+  libc::ChimeraThread render_thread;
 
   std::unique_ptr<Window> window;
   std::unique_ptr<LoadingAnimation> loading_animation;

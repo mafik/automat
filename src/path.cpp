@@ -4,6 +4,8 @@
 
 #include <sys/stat.h>
 
+#include <cerrno>
+
 #if defined(__linux__)
 #include <linux/limits.h>
 #include <pwd.h>

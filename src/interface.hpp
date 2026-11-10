@@ -382,8 +382,8 @@ struct ToC {
   std::span<Interface::Table*> array;
 
   int size() { return array.size(); }
-  Interface::Table** begin() { return &array[0]; }
-  Interface::Table** end() { return &array[array.size()]; }
+  Interface::Table** begin() { return array.data(); }
+  Interface::Table** end() { return array.data() + array.size(); }
   Interface::Table*& operator[](int i) { return array[i - 1]; }
 
   int SlotOf(const Interface::Table* table) {

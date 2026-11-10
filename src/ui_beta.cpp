@@ -1151,7 +1151,7 @@ ui::Tock RunButton::Tick(time::Timer& t) {
   if (enabled && clickable.pointers_over > 0) {
     wiggle = static_cast<uint32_t>(t.NowSeconds() * 5.0);
     tock.draw = true;
-    tock.next_tick = min(tock.next_tick, t.now + 200ms);
+    tock.next_tick = min<time::SteadyPoint>(tock.next_tick, t.now + 200ms);
   }
   return tock;
 }

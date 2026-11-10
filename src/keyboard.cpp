@@ -16,7 +16,6 @@
 #include "keymap.hpp"
 #include "root_widget.hpp"
 #include "x11_keys.hpp"
-#include "x11_xkb.hpp"
 
 #if defined(_WIN32)
 #include <Windows.h>

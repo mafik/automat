@@ -30,6 +30,10 @@ struct EqualLifetimeObserver {
   bool operator()(const Object* lhs, const LifetimeObserver* rhs) const {
     return lhs == &rhs->object;
   }
+
+  bool operator()(const LifetimeObserver* lhs, const Object* rhs) const {
+    return &lhs->object == rhs;
+  }
 };
 
 std::unordered_set<LifetimeObserver*, HashLifetimeObserver, EqualLifetimeObserver> object_observers;

@@ -46,6 +46,7 @@
 #include <signal.h>
 #include <unistd.h>
 
+#include "libc.hpp"
 #include "library_pipewire.hpp"
 #include "linux_syscall.hpp"
 #include "wayland.hpp"
@@ -168,6 +169,15 @@ static int argc;
 static char** argv;
 
 int Main() {
+#if defined(__linux__)
+  Status libc_status;
+  libc::Init(libc_status);
+  if (!OK(libc_status)) {
+    ERROR << "Couldn't initialize the host libc: " << libc_status;
+    return 1;
+  }
+#endif
+
   // Process setup
   // Thread name of the main thread is also used as a process name so instead of "Main" (which would
   // be more accurate in the context of Automat's thread) we use "automat" (which is more helpful

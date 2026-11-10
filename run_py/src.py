@@ -8,6 +8,7 @@ from types import ModuleType
 import clang
 import fs_utils
 import importlib.util
+import os
 import re
 import sys
 
@@ -135,7 +136,7 @@ class File:
             # TODO: handle <> & escapes
             match = re.match(r'^#embed "(.*)"', line)
             if match:
-                self.embeds.append(match.group(1))
+                self.embeds.append(os.path.normpath(self.path.parent / match.group(1)))
 
     # This should be called after all files are scanned
     def update_transitive_includes(self, srcs: dict[str, 'File']):

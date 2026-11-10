@@ -13,6 +13,7 @@
 #include "library_instruction_library.hpp"
 #include "library_key_presser.hpp"
 #include "library_macro_recorder.hpp"
+#include "library_memory_viewer.hpp"
 #include "library_mouse.hpp"
 #include "library_number.hpp"
 #include "library_program_launcher.hpp"
@@ -93,6 +94,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<Window>();
   index.Register<TesseractOCR>();
   index.Register<Sources>();
+  index.Register<MemoryViewer>();
   index.Register<Gear, HideInToolbar>();
   index.Register<BetaShelf>();
   index.Register<X11Window, HideInToolbar>();

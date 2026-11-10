@@ -44,10 +44,10 @@
 
 #if defined(__linux__)
 #include <signal.h>
-#include <sys/eventfd.h>
 #include <unistd.h>
 
 #include "library_pipewire.hpp"
+#include "linux_syscall.hpp"
 #include "wayland.hpp"
 #endif
 
@@ -132,7 +132,7 @@ struct SigtermListener : mux::Epoll::Listener {
 static SigtermListener sigterm_listener;
 
 static void StopOnSigterm() {
-  sigterm_listener.fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+  sigterm_listener.fd = LinuxSyscall(__NR_eventfd2, 0, mux::kCloexec | mux::kNonblock);
   mux::epoll.Post([] {
     Status status;
     mux::epoll.Add(&sigterm_listener, status);

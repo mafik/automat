@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: Copyright 2026 Automat Authors
 // SPDX-License-Identifier: MIT
 
-#include <sys/epoll.h>
 #include <sys/types.h>
 
+#include <cstdint>
 #include <functional>
 #include <mutex>
 #include <stop_token>
@@ -16,6 +16,25 @@
 
 // C++ wrappers around the Linux epoll facility.
 namespace automat::mux {
+
+constexpr uint32_t kEpollIn = 0x001;
+constexpr uint32_t kEpollOut = 0x004;
+
+constexpr int kEpollCtlAdd = 1;
+constexpr int kEpollCtlDel = 2;
+constexpr int kEpollCtlMod = 3;
+
+constexpr int kCloexec = 02000000;
+constexpr int kNonblock = 04000;
+
+#if defined(__x86_64__)
+struct __attribute__((packed)) EpollEvent {
+#else
+struct EpollEvent {
+#endif
+  uint32_t events;
+  uint64_t data;
+};
 
 struct Epoll {
   // Base class for objects that would like to receive epoll updates.
@@ -87,7 +106,7 @@ struct Epoll {
   int listener_count = 0;
 
   static constexpr int kMaxEpollEvents = 10;
-  epoll_event events[kMaxEpollEvents];
+  EpollEvent events[kMaxEpollEvents];
   int events_count = 0;
 
   Wakeup wakeup;

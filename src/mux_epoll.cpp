@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: MIT
 #include "mux_epoll.hpp"
 
-#include <sys/eventfd.h>
-#include <sys/syscall.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -13,6 +11,7 @@
 
 #include "colony.hpp"
 #include "format.hpp"
+#include "linux_syscall.hpp"
 #include "log.hpp"
 #include "thread_name.hpp"
 
@@ -21,26 +20,26 @@
 namespace automat::mux {
 
 void Epoll::Init(Status& status) {
-  fd = epoll_create1(EPOLL_CLOEXEC);
+  fd = LinuxSyscall(__NR_epoll_create1, kCloexec);
   if (fd < 0) {
-    status() += "epoll_create1";
+    status() += f("epoll_create1: {}", strerror(-fd));
     return;
   }
   wakeup.epoll = this;
-  wakeup.fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
-  epoll_event ev = {.events = EPOLLIN, .data = {.ptr = &wakeup}};
-  if (epoll_ctl(fd, EPOLL_CTL_ADD, wakeup.fd, &ev) == -1) {
-    status() += "epoll_ctl(EPOLL_CTL_ADD) wakeup";
+  wakeup.fd = LinuxSyscall(__NR_eventfd2, 0, kCloexec | kNonblock);
+  EpollEvent ev = {.events = kEpollIn, .data = (uint64_t)&wakeup};
+  if (int r = LinuxSyscall(__NR_epoll_ctl, fd, kEpollCtlAdd, (int)wakeup.fd, &ev); r < 0) {
+    status() += f("epoll_ctl(EPOLL_CTL_ADD) wakeup: {}", strerror(-r));
   }
 }
 
-static epoll_event MakeEpollEvent(Epoll::Listener* listener) {
-  epoll_event ev = {.events = 0, .data = {.ptr = listener}};
+static EpollEvent MakeEpollEvent(Epoll::Listener* listener) {
+  EpollEvent ev = {.events = 0, .data = (uint64_t)listener};
   if (listener->notify_read) {
-    ev.events |= EPOLLIN;
+    ev.events |= kEpollIn;
   }
   if (listener->notify_write) {
-    ev.events |= EPOLLOUT;
+    ev.events |= kEpollOut;
   }
   return ev;
 }
@@ -50,9 +49,10 @@ void Epoll::Add(Listener* listener, Status& status) {
     status() += "Epoll::Init() was not called";
     return;
   }
-  epoll_event ev = MakeEpollEvent(listener);
-  if (int r = epoll_ctl(fd, EPOLL_CTL_ADD, listener->fd, &ev); r == -1) {
-    status() += "epoll_ctl(EPOLL_CTL_ADD) epfd=" + ToStr(fd) + " fd=" + ToStr(listener->fd);
+  EpollEvent ev = MakeEpollEvent(listener);
+  if (int r = LinuxSyscall(__NR_epoll_ctl, fd, kEpollCtlAdd, (int)listener->fd, &ev); r < 0) {
+    status() +=
+        f("epoll_ctl(EPOLL_CTL_ADD) epfd={} fd={}: {}", fd, (int)listener->fd, strerror(-r));
     return;
   }
   ++listener_count;
@@ -63,25 +63,25 @@ void Epoll::Add(Listener* listener, Status& status) {
 }
 
 void Epoll::Mod(Listener* listener, Status& status) {
-  epoll_event ev = MakeEpollEvent(listener);
+  EpollEvent ev = MakeEpollEvent(listener);
 #ifdef DEBUG_EPOLL
   LOG << "epoll_ctl " << listener->Name() << listener->fd << " "
-      << (ev.events & EPOLLOUT ? "RDWR" : "RD");
+      << (ev.events & kEpollOut ? "RDWR" : "RD");
 #endif
-  if (int r = epoll_ctl(fd, EPOLL_CTL_MOD, listener->fd, &ev); r == -1) {
-    status() += "epoll_ctl(EPOLL_CTL_MOD)";
+  if (int r = LinuxSyscall(__NR_epoll_ctl, fd, kEpollCtlMod, (int)listener->fd, &ev); r < 0) {
+    status() += f("epoll_ctl(EPOLL_CTL_MOD): {}", strerror(-r));
   }
 }
 
 void Epoll::Del(Listener* l, Status& status) {
-  if (int r = epoll_ctl(fd, EPOLL_CTL_DEL, l->fd, nullptr); r == -1) {
-    status() += "epoll_ctl(EPOLL_CTL_DEL)";
+  if (int r = LinuxSyscall(__NR_epoll_ctl, fd, kEpollCtlDel, (int)l->fd, nullptr); r < 0) {
+    status() += f("epoll_ctl(EPOLL_CTL_DEL): {}", strerror(-r));
     return;
   }
   --listener_count;
   for (int i = 0; i < events_count; ++i) {
-    if (events[i].data.ptr == l) {
-      events[i].data.ptr = nullptr;
+    if (events[i].data == (uint64_t)l) {
+      events[i].data = 0;
     }
   }
 #ifdef DEBUG_EPOLL
@@ -120,27 +120,27 @@ void Epoll::Loop(Status& status, bool stop_when_empty, std::stop_token stop) {
     if ((stop_when_empty && listener_count == 0) || stop.stop_requested()) {
       break;
     }
-    events_count = epoll_wait(fd, events, kMaxEpollEvents, -1);
-    if (events_count == -1) {
-      if (errno == EINTR) {
+    events_count = LinuxSyscall(__NR_epoll_pwait, fd, events, kMaxEpollEvents, -1, nullptr, 0);
+    if (events_count < 0) {
+      if (events_count == -EINTR) {
         continue;
       }
-      status() += "epoll_wait";
+      status() += f("epoll_pwait: {}", strerror(-events_count));
       return;
     }
 
     for (int i = 0; i < events_count; ++i) {
-      if (events[i].data.ptr == nullptr) continue;
-      Listener* l = (Listener*)events[i].data.ptr;
+      if (events[i].data == 0) continue;
+      Listener* l = (Listener*)events[i].data;
 #ifdef DEBUG_EPOLL
       if (strcmp(l->Name(), "Timer")) {
-        bool in = events[i].events & EPOLLIN;
-        bool out = events[i].events & EPOLLOUT;
+        bool in = events[i].events & kEpollIn;
+        bool out = events[i].events & kEpollOut;
         LOG << "epoll_wait[" << i << "/" << events_count << "] " << l->Name() << l->fd << " "
             << (in ? "RD" : "") << (out ? "WR" : "");
       }
 #endif
-      if (events[i].events & EPOLLIN) {
+      if (events[i].events & kEpollIn) {
         l->NotifyRead(status);
         if (!status.Ok()) {
 #ifdef DEBUG_EPOLL
@@ -155,8 +155,8 @@ void Epoll::Loop(Status& status, bool stop_when_empty, std::stop_token stop) {
         }
 #endif
       }
-      if (events[i].data.ptr == nullptr) continue;
-      if (events[i].events & EPOLLOUT) {
+      if (events[i].data == 0) continue;
+      if (events[i].events & kEpollOut) {
         l->NotifyWrite(status);
         if (!status.Ok()) {
 #ifdef DEBUG_EPOLL
@@ -227,9 +227,9 @@ void Stop() {
 void WatchProcess(pid_t pid, std::function<void(int)> on_exit, Status& status) {
   // pidfd_open lacks a guaranteed glibc wrapper across versions, so go through
   // the syscall. The pid is still our unreaped child, so it is valid here.
-  FD pidfd = (int)syscall(SYS_pidfd_open, pid, 0);
+  FD pidfd = LinuxSyscall(__NR_pidfd_open, pid, 0);
   if (pidfd < 0) {
-    status() += f("pidfd_open(pid={}): {}", (int)pid, strerror(errno));
+    status() += f("pidfd_open(pid={}): {}", (int)pid, strerror(-pidfd));
     return;
   }
   // Registration touches the listener set, so it must run on the epoll thread.

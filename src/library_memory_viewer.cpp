@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: MIT
 #include "library_memory_viewer.hpp"
 
+#include <include/core/SkAlphaType.h>
 #include <include/core/SkColor.h>
+#include <include/core/SkColorType.h>
+#include <include/core/SkImage.h>
+#include <include/core/SkImageInfo.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPath.h>
@@ -24,10 +28,6 @@
 #include "fd.hpp"
 #include "font.hpp"
 #include "format.hpp"
-#include "include/core/SkAlphaType.h"
-#include "include/core/SkColorType.h"
-#include "include/core/SkImage.h"
-#include "include/core/SkImageInfo.h"
 #include "keyboard.hpp"
 #include "library_key_presser.hpp"
 #include "library_mouse.hpp"

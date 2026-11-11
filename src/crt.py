@@ -9,8 +9,8 @@ import fs_utils
 import make
 
 if platform == 'linux':
-  HELPER_C = fs_utils.src_dir / 'libc_helper.c'
-  HELPER = fs_utils.generated_dir / 'libc_helper'
+  HELPER_C = fs_utils.src_dir / 'crt_helper.c'
+  HELPER = fs_utils.generated_dir / 'crt_helper'
 
   def hook_recipe(recipe):
     recipe.add_step(
@@ -18,6 +18,6 @@ if platform == 'linux':
                                        '-o', HELPER, '-Wl,--no-as-needed', '-l:libdl.so.2', '-Wl,-e,_start', '-s']),
         outputs=[HELPER],
         inputs=[HELPER_C, __file__],
-        desc='Building the libc helper for the host',
-        shortcut='libc-helper')
+        desc='Building the crt helper for the host',
+        shortcut='crt-helper')
     recipe.generated.add(str(HELPER))

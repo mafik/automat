@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2026 Automat Authors
 // SPDX-License-Identifier: MIT
 
-#include "libc.hpp"
+#include "crt.hpp"
 
 #if defined(__linux__)
 #include <dlfcn.h>
@@ -35,7 +35,7 @@
 #undef _Bool
 #endif
 
-namespace automat::libc {
+namespace automat::crt {
 
 namespace {
 
@@ -53,9 +53,9 @@ void* FindSymbol(void* library, const char* name) { return host.find(library, na
 int CloseLibrary(void* library) { return host.close(library); }
 const char* LibraryError() { return host.error(); }
 
-}  // namespace automat::libc
+}  // namespace automat::crt
 
-namespace automat::libc {
+namespace automat::crt {
 
 namespace {
 
@@ -73,7 +73,7 @@ enum {
 };
 
 const unsigned char kHelperImage[] = {
-#embed "../build/generated/libc_helper"
+#embed "../build/generated/crt_helper"
 };
 
 struct Source {
@@ -373,6 +373,6 @@ void ChimeraThread::detach() {
 
 void Free(void* pointer) { host_free(pointer); }
 
-}  // namespace automat::libc
+}  // namespace automat::crt
 
 #endif

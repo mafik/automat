@@ -257,7 +257,7 @@ static bool ReadAtomNames(ServerKeymap& keymap) {
 
   bool all_replied = true;
   for (size_t i = 0; i < atoms.size(); ++i) {
-    std::unique_ptr<xcb_get_atom_name_reply_t, libc::DeleteWithFree> atom_reply(
+    std::unique_ptr<xcb_get_atom_name_reply_t, crt::DeleteWithFree> atom_reply(
         xcb_get_atom_name_reply(connection, cookies[i], nullptr));
     if (!atom_reply) {
       all_replied = false;
@@ -720,15 +720,15 @@ Str GetKeymapText() {
   auto indicators_cookie = xcb_xkb_get_indicator_map(connection, device, 0xffffffff);
   auto controls_cookie = xcb_xkb_get_controls(connection, device);
 
-  std::unique_ptr<xcb_xkb_get_map_reply_t, libc::DeleteWithFree> map(
+  std::unique_ptr<xcb_xkb_get_map_reply_t, crt::DeleteWithFree> map(
       xcb_xkb_get_map_reply(connection, map_cookie, nullptr));
-  std::unique_ptr<xcb_xkb_get_names_reply_t, libc::DeleteWithFree> names(
+  std::unique_ptr<xcb_xkb_get_names_reply_t, crt::DeleteWithFree> names(
       xcb_xkb_get_names_reply(connection, names_cookie, nullptr));
-  std::unique_ptr<xcb_xkb_get_compat_map_reply_t, libc::DeleteWithFree> compat(
+  std::unique_ptr<xcb_xkb_get_compat_map_reply_t, crt::DeleteWithFree> compat(
       xcb_xkb_get_compat_map_reply(connection, compat_cookie, nullptr));
-  std::unique_ptr<xcb_xkb_get_indicator_map_reply_t, libc::DeleteWithFree> indicators(
+  std::unique_ptr<xcb_xkb_get_indicator_map_reply_t, crt::DeleteWithFree> indicators(
       xcb_xkb_get_indicator_map_reply(connection, indicators_cookie, nullptr));
-  std::unique_ptr<xcb_xkb_get_controls_reply_t, libc::DeleteWithFree> controls(
+  std::unique_ptr<xcb_xkb_get_controls_reply_t, crt::DeleteWithFree> controls(
       xcb_xkb_get_controls_reply(connection, controls_cookie, nullptr));
   if (!map || !names || !compat || !indicators || !controls) return {};
 

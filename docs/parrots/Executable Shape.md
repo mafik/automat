@@ -36,7 +36,7 @@ Automat also uses the host's libxcb, but libxcb is not a dependency of the binar
 drivers call back into the XCB connection that Automat hands them through
 `VK_KHR_xcb_surface`. The driver's libxcb and Automat's libxcb must be the same library with the
 same connection state, so `xcb::LoadHostLibxcb` (`src/xcb.cpp`) opens the host's `libxcb.so.1`
-at run time through `automat::libc::OpenLibrary`. Every core libxcb function is a generated stub
+at run time through `automat::crt::OpenLibrary`. Every core libxcb function is a generated stub
 (`src/xcb.py`) that calls the host's function. The generated protocol code of the core protocol
 and of the extensions (`libxcb.a`, `libxcb-render.a`, `libxcb-xinput.a` and the others) is
 linked statically from locally built archives. No other X library is linked.

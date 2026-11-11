@@ -10,7 +10,7 @@
 
 // Provides access to host's libc (even when statically linked).
 
-namespace automat::libc {
+namespace automat::crt {
 
 void Init(Status&);
 
@@ -52,4 +52,4 @@ inline ChimeraThread StartChimeraThread(std::move_only_function<void()> body) {
   return ChimeraThread(std::move(body));
 }
 
-}  // namespace automat::libc
+}  // namespace automat::crt

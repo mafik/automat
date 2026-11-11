@@ -14,9 +14,9 @@
 #include "blockingconcurrentqueue.hpp"
 #include "casting.hpp"
 #include "command.hpp"
+#include "crt.hpp"
 #include "error.hpp"
 #include "error_recovery.hpp"
-#include "libc.hpp"
 #include "memory.hpp"
 #include "source_location.hpp"
 #include "thread_name.hpp"
@@ -118,11 +118,11 @@ static void AutomatLoop(std::stop_token stop_token) {
 #endif
 }
 
-std::vector<libc::ChimeraThread> worker_threads;
+std::vector<crt::ChimeraThread> worker_threads;
 
 void StartWorkerThreads(std::stop_token stop_token) {
   for (int i = 0; i < 4; ++i) {
-    worker_threads.push_back(libc::StartChimeraThread([stop_token] { AutomatLoop(stop_token); }));
+    worker_threads.push_back(crt::StartChimeraThread([stop_token] { AutomatLoop(stop_token); }));
   }
 }
 

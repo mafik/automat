@@ -19,12 +19,12 @@
 #include "black_hole.hpp"
 #include "build_variant.hpp"
 #include "casting.hpp"
+#include "crt.hpp"
 #include "drag_action.hpp"
 #include "embedded.hpp"
 #include "font.hpp"
 #include "global_resources.hpp"
 #include "key.hpp"
-#include "libc.hpp"
 #include "library_key_presser.hpp"
 #include "library_switch.hpp"
 #include "loading_animation.hpp"
@@ -190,7 +190,7 @@ void RootWidget::Init() {
 }
 
 void RootWidget::StartRenderThread() {
-  render_thread = libc::StartChimeraThread(
+  render_thread = crt::StartChimeraThread(
       [this, token = stop_source.get_token()] { RenderThread(*this, token); });
 }
 

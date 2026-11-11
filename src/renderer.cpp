@@ -35,11 +35,11 @@
 #include "../build/generated/embedded.hpp"
 #include "blockingconcurrentqueue.hpp"
 #include "color.hpp"
+#include "crt.hpp"
 #include "drawable_rtti.hpp"
 #include "engine.hpp"
 #include "font.hpp"
 #include "global_resources.hpp"
-#include "libc.hpp"
 #include "log.hpp"
 #include "render_cost_model.hpp"
 #include "render_shadows.hpp"
@@ -415,7 +415,7 @@ void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> 
 
 constexpr int kNumVkRecorderThreads = 4;
 
-libc::ChimeraThread vk_recorder_threads[kNumVkRecorderThreads];
+crt::ChimeraThread vk_recorder_threads[kNumVkRecorderThreads];
 
 std::unique_ptr<skgpu::graphite::Recorder> global_foreground_recorder;
 
@@ -466,7 +466,7 @@ void RendererInit() {
   for (int i = 0; i < kNumVkRecorderThreads; ++i) {
     auto fg_recorder = vk::graphite_context->makeRecorder(options);
     vk_recorder_threads[i] =
-        libc::StartChimeraThread([i, recorder = std::move(fg_recorder)]() mutable {
+        crt::StartChimeraThread([i, recorder = std::move(fg_recorder)]() mutable {
           VkRecorderThread(i, std::move(recorder));
         });
   }

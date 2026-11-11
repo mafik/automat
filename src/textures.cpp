@@ -11,8 +11,8 @@
 #include <tracy/Tracy.hpp>
 
 #include "concurrentqueue.hpp"
+#include "crt.hpp"
 #include "embedded.hpp"
-#include "libc.hpp"
 #include "log.hpp"
 #include "math.hpp"
 #include "thread_name.hpp"
@@ -91,7 +91,7 @@ PersistentImage::PersistentImage(sk_sp<SkImage> image, MakeArgs args) : image(im
 
 void PersistentImage::PreloadAll() {
   ZoneScoped;
-  std::vector<libc::ChimeraThread> workers;
+  std::vector<crt::ChimeraThread> workers;
   struct Task {
     PersistentImage* persistent_image;
     AutomatImageProvider::CacheEntry* cache_entry;
@@ -121,7 +121,7 @@ void PersistentImage::PreloadAll() {
     };
     // Start some extra threads, but also use the current thread to do some processing
     if (i) {
-      workers.push_back(libc::StartChimeraThread(std::move(WorkFunc)));
+      workers.push_back(crt::StartChimeraThread(std::move(WorkFunc)));
     } else {
       WorkFunc();
     }

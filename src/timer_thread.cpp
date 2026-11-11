@@ -8,7 +8,7 @@
 #include <tracy/Tracy.hpp>
 
 #include "base.hpp"
-#include "libc.hpp"
+#include "crt.hpp"
 #include "status.hpp"
 #include "tasks.hpp"
 #include "thread_name.hpp"
@@ -18,7 +18,7 @@ namespace automat {
 
 using namespace time;
 
-static libc::ChimeraThread timer_thread;
+static crt::ChimeraThread timer_thread;
 static std::mutex mtx;
 static std::condition_variable cv;
 
@@ -64,8 +64,7 @@ static void TimerThread(std::stop_token automat_stop_token) {
 }
 
 void StartTimeThread(std::stop_token automat_stop_token) {
-  timer_thread =
-      libc::StartChimeraThread([automat_stop_token] { TimerThread(automat_stop_token); });
+  timer_thread = crt::StartChimeraThread([automat_stop_token] { TimerThread(automat_stop_token); });
   timer_thread.detach();
 }
 

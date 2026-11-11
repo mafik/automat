@@ -10,10 +10,10 @@
 #include <thread>
 
 #include "automat.hpp"
+#include "crt.hpp"
 #include "file_import.hpp"
 #include "fn.hpp"
 #include "format.hpp"
-#include "libc.hpp"
 #include "library_data_offer.hpp"
 #include "log.hpp"
 #include "pointer.hpp"
@@ -119,7 +119,7 @@ static Str JoinAtomNames(const xcb_atom_t* atoms, size_t count) {
 static Str TakeDragData(xcb_window_t window, xcb_atom_t property, xcb_atom_t* out_type) {
   auto cookie = xcb_get_property(connection, true, window, property, XCB_GET_PROPERTY_TYPE_ANY, 0,
                                  UINT32_MAX / 4);
-  std::unique_ptr<xcb_get_property_reply_t, libc::DeleteWithFree> reply(
+  std::unique_ptr<xcb_get_property_reply_t, crt::DeleteWithFree> reply(
       xcb_get_property_reply(connection, cookie, nullptr));
   if (!reply) {
     *out_type = XCB_NONE;
@@ -236,7 +236,7 @@ std::unique_ptr<automat::ui::Window> XCBWindow::Make(automat::ui::RootWidget& ro
         connection, XCB_COPY_FROM_PARENT, window->xcb_window, screen->root, 0, 0,
         window->client_width, window->client_height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT,
         screen->root_visual, value_mask, value_list);
-    if (std::unique_ptr<xcb_generic_error_t, libc::DeleteWithFree> error{
+    if (std::unique_ptr<xcb_generic_error_t, crt::DeleteWithFree> error{
             xcb_request_check(connection, cookie)}) {
       AppendErrorMessage(status) += f("Failed to create window: {}", error->error_code);
       return nullptr;
@@ -307,7 +307,7 @@ std::unique_ptr<automat::ui::Window> XCBWindow::Make(automat::ui::RootWidget& ro
 
   xcb_void_cookie_t cookie =
       xcb_input_xi_select_events_checked(connection, window->xcb_window, 1, &event_mask.header);
-  if (std::unique_ptr<xcb_generic_error_t, libc::DeleteWithFree> error{
+  if (std::unique_ptr<xcb_generic_error_t, crt::DeleteWithFree> error{
           xcb_request_check(connection, cookie)}) {
     AppendErrorMessage(status) += f("Failed to select events: {}", error->error_code);
     return nullptr;
@@ -402,7 +402,7 @@ void XCBWindow::OnRegisterInput(bool keylogging, bool pointerlogging) {
   xcb_void_cookie_t cookie =
       xcb_input_xi_select_events_checked(xcb::connection, xcb::screen->root, 1, &event_mask.header);
 
-  if (std::unique_ptr<xcb_generic_error_t, libc::DeleteWithFree> error{
+  if (std::unique_ptr<xcb_generic_error_t, crt::DeleteWithFree> error{
           xcb_request_check(xcb::connection, cookie)}) {
     ERROR << f("Couldn't select X11 events for keylogging: {}", error->error_code);
   }
@@ -455,9 +455,9 @@ struct XCBPointerGrab : automat::ui::PointerGrab {
         FindOrLoadCursor(automat::ui::Cursor::Crosshair), xcb_window.master_pointer_device_id,
         XCB_INPUT_GRAB_MODE_22_ASYNC, XCB_INPUT_GRAB_MODE_22_ASYNC, false, 1, &mask);
 
-    std::unique_ptr<xcb_generic_error_t, automat::libc::DeleteWithFree> error;
+    std::unique_ptr<xcb_generic_error_t, automat::crt::DeleteWithFree> error;
 
-    std::unique_ptr<xcb_input_xi_grab_device_reply_t, automat::libc::DeleteWithFree> reply(
+    std::unique_ptr<xcb_input_xi_grab_device_reply_t, automat::crt::DeleteWithFree> reply(
         xcb_input_xi_grab_device_reply(connection, cookie, std::out_ptr(error)));
     if (reply) {
       if (reply->status != XCB_GRAB_STATUS_SUCCESS) {
@@ -472,7 +472,7 @@ struct XCBPointerGrab : automat::ui::PointerGrab {
   ~XCBPointerGrab() {
     xcb_void_cookie_t cookie = xcb_input_xi_ungrab_device(connection, XCB_CURRENT_TIME,
                                                           xcb_window.master_pointer_device_id);
-    if (std::unique_ptr<xcb_generic_error_t, automat::libc::DeleteWithFree> error{
+    if (std::unique_ptr<xcb_generic_error_t, automat::crt::DeleteWithFree> error{
             xcb_request_check(connection, cookie)}) {
       ERROR << "Failed to ungrab the pointer";
     }
@@ -688,7 +688,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
     }
     Str name = f("AUTOMAT_TRANSFER_{}", transfer_property_counter++);
     auto cookie = xcb_intern_atom(connection, false, name.size(), name.data());
-    std::unique_ptr<xcb_intern_atom_reply_t, libc::DeleteWithFree> reply(
+    std::unique_ptr<xcb_intern_atom_reply_t, crt::DeleteWithFree> reply(
         xcb_intern_atom_reply(connection, cookie, nullptr));
     return reply ? reply->atom : (xcb_atom_t)XCB_NONE;
   };
@@ -1337,7 +1337,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
     } else {  // event == nullptr
       root.WakeAnimation();
     }
-    libc::Free(event);
+    crt::Free(event);
   }
 }
 

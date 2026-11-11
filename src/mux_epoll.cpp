@@ -10,8 +10,8 @@
 #include <thread>
 
 #include "colony.hpp"
+#include "crt.hpp"
 #include "format.hpp"
-#include "libc.hpp"
 #include "linux_syscall.hpp"
 #include "log.hpp"
 #include "thread_name.hpp"
@@ -181,7 +181,7 @@ Epoll epoll;
 
 namespace {
 
-libc::ChimeraThread loop_thread;
+crt::ChimeraThread loop_thread;
 std::stop_source stop_source;
 
 // One watched child; created and destroyed only on the shared epoll thread.
@@ -212,7 +212,7 @@ void ProcessWatch::NotifyRead(Status&) {
 void Init(Status& status) {
   epoll.Init(status);
   if (!status.Ok()) return;
-  loop_thread = libc::StartChimeraThread([] {
+  loop_thread = crt::StartChimeraThread([] {
     SetThreadName("Epoll");
     Status status;
     epoll.Loop(status, false, stop_source.get_token());

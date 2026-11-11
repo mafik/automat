@@ -17,9 +17,9 @@
 #include <optional>
 #include <span>
 
+#include "crt.hpp"
 #include "format.hpp"
 #include "int.hpp"
-#include "libc.hpp"
 #include "pointer.hpp"
 #include "status.hpp"
 #include "str.hpp"
@@ -338,7 +338,7 @@ static Vec<CursorImage> RenderBundledCursor(const CursorDescription& description
 static xcb_render_pictformat_t FindArgb32Format() {
   const xcb_query_extension_reply_t* render = xcb_get_extension_data(connection, &xcb_render_id);
   if (!render || !render->present) return XCB_NONE;
-  std::unique_ptr<xcb_render_query_pict_formats_reply_t, libc::DeleteWithFree> reply(
+  std::unique_ptr<xcb_render_query_pict_formats_reply_t, crt::DeleteWithFree> reply(
       xcb_render_query_pict_formats_reply(connection, xcb_render_query_pict_formats(connection),
                                           nullptr));
   if (!reply) return XCB_NONE;

@@ -46,7 +46,7 @@
 #include <signal.h>
 #include <unistd.h>
 
-#include "libc.hpp"
+#include "crt.hpp"
 #include "library_pipewire.hpp"
 #include "linux_syscall.hpp"
 #include "wayland.hpp"
@@ -172,7 +172,7 @@ static char** argv;
 int Main() {
 #if defined(__linux__)
   Status libc_status;
-  libc::Init(libc_status);
+  crt::Init(libc_status);
   if (!OK(libc_status)) {
     ERROR << "Couldn't initialize the host libc: " << libc_status;
     return 1;

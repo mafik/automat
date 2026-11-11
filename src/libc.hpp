@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "status.hpp"
+#include "unique_ptr.hpp"
 
 // Provides access to host's libc (even when statically linked).
 
@@ -17,6 +18,11 @@ void* OpenLibrary(const char* name, int mode);
 void* FindSymbol(void* library, const char* name);
 int CloseLibrary(void* library);
 const char* LibraryError();
+
+#if defined(__linux__)
+void Free(void* pointer);
+using DeleteWithFree = DeleteWith<Free>;
+#endif
 
 // ChimeraThread is a mix of static (cosmopolitan) & host (glibc) thread.
 // It maintains the TLS buffers for both C libraries and can interact with both of them without any

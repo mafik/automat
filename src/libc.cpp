@@ -157,10 +157,13 @@ void FindHostFunction(const char* name, Function& function, Status& status) {
   }
 }
 
-void LoadHostThreadFunctions(Status& status) {
+void (*host_free)(void*);
+
+void LoadHostFunctions(Status& status) {
   FindHostFunction("pthread_create", host_thread.create, status);
   FindHostFunction("pthread_join", host_thread.join, status);
   FindHostFunction("pthread_detach", host_thread.detach, status);
+  FindHostFunction("free", host_free, status);
 }
 
 #if defined(__x86_64__)
@@ -185,7 +188,7 @@ struct ChimeraLaunch {
 void Init(Status& status) {
   if (getauxval(kAuxBase)) {
     host = {dlopen, dlsym, dlclose, dlerror};
-    LoadHostThreadFunctions(status);
+    LoadHostFunctions(status);
     return;
   }
   Image program, interpreter;
@@ -276,7 +279,7 @@ void Init(Status& status) {
 #if defined(__x86_64__)
     LinuxSyscall(kSysArchPrctl, kArchSetGs, gs_base);
 #endif
-    LoadHostThreadFunctions(status);
+    LoadHostFunctions(status);
     return;
   }
   asm volatile("mov %1, %%rsp\n\tjmp *%0" : : "r"(entry), "r"(sp) : "memory");
@@ -367,6 +370,8 @@ void ChimeraThread::detach() {
   handle = 0;
 }
 #endif
+
+void Free(void* pointer) { host_free(pointer); }
 
 }  // namespace automat::libc
 

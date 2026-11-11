@@ -11,9 +11,8 @@
 #include "log.hpp"
 
 #if defined(__linux__)
-#include <xkbcommon/xkbcommon-x11.h>
-
 #include "xcb.hpp"
+#include "xcb_keymap.hpp"
 #elif defined(_WIN32)
 #include "win32.hpp"
 
@@ -60,14 +59,10 @@ void ReloadKeymap() {
 static Keymap::xkb_keymap_ptr BuildFromPlatform(Keymap& keymap) {
   // No usable host X connection (Wayland client, headless): fall back to the default.
   if (!xcb::connection || xcb_connection_has_error(xcb::connection)) return nullptr;
-  if (!xkb_x11_setup_xkb_extension(
-          xcb::connection, XKB_X11_MIN_MAJOR_XKB_VERSION, XKB_X11_MIN_MINOR_XKB_VERSION,
-          XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS, nullptr, nullptr, nullptr, nullptr))
-    return nullptr;
-  int32_t device = xkb_x11_get_core_keyboard_device_id(xcb::connection);
-  if (device < 0) return nullptr;
-  return Keymap::xkb_keymap_ptr{xkb_x11_keymap_new_from_device(
-      context.get(), xcb::connection, device, XKB_KEYMAP_COMPILE_NO_FLAGS)};
+  Str text = xcb::GetKeymapText();
+  if (text.empty()) return nullptr;
+  return Keymap::xkb_keymap_ptr{xkb_keymap_new_from_string(
+      context.get(), text.c_str(), XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS)};
 }
 
 #elif defined(_WIN32)

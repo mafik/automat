@@ -22,19 +22,24 @@ is available as a static archive, a locally built one does not. Three libraries 
 from the OS as static archives — libffi, libpcre2 and libcap — and should eventually get their
 own extensions.
 
-The binary keeps exactly five shared library dependencies, each deliberate:
+The binary keeps exactly four shared library dependencies, each deliberate:
 
 - **libc, libm, ld-linux** — glibc must stay dynamic because the GPU drivers that Vulkan
   loads with `dlopen` crash under a statically linked glibc. This constraint is documented
   where it is enforced, in `src/skia.py`, which strips `-static` from the link and substitutes
   `-static-libstdc++ -static-libgcc`.
-- **libxcb** — Vulkan drivers call back into the XCB connection that Automat hands them
-  through `VK_KHR_xcb_surface`. The driver's libxcb and Automat's libxcb must be the same
-  library with the same connection state, so libxcb is linked shared (`src/xcb.py`). All other
-  X libraries (xcb-util, xcb-cursor, libX11, and the rest) are static archives built locally.
 - **libpipewire** — the interface to the host's audio and video session. The library is a
   thin client whose protocol modules are loaded from the host at runtime, so linking it
   statically would still depend on the host installation while hiding that dependency.
+
+Automat also uses the host's libxcb, but libxcb is not a dependency of the binary. Vulkan
+drivers call back into the XCB connection that Automat hands them through
+`VK_KHR_xcb_surface`. The driver's libxcb and Automat's libxcb must be the same library with the
+same connection state, so `xcb::LoadHostLibxcb` (`src/xcb.cpp`) opens the host's `libxcb.so.1`
+at run time through `automat::libc::OpenLibrary`. Every core libxcb function is a generated stub
+(`src/xcb.py`) that calls the host's function. The generated protocol code of the core protocol
+and of the extensions (`libxcb.a`, `libxcb-render.a`, `libxcb-xinput.a` and the others) is
+linked statically from locally built archives. No other X library is linked.
 
 `-Wl,--as-needed` keeps this list closed: a library that satisfies no import is not recorded,
 so transitive `-lfoo` flags from pkg-config expansions cannot grow the dependency list.

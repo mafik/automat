@@ -3,7 +3,6 @@
 #include "xcb_window.hpp"
 
 #include <xcb/xinput.h>
-#include <xkbcommon/xkbcommon-x11.h>
 
 #include <atomic>
 #include <bit>
@@ -14,13 +13,16 @@
 #include "file_import.hpp"
 #include "fn.hpp"
 #include "format.hpp"
+#include "libc.hpp"
 #include "library_data_offer.hpp"
 #include "log.hpp"
+#include "pointer.hpp"
 #include "root_widget.hpp"
 #include "tasks.hpp"
 #include "vec.hpp"
 #include "x11_keys.hpp"
 #include "xcb.hpp"
+#include "xcb_cursor.hpp"
 
 using namespace automat;
 
@@ -117,7 +119,7 @@ static Str JoinAtomNames(const xcb_atom_t* atoms, size_t count) {
 static Str TakeDragData(xcb_window_t window, xcb_atom_t property, xcb_atom_t* out_type) {
   auto cookie = xcb_get_property(connection, true, window, property, XCB_GET_PROPERTY_TYPE_ANY, 0,
                                  UINT32_MAX / 4);
-  std::unique_ptr<xcb_get_property_reply_t, DeleteWithFree> reply(
+  std::unique_ptr<xcb_get_property_reply_t, libc::DeleteWithFree> reply(
       xcb_get_property_reply(connection, cookie, nullptr));
   if (!reply) {
     *out_type = XCB_NONE;
@@ -219,10 +221,6 @@ std::unique_ptr<automat::ui::Window> XCBWindow::Make(automat::ui::RootWidget& ro
   }
   auto window = std::unique_ptr<XCBWindow>(new XCBWindow(root));
 
-  if (xcb_cursor_context_new(connection, screen, std::out_ptr(window->cursor_context)) < 0) {
-    ERROR << "Error: Failed to create cursor context";
-  }
-
   float pixels_per_meter = DisplayPxPerMeter();
   window->client_width = root.size.x * pixels_per_meter;
   window->client_height = root.size.y * pixels_per_meter;
@@ -238,7 +236,8 @@ std::unique_ptr<automat::ui::Window> XCBWindow::Make(automat::ui::RootWidget& ro
         connection, XCB_COPY_FROM_PARENT, window->xcb_window, screen->root, 0, 0,
         window->client_width, window->client_height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT,
         screen->root_visual, value_mask, value_list);
-    if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(connection, cookie)}) {
+    if (std::unique_ptr<xcb_generic_error_t, libc::DeleteWithFree> error{
+            xcb_request_check(connection, cookie)}) {
       AppendErrorMessage(status) += f("Failed to create window: {}", error->error_code);
       return nullptr;
     }
@@ -308,7 +307,8 @@ std::unique_ptr<automat::ui::Window> XCBWindow::Make(automat::ui::RootWidget& ro
 
   xcb_void_cookie_t cookie =
       xcb_input_xi_select_events_checked(connection, window->xcb_window, 1, &event_mask.header);
-  if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(connection, cookie)}) {
+  if (std::unique_ptr<xcb_generic_error_t, libc::DeleteWithFree> error{
+          xcb_request_check(connection, cookie)}) {
     AppendErrorMessage(status) += f("Failed to select events: {}", error->error_code);
     return nullptr;
   }
@@ -402,7 +402,8 @@ void XCBWindow::OnRegisterInput(bool keylogging, bool pointerlogging) {
   xcb_void_cookie_t cookie =
       xcb_input_xi_select_events_checked(xcb::connection, xcb::screen->root, 1, &event_mask.header);
 
-  if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(xcb::connection, cookie)}) {
+  if (std::unique_ptr<xcb_generic_error_t, libc::DeleteWithFree> error{
+          xcb_request_check(xcb::connection, cookie)}) {
     ERROR << f("Couldn't select X11 events for keylogging: {}", error->error_code);
   }
 }
@@ -433,22 +434,52 @@ void XCBWindow::OnWindowWatchingChanged() {
   xcb_flush(connection);
 }
 
+static const char* GetCursorName(automat::ui::Cursor icon) {
+  using enum automat::ui::Cursor;
+  switch (icon) {
+    case Arrow:
+      return "left_ptr";
+    case Hand:
+      return "hand1";
+    case IBeam:
+      return "xterm";
+    case AllScroll:
+      return "all-scroll";
+    case ResizeHorizontal:
+      return "ew-resize";
+    case ResizeVertical:
+      return "ns-resize";
+    case Crosshair:
+      return "crosshair";
+    default:
+      return "left_ptr";
+  }
+}
+
+static xcb_cursor_t FindOrLoadCursor(automat::ui::Cursor icon) {
+  static xcb_cursor_t cursors[int(automat::ui::Cursor::Crosshair) + 1] = {};
+  xcb_cursor_t& cursor = cursors[int(icon)];
+  if (cursor == XCB_NONE) {
+    cursor = LoadCursor(GetCursorName(icon));
+  }
+  return cursor;
+}
+
 struct XCBPointerGrab : automat::ui::PointerGrab {
   XCBWindow& xcb_window;
   XCBPointerGrab(automat::ui::Pointer& pointer, automat::ui::PointerGrabber& grabber,
                  XCBWindow& xcb_window)
       : automat::ui::PointerGrab(pointer, grabber), xcb_window(xcb_window) {
-    xcb_cursor_t cursor = xcb_cursor_load_cursor(xcb_window.cursor_context.get(), "crosshair");
-
     uint32_t mask = XCB_INPUT_XI_EVENT_MASK_BUTTON_PRESS | XCB_INPUT_XI_EVENT_MASK_BUTTON_RELEASE |
                     XCB_INPUT_XI_EVENT_MASK_MOTION;
     auto cookie = xcb_input_xi_grab_device(
-        connection, screen->root, XCB_CURRENT_TIME, cursor, xcb_window.master_pointer_device_id,
+        connection, screen->root, XCB_CURRENT_TIME,
+        FindOrLoadCursor(automat::ui::Cursor::Crosshair), xcb_window.master_pointer_device_id,
         XCB_INPUT_GRAB_MODE_22_ASYNC, XCB_INPUT_GRAB_MODE_22_ASYNC, false, 1, &mask);
 
-    std::unique_ptr<xcb_generic_error_t, automat::DeleteWithFree> error;
+    std::unique_ptr<xcb_generic_error_t, automat::libc::DeleteWithFree> error;
 
-    std::unique_ptr<xcb_input_xi_grab_device_reply_t, automat::DeleteWithFree> reply(
+    std::unique_ptr<xcb_input_xi_grab_device_reply_t, automat::libc::DeleteWithFree> reply(
         xcb_input_xi_grab_device_reply(connection, cookie, std::out_ptr(error)));
     if (reply) {
       if (reply->status != XCB_GRAB_STATUS_SUCCESS) {
@@ -459,15 +490,11 @@ struct XCBPointerGrab : automat::ui::PointerGrab {
     if (error) {
       ERROR << "Error while attempting to grab pointer: " << dump_struct(*error);
     }
-
-    if (cursor != XCB_NONE) {
-      xcb_free_cursor(connection, cursor);
-    }
   }
   ~XCBPointerGrab() {
     xcb_void_cookie_t cookie = xcb_input_xi_ungrab_device(connection, XCB_CURRENT_TIME,
                                                           xcb_window.master_pointer_device_id);
-    if (std::unique_ptr<xcb_generic_error_t, automat::DeleteWithFree> error{
+    if (std::unique_ptr<xcb_generic_error_t, automat::libc::DeleteWithFree> error{
             xcb_request_check(connection, cookie)}) {
       ERROR << "Failed to ungrab the pointer";
     }
@@ -477,27 +504,6 @@ struct XCBPointerGrab : automat::ui::PointerGrab {
 struct XCBPointer : automat::ui::Pointer {
   XCBWindow& xcb_window;
 
-  static const char* GetCursorName(automat::ui::Cursor icon) {
-    switch (icon) {
-      case automat::ui::Cursor::Arrow:
-        return "left_ptr";
-      case automat::ui::Cursor::Hand:
-        return "hand1";
-      case automat::ui::Cursor::IBeam:
-        return "xterm";
-      case automat::ui::Cursor::AllScroll:
-        return "all-scroll";
-      case automat::ui::Cursor::ResizeHorizontal:
-        return "size_hor";
-      case automat::ui::Cursor::ResizeVertical:
-        return "size_ver";
-      case automat::ui::Cursor::Crosshair:
-        return "crosshair";
-      default:
-        return "left_ptr";
-    }
-  }
-
   XCBPointer(automat::ui::RootWidget& root, Vec2 position, XCBWindow& xcb_window)
       : automat::ui::Pointer(root, position), xcb_window(xcb_window) {}
 
@@ -506,12 +512,10 @@ struct XCBPointer : automat::ui::Pointer {
   }
 
   void UpdateCursor(automat::ui::Cursor icon) {
-    xcb_cursor_t cursor =
-        xcb_cursor_load_cursor(xcb_window.cursor_context.get(), GetCursorName(icon));
+    xcb_cursor_t cursor = FindOrLoadCursor(icon);
     if (cursor != XCB_NONE) {
       uint32_t cursor_value = cursor;
       xcb_change_window_attributes(connection, xcb_window.xcb_window, XCB_CW_CURSOR, &cursor_value);
-      xcb_free_cursor(connection, cursor);
       xcb_flush(connection);
     }
   }
@@ -706,7 +710,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
     }
     Str name = f("AUTOMAT_TRANSFER_{}", transfer_property_counter++);
     auto cookie = xcb_intern_atom(connection, false, name.size(), name.data());
-    std::unique_ptr<xcb_intern_atom_reply_t, DeleteWithFree> reply(
+    std::unique_ptr<xcb_intern_atom_reply_t, libc::DeleteWithFree> reply(
         xcb_intern_atom_reply(connection, cookie, nullptr));
     return reply ? reply->atom : (xcb_atom_t)XCB_NONE;
   };
@@ -1355,7 +1359,7 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
     } else {  // event == nullptr
       root.WakeAnimation();
     }
-    free(event);
+    libc::Free(event);
   }
 }
 

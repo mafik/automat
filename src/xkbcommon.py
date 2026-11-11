@@ -5,7 +5,6 @@ import os
 import sys
 import build
 import extension_helper
-import src
 
 hook = extension_helper.ExtensionHelper('xkbcommon', globals())
 hook.FetchFromURL('https://github.com/xkbcommon/libxkbcommon/archive/refs/tags/xkbcommon-1.8.1.tar.gz')
@@ -15,19 +14,10 @@ hook.ConfigureOption('enable-xkbregistry', 'false')
 hook.InstallWhenIncluded(r'^xkbcommon/.*\.h$')
 
 if sys.platform == 'linux':
-  xcb = src.load_extension('xcb')
-  # libxkbcommon mixes C & statically-built C++ dependencies.
-  # This confuses Meson. Here we explicitly tell it to link in the C++ stdlib.
-  #
-  # TODO: Make the PKG_CONFIG_LIBDIR default for all extensions so they don't link against host's libs.
-  hook.ConfigureEnvReplaces(
-    LDFLAGS='-lstdc++',
-    PKG_CONFIG_LIBDIR=':'.join(str(build.PREFIX / x / 'pkgconfig') for x in ('lib64', 'lib', 'share')),
-  )
-  hook.ConfigureOption('enable-x11', 'true')
+  hook.ConfigureOption('enable-x11', 'false')
   hook.ConfigureOption('xkb-config-root', '/usr/share/X11/xkb')
-  hook.ConfigureDependsOn(xcb.libxcb)
-  hook.AddLinkArgs('-l:libxkbcommon.a', '-l:libxkbcommon-x11.a', '-l:libxcb-xkb.a')
+  hook.meson_build_targets = ['libxkbcommon.a']
+  hook.AddLinkArgs('-l:libxkbcommon.a')
 elif sys.platform == 'win32':
   # xkbcommon generates its keymap parser with bison at build time; winflexbison
   # provides a native bison that xkbcommon's meson finds under the name win_bison.

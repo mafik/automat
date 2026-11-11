@@ -50,6 +50,7 @@
 #include "library_pipewire.hpp"
 #include "linux_syscall.hpp"
 #include "wayland.hpp"
+#include "xcb.hpp"
 #endif
 
 using namespace automat::ui;
@@ -174,6 +175,13 @@ int Main() {
   libc::Init(libc_status);
   if (!OK(libc_status)) {
     ERROR << "Couldn't initialize the host libc: " << libc_status;
+    return 1;
+  }
+
+  Status xcb_status;
+  xcb::LoadHostLibxcb(xcb_status);
+  if (!OK(xcb_status)) {
+    ERROR << "Couldn't load the host's libxcb: " << xcb_status;
     return 1;
   }
 #endif

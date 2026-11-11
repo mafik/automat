@@ -4,11 +4,39 @@
 #include "xcb.hpp"
 
 #include <ankerl/unordered_dense.h>
-#include <xkbcommon/xkbcommon-x11.h>
+#include <dlfcn.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define explicit explicit_
+#include <xcb/xkb.h>
+#undef explicit
+
+#include "../build/generated/xcb_host_stubs.hpp"
+#include "format.hpp"
 
 using namespace automat;
 
 namespace xcb {
+
+extern "C" [[noreturn]] void AbortOnMissingHostXcbFunction(int index) {
+  fprintf(stderr, "%s is missing: the host's libxcb.so.1 is not loaded or lacks it\n",
+          xcb_host_names[index]);
+  abort();
+}
+
+void LoadHostLibxcb(Status& status) {
+  static void* library = automat::libc::OpenLibrary("libxcb.so.1", RTLD_NOW);
+  if (!library) {
+    AppendErrorMessage(status) += f("libxcb.so.1: {}", automat::libc::LibraryError());
+    return;
+  }
+  for (int i = 0; xcb_host_names[i]; ++i) {
+    if (void* function = automat::libc::FindSymbol(library, xcb_host_names[i])) {
+      xcb_host_table[i] = function;
+    }
+  }
+}
 
 xcb_connection_t* connection = nullptr;
 xcb_screen_t* screen = nullptr;
@@ -19,7 +47,7 @@ std::atomic<xcb_window_t> active_window{XCB_WINDOW_NONE};
 
 #define WRAP(f, ...)                             \
   std::unique_ptr<f##_reply_t, void (*)(void*)>( \
-      f##_reply(connection, f(connection, __VA_ARGS__), nullptr), free)
+      f##_reply(connection, f(connection, __VA_ARGS__), nullptr), automat::libc::Free)
 
 namespace atom {
 
@@ -34,10 +62,10 @@ void Initialize() {
   ATOMS
 #undef ATOM
 
-#define ATOM(name, str)                                                                  \
-  auto name##_reply = std::unique_ptr<xcb_intern_atom_reply_t, automat::DeleteWithFree>( \
-      xcb_intern_atom_reply(connection, name##_request, nullptr));                       \
-  name = name##_reply->atom;                                                             \
+#define ATOM(name, str)                                                                        \
+  auto name##_reply = std::unique_ptr<xcb_intern_atom_reply_t, automat::libc::DeleteWithFree>( \
+      xcb_intern_atom_reply(connection, name##_request, nullptr));                             \
+  name = name##_reply->atom;                                                                   \
   atom_names[name] = str;
   ATOMS
 #undef ATOM
@@ -47,7 +75,7 @@ Str ToStr(xcb_atom_t atom) {
   if (auto it = atom_names.find(atom); it != atom_names.end()) {
     return it->second;
   }
-  std::unique_ptr<xcb_get_atom_name_reply_t, automat::DeleteWithFree> reply(
+  std::unique_ptr<xcb_get_atom_name_reply_t, automat::libc::DeleteWithFree> reply(
       xcb_get_atom_name_reply(connection, xcb_get_atom_name(connection, atom), NULL));
   char* name = xcb_get_atom_name_name(reply.get());
   Str name_str(name, xcb_get_atom_name_name_length(reply.get()));
@@ -83,9 +111,9 @@ void Connect(Status& status) {
   }
   xi_opcode = xinput_data->major_opcode;
 
-  xkb_x11_setup_xkb_extension(xcb::connection, XKB_X11_MIN_MAJOR_XKB_VERSION,
-                              XKB_X11_MIN_MINOR_XKB_VERSION, XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS,
-                              nullptr, nullptr, nullptr, nullptr);
+  automat::libc::Free(xcb_xkb_use_extension_reply(
+      connection, xcb_xkb_use_extension(connection, XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION),
+      nullptr));
 }
 
 std::string GetPropertyString(xcb_window_t window, xcb_atom_t property) {

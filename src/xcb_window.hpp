@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MIT
 
 #include <xcb/xcb.h>
-#include <xcb/xcb_cursor.h>
 #include <xcb/xinput.h>
 
 #include <stop_token>
@@ -20,14 +19,6 @@ struct XCBWindow : automat::ui::Window {
 
   xcb_input_device_id_t master_pointer_device_id = 0;
   xcb_input_device_id_t master_keyboard_device_id = 0;
-
-  struct XCBCursorDeleter {
-    void operator()(xcb_cursor_context_t* cursor_context) {
-      xcb_cursor_context_free(cursor_context);
-    }
-  };
-
-  std::unique_ptr<xcb_cursor_context_t, XCBCursorDeleter> cursor_context;
 
   ~XCBWindow();
 

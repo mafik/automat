@@ -79,7 +79,7 @@ static void CheckCursorChanged(Pointer& pointer) {
         break;
       }
     }
-    return cursor == Cursor::None ? Cursor::Arrow : cursor;
+    return cursor == Cursor::None ? Cursor::Default : cursor;
   }();
   if (pointer.cursor != new_cursor) {
     pointer.OnCursorChanged(pointer.cursor, new_cursor);

@@ -46,28 +46,28 @@ struct TesseractOCR : public Object {
   float y_max_ratio = 0.75f;
 
   DEF_INTERFACE(TesseractOCR, Scalar, left, "Left edge")
-  static constexpr ui::Cursor kCursor = ui::Cursor::ResizeHorizontal;
+  static constexpr ui::Cursor kCursor = ui::Cursor::EwResize;
   double OnGet() { return obj->x_min_ratio; }
   void OnSet(double value);
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(left);
 
   DEF_INTERFACE(TesseractOCR, Scalar, right, "Right edge")
-  static constexpr ui::Cursor kCursor = ui::Cursor::ResizeHorizontal;
+  static constexpr ui::Cursor kCursor = ui::Cursor::EwResize;
   double OnGet() { return obj->x_max_ratio; }
   void OnSet(double value);
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(right);
 
   DEF_INTERFACE(TesseractOCR, Scalar, bottom, "Bottom edge")
-  static constexpr ui::Cursor kCursor = ui::Cursor::ResizeVertical;
+  static constexpr ui::Cursor kCursor = ui::Cursor::NsResize;
   double OnGet() { return obj->y_min_ratio; }
   void OnSet(double value);
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(bottom);
 
   DEF_INTERFACE(TesseractOCR, Scalar, top, "Top edge")
-  static constexpr ui::Cursor kCursor = ui::Cursor::ResizeVertical;
+  static constexpr ui::Cursor kCursor = ui::Cursor::NsResize;
   double OnGet() { return obj->y_max_ratio; }
   void OnSet(double value);
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);

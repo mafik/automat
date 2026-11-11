@@ -1739,7 +1739,7 @@ struct DragZoomAction : Action {
 SpliceAction::SpliceAction(ui::Pointer& pointer, TimelineWidget& timeline_widget_ref)
     : Action(pointer),
       timeline_widget(&timeline_widget_ref),
-      resize_cursor(pointer, ui::Cursor::ResizeHorizontal) {
+      resize_cursor(pointer, ui::Cursor::EwResize) {
   assert(timeline_widget_ref.splice_action == nullptr);
   timeline_widget_ref.splice_action = this;
   splice_to = timeline_widget_ref.current_offset;
@@ -1831,7 +1831,7 @@ std::unique_ptr<Action> Timeline::zoom_Impl::OnActivate(ui::Pointer& pointer, au
 
 constinit Command::Table kSplice = [] {
   Command::Table t("Splice");
-  t.cursor = ui::Cursor::ResizeHorizontal;
+  t.cursor = ui::Cursor::EwResize;
   t.activate = [](Span<Interface>, ui::Pointer& pointer, Toy* toy) -> std::unique_ptr<Action> {
     auto* widget = toy ? ui::Closest<TimelineWidget>(*toy) : nullptr;
     if (!widget || widget->splice_action) return nullptr;

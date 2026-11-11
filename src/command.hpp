@@ -24,7 +24,7 @@ struct Command : Interface {
     constexpr Table(StrView name, Kind kind = Interface::kCommand) : Interface::Table(kind, name) {
       activate = &CommandActivate;
       fill_menu = &CommandFillMenu;
-      cursor = ui::Cursor::Hand;
+      cursor = ui::Cursor::Pointer;
     }
 
     template <typename ImplT>

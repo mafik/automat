@@ -31,7 +31,7 @@ struct Timer : Object, TimerNotificationReceiver {
   DEF_END(running);
 
   DEF_INTERFACE(Timer, Command, run, "Run")
-  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr ui::Cursor kCursor = ui::Cursor::Pointer;
   static constexpr int NextIdx() { return SlotOf(next_tbl); }
   static constexpr int CancelIdx() { return SlotOf(cancel_tbl); }
   Locked<Command> OnRun() {
@@ -59,12 +59,12 @@ struct Timer : Object, TimerNotificationReceiver {
   DEF_END(readout);
 
   DEF_INTERFACE(Timer, Command, next_range, "Next range")
-  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr ui::Cursor kCursor = ui::Cursor::Pointer;
   void OnRun() { obj->ShiftRange(1); }
   DEF_END(next_range);
 
   DEF_INTERFACE(Timer, Command, prev_range, "Previous range")
-  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr ui::Cursor kCursor = ui::Cursor::Pointer;
   void OnRun() { obj->ShiftRange(-1); }
   DEF_END(prev_range);
 

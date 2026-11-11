@@ -4,8 +4,12 @@
 
 #include <xcb/xcb.h>
 
+namespace automat::ui {
+enum class Cursor;
+}  // namespace automat::ui
+
 namespace xcb {
 
-xcb_cursor_t LoadCursor(const char* name);
+xcb_cursor_t LoadCursor(automat::ui::Cursor);
 
 }  // namespace xcb

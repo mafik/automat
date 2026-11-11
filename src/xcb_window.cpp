@@ -434,33 +434,11 @@ void XCBWindow::OnWindowWatchingChanged() {
   xcb_flush(connection);
 }
 
-static const char* GetCursorName(automat::ui::Cursor icon) {
-  using enum automat::ui::Cursor;
-  switch (icon) {
-    case Arrow:
-      return "left_ptr";
-    case Hand:
-      return "hand1";
-    case IBeam:
-      return "xterm";
-    case AllScroll:
-      return "all-scroll";
-    case ResizeHorizontal:
-      return "ew-resize";
-    case ResizeVertical:
-      return "ns-resize";
-    case Crosshair:
-      return "crosshair";
-    default:
-      return "left_ptr";
-  }
-}
-
 static xcb_cursor_t FindOrLoadCursor(automat::ui::Cursor icon) {
-  static xcb_cursor_t cursors[int(automat::ui::Cursor::Crosshair) + 1] = {};
+  static xcb_cursor_t cursors[automat::ui::kCursorCount] = {};
   xcb_cursor_t& cursor = cursors[int(icon)];
   if (cursor == XCB_NONE) {
-    cursor = LoadCursor(GetCursorName(icon));
+    cursor = LoadCursor(icon);
   }
   return cursor;
 }

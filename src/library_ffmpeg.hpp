@@ -144,7 +144,7 @@ struct FfmpegDecoder : Object {
   uint64_t frame_bytes = 0;
 
   DEF_INTERFACE(FfmpegDecoder, Command, run, "Run")
-  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr ui::Cursor kCursor = ui::Cursor::Pointer;
   static constexpr int NextIdx() { return SlotOf(next_tbl); }
   void OnRun() { obj->Step(); }
   DEF_END(run);

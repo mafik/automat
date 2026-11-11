@@ -1740,7 +1740,7 @@ struct PropCommandTable : Command::Table {
   PropInfo info;
   PropCommandTable(const PropInfo& info) : Command::Table(""), info(info) {
     name = this->info.name;
-    cursor = ui::Cursor::Hand;
+    cursor = ui::Cursor::Pointer;
     on_run = [](Command self, Command::Table& true_self) -> Locked<Command> {
       auto& table = static_cast<PropCommandTable&>(true_self);
       auto& element = static_cast<GStreamerElement&>(*self.object_ptr);

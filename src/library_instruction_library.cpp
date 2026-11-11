@@ -1201,7 +1201,7 @@ struct RegisterFilterTable : Command::Table {
         read(read),
         label((read ? "Read " : "Write ") + kRegisters[reg].name) {
     name = label;
-    cursor = ui::Cursor::Hand;
+    cursor = ui::Cursor::Pointer;
     on_run = [](Command self, Command::Table& true_self) -> Locked<Command> {
       auto& table = static_cast<RegisterFilterTable&>(true_self);
       auto& library = static_cast<InstructionLibrary&>(*self.object_ptr);
@@ -1234,7 +1234,7 @@ struct CategoryTable : Command::Table {
                                  : x86::kCategories[category].groups[group].name),
         category(category),
         group(group) {
-    cursor = ui::Cursor::Hand;
+    cursor = ui::Cursor::Pointer;
     on_run = [](Command self, Command::Table& true_self) -> Locked<Command> {
       auto& table = static_cast<CategoryTable&>(true_self);
       auto& library = static_cast<InstructionLibrary&>(*self.object_ptr);

@@ -15,10 +15,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <optional>
+#include <span>
 
 #include "format.hpp"
 #include "int.hpp"
 #include "libc.hpp"
+#include "pointer.hpp"
 #include "status.hpp"
 #include "str.hpp"
 #include "svg.hpp"
@@ -44,21 +46,92 @@ struct CursorImage {
   U32 height;
   U32 xhot;
   U32 yhot;
+  U32 delay;
   const char* pixels;
 };
 
-struct BundledCursor {
+struct CursorDescription {
+  ui::Cursor cursor;
   StrView name;
   int xhot;
   int yhot;
+  std::span<const U32> frame_delays;
 };
 
 }  // namespace
 
-static constexpr BundledCursor kBundledCursors[] = {
-    {"left_ptr", 1, 1},    {"hand1", 8, 4},       {"xterm", 12, 12},     {"all-scroll", 12, 12},
-    {"ew-resize", 12, 12}, {"ns-resize", 12, 12}, {"crosshair", 11, 11},
-};
+static const CursorDescription* FindCursorDescription(ui::Cursor icon) {
+  using enum ui::Cursor;
+  static constexpr U32 kProgressAndWaitDelays[] = {30, 30, 30, 30, 300, 30, 30, 30,
+                                                   30, 30, 30, 30, 30,  30, 30, 30};
+  static constexpr CursorDescription kCursors[] = {
+      {Default, "default", 1, 1},
+      {ContextMenu, "context-menu", 1, 1},
+      {Help, "help", 1, 1},
+      {Pointer, "pointer", 8, 4},
+      {Progress, "progress", 1, 1, kProgressAndWaitDelays},
+      {Wait, "wait", 12, 12, kProgressAndWaitDelays},
+      {Cell, "cell", 11, 11},
+      {Crosshair, "crosshair", 11, 11},
+      {Text, "text", 12, 12},
+      {VerticalText, "vertical-text", 12, 12},
+      {Alias, "alias", 1, 1},
+      {Copy, "copy", 1, 1},
+      {Move, "move", 12, 12},
+      {NoDrop, "no-drop", 1, 1},
+      {NotAllowed, "not-allowed", 12, 12},
+      {Grab, "grab", 12, 15},
+      {Grabbing, "grabbing", 12, 15},
+      {EResize, "e-resize", 20, 11},
+      {NResize, "n-resize", 11, 3},
+      {NeResize, "ne-resize", 20, 3},
+      {NwResize, "nw-resize", 3, 3},
+      {SResize, "s-resize", 11, 19},
+      {SeResize, "se-resize", 20, 20},
+      {SwResize, "sw-resize", 3, 20},
+      {WResize, "w-resize", 3, 11},
+      {EwResize, "ew-resize", 12, 12},
+      {NsResize, "ns-resize", 12, 12},
+      {NeswResize, "nesw-resize", 12, 12},
+      {NwseResize, "nwse-resize", 12, 12},
+      {ColResize, "col-resize", 12, 12},
+      {RowResize, "row-resize", 12, 12},
+      {AllScroll, "all-scroll", 12, 12},
+      {ZoomIn, "zoom-in", 9, 9},
+      {ZoomOut, "zoom-out", 9, 9},
+      {DndAsk, "dnd-ask", 1, 1},
+      {AllResize, "all-resize", 12, 12},
+      {BasedArrowDown, "based_arrow_down", 11, 18},
+      {BasedArrowUp, "based_arrow_up", 11, 3},
+      {BottomTee, "bottom_tee", 11, 19},
+      {CenterPtr, "center_ptr", 11, 1},
+      {CoffeeMug, "coffee_mug", 6, 12},
+      {ColorPicker, "color-picker", 1, 20},
+      {DndMove, "dnd-move", 1, 1},
+      {Draft, "draft", 3, 20},
+      {DrapedBox, "draped_box", 12, 12},
+      {Exchange, "exchange", 12, 12},
+      {LeftTee, "left_tee", 3, 11},
+      {LlAngle, "ll_angle", 3, 20},
+      {LrAngle, "lr_angle", 20, 20},
+      {Pencil, "pencil", 3, 19},
+      {Pirate, "pirate", 12, 12},
+      {RightPtr, "right_ptr", 22, 1},
+      {RightTee, "right_tee", 20, 11},
+      {SbDownArrow, "sb_down_arrow", 11, 20},
+      {SbLeftArrow, "sb_left_arrow", 2, 11},
+      {SbRightArrow, "sb_right_arrow", 21, 11},
+      {SbUpArrow, "sb_up_arrow", 11, 1},
+      {TopTee, "top_tee", 11, 2},
+      {UlAngle, "ul_angle", 3, 3},
+      {UrAngle, "ur_angle", 20, 3},
+      {WaylandCursor, "wayland-cursor", 11, 11},
+      {XCursor, "X_cursor", 12, 12},
+      {Zoom, "zoom", 9, 9},
+  };
+  auto description = std::ranges::find(kCursors, icon, &CursorDescription::cursor);
+  return description == std::end(kCursors) ? nullptr : description;
+}
 
 static StrView NextLine(StrView& text) {
   size_t end = text.find('\n');
@@ -134,7 +207,7 @@ static Vec<Str> InheritedThemes(StrView index_theme) {
   return themes;
 }
 
-static Str ReadThemeCursorFile(const Vec<Str>& directories, StrView theme, const char* name,
+static Str ReadThemeCursorFile(const Vec<Str>& directories, StrView theme, StrView name,
                                Vec<Str>& searched_themes) {
   if (std::find(searched_themes.begin(), searched_themes.end(), theme) != searched_themes.end()) {
     return {};
@@ -165,54 +238,63 @@ static U32 ReadU32(StrView file, size_t offset) {
   return value;
 }
 
-static std::optional<CursorImage> FindNearestImage(StrView file, U32 size) {
-  if (file.size() < kXcursorFileHeaderSize || !file.starts_with("Xcur")) return std::nullopt;
+static Vec<CursorImage> FindNearestImages(StrView file, U32 size) {
+  if (file.size() < kXcursorFileHeaderSize || !file.starts_with("Xcur")) return {};
   U32 table_position = ReadU32(file, 4);
   U32 entry_count = ReadU32(file, 12);
   if (table_position > file.size() ||
       entry_count > (file.size() - table_position) / kXcursorTableEntrySize) {
-    return std::nullopt;
+    return {};
   }
-  std::optional<size_t> nearest_entry;
+  std::optional<U32> nearest_size;
   U32 nearest_distance = 0;
   for (U32 i = 0; i < entry_count; ++i) {
     size_t entry = table_position + i * kXcursorTableEntrySize;
     if (ReadU32(file, entry) != kXcursorImageType) continue;
     U32 nominal_size = ReadU32(file, entry + 4);
     U32 distance = nominal_size > size ? nominal_size - size : size - nominal_size;
-    if (!nearest_entry || distance < nearest_distance) {
-      nearest_entry = entry;
+    if (!nearest_size || distance < nearest_distance) {
+      nearest_size = nominal_size;
       nearest_distance = distance;
     }
   }
-  if (!nearest_entry) return std::nullopt;
-  U32 position = ReadU32(file, *nearest_entry + 8);
-  if (position > file.size() || file.size() - position < kXcursorImageHeaderSize) {
-    return std::nullopt;
+  if (!nearest_size) return {};
+  Vec<CursorImage> images;
+  for (U32 i = 0; i < entry_count; ++i) {
+    size_t entry = table_position + i * kXcursorTableEntrySize;
+    if (ReadU32(file, entry) != kXcursorImageType || ReadU32(file, entry + 4) != *nearest_size) {
+      continue;
+    }
+    U32 position = ReadU32(file, entry + 8);
+    if (position > file.size() || file.size() - position < kXcursorImageHeaderSize) {
+      return {};
+    }
+    if (ReadU32(file, position + 4) != kXcursorImageType ||
+        ReadU32(file, position + 8) != *nearest_size) {
+      return {};
+    }
+    CursorImage image = {
+        .width = ReadU32(file, position + 16),
+        .height = ReadU32(file, position + 20),
+        .xhot = ReadU32(file, position + 24),
+        .yhot = ReadU32(file, position + 28),
+        .delay = ReadU32(file, position + 32),
+        .pixels = file.data() + position + kXcursorImageHeaderSize,
+    };
+    if (image.width == 0 || image.height == 0 || image.width > 0x7fff || image.height > 0x7fff ||
+        U64(image.width) * image.height * 4 > file.size() - position - kXcursorImageHeaderSize) {
+      return {};
+    }
+    images.push_back(image);
   }
-  if (ReadU32(file, position + 4) != kXcursorImageType ||
-      ReadU32(file, position + 8) != ReadU32(file, *nearest_entry + 4)) {
-    return std::nullopt;
-  }
-  CursorImage image = {
-      .width = ReadU32(file, position + 16),
-      .height = ReadU32(file, position + 20),
-      .xhot = ReadU32(file, position + 24),
-      .yhot = ReadU32(file, position + 28),
-      .pixels = file.data() + position + kXcursorImageHeaderSize,
-  };
-  if (image.width == 0 || image.height == 0 || image.width > 0x7fff || image.height > 0x7fff ||
-      U64(image.width) * image.height * 4 > file.size() - position - kXcursorImageHeaderSize) {
-    return std::nullopt;
-  }
-  return image;
+  return images;
 }
 
-static std::optional<CursorImage> RenderBundledCursor(StrView name, U32 size, SkBitmap& bitmap) {
-  const BundledCursor* cursor = std::ranges::find(kBundledCursors, name, &BundledCursor::name);
-  if (cursor == std::end(kBundledCursors)) return std::nullopt;
+static std::optional<CursorImage> RenderBundledImage(StrView path,
+                                                     const CursorDescription& description, U32 size,
+                                                     U32 delay, SkBitmap& bitmap) {
   Status status;
-  Str svg = fs::embedded.Read(Path(f("assets/cursors/{}.svg", name)), status);
+  Str svg = fs::embedded.Read(Path(path), status);
   if (!OK(status)) return std::nullopt;
   sk_sp<SkSVGDOM> dom = SVGFromAsset(svg);
   if (!dom) return std::nullopt;
@@ -225,10 +307,32 @@ static std::optional<CursorImage> RenderBundledCursor(StrView name, U32 size, Sk
   return CursorImage{
       .width = size,
       .height = size,
-      .xhot = U32(std::lrint(cursor->xhot * size / double(kBundledCursorGrid))),
-      .yhot = U32(std::lrint(cursor->yhot * size / double(kBundledCursorGrid))),
+      .xhot = U32(std::lrint(description.xhot * size / double(kBundledCursorGrid))),
+      .yhot = U32(std::lrint(description.yhot * size / double(kBundledCursorGrid))),
+      .delay = delay,
       .pixels = (const char*)bitmap.getPixels(),
   };
+}
+
+static Vec<CursorImage> RenderBundledCursor(const CursorDescription& description, U32 size,
+                                            Vec<SkBitmap>& bitmaps) {
+  if (description.frame_delays.empty()) {
+    bitmaps.resize(1);
+    std::optional<CursorImage> image = RenderBundledImage(
+        f("assets/cursors/{}.svg", description.name), description, size, 0, bitmaps[0]);
+    if (!image) return {};
+    return {*image};
+  }
+  bitmaps.resize(description.frame_delays.size());
+  Vec<CursorImage> images;
+  for (size_t i = 0; i < description.frame_delays.size(); ++i) {
+    std::optional<CursorImage> image =
+        RenderBundledImage(f("assets/cursors/{}-{}.svg", description.name, i + 1), description,
+                           size, description.frame_delays[i], bitmaps[i]);
+    if (!image) return {};
+    images.push_back(*image);
+  }
+  return images;
 }
 
 static xcb_render_pictformat_t FindArgb32Format() {
@@ -252,7 +356,26 @@ static xcb_render_pictformat_t FindArgb32Format() {
   return XCB_NONE;
 }
 
-xcb_cursor_t LoadCursor(const char* name) {
+static xcb_cursor_t CreateCursor(xcb_render_pictformat_t argb32_format, const CursorImage& image) {
+  xcb_pixmap_t pixmap = xcb_generate_id(connection);
+  xcb_create_pixmap(connection, 32, pixmap, screen->root, image.width, image.height);
+  xcb_gcontext_t gc = xcb_generate_id(connection);
+  xcb_create_gc(connection, gc, pixmap, 0, nullptr);
+  xcb_put_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, pixmap, gc, image.width, image.height, 0, 0,
+                0, 32, image.width * image.height * 4, (const uint8_t*)image.pixels);
+  xcb_render_picture_t picture = xcb_generate_id(connection);
+  xcb_render_create_picture(connection, picture, pixmap, argb32_format, 0, nullptr);
+  xcb_cursor_t cursor = xcb_generate_id(connection);
+  xcb_render_create_cursor(connection, cursor, picture, image.xhot, image.yhot);
+  xcb_render_free_picture(connection, picture);
+  xcb_free_gc(connection, gc);
+  xcb_free_pixmap(connection, pixmap);
+  return cursor;
+}
+
+xcb_cursor_t LoadCursor(ui::Cursor icon) {
+  const CursorDescription* description = FindCursorDescription(icon);
+  if (!description) return XCB_NONE;
   xcb_render_pictformat_t argb32_format = FindArgb32Format();
   if (argb32_format == XCB_NONE) return XCB_NONE;
 
@@ -262,31 +385,33 @@ xcb_cursor_t LoadCursor(const char* name) {
   StrView theme = theme_variable ? theme_variable : ResourceValue(resources, "Xcursor.theme");
   Vec<Str> searched_themes;
   Str file;
-  if (!theme.empty()) file = ReadThemeCursorFile(directories, theme, name, searched_themes);
-  if (file.empty()) file = ReadThemeCursorFile(directories, "default", name, searched_themes);
-  U32 size = CursorSize(resources);
-  SkBitmap bitmap;
-  std::optional<CursorImage> image;
-  if (file.empty()) {
-    image = RenderBundledCursor(name, std::clamp<U32>(size, 1, kMaxBundledCursorSize), bitmap);
-  } else {
-    image = FindNearestImage(file, size);
+  if (!theme.empty()) {
+    file = ReadThemeCursorFile(directories, theme, description->name, searched_themes);
   }
-  if (!image) return XCB_NONE;
+  if (file.empty()) {
+    file = ReadThemeCursorFile(directories, "default", description->name, searched_themes);
+  }
+  U32 size = CursorSize(resources);
+  Vec<SkBitmap> bitmaps;
+  Vec<CursorImage> images;
+  if (file.empty()) {
+    images =
+        RenderBundledCursor(*description, std::clamp<U32>(size, 1, kMaxBundledCursorSize), bitmaps);
+  } else {
+    images = FindNearestImages(file, size);
+  }
+  if (images.empty()) return XCB_NONE;
 
-  xcb_pixmap_t pixmap = xcb_generate_id(connection);
-  xcb_create_pixmap(connection, 32, pixmap, screen->root, image->width, image->height);
-  xcb_gcontext_t gc = xcb_generate_id(connection);
-  xcb_create_gc(connection, gc, pixmap, 0, nullptr);
-  xcb_put_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, pixmap, gc, image->width, image->height, 0,
-                0, 0, 32, image->width * image->height * 4, (const uint8_t*)image->pixels);
-  xcb_render_picture_t picture = xcb_generate_id(connection);
-  xcb_render_create_picture(connection, picture, pixmap, argb32_format, 0, nullptr);
+  if (images.size() == 1) return CreateCursor(argb32_format, images[0]);
+  Vec<xcb_render_animcursorelt_t> frames;
+  for (const CursorImage& image : images) {
+    frames.push_back({.cursor = CreateCursor(argb32_format, image), .delay = image.delay});
+  }
   xcb_cursor_t cursor = xcb_generate_id(connection);
-  xcb_render_create_cursor(connection, cursor, picture, image->xhot, image->yhot);
-  xcb_render_free_picture(connection, picture);
-  xcb_free_gc(connection, gc);
-  xcb_free_pixmap(connection, pixmap);
+  xcb_render_create_anim_cursor(connection, cursor, frames.size(), frames.data());
+  for (const xcb_render_animcursorelt_t& frame : frames) {
+    xcb_free_cursor(connection, frame.cursor);
+  }
   return cursor;
 }
 

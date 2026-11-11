@@ -99,7 +99,7 @@ struct Text : Interface {
     static std::unique_ptr<Action> DefaultActivate(Span<Interface>, ui::Pointer&, Toy*);
 
     constexpr Table(StrView name) : Interface::Table(Interface::kText, name) {
-      cursor = ui::Cursor::IBeam;
+      cursor = ui::Cursor::Text;
       activate = &DefaultActivate;
     }
 

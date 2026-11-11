@@ -28,7 +28,7 @@ struct OnOff : Command {
         menu.Place(ui::Dir::W, object.InterfaceFromIdx(on_off.table->turn_on_idx));
         menu.Place(ui::Dir::S, object.InterfaceFromIdx(on_off.table->turn_off_idx));
       };
-      cursor = ui::Cursor::Hand;
+      cursor = ui::Cursor::Pointer;
     }
 
     template <typename ImplT>

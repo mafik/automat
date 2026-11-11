@@ -108,7 +108,7 @@ struct GStreamerElement : Object {
   std::atomic<bool> is_running = false;
 
   DEF_INTERFACE(GStreamerElement, Command, run, "Run")
-  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr ui::Cursor kCursor = ui::Cursor::Pointer;
   static constexpr int NextIdx() { return kNextSlot; }
   static constexpr int CancelIdx() { return kCancelSlot; }
   Locked<Command> OnRun() {
@@ -122,7 +122,7 @@ struct GStreamerElement : Object {
   DEF_END(run);
 
   DEF_INTERFACE(GStreamerElement, Command, cancel, "Cancel")
-  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr ui::Cursor kCursor = ui::Cursor::Pointer;
   void OnRun() {
     if (obj->is_running.exchange(false)) obj->Stop();
   }
@@ -240,7 +240,7 @@ struct AppSinkBoundary : GStreamerElement {
   DEF_END(image_provider);
 
   DEF_INTERFACE(AppSinkBoundary, Command, step, "Pull")
-  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr ui::Cursor kCursor = ui::Cursor::Pointer;
   static constexpr int NextIdx() { return kNextSlot; }
   void OnRun() { obj->StepOne(); }
   DEF_END(step);
@@ -278,7 +278,7 @@ struct AppSrcBoundary : GStreamerElement {
   DEF_END(image);
 
   DEF_INTERFACE(AppSrcBoundary, Command, step, "Push")
-  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr ui::Cursor kCursor = ui::Cursor::Pointer;
   static constexpr int NextIdx() { return kNextSlot; }
   void OnRun() { obj->StepOne(); }
   DEF_END(step);

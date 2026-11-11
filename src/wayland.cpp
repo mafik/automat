@@ -1737,35 +1737,14 @@ constexpr float kFrame = ui::WindowFrame::kFrame;
 constexpr float kMinContentW = 3_cm;
 constexpr float kMinContentH = 3_cm;
 
-// wp_cursor_shape_device_v1 shape (stable protocol values) to the nearest icon.
 ui::Cursor ShapeToCursor(uint32_t shape) {
-  switch (shape) {
-    case 4:  // pointer
-      return ui::Cursor::Hand;
-    case 9:   // text
-    case 10:  // vertical_text
-      return ui::Cursor::IBeam;
-    case 8:  // crosshair
-      return ui::Cursor::Crosshair;
-    case 13:  // move
-    case 16:  // grab
-    case 17:  // grabbing
-    case 32:  // all_scroll
-    case 36:  // all_resize
-      return ui::Cursor::AllScroll;
-    case 18:  // e_resize
-    case 25:  // w_resize
-    case 26:  // ew_resize
-    case 30:  // col_resize
-      return ui::Cursor::ResizeHorizontal;
-    case 19:  // n_resize
-    case 22:  // s_resize
-    case 27:  // ns_resize
-    case 31:  // row_resize
-      return ui::Cursor::ResizeVertical;
-    default:  // default and the long tail (help, wait, copy, ...)
-      return ui::Cursor::Arrow;
+  using wayland::CursorShapeDeviceV1;
+  static_assert(int(ui::Cursor::Default) == CursorShapeDeviceV1::ShapeDefault);
+  static_assert(int(ui::Cursor::AllResize) == CursorShapeDeviceV1::ShapeAllResize);
+  if (shape < CursorShapeDeviceV1::ShapeDefault || shape > CursorShapeDeviceV1::ShapeAllResize) {
+    return ui::Cursor::Default;
   }
+  return ui::Cursor(shape);
 }
 
 // Draws a surface's committed buffer, sampling `src` (buffer pixels) into a

@@ -172,7 +172,7 @@ std::unique_ptr<Action> Location::clone_Impl::OnActivate(ui::Pointer& pointer, a
 
 constinit ObjectSource::Table kMakeObject = [] {
   ObjectSource::Table t("New");
-  t.cursor = ui::Cursor::Hand;
+  t.cursor = ui::Cursor::Copy;
   t.take = [](ObjectSource self) { return self.object_ptr->Clone(); };
   t.activate = [](Span<Interface> chain, ui::Pointer& pointer,
                   Toy* toy) -> std::unique_ptr<Action> {

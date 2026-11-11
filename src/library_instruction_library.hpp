@@ -47,7 +47,7 @@ struct InstructionLibrary : Object {
   DEF_END(scroll);
 
   DEF_INTERFACE(InstructionLibrary, ObjectSource, pick, "Take instruction")
-  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr ui::Cursor kCursor = ui::Cursor::Pointer;
   Ptr<Object> OnTake();
   std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
   DEF_END(pick);

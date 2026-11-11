@@ -65,7 +65,7 @@ struct PipeWireNode : Object {
   DEF_END(out_stream);
 
   DEF_INTERFACE(PipeWireNode, OnOff, muted, "Mute")
-  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr ui::Cursor kCursor = ui::Cursor::Pointer;
   bool IsOn() const {
     auto lock = std::lock_guard(obj->mutex);
     return obj->mute;
@@ -75,12 +75,12 @@ struct PipeWireNode : Object {
   DEF_END(muted);
 
   DEF_INTERFACE(PipeWireNode, Command, mute_on, "Mute on")
-  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr ui::Cursor kCursor = ui::Cursor::Pointer;
   void OnRun() { obj->SetMute(true); }
   DEF_END(mute_on);
 
   DEF_INTERFACE(PipeWireNode, Command, mute_off, "Mute off")
-  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr ui::Cursor kCursor = ui::Cursor::Pointer;
   void OnRun() { obj->SetMute(false); }
   DEF_END(mute_off);
 

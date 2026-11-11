@@ -38,7 +38,7 @@ struct ProgramLauncher : Object, Container {
   DEF_END(running);
 
   DEF_INTERFACE(ProgramLauncher, Command, run, "Run")
-  static constexpr ui::Cursor kCursor = ui::Cursor::Hand;
+  static constexpr ui::Cursor kCursor = ui::Cursor::Pointer;
   static constexpr int NextIdx() { return SlotOf(next_tbl); }
   static constexpr int CancelIdx() { return SlotOf(cancel_tbl); }
   Locked<Command> OnRun() {

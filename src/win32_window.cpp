@@ -92,22 +92,22 @@ struct Win32Pointer : automat::ui::Pointer {
   void UpdateCursor(automat::ui::Cursor icon) {
     HCURSOR cursor;
     switch (icon) {
-      case automat::ui::Cursor::Arrow:
+      case automat::ui::Cursor::Default:
         cursor = LoadCursor(nullptr, IDC_ARROW);
         break;
-      case automat::ui::Cursor::Hand:
+      case automat::ui::Cursor::Pointer:
         cursor = LoadCursor(nullptr, IDC_HAND);
         break;
-      case automat::ui::Cursor::IBeam:
+      case automat::ui::Cursor::Text:
         cursor = LoadCursor(nullptr, IDC_IBEAM);
         break;
       case automat::ui::Cursor::AllScroll:
         cursor = LoadCursor(nullptr, IDC_SIZEALL);
         break;
-      case automat::ui::Cursor::ResizeHorizontal:
+      case automat::ui::Cursor::EwResize:
         cursor = LoadCursor(nullptr, IDC_SIZEWE);
         break;
-      case automat::ui::Cursor::ResizeVertical:
+      case automat::ui::Cursor::NsResize:
         cursor = LoadCursor(nullptr, IDC_SIZENS);
         break;
       case automat::ui::Cursor::Crosshair:

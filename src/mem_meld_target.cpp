@@ -267,6 +267,22 @@ void* KillChild(void*) {
   }
 }
 
+long RawSyscall(long number, long a, long b, long c, long d, long e, long f, bool& registers_kept) {
+  register long rax asm("rax") = number;
+  register long rdi asm("rdi") = a;
+  register long rsi asm("rsi") = b;
+  register long rdx asm("rdx") = c;
+  register long r10 asm("r10") = d;
+  register long r8 asm("r8") = e;
+  register long r9 asm("r9") = f;
+  asm volatile("syscall"
+               : "+r"(rax), "+r"(rdi), "+r"(rsi), "+r"(rdx), "+r"(r10), "+r"(r8), "+r"(r9)
+               :
+               : "rcx", "r11", "memory");
+  registers_kept = rdi == a && rsi == b && rdx == c && r10 == d && r8 == e && r9 == f;
+  return rax;
+}
+
 struct CloneArgs {
   uint64_t flags, pidfd, child_tid, parent_tid, exit_signal, stack, stack_size, tls;
 };
@@ -371,6 +387,20 @@ void Handle(const std::vector<string_view>& t, Out& out) {
     if (p == -1) return fail("mmap");
     out << "ok ";
     out.Hex((uint64_t)p);
+  } else if (cmd == "rawmmapregisters") {
+    bool registers_kept;
+    long p = RawSyscall(SYS_mmap, 0, kPage, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1,
+                        0, registers_kept);
+    if (p < 0) return (void)(out << "err mmap");
+    syscall(SYS_munmap, p, kPage);
+    out << (registers_kept ? "ok" : "err registers");
+  } else if (cmd == "rawmadviseregisters" && t.size() == 3) {
+    uint64_t addr, len;
+    if (!ParseU64(t[1], addr) || !ParseU64(t[2], len)) return (void)(out << "err args");
+    bool registers_kept;
+    long r = RawSyscall(SYS_madvise, (long)addr, (long)len, MADV_DONTNEED, 0, 0, 0, registers_kept);
+    if (r < 0) return (void)(out << "err madvise");
+    out << (registers_kept ? "ok" : "err registers");
   } else if (cmd == "mmapshared" && t.size() == 2) {
     uint64_t len;
     if (!ParseU64(t[1], len)) return (void)(out << "err args");

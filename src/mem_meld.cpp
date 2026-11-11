@@ -1487,6 +1487,12 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
       case SYS_mmap: {
         uint64_t flags = c.args[3];
         int prot = (int)c.args[2] & (PROT_READ | PROT_WRITE | PROT_EXEC);
+        if (c.offset != kNoOffset)
+          t.SetRegs([&](user_regs_struct& r) {
+            r.r10 = flags;
+            r.r8 = c.args[4];
+            r.r9 = c.args[5];
+          });
         if (IsError(result)) {
           if (c.offset != kNoOffset) slots.Release(c.offset, len);
           return;
@@ -1576,6 +1582,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
         return;
       }
       case SYS_madvise:
+        t.SetRegs([&](user_regs_struct& r) { r.rdx = c.args[2]; });
         if (c.args[2] == kMadvGuardInstall || c.args[2] == kMadvGuardRemove)
           SyncRegions(c, {{lo, lo + len}}, {});
         return;

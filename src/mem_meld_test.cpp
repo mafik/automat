@@ -506,6 +506,17 @@ TEST_F(Fixture, RawMmapIsMirrored) {
   EXPECT_TRUE(MirrorMatchesRemote(addr, 65536));
 }
 
+TEST_F(Fixture, RawMmapKeepsTheArgumentRegisters) {
+  Attach();
+  EXPECT_EQ(target.Command("rawmmapregisters"), "ok");
+}
+
+TEST_F(Fixture, RawMadviseKeepsTheArgumentRegisters) {
+  Attach();
+  uintptr_t addr = target.CommandAddr("mmap 65536 rw");
+  EXPECT_EQ(target.Command(f("rawmadviseregisters {:#x} 65536", addr)), "ok");
+}
+
 TEST_F(Fixture, MmapAndMunmapWhole) {
   Attach();
   uintptr_t addr = target.CommandAddr("mmap 65536 rw");

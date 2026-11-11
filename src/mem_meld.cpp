@@ -7,19 +7,13 @@
 
 #include <dirent.h>
 #include <fcntl.h>
-#include <linux/audit.h>
-#include <linux/fs.h>
-#include <linux/kcmp.h>
-#include <linux/seccomp.h>
 #include <pthread.h>
 #include <sched.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
-#include <sys/ptrace.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
-#include <sys/syscall.h>
 #include <sys/sysmacros.h>
 #include <sys/user.h>
 #include <sys/wait.h>
@@ -38,6 +32,7 @@
 
 #include "fd.hpp"
 #include "format.hpp"
+#include "linux_syscall.hpp"
 #include "vec.hpp"
 
 namespace automat {
@@ -59,10 +54,99 @@ constexpr uint64_t kStackGuard = 256 * kPage;
 constexpr uint64_t kPagemapGuardRegion = 1ull << 58;
 constexpr int kMadvGuardInstall = 102;
 constexpr int kMadvGuardRemove = 103;
-constexpr long kOptions = PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACECLONE | PTRACE_O_TRACEFORK |
-                          PTRACE_O_TRACEEXEC | PTRACE_O_TRACEEXIT;
+constexpr int kMapGrowsDown = 0x100;
+constexpr int kMremapDontUnmap = 4;
+constexpr int kSeekData = 3;
+constexpr int kSeekHole = 4;
+constexpr int kFallocKeepSize = 1;
+constexpr int kFallocPunchHole = 2;
+constexpr int kWaitAll = 0;
+constexpr int kWaitPid = 1;
+constexpr int kWaitNoThread = 0x20000000;
+constexpr uint64_t kCloneVm = 0x100;
+constexpr uint64_t kCloneChildClearTid = 0x200000;
+constexpr uint64_t kCloneUntraced = 0x800000;
+constexpr uint64_t kCloneChildSetTid = 0x1000000;
+constexpr int kPtraceSyscall = 24;
+constexpr int kPtraceDetach = 17;
+constexpr int kPtraceGetRegs = 12;
+constexpr int kPtraceSetRegs = 13;
+constexpr int kPtraceGetEventMsg = 0x4201;
+constexpr int kPtraceSeize = 0x4206;
+constexpr int kPtraceInterrupt = 0x4207;
+constexpr int kPtraceListen = 0x4208;
+constexpr int kPtraceGetSigmask = 0x420a;
+constexpr int kPtraceSetSigmask = 0x420b;
+constexpr int kPtraceGetSyscallInfo = 0x420e;
+constexpr int kSyscallInfoEntry = 1;
+constexpr int kSyscallInfoExit = 2;
+constexpr int kEventFork = 1;
+constexpr int kEventClone = 3;
+constexpr int kEventExec = 4;
+constexpr int kEventExit = 6;
+constexpr int kEventStop = 128;
+constexpr int kTraceSysGood = 1;
+constexpr int kTraceFork = 1 << kEventFork;
+constexpr int kTraceClone = 1 << kEventClone;
+constexpr int kTraceExec = 1 << kEventExec;
+constexpr int kTraceExit = 1 << kEventExit;
+constexpr uint32_t kAuditArchX86_64 = 0xc000003e;
+constexpr int kKcmpFile = 0;
+constexpr int kKcmpVm = 1;
+constexpr int kKcmpFiles = 2;
+constexpr int kSeccompSetModeStrict = 0;
+constexpr int kSeccompSetModeFilter = 1;
+constexpr uint64_t kPageIsPresent = 1 << 3;
+constexpr uint64_t kPageIsSwapped = 1 << 4;
+constexpr uint64_t kPageIsPfnZero = 1 << 5;
+constexpr uint64_t kProcmapVmaReadable = 0x01;
+constexpr uint64_t kProcmapVmaWritable = 0x02;
+constexpr uint64_t kProcmapVmaExecutable = 0x04;
+constexpr uint64_t kProcmapVmaShared = 0x08;
+constexpr uint64_t kProcmapQueryCoveringOrNextVma = 0x10;
+
+struct PtraceSyscallInfo {
+  uint8_t op;
+  uint8_t pad[3];
+  uint32_t arch;
+  uint64_t instruction_pointer;
+  uint64_t stack_pointer;
+  union {
+    struct {
+      uint64_t nr;
+      uint64_t args[6];
+    } entry;
+    struct {
+      int64_t rval;
+      uint8_t is_error;
+    } exit;
+  };
+};
+
+struct PageRegion {
+  uint64_t start, end, categories;
+};
+
+struct PmScanArg {
+  uint64_t size, flags, start, end, walk_end, vec, vec_len, max_pages, category_inverted,
+      category_mask, category_anyof_mask, return_mask;
+};
+
+struct ProcmapQuery {
+  uint64_t size, query_flags, query_addr, vma_start, vma_end, vma_flags, vma_page_size, vma_offset,
+      inode;
+  uint32_t dev_major, dev_minor, vma_name_size, build_id_size;
+  uint64_t vma_name_addr, build_id_addr;
+};
+
+constexpr unsigned long IocReadWrite(unsigned long number, unsigned long size) {
+  return 3ul << 30 | size << 16 | 'f' << 8 | number;
+}
+constexpr unsigned long kPagemapScan = IocReadWrite(16, sizeof(PmScanArg));
+constexpr unsigned long kProcmapQuery = IocReadWrite(17, sizeof(ProcmapQuery));
+constexpr long kOptions = kTraceSysGood | kTraceClone | kTraceFork | kTraceExec | kTraceExit;
 constexpr int kSyscallStop = SIGTRAP | 0x80;
-constexpr int kInterruptStop = SIGTRAP | PTRACE_EVENT_STOP << 8;
+constexpr int kInterruptStop = SIGTRAP | kEventStop << 8;
 constexpr long kErestartSys = 512, kErestartRestartBlock = 516;
 
 uint64_t PageDown(uint64_t x) { return x & ~(kPage - 1); }
@@ -106,18 +190,18 @@ struct MapEntry {
 
 Vec<std::pair<uint64_t, uint64_t>> GuardRuns(int pagemap_fd, uint64_t start, uint64_t end) {
   Vec<std::pair<uint64_t, uint64_t>> out;
-  page_region vec[128];
+  PageRegion vec[128];
   uint64_t entries[512];
   for (uint64_t cur = start; cur < end;) {
-    pm_scan_arg arg = {};
+    PmScanArg arg = {};
     arg.size = sizeof(arg);
     arg.start = cur;
     arg.end = end;
     arg.vec = (uint64_t)vec;
     arg.vec_len = std::size(vec);
-    arg.category_anyof_mask = PAGE_IS_SWAPPED;
-    arg.return_mask = PAGE_IS_SWAPPED;
-    long n = ioctl(pagemap_fd, PAGEMAP_SCAN, &arg);
+    arg.category_anyof_mask = kPageIsSwapped;
+    arg.return_mask = kPageIsSwapped;
+    long n = ioctl(pagemap_fd, kPagemapScan, &arg);
     if (n < 0) break;
     for (long i = 0; i < n; ++i) {
       for (uint64_t at = vec[i].start; at < vec[i].end;) {
@@ -149,21 +233,20 @@ void CopyIntoMirror(int mirror_local_fd, uint64_t memfd_offset, int procmem, int
   if (whole) {
     runs.push_back({remote, remote + len});
   } else {
-    Vec<page_region> vec(4096);
+    Vec<PageRegion> vec(4096);
     for (uint64_t cur = remote; cur < remote + len;) {
-      pm_scan_arg arg = {};
+      PmScanArg arg = {};
       arg.size = sizeof(arg);
       arg.start = cur;
       arg.end = remote + len;
       arg.vec = (uint64_t)vec.data();
       arg.vec_len = vec.size();
-      arg.category_anyof_mask = PAGE_IS_PRESENT | PAGE_IS_SWAPPED;
-      arg.return_mask = PAGE_IS_PRESENT | PAGE_IS_SWAPPED | PAGE_IS_PFNZERO;
-      long n = ioctl(pagemap, PAGEMAP_SCAN, &arg);
+      arg.category_anyof_mask = kPageIsPresent | kPageIsSwapped;
+      arg.return_mask = kPageIsPresent | kPageIsSwapped | kPageIsPfnZero;
+      long n = ioctl(pagemap, kPagemapScan, &arg);
       if (n < 0) break;
       for (long i = 0; i < n; ++i) {
-        if ((vec[i].categories & PAGE_IS_PFNZERO) && !(vec[i].categories & PAGE_IS_SWAPPED))
-          continue;
+        if ((vec[i].categories & kPageIsPfnZero) && !(vec[i].categories & kPageIsSwapped)) continue;
         if (!runs.empty() && runs.back().second == vec[i].start)
           runs.back().second = vec[i].end;
         else
@@ -184,9 +267,9 @@ void CopyIntoMirror(int mirror_local_fd, uint64_t memfd_offset, int procmem, int
 template <typename Fn>
 void ForEachExtent(int fd, uint64_t offset, uint64_t len, Fn&& fn) {
   for (uint64_t at = offset, end = offset + len; at < end;) {
-    off_t data = lseek(fd, at, SEEK_DATA);
+    off_t data = lseek(fd, at, kSeekData);
     if (data < 0 || (uint64_t)data >= end) return;
-    off_t hole = lseek(fd, data, SEEK_HOLE);
+    off_t hole = lseek(fd, data, kSeekHole);
     uint64_t stop = hole < 0 ? end : std::min<uint64_t>(hole, end);
     fn((uint64_t)data, stop - data);
     at = stop;
@@ -222,19 +305,19 @@ struct Vma {
 
 bool QueryVma(int maps, uint64_t addr, Vma& v, Str* name = nullptr) {
   char path[4096];
-  procmap_query q = {.size = sizeof q,
-                     .query_flags = PROCMAP_QUERY_COVERING_OR_NEXT_VMA,
-                     .query_addr = addr,
-                     .vma_name_size = name ? (uint32_t)sizeof path : 0,
-                     .vma_name_addr = name ? (uint64_t)path : 0};
-  if (ioctl(maps, PROCMAP_QUERY, &q) != 0) return false;
+  ProcmapQuery q = {.size = sizeof q,
+                    .query_flags = kProcmapQueryCoveringOrNextVma,
+                    .query_addr = addr,
+                    .vma_name_size = name ? (uint32_t)sizeof path : 0,
+                    .vma_name_addr = name ? (uint64_t)path : 0};
+  if (ioctl(maps, kProcmapQuery, &q) != 0) return false;
   v = {q.vma_start,
        q.vma_end,
        q.vma_offset,
-       (q.vma_flags & PROCMAP_QUERY_VMA_READABLE ? PROT_READ : 0) |
-           (q.vma_flags & PROCMAP_QUERY_VMA_WRITABLE ? PROT_WRITE : 0) |
-           (q.vma_flags & PROCMAP_QUERY_VMA_EXECUTABLE ? PROT_EXEC : 0),
-       (q.vma_flags & PROCMAP_QUERY_VMA_SHARED) != 0,
+       (q.vma_flags & kProcmapVmaReadable ? PROT_READ : 0) |
+           (q.vma_flags & kProcmapVmaWritable ? PROT_WRITE : 0) |
+           (q.vma_flags & kProcmapVmaExecutable ? PROT_EXEC : 0),
+       (q.vma_flags & kProcmapVmaShared) != 0,
        makedev(q.dev_major, q.dev_minor),
        q.inode};
   if (name) *name = q.vma_name_size ? Str(path) : Str();
@@ -330,7 +413,7 @@ struct Slots {
       Slot& s = slots[slot];
       Vec<std::pair<uint64_t, uint64_t>> cut = Cut(s.used, at - base, end - base);
       for (auto [a, b] : cut)
-        fallocate(memfd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, base + a, b - a);
+        LinuxSyscall(__NR_fallocate, memfd, kFallocKeepSize | kFallocPunchHole, base + a, b - a);
       if (cut.empty()) continue;
       s.epoch = ++epochs;
       if (s.used.empty()) {
@@ -378,15 +461,16 @@ Vec<Piece> PiecesWithout(const Vec<Piece>& pieces, uint64_t key, uint64_t len) {
 }
 
 uint64_t Stripped(uint64_t clone_flags) {
-  return CLONE_UNTRACED | (clone_flags & CLONE_VM ? 0 : CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID);
+  return kCloneUntraced | (clone_flags & kCloneVm ? 0 : kCloneChildSetTid | kCloneChildClearTid);
 }
 
 int WaitStop(pid_t tid, int options = 0) {
   for (;;) {
     siginfo_t info = {};
-    if (waitid(P_PID, tid, &info, WSTOPPED | __WALL | __WNOTHREAD | options) == 0)
-      return info.si_pid ? info.si_status : 0;
-    if (errno != EINTR) return -1;
+    long result = LinuxSyscall(__NR_waitid, kWaitPid, tid, &info,
+                               WSTOPPED | __WALL | kWaitNoThread | options, nullptr);
+    if (result == 0) return info.si_pid ? info.si_status : 0;
+    if (result != -EINTR) return -1;
   }
 }
 
@@ -402,21 +486,19 @@ struct Task {
   bool injected = false;
   bool rewind = false;
 
-  bool Injectable() const { return known && stop >> 8 != PTRACE_EVENT_EXIT; }
+  bool Injectable() const { return known && stop >> 8 != kEventExit; }
 
   bool NoteExitStop(int reported) {
-    if (reported >> 8 != PTRACE_EVENT_EXIT) return false;
+    if (reported >> 8 != kEventExit) return false;
     stop = reported;
     injected = rewind = false;
     return true;
   }
 
-  bool AtExitStop() {
-    return stop >> 8 == PTRACE_EVENT_EXIT || NoteExitStop(WaitStop(tid, WNOHANG));
-  }
+  bool AtExitStop() { return stop >> 8 == kEventExit || NoteExitStop(WaitStop(tid, WNOHANG)); }
 
   int ResumeAndWait(int pass) {
-    if (AtExitStop() || ptrace(PTRACE_SYSCALL, tid, 0, pass) != 0) return -1;
+    if (AtExitStop() || LinuxSyscall(__NR_ptrace, kPtraceSyscall, tid, 0, pass) != 0) return -1;
     int reported = WaitStop(tid);
     return NoteExitStop(reported) ? -1 : reported;
   }
@@ -427,25 +509,25 @@ struct Task {
       saved.rip -= 2;
       saved.rax = saved.orig_rax;
     }
-    ptrace(PTRACE_SETREGS, tid, 0, &saved);
-    ptrace(PTRACE_SETSIGMASK, tid, sizeof mask, &mask);
+    LinuxSyscall(__NR_ptrace, kPtraceSetRegs, tid, 0, &saved);
+    LinuxSyscall(__NR_ptrace, kPtraceSetSigmask, tid, sizeof mask, &mask);
     injected = rewind = false;
     long error = -(long)saved.rax;
     bool restart =
         (long)saved.orig_rax >= 0 && error >= kErestartSys && error <= kErestartRestartBlock;
-    bool group = stop >> 8 == PTRACE_EVENT_STOP && (stop & 0xff) != SIGTRAP;
+    bool group = stop >> 8 == kEventStop && (stop & 0xff) != SIGTRAP;
     stop = kSyscallStop;
     if (group || restart) {
-      ptrace(PTRACE_INTERRUPT, tid, 0, 0);
+      LinuxSyscall(__NR_ptrace, kPtraceInterrupt, tid, 0, 0);
       stop = kInterruptStop;
     }
   }
 
   void SetRegs(const std::function<void(user_regs_struct&)>& change) {
     user_regs_struct r;
-    if (ptrace(PTRACE_GETREGS, tid, 0, &r) != 0) return;
+    if (LinuxSyscall(__NR_ptrace, kPtraceGetRegs, tid, 0, &r) != 0) return;
     change(r);
-    ptrace(PTRACE_SETREGS, tid, 0, &r);
+    LinuxSyscall(__NR_ptrace, kPtraceSetRegs, tid, 0, &r);
   }
 
   void Cancel(int error) {
@@ -754,7 +836,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
 
   auto MemfdIntact = [&](pid_t tid) -> bool {
     return remote_fd >= 0 &&
-           syscall(SYS_kcmp, tid, getpid(), KCMP_FILE, remote_fd, (int)memfd) == 0;
+           LinuxSyscall(__NR_kcmp, tid, getpid(), kKcmpFile, remote_fd, (int)memfd) == 0;
   };
 
   auto OpenProc = [&]() -> bool {
@@ -766,24 +848,25 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
 
   auto Inject = [&](Task& t, long nr, long a = 0, long b = 0, long c = 0, long d = 0, long e = 0,
                     long g = 0) -> long {
-    if (t.stop >> 8 == PTRACE_EVENT_EXIT) return -ESRCH;
+    if (t.stop >> 8 == kEventExit) return -ESRCH;
     int pass = 0;
     if (!t.injected) {
       uint64_t all = ~0ull;
-      if (ptrace(PTRACE_GETREGS, t.tid, 0, &t.saved) != 0 ||
-          ptrace(PTRACE_GETSIGMASK, t.tid, sizeof t.mask, &t.mask) != 0 ||
-          ptrace(PTRACE_SETSIGMASK, t.tid, sizeof all, &all) != 0)
+      if (LinuxSyscall(__NR_ptrace, kPtraceGetRegs, t.tid, 0, &t.saved) != 0 ||
+          LinuxSyscall(__NR_ptrace, kPtraceGetSigmask, t.tid, sizeof t.mask, &t.mask) != 0 ||
+          LinuxSyscall(__NR_ptrace, kPtraceSetSigmask, t.tid, sizeof all, &all) != 0)
         return -ESRCH;
       t.injected = true;
       if (t.stop >> 8 == 0 && t.stop != kSyscallStop && t.stop == t.signal)
         std::swap(pass, t.signal);
-      __ptrace_syscall_info info;
+      PtraceSyscallInfo info;
       if (t.stop == kSyscallStop &&
-          ptrace(PTRACE_GET_SYSCALL_INFO, t.tid, sizeof info, &info) > 0 &&
-          info.op == PTRACE_SYSCALL_INFO_ENTRY) {
+          LinuxSyscall(__NR_ptrace, kPtraceGetSyscallInfo, t.tid, sizeof info, &info) > 0 &&
+          info.op == kSyscallInfoEntry) {
         user_regs_struct cancel = t.saved;
         cancel.orig_rax = -1;
-        if (ptrace(PTRACE_SETREGS, t.tid, 0, &cancel) != 0 || t.ResumeAndWait(0) != kSyscallStop)
+        if (LinuxSyscall(__NR_ptrace, kPtraceSetRegs, t.tid, 0, &cancel) != 0 ||
+            t.ResumeAndWait(0) != kSyscallStop)
           return -ESRCH;
         t.rewind = true;
       }
@@ -793,24 +876,25 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
     r.orig_rax = -1;
     r.rdi = a, r.rsi = b, r.rdx = c, r.r10 = d, r.r8 = e, r.r9 = g;
     r.rip = syscall_insn;
-    if (ptrace(PTRACE_SETREGS, t.tid, 0, &r) != 0) return -ESRCH;
+    if (LinuxSyscall(__NR_ptrace, kPtraceSetRegs, t.tid, 0, &r) != 0) return -ESRCH;
     for (bool entered = false;;) {
       int stop = t.ResumeAndWait(pass);
       pass = 0;
       if (stop < 0) return -ESRCH;
       if (stop == kSyscallStop) {
-        __ptrace_syscall_info info;
-        if (ptrace(PTRACE_GET_SYSCALL_INFO, t.tid, sizeof info, &info) <= 0) return -ESRCH;
-        if (info.op == PTRACE_SYSCALL_INFO_EXIT && entered) return info.exit.rval;
-        if (info.op == PTRACE_SYSCALL_INFO_ENTRY) {
+        PtraceSyscallInfo info;
+        if (LinuxSyscall(__NR_ptrace, kPtraceGetSyscallInfo, t.tid, sizeof info, &info) <= 0)
+          return -ESRCH;
+        if (info.op == kSyscallInfoExit && entered) return info.exit.rval;
+        if (info.op == kSyscallInfoEntry) {
           entered = true;
         } else {
           t.saved.rax = info.exit.rval;
-          if (ptrace(PTRACE_SETREGS, t.tid, 0, &r) != 0) return -ESRCH;
+          if (LinuxSyscall(__NR_ptrace, kPtraceSetRegs, t.tid, 0, &r) != 0) return -ESRCH;
         }
       } else if (stop >> 8 == 0) {
         t.signal = stop;
-      } else if (stop >> 8 == PTRACE_EVENT_STOP && (stop & 0xff) != SIGTRAP) {
+      } else if (stop >> 8 == kEventStop && (stop & 0xff) != SIGTRAP) {
         t.stop = stop;
       }
     }
@@ -834,8 +918,8 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
     std::erase_if(gone, [](const Piece& p) { return p.key >= kFileKey; });
     bool forking = std::ranges::any_of(tasks, [](auto& task) {
       const Call& call = task.second.call;
-      return call.nr == SYS_fork ||
-             ((call.nr == SYS_clone || call.nr == SYS_clone3) && !(call.clone_flags & CLONE_VM));
+      return call.nr == __NR_fork ||
+             ((call.nr == __NR_clone || call.nr == __NR_clone3) && !(call.clone_flags & kCloneVm));
     });
     if (forking) {
       for (const Piece& p : gone) deferred.push_back(p);
@@ -924,7 +1008,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
       uint64_t len = v.end - v.start;
       Vec<std::pair<uint64_t, uint64_t>> guards;
       if (pagemap_fd >= 0) guards = GuardRuns(pagemap_fd, v.start, v.end);
-      if (Inject(t, SYS_mmap, v.start, len, v.prot,
+      if (Inject(t, __NR_mmap, v.start, len, v.prot,
                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0) != (long)v.start)
         continue;
       void* local = mmap(nullptr, len, PROT_READ, MAP_SHARED, memfd, v.offset);
@@ -939,7 +1023,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
         }
       });
       munmap(local, len);
-      for (auto [from, to] : guards) Inject(t, SYS_madvise, from, to - from, kMadvGuardInstall);
+      for (auto [from, to] : guards) Inject(t, __NR_madvise, from, to - from, kMadvGuardInstall);
     }
   };
 
@@ -963,7 +1047,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
         MemfdIntact(t.tid) ? slots.Take(len, len, file, path, file_offset) : kNoOffset;
     if (offset == kNoOffset) return kNoOffset;
     CopyIntoMirror(memfd, offset, mem, pagemap, start, len, file);
-    if (Inject(t, SYS_mmap, start, len, prot, MAP_SHARED | MAP_FIXED, remote_fd, offset) ==
+    if (Inject(t, __NR_mmap, start, len, prot, MAP_SHARED | MAP_FIXED, remote_fd, offset) ==
         (long)start)
       return offset;
     slots.Release(offset, len);
@@ -1002,23 +1086,23 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
 
   auto CreateMemfd = [&](Task& t) -> bool {
     long scratch =
-        Inject(t, SYS_mmap, 0, kPage, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        Inject(t, __NR_mmap, 0, kPage, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (IsError(scratch)) return false;
     long fd = pwrite(mem, "pm-mirror", 10, scratch) == 10
-                  ? Inject(t, SYS_memfd_create, scratch, MFD_CLOEXEC)
+                  ? Inject(t, __NR_memfd_create, scratch, MFD_CLOEXEC)
                   : -EIO;
-    Inject(t, SYS_munmap, scratch, kPage);
+    Inject(t, __NR_munmap, scratch, kPage);
     if (IsError(fd)) return false;
-    remote_fd = Inject(t, SYS_fcntl, fd, F_DUPFD_CLOEXEC, kRemoteFd);
+    remote_fd = Inject(t, __NR_fcntl, fd, F_DUPFD_CLOEXEC, kRemoteFd);
     if (IsError(remote_fd))
       remote_fd = fd;
     else
-      Inject(t, SYS_close, fd);
+      Inject(t, __NR_close, fd);
     struct stat st;
-    if (Inject(t, SYS_ftruncate, remote_fd, kMemfdSize) != 0 ||
-        (memfd = (int)syscall(SYS_pidfd_getfd, (int)pidfd, (int)remote_fd, 0)) < 0 ||
+    if (Inject(t, __NR_ftruncate, remote_fd, kMemfdSize) != 0 ||
+        (memfd = (int)LinuxSyscall(__NR_pidfd_getfd, (int)pidfd, (int)remote_fd, 0)) < 0 ||
         fstat(memfd, &st) != 0) {
-      Inject(t, SYS_close, remote_fd);
+      Inject(t, __NR_close, remote_fd);
       remote_fd = -1;
       return false;
     }
@@ -1071,7 +1155,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
       t.Restore();
       return false;
     }
-    brk = PageUp(Inject(t, SYS_brk, 0));
+    brk = PageUp(Inject(t, __NR_brk, 0));
     Vec<std::pair<uint64_t, uint64_t>> guards = GuardRuns(pagemap, 0, kUserEnd - kPage);
     if (!guards.empty()) {
       Vec<MapEntry> parts;
@@ -1123,7 +1207,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
         }
         uint64_t split = arg_start >= v.start && arg_start < v.end ? PageDown(arg_start) : v.end;
         rlimit limit = {};
-        prlimit(pid, RLIMIT_STACK, nullptr, &limit);
+        LinuxSyscall(__NR_prlimit64, pid, RLIMIT_STACK, nullptr, &limit);
         uint64_t size = limit.rlim_cur == RLIM_INFINITY ? 64ull << 20 : PageUp(limit.rlim_cur);
         uint64_t low =
             std::min(v.start, std::max(v.end > size ? v.end - size : 0, below + kStackGuard));
@@ -1132,9 +1216,9 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
         if (offset == kNoOffset) continue;
         CopyIntoMirror(memfd, offset + (v.start - low), mem, pagemap, v.start, split - v.start,
                        false);
-        Inject(t, SYS_mmap, low - kStackGuard, kStackGuard, PROT_NONE,
+        Inject(t, __NR_mmap, low - kStackGuard, kStackGuard, PROT_NONE,
                MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE | MAP_NORESERVE, -1, 0);
-        if (Inject(t, SYS_mmap, low, split - low, v.prot, MAP_SHARED | MAP_FIXED, remote_fd,
+        if (Inject(t, __NR_mmap, low, split - low, v.prot, MAP_SHARED | MAP_FIXED, remote_fd,
                    offset) == (long)low)
           mappings.push_back({low, split - low, v.prot, offset, {}, Str(v.path), 0});
         else
@@ -1195,52 +1279,52 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
   auto Resume = [&](Task& t) {
     if (t.AtExitStop()) {
       unsigned long code = 0;
-      ptrace(PTRACE_GETEVENTMSG, t.tid, 0, &code);
-      ptrace(PTRACE_DETACH, t.tid, 0, 0);
+      LinuxSyscall(__NR_ptrace, kPtraceGetEventMsg, t.tid, 0, &code);
+      LinuxSyscall(__NR_ptrace, kPtraceDetach, t.tid, 0, 0);
       return OnTaskExit(t.tid, (int)code);
     }
-    ptrace(PTRACE_SYSCALL, t.tid, 0, t.signal);
+    LinuxSyscall(__NR_ptrace, kPtraceSyscall, t.tid, 0, t.signal);
     t.signal = 0;
     t.running = true;
   };
 
   auto NewChild = [&](Task& t) {
     unsigned long child = 0;
-    ptrace(PTRACE_GETEVENTMSG, t.tid, 0, &child);
+    LinuxSyscall(__NR_ptrace, kPtraceGetEventMsg, t.tid, 0, &child);
     auto [it, fresh] = tasks.try_emplace(child);
     Task& c = it->second;
     c.tid = child;
     if (fresh && (c.stop = WaitStop(child)) < 0) return RemoveTask(child);
     c.running = false;
-    if (syscall(SYS_kcmp, t.tid, child, KCMP_VM, 0, 0) == 0) {
+    if (LinuxSyscall(__NR_kcmp, t.tid, child, kKcmpVm, 0, 0) == 0) {
       c.known = true;
       return Resume(c);
     }
     if (remote_fd < 0) {
-      ptrace(PTRACE_DETACH, child, 0, 0);
+      LinuxSyscall(__NR_ptrace, kPtraceDetach, child, 0, 0);
       return RemoveTask(child);
     }
-    FD child_pidfd((int)syscall(SYS_pidfd_open, child, 0));
-    bool own_files = syscall(SYS_kcmp, child, pid, KCMP_FILES, 0, 0) != 0;
+    FD child_pidfd((int)LinuxSyscall(__NR_pidfd_open, child, 0));
+    bool own_files = LinuxSyscall(__NR_kcmp, child, pid, kKcmpFiles, 0, 0) != 0;
     {
       // Let the child go
       const Call& call = t.call;
       FD child_maps = open(f("/proc/{}/maps", child).c_str(), O_RDONLY | O_CLOEXEC);
       FD child_mem = open(f("/proc/{}/mem", child).c_str(), O_RDWR | O_CLOEXEC);
       Privatize(c, child_maps, child_mem, -1);
-      if (own_files && MemfdIntact(child)) Inject(c, SYS_close, remote_fd);
-      if (call.clone_flags & (CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID)) {
-        int set_tid = (int)Inject(c, SYS_set_tid_address,
-                                  call.clone_flags & CLONE_CHILD_CLEARTID ? call.child_tid : 0);
-        if (call.clone_flags & CLONE_CHILD_SETTID)
+      if (own_files && MemfdIntact(child)) Inject(c, __NR_close, remote_fd);
+      if (call.clone_flags & (kCloneChildSetTid | kCloneChildClearTid)) {
+        int set_tid = (int)Inject(c, __NR_set_tid_address,
+                                  call.clone_flags & kCloneChildClearTid ? call.child_tid : 0);
+        if (call.clone_flags & kCloneChildSetTid)
           pwrite(child_mem, &set_tid, sizeof set_tid, call.child_tid);
-        if (call.nr == SYS_clone3)
+        if (call.nr == __NR_clone3)
           pwrite(child_mem, &call.clone_flags, sizeof call.clone_flags, call.args[0]);
         else
           c.saved.rdi = call.clone_flags;
       }
       c.Restore();
-      ptrace(PTRACE_DETACH, child, 0, c.signal);
+      LinuxSyscall(__NR_ptrace, kPtraceDetach, child, 0, c.signal);
       tasks.erase(child);
     }
     if (child_pidfd.Opened() && own_files && !ending && on_forked) on_forked(child_pidfd);
@@ -1252,7 +1336,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
       for (auto& [tid, t] : tasks)
         if (t.running) running.push_back(tid);
       if (running.empty()) return;
-      for (pid_t tid : running) ptrace(PTRACE_INTERRUPT, tid, 0, 0);
+      for (pid_t tid : running) LinuxSyscall(__NR_ptrace, kPtraceInterrupt, tid, 0, 0);
       for (pid_t tid : running) {
         int stop = WaitStop(tid);
         auto it = tasks.find(tid);
@@ -1265,18 +1349,18 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
         t.running = false;
         t.stop = stop;
         if (stop >> 8 == 0 && stop != kSyscallStop) t.signal = stop;
-        if (stop >> 8 == PTRACE_EVENT_CLONE || stop >> 8 == PTRACE_EVENT_FORK) {
+        if (stop >> 8 == kEventClone || stop >> 8 == kEventFork) {
           NewChild(t);
           t.stop = kInterruptStop;
         }
-        if (stop >> 8 == PTRACE_EVENT_EXEC) t.stop = kInterruptStop;
+        if (stop >> 8 == kEventExec) t.stop = kInterruptStop;
       }
     }
   };
 
   auto DetachAll = [&] {
     StopAll();
-    for (auto& [tid, t] : tasks) ptrace(PTRACE_DETACH, tid, 0, t.signal);
+    for (auto& [tid, t] : tasks) LinuxSyscall(__NR_ptrace, kPtraceDetach, tid, 0, t.signal);
     tasks.clear();
   };
 
@@ -1293,13 +1377,11 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
       for (pid_t tid : listed) {
         if (seen.Contains(tid)) continue;
         seen.push_back(tid);
-        if (ptrace(PTRACE_SEIZE, tid, 0, kOptions) != 0) {
-          int error = errno;
-          if (ptrace(PTRACE_INTERRUPT, tid, 0, 0) != 0) {
-            if (error == ESRCH) continue;
-            errno = error;
-            return false;
-          }
+        long seized = LinuxSyscall(__NR_ptrace, kPtraceSeize, tid, 0, kOptions);
+        if (seized != 0 && LinuxSyscall(__NR_ptrace, kPtraceInterrupt, tid, 0, 0) != 0) {
+          if (seized == -ESRCH) continue;
+          errno = -seized;
+          return false;
         }
         Task& t = tasks[tid];
         t.tid = tid;
@@ -1317,7 +1399,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
     for (auto& [tid, t] : tasks) {
       if (!t.Injectable()) continue;
       Privatize(t, maps, mem, pagemap);
-      if (MemfdIntact(tid)) Inject(t, SYS_close, remote_fd);
+      if (MemfdIntact(tid)) Inject(t, __NR_close, remote_fd);
       t.Restore();
       break;
     }
@@ -1333,28 +1415,28 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
 
   auto Intercepts = [&](uint64_t nr, const uint64_t (&a)[6]) -> bool {
     switch (nr) {
-      case SYS_mmap:
-      case SYS_munmap:
-      case SYS_mremap:
-      case SYS_mprotect:
-      case SYS_pkey_mprotect:
-      case SYS_fork:
+      case __NR_mmap:
+      case __NR_munmap:
+      case __NR_mremap:
+      case __NR_mprotect:
+      case __NR_pkey_mprotect:
+      case __NR_fork:
         return true;
-      case SYS_brk:
+      case __NR_brk:
         return a[0] != 0;
-      case SYS_seccomp:
-        return a[0] == SECCOMP_SET_MODE_STRICT || a[0] == SECCOMP_SET_MODE_FILTER;
-      case SYS_madvise:
+      case __NR_seccomp:
+        return a[0] == kSeccompSetModeStrict || a[0] == kSeccompSetModeFilter;
+      case __NR_madvise:
         return a[2] == MADV_DONTNEED || a[2] == MADV_FREE || a[2] == MADV_DONTNEED_LOCKED ||
                a[2] == MADV_WIPEONFORK || a[2] == kMadvGuardInstall || a[2] == kMadvGuardRemove;
-      case SYS_clone:
-        return !(a[0] & CLONE_VM) || (a[0] & CLONE_UNTRACED);
-      case SYS_clone3: {
-        uint64_t flags = CLONE_VM;
+      case __NR_clone:
+        return !(a[0] & kCloneVm) || (a[0] & kCloneUntraced);
+      case __NR_clone3: {
+        uint64_t flags = kCloneVm;
         pread(mem, &flags, sizeof flags, a[0]);
-        return !(flags & CLONE_VM) || (flags & CLONE_UNTRACED);
+        return !(flags & kCloneVm) || (flags & kCloneUntraced);
       }
-      case SYS_prctl:
+      case __NR_prctl:
         return a[0] == PR_SET_SECCOMP;
     }
     return false;
@@ -1364,11 +1446,11 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
     Call& c = t.call;
     uint64_t lo = c.args[0], hi = lo + PageUp(c.args[1]);
     switch (c.nr) {
-      case SYS_mmap: {
+      case __NR_mmap: {
         uint64_t len = PageUp(c.args[1]), flags = c.args[3];
         if ((flags & MAP_FIXED) && !(flags & MAP_FIXED_NOREPLACE)) c.pieces = PiecesIn(lo, hi);
         if ((flags & MAP_TYPE) != MAP_PRIVATE || !(flags & MAP_ANONYMOUS) ||
-            (flags & (MAP_GROWSDOWN | MAP_HUGETLB)) || !len || len > kMemfdSize / 2)
+            (flags & (kMapGrowsDown | MAP_HUGETLB)) || !len || len > kMemfdSize / 2)
           return;
         if (DetachIfMemfdLost(t.tid)) return;
         c.offset = slots.Take(len, len);
@@ -1380,10 +1462,10 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
           r.r9 = c.offset;
         });
       }
-      case SYS_munmap:
+      case __NR_munmap:
         c.pieces = PiecesIn(lo, hi);
         return;
-      case SYS_mremap: {
+      case __NR_mremap: {
         uint64_t old_len = PageUp(c.args[1]), new_len = PageUp(c.args[2]), flags = c.args[3];
         c.pieces = PiecesIn(lo, lo + old_len);
         if (flags & MREMAP_FIXED)
@@ -1395,7 +1477,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
         } else {
           c.source = {};
         }
-        if (Memfd(c.source) && (!old_len || (flags & MREMAP_DONTUNMAP))) return t.Cancel(EINVAL);
+        if (Memfd(c.source) && (!old_len || (flags & kMremapDontUnmap))) return t.Cancel(EINVAL);
         uint64_t o = c.source.offset;
         if (Memfd(c.source) && new_len > old_len &&
             !slots.CanExtend(o + old_len, new_len - old_len)) {
@@ -1413,7 +1495,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
               n -= copied;
             }
           });
-          if (Inject(t, SYS_mmap, lo, old_len, c.source.prot, MAP_SHARED | MAP_FIXED, remote_fd,
+          if (Inject(t, __NR_mmap, lo, old_len, c.source.prot, MAP_SHARED | MAP_FIXED, remote_fd,
                      to) != (long)lo) {
             slots.Release(to, old_len);
             t.rewind = false;
@@ -1443,10 +1525,10 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
         c.mremaps = ++mremaps;
         return;
       }
-      case SYS_brk:
+      case __NR_brk:
         if (PageUp(c.args[0]) < brk) c.pieces = PiecesIn(PageUp(c.args[0]), brk);
         return;
-      case SYS_madvise: {
+      case __NR_madvise: {
         if (c.args[2] == kMadvGuardInstall || c.args[2] == kMadvGuardRemove) return;
         Vec<Vma> vmas = VmasIn(maps, lo, hi);
         if (vmas.empty() || !std::ranges::all_of(vmas, [&](const Vma& v) {
@@ -1460,11 +1542,11 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
         t.Restore();
         return SyncRegions(c, {{lo, hi}}, pieces);
       }
-      case SYS_clone:
+      case __NR_clone:
         c.clone_flags = c.args[0];
         c.child_tid = c.args[3];
         return t.SetRegs([&](user_regs_struct& r) { r.rdi &= ~Stripped(c.clone_flags); });
-      case SYS_clone3: {
+      case __NR_clone3: {
         uint64_t args[3];
         if (pread(mem, args, sizeof args, c.args[0]) != sizeof args) return;
         c.clone_flags = args[0];
@@ -1473,8 +1555,8 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
         pwrite(mem, args, sizeof args[0], c.args[0]);
         return;
       }
-      case SYS_seccomp:
-      case SYS_prctl:
+      case __NR_seccomp:
+      case __NR_prctl:
         return DetachCleanly(ErrorStatus("the target installs a seccomp filter"));
     }
   };
@@ -1484,7 +1566,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
     uint64_t lo = c.args[0], len = PageUp(c.args[1]);
     bool stripped = c.clone_flags & Stripped(c.clone_flags);
     switch (c.nr) {
-      case SYS_mmap: {
+      case __NR_mmap: {
         uint64_t flags = c.args[3];
         int prot = (int)c.args[2] & (PROT_READ | PROT_WRITE | PROT_EXEC);
         if (c.offset != kNoOffset)
@@ -1505,13 +1587,14 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
         else if ((shared || !anonymous) && prot != PROT_NONE)
           AddFileRegion(
               t, result, len,
-              anonymous ? FD() : FD((int)syscall(SYS_pidfd_getfd, (int)pidfd, (int)c.args[4], 0)));
+              anonymous ? FD()
+                        : FD((int)LinuxSyscall(__NR_pidfd_getfd, (int)pidfd, (int)c.args[4], 0)));
         return SyncRegions(c, {{(uint64_t)result, result + len}}, std::move(c.pieces));
       }
-      case SYS_munmap:
+      case __NR_munmap:
         if (!IsError(result)) SyncRegions(c, {{lo, lo + len}}, c.pieces);
         return;
-      case SYS_mremap: {
+      case __NR_mremap: {
         if (IsError(result)) return;
         uint64_t old_len = len, new_len = PageUp(c.args[2]), to = result;
         if (to != lo) {
@@ -1542,8 +1625,8 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
         }
         return SyncRegions(c, {{lo, lo + old_len}, {to, to + new_len}}, std::move(c.pieces));
       }
-      case SYS_mprotect:
-      case SYS_pkey_mprotect:
+      case __NR_mprotect:
+      case __NR_pkey_mprotect:
         for (const Vma& v : VmasIn(maps, lo, lo + len)) {
           if (Memfd(v) || !v.inode || v.prot == PROT_NONE) continue;
           if (!v.shared && (v.prot & PROT_WRITE))
@@ -1552,7 +1635,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
             AddFileRegion(t, v.start, v.end - v.start, {});
         }
         return SyncRegions(c, {{lo, lo + len}}, {});
-      case SYS_brk: {
+      case __NR_brk: {
         uint64_t end = PageUp(result);
         if (end > brk && MemfdIntact(t.tid)) {
           uint64_t grown = end - brk, offset = kNoOffset;
@@ -1567,8 +1650,8 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
           }
           if (offset == kNoOffset) offset = slots.Take(grown, kSlot, false, "[heap]");
           if (offset != kNoOffset) {
-            long r = Inject(t, SYS_mmap, brk, grown, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED,
-                            remote_fd, offset);
+            long r = Inject(t, __NR_mmap, brk, grown, PROT_READ | PROT_WRITE,
+                            MAP_SHARED | MAP_FIXED, remote_fd, offset);
             t.Restore();
             if (r == (long)brk)
               SyncRegions(c, {{brk, end}}, {});
@@ -1581,18 +1664,18 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
         brk = end;
         return;
       }
-      case SYS_madvise:
+      case __NR_madvise:
         t.SetRegs([&](user_regs_struct& r) { r.rdx = c.args[2]; });
         if (c.args[2] == kMadvGuardInstall || c.args[2] == kMadvGuardRemove)
           SyncRegions(c, {{lo, lo + len}}, {});
         return;
-      case SYS_clone:
+      case __NR_clone:
         if (stripped) t.SetRegs([&](user_regs_struct& r) { r.rdi = c.clone_flags; });
         return FreeUnusedPieces(c, {});
-      case SYS_clone3:
+      case __NR_clone3:
         if (stripped) pwrite(mem, &c.clone_flags, sizeof c.clone_flags, c.args[0]);
         return FreeUnusedPieces(c, {});
-      case SYS_fork:
+      case __NR_fork:
         return FreeUnusedPieces(c, {});
     }
   };
@@ -1602,9 +1685,9 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
     t.tid = tid;
     t.running = false;
     t.stop = stop;
-    if (stop >> 8 == PTRACE_EVENT_EXEC) {
+    if (stop >> 8 == kEventExec) {
       unsigned long former = 0;
-      ptrace(PTRACE_GETEVENTMSG, tid, 0, &former);
+      LinuxSyscall(__NR_ptrace, kPtraceGetEventMsg, tid, 0, &former);
       if (auto it = tasks.find(former); (pid_t)former != tid && it != tasks.end()) {
         t.known = it->second.known;
         tasks.erase(it);
@@ -1612,14 +1695,14 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
     }
     if (!t.known) return;
     if (stop == kSyscallStop) {
-      __ptrace_syscall_info info;
-      if (ptrace(PTRACE_GET_SYSCALL_INFO, tid, sizeof info, &info) > 0) {
-        if (info.op == PTRACE_SYSCALL_INFO_EXIT && t.call.nr >= 0) {
+      PtraceSyscallInfo info;
+      if (LinuxSyscall(__NR_ptrace, kPtraceGetSyscallInfo, tid, sizeof info, &info) > 0) {
+        if (info.op == kSyscallInfoExit && t.call.nr >= 0) {
           Call c = std::move(t.call);
           t.call = {};
           if (c.counted) --moving;
           OnSyscallExit(t, c, info.exit.rval);
-        } else if (info.op == PTRACE_SYSCALL_INFO_ENTRY && info.arch == AUDIT_ARCH_X86_64 &&
+        } else if (info.op == kSyscallInfoEntry && info.arch == kAuditArchX86_64 &&
                    Intercepts(info.entry.nr, (const uint64_t (&)[6])info.entry.args)) {
           t.call = {.nr = (long)info.entry.nr, .mremaps = mremaps, .moving = moving > 0};
           std::copy_n(info.entry.args, 6, t.call.args);
@@ -1628,15 +1711,15 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
       }
     } else if (stop >> 8 == 0) {
       t.signal = stop;
-    } else if (stop >> 8 == PTRACE_EVENT_STOP && (stop & 0xff) != SIGTRAP) {
-      ptrace(PTRACE_LISTEN, tid, 0, 0);
+    } else if (stop >> 8 == kEventStop && (stop & 0xff) != SIGTRAP) {
+      LinuxSyscall(__NR_ptrace, kPtraceListen, tid, 0, 0);
       t.running = true;
       return;
-    } else if (stop >> 8 == PTRACE_EVENT_CLONE || stop >> 8 == PTRACE_EVENT_FORK) {
+    } else if (stop >> 8 == kEventClone || stop >> 8 == kEventFork) {
       NewChild(t);
-    } else if (stop >> 8 == PTRACE_EVENT_EXEC) {
+    } else if (stop >> 8 == kEventExec) {
       if (tid != pid) {
-        ptrace(PTRACE_DETACH, tid, 0, 0);
+        LinuxSyscall(__NR_ptrace, kPtraceDetach, tid, 0, 0);
         return RemoveTask(tid);
       }
       t = {.tid = tid, .known = true, .running = false, .stop = t.stop};
@@ -1646,7 +1729,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
           ++it;
           continue;
         }
-        ptrace(PTRACE_DETACH, it->first, 0, it->second.signal);
+        LinuxSyscall(__NR_ptrace, kPtraceDetach, it->first, 0, it->second.signal);
         it = tasks.erase(it);
       }
       moving = 0;
@@ -1681,7 +1764,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
       failure = "opening the target's /proc files";
     else if (!Seize())
       failure = "seizing the target";
-    else if (syscall(SYS_pidfd_send_signal, (int)pidfd, 0, nullptr, 0) != 0)
+    else if (LinuxSyscall(__NR_pidfd_send_signal, (int)pidfd, 0, nullptr, 0) != 0)
       failure = "the pidfd no longer names the seized process";
     else if (auto it = std::ranges::find_if(tasks, [](auto& t) { return t.second.Injectable(); });
              it == tasks.end() || !ConvertAddressSpace(it->second))
@@ -1702,8 +1785,8 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
     {
       // Wait for the next event
       if (!detach.load(std::memory_order_relaxed) &&
-          waitid(P_ALL, 0, &info, WSTOPPED | WEXITED | __WALL | __WNOTHREAD) != 0 &&
-          errno == ECHILD)
+          LinuxSyscall(__NR_waitid, kWaitAll, 0, &info, WSTOPPED | WEXITED | __WALL | kWaitNoThread,
+                       nullptr) == -ECHILD)
         pause();
     }
     {
@@ -1724,7 +1807,7 @@ void MemMeld::Detach() {
   detach.store(true, std::memory_order_relaxed);
   while (pid_t tid = tracer.load(std::memory_order_acquire)) {
     if (tid == gettid()) return;
-    syscall(SYS_tgkill, getpid(), tid, WakeSignal());
+    LinuxSyscall(__NR_tgkill, getpid(), tid, WakeSignal());
     usleep(1000);
   }
 }

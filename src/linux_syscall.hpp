@@ -12,6 +12,31 @@
 #define __NR_timerfd_create 283
 #define __NR_timerfd_settime 286
 #define __NR_pidfd_open 434
+#define __NR_close 3
+#define __NR_ptrace 101
+#define __NR_mmap 9
+#define __NR_mprotect 10
+#define __NR_munmap 11
+#define __NR_brk 12
+#define __NR_mremap 25
+#define __NR_madvise 28
+#define __NR_fcntl 72
+#define __NR_ftruncate 77
+#define __NR_fork 57
+#define __NR_clone 56
+#define __NR_prctl 157
+#define __NR_tgkill 234
+#define __NR_set_tid_address 218
+#define __NR_waitid 247
+#define __NR_fallocate 285
+#define __NR_prlimit64 302
+#define __NR_kcmp 312
+#define __NR_memfd_create 319
+#define __NR_seccomp 317
+#define __NR_pkey_mprotect 329
+#define __NR_pidfd_send_signal 424
+#define __NR_clone3 435
+#define __NR_pidfd_getfd 438
 #elif defined(__aarch64__)
 #define __NR_epoll_create1 20
 #define __NR_epoll_ctl 21
@@ -20,6 +45,30 @@
 #define __NR_timerfd_create 85
 #define __NR_timerfd_settime 86
 #define __NR_pidfd_open 434
+#define __NR_close 57
+#define __NR_ptrace 117
+#define __NR_mmap 222
+#define __NR_mprotect 226
+#define __NR_munmap 215
+#define __NR_brk 214
+#define __NR_mremap 216
+#define __NR_madvise 233
+#define __NR_fcntl 25
+#define __NR_ftruncate 46
+#define __NR_clone 220
+#define __NR_prctl 167
+#define __NR_tgkill 131
+#define __NR_set_tid_address 96
+#define __NR_waitid 95
+#define __NR_fallocate 47
+#define __NR_prlimit64 261
+#define __NR_kcmp 272
+#define __NR_memfd_create 279
+#define __NR_seccomp 277
+#define __NR_pkey_mprotect 288
+#define __NR_pidfd_send_signal 424
+#define __NR_clone3 435
+#define __NR_pidfd_getfd 438
 #else
 #error "LinuxSyscall supports x86-64 and AArch64"
 #endif

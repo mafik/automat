@@ -13,6 +13,7 @@
 
 #include "argument.hpp"
 #include "base.hpp"
+#include "error_recovery.hpp"
 #include "gtest.hpp"
 #include "library_assembler.hpp"
 #include "library_instruction.hpp"
@@ -50,6 +51,7 @@ class MachineCodeControllerTest : public ::testing::Test {
     NestedWeakPtr<const mc::Inst> mc_instr = instr.lock()->ToMC();
     if (background_thread) {
       thread = std::jthread([this, mc_instr] {
+        error_recovery::SignalStack signal_stack;
         Status status;
         controller->Execute(mc_instr, status);
       });
@@ -57,6 +59,7 @@ class MachineCodeControllerTest : public ::testing::Test {
         std::this_thread::yield();
       }
     } else {
+      error_recovery::SignalStack signal_stack;
       Status status;
       controller->Execute(mc_instr, status);
       ASSERT_TRUE(OK(status));

@@ -60,7 +60,7 @@ struct SignalController : Controller {
     struct sigaction sa = {};
     sa.sa_sigaction = (void (*)(int, siginfo_t*, void*))SignalHandler;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_SIGINFO;
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
     if (sigaction(SIGUSR1, &sa, &old_usr1) == -1) {
       perror("sigaction");
     }

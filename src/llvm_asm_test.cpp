@@ -28,7 +28,9 @@ class MachineCodeControllerTest : public ::testing::Test {
     root = MAKE_PTR(Board);
     auto ExitCallback = [this](mc::CodePoint code_point) {
       std::unique_lock<std::mutex> lock(mutex);
-      exit_instr = *code_point.instruction;  // copy the weak_ptr
+      if (code_point.instruction) {
+        exit_instr = *code_point.instruction;  // copy the weak_ptr
+      }
       exit_point = code_point.stop_type;
       exited = true;
       cv.notify_all();

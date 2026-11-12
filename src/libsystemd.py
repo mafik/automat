@@ -12,6 +12,18 @@ if sys.platform == 'linux':
     hook = extension_helper.ExtensionHelper('libsystemd', globals())
     hook.FetchFromGit('https://github.com/systemd/systemd.git', 'v262.2')
     hook.DependsOn(libucontext.hook)
+    # Can be removed once the libc shims of systemd make no dlsym lookups in static builds.
+    hook.PatchSources('''--- src/libc/libc-shim.h
++++ src/libc/libc-shim.h
+@@ -2,6 +2,7 @@
+ #pragma once
+
+ #include <dlfcn.h>
++#define dlsym(library, name) NULL
+ #include <errno.h>
+ #include <sys/syscall.h>
+ #include <unistd.h>
+''')
     hook.ConfigureOptions(**{
         'libc': 'musl',
         'static-libsystemd': 'true',

@@ -55,10 +55,7 @@ const char* LibraryError() { return host.error(); }
 
 extern "C" {
 void* dlopen(const char* name, int mode) { return automat::crt::OpenLibrary(name, mode); }
-void* dlsym(void* library, const char* name) {
-  if (library == RTLD_DEFAULT) return nullptr;
-  return automat::crt::FindSymbol(library, name);
-}
+void* dlsym(void* library, const char* name) { return automat::crt::FindSymbol(library, name); }
 __attribute__((weak)) int dlclose(void* library) { return automat::crt::CloseLibrary(library); }
 char* dlerror() { return const_cast<char*>(automat::crt::LibraryError()); }
 }

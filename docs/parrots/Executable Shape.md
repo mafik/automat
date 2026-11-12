@@ -29,11 +29,11 @@ loader through a small helper program that is built for the host (`src/crt.py`) 
 host's `dlopen`, `dlsym`, `pthread_create` and `free` from it. Automat defines `dlopen`,
 `dlsym`, `dlclose` and `dlerror` itself and forwards them to the host's loader, so statically
 linked libraries that open libraries, such as vk-bootstrap opening the host's Vulkan loader,
-reach the host's libraries. A `dlsym` lookup with `RTLD_DEFAULT` returns null, because it asks
-for a symbol of the program itself and a static program has none. libsystemd looks up newer
-functions of the C library that way from static constructors; forwarded to the host, the
-lookups would return the wrappers of the host's C library, which report errors through its own
-`errno`. With null, libsystemd makes the system calls directly. A thread that calls into host
+reach the host's libraries. A `dlsym` lookup with `RTLD_DEFAULT` searches the global scope of
+the host's loader, which contains the host's C library. libsystemd looks up newer functions of
+the C library that way from static constructors and would call the host's functions, which
+report errors through the host's `errno`. For this reason `src/libsystemd.py` patches these
+lookups out, and libsystemd makes the system calls directly. A thread that calls into host
 libraries is a `crt::ChimeraThread`:
 the host's C library creates it and musl attaches its own thread structure to it. `crt`
 gives the host's loader a `PT_TLS` entry for Automat's own TLS segment, so the host's C library

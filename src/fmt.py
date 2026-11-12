@@ -6,7 +6,7 @@ import build
 
 hook = extension_helper.ExtensionHelper('fmt', globals())
 
-hook.FetchFromGit('https://github.com/fmtlib/fmt.git', '11.2.0')
+hook.FetchFromGit('https://github.com/fmtlib/fmt.git', '12.2.1')
 hook.ConfigureWithCMake(build.PREFIX / 'include' / 'fmt' / 'format.h')
 hook.ConfigureOptions(**{
     'FMT_DOC': 'OFF',

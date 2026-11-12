@@ -31,7 +31,7 @@ UNSUPPORTED_REGISTER_CLASSES = set([
   'FR16X', 'FR32X', 'FR64X',
   'i8mem', 'i16mem', 'i32mem', 'i64mem', 'i128mem',
   'i512mem_GR32', 'i512mem_GR64',
-  'f64mem', 'lea64_32mem', 'lea64mem',
+  'f64mem', 'lea64_8mem', 'lea64_16mem', 'lea64_32mem', 'lea64mem',
   'RSTi',
   'RFP32', 'RFP64', 'RFP80',
   'FR16', 'FR32', 'FR64',
@@ -185,7 +185,7 @@ def gen_x86_hpp():
       return list(sorted(self.opcodes.keys(), key=lambda x: sort_key(x)))
 
   Group('LLVM sanitizers', ['^UBSAN', '^ASAN'])
-  Group('LLVM internals', ['^ADJCALLSTACK', '^CMOV_', '^CATCHRET', '^CLEANUPRET', '^DYN_ALLOCA_64', '^EH_', '^Int_', '^KCFI_CHECK', '^PROBED_ALLOCA', '^SEG_ALLOCA', '^PTDPBF16PS', '^REP_', '^CMOV_'])
+  Group('LLVM internals', ['^ADJCALLSTACK', '^CMOV_', '^CATCHRET', '^CLEANUPRET', '^DYN_ALLOCA_64', '^EH_', '^Int_', '^KCFI_CHECK', '^PROBED_ALLOCA', '^SEG_ALLOCA', '^PTDPBF16PS', '^PTDPBF8PS', '^PTDPBHF8PS', '^PTDPHBF8PS', '^PTDPHF8PS', '^JCC_SELF', '^REP_', '^CMOV_'])
   Group('Synchronization prefixes', ['^LOCK_PREFIX', '^XRELEASE_PREFIX', '^XACQUIRE_PREFIX'])
   Group('Rep prefixes', ['^REPNE_PREFIX', '^REP_PREFIX'])
   Group('String scan', ['^SCAS'])
@@ -225,7 +225,7 @@ def gen_x86_hpp():
   Group('Move', [r'^MOV\d+(rr|ri)'])
   Group('Move Debug', [r'^MOV\d+(rd|dr)'])
   Group('Move If', [r'^CMOV\d', '^SETCC'])
-  Group('Jump', ['^JMP_', '^JCC', '^JECXZ', '^JRCXZ', '^LOOP'])
+  Group('Jump', ['^JMP_', r'^JCC_\d', '^JECXZ', '^JRCXZ', '^LOOP'])
   Group('Absolute Jump', ['^JMPABS64i'])
   Group('Procedures', ['^CALL64pcrel32$', '^RET64$'])
   Group('Indirect Call', ['^CALL64r$', '^CALL64r_NT$'])
@@ -266,7 +266,7 @@ def gen_x86_hpp():
   Group('Compare and Exchange', ['^CMPXCHG'])
   Group('Compare', [r'^CMP\d'])
   Group('Test', [r'^TEST\d'])
-  Group('Fence', ['^LFENCE', '^SFENCE', '^MFENCE', '^SERIALIZE'])
+  Group('Fence', ['^LFENCE', '^SFENCE', '^MFENCE', '^SERIALIZE', '^IBHF'])
   Group('Stack Frames', ['^ENTER', '^LEAVE'])
   Group('x87', ['^FEMMS'])
   Group('Intel Trusted Execution', ['^GETSEC'])

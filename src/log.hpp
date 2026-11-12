@@ -29,6 +29,7 @@
 #include <chrono>
 #include <functional>
 #include <source_location>
+#include <vector>
 
 #include "status.hpp"
 #include "str.hpp"

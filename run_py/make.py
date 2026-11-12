@@ -188,7 +188,7 @@ class Step:
             # Prevent infinite rebuild loops when outputting to an input directory.
             if path_is_dir(p) and any(Path(out).is_relative_to(p) and path_exists(out) for out in self.outputs):
                 continue
-            if path_exists(p) and path_mtime(p) < build_time:
+            if path_exists(p) and path_mtime(p) <= build_time:
                 continue
             if not path_exists(p):
                 continue

@@ -9,31 +9,23 @@
 #include <fcntl.h>
 #include <setjmp.h>
 #include <signal.h>
-#include <sys/auxv.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
 #include <algorithm>
-#include <cstdio>
-#include <cstdlib>
+#include <cerrno>
 #include <cstring>
+#include <functional>
 #include <span>
+#include <system_error>
 
 #include "format.hpp"
 #include "linux_syscall.hpp"
 
-#if defined(__COSMOPOLITAN__)
-#include <functional>
-#include <new>
-#include <system_error>
-
-#define _Bool bool
-#include <libc/intrin/cxaatexit.h>
-#include <libc/str/locale.internal.h>
-#include <libc/thread/posixthread.internal.h>
-#include <libc/thread/tls.h>
-#undef _Bool
-#endif
+extern "C" {
+void __pthread_attach_host(void* stack_addr, size_t stack_size, size_t guard_size);
+void __pthread_detach_host(void);
+}
 
 namespace automat::crt {
 
@@ -46,14 +38,30 @@ struct HelperFunctions {
   char* (*error)();
 } host;
 
+int* (*host_errno_location)();
+
 }  // namespace
 
-void* OpenLibrary(const char* name, int mode) { return host.open(name, mode); }
+void* OpenLibrary(const char* name, int mode) {
+  void* library = host.open(name, mode);
+  if (!library) errno = *host_errno_location();
+  return library;
+}
 void* FindSymbol(void* library, const char* name) { return host.find(library, name); }
 int CloseLibrary(void* library) { return host.close(library); }
 const char* LibraryError() { return host.error(); }
 
 }  // namespace automat::crt
+
+extern "C" {
+void* dlopen(const char* name, int mode) { return automat::crt::OpenLibrary(name, mode); }
+void* dlsym(void* library, const char* name) {
+  if (library == RTLD_DEFAULT) return nullptr;
+  return automat::crt::FindSymbol(library, name);
+}
+__attribute__((weak)) int dlclose(void* library) { return automat::crt::CloseLibrary(library); }
+char* dlerror() { return const_cast<char*>(automat::crt::LibraryError()); }
+}
 
 namespace automat::crt {
 
@@ -69,7 +77,6 @@ enum {
   kAuxExecfn = 31,
   kHelperStackSize = 64 << 10,
   kMaxProgramHeaders = 16,
-  kHostThreadStackSize = 8 << 20,
 };
 
 const unsigned char kHelperImage[] = {
@@ -85,7 +92,7 @@ struct Source {
       memcpy(destination, bytes + offset, size);
       return true;
     }
-    return pread(fd, destination, size, offset) == (ssize_t)size;
+    return LinuxSyscall(__NR_pread64, fd, destination, size, offset) == (ssize_t)size;
   }
 };
 
@@ -94,8 +101,9 @@ struct Image {
   Elf64_Ehdr header;
 };
 
-void MapImage(const Source& source, Image& image, char* interpreter, size_t interpreter_size,
-              Status& status) {
+const char* start_error;
+
+void MapImage(const Source& source, Image& image, char* interpreter, size_t interpreter_size) {
   const size_t page_size = sysconf(_SC_PAGESIZE);
   Elf64_Phdr headers[kMaxProgramHeaders];
   if (!source.Read(&image.header, sizeof(image.header), 0) ||
@@ -103,7 +111,7 @@ void MapImage(const Source& source, Image& image, char* interpreter, size_t inte
       image.header.e_machine != EM_X86_64 || image.header.e_phentsize != sizeof(Elf64_Phdr) ||
       image.header.e_phnum > kMaxProgramHeaders ||
       !source.Read(headers, image.header.e_phnum * sizeof(Elf64_Phdr), image.header.e_phoff)) {
-    status() += "Not a dynamic x86-64 ELF image";
+    start_error = "Not a dynamic x86-64 ELF image";
     return;
   }
   size_t size = 0;
@@ -113,9 +121,10 @@ void MapImage(const Source& source, Image& image, char* interpreter, size_t inte
     }
   }
   size = (size + page_size - 1) & -page_size;
-  void* base = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (base == MAP_FAILED) {
-    status() += "mmap";
+  long base =
+      LinuxSyscall(__NR_mmap, 0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (base < 0) {
+    start_error = "mmap";
     return;
   }
   image.base = (char*)base;
@@ -123,7 +132,7 @@ void MapImage(const Source& source, Image& image, char* interpreter, size_t inte
     if (header.p_type == PT_INTERP && interpreter_size) {
       if (header.p_filesz >= interpreter_size ||
           !source.Read(interpreter, header.p_filesz, header.p_offset)) {
-        status() += "Couldn't read the interpreter path";
+        start_error = "Couldn't read the interpreter path";
         return;
       }
     }
@@ -136,8 +145,8 @@ void MapImage(const Source& source, Image& image, char* interpreter, size_t inte
                      (header.p_flags & PF_W ? PROT_WRITE : 0) |
                      (header.p_flags & PF_X ? PROT_EXEC : 0);
     if (!source.Read(image.base + header.p_vaddr, header.p_filesz, header.p_offset) ||
-        mprotect(image.base + page_start, page_end - page_start, protection)) {
-      status() += "Couldn't map a segment";
+        LinuxSyscall(__NR_mprotect, image.base + page_start, page_end - page_start, protection)) {
+      start_error = "Couldn't map a segment";
       return;
     }
   }
@@ -147,6 +156,11 @@ struct HostThreadFunctions {
   int (*create)(unsigned long*, const void*, void* (*)(void*), void*);
   int (*join)(unsigned long, void**);
   int (*detach)(unsigned long);
+  unsigned long (*self)();
+  int (*getattr_np)(unsigned long, void*);
+  int (*attr_getstack)(const void*, void**, size_t*);
+  int (*attr_getguardsize)(const void*, size_t*);
+  int (*attr_destroy)(void*);
 } host_thread;
 
 template <typename Function>
@@ -163,50 +177,59 @@ void LoadHostFunctions(Status& status) {
   FindHostFunction("pthread_create", host_thread.create, status);
   FindHostFunction("pthread_join", host_thread.join, status);
   FindHostFunction("pthread_detach", host_thread.detach, status);
+  FindHostFunction("pthread_self", host_thread.self, status);
+  FindHostFunction("pthread_getattr_np", host_thread.getattr_np, status);
+  FindHostFunction("pthread_attr_getstack", host_thread.attr_getstack, status);
+  FindHostFunction("pthread_attr_getguardsize", host_thread.attr_getguardsize, status);
+  FindHostFunction("pthread_attr_destroy", host_thread.attr_destroy, status);
   FindHostFunction("free", host_free, status);
+  FindHostFunction("__errno_location", host_errno_location, status);
 }
 
-#if defined(__x86_64__)
-enum {
-  kSysArchPrctl = 158,
-  kSysGettid = 186,
-  kArchSetGs = 0x1001,
-  kArchGetGs = 0x1004,
-};
-#endif
-
-#if defined(__COSMOPOLITAN__)
 struct ChimeraLaunch {
   std::move_only_function<void()> body;
-  PosixThread* posix_thread;
   sigset_t creator_signal_mask;
 };
-#endif
 
 }  // namespace
 
-void Init(Status& status) {
-  if (getauxval(kAuxBase)) {
-    host = {dlopen, dlsym, dlclose, dlerror};
-    LoadHostFunctions(status);
-    return;
-  }
+extern "C" int __start_host(const Elf64_Phdr* tls) {
   Image program, interpreter;
   char interpreter_path[256] = {};
-  MapImage({kHelperImage, -1}, program, interpreter_path, sizeof(interpreter_path), status);
-  if (!OK(status)) {
-    return;
+  MapImage({kHelperImage, -1}, program, interpreter_path, sizeof(interpreter_path));
+  if (start_error) {
+    return 0;
   }
-  int fd = open(interpreter_path, O_RDONLY | O_CLOEXEC);
-  if (fd == -1) {
-    status() += f("open({})", interpreter_path);
-    return;
+  int fd = LinuxSyscall(__NR_open, interpreter_path, O_RDONLY | O_CLOEXEC);
+  if (fd < 0) {
+    start_error = "Couldn't open the interpreter";
+    return 0;
   }
-  MapImage({nullptr, fd}, interpreter, nullptr, 0, status);
-  close(fd);
-  if (!OK(status)) {
-    return;
+  MapImage({nullptr, fd}, interpreter, nullptr, 0);
+  LinuxSyscall(__NR_close, fd);
+  if (start_error) {
+    return 0;
   }
+  static Elf64_Phdr program_headers[kMaxProgramHeaders + 1];
+  int program_header_count = program.header.e_phnum;
+  memcpy(program_headers, program.base + program.header.e_phoff,
+         program_header_count * sizeof(Elf64_Phdr));
+  for (Elf64_Phdr& header : std::span(program_headers, program_header_count)) {
+    if (header.p_type == PT_PHDR) {
+      header.p_vaddr = header.p_paddr = (char*)program_headers - program.base;
+      header.p_filesz = header.p_memsz = (program_header_count + 1) * sizeof(Elf64_Phdr);
+    }
+  }
+  program_headers[program_header_count++] = {
+      .p_type = PT_TLS,
+      .p_flags = PF_R,
+      .p_offset = 0,
+      .p_vaddr = tls->p_vaddr - (uintptr_t)program.base,
+      .p_paddr = tls->p_vaddr - (uintptr_t)program.base,
+      .p_filesz = tls->p_filesz,
+      .p_memsz = tls->p_memsz,
+      .p_align = tls->p_align,
+  };
   char** environment_end = environ;
   while (*environment_end) {
     ++environment_end;
@@ -217,19 +240,22 @@ void Init(Status& status) {
   while (auxiliary_vector[auxiliary_count].a_type) {
     ++auxiliary_count;
   }
-  char* stack =
-      (char*)mmap(0, kHelperStackSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (stack == MAP_FAILED) {
-    status() += "mmap";
-    return;
+  long stack = LinuxSyscall(__NR_mmap, 0, kHelperStackSize, PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (stack < 0) {
+    start_error = "mmap";
+    return 0;
   }
-  static jmp_buf return_to_init;
+  static jmp_buf return_to_start;
   auto receive_helper_functions = [](void** functions) {
     memcpy(&host, functions, sizeof(host));
-    _longjmp(return_to_init, 1);
+    _longjmp(return_to_start, 1);
   };
-  char* address_argument = stack + kHelperStackSize - 32;
-  snprintf(address_argument, 32, "%lu", (unsigned long)(void (*)(void**))receive_helper_functions);
+  char* address_argument = (char*)stack + kHelperStackSize - 1;
+  for (auto address = (unsigned long)(void (*)(void**))receive_helper_functions; address;
+       address /= 10) {
+    *--address_argument = '0' + address % 10;
+  }
   size_t words = 4 + environment_count + 1 + 2 * auxiliary_count + 2;
   long* sp = (long*)(((uintptr_t)address_argument - words * sizeof(long)) & -16);
   long* out = sp;
@@ -244,13 +270,13 @@ void Init(Status& status) {
     unsigned long value = auxiliary_vector[i].a_un.a_val;
     switch (auxiliary_vector[i].a_type) {
       case kAuxPhdr:
-        value = (unsigned long)program.base + program.header.e_phoff;
+        value = (unsigned long)program_headers;
         break;
       case kAuxPhent:
         value = program.header.e_phentsize;
         break;
       case kAuxPhnum:
-        value = program.header.e_phnum;
+        value = program_header_count;
         break;
       case kAuxBase:
         value = (unsigned long)interpreter.base;
@@ -271,39 +297,23 @@ void Init(Status& status) {
   *out++ = 0;
   *out++ = 0;
   void* entry = interpreter.base + interpreter.header.e_entry;
-#if defined(__x86_64__)
-  unsigned long gs_base;
-  LinuxSyscall(kSysArchPrctl, kArchGetGs, (long)&gs_base);
-#endif
-  if (_setjmp(return_to_init)) {
-#if defined(__x86_64__)
-    LinuxSyscall(kSysArchPrctl, kArchSetGs, gs_base);
-#endif
-    LoadHostFunctions(status);
-    return;
+  if (!_setjmp(return_to_start)) {
+    asm volatile("mov %1, %%rsp\n\tjmp *%0" : : "r"(entry), "r"(sp) : "memory");
   }
-  asm volatile("mov %1, %%rsp\n\tjmp *%0" : : "r"(entry), "r"(sp) : "memory");
+  return 1;
 }
 
-#if defined(__COSMOPOLITAN__)
+void Init(Status& status) {
+  if (start_error) {
+    status() += start_error;
+    return;
+  }
+  LoadHostFunctions(status);
+}
+
 ChimeraThread::ChimeraThread(std::move_only_function<void()> body) {
-  auto* posix_thread = (PosixThread*)calloc(1, sizeof(PosixThread));
-  if (!posix_thread) {
-    throw std::bad_alloc();
-  }
-  dll_init(&posix_thread->list);
-  posix_thread->pt_locale = &__global_locale;
-  posix_thread->pt_tls = _mktls(&posix_thread->tib);
-  if (!posix_thread->pt_tls) {
-    free(posix_thread);
-    throw std::bad_alloc();
-  }
-  posix_thread->tib->tib_pthread = (pthread_t)posix_thread;
-  __c11_atomic_store(&posix_thread->tib->tib_sigmask, -1, __ATOMIC_RELAXED);
-  __c11_atomic_store(&posix_thread->pt_status, kPosixThreadDetached, __ATOMIC_RELAXED);
   auto launch = std::make_unique<ChimeraLaunch>();
   launch->body = std::move(body);
-  launch->posix_thread = posix_thread;
   sigset_t all, creator_signal_mask;
   sigfillset(&all);
   sigprocmask(SIG_SETMASK, &all, &creator_signal_mask);
@@ -312,32 +322,29 @@ ChimeraThread::ChimeraThread(std::move_only_function<void()> body) {
       &handle, nullptr,
       [](void* argument) -> void* {
         auto* launch = (ChimeraLaunch*)argument;
-        PosixThread* posix_thread = launch->posix_thread;
-        LinuxSyscall(kSysArchPrctl, kArchSetGs, (long)posix_thread->tib);
-        int tid = LinuxSyscall(kSysGettid, 0);
-        __c11_atomic_store(&posix_thread->tib->tib_ptid, tid, __ATOMIC_RELAXED);
-        __c11_atomic_store(&posix_thread->tib->tib_ctid, tid, __ATOMIC_RELAXED);
-        _pthread_lock();
-        dll_make_first(&_pthread_list, &posix_thread->list);
-        _pthread_unlock();
+        alignas(16) char attributes[64];
+        void* stack = nullptr;
+        size_t stack_size = 0;
+        size_t guard_size = 0;
+        if (!host_thread.getattr_np(host_thread.self(), attributes)) {
+          host_thread.attr_getstack(attributes, &stack, &stack_size);
+          host_thread.attr_getguardsize(attributes, &guard_size);
+          host_thread.attr_destroy(attributes);
+        }
+        __pthread_attach_host(stack, stack_size, guard_size);
         sigprocmask(SIG_SETMASK, &launch->creator_signal_mask, nullptr);
         launch->body();
         delete launch;
-        __cxa_thread_finalize();
         sigset_t all;
         sigfillset(&all);
         sigprocmask(SIG_BLOCK, &all, nullptr);
-        __c11_atomic_store(&posix_thread->pt_status, kPosixThreadZombie, __ATOMIC_RELEASE);
-        _pthread_zombify(posix_thread);
-        __c11_atomic_store(&posix_thread->tib->tib_ctid, 0, __ATOMIC_RELEASE);
+        __pthread_detach_host();
         return nullptr;
       },
       launch.get());
   sigprocmask(SIG_SETMASK, &creator_signal_mask, nullptr);
   if (error) {
     handle = 0;
-    free(posix_thread->pt_tls);
-    free(posix_thread);
     throw std::system_error(error, std::generic_category());
   }
   launch.release();
@@ -369,7 +376,6 @@ void ChimeraThread::detach() {
   host_thread.detach(handle);
   handle = 0;
 }
-#endif
 
 void Free(void* pointer) { host_free(pointer); }
 

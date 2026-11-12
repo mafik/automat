@@ -19,4 +19,5 @@ hook.ConfigureOptions(**{
 if build.platform == 'win32':
   hook.AddLinkArg('-lzstd_static')
 else:
+  hook.ConfigureOption('CMAKE_INSTALL_LIBDIR', 'lib')
   hook.AddLinkArg('-lzstd')

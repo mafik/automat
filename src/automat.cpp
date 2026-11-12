@@ -171,10 +171,10 @@ static char** argv;
 
 int Main() {
 #if defined(__linux__)
-  Status libc_status;
-  crt::Init(libc_status);
-  if (!OK(libc_status)) {
-    ERROR << "Couldn't initialize the host libc: " << libc_status;
+  Status crt_status;
+  crt::Init(crt_status);
+  if (!OK(crt_status)) {
+    ERROR << "Couldn't initialize the host libc: " << crt_status;
     return 1;
   }
 

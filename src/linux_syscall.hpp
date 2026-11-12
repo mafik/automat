@@ -37,6 +37,9 @@
 #define __NR_pidfd_send_signal 424
 #define __NR_clone3 435
 #define __NR_pidfd_getfd 438
+#define __NR_rt_sigaction 13
+#define __NR_open 2
+#define __NR_pread64 17
 #elif defined(__aarch64__)
 #define __NR_epoll_create1 20
 #define __NR_epoll_ctl 21
@@ -69,6 +72,7 @@
 #define __NR_pidfd_send_signal 424
 #define __NR_clone3 435
 #define __NR_pidfd_getfd 438
+#define __NR_rt_sigaction 134
 #else
 #error "LinuxSyscall supports x86-64 and AArch64"
 #endif

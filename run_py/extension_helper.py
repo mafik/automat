@@ -20,7 +20,8 @@ from make import Popen
 from pathlib import Path
 from typing import Callable
 
-def download_from_url(url : str, filename : Path):
+def download_from_url(url : str, filename : Path, sha256 : str | None = None):
+    import hashlib
     import os
     import urllib.request
 
@@ -29,6 +30,13 @@ def download_from_url(url : str, filename : Path):
 
     # Download the file from url
     urllib.request.urlretrieve(url, filename)
+
+    if sha256:
+        with filename.open('rb') as f:
+            digest = hashlib.file_digest(f, 'sha256').hexdigest()
+        if digest != sha256:
+            filename.unlink()
+            raise Exception(f'{url} has the SHA-256 hash {digest} instead of {sha256}')
 
 # Clears `output` and fills it with archive contents
 def extract_tar(archive : Path, output : Path):
@@ -111,6 +119,7 @@ class ExtensionHelper:
     self.git_tag = None
     self.fetch_url = None
     self.fetch_filename = None
+    self.fetch_sha256 = None
     self.include_regex = None
     self.skip_configure = False
     self.configure_inputs = []
@@ -129,6 +138,7 @@ class ExtensionHelper:
       self.old_hook_recipe(recipe)
 
   def _standard_recipe(self, recipe):
+    self.beam = []
     if self.git_url:
       recipe.add_step(
           git.clone(self.git_url, self.checkout_dir, self.git_tag),
@@ -142,7 +152,7 @@ class ExtensionHelper:
     elif self.fetch_url:
       archive = fs_utils.third_party_dir / self.fetch_filename
       recipe.add_step(
-          partial(download_from_url, self.fetch_url, archive),
+          partial(download_from_url, self.fetch_url, archive, self.fetch_sha256),
           outputs=[archive],
           inputs=[self.module_globals['__file__'], __file__],
           state=[archive],
@@ -175,12 +185,12 @@ class ExtensionHelper:
 
     build_dir = self.build_dir
 
-    configure_inputs = [self.module_globals['__file__'], __file__] + self.beam + self.configure_inputs
+    configure_inputs = [self.module_globals['__file__'], __file__] + self.beam + self.configure_inputs + build.compile_inputs
     makefile = None
 
     env = os.environ.copy()
-    env['CC'] = build.compiler_c
-    env['CXX'] = build.compiler
+    env['CC'] = ' '.join(build.compiler_c)
+    env['CXX'] = ' '.join(build.compiler)
     env['NINJA'] = str(ninja.BIN)
     env.update(self.configure_env_replacements)
     # env['CFLAGS'] = ' '.join(f for f in build.CFLAGS() if not f.startswith('-Werror'))
@@ -413,12 +423,13 @@ class ExtensionHelper:
     self.git_url = git_url
     self.git_tag = git_tag
 
-  def FetchFromURL(self, fetch_url, fetch_filename=None):
+  def FetchFromURL(self, fetch_url, fetch_filename=None, sha256=None):
     if self.git_url:
       raise ValueError(f'{self.name} already has git URL set')
     if self.fetch_url:
       raise ValueError(f'{self.name} already has fetch URL set')
     self.fetch_url = fetch_url
+    self.fetch_sha256 = sha256
     if fetch_filename:
       self.fetch_filename = fetch_filename
     else:

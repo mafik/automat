@@ -40,6 +40,7 @@
 #include "log.hpp"
 #include "math.hpp"
 #include "menu.hpp"
+#include "move_only_function.hpp"
 #include "pointer.hpp"
 #include "root_widget.hpp"
 #include "toy.hpp"

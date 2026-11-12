@@ -5,11 +5,15 @@ import sys
 import build
 import extension_helper
 import fs_utils
+import src
 
 if sys.platform == 'linux':
+    libucontext = src.load_extension('libucontext')
     hook = extension_helper.ExtensionHelper('libsystemd', globals())
-    hook.FetchFromGit('https://github.com/systemd/systemd.git', 'v258.11')
+    hook.FetchFromGit('https://github.com/systemd/systemd.git', 'v262.2')
+    hook.DependsOn(libucontext.hook)
     hook.ConfigureOptions(**{
+        'libc': 'musl',
         'static-libsystemd': 'true',
         'link-udev-shared': 'false',
         'link-executor-shared': 'false',
@@ -82,8 +86,6 @@ if sys.platform == 'linux':
         'libcryptsetup': 'disabled',
         'libcurl': 'disabled',
         'libidn2': 'disabled',
-        'libidn': 'disabled',
-        'libiptc': 'disabled',
         'qrencode': 'disabled',
         'gcrypt': 'disabled',
         'gnutls': 'disabled',
@@ -109,5 +111,5 @@ if sys.platform == 'linux':
     hook.ConfigureWithMeson(build.PREFIX / 'lib64' / 'libsystemd.a',
                             install_tags='devel,libsystemd',
                             build_targets=('libsystemd', 'devel'))
-    hook.AddLinkArgs('-l:libsystemd.a', '-l:libcap.a', '-lm')
+    hook.AddLinkArgs('-l:libsystemd.a', '-lm')
     hook.InstallWhenIncluded(r'^systemd/.*')

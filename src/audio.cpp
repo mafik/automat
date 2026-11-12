@@ -7,10 +7,11 @@
 #include <pipewire/main-loop.h>
 #include <pipewire/pipewire.h>
 #include <spa/param/audio/format-utils.h>
+#include <spa/support/thread.h>
+#include <spa/utils/result.h>
 
+#include "pipewire.hpp"
 #include "thread_name.hpp"
-
-#pragma maf add link argument "-latomic"
 #else
 // clang-format off
 #undef NOGDI
@@ -29,6 +30,7 @@
 #include <thread>
 
 #include "concurrentqueue.hpp"
+#include "crt.hpp"
 #include "log.hpp"
 #include "ptr.hpp"
 #include "span.hpp"
@@ -38,7 +40,7 @@ using namespace std;
 
 namespace automat::audio {
 
-jthread loop_thread;
+crt::ChimeraThread loop_thread;
 atomic<bool> running = false;
 
 constexpr int kDefaultRate = 48'000;
@@ -153,13 +155,13 @@ static void on_process(void* userdata) {
   struct data* data = (struct data*)userdata;
 
   if (!running) {
-    pw_main_loop_quit(data->loop);
+    pw.main_loop_quit(data->loop);
   }
 
   struct pw_buffer* b;
 
-  if ((b = pw_stream_dequeue_buffer(data->stream)) == NULL) {
-    pw_log_warn("out of buffers: %m");
+  if ((b = pw.stream_dequeue_buffer(data->stream)) == NULL) {
+    spa_log_warn(pw.log_get(), "out of buffers: %m");
     return;
   }
 
@@ -178,7 +180,7 @@ static void on_process(void* userdata) {
   buf.chunk->stride = sizeof(Frame);
   buf.chunk->size = dst.size_bytes();
 
-  pw_stream_queue_buffer(data->stream, b);
+  pw.stream_queue_buffer(data->stream, b);
 
   ReceiveClips();
 }
@@ -188,11 +190,29 @@ static const struct pw_stream_events stream_events = {
     .process = on_process,
 };
 
+static void AcquireRealtimePriority(pw_stream* stream) {
+  pw_context* context = pw.core_get_context(pw.stream_get_core(stream));
+  auto* thread_utils =
+      (spa_thread_utils*)pw.context_get_object(context, SPA_TYPE_INTERFACE_ThreadUtils);
+  if (thread_utils == nullptr) {
+    return;
+  }
+  auto host_pthread_self = (spa_thread * (*)()) crt::FindSymbol(nullptr, "pthread_self");
+  spa_thread_utils_acquire_rt(thread_utils, host_pthread_self(), -1);
+}
+
 void Init(int* argc, char*** argv) {
-  pw_init(argc, argv);
+  Status status;
+  pw.LoadSymbols(status);
+  if (!OK(status)) {
+    ERROR << "Audio disabled: " << status;
+    return;
+  }
+  pw.init(argc, argv);
+
   running = true;
 
-  loop_thread = std::jthread([] {
+  loop_thread = crt::StartChimeraThread([] {
     SetThreadName("Audio");
     struct data data = {
         0,
@@ -201,23 +221,23 @@ void Init(int* argc, char*** argv) {
     uint8_t buffer[1024];
     struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
 
-    data.loop = pw_main_loop_new(NULL);
+    data.loop = pw.main_loop_new(NULL);
     if (data.loop == nullptr) {
       ERROR << "Audio disabled: couldn't create a PipeWire main loop.";
       running = false;
       return;
     }
 
-    data.stream =
-        pw_stream_new_simple(pw_main_loop_get_loop(data.loop), "Automat",
-                             pw_properties_new(PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_CATEGORY,
-                                               "Playback", PW_KEY_MEDIA_ROLE, "Game", NULL),
-                             &stream_events, &data);
+    data.stream = pw.stream_new_simple(
+        pw.main_loop_get_loop(data.loop), "Automat",
+        pw.properties_new(PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_CATEGORY, "Playback",
+                          PW_KEY_MEDIA_ROLE, "Game", PW_KEY_NODE_LOOP_CLASS, "main", NULL),
+        &stream_events, &data);
     if (data.stream == nullptr) {
       ERROR << "Audio disabled: couldn't create a PipeWire stream "
                "(no PipeWire server? this machine may be running PulseAudio).";
       running = false;
-      pw_main_loop_destroy(data.loop);
+      pw.main_loop_destroy(data.loop);
       return;
     }
 
@@ -225,14 +245,21 @@ void Init(int* argc, char*** argv) {
                                         .channels = kDefaultChannels);
     params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &info);
 
-    pw_stream_connect(data.stream, PW_DIRECTION_OUTPUT, PW_ID_ANY,
-                      (pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS |
-                                        PW_STREAM_FLAG_RT_PROCESS),
-                      params, 1);
-    pw_main_loop_run(data.loop);
+    int result =
+        pw.stream_connect(data.stream, PW_DIRECTION_OUTPUT, PW_ID_ANY,
+                          (pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT |
+                                            PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_RT_PROCESS),
+                          params, 1);
+    if (result < 0) {
+      ERROR << "Audio disabled: couldn't connect to the PipeWire daemon (" << spa_strerror(result)
+            << ").";
+    } else {
+      AcquireRealtimePriority(data.stream);
+      pw.main_loop_run(data.loop);
+    }
     running = false;
-    pw_stream_destroy(data.stream);
-    pw_main_loop_destroy(data.loop);
+    pw.stream_destroy(data.stream);
+    pw.main_loop_destroy(data.loop);
   });
 }
 
@@ -397,7 +424,9 @@ void Init() {
 
 void Stop() {
   running = false;
-  loop_thread.join();
+  if (loop_thread.joinable()) {
+    loop_thread.join();
+  }
 }
 
 struct WAV_Header {

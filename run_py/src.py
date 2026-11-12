@@ -198,7 +198,7 @@ def load_extensions() -> list[ModuleType]:
     extensions_list = []
     old_dont_write_bytecode = sys.dont_write_bytecode
     sys.dont_write_bytecode = True
-    for path in fs_utils.src_dir.glob('*.py'):
+    for path in sorted(fs_utils.src_dir.glob('*.py')):
         try:
             load_extension(path.stem)
         except Exception as e:

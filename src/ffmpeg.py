@@ -39,7 +39,7 @@ hook.DependsOn(zlib.hook)
 # LGPL build - never pass enable-gpl / enable-nonfree here.
 hook.ConfigureOptions(**{
   # FFmpeg's configure ignores $CC; the bare name sidesteps spaces in the Windows clang path.
-  'cc': 'clang' if build.platform == 'win32' else build.compiler_c,
+  'cc': 'clang' if build.platform == 'win32' else ' '.join(build.compiler_c),
   'enable-pic': '',
   'disable-autodetect': '',  # no system .so deps (xlib, vaapi, lzma, ...)
   'enable-zlib': '',

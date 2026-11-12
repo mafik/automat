@@ -14,8 +14,8 @@ if sys.platform == 'linux':
 elif sys.platform == 'win32':
   tesseract_output = build.PREFIX / 'lib64' / ('tesseract55d.lib' if build.debug else 'tesseract55.lib')
 
-hook.FetchFromURL('https://github.com/tesseract-ocr/tesseract/archive/refs/tags/5.5.0.tar.gz', fetch_filename='tesseract-5.5.0.tar.gz')
-hook.ConfigureDependsOn(leptonica.hook)
+hook.FetchFromURL('https://github.com/tesseract-ocr/tesseract/archive/refs/tags/5.5.4.tar.gz', fetch_filename='tesseract-5.5.4.tar.gz')
+hook.DependsOn(leptonica.hook)
 
 hook.ConfigureOptions(
   SW_BUILD='OFF',
@@ -33,7 +33,7 @@ hook.ConfigureOptions(
   DISABLE_CURL='ON',
   INSTALL_CONFIGS='OFF')
 if sys.platform == 'win32':
-  hook.ConfigureOptions(WIN32_MT_BUILD='ON')
+  hook.ConfigureOptions(WIN32_MT_BUILD='ON', ENABLE_PRECOMPILED_HEADERS='OFF')
   # Windows SDK 10.0.26100.0 from May 2025 introduces a dependency from wchar.h to intrin.h (provided by Clang).
   # Clang seems to define its intrinsics using vector types, which don't work in MS-compatibility mode.
   # See: https://clang.llvm.org/docs/MSVCCompatibility.html#simd-vector-types

@@ -5,6 +5,7 @@
 #include <functional>
 #include <thread>
 
+#include "move_only_function.hpp"
 #include "status.hpp"
 #include "unique_ptr.hpp"
 
@@ -24,11 +25,13 @@ void Free(void* pointer);
 using DeleteWithFree = DeleteWith<Free>;
 #endif
 
-// ChimeraThread is a mix of static (cosmopolitan) & host (glibc) thread.
+// ChimeraThread is a mix of static (musl) & host (glibc) thread.
 // It maintains the TLS buffers for both C libraries and can interact with both of them without any
 // mode switching.
 
-#if defined(__COSMOPOLITAN__)
+#if defined(_WIN32)
+using ChimeraThread = std::jthread;
+#else
 class ChimeraThread {
  public:
   ChimeraThread() = default;
@@ -44,8 +47,6 @@ class ChimeraThread {
  private:
   unsigned long handle = 0;
 };
-#else
-using ChimeraThread = std::jthread;
 #endif
 
 inline ChimeraThread StartChimeraThread(std::move_only_function<void()> body) {

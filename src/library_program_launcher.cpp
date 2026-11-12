@@ -514,6 +514,24 @@ struct ArgvField : ui::TextFieldBase {
   Vec<Str> Snapshot() const;
 };
 
+#if !defined(_WIN32)
+static constexpr const char* kSignalAbbreviations[] = {
+    [SIGHUP] = "HUP",   [SIGINT] = "INT",       [SIGQUIT] = "QUIT", [SIGILL] = "ILL",
+    [SIGTRAP] = "TRAP", [SIGABRT] = "ABRT",     [SIGBUS] = "BUS",   [SIGFPE] = "FPE",
+    [SIGKILL] = "KILL", [SIGUSR1] = "USR1",     [SIGSEGV] = "SEGV", [SIGUSR2] = "USR2",
+    [SIGPIPE] = "PIPE", [SIGALRM] = "ALRM",     [SIGTERM] = "TERM", [SIGSTKFLT] = "STKFLT",
+    [SIGCHLD] = "CHLD", [SIGCONT] = "CONT",     [SIGSTOP] = "STOP", [SIGTSTP] = "TSTP",
+    [SIGTTIN] = "TTIN", [SIGTTOU] = "TTOU",     [SIGURG] = "URG",   [SIGXCPU] = "XCPU",
+    [SIGXFSZ] = "XFSZ", [SIGVTALRM] = "VTALRM", [SIGPROF] = "PROF", [SIGWINCH] = "WINCH",
+    [SIGIO] = "IO",     [SIGPWR] = "PWR",       [SIGSYS] = "SYS",
+};
+
+static const char* SignalAbbreviation(int sig) {
+  if (sig < 0 || sig >= (int)std::size(kSignalAbbreviations)) return nullptr;
+  return kSignalAbbreviations[sig];
+}
+#endif
+
 struct ProgramLauncherToy : ui::beta::ObjectToy {
   void FillMenu(ui::Pointer& pointer, Menu& menu) override {
     ui::beta::ObjectToy::FillMenu(pointer, menu);
@@ -694,7 +712,7 @@ struct ProgramLauncherToy : ui::beta::ObjectToy {
         color = code == 0 ? ui::beta::kGreen : ui::beta::kRed;
       } else if (WIFSIGNALED(wait_status_)) {
         int sig = WTERMSIG(wait_status_);
-        const char* abbr = sigabbrev_np(sig);
+        const char* abbr = SignalAbbreviation(sig);
         label = abbr ? f("SIG{}", abbr) : f("signal {}", sig);
         color = ui::beta::kRed;
       } else {

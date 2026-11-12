@@ -13,11 +13,14 @@
 #include <spa/param/video/format-utils.h>
 #include <spa/utils/result.h>
 
+#include "crt.hpp"
 #include "format.hpp"
 #include "location.hpp"
 #include "log.hpp"
 #include "menu.hpp"
+#include "pipewire.hpp"
 #include "text_field.hpp"
+#include "thread_name.hpp"
 #include "ui_beta.hpp"
 #include "ui_shelf_button.hpp"
 #include "units.hpp"
@@ -57,6 +60,8 @@ static Str FormatLabelFromPod(const spa_pod* param) {
 
 struct PwHost {
   pw_thread_loop* loop = nullptr;
+  crt::ChimeraThread loop_thread;
+  bool loop_running = false;
   pw_context* context = nullptr;
   pw_core* core = nullptr;
   pw_registry* registry = nullptr;
@@ -112,13 +117,20 @@ struct PwHost {
   static PwHost& Get();
 
   PwHost() {
-    pw_init(nullptr, nullptr);
-    loop = pw_thread_loop_new("pw-mirror", nullptr);
+    Status status;
+    pw.LoadSymbols(status);
+    if (!OK(status)) {
+      ERROR << "PipeWire objects disabled: " << status;
+      return;
+    }
+    pw.init(nullptr, nullptr);
+    loop = pw.thread_loop_new("pw-mirror", nullptr);
     if (!loop) return;
-    pw_thread_loop_lock(loop);
-    pw_thread_loop_start(loop);
-    context = pw_context_new(pw_thread_loop_get_loop(loop), nullptr, 0);
-    if (context) core = pw_context_connect(context, nullptr, 0);
+    pw.thread_loop_lock(loop);
+    loop_running = true;
+    loop_thread = crt::StartChimeraThread([this] { RunLoop(); });
+    context = pw.context_new(pw.thread_loop_get_loop(loop), nullptr, 0);
+    if (context) core = pw.context_connect(context, nullptr, 0);
     if (core) {
       static const pw_core_events core_events = {
           .version = PW_VERSION_CORE_EVENTS,
@@ -136,37 +148,55 @@ struct PwHost {
       connected = true;
       SyncLocked();  // the initial registry dump completes before first use
     }
-    pw_thread_loop_unlock(loop);
+    pw.thread_loop_unlock(loop);
   }
 
   ~PwHost() {
     if (!loop) return;
-    pw_thread_loop_lock(loop);
+    pw.thread_loop_lock(loop);
     for (auto& node : nodes) {
       if (node->proxy) {
         spa_hook_remove(&node->listener);
-        pw_proxy_destroy(node->proxy);
+        pw.proxy_destroy(node->proxy);
       }
     }
     if (registry) {
       spa_hook_remove(&registry_listener);
-      pw_proxy_destroy((pw_proxy*)registry);
+      pw.proxy_destroy((pw_proxy*)registry);
     }
     if (core) {
       spa_hook_remove(&core_listener);
-      pw_core_disconnect(core);
+      pw.core_disconnect(core);
     }
-    pw_thread_loop_unlock(loop);
-    pw_thread_loop_stop(loop);
-    if (context) pw_context_destroy(context);
-    pw_thread_loop_destroy(loop);
+    pw_loop_invoke(pw.thread_loop_get_loop(loop), OnStopRequest, 0, nullptr, 0, false, this);
+    pw.thread_loop_unlock(loop);
+    loop_thread.join();
+    if (context) pw.context_destroy(context);
+    pw.thread_loop_destroy(loop);
+  }
+
+  void RunLoop() {
+    SetThreadName("pw-mirror");
+    pw_loop* pipewire_loop = pw.thread_loop_get_loop(loop);
+    pw.thread_loop_lock(loop);
+    pw_loop_enter(pipewire_loop);
+    while (loop_running) {
+      pw_loop_iterate(pipewire_loop, -1);
+    }
+    pw_loop_leave(pipewire_loop);
+    pw.thread_loop_unlock(loop);
+  }
+
+  static int OnStopRequest(spa_loop*, bool, uint32_t, const void*, size_t, void* data) {
+    ((PwHost*)data)->loop_running = false;
+    return 0;
   }
 
   static void OnCoreDone(void* data, uint32_t id, int seq) {
     auto& host = *(PwHost*)data;
     if (id != PW_ID_CORE) return;
     host.sync_seen = seq;
-    pw_thread_loop_signal(host.loop, false);
+    pw.thread_loop_signal(host.loop, false);
   }
 
   static void OnCoreError(void* data, uint32_t id, int seq, int res, const char* message) {
@@ -179,7 +209,7 @@ struct PwHost {
   // Requires the thread loop lock.
   void SyncLocked() {
     sync_seq = pw_core_sync(core, PW_ID_CORE, sync_seq);
-    while (sync_seen != sync_seq) pw_thread_loop_wait(loop);
+    while (sync_seen != sync_seq) pw.thread_loop_wait(loop);
   }
 
   static void OnNodeInfo(void* data, const pw_node_info* info) {
@@ -197,7 +227,7 @@ struct PwHost {
       pw_node_subscribe_params((pw_node*)node.proxy, ids.data(), ids.size());
     }
     auto lock = std::lock_guard(host.mirror_mutex);
-    node.state = pw_node_state_as_string(info->state);
+    node.state = pw.node_state_as_string(info->state);
     if (info->props) {
       Str name = node.name;
       Str media_class = node.media_class;
@@ -302,7 +332,7 @@ struct PwHost {
       // The proxy is destroyed on this (the loop) thread; the entry goes
       // with it.
       spa_hook_remove(&host.nodes[i]->listener);
-      if (host.nodes[i]->proxy) pw_proxy_destroy(host.nodes[i]->proxy);
+      if (host.nodes[i]->proxy) pw.proxy_destroy(host.nodes[i]->proxy);
       host.nodes.erase(host.nodes.begin() + i);
       host.graph_generation.fetch_add(1, std::memory_order_relaxed);
       return;
@@ -365,7 +395,7 @@ struct PwHost {
   // scaling is the object's concern.
   void SetProps(StrView name, Optional<float> volume, Optional<bool> mute) {
     if (!connected) return;
-    pw_thread_loop_lock(loop);
+    pw.thread_loop_lock(loop);
     pw_proxy* proxy = nullptr;
     int channels = 1;
     {
@@ -397,7 +427,7 @@ struct PwHost {
         SyncLocked();  // the subscribed param event lands before the next tick reads
       }
     }
-    pw_thread_loop_unlock(loop);
+    pw.thread_loop_unlock(loop);
   }
 
   // Pairs the out-direction ports of `out_node` with the in-direction ports
@@ -450,7 +480,7 @@ struct PwHost {
   // graph yet).
   bool EnsureLinks(StrView out_name, StrView in_name) {
     if (!connected) return false;
-    pw_thread_loop_lock(loop);
+    pw.thread_loop_lock(loop);
     uint32_t out_node = 0, in_node = 0;
     Vec<PortPair> missing;
     {
@@ -471,33 +501,33 @@ struct PwHost {
     }
     Vec<pw_proxy*> created;
     for (auto& pair : missing) {
-      pw_properties* props = pw_properties_new(
+      pw_properties* props = pw.properties_new(
           PW_KEY_LINK_OUTPUT_NODE, f("{}", out_node).c_str(), PW_KEY_LINK_OUTPUT_PORT,
           f("{}", pair.out_port).c_str(), PW_KEY_LINK_INPUT_NODE, f("{}", in_node).c_str(),
           PW_KEY_LINK_INPUT_PORT, f("{}", pair.in_port).c_str(), PW_KEY_OBJECT_LINGER, "true",
           nullptr);
       auto* proxy = (pw_proxy*)pw_core_create_object(core, "link-factory", PW_TYPE_INTERFACE_Link,
                                                      PW_VERSION_LINK, &props->dict, 0);
-      pw_properties_free(props);
+      pw.properties_free(props);
       if (proxy) created.push_back(proxy);
     }
     if (!created.empty()) {
       SyncLocked();  // the new links land in the mirror before the sweep looks
-      for (auto* proxy : created) pw_proxy_destroy(proxy);  // the links linger
+      for (auto* proxy : created) pw.proxy_destroy(proxy);  // the links linger
     }
     bool realized;
     {
       auto lock = std::lock_guard(mirror_mutex);
       realized = out_node && in_node && !LinkIdsLocked(out_node, in_node).empty();
     }
-    pw_thread_loop_unlock(loop);
+    pw.thread_loop_unlock(loop);
     return realized;
   }
 
   // Destroys every daemon link between the two named nodes.
   void DestroyLinks(StrView out_name, StrView in_name) {
     if (!connected) return;
-    pw_thread_loop_lock(loop);
+    pw.thread_loop_lock(loop);
     Vec<uint32_t> doomed;
     {
       auto lock = std::lock_guard(mirror_mutex);
@@ -507,7 +537,7 @@ struct PwHost {
     }
     for (uint32_t id : doomed) pw_registry_destroy(registry, id);
     if (!doomed.empty()) SyncLocked();
-    pw_thread_loop_unlock(loop);
+    pw.thread_loop_unlock(loop);
   }
 
   // True when both nodes are in the graph yet no daemon link connects them -
@@ -605,7 +635,7 @@ static void OnVuProcess(void* data) {
   auto& obj = *vu_stream.owner;
   auto* stream = vu_stream.stream;
   if (!stream) return;
-  pw_buffer* b = pw_stream_dequeue_buffer(stream);
+  pw_buffer* b = pw.stream_dequeue_buffer(stream);
   if (!b) return;
   float peak = 0;
   if (b->buffer->n_datas > 0 && b->buffer->datas[0].data) {
@@ -618,7 +648,7 @@ static void OnVuProcess(void* data) {
   float next = std::max(peak, old * 0.9f);  // peak with decay
   obj.vu.store(next, std::memory_order_relaxed);
   if (fabsf(next - old) > 0.005f) obj.WakeToys();
-  pw_stream_queue_buffer(stream, b);
+  pw.stream_queue_buffer(stream, b);
 }
 
 static const pw_stream_events kVuStreamEvents = {
@@ -630,7 +660,7 @@ static const pw_stream_events kVuStreamEvents = {
 static void DestroyVuStreamLocked(PipeWireNode& obj) {
   if (auto* vu_stream = (VuStream*)obj.stream) {
     spa_hook_remove(&vu_stream->listener);
-    pw_stream_destroy(vu_stream->stream);
+    pw.stream_destroy(vu_stream->stream);
     delete vu_stream;
     obj.stream = nullptr;
   }
@@ -638,19 +668,19 @@ static void DestroyVuStreamLocked(PipeWireNode& obj) {
 
 static void CreateVuStreamLocked(PipeWireNode& obj, const Str& target) {
   auto& host = PwHost::Get();
-  pw_properties* props = pw_properties_new(
+  pw_properties* props = pw.properties_new(
       PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_CATEGORY, "Capture", PW_KEY_MEDIA_ROLE, "Music",
       PW_KEY_TARGET_OBJECT, target.c_str(), PW_KEY_STREAM_CAPTURE_SINK, "true", nullptr);
-  auto* stream = pw_stream_new(host.core, "Automat peak meter", props);
+  auto* stream = pw.stream_new(host.core, "Automat peak meter", props);
   if (!stream) return;
   auto* vu_stream = new VuStream{.stream = stream, .owner = &obj};
   obj.stream = vu_stream;
-  pw_stream_add_listener(stream, &vu_stream->listener, &kVuStreamEvents, vu_stream);
+  pw.stream_add_listener(stream, &vu_stream->listener, &kVuStreamEvents, vu_stream);
   uint8_t buffer[1024];
   spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
   auto info = SPA_AUDIO_INFO_RAW_INIT(.format = SPA_AUDIO_FORMAT_F32);
   const spa_pod* params[1] = {spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &info)};
-  pw_stream_connect(stream, PW_DIRECTION_INPUT, PW_ID_ANY,
+  pw.stream_connect(stream, PW_DIRECTION_INPUT, PW_ID_ANY,
                     (pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS),
                     params, 1);
 }
@@ -662,9 +692,9 @@ static void CreateVuStreamLocked(PipeWireNode& obj, const Str& target) {
 PipeWireNode::~PipeWireNode() {
   if (!stream) return;
   auto& host = PwHost::Get();
-  pw_thread_loop_lock(host.loop);
+  pw.thread_loop_lock(host.loop);
   DestroyVuStreamLocked(*this);
-  pw_thread_loop_unlock(host.loop);
+  pw.thread_loop_unlock(host.loop);
 }
 
 void PipeWireNode::SerializeState(ObjectSerializer& writer) const {
@@ -691,9 +721,9 @@ void PipeWireNode::SetNodeName(StrView name) {
     vu.store(0, std::memory_order_relaxed);
   }
   if (host.loop && stream) {
-    pw_thread_loop_lock(host.loop);
+    pw.thread_loop_lock(host.loop);
     DestroyVuStreamLocked(*this);
-    pw_thread_loop_unlock(host.loop);
+    pw.thread_loop_unlock(host.loop);
   }
   WakeToys();
 }
@@ -711,10 +741,10 @@ void PipeWireNode::RefreshFromMirror() {
   // opens a stream targeting its node.
   bool want_stream = host.connected && HomeLocation() != nullptr && !name.empty();
   if (want_stream != (stream != nullptr)) {
-    pw_thread_loop_lock(host.loop);
+    pw.thread_loop_lock(host.loop);
     DestroyVuStreamLocked(*this);
     if (want_stream) CreateVuStreamLocked(*this, name);
-    pw_thread_loop_unlock(host.loop);
+    pw.thread_loop_unlock(host.loop);
   }
   PwHost::NodeFacts facts;
   bool found = host.connected && host.Find(name, facts);

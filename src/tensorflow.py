@@ -203,8 +203,8 @@ else:
 
   def BazelEnv():
     env = os.environ.copy()
-    env['CC'] = build.compiler_c
-    env['CXX'] = build.compiler
+    env['CC'] = build.compiler_c[0]
+    env['CXX'] = build.compiler[0]
     return env
 
   def Install():

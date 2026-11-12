@@ -6,7 +6,6 @@
 #include <dirent.h>
 #include <dlfcn.h>
 #include <fcntl.h>
-#include <malloc.h>
 #include <poll.h>
 #include <signal.h>
 #include <spawn.h>
@@ -225,8 +224,9 @@ struct Resources {
     for (auto& v : ReadMaps("/proc/self/maps")) {
       if (v.path.find("memfd:pm-") != Str::npos) ++r.mirror_mappings;
       if (v.prot == PROT_NONE && v.end - v.start >= kGiB) ++r.reservations;
+      if ((v.prot & PROT_WRITE) && !v.shared && (v.path.empty() || v.path == "[heap]"))
+        r.heap += v.end - v.start;
     }
-    r.heap = mallinfo2().uordblks;
     return r;
   }
   Str ToStr() const {
@@ -844,6 +844,7 @@ enum class Load { kMaps, kDlopen, kForks, kMallocs, kMixed };
 struct Stream {
   Target& target;
   Load load;
+  Vec<Str> libraries = ExistingLibraries();
   std::atomic<bool> stop = false;
   uint64_t commands = 0;
   Vec<Str> errors;
@@ -880,7 +881,6 @@ struct Stream {
   }
 
   void Run() {
-    Vec<Str> libraries = ExistingLibraries();
     for (uint64_t round = 0; !stop.load(std::memory_order_relaxed); ++round) {
       Vec<Str> lines;
       auto add = [&](int count, auto make) {

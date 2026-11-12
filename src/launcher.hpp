@@ -12,6 +12,7 @@
 
 #include "argument.hpp"
 #include "base.hpp"
+#include "move_only_function.hpp"
 #include "object.hpp"
 #include "ptr.hpp"
 #include "status.hpp"

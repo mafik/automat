@@ -80,7 +80,7 @@ def post_install(*outputs):
                               str(hook.checkout_dir))
 
 hook.DependsOn(zlib_ext.hook, zstd_ext.hook)
-hook.FetchFromGit('https://github.com/llvm/llvm-project.git', 'llvmorg-19.1.6')
+hook.FetchFromGit('https://github.com/llvm/llvm-project.git', 'llvmorg-23.1.5')
 hook.SetSrcDir(hook.checkout_dir / 'llvm')
 hook.ConfigureWithCMake(llvm_config_path)
 hook.ConfigureOption('LLVM_ENABLE_RTTI', 'ON')
@@ -103,6 +103,12 @@ else:
 hook.ConfigureOption('LLVM_RAM_PER_LINK_JOB', '10000')
 if build.platform == 'win32':
   hook.ConfigureOption('LLVM_HOST_TRIPLE', 'x86_64-pc-windows') # needed to build on Windows
+elif build.platform == 'linux':
+  hook.ConfigureOption('LLVM_ENABLE_PIC', 'OFF')
+  hook.ConfigureOption('LLVM_ENABLE_LIBXML2', 'OFF')
+  hook.ConfigureOption('LLVM_ENABLE_LIBEDIT', 'OFF')
+  hook.ConfigureOption('LLVM_DISTRIBUTION_COMPONENTS', 'llvm-headers;llvm-libraries;llvm-config;llvm-tblgen')
+  hook.ninja_target = 'install-distribution'
 hook.ConfigureOption('CMAKE_CXX_STANDARD', '17')
 hook.InstallWhenIncluded(r'llvm/.*\.h')
 hook.AddCompileArg(llvm_cxxflags)

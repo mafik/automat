@@ -115,13 +115,27 @@ exception handling, and a handler that intercepted those on every thread would b
 
 ### The signal handler (Linux)
 
-`ErrorRecoverySignalHandler` classifies the signal (`ClassifySignal`), re-aims the saved
-instruction pointer (`UnwindReturnAddress`, described below), unblocks the signal and throws
-the `LowLevelError`. Throwing from the handler works because GCC's stack unwinder can
-properly unwind signal handler frames. When the fault is an execution of protected or unmapped
-memory, the handler first replaces the saved instruction pointer with the return address found
-at the saved stack pointer and pops it, so that unwinding resumes in the caller of the
-faulting call.
+`error_recovery::Init` installs `ErrorRecoverySignalHandler` with the raw `rt_sigaction`
+system call, not with musl's `sigaction`, so that the kernel returns from the handler
+into `ReturnFromSignalHandler`. musl's own restorer has no unwind information, and the
+unwinder (LLVM libunwind, built by `src/0_musl.py`) does not recognize signal frames on x86-64
+without it. `ReturnFromSignalHandler` carries signal-frame unwind information that reads every
+register of the interrupted frame from the `ucontext_t` that the kernel saved, as glibc's
+restorer does. Its unwind information starts two bytes before its first instruction, because
+the unwinder looks up the return address minus one, and its uncached table search requires
+that address to lie strictly after the start of the entry.
+
+The handler classifies the signal (`ClassifySignal`), turns the saved instruction pointer
+into a return address, re-aims it (`UnwindReturnAddress`, described below), unblocks the signal
+and throws the `LowLevelError`. The unwinder and libc++abi's personality treat the saved
+instruction pointer of the interrupted frame like every other return address and look up the
+address one byte before it, so the handler advances the saved instruction pointer by one. When
+the fault is an execution of protected or unmapped memory, or happens at the first instruction
+of a function (for example the push of a stack overflow at function entry), the handler
+instead replaces the saved instruction pointer with the return address found at the saved
+stack pointer and pops it, so that unwinding resumes in the caller of the faulting call. The
+first instruction is treated like an execution fault because the address one byte before it
+lies outside the function, and because the frame owns nothing yet.
 
 A SIGSEGV is classified along two axes. Whether the memory is protected or unmapped comes from
 `si_code`: `SEGV_ACCERR` and `SEGV_PKUERR` mean a mapping exists but denies the access, and
@@ -142,9 +156,9 @@ ordinary memory access; the build deliberately does not probe stack pages
 (`-fstack-clash-protection`), so that stack allocation stays free. The check runs after the
 execution check, because executing protected memory is the more specific report, and before
 the other SIGSEGV classifications, because the guard region of a pthread stack would otherwise
-be reported as a write to protected memory (glibc maps it `PROT_NONE`) or to unmapped memory
-(on Linux 6.13 and later, glibc installs it with `MADV_GUARD_INSTALL`, and the kernel reports
-a fault there as `SEGV_MAPERR`).
+be reported as a write to protected memory (musl and glibc map it `PROT_NONE`) or to unmapped
+memory (on Linux 6.13 and later, glibc installs the guard of the threads that it creates with
+`MADV_GUARD_INSTALL`, and the kernel reports a fault there as `SEGV_MAPERR`).
 
 ### The unwind return address (Linux)
 
@@ -154,8 +168,8 @@ every call-site entry, or inside an entry with no landing pad, recorded for a ca
 genuinely needs no cleanup (for example a constructor call, before which there is nothing to
 destroy yet). Unwinding from the faulting instruction pointer as it is would skip the
 destructors of the faulting frame. `UnwindReturnAddress` therefore re-aims the saved
-instruction pointer at the start of the next call-site entry after the fault, and the stock
-personality applies that entry's rule during the throw.
+instruction pointer one byte past the start of the next call-site entry after the fault, and
+the stock personality applies that entry's rule during the throw.
 
 The next call site is the right source of cleanups because destruction obligations of
 interest are anchored at calls: a mutex is held after its lock call returned, so the unlock
@@ -169,7 +183,7 @@ over its IP-to-state map, described below.
 
 `UnwindReturnAddress` reaches the faulting frame's exception table with `_Unwind_Backtrace`:
 the walk crosses the signal frame, the first frame reported with the ip-before-instruction
-flag is the faulting frame, and the table is available there through
+flag is the frame interrupted by the signal, and the table is available there through
 `_Unwind_GetLanguageSpecificData` and `_Unwind_GetRegionStart`. The saved instruction pointer
 is kept when the covering call-site entry has a landing pad, because the table's rule for
 that region already applies. It is also kept when the table cannot be parsed or when no entry
@@ -184,8 +198,9 @@ covered by any call-site entry of its exception table. The re-aiming keeps that 
 happening for the layouts the compiler emits today, but a fault where no later entry
 qualifies (for example inside a landing pad, while a destructor faults during unwinding)
 could still present an uncovered instruction pointer. The Linux part is therefore linked with
-`-Wl,--wrap=__gxx_personality_v0`; `__wrap___gxx_personality_v0` defers covered instruction
-pointers to the stock personality unchanged and reports "continue unwinding" for uncovered
+`-Wl,--wrap=__gxx_personality_v0`; `__wrap___gxx_personality_v0` looks up the instruction
+pointer minus one, as libc++abi's personality does, defers covered instruction pointers to the
+stock personality unchanged and reports "continue unwinding" for uncovered
 ones, so such a frame is skipped instead of terminating the process.
 
 ### The exception handler (Windows)
@@ -268,7 +283,7 @@ on Windows; `automat::Main` calls it after `JoinWorkerThreads`.
 ### SourceLocation
 
 `automat::SourceLocation` (`src/source_location.hpp`) is a 24-byte type that converts to and
-from `std::source_location` and can own its strings. libstdc++'s `std::source_location` holds
+from `std::source_location` and can own its strings. libc++'s `std::source_location` holds
 a pointer to a record; converting an owning `SourceLocation` there allocates a record that is
 never freed, because `std::source_location` can only view its data. The MSVC STL stores its own record
 by value, with the line and column ahead of the file and function pointers, so the conversion

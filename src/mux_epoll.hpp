@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "fd.hpp"
+#include "move_only_function.hpp"
 #include "status.hpp"
 #include "str.hpp"
 

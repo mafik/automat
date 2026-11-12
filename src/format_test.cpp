@@ -55,7 +55,8 @@ TEST(BlobSummary, Utf16) {
       "a\0"
       "\x3D\xD8\x00\xDE";
   EXPECT_EQ(BlobSummary(StrView(s3, 6)), "(utf-16 6 B) a😀");
-  EXPECT_EQ(BlobSummary("\xFF\xFE"sv), "(blob 2 B) ..  fffe");
+  alignas(2) const char s4[] = "\xFF\xFE";
+  EXPECT_EQ(BlobSummary(StrView(s4, 2)), "(utf-16 2 B) \xEF\xBB\xBF");
 }
 
 TEST(BlobSummary, Utf16NeedsAsciiMajority) {

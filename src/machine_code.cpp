@@ -416,7 +416,7 @@ struct SignalController : Controller {
       struct Fixup {
         size_t end_offset;  // place in machine_code where the fixup ends
         int target_index;   // index of the target instruction
-        llvm::MCFixupKind kind = llvm::MCFixupKind::FK_PCRel_4;
+        llvm::MCFixupKind kind = llvm::FK_Data_4;
         int source_index;  // index of the source instruction
         StopType code_type;
       };
@@ -564,9 +564,9 @@ struct SignalController : Controller {
           target_offset = new_code.size();
           EmitExitPoint(fixup.source_index, fixup.code_type);
         }
-        if (fixup.kind == llvm::MCFixupKind::FK_PCRel_4) {
+        if (fixup.kind == llvm::FK_Data_4) {
           Fixup4(fixup.end_offset, target_offset);
-        } else if (fixup.kind == llvm::MCFixupKind::FK_PCRel_1) {
+        } else if (fixup.kind == llvm::FK_Data_1) {
           Fixup1(fixup.end_offset, target_offset);
         } else {
           ERROR << "Unsupported fixup kind: " << fixup.kind;
@@ -859,7 +859,7 @@ struct PtraceController : Controller {
       struct Fixup {
         size_t end_offset;  // place in machine_code where the fixup ends
         int target_index;   // index of the target instruction
-        llvm::MCFixupKind kind = llvm::MCFixupKind::FK_PCRel_4;
+        llvm::MCFixupKind kind = llvm::FK_Data_4;
         int source_index;  // index of the source instruction
         StopType code_type;
       };
@@ -999,9 +999,9 @@ struct PtraceController : Controller {
           target_offset = new_code.size();
           EmitExitPoint(fixup.source_index, fixup.code_type);
         }
-        if (fixup.kind == llvm::MCFixupKind::FK_PCRel_4) {
+        if (fixup.kind == llvm::FK_Data_4) {
           Fixup4(fixup.end_offset, target_offset);
-        } else if (fixup.kind == llvm::MCFixupKind::FK_PCRel_1) {
+        } else if (fixup.kind == llvm::FK_Data_1) {
           Fixup1(fixup.end_offset, target_offset);
         } else {
           ERROR << "Unsupported fixup kind: " << fixup.kind;

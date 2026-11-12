@@ -45,19 +45,18 @@ class MachineCodeControllerTest : public ::testing::Test {
     exited = false;
     exit_instr = {};
     exit_point = mc::StopType::InstructionBody;
-    Status status;
     NestedWeakPtr<const mc::Inst> mc_instr = instr.lock()->ToMC();
-    std::atomic<bool> ready = false;
-    auto Execute = [&]() {
-      ready = true;
-      ready.notify_one();
-      controller->Execute(mc_instr, status);
-    };
     if (background_thread) {
-      thread = std::jthread(Execute);
-      ready.wait(false);
+      thread = std::jthread([this, mc_instr] {
+        Status status;
+        controller->Execute(mc_instr, status);
+      });
+      while (!controller->IsRunning()) {
+        std::this_thread::yield();
+      }
     } else {
-      Execute();
+      Status status;
+      controller->Execute(mc_instr, status);
       ASSERT_TRUE(OK(status));
     }
   }

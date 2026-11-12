@@ -11,6 +11,7 @@
 #include "log.hpp"
 
 #pragma maf add link argument "-lsvg"
+#pragma maf add link argument "-lskia"
 
 namespace automat {
 

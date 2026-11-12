@@ -863,9 +863,9 @@ void Handle(const std::vector<string_view>& t, Out& out) {
       out << "ok ";
       out.Hex((uint64_t)race.addr);
     }
-  } else if (cmd == "sigwatch" && t.size() == 2) {
-    uint64_t pid;
-    if (!ParseU64(t[1], pid)) return (void)(out << "err args");
+  } else if (cmd == "sigwatch" && t.size() == 3) {
+    uint64_t pid, rt_signal;
+    if (!ParseU64(t[1], pid) || !ParseU64(t[2], rt_signal)) return (void)(out << "err args");
     expected_sender = (pid_t)pid;
     rt_signals = usr1_signals = foreign_signals = 0;
     rt_values = 0;
@@ -873,7 +873,7 @@ void Handle(const std::vector<string_view>& t, Out& out) {
     action.sa_sigaction = CountSignal;
     action.sa_flags = SA_SIGINFO | SA_RESTART;
     sigaction(SIGUSR1, &action, nullptr);
-    sigaction(SIGRTMIN + 1, &action, nullptr);
+    sigaction((int)rt_signal, &action, nullptr);
     out << "ok";
   } else if (cmd == "sigcount") {
     out << "ok rt=";

@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 
 #include <cerrno>
+#include <cstdlib>
 
 #if defined(__linux__)
 #include <linux/limits.h>

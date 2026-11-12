@@ -34,6 +34,7 @@ if build.platform == 'win32':
   hook.PostInstallStep(InstallZAlias)
   hook.AddLinkArg('-lzlibstatic')
 else:
+  hook.ConfigureOption('ZLIB_BUILD_EXAMPLES', 'OFF')
   def RemoveSharedZlib(marker):
     for so in (build.PREFIX / 'lib').glob('libz.so*'):
       so.unlink()

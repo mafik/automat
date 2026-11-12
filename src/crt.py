@@ -14,8 +14,8 @@ if platform == 'linux':
 
   def hook_recipe(recipe):
     recipe.add_step(
-        functools.partial(make.Popen, [build.compiler_c, '-pie', '-fPIC', '-O2', '-nostartfiles', HELPER_C,
-                                       '-o', HELPER, '-Wl,--no-as-needed', '-l:libdl.so.2', '-Wl,-e,_start', '-s']),
+        functools.partial(make.Popen, [build.compiler_c[0], '-pie', '-fPIC', '-O2', '-nostartfiles', HELPER_C,
+                                       '-o', HELPER, '-Wl,--no-as-needed', '-l:libdl.so.2', '-l:libpthread.so.0', '-Wl,-e,_start', '-s']),
         outputs=[HELPER],
         inputs=[HELPER_C, __file__],
         desc='Building the crt helper for the host',

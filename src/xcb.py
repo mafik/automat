@@ -109,7 +109,6 @@ libxcb = extension_helper.ExtensionHelper('libxcb', globals())
 libxcb.FetchFromURL('https://xcb.freedesktop.org/dist/libxcb-1.17.0.tar.xz')
 libxcb.ConfigureDependsOn(xcb_proto, libXau)
 libxcb.ConfigureEnvReplace('MAKEFLAGS', 'am_libxcb_la_OBJECTS=')
-libxcb.ConfigureEnvReplace('PKG_CONFIG_LIBDIR', ':'.join(str(build.PREFIX / x / 'pkgconfig') for x in ('lib64', 'lib', 'share')))
 libxcb.ConfigureWithAutotools(build.PREFIX / 'lib64' / 'libxcb.a')
 libxcb.AddLinkArgs('-l:libxcb.a',
                    '-l:libxcb-xtest.a',

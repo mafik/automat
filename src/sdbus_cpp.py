@@ -35,7 +35,13 @@ if sys.platform == 'linux':
     hook.LinkDependsOn(libsystemd.hook)
     hook.ConfigureOptions(BUILD_SHARED_LIBS='OFF',
                           SDBUSCPP_BUILD_DOCS='OFF',
-                          SDBUSCPP_BUILD_CODEGEN='ON')
-    hook.ConfigureWithCMake(build.PREFIX / 'lib64' / 'libsdbus-c++.a', xml2cpp)
+                          SDBUSCPP_BUILD_CODEGEN='OFF')
+    hook.ConfigureWithCMake(build.PREFIX / 'lib64' / 'libsdbus-c++.a')
     hook.AddLinkArgs('-l:libsdbus-c++.a')
     hook.InstallWhenIncluded(r'^sdbus-c[+][+]/.*')
+
+    codegen = extension_helper.ExtensionHelper('sdbus-cpp-codegen', globals())
+    codegen.SetSrcDir(hook.checkout_dir / 'tools')
+    codegen.ConfigureDependsOn(hook.checkout_dir)
+    codegen.ConfigureOptions(CMAKE_C_COMPILER=build.compiler_c[0], CMAKE_CXX_COMPILER=build.compiler[0])
+    codegen.ConfigureWithCMake(xml2cpp)

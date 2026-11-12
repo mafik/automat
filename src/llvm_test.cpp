@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
 
-#include <linux/prctl.h>
 #include <llvm/IR/Module.h>
 #include <llvm/MC/MCAsmInfo.h>
 #include <llvm/MC/MCCodeEmitter.h>
@@ -62,7 +61,7 @@ void DumpInfo(const MCInstrInfo* MCI, const MCRegisterInfo* MRI, const MCSubtarg
     if (name.contains("_alt")) skip = true;
 
     MCInst inst = MCInstBuilder(i);
-    auto mnemonic = inst_printer->getMnemonic(&inst).first;
+    auto mnemonic = inst_printer->getMnemonic(inst).first;
     if (mnemonic) {
       string mnemonic_str;
       for (int j = 0; mnemonic[j]; ++j) {
@@ -146,8 +145,8 @@ void DumpInfo(const MCInstrInfo* MCI, const MCRegisterInfo* MRI, const MCSubtarg
       // operand_info += std::to_string(operand_i);
       // operand_info += ",";
       if (operand.OperandType == MCOI::OPERAND_REGISTER) {
-        if (operand.isLookupPtrRegClass()) {
-          operand_info += "isLookupPtrRegClass:true,";
+        if (operand.isLookupRegClassByHwMode()) {
+          operand_info += "isLookupRegClassByHwMode:true,";
         } else {
           const MCRegisterClass& reg_class = MRI->getRegClass(operand.RegClass);
           auto reg_class_name = MRI->getRegClassName(&reg_class);
@@ -234,7 +233,7 @@ void DumpInfo(const MCInstrInfo* MCI, const MCRegisterInfo* MRI, const MCSubtarg
   printf("];\n");
 }
 
-void signal_handler(int sig, siginfo_t* si, struct ucontext_t* context) {
+void signal_handler(int sig, siginfo_t* si, ucontext_t* context) {
   // In Automat this handler will actually call Automat code to see what to do.
   // That code may block the current thread.
   // Response may be either to restart from scratch (longjmp), retry (return) or exit the thread
@@ -305,20 +304,20 @@ int main() {
 
   // Create target machine
   std::string Error;
-  const Target* TheTarget = TargetRegistry::lookupTarget("x86_64-pc-linux-gnu", Error);
+  const Target* TheTarget = TargetRegistry::lookupTarget(Triple("x86_64-pc-linux-gnu"), Error);
   if (!TheTarget) {
     fprintf(stderr, "Target lookup failed: %s\n", Error.c_str());
     return 1;
   }
 
   TargetOptions Options;
-  auto TM = std::unique_ptr<TargetMachine>(
-      TheTarget->createTargetMachine("x86_64-pc-linux-gnu", "generic", "", Options, nullopt));
+  auto TM = std::unique_ptr<TargetMachine>(TheTarget->createTargetMachine(
+      Triple("x86_64-pc-linux-gnu"), "generic", "", Options, nullopt));
 
-  const MCAsmInfo* MAI = TM->getMCAsmInfo();
+  const MCAsmInfo* MAI = &TM->getMCAsmInfo();
   auto MCI = TM->getMCInstrInfo();
-  auto MRI = TM->getMCRegisterInfo();
-  auto STI = TM->getMCSubtargetInfo();
+  auto MRI = &TM->getMCRegisterInfo();
+  auto STI = &TM->getMCSubtargetInfo();
   auto MIP =
       TheTarget->createMCInstPrinter(Triple("x86_64-pc-linux-gnu"), 1 /*Intel*/, *MAI, *MCI, *MRI);
 
@@ -326,7 +325,7 @@ int main() {
   return 0;
 
   // Create MC context
-  MCContext Ctx(Triple("x86_64-pc-linux-gnu"), MAI, MRI, STI);
+  MCContext Ctx(Triple("x86_64-pc-linux-gnu"), *MAI, *MRI, *STI);
 
   auto mc_inst_printer =
       TheTarget->createMCInstPrinter(Triple("x86_64-pc-linux-gnu"), 1, *MAI, *MCI, *MRI);
@@ -473,7 +472,7 @@ int main() {
 
     for (size_t i = 0; i < Fixups.size(); ++i) {
       auto& fixup = Fixups[i];
-      if (fixup.getKind() == MCFixupKind::FK_PCRel_1) {
+      if (fixup.getKind() == FK_Data_1) {
         size_t offset = base_offset + fixup.getOffset();
         CodeBytes[offset] = (char)-2;
       }

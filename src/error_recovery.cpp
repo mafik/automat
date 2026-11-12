@@ -17,9 +17,51 @@
 #include <ucontext.h>
 #include <unwind.h>
 
+#include <cstddef>
 #include <iterator>
 
+#include "linux_syscall.hpp"
+
 #pragma maf add link argument "-Wl,--wrap=__gxx_personality_v0"
+
+asm(R"(
+  .macro ucontext_register dwarf_register, greg
+  .cfi_escape 0x10, \dwarf_register, 3, 0x77, ((40 + 8 * \greg) & 0x7f) | 0x80, (40 + 8 * \greg) >> 7
+  .endm
+  .text
+  .p2align 4
+  .cfi_startproc simple
+  .cfi_signal_frame
+  .cfi_escape 0x0f, 4, 0x77, ((40 + 8 * 15) & 0x7f) | 0x80, (40 + 8 * 15) >> 7, 0x06
+  ucontext_register 8, 0
+  ucontext_register 9, 1
+  ucontext_register 10, 2
+  ucontext_register 11, 3
+  ucontext_register 12, 4
+  ucontext_register 13, 5
+  ucontext_register 14, 6
+  ucontext_register 15, 7
+  ucontext_register 5, 8
+  ucontext_register 4, 9
+  ucontext_register 6, 10
+  ucontext_register 3, 11
+  ucontext_register 1, 12
+  ucontext_register 0, 13
+  ucontext_register 2, 14
+  ucontext_register 7, 15
+  ucontext_register 16, 16
+  nop
+  nop
+ReturnFromSignalHandler:
+  mov $15, %eax
+  syscall
+  .cfi_endproc
+  .purgem ucontext_register
+)");
+
+extern "C" void ReturnFromSignalHandler();
+
+static_assert(offsetof(ucontext_t, uc_mcontext.gregs) == 40);
 
 #elif defined(_WIN32)
 
@@ -48,7 +90,15 @@ Str exe_path;
 constexpr bool kDebugErrorRecovery = false;
 
 constexpr int kSignals[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE};
-struct sigaction old_actions[std::size(kSignals)];
+
+struct KernelSigaction {
+  void (*handler)(int, siginfo_t*, ucontext_t*);
+  unsigned long flags;
+  void (*restorer)();
+  uint64_t mask;
+};
+
+KernelSigaction old_actions[std::size(kSignals)];
 
 constexpr uintptr_t kStackOverflowReach = 4096;
 
@@ -198,7 +248,7 @@ struct CallSiteTable {
 };
 
 struct ReturnAddressSearch {
-  uintptr_t fault_ip;
+  uintptr_t return_address;
   uintptr_t result;
 };
 
@@ -206,9 +256,9 @@ _Unwind_Reason_Code FindFaultCallSite(_Unwind_Context* context, void* arg) {
   auto& search = *(ReturnAddressSearch*)arg;
   int ip_before = 0;
   uintptr_t ip = _Unwind_GetIPInfo(context, &ip_before);
-  if (!ip_before || ip != search.fault_ip) return _URC_NO_REASON;
+  if (!ip_before || ip != search.return_address) return _URC_NO_REASON;
   uintptr_t region_start = _Unwind_GetRegionStart(context);
-  uintptr_t offset = ip - region_start;
+  uintptr_t offset = ip - 1 - region_start;
   CallSiteTable table((const uint8_t*)_Unwind_GetLanguageSpecificData(context));
   CallSite call_site;
   bool covered_with_landing_pad = false;
@@ -222,15 +272,20 @@ _Unwind_Reason_Code FindFaultCallSite(_Unwind_Context* context, void* arg) {
     }
   }
   if (!table.broken && !covered_with_landing_pad && next_start != ~0ULL) {
-    search.result = region_start + (uintptr_t)next_start;
+    search.result = region_start + (uintptr_t)next_start + 1;
   }
   return _URC_END_OF_STACK;
 }
 
-uintptr_t UnwindReturnAddress(uintptr_t fault_ip) {
-  ReturnAddressSearch search = {.fault_ip = fault_ip, .result = fault_ip};
+uintptr_t UnwindReturnAddress(uintptr_t return_address) {
+  ReturnAddressSearch search = {.return_address = return_address, .result = return_address};
   _Unwind_Backtrace(FindFaultCallSite, &search);
   return search.result;
+}
+
+bool IsFunctionStart(uintptr_t ip) {
+  dwarf_eh_bases bases;
+  return _Unwind_Find_FDE((void*)(ip + 1), &bases) && bases.func == ip;
 }
 
 void ErrorRecoverySignalHandler(int sig, siginfo_t* si, ucontext_t* context) {
@@ -253,9 +308,12 @@ void ErrorRecoverySignalHandler(int sig, siginfo_t* si, ucontext_t* context) {
   LowLevelError error{ClassifySignal(sig, si, context), (intptr_t)regs[REG_RIP]};
 
   using enum LowLevelError::Type;
-  if (error.type == EXECUTED_PROTECTED_MEMORY || error.type == EXECUTED_UNMAPPED_MEMORY) {
-    regs[REG_RIP] = *(uint64_t*)regs[REG_RSP] - 1;
+  if (error.type == EXECUTED_PROTECTED_MEMORY || error.type == EXECUTED_UNMAPPED_MEMORY ||
+      IsFunctionStart(regs[REG_RIP])) {
+    regs[REG_RIP] = *(uint64_t*)regs[REG_RSP];
     regs[REG_RSP] += 8;
+  } else {
+    regs[REG_RIP] += 1;
   }
 
   regs[REG_RIP] = UnwindReturnAddress(regs[REG_RIP]);
@@ -282,10 +340,7 @@ void ErrorRecoverySignalHandler(int sig, siginfo_t* si, ucontext_t* context) {
 bool IpCoveredByCallSites(_Unwind_Context* context) {
   auto* lsda = (const uint8_t*)_Unwind_GetLanguageSpecificData(context);
   if (!lsda) return true;
-  int ip_before = 0;
-  uintptr_t ip = _Unwind_GetIPInfo(context, &ip_before);
-  if (!ip_before) ip -= 1;
-  uintptr_t offset = ip - _Unwind_GetRegionStart(context);
+  uintptr_t offset = _Unwind_GetIP(context) - 1 - _Unwind_GetRegionStart(context);
   CallSiteTable table(lsda);
   CallSite call_site;
   while (table.Next(call_site)) {
@@ -542,12 +597,13 @@ void Init() {
   }
 
 #if defined(__linux__)
-  struct sigaction sa = {};
-  sa.sa_sigaction = (void (*)(int, siginfo_t*, void*))ErrorRecoverySignalHandler;
-  sigemptyset(&sa.sa_mask);
-  sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+  KernelSigaction action = {.handler = ErrorRecoverySignalHandler,
+                            .flags = SA_SIGINFO | SA_ONSTACK | SA_RESTORER,
+                            .restorer = ReturnFromSignalHandler,
+                            .mask = 0};
   for (size_t i = 0; i < std::size(kSignals); ++i) {
-    if (sigaction(kSignals[i], &sa, &old_actions[i]) == -1) {
+    if (LinuxSyscall(__NR_rt_sigaction, kSignals[i], (long)&action, (long)&old_actions[i],
+                     sizeof(action.mask)) != 0) {
       ERROR << f("Couldn't install the recovery handler for signal {}", kSignals[i]);
     }
   }
@@ -562,7 +618,8 @@ void Stop() {
   if (!initialized) return;
 #if defined(__linux__)
   for (size_t i = 0; i < std::size(kSignals); ++i) {
-    sigaction(kSignals[i], &old_actions[i], nullptr);
+    LinuxSyscall(__NR_rt_sigaction, kSignals[i], (long)&old_actions[i], 0,
+                 sizeof(old_actions[i].mask));
   }
 #elif defined(_WIN32)
   RemoveVectoredExceptionHandler(exception_handler);

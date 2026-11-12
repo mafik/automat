@@ -10,24 +10,19 @@ path_to_package = {
     "/usr/bin/python": "python-is-python3",
     "/usr/bin/clang": "clang",
     "/usr/bin/ld.lld": "lld",
-    "/usr/bin/strip": "binutils",
+    "/usr/bin/ar": "binutils",
+    "/usr/bin/make": "make",
+    "/usr/bin/git": "git",
     "/usr/bin/ninja": "ninja-build",
     "/usr/bin/cmake": "cmake",
-    "/usr/include/zlib.h": "zlib1g-dev",
-    "/usr/include/openssl/ssl.h": "libssl-dev",
-    "/usr/include/gmock": "libgmock-dev",
     "/usr/bin/meson": "meson",
-    "/usr/include/X11/Xlib.h": "libx11-dev",
-    "/usr/include/X11/extensions/Xrandr.h": "libxrandr-dev",
-    "/usr/include/X11/extensions/Xinerama.h": "libxinerama-dev",
-    "/usr/include/X11/Xcursor/Xcursor.h": "libxcursor-dev",
-    "/usr/include/X11/extensions/XInput2.h": "libxi-dev",
-    "/usr/include/GL/gl.h": "libgl-dev",
-    "/usr/include/fontconfig/fontconfig.h": "libfontconfig-dev",
+    "/usr/bin/pkg-config": "pkgconf",
+    "/usr/bin/patch": "patch",
     "/usr/bin/gperf": "gperf",
     "/usr/bin/bison": "bison",  # xkbcommon meson keymap parser (YACC)
-    "/usr/include/sys/capability.h": "libcap-dev",
-    "/usr/lib/python3/dist-packages/jinja2/__init__.py": "python3-jinja2"  # libsystemd meson codegen
+    "/usr/include/expat.h": "libexpat1-dev",
+    "/usr/include/linux/limits.h": "linux-libc-dev",
+    "/usr/lib/python3/dist-packages/jinja2/__init__.py": "python3-jinja2",  # libsystemd meson codegen
 }
 
 

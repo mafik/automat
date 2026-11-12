@@ -2,109 +2,111 @@
 
 ## Goal
 
-The Automat executable should be as close to a statically linked binary as possible. Every
-symbol that can be resolved at link time is resolved at link time. The dynamic symbol table
-carries no symbols beyond what the dynamic linking model itself requires. The binary loads at
-a fixed address, so it needs no relocation pass at startup and its symbol addresses are stable
-across runs, which makes debugger output reproducible. Every variant carries full debug
-information embedded in the binary; the release variant strips the symbol tables and keeps
-only the DWARF.
+The Automat executable is one statically linked binary. On Linux the system clang links it
+statically against musl and against libc++, libc++abi, libunwind and the compiler-rt builtins,
+which `src/0_musl.py` builds from the LLVM checkout. Every symbol is resolved at link time, and the binary has no dynamic section. The binary loads at a fixed address, so it
+needs no relocation pass at startup and its symbol addresses are stable across runs, which
+makes debugger output reproducible. Every variant writes full debug information.
 
-The flags that produce this shape live in `run_py/build.py`. This document records why each
-decision was made and which dependencies are exempt.
+The flags that produce this shape live in `run_py/build.py` and `src/0_musl.py`. This document
+records why each decision was made.
 
 ## Dependencies
 
-Automat must build on any Linux distribution. The build may assume only python, git and a
-compiler; every library is downloaded and built locally by a build extension (`src/*.py`).
-Local builds are what make the shape controllable: an OS-provided library dictates whether it
-is available as a static archive, a locally built one does not. Three libraries still come
-from the OS as static archives — libffi, libpcre2 and libcap — and should eventually get their
-own extensions.
+Automat must build on any Linux distribution. The build may assume only python, git, a
+compiler and the host tools that `run_py/debian_deps.py` lists; every library is downloaded
+and built locally by a build extension (`src/*.py`) against musl. Static archives of the host
+system are built for the host's C library and are never linked. `src/0_musl.py` writes a clang
+configuration file, `build/{variant}/musl.cfg`, which names the musl target and makes
+`build/{variant}/sysroot` the sysroot and the resource directory. Every compiler command of the
+build and of the dependencies carries it, and `PKG_CONFIG_LIBDIR` names only the build prefix,
+so `-lm` or `-latomic` cannot resolve to the host's archives. The kernel headers are the
+host's, linked into `build/{variant}/linux_uapi`.
 
-The binary keeps exactly four shared library dependencies, each deliberate:
+The binary has no shared library dependencies decided at link time. Code that must come from
+the host is opened at run time. `automat::crt` (`src/crt.cpp`) maps the host's dynamic
+loader through a small helper program that is built for the host (`src/crt.py`) and takes the
+host's `dlopen`, `dlsym`, `pthread_create` and `free` from it. Automat defines `dlopen`,
+`dlsym`, `dlclose` and `dlerror` itself and forwards them to the host's loader, so statically
+linked libraries that open libraries, such as vk-bootstrap opening the host's Vulkan loader,
+reach the host's libraries. A `dlsym` lookup with `RTLD_DEFAULT` returns null, because it asks
+for a symbol of the program itself and a static program has none. libsystemd looks up newer
+functions of the C library that way from static constructors; forwarded to the host, the
+lookups would return the wrappers of the host's C library, which report errors through its own
+`errno`. With null, libsystemd makes the system calls directly. A thread that calls into host
+libraries is a `crt::ChimeraThread`:
+the host's C library creates it and musl attaches its own thread structure to it. `crt`
+gives the host's loader a `PT_TLS` entry for Automat's own TLS segment, so the host's C library
+allocates that segment in every thread it creates, at the offsets that the static link assumed,
+and musl finds its thread structure through a thread-local variable (the source patch in
+`src/0_musl.py`).
 
-- **libc, libm, ld-linux** — glibc must stay dynamic because the GPU drivers that Vulkan
-  loads with `dlopen` crash under a statically linked glibc. This constraint is documented
-  where it is enforced, in `src/skia.py`, which strips `-static` from the link and substitutes
-  `-static-libstdc++ -static-libgcc`.
-- **libpipewire** — the interface to the host's audio and video session. The library is a
-  thin client whose protocol modules are loaded from the host at runtime, so linking it
-  statically would still depend on the host installation while hiding that dependency.
+The host's loader installs its own thread pointer and allocates the TLS block of the thread
+that it starts on. musl therefore calls `__start_host` (`src/crt.cpp`), which starts the host's
+loader, before it gives the main thread a thread pointer (the source patch in
+`src/0_musl.py`). The main thread keeps one thread pointer and one TLS block from then on, so
+static constructors may use thread-locals and keep their addresses. `__start_host` runs
+without a thread structure: it makes its system calls through `LinuxSyscall` and calls no
+function of the C library that uses `errno`, stdio or the thread structure. When it cannot map
+the helper or the host's loader, it stores an error text and returns, and the process continues
+as a plain musl program. A failure inside the host's loader ends the process. `crt::Init` is
+the first statement of `automat::Main` and of the `main` of every test binary: it reports the
+stored error, or looks up the host's functions that `crt` calls.
 
-Automat also uses the host's libxcb, but libxcb is not a dependency of the binary. Vulkan
-drivers call back into the XCB connection that Automat hands them through
-`VK_KHR_xcb_surface`. The driver's libxcb and Automat's libxcb must be the same library with the
-same connection state, so `xcb::LoadHostLibxcb` (`src/xcb.cpp`) opens the host's `libxcb.so.1`
-at run time through `automat::crt::OpenLibrary`. Every core libxcb function is a generated stub
-(`src/xcb.py`) that calls the host's function. The generated protocol code of the core protocol
-and of the extensions (`libxcb.a`, `libxcb-render.a`, `libxcb-xinput.a` and the others) is
-linked statically from locally built archives. No other X library is linked.
+A thread that a host library creates by itself has no musl thread structure, so static code
+must not run on it; a signal handler that runs on such a thread faults at its first use of
+`errno`. The program break belongs to the host's allocator: musl's allocator does not use it,
+and static code must not move it. musl is built with unwind tables, including those of its
+assembly routines, so that a fault inside a libc function unwinds into the calling frames.
 
-`-Wl,--as-needed` keeps this list closed: a library that satisfies no import is not recorded,
-so transitive `-lfoo` flags from pkg-config expansions cannot grow the dependency list.
+Automat uses the host's libxcb in this way. Vulkan drivers call back into the XCB connection
+that Automat hands them through `VK_KHR_xcb_surface`. The driver's libxcb and Automat's libxcb
+must be the same library with the same connection state, so `xcb::LoadHostLibxcb`
+(`src/xcb.cpp`) opens the host's `libxcb.so.1` at run time through `automat::crt::OpenLibrary`.
+Every core libxcb function is a generated stub (`src/xcb.py`) that calls the host's function.
+The generated protocol code of the core protocol and of the extensions (`libxcb.a`,
+`libxcb-render.a`, `libxcb-xinput.a` and the others) is linked statically from locally built
+archives. No other X library is linked.
 
-## Static archives must be named explicitly
+Automat also opens the host's libpipewire at run time. libpipewire is a thin client whose
+protocol modules and SPA plugins are loaded from the host at run time and are built for the
+host's C library, so `Libpipewire::LoadSymbols` (`src/pipewire.cpp`) opens the host's
+`libpipewire-0.3.so.0` and looks up the libpipewire functions that Automat calls. Only
+Automat's own code calls libpipewire, so it calls these functions through the pointers in
+`automat::pw` and no stubs are generated. Only the PipeWire headers are installed
+from the PipeWire source; the library itself is not built.
+PipeWire's loops run on `crt::ChimeraThread`s that Automat starts, so that Automat's callbacks
+never run on a thread that the host's C library created.
 
-When a directory holds both `libfoo.a` and `libfoo.so`, plain `-lfoo` picks the shared one.
-Every link argument for a locally built library therefore names the archive: `-l:libfoo.a`.
-The places where this matters:
+## Static archives
 
-- `src/zlib.py` deletes the shared zlib that zlib's CMake unconditionally builds, and links
-  `-l:libz.a`.
-- `src/libsystemd.py` links `-l:libsystemd.a` (meson installs the shared library next to it).
-  `src/sdbus_cpp.py` reaches it through `LinkDependsOn`, which appends the dependency's link
-  arguments after the consumer's archive, in lazy-archive resolution order.
-- `StaticLibs` in `src/glib.py` resolves pkg-config expansions at link time and rewrites the
-  system libraries in them (`-lffi`, `-lpcre2-8`, `-lz`) to explicit archive names. It also
-  strips the `-Wl,--export-dynamic` that gmodule-2.0.pc injects; the comment in that function
-  explains the failure it prevents.
+The link is static, so the linker resolves every `-lfoo` to an archive. `StaticLibs` in
+`src/glib.py` resolves pkg-config expansions at link time and rewrites the libraries in them
+(`-lffi`, `-lpcre2-8`, `-lz`) to explicit archive names. It also strips the
+`-Wl,--export-dynamic` that gmodule-2.0.pc injects.
 
 ## Fixed load address
 
-The binary links with `-fno-pie -no-pie`. A position-independent executable pays for address
-space randomization with a startup relocation pass — about 106,000 `R_X86_64_RELATIVE` entries
-in Automat's case, one for every address constant in vtables and pointer tables — and with
-GOT-indirect access to its own globals. The fixed-address binary has none of that: the
-relocation section shrinks from 2.5 MB to about 7 KB, and every symbol sits at the address the
-debugger and `nm` report.
+The binary is linked with `-fno-pie -no-pie` and `-static`, so the linker produces an
+executable for a fixed address. A position-independent executable pays for address space randomization
+with a startup relocation pass — about 106,000 `R_X86_64_RELATIVE` entries in Automat's case,
+one for every address constant in vtables and pointer tables — and with GOT-indirect access to
+its own globals. The fixed-address binary has none of that, and every symbol sits at the
+address the debugger and `nm` report.
 
-The accepted cost is the standard non-PIE artifact set: a handful of `R_X86_64_COPY`
-relocations and their symbols in the dynamic table (`environ`, `stdout`, `stderr`, the
-pipewire log globals). These are how a fixed-address executable shares data objects with
-shared libraries; they are not internal symbols.
-
-Sanitizer variants (asan, tsan, ubsan) keep the default PIE because ThreadSanitizer's shadow
-memory layout assumes it.
-
-## Dynamic symbol table
-
-Nothing exports symbols on purpose. `-Wl,--exclude-libs,ALL` hides every symbol that enters
-the link through a static archive, which is how the weak `backtrace` from the vendored
-libunwind stays private. The Tracy profiler defines `dlclose` as an interposer; it is compiled
-in everywhere except release (`src/tracy.py`), so the release binary's dynamic symbols are the
-copy-relocated data objects and nothing else.
+The `asan` and `tsan` variants do not build on Linux (`docs/Stochastic Parrots.md`).
 
 ## Debug information
 
-Every variant compiles and links with `-gz=zstd`: DWARF5, compressed about 2.6x (667 MB to
-258 MB in the fast variant). gdb reads the compressed sections natively. All variants,
-including release, keep the debug information embedded in the binary, so
-`LowLevelError::FindSourceLocation` (`src/error_recovery.cpp`) can symbolize faults in every
-variant and a released binary can be debugged as shipped.
-
-The Linux release additionally drops the linker symbol tables, whose strings cost more than
-the compressed DWARF and duplicate what the DWARF already knows. `-Wl,--exclude-libs,ALL`
-localizes archive symbols only after the linker's own `--discard-all` filtering, so no link
-flag can drop them; instead the linker writes `automat.unstripped` and a separate build step
-produces the released binary with `strip --strip-all --keep-section=.debug_*`. The `link
-automat` shortcut names the stripping step, so every caller, including `src/release.py` on
-the build slaves, receives the stripped binary.
+Every Linux variant compiles and links with `-gz=zstd`, so the binary carries its debug
+information in compressed sections, which gdb reads natively.
+`LowLevelError::FindSourceLocation` (`src/error_recovery.cpp`) reads them through
+`/proc/self/exe`, so faults symbolize in every variant.
 
 ## Inspecting
 
-`readelf -d` shows the dependency list and `BIND_NOW`; `nm -D --defined-only` lists the
-dynamic exports; `readelf -rW` counts the relocations. A regression in any of the three is a
+`readelf -lS automat` shows the program headers, which have no `INTERP` and no
+`DYNAMIC` entry, and the sections. A program header that asks for a dynamic loader is a
 regression in this design.
 
 ## Windows

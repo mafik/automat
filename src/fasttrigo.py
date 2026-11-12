@@ -19,10 +19,10 @@ def hook_recipe(recipe):
   object_path.parent.mkdir(parents=True, exist_ok=True)
   outputs = [str(object_path)]
   recipe.add_step(
-      partial(Popen, [build.compiler] + build.CXXFLAGS() +
+      partial(Popen, build.compiler + build.CXXFLAGS() +
                         ['-c', str(FASTTRIGO_ROOT / 'fasttrigo.cpp'), '-o'] + outputs),
       outputs=outputs,
-      inputs=[FASTTRIGO_ROOT / 'fasttrigo.cpp'],
+      inputs=[FASTTRIGO_ROOT / 'fasttrigo.cpp'] + build.compile_inputs,
       desc='Building FastTrigo',
       shortcut='build fasttrigo')
 

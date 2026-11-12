@@ -26,8 +26,8 @@
 #include "virtual_fs.hpp"
 
 #pragma comment(lib, "skshaper")
-#pragma comment(lib, "skunicode_core")
 #pragma comment(lib, "skunicode_icu")
+#pragma comment(lib, "skunicode_core")
 #ifdef _WIN32
 #pragma comment(lib, "Advapi32")
 #endif

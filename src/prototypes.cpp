@@ -13,7 +13,6 @@
 #include "library_instruction_library.hpp"
 #include "library_key_presser.hpp"
 #include "library_macro_recorder.hpp"
-#include "library_memory_viewer.hpp"
 #include "library_mouse.hpp"
 #include "library_number.hpp"
 #include "library_program_launcher.hpp"
@@ -37,6 +36,7 @@
 // Wayland compositor needs SCM_RIGHTS fd passing, which Windows AF_UNIX
 // sockets lack.
 #if defined(__linux__)
+#include "library_memory_viewer.hpp"
 #include "library_pipewire.hpp"
 #include "wayland.hpp"
 #endif
@@ -94,7 +94,9 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<Window>();
   index.Register<TesseractOCR>();
   index.Register<Sources>();
+#if defined(__linux__)
   index.Register<MemoryViewer>();
+#endif
   index.Register<Gear, HideInToolbar>();
   index.Register<BetaShelf>();
   index.Register<X11Window, HideInToolbar>();

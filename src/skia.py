@@ -61,19 +61,14 @@ if platform == 'win32':
     # https://github.com/google/skia/blob/main/include/config/SkUserConfig.h
 elif platform == 'linux':
   build.compile_args += ['-DVK_USE_PLATFORM_XCB_KHR']
-  # Static linking to Vulkan on Linux seems to fail because the dynamically loaded libc / pthread is not properly initialized
-  # by dlopen. It seems that glibc is closely coupled with ld.
-  # Note that this problem might disappear when executed under debugger because they might be initialized when debugger ld runs.
-  # Some discussion can be found here: https://www.openwall.com/lists/musl/2012/12/08/4
-  # Most online discussions wrongly claim its nonsensical to call dlopen from a static binary because this loses the static linking benefits.
-  # It is in fact useful, for example because it might allow Automat to bundle its dependencies but still use the system's vulkan drivers.
-  # Anyway there is no clean, officially supported solution to dlopen from a static binary on Linux :(
-  # A potential, slightly hacky workaround might be found here: https://github.com/pfalcon/foreign-dlopen/tree/master
-  # For the time being we disable static linking on Linux and instead statically link everything except libm & libc (they seem to be coupled).
-  build.compile_args = [x for x in build.compile_args if x != '-static']
-  build.link_args = [x for x in build.link_args if x != '-static']
-  build.link_args += ['-static-libstdc++', '-static-libgcc', '-ldl']
-  skia.ConfigureOptions(skia_use_system_freetype2='false')
+  skia.ConfigureOptions(
+    skia_use_system_freetype2='false',
+    cc=f'"{build.compiler_c[0]}"',
+    cxx=f'"{build.compiler[0]}"',
+    target_cc=f'"{" ".join(build.compiler_c)}"',
+    target_cxx=f'"{" ".join(build.compiler)}"',
+    skia_use_fontconfig='false',
+    skia_enable_tools='false')
 
 build.compile_args += ['-I', skia.src_dir]
 build.compile_args += ['-DSK_GRAPHITE']
@@ -211,7 +206,7 @@ skia.PatchSources('''--- include/gpu/vk/VulkanMemoryAllocator.h
      void getAllocInfo(const skgpu::VulkanBackendMemory&, skgpu::VulkanAlloc*) const override;
 ''')
 
-# Remove when Skia's vkCreateRenderPass2 path sets the sam rasterization order subpass flag as
+# Remove when Skia's vkCreateRenderPass2 path sets the same rasterization order subpass flag as
 # its pipelines use (not fixed as of chrome/m157).
 skia.PatchSources('''--- src/gpu/graphite/vk/VulkanRenderPass.cpp
 +++ src/gpu/graphite/vk/VulkanRenderPass.cpp

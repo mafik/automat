@@ -29,17 +29,17 @@ LLVM_Assembler& LLVM_Assembler::Get() {
     auto a = make_unique<LLVM_Assembler>();
 
     string err;
-    a->target = TargetRegistry::lookupTarget(kTripleStr, err);
+    a->target = TargetRegistry::lookupTarget(kTriple, err);
     assert(a->target);
 
     TargetOptions target_options;
     a->target_machine = std::unique_ptr<TargetMachine>(
-        a->target->createTargetMachine(kTripleStr, "generic", "", target_options, nullopt));
-    a->mc_asm_info = a->target_machine->getMCAsmInfo();
+        a->target->createTargetMachine(kTriple, "generic", "", target_options, nullopt));
+    a->mc_asm_info = &a->target_machine->getMCAsmInfo();
     a->mc_instr_info = a->target_machine->getMCInstrInfo();
-    a->mc_reg_info = a->target_machine->getMCRegisterInfo();
-    a->mc_subtarget_info = a->target_machine->getMCSubtargetInfo();
-    a->mc_context.emplace(kTriple, a->mc_asm_info, a->mc_reg_info, a->mc_subtarget_info);
+    a->mc_reg_info = &a->target_machine->getMCRegisterInfo();
+    a->mc_subtarget_info = &a->target_machine->getMCSubtargetInfo();
+    a->mc_context.emplace(kTriple, *a->mc_asm_info, *a->mc_reg_info, *a->mc_subtarget_info);
 
     a->mc_code_emitter.reset(a->target->createMCCodeEmitter(*a->mc_instr_info, *a->mc_context));
     a->mc_inst_printer.reset(a->target->createMCInstPrinter(kTriple, 1 /*Intel*/, *a->mc_asm_info,

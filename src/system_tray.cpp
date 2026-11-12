@@ -19,6 +19,7 @@
 #include "../build/generated/com.canonical.dbusmenu_adaptor.hpp"
 #include "../build/generated/org.kde.StatusNotifierItem_adaptor.hpp"
 #include "../build/generated/org.kde.StatusNotifierWatcher_proxy.hpp"
+#include "crt.hpp"
 #endif  // __linux__
 
 #include <include/core/SkAlphaType.h>
@@ -360,7 +361,14 @@ struct Icon::Impl {
   std::unique_ptr<IConnection> connection;
   std::unique_ptr<DBusMenu> menu;
   std::unique_ptr<StatusNotifierItem> sni;
+  crt::ChimeraThread event_loop;
   Impl(IdPool& pool) : uid(pool) {}
+  ~Impl() {
+    if (event_loop.joinable()) {
+      connection->leaveEventLoop();
+      event_loop.join();
+    }
+  }
 };
 
 Icon::Icon(const Menu& root_menu, Action* default_item)
@@ -374,7 +382,8 @@ Icon::Icon(const Menu& root_menu, Action* default_item)
                                              default_item ? default_item->on_click : Fn<void()>{});
     StatusNotifierWatcherProxy watcher{*impl->connection};
     watcher.RegisterStatusNotifierItem(service_name);
-    impl->connection->enterEventLoopAsync();
+    impl->event_loop = crt::StartChimeraThread(
+        [connection = impl->connection.get()] { connection->enterEventLoop(); });
   } catch (const sdbus::Error&) {
     impl->sni.reset();
     impl->menu.reset();

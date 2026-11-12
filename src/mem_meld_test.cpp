@@ -1438,7 +1438,7 @@ TEST_F(Fixture, MirrorsTraceFromTheirOwnThreads) {
 
 TEST_F(Fixture, SignalsArriveIntact) {
   Attach();
-  EXPECT_EQ(target.Command(f("sigwatch {}", getpid())), "ok");
+  EXPECT_EQ(target.Command(f("sigwatch {} {}", getpid(), SIGRTMIN + 1)), "ok");
   EXPECT_EQ(target.Command("threads 3"), "ok");
   for (int i = 1; i <= 200; ++i) {
     sigval value = {.sival_int = i};

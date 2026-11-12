@@ -28,7 +28,8 @@ def _patch_echo_cancel_plugin_dependencies(marker):
   marker.touch()
 hook.PatchSources(_patch_echo_cancel_plugin_dependencies)
 
-hook.ConfigureWithMeson(build.PREFIX / 'include' / 'pipewire-0.3' / 'pipewire' / 'pipewire.h')
+hook.ConfigureWithMeson(build.PREFIX / 'include' / 'pipewire-0.3' / 'pipewire' / 'pipewire.h',
+                        install_tags='devel', build_targets=('build.ninja',))
 hook.ConfigureOptions(**{
   'spa-plugins': 'disabled',
   'alsa': 'disabled',
@@ -54,8 +55,6 @@ hook.ConfigureOptions(**{
   'snap': 'disabled',
   'session-managers': '[]',
   'support': 'disabled',
-  'prefer_static': 'false',
 })
 hook.InstallWhenIncluded(r'pipewire/pipewire\.h')
 hook.AddCompileArgs(f'-I{build.PREFIX / "include" / "pipewire-0.3"}', f'-I{build.PREFIX / "include" / "spa-0.2"}')
-hook.AddLinkArgs('-ldl', '-lm', '-lpipewire-0.3')

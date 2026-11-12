@@ -216,6 +216,7 @@ def plan(srcs) -> tuple[list[ObjectFile], list[Binary]]:
         # TODO: maybe instead of depending on this file, it would be possible
         # to depend on the specific compile_args that were used?
         f_obj.deps.add(__file__)
+        f_obj.deps.update(str(x) for x in compile_inputs)
         f_obj.source = src_file
         f_obj.compile_args += src_file.build_compile_args(build_variant.name)
         for inc in src_file.transitive_includes:
@@ -250,8 +251,9 @@ def plan(srcs) -> tuple[list[ObjectFile], list[Binary]]:
     return list(objs.values()), binaries
 
 
-compiler = os.environ['CXX'] = os.environ['CXX'] if 'CXX' in os.environ else clang.executable
-compiler_c = os.environ['CC'] = os.environ['CC'] if 'CC' in os.environ else clang.executable_c
+compiler = [os.environ.setdefault('CXX', clang.executable)]
+compiler_c = [os.environ.setdefault('CC', clang.executable_c)]
+compile_inputs = []
 
 if platform == 'win32':
     compile_args += ['-D_USE_MATH_DEFINES', '-DNODRAWTEXT']
@@ -265,7 +267,7 @@ if platform == 'win32':
     # 128-bit arithmetic (GLib) calls compiler-rt builtins such as __udivti3,
     # which the MSVC runtime does not carry.
     link_args += [subprocess.check_output(
-        [compiler_c, '--rtlib=compiler-rt', '-print-libgcc-file-name'],
+        [*compiler_c, '--rtlib=compiler-rt', '-print-libgcc-file-name'],
         text=True).strip()]
     link_args += ['-Wl,/fixed', '-Wl,/highentropyva:no', '-Wl,/debug']
 else:
@@ -273,7 +275,7 @@ else:
                   '-Wl,--build-id=none', '-Wl,-z,relro', '-Wl,-z,now']
 
 
-if 'g++' in compiler and 'clang' not in compiler:
+if 'g++' in compiler[0] and 'clang' not in compiler[0]:
     # GCC doesn't support -fcolor-diagnostics
     compile_args.remove('-fcolor-diagnostics')
 
@@ -345,9 +347,9 @@ def recipe() -> make.Recipe:
     compilation_db = []
     for obj in objs:
         if obj.source.path.name.endswith('.c'):
-            pargs = [compiler_c] + CFLAGS()
+            pargs = compiler_c + CFLAGS()
         else:
-            pargs = [compiler] + CXXFLAGS()
+            pargs = compiler + CXXFLAGS()
 
         for arg in obj.compile_args:
             pargs.append(arg)
@@ -369,7 +371,7 @@ def recipe() -> make.Recipe:
         compilation_db.append(
             CompilationEntry(str(obj.source.path), str(obj.path), expanded_args))
     for bin in bins:
-        pargs = [compiler]
+        pargs = list(compiler)
         pargs += [str(obj.path) for obj in bin.objects]
         pargs += LDFLAGS()
         for arg in bin.link_args:

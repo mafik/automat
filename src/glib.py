@@ -14,6 +14,9 @@ import build
 import src
 
 zlib_ext = src.load_extension('zlib')
+if build.platform == 'linux':
+  libffi_ext = src.load_extension('libffi')
+  pcre2_ext = src.load_extension('pcre2')
 
 hook = extension_helper.ExtensionHelper('GLib', globals())
 
@@ -61,6 +64,8 @@ hook.PatchSources('''--- meson.build
 ''')
 
 hook.ConfigureDependsOn(zlib_ext.hook)
+if build.platform == 'linux':
+  hook.ConfigureDependsOn(libffi_ext.hook, pcre2_ext.hook)
 UsePkgConfig(hook)
 if build.platform == 'win32':
   # Windows-target clang folds girepository/cmph's debug macros into

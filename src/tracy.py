@@ -2,11 +2,10 @@
 # SPDX-License-Identifier: MIT
 
 from extension_helper import ExtensionHelper
-from sys import platform
 import build
 
 tracy = ExtensionHelper('tracy', globals())
-tracy.FetchFromGit('https://github.com/wolfpld/tracy.git', 'v0.12.2')
+tracy.FetchFromGit('https://github.com/wolfpld/tracy.git', 'v0.15.0')
 tracy.SkipConfigure()
 
 # Warning: Tracy likes to pick a wrong MSVC runtime library (dynamic instead of
@@ -17,5 +16,3 @@ tracy.AddCompileArgs('-I', tracy.src_dir / 'public')
 
 if not build.release:
   tracy.AddCompileArgs('-DTRACY_ENABLE', '-DTRACY_ON_DEMAND', '-DTRACY_ONLY_LOCALHOST')
-  if platform == 'linux':
-    tracy.AddCompileArgs('-DTRACY_LIBUNWIND_BACKTRACE')

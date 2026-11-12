@@ -42,12 +42,3 @@ using Size = size_t;
 using SSize = I64;
 
 }  // namespace automat
-
-namespace std {
-
-template <>
-struct is_integral<automat::U24> {
-  static constexpr bool value = true;
-};
-
-}  // namespace std

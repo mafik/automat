@@ -33,7 +33,7 @@ struct MemMeld {
   void Attach(int target_pidfd, Status&);
   void Detach();
 
-  Span<char> Mirror() const;
+  Span<char> Local() const;
   Span<char> ToLocal(uintptr_t remote, Size size) const;
   uintptr_t ToRemote(const void* local) const;
   const Region* Find(uintptr_t remote) const;
@@ -67,8 +67,8 @@ struct MemMeld {
     RegionTable();
     ~RegionTable();
 
-    uint64_t AllocMirror(uint64_t len);
-    void FreeMirror(uint64_t off, uint64_t len);
+    uint64_t AllocLocal(uint64_t len);
+    void FreeLocal(uint64_t off, uint64_t len);
     uint32_t AddRec(uint64_t remote, uint64_t len, int prot, uint64_t key, StrView path,
                     uint64_t file_offset, char* local, dev_t dev, uint64_t inode);
     void DropRec(uint32_t idx);

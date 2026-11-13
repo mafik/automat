@@ -32,6 +32,7 @@
 #include "library_key_presser.hpp"
 #include "library_mouse.hpp"
 #include "library_timeline.hpp"
+#include "llvm/Support/MathExtras.h"
 #include "log.hpp"
 #include "math.hpp"
 #include "mem_meld.hpp"
@@ -39,6 +40,7 @@
 #include "root_widget.hpp"
 #include "run_button.hpp"
 #include "sincos.hpp"
+#include "span.hpp"
 #include "status.hpp"
 #include "svg.hpp"
 #include "textures.hpp"
@@ -65,8 +67,8 @@ MemoryViewer::MemoryViewer() {}
 
 void MemoryViewer::Start() {
   LOG << "Start";
-  constexpr int pid = 1030745;
-  FD pidfd = syscall(SYS_pidfd_open, 1030745, 0);
+  constexpr int pid = 2608465;
+  FD pidfd = syscall(SYS_pidfd_open, pid, 0);
   if (!pidfd.Opened()) {
     Status status;
     AppendErrorMessage(status) += "Couldn't open pidfd";
@@ -76,8 +78,11 @@ void MemoryViewer::Start() {
 
   LOG << "Pidfd=" << pidfd;
   Status status;
-  mirror.on_attached = []() { LOG << "on_attached"; };
-  mirror.on_changed = [&](const MemMeld::Region& before, const MemMeld::Region& after) {
+  mem_meld.on_attached = [&]() {
+    LOG << "on_attached";
+    WakeToys();
+  };
+  mem_meld.on_changed = [&](const MemMeld::Region& before, const MemMeld::Region& after) {
     LOG << "on_changed";
     if (before.remote == after.remote)
       LOG << "  @" << f("{}", (void*)before.remote);
@@ -86,20 +91,23 @@ void MemoryViewer::Start() {
     // if (before.)
     if (!before.path.empty()) LOG << "  path [" << before.path << "] => [" << after.path << "]";
     last_region = after;
+    WakeToys();
   };
-  mirror.on_detached = [](const Status& status) {
+  mem_meld.on_detached = [&](const Status& status) {
     if (OK(status)) {
       LOG << "on_detached";
     } else {
       ERROR << "on_detached: " << status;
     }
+    WakeToys();
   };
-  mirror.on_forked = [](int pid) { LOG << "on_forked " << pid; };
-  mirror.on_mapped = [&](const MemMeld::Region& region) {
+  mem_meld.on_forked = [](int pid) { LOG << "on_forked " << pid; };
+  mem_meld.on_mapped = [&](const MemMeld::Region& region) {
     LOG << "on_mapped " << region;
     last_region = region;
+    WakeToys();
   };
-  mirror.Attach(pidfd, status);
+  mem_meld.Attach(pidfd, status);
   LOG << "Attach exited";
   if (!OK(status)) {
     ERROR << status;
@@ -120,7 +128,56 @@ struct MemoryViewerToy : ObjectToy {
   constexpr static Rect kShapeRect = Rect::MakeCenterZero(10_cm, 10_cm);
   SkPath Shape() const override { return SkPath::Rect(kShapeRect); }
 
-  Tock Tick(time::Timer&) override { return Tock::Drawing; }
+  Vec<sk_sp<SkImage>> images;
+
+  Tock Tick(time::Timer&) override {
+    auto mv = LockObject<MemoryViewer>();
+    auto& m = mv->mem_meld;
+
+    // Goal: divide memory into consecutive chunks with:
+    // - identical memory protection
+    // - same backing file
+    images.clear();
+    if (m.Local().Empty()) return Tock::Draw;  // nothing to animate
+    char* begin = &*m.Local().begin();
+    char* end = &*m.Local().end();
+    auto* current_region = m.Find(m.ToRemote(begin));
+    auto current = current_region->local;
+    auto CurrentToImage = [&]() {
+      int pixels = current.size_bytes() / 4;
+      int width = std::max(8, ((int)sqrt(pixels)) & ~7);
+      int height = pixels / width;
+      if (width > 0 && height > 0) {
+        auto info =
+            SkImageInfo::Make(SkISize(width, height), kRGB_888x_SkColorType, kOpaque_SkAlphaType);
+        // auto info = SkImageInfo::MakeN32(width, height, kUnpremul_SkAlphaType);
+        auto pixmap = SkPixmap(info, current.data(), width * 4);
+        images.emplace_back(SkImages::RasterFromPixmap(pixmap, nullptr, nullptr));
+      }
+    };
+    // Invariant:
+    // - we maintain a 'current' segment
+    // - every iteration consumes one region of local memory
+    //   A) if it's a continuation - it appends it to the 'current' segment
+    //   B) if it's discontinuous - it converts the 'current' into SkImage & advances current
+    while (current.data() + current.size() < end) {
+      char* next = current.data() + current.size_bytes();
+      auto* next_region = m.Find(m.ToRemote(next));
+
+      // TODO: check if the memory segments are continuous in the remote address space
+      if (current_region->prot == next_region->prot && current_region->path == next_region->path) {
+        // merge 'current' with 'next'
+        current = SpanOfArr(current.data(), current.size_bytes() + next_region->local.size_bytes());
+      } else {
+        // produce an SkImage & replace current
+        CurrentToImage();
+        current = next_region->local;
+        current_region = next_region;
+      }
+    }
+    CurrentToImage();
+    return Tock::Drawing;
+  }
 
   void Draw(SkCanvas& canvas) const override {
     auto mv = LockObject<MemoryViewer>();
@@ -128,20 +185,23 @@ struct MemoryViewerToy : ObjectToy {
     bg.setColor("#e3c2a8"_color);
     canvas.drawPath(shape, bg);
 
-    GetFont().DrawText(canvas, f("size: {}", mv->mirror.Mirror().size_bytes()), {});
+    GetFont().DrawText(canvas, f("size: {}", mv->mem_meld.Local().size_bytes()), {});
 
-    auto span = mv->mirror.Mirror();
-    span = span.subspan(0, (span.size_bytes() * 1 / 16));
-    int pixels = span.size_bytes() / 4;
-    int width = std::max(8, ((int)sqrt(pixels)) & ~7);
-    int height = pixels / width;
-    if (width > 0 && height > 0) {
-      auto info =
-          SkImageInfo::Make(SkISize(width, height), kRGB_888x_SkColorType, kOpaque_SkAlphaType);
-      // auto info = SkImageInfo::MakeN32(width, height, kUnpremul_SkAlphaType);
-      auto pixmap = SkPixmap(info, span.data(), width * 4);
-      auto img = SkImages::RasterFromPixmap(pixmap, nullptr, nullptr);
-      canvas.drawImageRect(img.get(), kShapeRect, kFastSamplingOptions);
+    int side = floor(sqrt(images.size()));
+    if (side > 0) {
+      float cell_width = kShapeRect.Width() / side;
+      float cell_height = kShapeRect.Height() / side;
+      for (int i = 0; i < images.size(); ++i) {
+        auto& img = images[i];
+        int column = i % side;
+        int row = i / side;
+        float left = kShapeRect.left + column * cell_width;
+        float right = left + cell_width;
+        float bottom = kShapeRect.bottom + row * cell_height;
+        float top = bottom + cell_height;
+        Rect cell = Rect(left, bottom, right, top);
+        canvas.drawImageRect(img.get(), cell, kFastSamplingOptions);
+      }
     }
 
     return BakeChildren(canvas);

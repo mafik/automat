@@ -555,7 +555,7 @@ MemMeld::RegionTable::~RegionTable() {
   if (mirror) munmap(mirror, kMirrorReserve);
 }
 
-uint64_t MemMeld::RegionTable::AllocMirror(uint64_t len) {
+uint64_t MemMeld::RegionTable::AllocLocal(uint64_t len) {
   for (size_t i = 0; i < free_list.size(); ++i) {
     if (free_list[i].second >= len) {
       uint64_t off = free_list[i].first;
@@ -572,7 +572,7 @@ uint64_t MemMeld::RegionTable::AllocMirror(uint64_t len) {
   return off + len > kMirrorReserve ? kNoOffset : off;
 }
 
-void MemMeld::RegionTable::FreeMirror(uint64_t off, uint64_t len) {
+void MemMeld::RegionTable::FreeLocal(uint64_t off, uint64_t len) {
   mmap(mirror + off, len, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1,
        0);
   if (off + len >= high_water.load(std::memory_order_relaxed))
@@ -614,7 +614,7 @@ void MemMeld::RegionTable::DropRec(uint32_t idx) {
 
 uint32_t MemMeld::RegionTable::MapRegion(uint64_t remote, uint64_t len, int prot, uint64_t key,
                                          int file, StrView path, uint64_t file_offset, int memfd) {
-  uint64_t off = AllocMirror(len);
+  uint64_t off = AllocLocal(len);
   if (off == kNoOffset) return 0;
   struct stat st = {};
   if (file >= 0) fstat(file, &st);
@@ -623,7 +623,7 @@ uint32_t MemMeld::RegionTable::MapRegion(uint64_t remote, uint64_t len, int prot
       mmap(mirror + off, len, write ? PROT_READ | PROT_WRITE : PROT_READ, MAP_SHARED | MAP_FIXED,
            file >= 0 ? file : memfd, file >= 0 ? file_offset : key);
   if (local == MAP_FAILED) {
-    FreeMirror(off, len);
+    FreeLocal(off, len);
     return 0;
   }
   if (off + len > high_water.load(std::memory_order_relaxed))
@@ -634,7 +634,7 @@ uint32_t MemMeld::RegionTable::MapRegion(uint64_t remote, uint64_t len, int prot
 void MemMeld::RegionTable::UnmapRegion(uint32_t idx) {
   Span<char> local = pool[idx].r.local;
   DropRec(idx);
-  FreeMirror(local.data() - mirror, local.size());
+  FreeLocal(local.data() - mirror, local.size());
 }
 
 uint32_t MemMeld::RegionTable::IndexAt(uint64_t remote) const {
@@ -672,7 +672,7 @@ void MemMeld::RegionTable::Shrink(uint32_t idx, uint64_t keep) {
   uint64_t size = r.local.size();
   by_remote.Erase(r.remote + keep, r.remote + size);
   by_local.Erase((uint64_t)r.local.data() + keep, (uint64_t)r.local.data() + size);
-  FreeMirror(r.local.data() + keep - mirror, size - keep);
+  FreeLocal(r.local.data() + keep - mirror, size - keep);
   r.local = r.local.first(keep);
 }
 
@@ -1812,7 +1812,7 @@ void MemMeld::Detach() {
   }
 }
 
-Span<char> MemMeld::Mirror() const {
+Span<char> MemMeld::Local() const {
   return {regions.mirror, regions.high_water.load(std::memory_order_relaxed)};
 }
 

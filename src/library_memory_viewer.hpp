@@ -8,7 +8,7 @@
 namespace automat::library {
 
 struct MemoryViewer : Object {
-  MemMeld mirror;
+  MemMeld mem_meld;
   MemMeld::Region last_region;
 
   DEF_INTERFACE(MemoryViewer, Command, start, "Start")

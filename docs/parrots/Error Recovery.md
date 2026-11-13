@@ -102,8 +102,9 @@ guard when it is destroyed at the end of the enclosing scope.
 ### Per-thread setup
 
 `error_recovery::SignalStack` is the per-thread object that prepares a thread for recovery;
-`AutomatLoop` declares one at the start of each worker thread, and the test suite's
-environment holds one for its main thread. On Linux it is an RAII object with inline storage
+`AutomatLoop` declares one at the start of each worker thread, `automat::Main` declares one
+for the main thread on Linux, and the test suite's environment holds one for its main thread.
+On Linux it is an RAII object with inline storage
 that registers itself with `sigaltstack` for its lifetime, giving signal delivery a stack to
 run on when the thread's own stack overflows; the handlers themselves apply to every thread,
 so a thread without a `SignalStack` still recovers from everything except stack overflow. On
@@ -115,15 +116,19 @@ exception handling, and a handler that intercepted those on every thread would b
 
 ### The signal handler (Linux)
 
-`error_recovery::Init` installs `ErrorRecoverySignalHandler` with the raw `rt_sigaction`
-system call, not with musl's `sigaction`, so that the kernel returns from the handler
-into `ReturnFromSignalHandler`. musl's own restorer has no unwind information, and the
-unwinder (LLVM libunwind, built by `src/0_musl.py`) does not recognize signal frames on x86-64
-without it. `ReturnFromSignalHandler` carries signal-frame unwind information that reads every
-register of the interrupted frame from the `ucontext_t` that the kernel saved, as glibc's
-restorer does. Its unwind information starts two bytes before its first instruction, because
-the unwinder looks up the return address minus one, and its uncached table search requires
-that address to lie strictly after the start of the entry.
+`error_recovery::Init` installs `ErrorRecoverySignalHandler` with `sigaction`. The unwinder
+(LLVM libunwind, built by `src/0_musl.py`) does not recognize signal frames on x86-64 by their
+code, so it crosses a signal frame through the unwind information of musl's restorer
+`__restore_rt`, which a patch in `src/0_musl.py` adds. That information marks the frame as a
+signal frame and reads the stack pointer and the instruction pointer of the interrupted frame
+from the `ucontext_t` that the kernel saved. The other registers need no rule, because the
+kernel enters the handler with the callee-saved registers of the interrupted frame unchanged.
+The information starts at the `nop` before `__restore_rt`, because the unwinder looks up the
+return address minus one.
+
+A fault in first-party code that a host function without a personality routine called, such as
+a `qsort` comparator, is recovered through the host frame. A fault below a host frame with a
+personality routine terminates the process, as described in `docs/parrots/Executable Shape.md`.
 
 The handler classifies the signal (`ClassifySignal`), turns the saved instruction pointer
 into a return address, re-aims it (`UnwindReturnAddress`, described below), unblocks the signal
@@ -133,7 +138,9 @@ address one byte before it, so the handler advances the saved instruction pointe
 the fault is an execution of protected or unmapped memory, or happens at the first instruction
 of a function (for example the push of a stack overflow at function entry), the handler
 instead replaces the saved instruction pointer with the return address found at the saved
-stack pointer and pops it, so that unwinding resumes in the caller of the faulting call. The
+stack pointer minus one and pops it, so that unwinding resumes in the caller, at the faulting
+call. The address lies inside the call instruction, because a personality routine that honours
+the signal-frame mark, such as the one of the host's libstdc++, looks up the address itself. The
 first instruction is treated like an execution fault because the address one byte before it
 lies outside the function, and because the frame owns nothing yet.
 

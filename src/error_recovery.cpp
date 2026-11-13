@@ -17,51 +17,9 @@
 #include <ucontext.h>
 #include <unwind.h>
 
-#include <cstddef>
 #include <iterator>
 
-#include "linux_syscall.hpp"
-
 #pragma maf add link argument "-Wl,--wrap=__gxx_personality_v0"
-
-asm(R"(
-  .macro ucontext_register dwarf_register, greg
-  .cfi_escape 0x10, \dwarf_register, 3, 0x77, ((40 + 8 * \greg) & 0x7f) | 0x80, (40 + 8 * \greg) >> 7
-  .endm
-  .text
-  .p2align 4
-  .cfi_startproc simple
-  .cfi_signal_frame
-  .cfi_escape 0x0f, 4, 0x77, ((40 + 8 * 15) & 0x7f) | 0x80, (40 + 8 * 15) >> 7, 0x06
-  ucontext_register 8, 0
-  ucontext_register 9, 1
-  ucontext_register 10, 2
-  ucontext_register 11, 3
-  ucontext_register 12, 4
-  ucontext_register 13, 5
-  ucontext_register 14, 6
-  ucontext_register 15, 7
-  ucontext_register 5, 8
-  ucontext_register 4, 9
-  ucontext_register 6, 10
-  ucontext_register 3, 11
-  ucontext_register 1, 12
-  ucontext_register 0, 13
-  ucontext_register 2, 14
-  ucontext_register 7, 15
-  ucontext_register 16, 16
-  nop
-  nop
-ReturnFromSignalHandler:
-  mov $15, %eax
-  syscall
-  .cfi_endproc
-  .purgem ucontext_register
-)");
-
-extern "C" void ReturnFromSignalHandler();
-
-static_assert(offsetof(ucontext_t, uc_mcontext.gregs) == 40);
 
 #elif defined(_WIN32)
 
@@ -90,15 +48,7 @@ Str exe_path;
 constexpr bool kDebugErrorRecovery = false;
 
 constexpr int kSignals[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE};
-
-struct KernelSigaction {
-  void (*handler)(int, siginfo_t*, ucontext_t*);
-  unsigned long flags;
-  void (*restorer)();
-  uint64_t mask;
-};
-
-KernelSigaction old_actions[std::size(kSignals)];
+struct sigaction old_actions[std::size(kSignals)];
 
 constexpr uintptr_t kStackOverflowReach = 4096;
 
@@ -310,7 +260,7 @@ void ErrorRecoverySignalHandler(int sig, siginfo_t* si, ucontext_t* context) {
   using enum LowLevelError::Type;
   if (error.type == EXECUTED_PROTECTED_MEMORY || error.type == EXECUTED_UNMAPPED_MEMORY ||
       IsFunctionStart(regs[REG_RIP])) {
-    regs[REG_RIP] = *(uint64_t*)regs[REG_RSP];
+    regs[REG_RIP] = *(uint64_t*)regs[REG_RSP] - 1;  // place RIP in the calling instruction
     regs[REG_RSP] += 8;
   } else {
     regs[REG_RIP] += 1;
@@ -597,13 +547,12 @@ void Init() {
   }
 
 #if defined(__linux__)
-  KernelSigaction action = {.handler = ErrorRecoverySignalHandler,
-                            .flags = SA_SIGINFO | SA_ONSTACK | SA_RESTORER,
-                            .restorer = ReturnFromSignalHandler,
-                            .mask = 0};
+  struct sigaction sa = {};
+  sa.sa_sigaction = (void (*)(int, siginfo_t*, void*))ErrorRecoverySignalHandler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
   for (size_t i = 0; i < std::size(kSignals); ++i) {
-    if (LinuxSyscall(__NR_rt_sigaction, kSignals[i], (long)&action, (long)&old_actions[i],
-                     sizeof(action.mask)) != 0) {
+    if (sigaction(kSignals[i], &sa, &old_actions[i]) == -1) {
       ERROR << f("Couldn't install the recovery handler for signal {}", kSignals[i]);
     }
   }
@@ -618,8 +567,7 @@ void Stop() {
   if (!initialized) return;
 #if defined(__linux__)
   for (size_t i = 0; i < std::size(kSignals); ++i) {
-    LinuxSyscall(__NR_rt_sigaction, kSignals[i], (long)&old_actions[i], 0,
-                 sizeof(old_actions[i].mask));
+    sigaction(kSignals[i], &old_actions[i], nullptr);
   }
 #elif defined(_WIN32)
   RemoveVectoredExceptionHandler(exception_handler);

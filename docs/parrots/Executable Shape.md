@@ -58,6 +58,31 @@ must not run on it; a signal handler that runs on such a thread faults at its fi
 `errno`. musl is built with unwind tables, including those of its assembly routines, so that a
 fault inside a libc function unwinds into the calling frames.
 
+`crt` reports the host's objects through `dl_iterate_phdr` and `dladdr` (`src/crt.cpp`). It
+reads the list of objects of the host's loader (`_r_debug`) and calls no function of the host,
+so the lookup works on every thread. The unwinder therefore finds the unwind tables of the
+host's libraries, and call stacks and crash reports continue through host frames, which
+Tracy's symbolizer names.
+
+One unwinder, Automat's (LLVM libunwind), unwinds the exceptions of the whole process. The
+personality routine of a host C++ frame belongs to the host's libstdc++ and calls the unwinder
+functions of the C++ ABI (`_Unwind_GetLanguageSpecificData`, `_Unwind_SetIP`, `_Unwind_Resume`
+and the others) by name. The helper program (`src/crt_helper.c`) defines and exports these
+functions. The host's loader searches the main program first, so the host's libraries call the
+helper's definitions, and the helper forwards each call to Automat's unwinder. A throw from
+Automat's code therefore passes host frames by the host's rules: destructors of host frames
+run, a host `catch (...)` catches the exception, and the throw continues into Automat's frames
+below. An exception that a host library throws passes Automat's frames in the same way.
+
+glibc is the exception. `pthread_exit` and `pthread_cancel` unwind the thread with the
+libgcc_s that glibc opens itself and calls through pointers, which the helper cannot replace.
+The personality routines that libgcc_s calls during such a forced unwind still call the
+helper, so the helper forwards a call to libgcc_s when its context was not created by
+Automat's unwinder (the first word of the context is not the type marker of LLVM's cursor) or
+when the exception belongs to a forced unwind. libgcc_s does not know Automat's image, so a
+forced unwind ends at the first frame of Automat and the destructors of Automat's frames on
+that thread do not run.
+
 Automat uses the host's libxcb in this way. Vulkan drivers call back into the XCB connection
 that Automat hands them through `VK_KHR_xcb_surface`. The driver's libxcb and Automat's libxcb
 must be the same library with the same connection state, so `xcb::LoadHostLibxcb`

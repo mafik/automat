@@ -170,7 +170,7 @@ if platform == 'linux':
     musl = extension_helper.ExtensionHelper('musl', globals())
     musl.FetchFromURL('https://musl.libc.org/releases/musl-1.2.6.tar.gz',
                       sha256='d585fd3b613c66151fc3249e8ed44f77020cb5e6c1e635a616d3f9f82460512a')
-    # Can be removed once no other C library runs in the process.
+    # Helpers that enable Automat's static TLS within host crt threads
     musl.PatchSources('''--- arch/x86_64/pthread_arch.h
 +++ arch/x86_64/pthread_arch.h
 @@ -1,8 +1,6 @@
@@ -378,6 +378,61 @@ if platform == 'linux':
  
    # only emit CFI directives inside a function
    in_function = 0
+''')
+    # Add unwind information to Musl's signal restorer, _start & __clone.
+    # Can be removed once the upstream Musl adds it.
+    musl.PatchSources('''--- arch/x86_64/crt_arch.h
++++ arch/x86_64/crt_arch.h
+@@ -3,6 +3,8 @@
+ ".global " START " \\n"
+ ".type " START ",%function \\n"
+ START ": \\n"
++".cfi_startproc \\n"
++".cfi_undefined rip \\n"
+ "	xor %rbp,%rbp \\n"
+ "	mov %rsp,%rdi \\n"
+ ".weak _DYNAMIC \\n"
+@@ -10,4 +12,6 @@
+ "	lea _DYNAMIC(%rip),%rsi \\n"
+ "	andq $-16,%rsp \\n"
+ "	call " START "_c \\n"
++".cfi_endproc \\n"
++".size " START ", .-" START " \\n"
+ );
+--- src/signal/x86_64/restore.s
++++ src/signal/x86_64/restore.s
+@@ -1,8 +1,12 @@
++.cfi_startproc simple
++.cfi_signal_frame
++.cfi_escape 0x0f,4,0x77,0xa0,0x01,0x06
++.cfi_escape 0x10,16,3,0x77,0xa8,0x01
+ 	nop
+ .global __restore_rt
+ .hidden __restore_rt
+-.type __restore_rt,@function
+ __restore_rt:
+ 	mov $15, %rax
+ 	syscall
++.cfi_endproc
+ .size __restore_rt,.-__restore_rt
+--- src/thread/x86_64/clone.s
++++ src/thread/x86_64/clone.s
+@@ -17,6 +17,8 @@
+ 	syscall
+ 	test %eax,%eax
+ 	jnz 1f
++.cfi_remember_state
++.cfi_undefined rip
+ 	xor %ebp,%ebp
+ 	pop %rdi
+ 	call *%r9
+@@ -25,4 +27,6 @@
+ 	mov $60,%al
+ 	syscall
+ 	hlt
++.cfi_restore_state
+ 1:	ret
++.size __clone,.-__clone
 ''')
     musl.SkipConfigure()
 

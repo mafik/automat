@@ -184,6 +184,8 @@ int Main() {
     ERROR << "Couldn't load the host's libxcb: " << xcb_status;
     return 1;
   }
+
+  error_recovery::SignalStack signal_stack;
 #endif
 
   // Process setup

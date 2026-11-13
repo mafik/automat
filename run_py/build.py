@@ -258,14 +258,8 @@ compile_inputs = []
 if platform == 'win32':
     compile_args += ['-D_USE_MATH_DEFINES', '-DNODRAWTEXT']
     link_args += ['-Wl,/opt:ref', '-Wl,/opt:icf']
-    # Hybrid CRT: vcruntime and the STL stay static, malloc comes from the
-    # OS-provided ucrtbase - so automat.exe and the tensorflow.dll it
-    # delay-loads (src/tensorflow.py) share one heap and C++ objects can cross
-    # between them.
-    ucrt_d = 'd' if debug else ''
-    link_args += [f'-Wl,/NODEFAULTLIB:libucrt{ucrt_d}.lib', f'-Wl,/DEFAULTLIB:ucrt{ucrt_d}.lib']
     # 128-bit arithmetic (GLib) calls compiler-rt builtins such as __udivti3,
-    # which the MSVC runtime does not carry.
+    # which are missing from the MSVC runtime.
     link_args += [subprocess.check_output(
         [*compiler_c, '--rtlib=compiler-rt', '-print-libgcc-file-name'],
         text=True).strip()]

@@ -55,9 +55,8 @@ stored error, or looks up the host's functions that `crt` calls.
 
 A thread that a host library creates by itself has no musl thread structure, so static code
 must not run on it; a signal handler that runs on such a thread faults at its first use of
-`errno`. The program break belongs to the host's allocator: musl's allocator does not use it,
-and static code must not move it. musl is built with unwind tables, including those of its
-assembly routines, so that a fault inside a libc function unwinds into the calling frames.
+`errno`. musl is built with unwind tables, including those of its assembly routines, so that a
+fault inside a libc function unwinds into the calling frames.
 
 Automat uses the host's libxcb in this way. Vulkan drivers call back into the XCB connection
 that Automat hands them through `VK_KHR_xcb_surface`. The driver's libxcb and Automat's libxcb
@@ -84,6 +83,33 @@ The link is static, so the linker resolves every `-lfoo` to an archive. `StaticL
 `src/glib.py` resolves pkg-config expansions at link time and rewrites the libraries in them
 (`-lffi`, `-lpcre2-8`, `-lz`) to explicit archive names. It also strips the
 `-Wl,--export-dynamic` that gmodule-2.0.pc injects.
+
+## Allocator
+
+Every Linux binary of the build allocates through mimalloc (`src/mimalloc.py`). musl's
+allocator takes one lock for every operation, so threads that allocate at the same time wait
+for each other. mimalloc keeps a heap for every thread.
+
+mimalloc is linked as one object file, which `src/mimalloc.py` adds to the objects of every
+binary. The linker links every object file that it is given and searches `libc.a` only for
+names that are still undefined, so no member of `libc.a` that defines an allocation function
+is linked. The object defines `malloc`, `free`, `calloc`, `realloc`, the aligned allocation
+functions, `malloc_usable_size` and the C++ allocation operators. It also defines
+`__libc_malloc`, `__libc_calloc`, `__libc_realloc` and `__libc_free`, the names through which
+musl allocates for its own use, so the binary contains no allocator of musl.
+
+The program break belongs to the host's allocator, and static code must not move it. mimalloc
+takes its memory from the system with `mmap`. musl's `sbrk` is linked because LLVM refers to
+it; it reports the program break and fails for every non-zero increment.
+
+The two allocators do not know each other's memory. Memory that a host library allocated is
+freed with `crt::Free`, which calls the host's `free`.
+
+mimalloc finds the heap of a thread through thread-local variables and releases the heap in
+the destructor of a thread-specific key of musl. The host's C library allocates the TLS
+segment in every thread that it creates, and musl runs the destructors of its keys when one of
+its own threads ends and when a `crt::ChimeraThread` ends, so both mechanisms work on the main
+thread, on the threads of musl and on every `crt::ChimeraThread`.
 
 ## Fixed load address
 
@@ -115,9 +141,13 @@ The Windows build follows the same intent with PE mechanics. The toolchain is cl
 MSVC ABI and lld-link; every library is a locally built static archive, linked by explicit
 path or through the defaultlib directives embedded in object files. The shared library
 dependencies are operating-system DLLs plus the delay-loaded tensorflow.dll
-(`src/tensorflow.py`). The C runtime is hybrid: vcruntime and the STL are linked statically,
-while malloc comes from the OS-provided ucrtbase, so automat.exe and tensorflow.dll share one
-heap and C++ objects can cross between them (the flags live in `run_py/build.py`). 128-bit
+(`src/tensorflow.py`). The C runtime is linked statically, including the UCRT, because an
+object file can replace the allocation functions of the static UCRT and cannot replace those
+that ucrtbase.dll exports. mimalloc's object (`src/mimalloc.py`) defines them, so the
+executable contains no allocator of the UCRT. The debug variant is the exception: mimalloc's
+static override does not compile against the debug CRT, so debug binaries allocate through the
+CRT. tensorflow.dll allocates from ucrtbase and the executable from mimalloc, so a C++ object
+that one module allocates and the other frees is not supported. 128-bit
 arithmetic helpers that the MSVC runtime lacks come from compiler-rt's builtins archive.
 
 Clang emits CodeView debug information and every variant links with `-Wl,/debug`, which

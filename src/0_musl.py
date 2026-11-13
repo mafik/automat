@@ -264,17 +264,6 @@ if platform == 'linux':
  hidden void __membarrier_init(void);
  hidden void __dl_thread_cleanup(void);
  hidden void __testcancel();
---- src/malloc/mallocng/malloc.c
-+++ src/malloc/mallocng/malloc.c
-@@ -37,7 +37,7 @@
- 
- static const uint8_t med_cnt_tab[4] = { 28, 24, 20, 32 };
- 
--struct malloc_context ctx = { 0 };
-+struct malloc_context ctx = { .brk = -1 };
- 
- struct meta *alloc_meta(void)
- {
 --- src/thread/pthread_create.c
 +++ src/thread/pthread_create.c
 @@ -234,6 +234,21 @@

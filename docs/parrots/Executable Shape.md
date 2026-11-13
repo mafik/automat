@@ -74,14 +74,24 @@ Automat's code therefore passes host frames by the host's rules: destructors of 
 run, a host `catch (...)` catches the exception, and the throw continues into Automat's frames
 below. An exception that a host library throws passes Automat's frames in the same way.
 
-glibc is the exception. `pthread_exit` and `pthread_cancel` unwind the thread with the
-libgcc_s that glibc opens itself and calls through pointers, which the helper cannot replace.
-The personality routines that libgcc_s calls during such a forced unwind still call the
-helper, so the helper forwards a call to libgcc_s when its context was not created by
-Automat's unwinder (the first word of the context is not the type marker of LLVM's cursor) or
-when the exception belongs to a forced unwind. libgcc_s does not know Automat's image, so a
-forced unwind ends at the first frame of Automat and the destructors of Automat's frames on
-that thread do not run.
+glibc does not look its unwinder up by name. `pthread_exit`, `pthread_cancel` and `backtrace`
+open `libgcc_s.so.1` with glibc's private `dlopen` and take `_Unwind_ForcedUnwind`,
+`_Unwind_Resume`, `_Unwind_GetCFA`, `_Unwind_Backtrace` and `__gcc_personality_v0` from the
+object that this name resolves to. The helper therefore takes the name `libgcc_s.so.1` for
+itself. Before Automat's code runs, the helper loads
+the host's libgcc_s into the global scope and then points the `DT_SONAME` entry of its own
+dynamic section at the string `libgcc_s.so.1`. The helper is linked with a placeholder name and
+without RELRO, so that this entry is writable. The host's loader compares a requested name with
+the loaded objects in their load order, the main program first, and reads each object's
+`DT_SONAME` entry at every comparison. Every later request for `libgcc_s.so.1`, from glibc or
+from a host library, therefore resolves to the helper, and glibc's forced unwinds run on
+Automat's unwinder: the destructors of host frames and of Automat's frames run. A host library
+that imports another function of libgcc_s finds it in the host's libgcc_s, because the helper has
+no version definitions and the lookup continues through the global scope. glibc before 2.31
+stops a versioned lookup at the object that the version entry names, so such a library fails to
+load there; `crt::Init` reports glibc versions older than 2.31 as an error. A chimera thread
+frees its launch record and detaches musl's thread structure in a destructor, so that a forced
+unwind through its body does both.
 
 Automat uses the host's libxcb in this way. Vulkan drivers call back into the XCB connection
 that Automat hands them through `VK_KHR_xcb_surface`. The driver's libxcb and Automat's libxcb

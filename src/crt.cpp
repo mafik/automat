@@ -7,7 +7,6 @@
 #include <dlfcn.h>
 #include <elf.h>
 #include <fcntl.h>
-#include <libunwind.h>
 #include <link.h>
 #include <setjmp.h>
 #include <signal.h>
@@ -28,6 +27,8 @@
 extern "C" {
 void __pthread_attach_host(void* stack_addr, size_t stack_size, size_t guard_size);
 void __pthread_detach_host(void);
+_Unwind_Reason_Code __gcc_personality_v0(int, _Unwind_Action, uint64_t, _Unwind_Exception*,
+                                         _Unwind_Context*);
 }
 
 namespace automat::crt {
@@ -52,6 +53,8 @@ struct Unwinder {
   uintptr_t (*get_data_rel_base)(_Unwind_Context*);
   uintptr_t (*get_text_rel_base)(_Unwind_Context*);
   void* (*find_enclosing_function)(void*);
+  _Unwind_Reason_Code (*personality)(int, _Unwind_Action, uint64_t, _Unwind_Exception*,
+                                     _Unwind_Context*);
 };
 
 struct HelperFunctions {
@@ -60,7 +63,6 @@ struct HelperFunctions {
   int (*close)(void*);
   char* (*error)();
   Unwinder* unwinder;
-  const void** cursor_type;
 } host;
 
 int* (*host_errno_location)();
@@ -336,12 +338,8 @@ extern "C" int __start_host(const Elf64_Phdr* tls) {
         .get_data_rel_base = _Unwind_GetDataRelBase,
         .get_text_rel_base = _Unwind_GetTextRelBase,
         .find_enclosing_function = _Unwind_FindEnclosingFunction,
+        .personality = __gcc_personality_v0,
     };
-    unw_context_t context;
-    unw_cursor_t cursor;
-    unw_getcontext(&context);
-    unw_init_local(&cursor, &context);
-    *host.cursor_type = *(const void**)&cursor;
     _longjmp(return_to_start, 1);
   };
   char* address_argument = (char*)stack + kHelperStackSize - 1;
@@ -426,12 +424,17 @@ ChimeraThread::ChimeraThread(std::move_only_function<void()> body) {
         }
         __pthread_attach_host(stack, stack_size, guard_size);
         sigprocmask(SIG_SETMASK, &launch->creator_signal_mask, nullptr);
+        struct DetachAtThreadExit {
+          ChimeraLaunch* launch;
+          ~DetachAtThreadExit() {
+            delete launch;
+            sigset_t all;
+            sigfillset(&all);
+            sigprocmask(SIG_BLOCK, &all, nullptr);
+            __pthread_detach_host();
+          }
+        } detach{launch};
         launch->body();
-        delete launch;
-        sigset_t all;
-        sigfillset(&all);
-        sigprocmask(SIG_BLOCK, &all, nullptr);
-        __pthread_detach_host();
         return nullptr;
       },
       launch.get());

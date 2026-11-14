@@ -47,6 +47,7 @@ struct MapleTree {
   void Clear() noexcept;
   bool TryReclaim();
   void Reclaim();
+  uint64_t Epoch() const;
 
   size_t NodeCount() const;
   size_t Depth() const;

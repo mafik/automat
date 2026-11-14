@@ -28,6 +28,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <memory>
 #include <optional>
 
 #include "fd.hpp"
@@ -547,12 +548,21 @@ MemMeld::RegionTable::RegionTable()
         void* reserved = mmap(nullptr, kMirrorReserve, PROT_NONE,
                               MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
         return reserved == MAP_FAILED ? nullptr : (char*)reserved;
+      }()),
+      pool([] {
+        void* reserved = mmap(nullptr, (1ull << kIndexBits) * sizeof(Rec), PROT_READ | PROT_WRITE,
+                              MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+        return reserved == MAP_FAILED ? nullptr : (Rec*)reserved;
       }()) {
-  pool.emplace_back();
+  if (pool) std::construct_at(pool);
 }
 
 MemMeld::RegionTable::~RegionTable() {
   if (mirror) munmap(mirror, kMirrorReserve);
+  if (pool) {
+    std::destroy_n(pool, pool_size);
+    munmap(pool, (1ull << kIndexBits) * sizeof(Rec));
+  }
 }
 
 uint64_t MemMeld::RegionTable::AllocLocal(uint64_t len) {
@@ -585,19 +595,18 @@ uint32_t MemMeld::RegionTable::AddRec(uint64_t remote, uint64_t len, int prot, u
                                       StrView path, uint64_t file_offset, char* local, dev_t dev,
                                       uint64_t inode) {
   uint32_t idx;
-  if (free_pool.empty()) {
-    idx = pool.size();
-    pool.emplace_back();
+  if (!dropped.empty() && by_remote.Epoch() >= dropped.front().first + 2) {
+    idx = dropped.front().second;
+    dropped.pop_front();
   } else {
-    idx = free_pool.back();
-    free_pool.pop_back();
+    idx = pool_size++;
+    std::construct_at(pool + idx);
   }
   Rec& rec = pool[idx];
-  rec.path = Str(path);
   rec.key = key;
   rec.dev = dev;
   rec.inode = inode;
-  rec.r = {remote, Span<char>(local, len), prot, rec.path, file_offset};
+  rec.r = {remote, Span<char>(local, len), prot, Str(path), file_offset};
   by_remote.Update(remote, remote + len, PackTranslation(remote, (uint64_t)local, idx));
   by_local.Update((uint64_t)local, (uint64_t)local + len,
                   PackTranslation((uint64_t)local, remote, idx));
@@ -605,11 +614,10 @@ uint32_t MemMeld::RegionTable::AddRec(uint64_t remote, uint64_t len, int prot, u
 }
 
 void MemMeld::RegionTable::DropRec(uint32_t idx) {
-  Rec& rec = pool[idx];
+  const Rec& rec = pool[idx];
   by_remote.Erase(rec.r.remote, rec.End());
   by_local.Erase((uint64_t)rec.r.local.data(), (uint64_t)rec.r.local.data() + rec.r.local.size());
-  rec.path.clear();
-  free_pool.push_back(idx);
+  dropped.push_back({by_remote.Epoch(), idx});
 }
 
 uint32_t MemMeld::RegionTable::MapRegion(uint64_t remote, uint64_t len, int prot, uint64_t key,
@@ -661,28 +669,40 @@ std::array<uint32_t, 3> MemMeld::RegionTable::Split(uint32_t idx, uint64_t lo, u
   for (int i = 0; i < 3; ++i) {
     if (cuts[i] == cuts[i + 1]) continue;
     uint64_t skip = cuts[i] - old.r.remote;
-    parts[i] = AddRec(cuts[i], cuts[i + 1] - cuts[i], old.r.prot, old.key + skip, old.path,
+    parts[i] = AddRec(cuts[i], cuts[i + 1] - cuts[i], old.r.prot, old.key + skip, old.r.path,
                       old.r.file_offset + skip, old.r.local.data() + skip, old.dev, old.inode);
   }
   return parts;
 }
 
-void MemMeld::RegionTable::Shrink(uint32_t idx, uint64_t keep) {
-  Region& r = pool[idx].r;
+uint32_t MemMeld::RegionTable::Protect(uint32_t idx, int prot) {
+  const Rec& old = pool[idx];
+  uint32_t changed = AddRec(old.r.remote, old.r.local.size(), prot, old.key, old.r.path,
+                            old.r.file_offset, old.r.local.data(), old.dev, old.inode);
+  dropped.push_back({by_remote.Epoch(), idx});
+  return changed;
+}
+
+uint32_t MemMeld::RegionTable::Shrink(uint32_t idx, uint64_t keep) {
+  const Rec& old = pool[idx];
+  const Region& r = old.r;
   uint64_t size = r.local.size();
   by_remote.Erase(r.remote + keep, r.remote + size);
   by_local.Erase((uint64_t)r.local.data() + keep, (uint64_t)r.local.data() + size);
+  uint32_t head = AddRec(r.remote, keep, r.prot, old.key, r.path, r.file_offset, r.local.data(),
+                         old.dev, old.inode);
+  dropped.push_back({by_remote.Epoch(), idx});
   FreeLocal(r.local.data() + keep - mirror, size - keep);
-  r.local = r.local.first(keep);
+  return head;
 }
 
-void MemMeld::RegionTable::Move(uint32_t idx, uint64_t remote) {
-  Region& r = pool[idx].r;
-  uint64_t local = (uint64_t)r.local.data(), size = r.local.size();
-  by_remote.Erase(r.remote, r.remote + size);
-  r.remote = remote;
-  by_remote.Update(remote, remote + size, PackTranslation(remote, local, idx));
-  by_local.Update(local, local + size, PackTranslation(local, remote, idx));
+uint32_t MemMeld::RegionTable::Move(uint32_t idx, uint64_t remote) {
+  const Rec& old = pool[idx];
+  by_remote.Erase(old.r.remote, old.End());
+  uint32_t moved = AddRec(remote, old.r.local.size(), old.r.prot, old.key, old.r.path,
+                          old.r.file_offset, old.r.local.data(), old.dev, old.inode);
+  dropped.push_back({by_remote.Epoch(), idx});
+  return moved;
 }
 
 MemMeld::~MemMeld() { assert(tracer.load(std::memory_order_relaxed) == 0); }
@@ -707,6 +727,10 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
   }
   if (!regions.mirror) {
     AppendErrorMessage(status) += "MemMeld: reserving the local mirror";
+    return;
+  }
+  if (!regions.pool) {
+    AppendErrorMessage(status) += "MemMeld: reserving the region records";
     return;
   }
 
@@ -753,15 +777,14 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
     if (m.file.Opened()) fstat(m.file, &st);
     Split(lo, hi);
     for (uint32_t idx : regions.Overlapping(lo, hi)) {
-      auto& rec = regions.pool[idx];
+      const auto& rec = regions.pool[idx];
       if (rec.Delta() != delta ||
           (m.file.Opened() && (rec.dev != st.st_dev || rec.inode != st.st_ino))) {
         OnUnmapped(rec.r);
         regions.UnmapRegion(idx);
       } else if (rec.r.prot != m.prot) {
-        Region before = rec.r;
-        rec.r.prot = m.prot;
-        OnChanged(before, rec.r);
+        uint32_t changed = regions.Protect(idx, m.prot);
+        OnChanged(rec.r, regions.pool[changed].r);
       }
     }
     if (m.key >= kFileKey && !m.file.Opened()) return;
@@ -773,13 +796,12 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
       uint64_t end = regions.NextStart(at, hi);
       uint32_t below = at && m.key < kFileKey ? regions.IndexAt(at - 1) : 0;
       if (below && regions.pool[below].Delta() == delta && regions.pool[below].r.prot == m.prot) {
-        auto& rec = regions.pool[below];
-        Region before = rec.r;
+        const auto& rec = regions.pool[below];
+        const Region& before = rec.r;
         uint64_t remote = rec.r.remote, key = rec.key, file_offset = rec.r.file_offset;
-        Str path = rec.path;
         regions.UnmapRegion(below);
-        if (uint32_t idx =
-                regions.MapRegion(remote, end - remote, m.prot, key, -1, path, file_offset, memfd))
+        if (uint32_t idx = regions.MapRegion(remote, end - remote, m.prot, key, -1, before.path,
+                                             file_offset, memfd))
           OnChanged(before, regions.pool[idx].r);
         else
           OnUnmapped(before);
@@ -804,9 +826,9 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
   };
 
   auto Shrink = [&](uint32_t idx, uint64_t keep) {
-    Region before = regions.pool[idx].r;
-    regions.Shrink(idx, keep);
-    OnChanged(before, regions.pool[idx].r);
+    uint32_t head = regions.Shrink(idx, keep);
+    OnChanged(regions.pool[idx].r, regions.pool[head].r);
+    return head;
   };
 
   auto RemovePiece = [&](const Piece& p) {
@@ -1603,10 +1625,10 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
           Split(lo, lo + old_len);
           for (uint32_t idx : regions.Overlapping(lo, lo + moved)) {
             const auto& rec = regions.pool[idx];
-            if (rec.End() > lo + moved) Shrink(idx, lo + moved - rec.r.remote);
-            Region before = rec.r;
-            regions.Move(idx, before.remote + (to - lo));
-            OnChanged(before, rec.r);
+            uint32_t kept = rec.End() > lo + moved ? Shrink(idx, lo + moved - rec.r.remote) : idx;
+            const Region& before = regions.pool[kept].r;
+            uint32_t at_destination = regions.Move(kept, before.remote + (to - lo));
+            OnChanged(before, regions.pool[at_destination].r);
           }
         }
         if (Memfd(c.source) && new_len > old_len) {
@@ -1823,12 +1845,19 @@ uintptr_t MemMeld::ToRemote(const void* local) const {
   return value ? Translate(at, value) : 0;
 }
 
-const MemMeld::Region* MemMeld::Find(uintptr_t remote) const {
+MemMeld::ReadGuard::ReadGuard(const MemMeld& mem_meld)
+    : by_remote(mem_meld.regions.by_remote), mem_meld(mem_meld) {}
+
+const MemMeld::Region* MemMeld::ReadGuard::Find(uintptr_t remote) const {
   if (remote >= kUserEnd) return nullptr;
-  uint32_t idx = regions.IndexAt(remote);
-  if (!idx) return nullptr;
-  const Region& r = regions.pool[idx].r;
-  return remote >= r.remote && remote < r.remote + r.local.size() ? &r : nullptr;
+  uint32_t idx = by_remote.Query(remote).value & kIndexMask;
+  return idx ? &mem_meld.regions.pool[idx].r : nullptr;
+}
+
+const MemMeld::Region* MemMeld::ReadGuard::FindLowerBound(uintptr_t remote) const {
+  if (remote >= kUserEnd) return nullptr;
+  uint32_t idx = by_remote.QueryLowerBound(remote).value & kIndexMask;
+  return idx ? &mem_meld.regions.pool[idx].r : nullptr;
 }
 
 }  // namespace automat

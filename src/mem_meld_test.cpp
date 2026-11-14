@@ -188,19 +188,11 @@ pid_t TracerPid(pid_t pid) {
 struct TestMirror {
   using Region = MemMeld::Region;
 
-  struct Rec {
-    uintptr_t remote;
-    Span<char> local;
-    int prot;
-    Str path;
-    Size file_offset;
-  };
-
   std::mutex mutex;
   std::condition_variable cv;
-  std::map<uintptr_t, Rec> live;
-  Vec<Rec> history;
-  Vec<std::pair<Rec, Rec>> changes;
+  std::map<uintptr_t, Region> live;
+  Vec<Region> history;
+  Vec<std::pair<Region, Region>> changes;
   Vec<uintptr_t> unmapped;
   int events = 0;
   bool attached = false;
@@ -241,14 +233,11 @@ struct TestMirror {
     if (thread.joinable()) thread.join();
   }
 
-  static Rec Copy(const Region& r) {
-    return {r.remote, r.local, r.prot, Str(r.path), r.file_offset};
-  }
-
   void Record(const Region& r) {
-    live[r.remote] = Copy(r);
-    history.push_back(Copy(r));
-    const Region* found = mem_meld.Find(r.remote + r.local.size() / 2);
+    live[r.remote] = r;
+    history.push_back(r);
+    MemMeld::ReadGuard guard(mem_meld);
+    const Region* found = guard.Find(r.remote + r.local.size() / 2);
     uint64_t last = r.local.size() - 1;
     translation_errors += !found || found->remote != r.remote ||
                           mem_meld.ToLocal(r.remote, r.local.size()).data() != r.local.data() ||
@@ -274,7 +263,7 @@ struct TestMirror {
   void OnChanged(const Region& before, const Region& after) {
     std::lock_guard lock(mutex);
     ++events;
-    changes.push_back({Copy(before), Copy(after)});
+    changes.push_back({before, after});
     live.erase(before.remote);
     Record(after);
   }
@@ -920,14 +909,14 @@ TEST_F(Fixture, TranslationFromOtherThreads) {
       std::mt19937_64 rng(i);
       uint64_t sum = 0;
       while (!stop.load(std::memory_order_relaxed)) {
-        Vec<TestMirror::Rec> recent;
+        Vec<MemMeld::Region> recent;
         {
           std::lock_guard lock(mirror->mutex);
           auto& history = mirror->history;
           recent.assign(history.end() - std::min<size_t>(history.size(), 64), history.end());
         }
         for (int k = 0; k < 1000; ++k) {
-          const TestMirror::Rec& r = recent[rng() % recent.size()];
+          const MemMeld::Region& r = recent[rng() % recent.size()];
           uintptr_t remote = r.remote + rng() % r.local.size();
           Span<char> local =
               mirror->mem_meld.ToLocal(remote, 1 + rng() % (r.remote + r.local.size() - remote));
@@ -950,20 +939,97 @@ TEST_F(Fixture, TranslationFromOtherThreads) {
   stop.store(true, std::memory_order_relaxed);
   for (std::thread& reader : readers) reader.join();
   mirror->Detach();
-  std::map<uint64_t, Vec<const TestMirror::Rec*>> by_skew;
-  for (const TestMirror::Rec& r : mirror->history)
+  std::map<uint64_t, Vec<const MemMeld::Region*>> by_skew;
+  for (const MemMeld::Region& r : mirror->history)
     by_skew[(uint64_t)r.local.data() - r.remote].push_back(&r);
   size_t results = 0, unknown = 0;
   for (const Vec<Seen>& results_of_one : seen)
     for (const Seen& t : results_of_one) {
       ++results;
-      const Vec<const TestMirror::Rec*>& regions = by_skew[(uint64_t)t.local - t.remote];
-      unknown += std::none_of(regions.begin(), regions.end(), [&](const TestMirror::Rec* r) {
+      const Vec<const MemMeld::Region*>& regions = by_skew[(uint64_t)t.local - t.remote];
+      unknown += std::none_of(regions.begin(), regions.end(), [&](const MemMeld::Region* r) {
         return r->remote <= t.remote && t.remote + t.size <= r->remote + r->local.size();
       });
     }
   EXPECT_GT(results, 1000u);
   EXPECT_EQ(unknown, 0u) << "of " << results << " translations";
+}
+
+TEST_F(Fixture, GuardLookupsAgreeWithTheCallbacks) {
+  Attach();
+  uintptr_t addr = target.CommandAddr("mmap 16384 rw");
+  EXPECT_EQ(target.Command(f("munmap {:#x} 4096", addr)), "ok");
+  MemMeld::ReadGuard guard(mirror->mem_meld);
+  Vec<MemMeld::Region> visited;
+  uintptr_t end = 0;
+  for (const MemMeld::Region* r = guard.FindLowerBound(0); r;
+       r = guard.FindLowerBound(r->remote + r->local.size())) {
+    EXPECT_GE(r->remote, end);
+    end = r->remote + r->local.size();
+    visited.push_back(*r);
+  }
+  {
+    std::lock_guard lock(mirror->mutex);
+    ASSERT_EQ(visited.size(), mirror->live.size());
+    auto live = mirror->live.begin();
+    for (const MemMeld::Region& r : visited) {
+      EXPECT_EQ(r.remote, live->first);
+      EXPECT_EQ(r.local.data(), live->second.local.data());
+      EXPECT_EQ(r.local.size(), live->second.local.size());
+      EXPECT_EQ(r.prot, live->second.prot);
+      EXPECT_EQ(r.path, live->second.path);
+      EXPECT_EQ(r.file_offset, live->second.file_offset);
+      ++live;
+    }
+  }
+  const MemMeld::Region* found = guard.Find(addr + 4096 + 100);
+  ASSERT_TRUE(found);
+  EXPECT_EQ(found->remote, addr + 4096);
+  EXPECT_EQ(found->local.size(), 12288u);
+  EXPECT_FALSE(guard.Find(addr));
+  EXPECT_EQ(guard.FindLowerBound(addr), found);
+  EXPECT_FALSE(guard.FindLowerBound(end));
+  EXPECT_FALSE(guard.Find(UINT64_MAX));
+}
+
+TEST_F(Fixture, RegionsTakenThroughAGuardStayIntact) {
+  Attach();
+  uintptr_t reserved = target.CommandAddr("mmap 12288 none");
+  uintptr_t unmapped =
+      target.CommandAddr(f("mmapfile /etc/hostname 4096 r {:#x}", reserved + 4096));
+  uintptr_t reprotected = target.CommandAddr("mmapfile /etc/hostname 4096 r");
+  struct Kept {
+    const MemMeld::Region* region;
+    MemMeld::Region fields;
+  };
+  Vec<Kept> kept;
+  {
+    MemMeld::ReadGuard guard(mirror->mem_meld);
+    for (uintptr_t addr : {unmapped, reprotected}) {
+      const MemMeld::Region* r = guard.Find(addr);
+      ASSERT_TRUE(r);
+      ASSERT_EQ(r->path, "/etc/hostname");
+      kept.push_back({r, *r});
+    }
+    EXPECT_EQ(target.CommandAddr(f("mmap 4096 none {:#x}", unmapped)), unmapped);
+    EXPECT_EQ(target.Command(f("mprotect {:#x} 4096 rx", reprotected)), "ok");
+    EXPECT_EQ(target.Command("remaps 2000"), "ok");
+    for (const Kept& k : kept) {
+      const MemMeld::Region& r = *k.region;
+      EXPECT_EQ(r.remote, k.fields.remote);
+      EXPECT_EQ(r.local.data(), k.fields.local.data());
+      EXPECT_EQ(r.local.size(), k.fields.local.size());
+      EXPECT_EQ(r.prot, k.fields.prot);
+      EXPECT_EQ(r.path, k.fields.path);
+      EXPECT_EQ(r.file_offset, k.fields.file_offset);
+    }
+  }
+  MemMeld::ReadGuard guard(mirror->mem_meld);
+  EXPECT_FALSE(guard.Find(unmapped));
+  const MemMeld::Region* found = guard.Find(reprotected);
+  ASSERT_TRUE(found);
+  EXPECT_NE(found, kept[1].region);
+  EXPECT_EQ(found->prot, PROT_READ | PROT_EXEC);
 }
 
 TEST_F(Fixture, MirrorIsReadableFromOtherThreads) {

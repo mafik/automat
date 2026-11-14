@@ -376,13 +376,13 @@ struct FuzzMirror {
       if (rec.local.data() < r.local.data() + len &&
           r.local.data() < rec.local.data() + rec.local.size())
         Error(f("{} reported {} whose local bytes overlap {}", event, Describe(r), Describe(rec)));
-    const Region* found = mem_meld.Find(r.remote);
+    MemMeld::ReadGuard guard(mem_meld);
+    const Region* found = guard.Find(r.remote);
     if (!found || found->remote != r.remote || found->local.data() != r.local.data() ||
         found->local.size() != len || found->prot != r.prot)
       Error(f("during {} of {}, Find returned {}", event, Describe(r),
               found ? Describe(*found) : Str("null")));
-    model[r.remote] =
-        Rec{r.remote, r.local, r.prot, check_paths ? Str(r.path) : Str(), r.file_offset};
+    model[r.remote] = Rec{r.remote, r.local, r.prot, check_paths ? r.path : Str(), r.file_offset};
   }
 
   void Retire(const Region& r, StrView event) {
@@ -1195,7 +1195,8 @@ struct Run {
     Vec<Span<char>> spans = [&] {
       Vec<Span<char>> out;
       for (uint64_t done = 0; done < len;) {
-        const MemMeld::Region* region = mirror->mem_meld.Find(remote + done);
+        MemMeld::ReadGuard guard(mirror->mem_meld);
+        const MemMeld::Region* region = guard.Find(remote + done);
         if (!region || !(region->prot & PROT_WRITE)) return Vec<Span<char>>();
         uint64_t n =
             std::min<uint64_t>(region->remote + region->local.size() - remote - done, len - done);
@@ -1580,7 +1581,8 @@ struct Run {
       Rng sample{seed};
       auto expect_find = [&](uint64_t addr) -> Str {
         const Rec* want = RegionAt(s.regions, addr);
-        const MemMeld::Region* got = mirror->mem_meld.Find(addr);
+        MemMeld::ReadGuard guard(mirror->mem_meld);
+        const MemMeld::Region* got = guard.Find(addr);
         uint64_t k = want ? addr - want->remote : 0, rest = want ? want->local.size() - k : 1;
         Span<char> local = mirror->mem_meld.ToLocal(addr, rest);
         if (!want) {

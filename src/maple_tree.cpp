@@ -267,6 +267,8 @@ void MapleTree::Reclaim() {
   }
 }
 
+uint64_t MapleTree::Epoch() const { return epoch.load(std::memory_order_relaxed); }
+
 size_t MapleTree::NodeCount() const {
   auto count_subtree = [](this auto& self, const Node* node) -> size_t {
     size_t count = 1;

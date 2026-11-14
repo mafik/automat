@@ -443,7 +443,8 @@ struct StressMirror {
   }
 
   void CheckNew(const Region& r, StrView event) {
-    const Region* found = mem_meld.Find(r.remote);
+    MemMeld::ReadGuard guard(mem_meld);
+    const Region* found = guard.Find(r.remote);
     if (!found || found->remote != r.remote || found->local.data() != r.local.data() ||
         found->local.size() != r.local.size())
       Violation(f("{}: Find({:#x}) disagrees with the event", event, r.remote));
@@ -477,7 +478,7 @@ struct StressMirror {
   }
 
   void Add(const Region& r) {
-    live[r.remote] = {r.local, r.prot, Str(r.path)};
+    live[r.remote] = {r.local, r.prot, r.path};
     live_bytes += r.local.size();
   }
 
@@ -677,7 +678,8 @@ uint64_t ExpectConsistent(pid_t pid, StressMirror& m, const Str& when) {
     local_mirror = m.mem_meld.Local();
     for (auto& [remote, rec] : live) {
       uint64_t size = rec.local.size();
-      const MemMeld::Region* r = m.mem_meld.Find(remote + size / 2);
+      MemMeld::ReadGuard guard(m.mem_meld);
+      const MemMeld::Region* r = guard.Find(remote + size / 2);
       if (!r || r->remote != remote || r->local.data() != rec.local.data() ||
           r->local.size() != size || r->prot != rec.prot) {
         out.push_back(f("Find inside [{:#x}, +{:#x}) disagrees with the events", remote, size));
@@ -1292,6 +1294,51 @@ TEST_F(Stress, HighEventRate) {
       "{:.1f} "
       "MiB live; local mirror/live MiB over time:{}",
       MiB(m->max_mirror), MiB(m->live_at_max_mirror), MiB(mirror_now), MiB(m->live_bytes), series));
+  Destroy(m);
+}
+
+TEST_F(Stress, GuardsSeeOrderedRegionsWhileTheTargetChurns) {
+  Target t;
+  ASSERT_NO_FATAL_FAILURE(t.Spawn());
+  auto m = Attach(t);
+  ASSERT_TRUE(m);
+  std::atomic<bool> stop = false;
+  std::atomic<uint64_t> guards = 0, regions = 0, path_bytes = 0, bad = 0;
+  Vec<std::thread> readers;
+  for (int i = 0; i < 3; ++i)
+    readers.emplace_back([&] {
+      uint64_t bytes = 0;
+      while (!stop.load(std::memory_order_relaxed)) {
+        MemMeld::ReadGuard guard(m->mem_meld);
+        uintptr_t end = 0;
+        uint64_t seen = 0;
+        for (const MemMeld::Region* r = guard.FindLowerBound(0); r;
+             r = guard.FindLowerBound(r->remote + r->local.size())) {
+          if (r->remote < end || r->remote % kPage || r->local.empty() ||
+              (uintptr_t)r->local.data() % kPage || r->local.size() % kPage)
+            bad.fetch_add(1, std::memory_order_relaxed);
+          for (char c : r->path) bytes += (uint8_t)c;
+          end = r->remote + r->local.size();
+          ++seen;
+        }
+        guards.fetch_add(1, std::memory_order_relaxed);
+        regions.fetch_add(seen, std::memory_order_relaxed);
+      }
+      path_bytes.fetch_add(bytes, std::memory_order_relaxed);
+    });
+  Workload w(t, kSeed ^ 7);
+  auto start = Clock::now();
+  bool rounds_ok = true;
+  while (rounds_ok && Clock::now() < start + std::chrono::seconds(kSeconds)) rounds_ok = w.Round();
+  stop.store(true, std::memory_order_relaxed);
+  for (std::thread& reader : readers) reader.join();
+  EXPECT_TRUE(rounds_ok);
+  EXPECT_TRUE(w.errors.empty()) << w.errors[0];
+  EXPECT_GT(guards.load(std::memory_order_relaxed), 100u);
+  EXPECT_EQ(bad.load(std::memory_order_relaxed), 0u);
+  Report(f("guards: {} ops, {} guards, {} regions visited, path byte sum {}", w.ops,
+           guards.load(std::memory_order_relaxed), regions.load(std::memory_order_relaxed),
+           path_bytes.load(std::memory_order_relaxed)));
   Destroy(m);
 }
 

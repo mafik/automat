@@ -27,11 +27,17 @@ constructed; a region that does not fit is not mirrored.
 A region (`MemMeld::Region`) is one mirrored range of the target. It records the target
 address of its first byte, its local bytes inside the local mirror, its protection in the target,
 its path and its file offset. The path is the file of a file region and the name of anonymous
-memory that has one, such as `[heap]` or `[stack]`; it is empty for other anonymous memory.
+memory that has one, such as `[heap]` or `[stack]`; it is empty for other anonymous memory. A
+region owns its path, so a copy of a region owns a copy of the path and stays valid on its own.
 `ToLocal(remote, size)` returns the local bytes of `[remote, remote + size)` when the first and the
 last byte of that range lie in one region, and an empty span otherwise. `ToRemote(local)` returns
 the target address of a byte of the local mirror, or 0 when the byte lies outside every live region.
-`Find(remote)` returns the live region that contains the address, or null.
+A `MemMeld::ReadGuard` is the only way to look up regions, and it is valid on every thread,
+including the tracer thread inside a callback: its `Find(remote)` returns the region that
+contains the address, and its `FindLowerBound(remote)` returns that region or else the next region
+above the address, so that a loop from address 0 visits every region in ascending order. The
+regions that a guard returns stay valid and unchanged until the guard is destroyed, and all lookups
+through one guard read the same version of the table.
 
 `Local`, `ToLocal` and `ToRemote` may be called from any thread without a lock, so that objects on
 other threads can read and write the target's memory directly. Only the tracer thread writes the
@@ -41,12 +47,23 @@ by step, so a reader may find no translation for an address whose mapping did no
 keyed by remote addresses holds a segment that covers the remote range of each region, and the table
 keyed by local addresses holds a segment that covers its local range. The value of a segment is the
 page distance from its range to the other range, modulo 2^35 pages, together with the index of the
-region. A reader therefore translates with the value alone and never reads the region records,
-which the tracer thread changes. `ToLocal` looks up the first byte and requires that the last byte
-lies in the same segment. The extent behind `Local()` is an atomic, which grows only after the new
-local range is mapped. `Find` reads the region records, which the tracer thread changes and reuses,
-so it may be called only from the callbacks, and the region that it returns is valid until the
-callback returns.
+region. A translation therefore uses the value alone and never reads the region records.
+`ToLocal` looks up the first byte and requires that the last byte lies in the same segment. The
+extent behind `Local()` is an atomic, which grows only after the new local range is mapped.
+
+The region records live in one array in reserved address space, so that a record never moves and
+the array is readable while it grows. A published record is never edited: a change of protection, a
+shrink and a move publish a new record and retire the old one, because a reader may hold the old
+record at any moment and must see consistent fields. The tracer thread orders the updates of an
+operation so that the regions that a loop over one guard visits never overlap: a shrink removes the
+tail from the table before it publishes the record of the head. A retired record is reused only
+after the grace period of the table keyed by remote addresses (see `docs/parrots/Maple Tree.md`): a
+`MemMeld::ReadGuard` holds a read guard of that table, so a record that left the table is reused
+only after every guard that could have reached it has ended. Readers reach records only through
+that table, so only its epochs decide. The guard costs the two atomic operations of the read guard
+of the tree. It never blocks the tracer thread. A guard that lives for a long time delays the reuse
+of records and the freeing of replaced tree nodes, so a consumer should not hold a guard across
+frames. A callback that needs a lookup takes a guard for the duration of the lookup.
 
 A translation may be outdated by the time it is used, because the target keeps running. Reading
 through an outdated translation never faults: the local bytes of a region that left are mapped again
@@ -91,28 +108,29 @@ thread that calls `Attach` and keeps it for the whole session. The tracer thread
 tracer thread or the children of other Automat threads. It does see the children of its own thread,
 and its wait collects their exits, so the tracer thread should not be the parent of other
 processes. Mirrors share no state, so they need no lock. The tracer thread changes all state of its
-mirror: the memfd, the offset allocator, the local mirror and the translation tables. At each
-system-call stop it applies the change to the local mirror and the tables, calls the callbacks, and
-only then resumes the target thread, so a callback sees the target's memory map as the call left
-it. A consumer with expensive work forwards it to another thread itself.
+mirror: the memfd, the offset allocator, the local mirror, the translation tables and the region
+records. At each system-call stop it applies the change to the local mirror and the tables, calls
+the callbacks, and only then resumes the target thread, so a callback sees the target's memory map
+as the call left it. A consumer with expensive work forwards it to another thread itself.
 
 `Attach` may be called once. It duplicates the pidfd of the target, so the caller keeps its own
 descriptor. When `Attach` returns, its `Status` reports the outcome of the session: OK when `Detach`
 ended it or the target exited with status 0, otherwise an error that says how the target exited or
 why the attach or the session failed. The errors found before the session starts are reported
 through the same `Status`: a second call, an invalid pidfd, a pidfd whose process id cannot be read
-and a failed reservation of the local mirror. No callback reports the end of the session; a consumer
-that reacts to it does so after `Attach` returns. While the session runs, the wake signal is
-unblocked in the tracer thread, and the signal mask of the thread is restored when `Attach` returns.
+and a failed reservation of the local mirror or of the region records. No callback reports the end
+of the session; a consumer that reacts to it does so after `Attach` returns. While the session
+runs, the wake signal is unblocked in the tracer thread, and the signal mask of the thread is
+restored when `Attach` returns.
 
 `Detach` is the only function that another thread calls to control the session (`Local`,
-`ToLocal` and `ToRemote` need no lock). It sets a flag of the mirror, which the tracer thread reads
-before each wait, and interrupts the tracer's `waitid` with a signal whose handler does nothing. A
-signal that arrives just before the wait is lost, so `Detach` sends it again every millisecond until
-the session has ended. When `Detach` returns while `Attach` runs, no callback runs afterwards. A
-callback runs on the tracer thread and may call `Detach`, which then only sets the flag, and the
-session ends when the callback returns. The flag stays set when `Detach` is called before `Attach`,
-so that `Attach` detaches again as soon as it has attached.
+`ToLocal`, `ToRemote` and `MemMeld::ReadGuard` need no lock). It sets a flag of the mirror, which
+the tracer thread reads before each wait, and interrupts the tracer's `waitid` with a signal whose
+handler does nothing. A signal that arrives just before the wait is lost, so `Detach` sends it
+again every millisecond until the session has ended. When `Detach` returns while `Attach` runs, no
+callback runs afterwards. A callback runs on the tracer thread and may call `Detach`, which then
+only sets the flag, and the session ends when the callback returns. The flag stays set when
+`Detach` is called before `Attach`, so that `Attach` detaches again as soon as it has attached.
 
 A mirror must not be destroyed while `Attach` runs, which a debug assertion reports. Because no
 callback can run once `Attach` has returned, the state that the callbacks use needs no protection
@@ -441,4 +459,7 @@ and the memory of the translation tables follow the number of regions, not their
 - On a kernel that reports no exit stop for a task killed by `SIGKILL`, the tracer's wait collects
   such a target, and a parent in Automat gets `ECHILD` from `waitpid`; the `Status` of `Attach`
   still reports the exit status.
-- A translation from another thread may be outdated by the time it is used.
+- A translation from another thread may be outdated by the time it is used, and so may the
+  regions that a guard returns.
+- A guard that is held for a long time keeps every record and tree node retired meanwhile
+  allocated.

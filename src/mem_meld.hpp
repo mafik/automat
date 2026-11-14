@@ -24,8 +24,18 @@ struct MemMeld {
     uintptr_t remote;
     Span<char> local;
     int prot;
-    StrView path;
+    Str path;
     Size file_offset;
+  };
+
+  struct ReadGuard {
+    explicit ReadGuard(const MemMeld&);
+    const Region* Find(uintptr_t remote) const;
+    const Region* FindLowerBound(uintptr_t remote) const;
+
+   private:
+    MapleTree::ReadGuard by_remote;
+    const MemMeld& mem_meld;
   };
 
   ~MemMeld();
@@ -36,7 +46,6 @@ struct MemMeld {
   Span<char> Local() const;
   Span<char> ToLocal(uintptr_t remote, Size size) const;
   uintptr_t ToRemote(const void* local) const;
-  const Region* Find(uintptr_t remote) const;
 
   Fn<void()> on_attached;
   Fn<void(const Region&)> on_mapped;
@@ -49,7 +58,6 @@ struct MemMeld {
     struct Rec {
       Region r;
       uint64_t key = 0;
-      Str path;
       dev_t dev = 0;
       uint64_t inode = 0;
       uint64_t End() const;
@@ -59,8 +67,9 @@ struct MemMeld {
     char* const mirror;
     std::atomic<uint64_t> high_water = 0;
     Vec<std::pair<uint64_t, uint64_t>> free_list;
-    std::deque<Rec> pool;
-    Vec<uint32_t> free_pool;
+    Rec* const pool;  // 22 GB of MAP_NORESERVE address space
+    uint32_t pool_size = 1;
+    std::deque<std::pair<uint64_t, uint32_t>> dropped;
     MapleTree by_remote, by_local;
 
     RegionTable();
@@ -78,8 +87,9 @@ struct MemMeld {
     uint64_t NextStart(uint64_t at, uint64_t hi);
     Vec<uint32_t> Overlapping(uint64_t lo, uint64_t hi);
     std::array<uint32_t, 3> Split(uint32_t idx, uint64_t lo, uint64_t hi);
-    void Shrink(uint32_t idx, uint64_t keep);
-    void Move(uint32_t idx, uint64_t remote);
+    uint32_t Protect(uint32_t idx, int prot);
+    uint32_t Shrink(uint32_t idx, uint64_t keep);
+    uint32_t Move(uint32_t idx, uint64_t remote);
   };
 
   RegionTable regions;

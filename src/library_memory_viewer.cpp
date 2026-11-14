@@ -130,11 +130,11 @@ struct MemoryViewerToy : ObjectToy {
     // - identical memory protection
     // - same backing file
     images.clear();
-    if (m.Local().Empty()) return Tock::Draw;  // nothing to animate
-    char* begin = &*m.Local().begin();
-    char* end = &*m.Local().end();
-    auto* current_region = m.Find(m.ToRemote(begin));
+    MemMeld::ReadGuard guard(m);
+    auto* current_region = guard.FindLowerBound(0);
+    if (!current_region) return Tock::Draw;  // nothing to animate
     auto current = current_region->local;
+    uintptr_t current_remote_end = current_region->remote + current.size_bytes();
     auto CurrentToImage = [&]() {
       int pixels = current.size_bytes() / 4;
       int width = std::max(8, ((int)sqrt(pixels)) & ~7);
@@ -152,12 +152,10 @@ struct MemoryViewerToy : ObjectToy {
     // - every iteration consumes one region of local memory
     //   A) if it's a continuation - it appends it to the 'current' segment
     //   B) if it's discontinuous - it converts the 'current' into SkImage & advances current
-    while (current.data() + current.size() < end) {
-      char* next = current.data() + current.size_bytes();
-      auto* next_region = m.Find(m.ToRemote(next));
-
-      // TODO: check if the memory segments are continuous in the remote address space
-      if (current_region->prot == next_region->prot && current_region->path == next_region->path) {
+    while (auto* next_region = guard.FindLowerBound(current_remote_end)) {
+      if (next_region->remote == current_remote_end &&
+          next_region->local.data() == current.data() + current.size_bytes() &&
+          current_region->prot == next_region->prot && current_region->path == next_region->path) {
         // merge 'current' with 'next'
         current = SpanOfArr(current.data(), current.size_bytes() + next_region->local.size_bytes());
       } else {
@@ -166,6 +164,7 @@ struct MemoryViewerToy : ObjectToy {
         current = next_region->local;
         current_region = next_region;
       }
+      current_remote_end = next_region->remote + next_region->local.size_bytes();
     }
     CurrentToImage();
     return Tock::Drawing;

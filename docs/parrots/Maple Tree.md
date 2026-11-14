@@ -48,11 +48,11 @@ it is never stored.
   `[begin, end)`, in ascending order and not clipped to the query. An empty range returns nothing.
 
 There is one writer at a time, and the callers serialize the writers. `Update`, `Erase`, `Clear`,
-`TryReclaim`, `Reclaim` and the introspection functions (`NodeCount`, `Depth`, `RetiredCount`,
-`AllocatedCount`, `Validate`) are writer operations. Any number of threads read concurrently with
-the writer, without registration. `Reclaim` must not be called by a thread that holds a guard of
-the same tree, because it waits for that guard and never returns. `TryReclaim` and the writes are
-safe on such a thread.
+`TryReclaim`, `Reclaim`, `Epoch` and the introspection functions (`NodeCount`, `Depth`,
+`RetiredCount`, `AllocatedCount`, `Validate`) are writer operations. Any number of threads read
+concurrently with the writer, without registration. `Reclaim` must not be called by a thread that
+holds a guard of the same tree, because it waits for that guard and never returns. `TryReclaim` and
+the writes are safe on such a thread.
 
 A read takes a `MapleTree::ReadGuard`. The reads of the tree itself take a guard for their own
 duration, and several reads through one guard see one version of the tree. A read never blocks,
@@ -152,6 +152,18 @@ counters of the parity opposite to the current epoch are zero in all shards. If 
 does nothing and returns false. Every write calls `TryReclaim` first. `Reclaim` performs this step
 twice, and before each step it yields until the check passes, so it frees everything retired before
 the call and returns after every guard that existed at the call has ended.
+
+### Objects that the writer retires itself
+
+The values of a tree may index objects outside the tree, such as the region records of MemMeld,
+that readers read through a guard. The writer frees such an object through the same grace period:
+it reads `Epoch()` right after the write that removed the last value which leads to the object, and
+it frees or reuses the object once `Epoch()` is at least two higher. This is the rule under which
+the tree frees its own nodes: the leaf that held the value was retired in that epoch, the check in
+the next epoch has then seen every reader leave that could have reached it, and both claims below
+apply to the object as they apply to the leaf. An epoch that is read later than right after the
+write only delays the reuse. The object must be written before the write that publishes its index,
+so that the release store of the root publishes its contents.
 
 ### Why it is safe
 

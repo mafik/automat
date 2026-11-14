@@ -725,12 +725,6 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
   int moving = 0;
   Vec<Piece> deferred;
 
-  auto Finish = [&](const Status& why) {
-    if (done) return;
-    done = true;
-    if (on_detached) on_detached(why);
-  };
-
   auto OnMapped = [&](const Region& r) {
     if (on_mapped) on_mapped(r);
   };
@@ -1268,12 +1262,11 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
     bool known = it != tasks.end() && it->second.known;
     RemoveTask(tid);
     if (!known || std::ranges::any_of(tasks, [](auto& task) { return task.second.known; })) return;
-    Status why;
+    done = true;
     if (WIFSIGNALED(code))
-      why = ErrorStatus(f("the target was killed by signal {}", WTERMSIG(code)));
+      status = ErrorStatus(f("the target was killed by signal {}", WTERMSIG(code)));
     else if (WEXITSTATUS(code))
-      why = ErrorStatus(f("the target exited with status {}", WEXITSTATUS(code)));
-    Finish(why);
+      status = ErrorStatus(f("the target exited with status {}", WEXITSTATUS(code)));
   };
 
   auto Resume = [&](Task& t) {
@@ -1404,7 +1397,8 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
       break;
     }
     DetachAll();
-    Finish(why);
+    done = true;
+    status = std::move(why);
   };
 
   auto DetachIfMemfdLost = [&](pid_t tid) -> bool {
@@ -1759,7 +1753,7 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
     // Attach
     const char* failure = nullptr;
     if (ReadWholeFile(f("/proc/{}/status", pid)).contains("Seccomp:\t2"))
-      Finish(ErrorStatus("the target runs under a seccomp filter"));
+      failure = "the target runs under a seccomp filter";
     else if (!OpenProc())
       failure = "opening the target's /proc files";
     else if (!Seize())
@@ -1770,9 +1764,8 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
              it == tasks.end() || !ConvertAddressSpace(it->second))
       failure = "creating the memfd in the target";
     if (failure) {
-      Status why;
-      AppendErrorMessage(why) += failure;
-      Finish(why);
+      AppendErrorMessage(status) += failure;
+      done = true;
       DetachAll();
     }
     Vec<pid_t> stopped;

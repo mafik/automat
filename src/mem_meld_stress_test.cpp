@@ -414,7 +414,6 @@ struct StressMirror {
       OnChanged(before, after);
     };
     mem_meld.on_unmapped = [this](const Region& r) { OnUnmapped(r); };
-    mem_meld.on_detached = [this](const Status& status) { OnDetached(status); };
   }
 
   void Attach(int pidfd) {
@@ -424,7 +423,7 @@ struct StressMirror {
       Status status;
       mem_meld.Attach(own, status);
       close(own);
-      if (!OK(status)) OnDetached(status);
+      OnDetached(status);
     });
   }
 
@@ -450,10 +449,10 @@ struct StressMirror {
       Violation(f("{}: Find({:#x}) disagrees with the event", event, r.remote));
     if (mem_meld.ToRemote(r.local.data()) != r.remote)
       Violation(f("{}: ToRemote of {:#x} is wrong", event, r.remote));
-    Span<char> local_mirror = mem_meld.Mirror();
+    Span<char> local_mirror = mem_meld.Local();
     if (r.local.data() < local_mirror.data() ||
         r.local.data() + r.local.size() > local_mirror.data() + local_mirror.size())
-      Violation(f("{}: {:#x} lies outside Mirror()", event, r.remote));
+      Violation(f("{}: {:#x} lies outside Local()", event, r.remote));
     auto next = live.lower_bound(r.remote);
     if (next != live.end() && next->first < r.remote + r.local.size())
       Violation(f("{}: [{:#x}, +{:#x}) overlaps live {:#x}", event, r.remote, r.local.size(),
@@ -484,7 +483,7 @@ struct StressMirror {
 
   void Counted() {
     ++events;
-    uint64_t local_mirror = mem_meld.Mirror().size();
+    uint64_t local_mirror = mem_meld.Local().size();
     if (local_mirror > max_mirror) {
       max_mirror = local_mirror;
       live_at_max_mirror = live_bytes;
@@ -675,7 +674,7 @@ uint64_t ExpectConsistent(pid_t pid, StressMirror& m, const Str& when) {
   Span<char> local_mirror;
   Vec<Str> library = [&] {
     Vec<Str> out;
-    local_mirror = m.mem_meld.Mirror();
+    local_mirror = m.mem_meld.Local();
     for (auto& [remote, rec] : live) {
       uint64_t size = rec.local.size();
       const MemMeld::Region* r = m.mem_meld.Find(remote + size / 2);
@@ -691,7 +690,7 @@ uint64_t ExpectConsistent(pid_t pid, StressMirror& m, const Str& when) {
         out.push_back(f("ToLocal of the last byte of {:#x} is wrong", remote));
       if (rec.local.data() < local_mirror.data() ||
           rec.local.data() + size > local_mirror.data() + local_mirror.size())
-        out.push_back(f("{:#x} lies outside Mirror()", remote));
+        out.push_back(f("{:#x} lies outside Local()", remote));
     }
     return out;
   }();
@@ -714,7 +713,7 @@ uint64_t ExpectConsistent(pid_t pid, StressMirror& m, const Str& when) {
     }
     if (cursor < end) {
       mirror_readable = false;
-      problem(f("Mirror() is not readable at offset {:#x} of {:#x}",
+      problem(f("Local() is not readable at offset {:#x} of {:#x}",
                 cursor - (uint64_t)local_mirror.data(), local_mirror.size()));
     }
   }
@@ -1244,7 +1243,7 @@ TEST_F(Stress, HighEventRate) {
   while (w.ops < target_ops) {
     ASSERT_TRUE(w.Round());
     if (Clock::now() >= next_sample) {
-      uint64_t local_mirror = m->mem_meld.Mirror().size();
+      uint64_t local_mirror = m->mem_meld.Local().size();
       std::lock_guard lock(m->mutex);
       mirror_series.push_back({Seconds(Clock::now() - start), local_mirror, m->live_bytes});
       next_sample += 250ms;
@@ -1270,7 +1269,7 @@ TEST_F(Stress, HighEventRate) {
       lag.push_back(Ms(e.at - it->second[used[key]++]));
     }
   }
-  uint64_t mirror_now = m->mem_meld.Mirror().size();
+  uint64_t mirror_now = m->mem_meld.Local().size();
   Str series;
   for (size_t i = 0; i < mirror_series.size(); i += std::max<size_t>(1, mirror_series.size() / 8)) {
     auto [s, local_mirror, live] = mirror_series[i];

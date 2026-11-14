@@ -43,7 +43,6 @@ struct MemMeld {
   Fn<void(const Region& before, const Region& after)> on_changed;
   Fn<void(const Region&)> on_unmapped;
   Fn<void(int pidfd)> on_forked;
-  Fn<void(const Status&)> on_detached;
 
  private:
   struct RegionTable {

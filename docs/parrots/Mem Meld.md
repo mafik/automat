@@ -16,7 +16,7 @@ mapping the same file.
 
 ## The local mirror
 
-`Mirror()` returns the local mirror: one contiguous local range with no holes, because the GPU
+`Local()` returns the local mirror: one contiguous local range with no holes, because the GPU
 upload wants a single buffer. Remote pages live at unrelated local addresses and addresses are never
 shared between the processes, so a stored reference is a remote address plus an offset that is
 translated again before each use. Translation in both directions is one lookup in one of two
@@ -33,7 +33,7 @@ last byte of that range lie in one region, and an empty span otherwise. `ToRemot
 the target address of a byte of the local mirror, or 0 when the byte lies outside every live region.
 `Find(remote)` returns the live region that contains the address, or null.
 
-`Mirror`, `ToLocal` and `ToRemote` may be called from any thread without a lock, so that objects on
+`Local`, `ToLocal` and `ToRemote` may be called from any thread without a lock, so that objects on
 other threads can read and write the target's memory directly. Only the tracer thread writes the
 translation tables, and each update of a table becomes visible to readers at one instant. An
 operation that needs several updates, such as the split of a region or a move, becomes visible step
@@ -43,7 +43,7 @@ keyed by local addresses holds a segment that covers its local range. The value 
 page distance from its range to the other range, modulo 2^35 pages, together with the index of the
 region. A reader therefore translates with the value alone and never reads the region records,
 which the tracer thread changes. `ToLocal` looks up the first byte and requires that the last byte
-lies in the same segment. The extent behind `Mirror()` is an atomic, which grows only after the new
+lies in the same segment. The extent behind `Local()` is an atomic, which grows only after the new
 local range is mapped. `Find` reads the region records, which the tracer thread changes and reuses,
 so it may be called only from the callbacks, and the region that it returns is valid until the
 callback returns.
@@ -97,13 +97,15 @@ only then resumes the target thread, so a callback sees the target's memory map 
 it. A consumer with expensive work forwards it to another thread itself.
 
 `Attach` may be called once. It duplicates the pidfd of the target, so the caller keeps its own
-descriptor. Its `Status` reports only the errors found before the session starts: a second call, an
-invalid pidfd, a pidfd whose process id cannot be read and a failed reservation of the local mirror.
-Every later outcome, a failed attach included, is reported through `on_detached`, which the tracer
-thread calls before `Attach` returns. While the session runs, the wake signal is unblocked in the
-tracer thread, and the signal mask of the thread is restored when `Attach` returns.
+descriptor. When `Attach` returns, its `Status` reports the outcome of the session: OK when `Detach`
+ended it or the target exited with status 0, otherwise an error that says how the target exited or
+why the attach or the session failed. The errors found before the session starts are reported
+through the same `Status`: a second call, an invalid pidfd, a pidfd whose process id cannot be read
+and a failed reservation of the local mirror. No callback reports the end of the session; a consumer
+that reacts to it does so after `Attach` returns. While the session runs, the wake signal is
+unblocked in the tracer thread, and the signal mask of the thread is restored when `Attach` returns.
 
-`Detach` is the only function that another thread calls to control the session (`Mirror`,
+`Detach` is the only function that another thread calls to control the session (`Local`,
 `ToLocal` and `ToRemote` need no lock). It sets a flag of the mirror, which the tracer thread reads
 before each wait, and interrupts the tracer's `waitid` with a signal whose handler does nothing. A
 signal that arrives just before the wait is lost, so `Detach` sends it again every millisecond until
@@ -135,9 +137,6 @@ them waits:
 - `on_attached` reports that every region of a new address space, at the attach or after an `exec`,
   has arrived through `on_mapped`, so the mirror is live.
 - `on_forked` reports a fork child that the consumer may follow (see fork, clone, threads and exec).
-- `on_detached` reports the end of the session: OK when `Detach` ended it or the target exited with
-  status 0, otherwise an error that says how the target exited or why the session failed. The
-  tracer thread calls it once, before `Attach` returns.
 
 A new address space is reported through `on_unmapped` for every region of the old one, then through
 `on_mapped` for each new region in ascending address order, and then through `on_attached`. A region
@@ -440,6 +439,6 @@ and the memory of the translation tables follow the number of regions, not their
 - A `CLONE_VM` task of another thread group that outlives an `exec` of the target keeps memfd
   memory, with the consequences of an unclean exit of Automat.
 - On a kernel that reports no exit stop for a task killed by `SIGKILL`, the tracer's wait collects
-  such a target, and a parent in Automat gets `ECHILD` from `waitpid`; `on_detached` still reports
-  the status.
+  such a target, and a parent in Automat gets `ECHILD` from `waitpid`; the `Status` of `Attach`
+  still reports the exit status.
 - A translation from another thread may be outdated by the time it is used.

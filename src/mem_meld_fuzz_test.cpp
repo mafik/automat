@@ -317,7 +317,6 @@ struct FuzzMirror {
       OnChanged(before, after);
     };
     mem_meld.on_unmapped = [this](const Region& r) { OnUnmapped(r); };
-    mem_meld.on_detached = [this](const Status& status) { OnDetached(status); };
   }
 
   void Attach(int pidfd) {
@@ -327,7 +326,7 @@ struct FuzzMirror {
       Status status;
       mem_meld.Attach(own, status);
       close(own);
-      if (!OK(status)) OnDetached(status);
+      OnDetached(status);
     });
   }
 
@@ -358,12 +357,12 @@ struct FuzzMirror {
   }
 
   void Admit(const Region& r, StrView event) {
-    Span<char> all = mem_meld.Mirror();
+    Span<char> all = mem_meld.Local();
     uint64_t len = r.local.size();
     if (len == 0 || len % kPage || r.remote % kPage)
       Error(f("{} reported an unaligned or empty region {}", event, Describe(r)));
     if (r.local.data() < all.data() || r.local.data() + len > all.data() + all.size())
-      Error(f("{} reported {} outside Mirror() [{}, +{:#x})", event, Describe(r), (void*)all.data(),
+      Error(f("{} reported {} outside Local() [{}, +{:#x})", event, Describe(r), (void*)all.data(),
               all.size()));
     auto next = model.lower_bound(r.remote);
     if (next != model.end() && next->first < r.remote + len)
@@ -1387,7 +1386,7 @@ struct Run {
       s.removed = mirror->removed;
     }
     s.target = ReadVmas(f("/proc/{}/smaps", proc[kA].pid));
-    s.mirror = mirror->mem_meld.Mirror();
+    s.mirror = mirror->mem_meld.Local();
     s.local = ReadVmas("/proc/self/maps");
     BuildIntervals(s);
     for (auto check :
@@ -1441,7 +1440,7 @@ struct Run {
     for (const Rec& r : s.regions)
       if (r.local.data() < s.mirror.data() ||
           r.local.data() + r.local.size() > s.mirror.data() + s.mirror.size())
-        return {"mirror", f("{} lies outside Mirror() [{}, +{:#x})", FuzzMirror::Describe(r),
+        return {"mirror", f("{} lies outside Local() [{}, +{:#x})", FuzzMirror::Describe(r),
                             (void*)s.mirror.data(), s.mirror.size())};
     return {};
   }
@@ -1552,9 +1551,9 @@ struct Run {
     for (const Vma& v : s.local) {
       if (v.end <= lo || v.start >= hi) continue;
       if (v.start > at)
-        return {"mirror", f("Mirror() has no mapping at [{:#x}, {:#x})", at, v.start)};
+        return {"mirror", f("Local() has no mapping at [{:#x}, {:#x})", at, v.start)};
       if (!(v.prot & PROT_READ))
-        return {"mirror", f("Mirror() has unreadable pages {}", DescribeVma(v))};
+        return {"mirror", f("Local() has unreadable pages {}", DescribeVma(v))};
       if (IsMirrorMemfd(v)) {
         uint64_t page = std::max(v.start, lo), end = std::min(v.end, hi);
         auto it = std::upper_bound(held.begin(), held.end(), std::pair(page, UINT64_MAX));
@@ -1562,13 +1561,13 @@ struct Run {
         for (; page < end && it != held.end() && it->first <= page; ++it)
           page = std::max(page, it->second);
         if (page < end)
-          return {"mirror", f("the page {:#x} of Mirror() belongs to no region but still maps "
+          return {"mirror", f("the page {:#x} of Local() belongs to no region but still maps "
                               "memfd offset {:#x}",
                               page, v.offset + (page - v.start))};
       }
       at = v.end;
     }
-    if (at < hi) return {"mirror", f("Mirror() has no mapping at [{:#x}, {:#x})", at, hi)};
+    if (at < hi) return {"mirror", f("Local() has no mapping at [{:#x}, {:#x})", at, hi)};
     uint64_t live = 0;
     for (const Rec& r : s.regions) live += r.local.size();
     if (live) mirror_ratio = std::max(mirror_ratio, (double)s.mirror.size() / live);
@@ -1625,9 +1624,9 @@ struct Run {
         for (uint64_t addr : std::initializer_list<uint64_t>{remote, remote + len - 1,
                                                              remote + sample.Next() % len})
           if (Str e = expect_find(addr); !e.empty()) return e;
-      Span<char> all = mirror->mem_meld.Mirror();
+      Span<char> all = mirror->mem_meld.Local();
       if (all.data() != s.mirror.data() || all.size() != s.mirror.size())
-        return f("Mirror() changed without an event");
+        return f("Local() changed without an event");
       Vec<const Rec*> by_local;
       for (const Rec& r : s.regions) by_local.push_back(&r);
       std::sort(by_local.begin(), by_local.end(),
@@ -1648,7 +1647,7 @@ struct Run {
       for (const void* p : {(const void*)nullptr, (const void*)&on_stack,
                             (const void*)(all.data() + all.size()), (const void*)(all.data() - 1)})
         if (uintptr_t got = mirror->mem_meld.ToRemote(p); got)
-          return f("ToRemote({}) returned {:#x} for an address outside Mirror()", p, got);
+          return f("ToRemote({}) returned {:#x} for an address outside Local()", p, got);
       return {};
     }();
     if (!error.empty()) return {"translation", error};
@@ -1931,7 +1930,7 @@ TEST_F(MemMeldFuzz, RandomSequences) {
     else
       mirror_ratio = std::max(mirror_ratio, outcome.mirror_ratio);
   }
-  Print(f("mem_meld_fuzz: seeds {}..{} done, largest Mirror() to live size ratio {:.2f}\n", first,
+  Print(f("mem_meld_fuzz: seeds {}..{} done, largest Local() to live size ratio {:.2f}\n", first,
           first + seeds - 1, mirror_ratio));
 }
 

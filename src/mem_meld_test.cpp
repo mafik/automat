@@ -223,7 +223,6 @@ struct TestMirror {
     };
     mem_meld.on_unmapped = [this](const Region& r) { OnUnmapped(r); };
     mem_meld.on_forked = [this](int pidfd) { OnForked(pidfd); };
-    mem_meld.on_detached = [this](const Status& status) { OnDetached(status); };
   }
 
   void Attach(int pidfd) {
@@ -233,7 +232,7 @@ struct TestMirror {
       Status status;
       mem_meld.Attach(own, status);
       close(own);
-      if (!OK(status)) OnDetached(status);
+      OnDetached(status);
     });
   }
 
@@ -940,7 +939,7 @@ TEST_F(Fixture, TranslationFromOtherThreads) {
           sum += *p;
           if (uintptr_t back = mirror->mem_meld.ToRemote(p); back && seen[i].size() < 100000)
             seen[i].push_back({back, p, 1});
-          sum += mirror->mem_meld.Mirror().front();
+          sum += mirror->mem_meld.Local().front();
         }
       }
       read.fetch_add(sum, std::memory_order_relaxed);
@@ -975,7 +974,7 @@ TEST_F(Fixture, MirrorIsReadableFromOtherThreads) {
   for (int i = 0; i < 4; ++i)
     readers.emplace_back([&] {
       while (!stop.load(std::memory_order_relaxed)) {
-        Span<char> local = mirror->mem_meld.Mirror();
+        Span<char> local = mirror->mem_meld.Local();
         if (local.empty()) continue;
         char byte;
         iovec l{&byte, 1}, r{local.data() + local.size() - 1, 1};
@@ -1238,6 +1237,7 @@ TEST_F(Fixture, DetachFromAnotherThreadWhileTheTargetChurns) {
   target.Send("remaps 4000");
   usleep(50'000);
   std::thread([&] { mirror->mem_meld.Detach(); }).join();
+  EXPECT_TRUE(mirror->WaitDetached());
   int events = mirror->Events();
   EXPECT_TRUE(mirror->detached_ok) << mirror->detached_status;
   EXPECT_EQ(TracerPid(target.pid), 0);

@@ -32,7 +32,6 @@
 #include "library_key_presser.hpp"
 #include "library_mouse.hpp"
 #include "library_timeline.hpp"
-#include "llvm/Support/MathExtras.h"
 #include "log.hpp"
 #include "math.hpp"
 #include "mem_meld.hpp"
@@ -93,14 +92,6 @@ void MemoryViewer::Start() {
     last_region = after;
     WakeToys();
   };
-  mem_meld.on_detached = [&](const Status& status) {
-    if (OK(status)) {
-      LOG << "on_detached";
-    } else {
-      ERROR << "on_detached: " << status;
-    }
-    WakeToys();
-  };
   mem_meld.on_forked = [](int pid) { LOG << "on_forked " << pid; };
   mem_meld.on_mapped = [&](const MemMeld::Region& region) {
     LOG << "on_mapped " << region;
@@ -109,6 +100,7 @@ void MemoryViewer::Start() {
   };
   mem_meld.Attach(pidfd, status);
   LOG << "Attach exited";
+  WakeToys();
   if (!OK(status)) {
     ERROR << status;
     return;

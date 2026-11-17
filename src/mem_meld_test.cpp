@@ -1196,6 +1196,54 @@ TEST_F(Fixture, SharedMemoryStaysShared) {
   EXPECT_FALSE(Covered(addr));
 }
 
+TEST_F(Fixture, ShmatIsMirroredBeforeItReturns) {
+  if (geteuid() != 0) GTEST_SKIP() << "only root can open a System V segment of the target";
+  Attach();
+  uintptr_t addr = target.CommandAddr("shmat 8192 rw");
+  EXPECT_EQ(RegionSize(addr), 8192u);
+  Span<char> local = mirror->mem_meld.ToLocal(addr, 8192);
+  ASSERT_EQ(local.size(), 8192u);
+  EXPECT_EQ(local[0], 'S');
+  EXPECT_EQ(target.Command(f("write {:#x} 8192 3", addr)), "ok");
+  EXPECT_TRUE(MirrorMatchesRemote(addr, 8192));
+}
+
+TEST_F(Fixture, ShmdtLeavesNoTranslation) {
+  if (geteuid() != 0) GTEST_SKIP() << "only root can open a System V segment of the target";
+  Attach();
+  uintptr_t addr = target.CommandAddr("shmat 8192 rw");
+  EXPECT_EQ(target.Command(f("shmdt {:#x}", addr)), "ok");
+  EXPECT_TRUE(mirror->mem_meld.ToLocal(addr, 1).empty());
+  std::lock_guard lock(mirror->mutex);
+  EXPECT_EQ(std::count(mirror->unmapped.begin(), mirror->unmapped.end(), addr), 1);
+}
+
+TEST_F(Fixture, ReadOnlyShmatIsMirrored) {
+  if (geteuid() != 0) GTEST_SKIP() << "only root can open a System V segment of the target";
+  Attach();
+  uintptr_t addr = target.CommandAddr("shmat 8192 r");
+  Span<char> local = mirror->mem_meld.ToLocal(addr, 8192);
+  ASSERT_EQ(local.size(), 8192u);
+  local[100] = 'M';
+  char seen = 0;
+  ASSERT_TRUE(ReadRemote(target.pid, addr + 100, &seen, 1));
+  EXPECT_EQ(seen, 'M');
+  std::lock_guard lock(mirror->mutex);
+  EXPECT_EQ(mirror->live[addr].prot, PROT_READ);
+}
+
+TEST_F(Fixture, ShmdtRemovesASegmentAttachedBeforeTheMirror) {
+  if (geteuid() != 0) GTEST_SKIP() << "only root can open a System V segment of the target";
+  uintptr_t addr = target.CommandAddr("shmat 8192 rw");
+  Attach();
+  EXPECT_EQ(target.Command(f("write {:#x} 8192 4", addr)), "ok");
+  EXPECT_TRUE(MirrorMatchesRemote(addr, 8192));
+  EXPECT_EQ(target.Command(f("shmdt {:#x}", addr)), "ok");
+  EXPECT_TRUE(mirror->mem_meld.ToLocal(addr, 1).empty());
+  std::lock_guard lock(mirror->mutex);
+  EXPECT_EQ(std::count(mirror->unmapped.begin(), mirror->unmapped.end(), addr), 1);
+}
+
 TEST_F(Fixture, VforkAndCloneVmChildrenExec) {
   Attach();
   EXPECT_EQ(target.Command("vfork"), "ok status=0");

@@ -1436,6 +1436,8 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
       case __NR_mremap:
       case __NR_mprotect:
       case __NR_pkey_mprotect:
+      case __NR_shmat:
+      case __NR_shmdt:
       case __NR_fork:
         return true;
       case __NR_brk:
@@ -1480,6 +1482,9 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
       }
       case __NR_munmap:
         c.pieces = PiecesIn(lo, hi);
+        return;
+      case __NR_shmdt:
+        QueryVma(maps, lo, c.source);
         return;
       case __NR_mremap: {
         uint64_t old_len = PageUp(c.args[1]), new_len = PageUp(c.args[2]), flags = c.args[3];
@@ -1609,6 +1614,15 @@ void MemMeld::Attach(int target_pidfd, Status& status) {
       }
       case __NR_munmap:
         if (!IsError(result)) SyncRegions(c, {{lo, lo + len}}, c.pieces);
+        return;
+      case __NR_shmat: {
+        Vma segment;
+        if (IsError(result) || !QueryVma(maps, result, segment)) return;
+        AddFileRegion(t, result, segment.end - result, {});
+        return SyncRegions(c, {{(uint64_t)result, segment.end}}, {});
+      }
+      case __NR_shmdt:
+        if (!IsError(result) && lo < c.source.end) SyncRegions(c, {{lo, c.source.end}}, {});
         return;
       case __NR_mremap: {
         if (IsError(result)) return;

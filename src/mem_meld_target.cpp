@@ -18,6 +18,7 @@
 #include <sys/prctl.h>
 #include <sys/random.h>
 #include <sys/resource.h>
+#include <sys/shm.h>
 #include <sys/syscall.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -432,6 +433,23 @@ void Handle(const std::vector<string_view>& t, Out& out) {
     if (p == MAP_FAILED) return fail("mmap");
     out << "ok ";
     out.Hex((uint64_t)p);
+  } else if (cmd == "shmat" && t.size() == 3) {
+    uint64_t len;
+    int prot = ParseProt(t[2]);
+    if (!ParseU64(t[1], len) || prot < 0) return (void)(out << "err args");
+    int id = shmget(IPC_PRIVATE, len, IPC_CREAT | 0600);
+    if (id < 0) return fail("shmget");
+    void* p = shmat(id, nullptr, prot & PROT_WRITE ? 0 : SHM_RDONLY);
+    if (p != (void*)-1 && (prot & PROT_WRITE)) *(char*)p = 'S';
+    shmctl(id, IPC_RMID, nullptr);
+    if (p == (void*)-1) return fail("shmat");
+    out << "ok ";
+    out.Hex((uint64_t)p);
+  } else if (cmd == "shmdt" && t.size() == 2) {
+    uint64_t addr;
+    if (!ParseU64(t[1], addr)) return (void)(out << "err args");
+    if (shmdt((void*)addr)) return fail("shmdt");
+    out << "ok";
   } else if (cmd == "munmap" && t.size() == 3) {
     uint64_t addr, len;
     if (!ParseU64(t[1], addr) || !ParseU64(t[2], len)) return (void)(out << "err args");

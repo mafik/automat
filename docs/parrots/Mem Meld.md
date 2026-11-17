@@ -207,6 +207,10 @@ and drops it when it becomes inaccessible. The tracer acts on these calls:
   other accessible file mapping in the range is shown from its file.
 - `munmap`, a `MAP_FIXED` mapping over mirrored memory, an `MREMAP_FIXED` destination, a shrinking
   `mremap` and a shrinking `brk` release the memfd offsets they remove.
+- `shmat` runs unchanged; at its exit the mapping at the returned address is shown from its file
+  (see Shared file mappings), so the local mirror has the segment before the target thread
+  continues. `shmdt` names only an address, so its entry records the mapping at that address, and
+  its exit reads the range of that mapping again, which removes the region.
 - `mremap` growth whose new offsets would reach pages that another mapping uses first moves the
   range to fresh offsets (the call is cancelled, the bytes are copied with `copy_file_range`, and
   the call runs again); when that fails it fails with `ENOMEM`, as without memory. Only a range of
@@ -311,9 +315,11 @@ A shared mapping of a regular file (which includes memfd and shmem files, so als
 `MAP_SHARED` into the local mirror at the same file offset, so Automat and the target see each
 other's writes. The file comes from `pidfd_getfd` of the descriptor at the exit of the `mmap`,
 otherwise from `/proc/<pid>/map_files`, which root may open, otherwise from the path after a device
-and inode check; when none works the mapping stays unmirrored. These mappings are never punched,
-copied or converted: a fork leaves them shared, and `munmap`, `mremap` and `exec` only change the
-local mirror. The mirror's own memfd and mappings of devices are not shown.
+and inode check; when none works the mapping stays unmirrored. A System V segment has no descriptor
+and no path that can be opened, so it is mirrored only when the tracer runs as root. These mappings
+are never punched, copied or converted: a fork leaves them shared, and `munmap`, `shmdt`, `mremap`
+and `exec` only change the local mirror. The mirror's own memfd and mappings of devices are not
+shown.
 
 ## fork, clone, threads and exec
 
@@ -437,7 +443,11 @@ and the memory of the translation tables follow the number of regions, not their
   parent.
 - Some changes of the memory map are not followed and leave the region set stale until a later call
   touches the range: 32-bit system calls through `int 0x80`, io_uring's `IORING_OP_MADVISE`, the
-  memory operations of a vfork child before its `exec`, and System V `shmat` and `shmdt`.
+  memory operations of a vfork child before its `exec`, and the `shmdt` of a segment whose mapping
+  was split into several mappings, which removes only the first of them from the local mirror.
+- A System V segment is mirrored only when the tracer runs as root (see Shared file mappings).
+- `shmat` with `SHM_REMAP` over memfd memory keeps the memfd pages of the memory that it replaces
+  until the session ends.
 - A fork child gets no guard markers in the memfd mappings of its parent, because the kernel copies
   no page tables of a shared mapping, so its copy of a guard page is an ordinary page. A private
   file mapping that becomes writable and an `mremap` growth that moves memfd memory to fresh offsets

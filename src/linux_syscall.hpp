@@ -20,6 +20,8 @@
 #define __NR_brk 12
 #define __NR_mremap 25
 #define __NR_madvise 28
+#define __NR_shmat 30
+#define __NR_shmdt 67
 #define __NR_fcntl 72
 #define __NR_ftruncate 77
 #define __NR_fork 57
@@ -56,6 +58,8 @@
 #define __NR_brk 214
 #define __NR_mremap 216
 #define __NR_madvise 233
+#define __NR_shmat 196
+#define __NR_shmdt 197
 #define __NR_fcntl 25
 #define __NR_ftruncate 46
 #define __NR_clone 220

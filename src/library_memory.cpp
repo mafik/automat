@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
-#include "library_memory_viewer.hpp"
+#include "library_memory.hpp"
 
 #include <include/core/SkAlphaType.h>
 #include <include/core/SkColor.h>
@@ -53,7 +53,7 @@ namespace automat {
 Str ToStr(const MemMeld::Region& reg) {
   return f("{}@{}[{}{}{}]+{} at {}", reg.path.empty() ? "Region"sv : reg.path, (void*)reg.remote,
            reg.prot & PROT_READ ? 'R' : '-', reg.prot & PROT_WRITE ? 'W' : '-',
-           reg.prot & PROT_EXEC ? 'X' : '-', reg.local.size_bytes(), (void*)reg.local.data());
+           reg.prot & PROT_EXEC ? 'X' : '-', reg.Size(), (void*)reg.local.data());
 }
 }  // namespace automat
 
@@ -62,11 +62,11 @@ namespace automat::library {
 using namespace automat::ui;
 using namespace std;
 
-MemoryViewer::MemoryViewer() {}
+Memory::Memory() {}
 
-void MemoryViewer::Start() {
+void Memory::Start() {
   LOG << "Start";
-  constexpr int pid = 2608465;
+  constexpr int pid = 948318;
   FD pidfd = syscall(SYS_pidfd_open, pid, 0);
   if (!pidfd.Opened()) {
     Status status;
@@ -107,10 +107,10 @@ void MemoryViewer::Start() {
   }
 }
 
-struct MemoryViewerToy : ObjectToy {
+struct MemoryToy : ObjectToy {
   ui::Button btn_attach;
 
-  MemoryViewerToy(Widget* parent, MemoryViewer& mv) : ObjectToy(parent, mv), btn_attach(this) {
+  MemoryToy(Widget* parent, Memory& mv) : ObjectToy(parent, mv), btn_attach(this) {
     btn_attach.child = MakeShapeWidget(&btn_attach, PathFromSVG(kPlayShape), "#f56a00"_color);
     btn_attach.UpdateChildTransform();
     btn_attach.target = mv.start.Bind();
@@ -120,23 +120,29 @@ struct MemoryViewerToy : ObjectToy {
   constexpr static Rect kShapeRect = Rect::MakeCenterZero(10_cm, 10_cm);
   SkPath Shape() const override { return SkPath::Rect(kShapeRect); }
 
+  Vec<MemMeld::Region> regions;
   Vec<sk_sp<SkImage>> images;
 
   Tock Tick(time::Timer&) override {
-    auto mv = LockObject<MemoryViewer>();
+    auto mv = LockObject<Memory>();
     auto& m = mv->mem_meld;
 
-    // Goal: divide memory into consecutive chunks with:
-    // - identical memory protection
-    // - same backing file
+    {  // Refresh `regions`
+      regions.clear();
+      MemMeld::ReadGuard guard(m);
+      // TODO: rather than re-querying the tree, introduce an API to walk the tree
+      for (auto* it = guard.FindLowerBound(0); it != nullptr;
+           it = guard.FindLowerBound(it->remote + it->Size())) {
+        regions.Append(*it);
+      }
+    }
+    if (regions.empty()) return Tock::Draw;  // nothing to animate
+
     images.clear();
-    MemMeld::ReadGuard guard(m);
-    auto* current_region = guard.FindLowerBound(0);
-    if (!current_region) return Tock::Draw;  // nothing to animate
-    auto current = current_region->local;
-    uintptr_t current_remote_end = current_region->remote + current.size_bytes();
-    auto CurrentToImage = [&]() {
-      int pixels = current.size_bytes() / 4;
+    for (auto current_region = regions.begin(); current_region != regions.end(); ++current_region) {
+      auto current = current_region->local;
+      int pixels = current_region->Size() / 4;
+      if (pixels > 2000) continue;
       int width = std::max(8, ((int)sqrt(pixels)) & ~7);
       int height = pixels / width;
       if (width > 0 && height > 0) {
@@ -146,52 +152,79 @@ struct MemoryViewerToy : ObjectToy {
         auto pixmap = SkPixmap(info, current.data(), width * 4);
         images.emplace_back(SkImages::RasterFromPixmap(pixmap, nullptr, nullptr));
       }
-    };
-    // Invariant:
-    // - we maintain a 'current' segment
-    // - every iteration consumes one region of local memory
-    //   A) if it's a continuation - it appends it to the 'current' segment
-    //   B) if it's discontinuous - it converts the 'current' into SkImage & advances current
-    while (auto* next_region = guard.FindLowerBound(current_remote_end)) {
-      if (next_region->remote == current_remote_end &&
-          next_region->local.data() == current.data() + current.size_bytes() &&
-          current_region->prot == next_region->prot && current_region->path == next_region->path) {
-        // merge 'current' with 'next'
-        current = SpanOfArr(current.data(), current.size_bytes() + next_region->local.size_bytes());
-      } else {
-        // produce an SkImage & replace current
-        CurrentToImage();
-        current = next_region->local;
-        current_region = next_region;
-      }
-      current_remote_end = next_region->remote + next_region->local.size_bytes();
     }
-    CurrentToImage();
     return Tock::Drawing;
   }
 
   void Draw(SkCanvas& canvas) const override {
-    auto mv = LockObject<MemoryViewer>();
+    auto mv = LockObject<Memory>();
     SkPaint bg;
     bg.setColor("#e3c2a8"_color);
     canvas.drawPath(shape, bg);
 
     GetFont().DrawText(canvas, f("size: {}", mv->mem_meld.Local().size_bytes()), {});
 
+    Rect zone_contents = kShapeRect;
+    Rect zone_spear = zone_contents.CutRight(1_cm);
+
     int side = floor(sqrt(images.size()));
     if (side > 0) {
-      float cell_width = kShapeRect.Width() / side;
-      float cell_height = kShapeRect.Height() / side;
+      float cell_width = zone_contents.Width() / side;
+      float cell_height = zone_contents.Height() / side;
       for (int i = 0; i < images.size(); ++i) {
         auto& img = images[i];
         int column = i % side;
         int row = i / side;
-        float left = kShapeRect.left + column * cell_width;
+        float left = zone_contents.left + column * cell_width;
         float right = left + cell_width;
-        float bottom = kShapeRect.bottom + row * cell_height;
+        float bottom = zone_contents.bottom + row * cell_height;
         float top = bottom + cell_height;
         Rect cell = Rect(left, bottom, right, top);
         canvas.drawImageRect(img.get(), cell, kFastSamplingOptions);
+      }
+
+      {
+        int n_gaps = 0;
+        int64_t n_bytes = regions.empty() ? 0 : regions.front().Size();
+        for (int i = 1; i < regions.size(); ++i) {
+          auto& prev = regions[i - 1];
+          auto& curr = regions[i];
+          if (prev.remote + prev.Size() < curr.remote) ++n_gaps;
+          n_bytes += curr.Size();
+        }
+        constexpr float kZigZagW = 2_mm;
+        // Zig-zag bends at 60 degrees to the right (W to the right, W/2 up), then at 60 degrees
+        // left (2W to the left, W up), then back 60deg to the right (W to the right, ending in the
+        // middle, W/2 up). Total height is W*2.
+
+        float shaft_height = zone_spear.Height() - 1_cm;
+        float gap_height = min(kZigZagW * 2, shaft_height * 0.2f / n_gaps);
+        float gaps_height = gap_height * n_gaps;
+        float bytes_height = shaft_height - gaps_height;
+
+        SkPaint shaft_paint;
+        shaft_paint.setStyle(SkPaint::kStroke_Style);
+        shaft_paint.setStrokeWidth(kMargin);
+        SkPathBuilder shaft_builder;
+        shaft_builder.moveTo(zone_spear.BottomCenter());
+        float x = zone_spear.CenterX();
+        float y = zone_spear.bottom;
+        uintptr_t addr = 0;
+        for (auto& r : regions) {
+          if (r.remote > addr) {
+            y += gap_height / 4;
+            shaft_builder.lineTo(x + kZigZagW, y);
+            y += gap_height / 2;
+            shaft_builder.lineTo(x - kZigZagW, y);
+            y += gap_height / 4;
+            shaft_builder.lineTo(x, y);
+          }
+          y += bytes_height * r.Size() / n_bytes;
+          shaft_builder.lineTo(x, y);
+          addr = r.remote + r.Size();
+        }
+
+        canvas.drawPath(shaft_builder.detach(), shaft_paint);
       }
     }
 
@@ -199,8 +232,8 @@ struct MemoryViewerToy : ObjectToy {
   }
 };
 
-std::unique_ptr<MemoryViewer::Toy> MemoryViewer::MakeToy(ui::Widget* parent) {
-  return make_unique<MemoryViewerToy>(parent, *this);
+std::unique_ptr<Memory::Toy> Memory::MakeToy(ui::Widget* parent) {
+  return make_unique<MemoryToy>(parent, *this);
 }
 
 }  // namespace automat::library

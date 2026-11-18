@@ -7,19 +7,19 @@
 
 namespace automat::library {
 
-struct MemoryViewer : Object {
+struct Memory : Object {
   MemMeld mem_meld;
   MemMeld::Region last_region;
 
-  DEF_INTERFACE(MemoryViewer, Command, start, "Start")
+  DEF_INTERFACE(Memory, Command, start, "Start")
   void OnRun() { obj->Start(); }
   DEF_END(start);
 
   INTERFACES(start_tbl);
 
-  MemoryViewer();
+  Memory();
   string_view Name() const override { return "Memory Viewer"sv; }
-  Ptr<Object> Clone() const override { return MAKE_PTR(MemoryViewer); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(Memory); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
   void Start();

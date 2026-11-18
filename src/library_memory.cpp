@@ -120,9 +120,9 @@ namespace automat::library {
 using namespace automat::ui;
 using namespace std;
 
-Memory::Memory() {}
+MemMeld::MemMeld() {}
 
-void Memory::Start() {
+void MemMeld::Start() {
   constexpr int pid = 948318;
   FD pidfd = syscall(SYS_pidfd_open, pid, 0);
   if (!pidfd.Opened()) {
@@ -134,10 +134,9 @@ void Memory::Start() {
 
   Status status;
   mem_meld.on_attached = [&]() { WakeToys(); };
-  mem_meld.on_changed = [&](const MemMeld::Region& before, const MemMeld::Region& after) {
-    WakeToys();
-  };
-  mem_meld.on_mapped = [&](const MemMeld::Region& region) { WakeToys(); };
+  mem_meld.on_changed = [&](const automat::MemMeld::Region& before,
+                            const automat::MemMeld::Region& after) { WakeToys(); };
+  mem_meld.on_mapped = [&](const automat::MemMeld::Region& region) { WakeToys(); };
   mem_meld.Attach(pidfd, status);
   WakeToys();
   if (!OK(status)) {
@@ -146,10 +145,10 @@ void Memory::Start() {
   }
 }
 
-struct MemoryToy : ObjectToy {
+struct MemMeldToy : ObjectToy {
   ui::Button btn_attach;
 
-  MemoryToy(Widget* parent, Memory& mv) : ObjectToy(parent, mv), btn_attach(this) {
+  MemMeldToy(Widget* parent, MemMeld& mv) : ObjectToy(parent, mv), btn_attach(this) {
     btn_attach.child = MakeShapeWidget(&btn_attach, PathFromSVG(kPlayShape), "#f56a00"_color);
     btn_attach.UpdateChildTransform();
     btn_attach.target = mv.start.Bind();
@@ -159,13 +158,13 @@ struct MemoryToy : ObjectToy {
   constexpr static Rect kShapeRect = Rect::MakeCenterZero(10_cm, 15_cm);
   SkPath Shape() const override { return SkPath::Rect(kShapeRect); }
 
-  Vec<MemMeld::Region> regions;
+  Vec<automat::MemMeld::Region> regions;
   Vec<AddressRange> address_ranges;  // merged address ranges in the remote process
   uint64_t n_bytes = 0;
   Vec<sk_sp<SkImage>> images;
 
   Tock Tick(time::Timer&) override {
-    auto mv = LockObject<Memory>();
+    auto mv = LockObject<MemMeld>();
     auto& m = mv->mem_meld;
 
     regions.clear();
@@ -173,7 +172,7 @@ struct MemoryToy : ObjectToy {
     n_bytes = 0;
 
     {  // Refresh `regions`
-      MemMeld::ReadGuard guard(m);
+      automat::MemMeld::ReadGuard guard(m);
       // TODO: rather than re-querying the tree, introduce an API to walk the tree
       for (auto* it = guard.FindLowerBound(0); it != nullptr;
            it = guard.FindLowerBound(it->remote + it->Size())) {
@@ -215,7 +214,7 @@ struct MemoryToy : ObjectToy {
   }
 
   void Draw(SkCanvas& canvas) const override {
-    auto mv = LockObject<Memory>();
+    auto mv = LockObject<MemMeld>();
     SkPaint bg;
     bg.setColor("#e3c2a8"_color);
     canvas.drawPath(shape, bg);
@@ -325,8 +324,8 @@ struct MemoryToy : ObjectToy {
   }
 };
 
-std::unique_ptr<Memory::Toy> Memory::MakeToy(ui::Widget* parent) {
-  return make_unique<MemoryToy>(parent, *this);
+std::unique_ptr<MemMeld::Toy> MemMeld::MakeToy(ui::Widget* parent) {
+  return make_unique<MemMeldToy>(parent, *this);
 }
 
 }  // namespace automat::library

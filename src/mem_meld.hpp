@@ -26,6 +26,8 @@ struct MemMeld {
     int prot;
     Str path;
     Size file_offset;
+
+    Size Size() const { return local.size_bytes(); }
   };
 
   struct ReadGuard {

@@ -382,6 +382,14 @@ union Rect {
     return ret;
   }
 
+  // Cut off and return the right of the rectangle.
+  constexpr Rect CutRight(float width) {
+    Rect ret = *this;
+    right -= width;
+    ret.left = right;
+    return ret;
+  }
+
   void ExpandToInclude(Vec2 point) {
     left = std::min(left, point.x);
     right = std::max(right, point.x);

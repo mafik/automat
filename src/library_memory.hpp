@@ -9,7 +9,6 @@ namespace automat::library {
 
 struct Memory : Object {
   MemMeld mem_meld;
-  MemMeld::Region last_region;
 
   DEF_INTERFACE(Memory, Command, start, "Start")
   void OnRun() { obj->Start(); }

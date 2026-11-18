@@ -19,6 +19,8 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include <cstdint>
+
 #include "animation.hpp"
 #include "argument.hpp"
 #include "audio.hpp"
@@ -35,6 +37,7 @@
 #include "log.hpp"
 #include "math.hpp"
 #include "mem_meld.hpp"
+#include "memory_landmarks.hpp"
 #include "object.hpp"
 #include "root_widget.hpp"
 #include "run_button.hpp"
@@ -46,6 +49,7 @@
 #include "time.hpp"
 #include "ui_button.hpp"
 #include "ui_connection_widget.hpp"
+#include "ui_constants.hpp"
 #include "ui_shape_widget.hpp"
 #include "widget.hpp"
 
@@ -59,13 +63,66 @@ Str ToStr(const MemMeld::Region& reg) {
 
 namespace automat::library {
 
+// Idea: More Objects
+// 1. Can map memory of another process (already present!)
+// 2. Can select a sub-section of this memory (preserves map information)
+// 3. Scans memory for interesting regions
+// Opens possibilities of extra composable objects:
+// 1b. Core dump
+// 1c. Local memory
+// 1d. ELF file
+// 1e. Regular ptrace-based attach
+// 2b. Selects some file
+// 2c. Follows some pointer + size
+// 3b. Interprets memory as a specific data type
+
+// How Memory object will work:
+// - will expose a "Refreshed" notification / command - (no-op for MemMeld) that notifies that
+// memory contents have been refreshed
+// - will show just the memory ranges as a simple color-coded line
+// - will allow dropping for "Crop" objects
+
+// "Crop" object:
+// - can be dropped on another toy to select a sub-range of it
+//
+// Problem: "Crop" object needs to ask the underlying "Memory" about the range described by some
+// rect. Shape of objects is NOT part of the VM - this must happen in the UI. So Toys need to be
+// able to talk with each other. So the "croppable" interface must be defined on the Toy.
+//
+// Design A: reuse the drag&drop infrastructure and create a "Crop" object that can be "dropped
+//                 into" other objects and then moved around to select their sub-sections. Clones of
+//                 the Crop object will create a toy for the original object parametrized by the
+//                 cropped section. This way the "Crop" object doesn't need to care about the type
+//                 of the object it's dropped onto. The "embedded" clone of Crop will be positioned
+//                 by the parent toy so if position is changed, it'll be re-positioned during Tick
+//
+// Whet the "Crop" is dropped onto Memory, Memory will tell it how many control points to create and
+// they'll be stored as child objects within memory.
+//
+// The original Crop will immediately create a "cropped" version of the toy it was dropped into.
+//
+// Effectively the "crop target" is going to be the first owner that implements "croppable".
+//
+// Process Object Idea:
+// - Object that represents arbitrary process in the OS
+// - uses pidfd to track some OS process
+// - shows PID as text
+// - shows the "mind meld" symbol (Star Trek reference)
+
+// When the arrow is dragged out it'll create a MemMeld object.
+// - allows dropping & interaction with the Crop object
+// - it could be a snow globe
+//
+// The plan:
+// - Process object (snow globe) will be available in the bubble menu of Window
+// -
+
 using namespace automat::ui;
 using namespace std;
 
 Memory::Memory() {}
 
 void Memory::Start() {
-  LOG << "Start";
   constexpr int pid = 948318;
   FD pidfd = syscall(SYS_pidfd_open, pid, 0);
   if (!pidfd.Opened()) {
@@ -75,31 +132,13 @@ void Memory::Start() {
     return;
   }
 
-  LOG << "Pidfd=" << pidfd;
   Status status;
-  mem_meld.on_attached = [&]() {
-    LOG << "on_attached";
-    WakeToys();
-  };
+  mem_meld.on_attached = [&]() { WakeToys(); };
   mem_meld.on_changed = [&](const MemMeld::Region& before, const MemMeld::Region& after) {
-    LOG << "on_changed";
-    if (before.remote == after.remote)
-      LOG << "  @" << f("{}", (void*)before.remote);
-    else
-      LOG << "  @" << f("{}", (void*)before.remote) << " => @" << f("{}", (void*)after.remote);
-    // if (before.)
-    if (!before.path.empty()) LOG << "  path [" << before.path << "] => [" << after.path << "]";
-    last_region = after;
     WakeToys();
   };
-  mem_meld.on_forked = [](int pid) { LOG << "on_forked " << pid; };
-  mem_meld.on_mapped = [&](const MemMeld::Region& region) {
-    LOG << "on_mapped " << region;
-    last_region = region;
-    WakeToys();
-  };
+  mem_meld.on_mapped = [&](const MemMeld::Region& region) { WakeToys(); };
   mem_meld.Attach(pidfd, status);
-  LOG << "Attach exited";
   WakeToys();
   if (!OK(status)) {
     ERROR << status;
@@ -117,26 +156,45 @@ struct MemoryToy : ObjectToy {
     btn_attach.local_to_parent = SkM44(SkMatrix::Translate(-5_cm, -5_cm));
   }
 
-  constexpr static Rect kShapeRect = Rect::MakeCenterZero(10_cm, 10_cm);
+  constexpr static Rect kShapeRect = Rect::MakeCenterZero(10_cm, 15_cm);
   SkPath Shape() const override { return SkPath::Rect(kShapeRect); }
 
   Vec<MemMeld::Region> regions;
+  Vec<AddressRange> address_ranges;  // merged address ranges in the remote process
+  uint64_t n_bytes = 0;
   Vec<sk_sp<SkImage>> images;
 
   Tock Tick(time::Timer&) override {
     auto mv = LockObject<Memory>();
     auto& m = mv->mem_meld;
 
+    regions.clear();
+    address_ranges.clear();
+    n_bytes = 0;
+
     {  // Refresh `regions`
-      regions.clear();
       MemMeld::ReadGuard guard(m);
       // TODO: rather than re-querying the tree, introduce an API to walk the tree
       for (auto* it = guard.FindLowerBound(0); it != nullptr;
            it = guard.FindLowerBound(it->remote + it->Size())) {
         regions.Append(*it);
+        n_bytes += it->Size();
       }
     }
     if (regions.empty()) return Tock::Draw;  // nothing to animate
+
+    {  // Update `address_ranges`
+      address_ranges.emplace_back(regions.front().remote,
+                                  regions.front().remote + regions.front().Size());
+      for (int i = 1; i < regions.size(); ++i) {
+        auto& r = regions[i];
+        if (address_ranges.back().end == r.remote) {  // merge
+          address_ranges.back().end = r.remote + r.Size();
+        } else {
+          address_ranges.emplace_back(r.remote, r.remote + r.Size());
+        }
+      }
+    }
 
     images.clear();
     for (auto current_region = regions.begin(); current_region != regions.end(); ++current_region) {
@@ -165,7 +223,7 @@ struct MemoryToy : ObjectToy {
     GetFont().DrawText(canvas, f("size: {}", mv->mem_meld.Local().size_bytes()), {});
 
     Rect zone_contents = kShapeRect;
-    Rect zone_spear = zone_contents.CutRight(1_cm);
+    Rect zone_spear = zone_contents.CutRight(4_mm);
 
     int side = floor(sqrt(images.size()));
     if (side > 0) {
@@ -180,51 +238,86 @@ struct MemoryToy : ObjectToy {
         float bottom = zone_contents.bottom + row * cell_height;
         float top = bottom + cell_height;
         Rect cell = Rect(left, bottom, right, top);
-        canvas.drawImageRect(img.get(), cell, kFastSamplingOptions);
+        // canvas.drawImageRect(img.get(), cell, kFastSamplingOptions);
       }
 
       {
-        int n_gaps = 0;
-        int64_t n_bytes = regions.empty() ? 0 : regions.front().Size();
-        for (int i = 1; i < regions.size(); ++i) {
-          auto& prev = regions[i - 1];
-          auto& curr = regions[i];
-          if (prev.remote + prev.Size() < curr.remote) ++n_gaps;
-          n_bytes += curr.Size();
-        }
-        constexpr float kZigZagW = 2_mm;
+        int n_gaps = address_ranges.size() - 1;
+        if (address_ranges.front().begin > 0) n_gaps += 1;
+        if (address_ranges.back().end < UINT64_MAX) n_gaps += 1;
+
+        constexpr float kZigZagW = 0.5_mm;
         // Zig-zag bends at 60 degrees to the right (W to the right, W/2 up), then at 60 degrees
         // left (2W to the left, W up), then back 60deg to the right (W to the right, ending in the
         // middle, W/2 up). Total height is W*2.
 
-        float shaft_height = zone_spear.Height() - 1_cm;
-        float gap_height = min(kZigZagW * 2, shaft_height * 0.2f / n_gaps);
+        float shaft_height = zone_spear.Height() - 6_mm;
+        float gap_height = min(kZigZagW * 2, shaft_height * 0.5f / n_gaps);
         float gaps_height = gap_height * n_gaps;
         float bytes_height = shaft_height - gaps_height;
 
-        SkPaint shaft_paint;
-        shaft_paint.setStyle(SkPaint::kStroke_Style);
-        shaft_paint.setStrokeWidth(kMargin);
-        SkPathBuilder shaft_builder;
-        shaft_builder.moveTo(zone_spear.BottomCenter());
-        float x = zone_spear.CenterX();
-        float y = zone_spear.bottom;
-        uintptr_t addr = 0;
-        for (auto& r : regions) {
-          if (r.remote > addr) {
-            y += gap_height / 4;
-            shaft_builder.lineTo(x + kZigZagW, y);
-            y += gap_height / 2;
-            shaft_builder.lineTo(x - kZigZagW, y);
-            y += gap_height / 4;
-            shaft_builder.lineTo(x, y);
+        {
+          SkPaint shaft_paint;
+          SkPathBuilder shaft_builder;
+          float x = zone_spear.CenterX();
+          float y = zone_spear.bottom;
+          uintptr_t addr = 0;
+          constexpr float kW = kMargin / 2;
+          shaft_builder.moveTo(zone_spear.BottomCenter() + Vec2(kW, 0));
+          for (auto [a, b] : address_ranges) {
+            if (a > addr) {
+              y += gap_height / 4;
+              shaft_builder.lineTo(x + kW + kZigZagW, y);
+              y += gap_height / 2;
+              shaft_builder.lineTo(x + kW - kZigZagW, y);
+              y += gap_height / 4;
+              shaft_builder.lineTo(x + kW, y);
+            }
+            // float bottom = y;
+            y += bytes_height * (b - a) / n_bytes;
+            shaft_builder.lineTo(x + kW, y);
+            addr = b;
+            // float top = y;
+            // canvas.drawRect(Rect(x - kW, bottom, x + kW, top), {});
           }
-          y += bytes_height * r.Size() / n_bytes;
-          shaft_builder.lineTo(x, y);
-          addr = r.remote + r.Size();
-        }
+          if (UINT64_MAX > addr) {
+            y += gap_height / 4;
+            shaft_builder.lineTo(x + kW + kZigZagW, y);
+            y += gap_height / 2;
+            shaft_builder.lineTo(x + kW - kZigZagW, y);
+            y += gap_height / 4;
+            shaft_builder.lineTo(x + kW, y);
+          }
+          addr = UINT64_MAX;
+          shaft_builder.lineTo(zone_spear.right, zone_spear.top - 5_mm);
+          shaft_builder.lineTo(zone_spear.TopCenter());
+          shaft_builder.lineTo(zone_spear.left, zone_spear.top - 5_mm);
+          shaft_builder.lineTo(x - kW, y);
+          for (auto [a, b] : std::ranges::reverse_view(address_ranges)) {
+            if (b < addr) {
+              y -= gap_height / 4;
+              shaft_builder.lineTo(x - kW - kZigZagW, y);
+              y -= gap_height / 2;
+              shaft_builder.lineTo(x - kW + kZigZagW, y);
+              y -= gap_height / 4;
+              shaft_builder.lineTo(x - kW, y);
+            }
+            y -= bytes_height * (b - a) / n_bytes;
+            shaft_builder.lineTo(x - kW, y);
+            addr = a;
+          }
+          if (addr > 0) {
+            y -= gap_height / 4;
+            shaft_builder.lineTo(x - kW - kZigZagW, y);
+            y -= gap_height / 2;
+            shaft_builder.lineTo(x - kW + kZigZagW, y);
+            y -= gap_height / 4;
+            shaft_builder.lineTo(x - kW, y);
+          }
+          shaft_builder.close();
 
-        canvas.drawPath(shaft_builder.detach(), shaft_paint);
+          canvas.drawPath(shaft_builder.detach(), shaft_paint);
+        }
       }
     }
 

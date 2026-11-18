@@ -36,7 +36,7 @@ struct AppWindow : ClientWindow {
   };
   Vec<PopupMirror> popups;
 
-  INTERFACES(launcher_tbl, kDecorationMenu, kPickWindow);
+  INTERFACES(launcher_tbl, kDecorationMenu, process_tbl, kPickWindow);
 
   AppWindow();
   AppWindow(const AppWindow&);

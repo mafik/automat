@@ -39,7 +39,7 @@ child mapped it — a visible cable, serialized through the ordinary links
 mechanism. On restore, the launch goes *through* that Program Launcher
 (`ProgramLauncher::RunFor`): the Program Launcher spawns its own argv, synthesizes the
 running state the way Timer resumes from a save, and therefore keeps the
-launch icon and STOP control over the restored child. The window's own
+Process globe and STOP control over the restored child. The window's own
 recipe is the fallback for windows whose Program Launcher is gone or already busy
 (a copied window whose original still runs, for example — the copy's launch
 spawns a second instance while the Program Launcher keeps owning the first).

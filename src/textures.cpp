@@ -228,6 +228,13 @@ PersistentImage& PressingHandColor() {
   return pressing_hand_color;
 }
 
+PersistentImage& RosewoodColor() {
+  static auto rosewood_color = PersistentImage::MakeFromAsset(
+      embedded::assets_rosewood_color_webp,
+      {.tile_x = SkTileMode::kRepeat, .tile_y = SkTileMode::kRepeat});
+  return rosewood_color;
+}
+
 }  // namespace textures
 
 }  // namespace automat

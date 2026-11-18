@@ -66,17 +66,15 @@ Every state change is shown on two channels (the Beta rule):
 - The program tile is marked with a red outline and squiggle while its text
   does not resolve to an executable (`$PATH` search, same rules as
   `execvp`), and RUN is gray and hatched. When it resolves, RUN turns green.
-- The run itself is a Launch object (`Launches.md`), shown on the plate's
-  lower right as an icon: a gear with the pid under it, rotating and
-  saturated while the process runs, still and desaturated after it exits.
+- The run itself is a Launch object (`Launches.md`), and the plate's lower
+  right shows its Process object as a small snow globe with the process id
+  beside it, lit while the process runs and dimmed after it exits.
   While the child runs the button is a red STOP; STOP means SIGTERM.
 - After exit, a chip in the lower-left corner reports the result: green
   `exit 0`, red `exit N`, or the signal name if the child died by signal.
-- Dragging the icon off the plate extracts the launch onto the board
-  (`ProgramLauncher::ExtractLaunch`): the Program Launcher is free to run again while the
-  extracted instance keeps running as its own object — this is how one
-  Program Launcher runs several instances at once. The Program Launcher's chip and icon
-  follow the launch, so both leave with it.
+- Dragging the globe off the plate places the Process object of the run on
+  the board. The run stays with the Program Launcher: the chip and the globe
+  remain on the plate.
 
 Pressing Enter inside the tiles is equivalent to pressing RUN.
 
@@ -85,9 +83,9 @@ Pressing Enter inside the tiles is equivalent to pressing RUN.
 The object exposes a `run` Command, which spawns the child and calls
 `Done` when the child is reaped, so that the `Next` chain continues; a
 `cancel` Command, which sends SIGTERM; and a `running` OnOff over the
-two. The OnOff is the first Command of the object, so a `Next` cable
-dropped on the object toggles it; the toy places it at NE of the bubble
-menu. Timers, chains and the bubble menu drive it without special cases.
+two. The `run` Command is the first Command of the object, so a `Next`
+cable dropped on the object runs it; the toy places the OnOff at NE of the
+bubble menu. Timers, chains and the bubble menu drive it without special cases.
 RUN activates the OnOff, which runs `run` because the child is not
 running, and STOP activates the `stop` Command, which also closes the
 windows in the connected mode.

@@ -7,6 +7,7 @@
 #include "base.hpp"
 #include "command.hpp"
 #include "launcher.hpp"
+#include "object_source.hpp"
 #include "status.hpp"
 #include "str.hpp"
 #include "stream.hpp"
@@ -24,7 +25,7 @@ Vec<Str> SplitWords(StrView line);
 // posix_spawnp exactly as stored, so quoting, globs and $variables do not
 // exist. Elements may contain spaces (one element = one argument, always);
 // empty elements are transient editor state, skipped at spawn and save.
-struct ProgramLauncher : Object, Container {
+struct ProgramLauncher : Object {
   mutable std::mutex mutex;     // guards argv and the launch below
   Vec<Str> argv;                // argv[0] is the program
   Owned<Launch> launch{*this};  // current or last run; replaced by the next run
@@ -84,8 +85,14 @@ struct ProgramLauncher : Object, Container {
   Str OnFormat() { return "bytes"; }
   DEF_END(in_stream);
 
+  DEF_INTERFACE(ProgramLauncher, ObjectSource, process, "Process")
+  static constexpr ui::Cursor kCursor = ui::Cursor::Alias;
+  Ptr<Object> OnTake();
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  DEF_END(process);
+
   INTERFACES(run_tbl, running_tbl, cancel_tbl, next_tbl, out_stream_tbl, in_stream_tbl, stop_tbl,
-             text_tbl);
+             text_tbl, process_tbl);
 
   ProgramLauncher() = default;
   ProgramLauncher(const ProgramLauncher& o)
@@ -110,11 +117,6 @@ struct ProgramLauncher : Object, Container {
   // Asks the live child to exit (SIGTERM). With `keep_connected`, windows in
   // the connected mode survive; the stop button closes them too.
   void Terminate(bool keep_connected = false);
-  // Takes the launch out of this ProgramLauncher, leaving it free to run again. The
-  // running state ends without cancelling the child or scheduling `next`.
-  Ptr<Launch> ExtractLaunch();
-  Container* AsContainer() override { return this; }
-  Ptr<Location> Extract(Object& descendant) override;
 
   StreamStats StdoutStats();
 

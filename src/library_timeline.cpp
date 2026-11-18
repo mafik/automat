@@ -23,7 +23,6 @@
 #include <ranges>
 #include <tracy/Tracy.hpp>
 
-#include "../build/generated/embedded.hpp"
 #include "animation.hpp"
 #include "arcline.hpp"
 #include "argument.hpp"
@@ -134,17 +133,12 @@ constexpr RRect kDisplayRRect = [] {
                .type = SkRRect::kSimple_Type};
 }();
 
-static auto rosewood_color = PersistentImage::MakeFromAsset(embedded::assets_rosewood_color_webp,
-                                                            {
-                                                                .tile_x = SkTileMode::kRepeat,
-                                                                .tile_y = SkTileMode::kRepeat,
-                                                            });
-
 const SkPaint& WoodPaint() {
   static SkPaint wood_paint = ([&]() {
     SkPaint p;
     p.setColor("#805338"_color);
-    p.setShader(rosewood_color.paint.getShader()->makeWithLocalMatrix(SkMatrix::RotateDeg(-5)));
+    p.setShader(
+        textures::RosewoodColor().paint.getShader()->makeWithLocalMatrix(SkMatrix::RotateDeg(-5)));
     return p;
   })();
   return wood_paint;

@@ -9,7 +9,6 @@
 #include "argument.hpp"
 #include "automat.hpp"
 #include "casting.hpp"
-#include "launcher.hpp"
 #include "root_widget.hpp"
 #include "status.hpp"
 #include "virtual_fs.hpp"
@@ -86,9 +85,6 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
                 d.RegisterObject(key, *board);
                 auto lock = std::lock_guard(engine.mutex);
                 engine.boards.push_back(std::move(board));
-              } else if (type == "Launch") {
-                auto launch = MAKE_PTR(Launch);
-                d.RegisterObject(key, *launch);
               } else {
                 auto proto = prototypes->Find(type);
                 if (proto == nullptr) {

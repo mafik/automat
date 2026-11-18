@@ -29,7 +29,8 @@ Three kinds of objects divide the work:
   sequence (the token). A Launch is created only for a running process,
   either by spawning it or by following the running client of a window; an
   unlaunched Launch does not exist. It is an `Object`, so it is
-  reference-counted, thread-safe to point at, and has a widget.
+  reference-counted and thread-safe to point at. It holds the Process object
+  (`src/library_process.hpp`) of the process that it started or follows.
 - **WaylandWindow and X11Window** hold what the display servers report.
   Their shared launch-related part — title, app_id, recipe, client pid, the
   Launcher cable, copy and serialization behavior — is the `ClientWindow`
@@ -101,11 +102,10 @@ one after it exits. Re-running replaces it, which is also what bounds the
 capture buffers: one run, one set of buffers, overwritten by the next run.
 The exit chip and the stdout meters read through this launch.
 
-The launch is displayed as an icon: a gear with the pid under it, rotating
-and saturated while the process runs, still and desaturated after it exits.
-One widget draws it everywhere (`LaunchWidget`, `src/launcher.hpp`): the
-Program Launcher plate embeds it small, and an extracted launch shows it
-standalone. The desaturation deliberately changes nothing beyond the display:
+The process of a launch is displayed as a snow globe, the toy of its Process
+object: its colors are lit while the process runs and dimmed after it exits.
+The Program Launcher plate embeds this toy at a small size. The dimmed globe
+deliberately changes nothing beyond the display:
 matching does not depend on the launch's state, so a window
 arriving after the process ended — the nemo forward, a slow application —
 still finds its launch and lands correctly. There is no way to know at exit
@@ -113,25 +113,19 @@ time whether a cleanly-exited process was `ls` being done or a process
 whose forwarded startup continues elsewhere; the design makes the
 distinction unnecessary instead of guessing.
 
-The icon can be dragged off the plate. Dragging extracts the launch
-(`ProgramLauncher::ExtractLaunch`): the Program Launcher's slot empties, its running state
-ends without cancelling the child and without scheduling `next`, and the
-launch becomes a board object under the pointer. This is how one Program Launcher
-runs several instances at once — extract the running one, run again — while
-the Program Launcher itself keeps strict one-instance semantics (`run` refuses a
+The globe can be dragged off the plate. The drag places the Process object of
+the launch on the board (`ProgramLauncher::process`). The launch stays with the
+Program Launcher, which keeps strict one-instance semantics (`run` refuses a
 second start while the child runs; a `Next` cable dropped on the Program Launcher
 connects to its `running` OnOff, so a Timer firing into a busy Program Launcher
-stops it). Deleting a launch that sits on a Board SIGTERMs a
-child that has not exited and has produced no window; a child with a window is terminated
-through the window's own close path instead, and deleting the launch of an
-already-exited run deletes only the record.
+stops it); a second instance needs a copy of the Program Launcher. Deleting a
+Process object leaves its process running. A launch that is destroyed sends
+SIGTERM to a child that has not exited and has produced no window; a child with a
+window is closed through its window.
 
-Launches on a Board do not survive serialization: a saved Launch
-deserializes as a dead record and is removed by the post-load pass, because the process it
-represented is gone and the windows it produced revive through their own
-recipes. `persistence.cpp` creates the object for the "Launch" type directly
-instead of going through the prototype registry, which keeps Launch out of
-the toolbar.
+A Launch is never placed on a Board and is not saved. A Process object is saved
+with its process id and the start time of its process, and it follows the same
+process after loading when that process still runs.
 
 ## Stream captures and pipes
 

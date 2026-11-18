@@ -15,6 +15,7 @@
 #include "library_macro_recorder.hpp"
 #include "library_mouse.hpp"
 #include "library_number.hpp"
+#include "library_process.hpp"
 #include "library_program_launcher.hpp"
 #include "library_sources.hpp"
 #include "library_switch.hpp"
@@ -72,6 +73,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<Switch>();
   index.Register<LinkedSwitch, HideInToolbar>(OnOff{});
   index.Register<ProgramLauncher, HideInToolbar>();
+  index.Register<Process, HideInToolbar>();
   index.Register<MacroRecorder>();
   index.Register<Timer>();
   index.Register<HotKey>();

@@ -80,9 +80,11 @@ commands as interfaces, and the widgets only map triggers to those interfaces:
 - Text is a `Text` interface (src/base.hpp); text fields are Toys of it (src/text_field.hpp).
 - An object that hands out objects is an `ObjectSource` (src/object_source.hpp): `Take()` returns
   the object, the activation starts the drag. Location `move`, `copy` and `clone`, the prototypes'
-  `kMakeObject` (src/object.cpp), the instruction library's `pick` (its front card) and the
+  `kMakeObject` (src/object.cpp), the instruction library's `pick` (its front card), the
   Board's `take_wallpaper`, which hands out the board's wallpaper File (docs/parrots/Boards.md),
-  are the tables. The activation makes the new object's toy where the object is born and hands the object
+  and the `process` tables of `ProgramLauncher` (the Process object of its launch, taken from the
+  globe on its plate), `Window` and `ClientWindow` (a new Process object for the process of the
+  window, src/library_process.hpp) are the tables. The activation makes the new object's toy where the object is born and hands the object
   and its toy to `DragNew`, whose drag springs that toy to the pointer: `kMakeObject` births the
   clone under the toy it receives, which is why the toolbar's `PrototypeButton` and the
   `ShelfButton` are Toys of the prototype they display, and `pick` places the card's toy at the

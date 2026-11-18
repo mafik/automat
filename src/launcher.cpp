@@ -5,8 +5,6 @@
 
 #include "launcher.hpp"
 
-#include <include/core/SkPathBuilder.h>
-
 #if defined(_WIN32)
 #include <io.h>
 
@@ -29,9 +27,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "animation.hpp"
 #include "board.hpp"
-#include "color.hpp"
 #include "deserializer.hpp"
 #include "engine.hpp"
 #include "fd.hpp"
@@ -41,8 +37,6 @@
 #include "log.hpp"
 #include "mux.hpp"
 #include "random.hpp"
-#include "sincos.hpp"
-#include "ui_beta.hpp"
 #include "x11.hpp"
 
 #if !defined(_WIN32)
@@ -374,7 +368,7 @@ static Ptr<Launch> StartProcess(Vec<Str>& words, const SpawnFds& fds, Status& st
 
   auto launch = MAKE_PTR(Launch);
   launch->pid = process.dwProcessId;
-  launch->process = process.hProcess;
+  launch->process_handle = process.hProcess;
   launch->job = job;
   launch->job_key = job_key;
   launch->job_tracked = in_job && job_key != 0;
@@ -535,6 +529,7 @@ Ptr<Launch> Launch::Spawn(const Vec<Str>& argv_in, Object* source, ClientWindow*
     if (!launch) return nullptr;
     if (restoring) launch->restoring = restoring->AcquireWeakPtr();
   }
+  launch->process = MAKE_PTR(library::Process, launch->pid);
 
   launch->when = time::SteadyNow();
   launch->argv = std::move(words);
@@ -625,7 +620,7 @@ Launch::~Launch() {
     Jobs().launches.erase(job_key);
   }
   if (!exited && !window_appeared) Terminate();
-  if (process) CloseHandle((HANDLE)process);
+  if (process_handle) CloseHandle((HANDLE)process_handle);
   if (job) CloseHandle((HANDLE)job);
 #else
   if (pidfd >= 0) close(pidfd);
@@ -732,9 +727,11 @@ StreamStats Launch::StdoutStats() {
   {
     auto lock = std::lock_guard(mutex);
     alive = !exited;
-    if (alive && process) {
+    if (alive && process_handle) {
       IO_COUNTERS counters = {};
-      if (GetProcessIoCounters((HANDLE)process, &counters)) io_wchar = counters.WriteTransferCount;
+      if (GetProcessIoCounters((HANDLE)process_handle, &counters)) {
+        io_wchar = counters.WriteTransferCount;
+      }
     }
     stats.bytes = io_wchar;
     pipe = stdout_pipe;
@@ -748,7 +745,7 @@ StreamStats Launch::StdoutStats() {
   {
     auto lock = std::lock_guard(peer->mutex);
     if (!peer->exited) {
-      peer_process = (HANDLE)peer->process;
+      peer_process = (HANDLE)peer->process_handle;
       peer_stdin = peer->child_stdin;
     }
   }
@@ -852,16 +849,10 @@ Ptr<Object> Launch::Clone() const {
 
 void LaunchRestoredWindows() {
   Vec<Ptr<ClientWindow>> pending;
-  Vec<std::pair<Ptr<Board>, Location*>> dead_launches;
   {
     auto lock = std::lock_guard(engine.mutex);
     for (auto& board : engine.boards) {
       for (auto& loc : board->locations) {
-        if (auto* launch = dynamic_cast<Launch*>(loc->object.Get())) {
-          auto launch_lock = std::lock_guard(launch->mutex);
-          if (launch->pid == 0) dead_launches.emplace_back(board, loc.Get());
-          continue;
-        }
         auto* win = dynamic_cast<ClientWindow*>(loc->object.Get());
         if (!win) continue;
         auto win_lock = std::lock_guard(win->mutex);
@@ -870,10 +861,6 @@ void LaunchRestoredWindows() {
         }
       }
     }
-  }
-  for (auto& [board, loc] : dead_launches) {
-    board->Extract(*loc);
-    board->WakeToys();
   }
   for (auto& win : pending) {
     Vec<Str> recipe;
@@ -896,72 +883,6 @@ void LaunchRestoredWindows() {
     auto lock = std::lock_guard(win->mutex);
     win->launched_by = std::move(launch);
   }
-}
-
-static SkPath GearPath(Vec2 c, float r, float rotation_phase) {
-  SkPathBuilder path;
-  constexpr int kTeeth = 9;
-  float inner = r * 0.78f;
-  SinCos step = SinCos::FromDegrees(360.f / (kTeeth * 4));
-  SinCos a = SinCos::FromDegrees(90.f + rotation_phase * 360.f / kTeeth);
-  for (int i = 0; i < kTeeth; ++i) {
-    Vec2 p0 = c + Vec2::Polar(a, r);
-    a = a + step;
-    Vec2 p1 = c + Vec2::Polar(a, r);
-    a = a + step;
-    Vec2 p2 = c + Vec2::Polar(a, inner);
-    a = a + step;
-    Vec2 p3 = c + Vec2::Polar(a, inner);
-    a = a + step;
-    if (i == 0) {
-      path.moveTo(p0);
-    } else {
-      path.lineTo(p0);
-    }
-    path.lineTo(p1);
-    path.lineTo(p2);
-    path.lineTo(p3);
-  }
-  path.close();
-  path.setFillType(SkPathFillType::kEvenOdd);
-  path.addCircle(c.x, c.y, r * 0.28f);
-  return path.detach();
-}
-
-static SkColor MixSk(SkColor zero, SkColor one, float ratio) {
-  return color::MixColors(SkColor4f::FromColor(zero), SkColor4f::FromColor(one), ratio).toSkColor();
-}
-
-ui::Tock LaunchWidget::Tick(time::Timer& t) {
-  if (auto launch = LockLaunch()) {
-    auto lock = std::lock_guard(launch->mutex);
-    pid_label_ = launch->pid ? f("{}", launch->pid) : Str{};
-    exited_ = launch->exited;
-  }
-  ui::Tock tock = ui::Tock::Draw;
-  if (!exited_) {
-    rotation_ = fmodf(rotation_ + (float)t.d * 0.7f, 1.f);
-    tock.drawing |= true;
-  }
-  tock.drawing |= animation::LinearApproach(exited_ ? 0.f : 1.f, (float)t.d, 4, saturation_);
-  return tock;
-}
-
-void LaunchWidget::Draw(SkCanvas& canvas) const {
-  uint32_t seed = Seed(0x7A);
-  SkPath gear = GearPath({0, 0}, radius, rotation_);
-  ui::beta::MisregFill(canvas, gear, MixSk(ui::beta::kGray, ui::beta::kYellow, saturation_), seed);
-  ui::beta::SketchyStroke(canvas, gear, MixSk(ui::beta::kGrayDark, ui::beta::kInk, saturation_),
-                          ui::beta::kStroke * 0.8f, seed, 1);
-  if (!pid_label_.empty()) {
-    float w = ui::beta::TextWidth(pid_label_, ui::beta::kMicroSize);
-    ui::beta::DrawText(canvas, pid_label_, Vec2(-w / 2, radius + 0.4_mm), ui::beta::kMicroSize,
-                       MixSk(ui::beta::kInkSoft, ui::beta::kInk, saturation_), false, seed);
-  }
-}
-
-std::unique_ptr<ObjectToy> Launch::MakeToy(ui::Widget* parent) {
-  return std::make_unique<LaunchWidget>(parent, *this);
 }
 
 }  // namespace automat
@@ -1015,6 +936,34 @@ bool ClientWindow::DeserializeKey(ObjectDeserializer& d, StrView key) {
     return true;
   }
   return DeserializeDecoration(d, key);
+}
+
+bool ClientWindow::ClientRunning() const {
+  auto lock = std::lock_guard(mutex);
+  return client_pid != 0 && !client_gone;
+}
+
+Ptr<Object> ClientWindow::process_Impl::OnTake() {
+  I64 pid;
+  {
+    auto lock = std::lock_guard(obj->mutex);
+    pid = obj->client_gone ? 0 : obj->client_pid;
+  }
+  if (pid == 0) return nullptr;
+  return MAKE_PTR(Process, pid);
+}
+
+std::unique_ptr<Action> ClientWindow::process_Impl::OnActivate(ui::Pointer& pointer,
+                                                               automat::Toy* toy) {
+  if (toy == nullptr) return nullptr;
+  auto process = OnTake();
+  if (process == nullptr) return nullptr;
+  auto new_toy = process->MakeToy(toy);
+  return DragNew(pointer, std::move(process), std::move(new_toy));
+}
+
+std::unique_ptr<ui::Widget> ClientWindow::process_Impl::OnMakeIcon(ui::Widget* parent) {
+  return prototypes->Find<Process>()->MakeToy(parent);
 }
 
 Ptr<Launch> LaunchClone(const ClientWindow& original, ClientWindow& clone) {

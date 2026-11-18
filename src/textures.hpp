@@ -130,6 +130,7 @@ namespace textures {
 
 PersistentImage& PointingHandColor();
 PersistentImage& PressingHandColor();
+PersistentImage& RosewoodColor();
 
 }  // namespace textures
 

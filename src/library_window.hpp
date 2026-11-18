@@ -5,8 +5,10 @@
 #include "base.hpp"
 #include "image_provider.hpp"
 #include "keyboard.hpp"
+#include "object_source.hpp"
 #include "on_off.hpp"
 #include "os_window.hpp"
+#include "pointer.hpp"
 #include "str.hpp"
 #include "syncable.hpp"
 #include "theme_xp.hpp"
@@ -101,6 +103,13 @@ struct Window : public Object, ui::WindowWatcher {
   }
   DEF_END(deactivate);
 
+  DEF_INTERFACE(Window, ObjectSource, process, "Process")
+  static constexpr ui::Cursor kCursor = ui::Cursor::Copy;
+  Ptr<Object> OnTake();
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  std::unique_ptr<ui::Widget> OnMakeIcon(ui::Widget* parent);
+  DEF_END(process);
+
   struct Impl;
   // Private implementation to avoid polluting header with platform-specific defines.
   std::unique_ptr<Impl> impl;
@@ -122,7 +131,7 @@ struct Window : public Object, ui::WindowWatcher {
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 
   INTERFACES(capture_tbl, on_off_tbl, activate_tbl, deactivate_tbl, next_tbl, image_provider_tbl,
-             kPickWindow, syncable_tbl);
+             kPickWindow, syncable_tbl, process_tbl);
 
   // Called after deserialization. Makes the window object attach its native handle to the window
   // with the current title.

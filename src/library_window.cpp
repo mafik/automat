@@ -26,6 +26,7 @@
 #include "crt.hpp"
 #include "font.hpp"
 #include "key.hpp"
+#include "library_process.hpp"
 #include "library_window.hpp"
 #include "menu.hpp"
 #include "pointer.hpp"
@@ -39,6 +40,7 @@
 
 #ifdef __linux__
 #include <sys/shm.h>
+#include <xcb/res.h>
 #include <xcb/shm.h>
 
 #include <ranges>
@@ -84,6 +86,27 @@ using namespace std;
 namespace automat::library {
 
 constexpr bool kDebugWindowPicking = false;
+
+#ifdef __linux__
+static I64 WindowPid(os::WindowHandle window) {
+  if (!xcb::get_window_attributes(window)) return 0;
+  xcb_res_client_id_spec_t spec = {.client = window,
+                                   .mask = XCB_RES_CLIENT_ID_MASK_LOCAL_CLIENT_PID};
+  std::unique_ptr<xcb_res_query_client_ids_reply_t, crt::DeleteWithFree> reply(
+      xcb_res_query_client_ids_reply(xcb::connection,
+                                     xcb_res_query_client_ids(xcb::connection, 1, &spec), nullptr));
+  if (!reply) return 0;
+  auto ids = xcb_res_query_client_ids_ids_iterator(reply.get());
+  if (ids.rem == 0 || xcb_res_client_id_value_value_length(ids.data) == 0) return 0;
+  return *xcb_res_client_id_value_value(ids.data);
+}
+#elif defined(_WIN32)
+static I64 WindowPid(os::WindowHandle window) {
+  DWORD pid = 0;
+  GetWindowThreadProcessId(window, &pid);
+  return pid;
+}
+#endif
 
 std::string_view Window::Name() const { return "Window"; }
 
@@ -190,6 +213,12 @@ struct WindowWidget : ObjectToy, WindowPicker {
     auto object = LockObject<Window>();
     if (!object) return;
     menu.Place(ui::Dir::NE, object->on_off.Bind());
+    os::WindowHandle handle;
+    {
+      auto lock = std::lock_guard(object->mutex);
+      handle = object->handle;
+    }
+    if (handle != os::kNoWindow) menu.Place(ui::Dir::SE, object->process.Bind());
   }
   constexpr static float kWidth = 5_cm;
   constexpr static float kCornerRadius = 1_mm;
@@ -658,6 +687,29 @@ bool Window::DeserializeKey(ObjectDeserializer& d, StrView key) {
     ReportError(status.ToStr());
   }
   return true;
+}
+
+Ptr<Object> Window::process_Impl::OnTake() {
+  os::WindowHandle window;
+  {
+    auto lock = std::lock_guard(obj->mutex);
+    window = obj->handle;
+  }
+  I64 pid = WindowPid(window);
+  if (pid == 0) return nullptr;
+  return MAKE_PTR(Process, pid);
+}
+
+std::unique_ptr<Action> Window::process_Impl::OnActivate(ui::Pointer& pointer, automat::Toy* toy) {
+  if (toy == nullptr) return nullptr;
+  auto process = OnTake();
+  if (process == nullptr) return nullptr;
+  auto new_toy = process->MakeToy(toy);
+  return DragNew(pointer, std::move(process), std::move(new_toy));
+}
+
+std::unique_ptr<ui::Widget> Window::process_Impl::OnMakeIcon(ui::Widget* parent) {
+  return prototypes->Find<Process>()->MakeToy(parent);
 }
 
 void Window::syncable_Impl::OnSync() {

@@ -242,7 +242,10 @@ Interface ClientWindowToy::FindOption(ui::Pointer& pointer, ui::ActionTrigger tr
 
 void ClientWindowToy::FillMenu(ui::Pointer& pointer, Menu& menu) {
   ObjectToy::FillMenu(pointer, menu);
-  if (auto window = LockOwner()) menu.Place(ui::Dir::W, DecorationMenu(*window));
+  auto window = LockClientWindow();
+  if (!window) return;
+  menu.Place(ui::Dir::W, DecorationMenu(*window));
+  if (window->ClientRunning()) menu.Place(ui::Dir::SE, window->process.Bind());
 }
 
 void ClientWindowToy::FocusClient(ui::Pointer& p) {

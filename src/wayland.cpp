@@ -2133,7 +2133,10 @@ struct WaylandWindowToy : ui::beta::ObjectToy {
 
   void FillMenu(ui::Pointer& pointer, Menu& menu) override {
     ObjectToy::FillMenu(pointer, menu);
-    if (auto window = LockOwner()) menu.Place(ui::Dir::W, DecorationMenu(*window));
+    auto window = LockWindow();
+    if (!window) return;
+    menu.Place(ui::Dir::W, DecorationMenu(*window));
+    if (window->ClientRunning()) menu.Place(ui::Dir::SE, window->process.Bind());
   }
 
   SkPath Shape() const override {

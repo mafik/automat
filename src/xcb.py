@@ -115,6 +115,7 @@ libxcb.AddLinkArgs('-l:libxcb.a',
                    '-l:libxcb-xinput.a',
                    '-l:libxcb-shm.a',
                    '-l:libxcb-render.a',
+                   '-l:libxcb-res.a',
                    '-l:libxcb-xkb.a')
 libxcb.InstallWhenIncluded(r'^xcb/.+\.h')
 

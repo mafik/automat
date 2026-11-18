@@ -12,14 +12,16 @@
 
 #include "argument.hpp"
 #include "base.hpp"
+#include "library_process.hpp"
 #include "move_only_function.hpp"
 #include "object.hpp"
+#include "object_source.hpp"
+#include "pointer.hpp"
 #include "ptr.hpp"
 #include "status.hpp"
 #include "str.hpp"
 #include "stream.hpp"
 #include "time.hpp"
-#include "ui_beta.hpp"
 #include "vec.hpp"
 #include "window_frame.hpp"
 
@@ -68,8 +70,9 @@ struct Launch : Object {
   time::SteadyPoint when = {};
   Vec<Str> argv;
   int pidfd = -1;
+  Ptr<library::Process> process;
 #if defined(_WIN32)
-  void* process = nullptr;
+  void* process_handle = nullptr;
   void* job = nullptr;
   uintptr_t job_key = 0;
   bool job_tracked = false;
@@ -111,31 +114,11 @@ struct Launch : Object {
 
   StrView Name() const override { return "Launch"; }
   Ptr<Object> Clone() const override;
-  std::unique_ptr<ObjectToy> MakeToy(ui::Widget* parent) override;
 };
 
 void LaunchRestoredWindows();
 
 Str MintActivationToken();
-
-struct LaunchWidget : ui::beta::ObjectToy {
-  float radius = 6_mm;
-
-  Str pid_label_;
-  bool exited_ = false;
-  float saturation_ = 1;
-  float rotation_ = 0;
-
-  LaunchWidget(ui::Widget* parent, Object& obj) : ui::beta::ObjectToy(parent, obj) {}
-
-  Ptr<Launch> LockLaunch() const { return LockObject<Launch>(); }
-
-  bool CenteredAtZero() const override { return true; }
-  SkPath Shape() const override { return SkPath::Circle(0, 0, radius + 1_mm); }
-  Optional<Rect> DrawBounds() const override { return Shape().getBounds().makeOutset(3_mm, 4_mm); }
-  Tock Tick(time::Timer&) override;
-  void Draw(SkCanvas&) const override;
-};
 
 }  // namespace automat
 
@@ -161,10 +144,19 @@ struct ClientWindow : Object, DecoratedWindow {
   static constexpr float kAutoconnectRadius = 0.f;
   DEF_END(launcher);
 
-  INTERFACES(launcher_tbl, kDecorationMenu);
+  DEF_INTERFACE(ClientWindow, ObjectSource, process, "Process")
+  static constexpr ui::Cursor kCursor = ui::Cursor::Copy;
+  Ptr<Object> OnTake();
+  std::unique_ptr<Action> OnActivate(ui::Pointer&, automat::Toy*);
+  std::unique_ptr<ui::Widget> OnMakeIcon(ui::Widget* parent);
+  DEF_END(process);
+
+  INTERFACES(launcher_tbl, kDecorationMenu, process_tbl);
 
   ClientWindow() = default;
   ClientWindow(const ClientWindow&);
+
+  bool ClientRunning() const;
 
   void SerializeState(ObjectSerializer&) const override;
   bool DeserializeKey(ObjectDeserializer&, StrView key) override;

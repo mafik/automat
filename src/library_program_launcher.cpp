@@ -10,10 +10,8 @@
 #include <cmath>
 
 #include "animation.hpp"
-#include "board.hpp"
 #include "fd_provider.hpp"
 #include "format.hpp"
-#include "location.hpp"
 #include "menu.hpp"
 #include "text_field.hpp"
 #include "ui_beta.hpp"
@@ -272,17 +270,6 @@ void ProgramLauncher::Terminate(bool keep_connected) {
   if (live) live->Terminate(keep_connected);
 }
 
-Ptr<Launch> ProgramLauncher::ExtractLaunch() {
-  Ptr<Launch> extracted;
-  {
-    auto lock = std::lock_guard(mutex);
-    extracted = launch.Release();
-    is_running = false;
-  }
-  WakeToys();
-  return extracted;
-}
-
 StreamStats ProgramLauncher::StdoutStats() {
   Ptr<Launch> current;
   {
@@ -332,24 +319,6 @@ static bool ResolvesOnPath(const Str& prog) {
 }
 
 #endif  // !_WIN32
-
-Ptr<Location> ProgramLauncher::Extract(Object& descendant) {
-  {
-    auto lock = std::lock_guard(mutex);
-    if (launch.Get() != &descendant) return nullptr;
-  }
-  auto extracted = ExtractLaunch();
-  if (!extracted) return nullptr;
-  Vec2 position = {};
-  if (auto my_location = HomeLocation()) {
-    position = my_location->PeekPosition();
-    if (auto board = my_location->LockBoard()) position += board->position;
-  }
-  auto loc = MAKE_PTR(Location);
-  loc->InsertHere(std::move(extracted));
-  loc->placement = Location::Direct{position};
-  return loc;
-}
 
 // ============================================================================
 // Toy
@@ -489,7 +458,7 @@ ArgvLayout LayoutArgv(const Vec<Str>& argv) {
 
 }  // namespace
 
-constexpr float kLaunchIconRadius = 2.2_mm;
+constexpr float kProcessHeight = 8_mm;
 constexpr int kTailLinesOut = 4;
 constexpr int kTailLinesErr = 3;
 constexpr int kTailColumns = 60;
@@ -497,6 +466,13 @@ constexpr float kTailLineH = 2.2_mm;
 constexpr float kTailPad = 1.0_mm;
 
 struct ProgramLauncherToy;
+
+struct ProcessZone : ui::ActionZone {
+  using ActionZone::ActionZone;
+  ProgramLauncherToy& Plate() const;
+  SkPath Shape() const override;
+  Interface FindOption(ui::Pointer&, ui::ActionTrigger) override;
+};
 
 // The argv editor. The backing model is the object's argv vector; one tile
 // per element. The space KEY always commits a tile (that is the teaching
@@ -541,8 +517,11 @@ struct ProgramLauncherToy : ui::beta::ObjectToy {
   }
   std::unique_ptr<ArgvField> field;
   std::unique_ptr<ui::beta::RunButton> button;
-  std::unique_ptr<LaunchWidget> launch_widget;
+  std::unique_ptr<automat::ObjectToy> process_toy;
+  std::unique_ptr<ProcessZone> process_zone;
   WeakPtr<Launch> shown_launch_;
+  Str pid_label_;
+  float pid_label_right_ = 0;
 
   // Tick-cached object state (UI thread only):
   Vec<Str> argv_;
@@ -569,6 +548,10 @@ struct ProgramLauncherToy : ui::beta::ObjectToy {
   }
 
   Ptr<ProgramLauncher> LockProgramLauncher() const { return LockObject<ProgramLauncher>(); }
+
+  void OnPoll(time::Timer& timer) override {
+    if (process_toy) process_toy->Poll(timer);
+  }
 
   bool CenteredAtZero() const override { return true; }
   SkPath Shape() const override {
@@ -614,16 +597,23 @@ struct ProgramLauncherToy : ui::beta::ObjectToy {
     if (launch.Get() != shown_launch_.GetUnsafe()) {
       shown_launch_ = launch ? launch->AcquireWeakPtr() : WeakPtr<Launch>{};
       if (launch) {
-        launch_widget = std::make_unique<LaunchWidget>(this, *launch);
-        launch_widget->radius = kLaunchIconRadius;
-        launch_widget->local_to_parent =
-            SkM44::Translate(kPlateW / 2 - kSide - kLaunchIconRadius - 0.6_mm,
-                             -kPlateH / 2 + kBottomPad + kStatusRow * 0.5f + 0.5_mm);
+        process_toy = launch->process->MakeToy(this);
+        Rect bounds = process_toy->Shape().getBounds();
+        float scale = kProcessHeight / bounds.Height();
+        process_toy->local_to_parent =
+            SkM44::Translate(kPlateW / 2 - kSide - bounds.right * scale,
+                             -kPlateH / 2 + kBottomPad - 0.3_mm - bounds.bottom * scale) *
+            SkM44::Scale(scale, scale);
+        pid_label_right_ = kPlateW / 2 - kSide - bounds.Width() * scale - 1_mm;
+        process_zone = std::make_unique<ProcessZone>(this);
+        process_zone->local_to_parent = process_toy->local_to_parent;
+        pid_label_ = f("{}", launch->pid);
       } else {
-        launch_widget.reset();
+        process_toy.reset();
+        process_zone.reset();
+        pid_label_.clear();
       }
     }
-    if (launch_widget) launch_widget->WakeAnimation();
     if (argv_ != old_argv) field->WakeAnimation();
     program_ = argv_.empty() ? Str{} : argv_[0];
     if (program_ != resolve_query_) {
@@ -695,8 +685,6 @@ struct ProgramLauncherToy : ui::beta::ObjectToy {
                          ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
     }
 
-    // Status corner, lower-left: the exit chip after a run; the launch icon
-    // sits lower-right (LaunchIcon child).
     float row_mid = -kPlateH / 2 + kBottomPad + kStatusRow * 0.5f;
     if (!running_ && ever_ran_ && has_launch_) {
       Str label;
@@ -733,6 +721,12 @@ struct ProgramLauncherToy : ui::beta::ObjectToy {
                            ui::beta::TextOn(color), ui::beta::TextAlign::Center, false, cs);
     }
 
+    if (!pid_label_.empty()) {
+      float w = ui::beta::TextWidth(pid_label_, ui::beta::kMicroSize);
+      ui::beta::DrawText(canvas, pid_label_, {pid_label_right_ - w, row_mid - 0.8_mm},
+                         ui::beta::kMicroSize, ui::beta::kInkSoft, false, Seed(kSeed));
+    }
+
     DrawTailStrip(canvas);
     BakeChildren(canvas);
   }
@@ -766,6 +760,32 @@ struct ProgramLauncherToy : ui::beta::ObjectToy {
     }
   }
 };
+
+ProgramLauncherToy& ProcessZone::Plate() const { return static_cast<ProgramLauncherToy&>(*parent); }
+
+SkPath ProcessZone::Shape() const { return SkPath::Rect(Plate().process_toy->Shape().getBounds()); }
+
+Interface ProcessZone::FindOption(ui::Pointer&, ui::ActionTrigger trigger) {
+  if (trigger != ui::PointerButton::Left) return {};
+  auto launcher = Plate().LockProgramLauncher();
+  return launcher ? launcher->process.Bind() : Interface();
+}
+
+Ptr<Object> ProgramLauncher::process_Impl::OnTake() {
+  auto lock = std::lock_guard(obj->mutex);
+  return obj->launch ? obj->launch->process : nullptr;
+}
+
+std::unique_ptr<Action> ProgramLauncher::process_Impl::OnActivate(ui::Pointer& pointer,
+                                                                  automat::Toy* toy) {
+  auto* plate = dynamic_cast<ProgramLauncherToy*>(toy);
+  if (plate == nullptr || plate->process_toy == nullptr) return nullptr;
+  auto process = OnTake();
+  if (process == nullptr) return nullptr;
+  auto new_toy = process->MakeToy(plate);
+  new_toy->local_to_parent = plate->process_toy->local_to_parent;
+  return DragNew(pointer, std::move(process), std::move(new_toy));
+}
 
 // ---------------------------------------------------------------- ArgvField --
 

@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
-#include "library_memory.hpp"
+#include "library_mem_meld.hpp"
 
 #include <include/core/SkAlphaType.h>
 #include <include/core/SkColor.h>
@@ -63,10 +63,11 @@ Str ToStr(const MemMeld::Region& reg) {
 
 namespace automat::library {
 
-// Idea: More Objects
-// 1. Can map memory of another process (already present!)
-// 2. Can select a sub-section of this memory (preserves map information)
-// 3. Scans memory for interesting regions
+// Idea: Decompose the memory visualization into more, reusable objects:
+// 0. Object that represents another process
+// 1. Object that maps memory of another process (that's MemMeld!)
+// 2. Object that  selects a sub-section of another object
+// 3. Object that scans memory for interesting regions
 // Opens possibilities of extra composable objects:
 // 1b. Core dump
 // 1c. Local memory
@@ -76,10 +77,10 @@ namespace automat::library {
 // 2c. Follows some pointer + size
 // 3b. Interprets memory as a specific data type
 
-// How Memory object will work:
+// How "1-type" objects will work:
 // - will expose a "Refreshed" notification / command - (no-op for MemMeld) that notifies that
 // memory contents have been refreshed
-// - will show just the memory ranges as a simple color-coded line
+// - will show just the memory ranges as a simple (maybe color-coded) line
 // - will allow dropping for "Crop" objects
 
 // "Crop" object:
@@ -108,14 +109,14 @@ namespace automat::library {
 // - uses pidfd to track some OS process
 // - shows PID as text
 // - shows the "mind meld" symbol (Star Trek reference)
+// - it could be a snow globe!
 
 // When the arrow is dragged out it'll create a MemMeld object.
 // - allows dropping & interaction with the Crop object
-// - it could be a snow globe
 //
 // The plan:
 // - Process object (snow globe) will be available in the bubble menu of Window
-// -
+// - ...
 
 using namespace automat::ui;
 using namespace std;

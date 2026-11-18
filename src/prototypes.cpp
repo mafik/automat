@@ -36,7 +36,7 @@
 // Wayland compositor needs SCM_RIGHTS fd passing, which Windows AF_UNIX
 // sockets lack.
 #if defined(__linux__)
-#include "library_memory.hpp"
+#include "library_mem_meld.hpp"
 #include "library_pipewire.hpp"
 #include "wayland.hpp"
 #endif

@@ -17,7 +17,7 @@ struct MemMeld : Object {
   INTERFACES(start_tbl);
 
   MemMeld();
-  string_view Name() const override { return "Memory Viewer"sv; }
+  string_view Name() const override { return "MemMeld"sv; }
   Ptr<Object> Clone() const override { return MAKE_PTR(MemMeld); }
   std::unique_ptr<Toy> MakeToy(ui::Widget* parent) override;
 

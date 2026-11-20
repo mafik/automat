@@ -6,6 +6,8 @@
 #include <src/pathops/SkIntersections.h>
 #include <src/pathops/SkOpContour.h>
 
+#include <cassert>
+
 namespace automat {
 
 std::optional<Vec2> Raycast(const SkPath& path, const Vec2AndDir& ray) {
@@ -24,6 +26,7 @@ std::optional<Vec2> Raycast(const SkPath& path, const Vec2AndDir& ray) {
     if (verb == SkPath::kMove_Verb) {
       continue;
     } else if (SkPath::kLine_Verb == verb) {
+      assert(points[0] != points[1]);  // clean up your path, dummy
       SkDLine line;
       line.set(points);
       if (intersections.intersectRay(line, ray_line) == 0) continue;
@@ -48,7 +51,7 @@ std::optional<Vec2> Raycast(const SkPath& path, const Vec2AndDir& ray) {
       continue;  // this can still mostly work but will not intersect unknown verbs
     }
     double best_dist_section;
-    int closest_index = intersections.closestTo(0, 10000, ray_line_start, &best_dist_section);
+    int closest_index = intersections.closestTo(0, 1, ray_line_start, &best_dist_section);
     if (best_dist_section < best_dist) {
       best_dist = best_dist_section;
       best_point = intersections.pt(closest_index).asSkPoint();

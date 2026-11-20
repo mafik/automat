@@ -9,6 +9,7 @@
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkCanvas.h>
 #include <include/core/SkColor.h>
+#include <include/core/SkM44.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
@@ -21,26 +22,34 @@
 #include <include/core/SkSize.h>
 #include <include/effects/SkGradient.h>
 #include <include/effects/SkImageFilters.h>
+#include <include/effects/SkRuntimeEffect.h>
 
-#include <array>
+#include <algorithm>
 #include <cerrno>
 #include <cmath>
 #include <cstring>
 #include <memory>
-#include <span>
 
 #include "animation.hpp"
+#include "casting.hpp"
 #include "color.hpp"
 #include "drawing.hpp"
+#include "embedded.hpp"
 #include "font.hpp"
 #include "format.hpp"
+#include "global_resources.hpp"
+#include "knob.hpp"
 #include "log.hpp"
 #include "math.hpp"
+#include "object_source.hpp"
+#include "pointer.hpp"
 #include "random.hpp"
 #include "sincos.hpp"
 #include "status.hpp"
 #include "textures.hpp"
+#include "toy.hpp"
 #include "units.hpp"
+#include "widget.hpp"
 
 #if defined(_WIN32)
 #include "win32.hpp"
@@ -54,7 +63,32 @@
 #include "virtual_fs.hpp"
 #endif
 
+#if defined(__linux__)
+#include "library_mem_meld.hpp"
+#endif
+
 namespace automat::library {
+
+#if defined(__linux__)
+
+static std::unique_ptr<Toy> MakeSpearTip(ui::Widget* parent) {
+  return MemMeld::MakeDeadToy(parent);
+}
+
+static Ptr<Object> AttachMemMeld(Process& process) {
+  auto mem_meld = MAKE_PTR(MemMeld);
+  mem_meld->process->Connect(process);
+  mem_meld->Start();
+  return mem_meld;
+}
+
+#else
+
+static std::unique_ptr<Toy> MakeSpearTip(ui::Widget*) { return nullptr; }
+
+static Ptr<Object> AttachMemMeld(Process&) { return nullptr; }
+
+#endif
 
 #if defined(_WIN32)
 
@@ -261,36 +295,32 @@ constexpr float kBaseBottom = -15_mm;
 constexpr Rect kRingBounds = {-kRingHalfWidth, kRingBottom, kRingHalfWidth, kRingTop};
 constexpr Rect kBaseBounds = {-kFootHalfWidth, kBaseBottom, kFootHalfWidth, kRingBounds.CenterY()};
 
-constexpr float kSnowCrest = 0.6_mm;
-constexpr float kSnowDrop = 5_mm;
 constexpr float kDigitsBaseline = -1.15_mm;
 constexpr float kDigitsHeight = 5_mm;
 constexpr float kDigitsMaxWidth = 12.2_mm;
 
-constexpr int kFlakeCount = 40;
-constexpr int kBackFlakeCount = 24;
-constexpr float kFlakeTimeConstant = 0.35f;
-constexpr float kSwayAmplitude = 2.5_mm;
-constexpr float kSwayRate = 1.7f;
-constexpr float kSwirl = 1.4f;
+constexpr float kStirTurbulence = 0.56f;
+constexpr float kShakeTurbulence = 0.001f;
+constexpr float kRollShare = 0.3f;
+constexpr float kTurnShare = 1;
+constexpr float kTightRadius = 6_cm;
+constexpr float kCoastTime = 0.7f;
+constexpr float kGripGain = 2;
+constexpr float kStirSpin = 2.2f;
+constexpr float kMaxSpin = 6;
+constexpr float kTurbulenceTimeConstant = 2;
+constexpr float kRestingSpin = 0.05f;
+constexpr float kRestingTurbulence = 0.03f;
+constexpr float kCalmTimeRate = 0.2f;
+constexpr float kTurbulentTimeRate = 4;
 constexpr float kMaxImpulse = 45_mm;
-constexpr float kLiquidLag = 0.3f;
 constexpr float kMaxStep = 1 / 30.f;
+constexpr float kLightSpeed = 1.25f;
 
-constexpr SkColor4f kSkyTopLit = "#3f77a6"_color4f;
-constexpr SkColor4f kSkyBottomLit = "#9cc5e0"_color4f;
-constexpr SkColor4f kSkyTopDim = "#8b949b"_color4f;
-constexpr SkColor4f kSkyBottomDim = "#a9b0b5"_color4f;
-constexpr SkColor4f kSnowCrestLit = "#ffffff"_color4f;
-constexpr SkColor4f kSnowFootLit = "#b7cde2"_color4f;
-constexpr SkColor4f kSnowCrestDim = "#d3d7da"_color4f;
-constexpr SkColor4f kSnowFootDim = "#b4b9bd"_color4f;
-constexpr SkColor4f kDigitsTopLit = "#2c4a63"_color4f;
-constexpr SkColor4f kDigitsBottomLit = "#162736"_color4f;
-constexpr SkColor4f kDigitsTopDim = "#5d656c"_color4f;
-constexpr SkColor4f kDigitsBottomDim = "#484f55"_color4f;
-constexpr SkColor4f kFlakeLit = "#ffffff"_color4f;
-constexpr SkColor4f kFlakeDim = "#e3e6e8"_color4f;
+constexpr SkColor4f kDigitsTopLit = "#21384a"_color4f;
+constexpr SkColor4f kDigitsBottomLit = "#111d29"_color4f;
+constexpr SkColor4f kDigitsTopDim = "#d5dce4"_color4f;
+constexpr SkColor4f kDigitsBottomDim = "#a4aebb"_color4f;
 constexpr SkColor4f kGlassTint = "#0b3444"_color4f;
 constexpr SkColor4f kGlassRim = "#06202c"_color4f;
 constexpr SkColor4f kCoolLight = "#d7ecff"_color4f;
@@ -299,105 +329,77 @@ constexpr SkColor4f kReflectedLight = "#e0c0ac"_color4f;
 constexpr SkColor4f kBrassReflection = "#e3b055"_color4f;
 constexpr SkColor4f kBrassShade = "#2a1200"_color4f;
 
-static float BankHeight(float x) {
-  float t = x / kSceneRadius;
-  return kSnowCrest - kSnowDrop * t * t;
-}
-
-static float FallSpeed(float flake_radius) {
-  return 5_mm + 4_mm * (flake_radius - 0.22_mm) / 0.28_mm;
-}
-
 static ui::Font& DigitsFont() {
   static std::unique_ptr<ui::Font> font =
       ui::Font::MakeV2(ui::Font::MakeWeightVariation(ui::Font::GetNotoSans(), 800), kDigitsHeight);
   return *font;
 }
 
-static void DrawSky(SkCanvas& canvas, float light) {
-  SkPoint pts[] = {kSceneBounds.TopCenter(), Vec2(0, kSnowCrest)};
-  SkColor4f colors[] = {color::MixColors(kSkyTopDim, kSkyTopLit, light),
-                        color::MixColors(kSkyBottomDim, kSkyBottomLit, light)};
-  SkPaint paint;
-  paint.setShader(SkShaders::LinearGradient(
-      pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
-  canvas.drawPaint(paint);
+static sk_sp<SkRuntimeEffect>& FluidShader() {
+  Status status;
+  static auto effect = resources::CompileShader(embedded::assets_rheoscopic_fluid_sksl, status);
+  if (!OK(status)) {
+    FATAL << status;
+  }
+  return effect;
 }
 
-struct Flake {
-  Vec2 position;
-  Vec2 velocity;
-  float radius;
-  SinCos sway;
-  bool resting = true;
+struct Liquid {
+  Vec2 seed;
+  bool clockwise = false;
+  SkV3 right = {1, 0, 0};
+  SkV3 up = {0, 1, 0};
+  SkV3 angular_velocity = {0, 0, 0};
+  float turbulence = 0;
+  float time = 0;
+
+  void Shake(float impulse, float d) {
+    turbulence = std::min(
+        1.f, turbulence + impulse * impulse / (kMaxImpulse * kMaxImpulse) / d * kShakeTurbulence);
+  }
+
+  bool Move(SkV3 rotation, float d) {
+    if (d > 0) {
+      SkV3 drive = rotation * (1 / d);
+      float rate = 1 / kCoastTime + drive.length() * kGripGain;
+      angular_velocity += (drive - angular_velocity) * (1 - expf(-d * rate));
+    }
+    float spin = angular_velocity.length();
+    if (spin > kMaxSpin) {
+      angular_velocity = angular_velocity * (kMaxSpin / spin);
+      spin = kMaxSpin;
+    }
+    if (spin < kRestingSpin && turbulence < kRestingTurbulence) return false;
+    SkM44 step = SkM44::Rotate(angular_velocity, spin * d);
+    SkV4 new_right = step.map(right.x, right.y, right.z, 0);
+    SkV4 new_up = step.map(up.x, up.y, up.z, 0);
+    right = SkV3{new_right.x, new_right.y, new_right.z}.normalize();
+    up = SkV3{new_up.x, new_up.y, new_up.z};
+    up = (up - right * right.dot(up)).normalize();
+    time += d * (kCalmTimeRate + kTurbulentTimeRate * turbulence);
+    turbulence *= expf(-d / kTurbulenceTimeConstant);
+    return true;
+  }
+
+  void Draw(SkCanvas& canvas, float light) const {
+    SkRuntimeEffectBuilder builder(FluidShader());
+    builder.uniform("iCenter") = kBallCenter;
+    builder.uniform("iRadius") = kSceneRadius;
+    builder.uniform("iSeed") = seed;
+    builder.uniform("iClockwise") = clockwise ? 1.f : -1.f;
+    SkV3 orientation[3] = {right, up, right.cross(up)};
+    builder.uniform("iOrientation") = orientation;
+    builder.uniform("iTime") = time;
+    builder.uniform("iTurbulence") = turbulence;
+    builder.uniform("iLight") = light;
+    SkPaint paint;
+    paint.setShader(builder.makeShader());
+    canvas.drawPaint(paint);
+  }
 };
 
-static void DrawFlakes(SkCanvas& canvas, std::span<const Flake> flakes, float scale, float alpha,
-                       float light) {
-  SkPaint paint;
-  paint.setAntiAlias(true);
-  SkColor4f color = color::MixColors(kFlakeDim, kFlakeLit, light);
-  color.fA = alpha;
-  paint.setColor4f(color);
-  for (auto& flake : flakes) {
-    if (flake.resting) continue;
-    canvas.drawCircle(flake.position, flake.radius * scale, paint);
-  }
-}
-
-static void DrawBank(SkCanvas& canvas, float light) {
-  static const SkPath bank = [] {
-    SkPathBuilder path;
-    path.moveTo(-kSceneRadius, kSnowCrest - kSnowDrop);
-    path.quadTo({0, kSnowCrest + kSnowDrop}, {kSceneRadius, kSnowCrest - kSnowDrop});
-    path.lineTo(kSceneBounds.BottomRightCorner());
-    path.lineTo(kSceneBounds.BottomLeftCorner());
-    path.close();
-    return path.detach();
-  }();
-  SkPoint pts[] = {Vec2(-2_mm, kSnowCrest), Vec2(2_mm, kSnowCrest - kSnowDrop)};
-  SkColor4f colors[] = {color::MixColors(kSnowCrestDim, kSnowCrestLit, light),
-                        color::MixColors(kSnowFootDim, kSnowFootLit, light)};
-  SkPaint paint;
-  paint.setAntiAlias(true);
-  paint.setShader(SkShaders::LinearGradient(
-      pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
-  canvas.drawPath(bank, paint);
-}
-
-static void DrawDigits(SkCanvas& canvas, StrView digits, float width, float light) {
-  if (digits.empty()) return;
-  auto& font = DigitsFont();
-  float scale = std::min(1.f, kDigitsMaxWidth / width);
-  SkColor4f bottom = color::MixColors(kDigitsBottomDim, kDigitsBottomLit, light);
-  SkColor4f top = color::MixColors(kDigitsTopDim, kDigitsTopLit, light);
-
-  Rect shadow_bounds =
-      Rect::MakeCenter({0.25_mm, kDigitsBaseline - 0.05_mm}, width * scale + 1_mm, 0.9_mm);
-  SkColor4f shadow_colors[] = {bottom.withAlpha(0.4f), bottom.withAlpha(0)};
-  SkMatrix shadow_matrix = SkMatrix::RectToRect(Rect::MakeCircleR(1), shadow_bounds);
-  SkPaint shadow;
-  shadow.setAntiAlias(true);
-  shadow.setShader(SkShaders::RadialGradient(
-      {0, 0}, 1, SkGradient{SkGradient::Colors{shadow_colors, SkTileMode::kClamp}, {}},
-      &shadow_matrix));
-  canvas.drawOval(shadow_bounds, shadow);
-
-  SkPoint pts[] = {{0, 0}, {0, -kDigitsHeight / font.font_scale}};
-  SkColor4f colors[] = {bottom, top};
-  SkPaint paint;
-  paint.setAntiAlias(true);
-  paint.setShader(SkShaders::LinearGradient(
-      pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
-  canvas.save();
-  canvas.translate(-width * scale / 2, kDigitsBaseline);
-  canvas.scale(scale, scale);
-  font.DrawText(canvas, digits, paint);
-  canvas.restore();
-}
-
-static void DrawContents(SkCanvas& canvas, std::span<const Flake> flakes, StrView digits,
-                         float digits_width, float light) {
+static void DrawContents(SkCanvas& canvas, const Liquid& liquid, StrView digits, float digits_width,
+                         float light) {
   static const SkMatrix ball_to_layer =
       SkMatrix().setScale(kLensZoom, kLensZoom, kBallCenter.x, kBallCenter.y);
   static const SkMatrix layer_to_ball =
@@ -414,11 +416,24 @@ static void DrawContents(SkCanvas& canvas, std::span<const Flake> flakes, StrVie
   canvas.clipRRect(SkRRect::MakeOval(kWaterBounds.sk), true);
   canvas.concat(ball_to_layer);
   canvas.saveLayer(&kSceneBounds.sk, &lens);
-  DrawSky(canvas, light);
-  DrawFlakes(canvas, flakes.first(kBackFlakeCount), 0.55f, 0.7f, light);
-  DrawBank(canvas, light);
-  DrawDigits(canvas, digits, digits_width, light);
-  DrawFlakes(canvas, flakes.subspan(kBackFlakeCount), 0.7f, 0.95f, light);
+  liquid.Draw(canvas, light);
+  if (!digits.empty()) {  // Digits of the pid
+    auto& font = DigitsFont();
+    float scale = std::min(1.f, kDigitsMaxWidth / digits_width);
+    SkPoint pts[] = {{0, 0}, {0, -kDigitsHeight / font.font_scale}};
+    SkColor4f colors[] = {color::MixColors(kDigitsBottomDim, kDigitsBottomLit, light),
+                          color::MixColors(kDigitsTopDim, kDigitsTopLit, light)};
+    SkPaint paint;
+    paint.setAntiAlias(true);
+    paint.setShader(SkShaders::LinearGradient(
+        pts, SkGradient{SkGradient::Colors{colors, SkTileMode::kClamp}, {}}));
+    paint.setBlendMode(SkBlendMode::kHardLight);
+    canvas.save();
+    canvas.translate(-digits_width * scale / 2, kDigitsBaseline);
+    canvas.scale(scale, scale);
+    font.DrawText(canvas, digits, paint);
+    canvas.restore();
+  }
   canvas.restore();
   canvas.restore();
 }
@@ -428,23 +443,30 @@ struct ProcessToy : ObjectToy {
   float digits_width = 0;
   float light = 1;
   XorShift32 rng;
-  std::array<Flake, kFlakeCount> flakes;
+  Liquid liquid;
+  Knob knob;
   Vec2 last_position;
   Vec2 last_velocity;
+  std::unique_ptr<Toy> spear_tip;
 
   ProcessToy(ui::Widget* parent, Process& process) : ObjectToy(parent, process) {
     if (process.pid) {
       digits = f("{}", process.pid);
       digits_width = DigitsFont().MeasureText(digits);
     }
-    light = process.exited.load(std::memory_order_relaxed) ? 0 : 1;
+    bool exited = process.exited.load(std::memory_order_relaxed);
+    light = exited ? 0 : 1;
     rng.state = (U32)process.pid * 2654435761u | 1;
-    for (auto& flake : flakes) {
-      flake.radius = rng.RollFloat(0.22_mm, 0.5_mm);
-      flake.position.x = rng.RollFloat(-0.8f, 0.8f) * kSceneRadius;
-      flake.position.y = BankHeight(flake.position.x);
-      flake.sway = SinCos::FromDegrees(rng.RollFloat(0, 360));
+    liquid.seed = Vec2(rng.RollFloat(0, 100), rng.RollFloat(0, 100));
+    liquid.clockwise = rng.Roll() & 1;
+    if (process.pid && !exited) {
+      liquid.turbulence = kStirTurbulence;
+      liquid.angular_velocity = {0, 0, liquid.clockwise ? -kStirSpin : kStirSpin};
     }
+  }
+
+  void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override {
+    out_positions.push_back({.pos = kBallCenter, .dir = -90_deg});
   }
 
   bool CenteredAtZero() const override { return true; }
@@ -459,22 +481,23 @@ struct ProcessToy : ObjectToy {
                     SkPathDirection::kCW, {-junction_x, kRingTop});
       outline.arcTo({-kRingHalfWidth, kRingTop}, {-kRingHalfWidth, kRingBottom}, kRingCornerRadius);
       outline.arcTo({-kRingHalfWidth, kRingBottom}, {0, kRingBottom}, kRingCornerRadius);
-      outline.arcTo({-kBeadHalfWidth, kRingBottom}, {-kBeadHalfWidth, kBeadBottom}, kBeadRadius);
-      outline.arcTo({-kBeadHalfWidth, kBeadBottom}, {0, kBeadBottom}, kBeadRadius);
+      outline.lineTo(-kBeadHalfWidth + kBeadRadius, kRingBottom);
+      outline.arcTo({kBeadRadius, kBeadRadius}, 0, SkPathBuilder::kSmall_ArcSize,
+                    SkPathDirection::kCW, {-kBeadHalfWidth + kBeadRadius, kBeadBottom});
       outline.lineTo(-kNeckHalfWidth, kBeadBottom);
       outline.quadTo({-kNeckHalfWidth, kFilletTop}, {-kFilletHalfWidth, kFilletTop});
       outline.lineTo(-kFilletHalfWidth, kFilletBottom);
-      outline.arcTo({-kFootHalfWidth, kFilletBottom}, {-kFootHalfWidth, kBaseBottom},
-                    kFootShoulderRadius);
+      outline.arcTo({kFootShoulderRadius, kFootShoulderRadius}, 0, SkPathBuilder::kSmall_ArcSize,
+                    SkPathDirection::kCW, {-kFootHalfWidth, kFilletBottom - kFootShoulderRadius});
       outline.arcTo({-kFootHalfWidth, kBaseBottom}, {0, kBaseBottom}, kFootHeelRadius);
       outline.arcTo({kFootHalfWidth, kBaseBottom}, {kFootHalfWidth, kFilletBottom},
                     kFootHeelRadius);
       outline.arcTo({kFootHalfWidth, kFilletBottom}, {0, kFilletBottom}, kFootShoulderRadius);
-      outline.lineTo(kFilletHalfWidth, kFilletBottom);
       outline.lineTo(kFilletHalfWidth, kFilletTop);
       outline.quadTo({kNeckHalfWidth, kFilletTop}, {kNeckHalfWidth, kBeadBottom});
-      outline.arcTo({kBeadHalfWidth, kBeadBottom}, {kBeadHalfWidth, kRingBottom}, kBeadRadius);
-      outline.arcTo({kBeadHalfWidth, kRingBottom}, {0, kRingBottom}, kBeadRadius);
+      outline.lineTo(kBeadHalfWidth - kBeadRadius, kBeadBottom);
+      outline.arcTo({kBeadRadius, kBeadRadius}, 0, SkPathBuilder::kSmall_ArcSize,
+                    SkPathDirection::kCW, {kBeadHalfWidth - kBeadRadius, kRingBottom});
       outline.arcTo({kRingHalfWidth, kRingBottom}, {kRingHalfWidth, kRingTop}, kRingCornerRadius);
       outline.arcTo({kRingHalfWidth, kRingTop}, {0, kRingTop}, kRingCornerRadius);
       outline.close();
@@ -489,86 +512,61 @@ struct ProcessToy : ObjectToy {
     if (Position() != last_position) WakeAnimationAt(timer.now);
   }
 
-  void StirSnow() {
-    float swirl = rng.Roll() & 1 ? kSwirl : -kSwirl;
-    for (auto& flake : flakes) {
-      if (flake.resting) {
-        flake.resting = false;
-        flake.velocity = {rng.RollFloat(-12_mm, 12_mm), rng.RollFloat(14_mm, 34_mm)};
-      }
-      flake.velocity += Rotate90DegreesCounterClockwise(flake.position - kBallCenter) * swirl;
-    }
-  }
-
-  void ShakeSnow(Vec2 impulse) {
-    float strength = Length(impulse) / kMaxImpulse;
-    for (auto& flake : flakes) {
-      if (!flake.resting) {
-        flake.velocity += impulse * kLiquidLag;
-      } else if (rng.RollFloat(0, 1) < strength) {
-        flake.resting = false;
-        flake.velocity =
-            impulse * kLiquidLag + Vec2(0, Length(impulse) * rng.RollFloat(0.6f, 1.2f));
-      }
-    }
-  }
-
-  bool MoveFlakes(float d) {
-    bool moved = false;
-    float approach = std::min(1.f, d / kFlakeTimeConstant);
-    for (auto& flake : flakes) {
-      if (flake.resting) continue;
-      moved = true;
-      flake.sway = flake.sway + SinCos::FromRadians(d * kSwayRate);
-      Vec2 terminal = {kSwayAmplitude * (float)flake.sway.sin, -FallSpeed(flake.radius)};
-      flake.velocity += (terminal - flake.velocity) * approach;
-      flake.position += flake.velocity * d;
-      Vec2 offset = flake.position - kBallCenter;
-      float limit = kSceneRadius - flake.radius;
-      if (LengthSquared(offset) > limit * limit) {
-        Vec2 normal = Normalize(offset);
-        flake.position = kBallCenter + normal * limit;
-        flake.velocity -= normal * std::max(0.f, Dot(flake.velocity, normal));
-      }
-      float bank = BankHeight(flake.position.x);
-      if (flake.position.y <= bank && flake.velocity.y <= 0) {
-        flake.position.y = bank;
-        flake.resting = true;
-      }
-    }
-    return moved;
-  }
-
   Tock Tick(time::Timer& timer) override {
+    Tock tock;
+    auto process = LockObject<Process>();
+    if (process) {
+      if (iconified || !process->mem_meld.IsExpired()) {
+        spear_tip.reset();
+      } else if (!spear_tip) {
+        spear_tip = MakeSpearTip(this);
+        if (spear_tip) {
+          spear_tip->shadow_elevation = 1_mm;
+          layers.OrderBelow(spear_tip.get());
+        }
+      }
+    }
     float d = std::min<float>(timer.d, kMaxStep);
     bool exited = true;
-    if (auto process = LockObject<Process>()) {
+    if (process) {
       exited = process->exited.load(std::memory_order_relaxed);
     }
     Vec2 position = Position();
-    if (last_tick == time::SteadyPoint::min()) {
-      last_position = position;
-      if (!digits.empty() && !exited) StirSnow();
-    }
+    if (last_tick == time::SteadyPoint::min()) last_position = position;
     bool moved = position != last_position;
+    SkV3 rotation = {0, 0, 0};
+    if (moved) {
+      Vec2 step = position - last_position;
+      knob.Update(position);
+      float straightness = 1 / (1 + kTightRadius / knob.radius);
+      rotation = SkV3{-step.y, step.x, 0} * (kRollShare / kBallRadius * straightness);
+      if (!isinf(knob.radius)) {
+        SinCos turn = SinCos::FromVec2(position - knob.center) -
+                      SinCos::FromVec2(last_position - knob.center);
+        rotation.z += turn.ToRadians() * kTurnShare;
+      }
+    }
     Vec2 velocity = timer.d > 0 ? (position - last_position) / timer.d : last_velocity;
-    ShakeSnow(LimitLength(last_velocity - velocity, kMaxImpulse));
+    if (d > 0) {
+      liquid.Shake(std::clamp(Length(last_velocity) - Length(velocity), -kMaxImpulse, kMaxImpulse),
+                   d);
+    }
     last_position = position;
     last_velocity = velocity;
 
-    Tock tock;
     tock.ing |= moved;
-    tock.drawing |= animation::LinearApproach(exited ? 0 : 1, d, 2.5f, light);
-    tock.drawing |= MoveFlakes(d);
+    tock.drawing |= animation::LinearApproach(exited ? 0 : 1, d, kLightSpeed, light);
+    tock.drawing |= liquid.Move(rotation, d);
     return tock;
   }
 
   static inline RasterPatch glass_patch;
+  static inline RasterPatch caustic_patch;
   static inline RasterPatch shadow_patch;
   static inline RasterPatch gloss_patch;
   static inline RasterPatch ring_patch;
 
-  static void DrawGlass(SkCanvas& canvas) {
+  static void DrawGlass(SkCanvas& canvas, float light) {
     glass_patch.DrawCached(canvas, kBallBounds, SkISize(192, 192), [](SkCanvas& canvas) {
       SkColor4f tint_colors[] = {kGlassTint.withAlpha(0), kGlassTint.withAlpha(0),
                                  kGlassTint.withAlpha(0.22f), kGlassRim.withAlpha(0.75f)};
@@ -630,13 +628,21 @@ struct ProcessToy : ObjectToy {
           contact_pts, SkGradient{SkGradient::Colors{contact_colors, SkTileMode::kClamp}, {}}));
       canvas.drawRect(contact_bounds, contact_shadow);
 
-      SkPaint caustic;
-      caustic.setColor4f(SkColors::kWhite.withAlpha(0.6f));
-      caustic.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.7_mm));
-      canvas.drawOval(Rect::MakeCenter({4.8_mm, -4_mm}, 7.5_mm, 1.5_mm), caustic);
-
       return SkPath::Circle(kBallCenter.x, kBallCenter.y, kBallRadius);
     });
+
+    SkPaint caustic;
+    caustic.setAlphaf(light);
+    caustic_patch.DrawCached(
+        canvas, Rect::MakeCenter({4.8_mm, -4_mm}, 12_mm, 6_mm), SkISize(96, 48),
+        [](SkCanvas& canvas) {
+          SkPaint paint;
+          paint.setColor4f(SkColors::kWhite.withAlpha(0.6f));
+          paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.7_mm));
+          canvas.drawOval(Rect::MakeCenter({4.8_mm, -4_mm}, 7.5_mm, 1.5_mm), paint);
+          return SkPath();
+        },
+        &caustic);
 
     static const SkPaint rim = [] {
       SkColor4f colors[] = {kGlassRim.withAlpha(0.6f),  kGlassRim.withAlpha(0.4f),
@@ -857,12 +863,27 @@ struct ProcessToy : ObjectToy {
   }
 
   void Draw(SkCanvas& canvas) const override {
-    DrawContents(canvas, flakes, digits, digits_width, light);
-    DrawGlass(canvas);
+    DrawContents(canvas, liquid, digits, digits_width, light);
+    DrawGlass(canvas, light);
     DrawBase(canvas, shape);
     DrawRing(canvas, shape);
   }
 };
+
+constinit ObjectSource::Table kMakeMemMeld = [] {
+  ObjectSource::Table t("MemMeld");
+  t.cursor = ui::Cursor::Copy;
+  t.take = [](ObjectSource self) { return AttachMemMeld(static_cast<Process&>(*self.object_ptr)); };
+  t.activate = [](Span<Interface> chain, ui::Pointer& pointer,
+                  Toy* toy) -> std::unique_ptr<Action> {
+    auto* globe = dynamic_cast<ProcessToy*>(toy ? toy->parent.Get() : nullptr);
+    if (!globe || !globe->spear_tip) return nullptr;
+    auto mem_meld = cast<ObjectSource>(chain.back()).Take();
+    globe->spear_tip->SetOwner(*mem_meld, mem_meld->monitor);
+    return DragNew(pointer, std::move(mem_meld), std::move(globe->spear_tip));
+  };
+  return t;
+}();
 
 std::unique_ptr<ObjectToy> Process::MakeToy(ui::Widget* parent) {
   return std::make_unique<ProcessToy>(parent, *this);

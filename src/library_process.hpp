@@ -8,6 +8,7 @@
 
 #include "base.hpp"
 #include "int.hpp"
+#include "object_source.hpp"
 #include "str.hpp"
 
 namespace automat::library {
@@ -15,10 +16,11 @@ namespace automat::library {
 struct Process : Object {
   struct Watch;
 
-  I64 pid = 0;
+  I64 pid = 0;  // TODO: track with pidfd instead
   Str start_time;
   std::atomic<bool> exited = false;
   Watch* watch = nullptr;
+  WeakPtr<Object> mem_meld;
 
   Process() = default;
   Process(I64 pid);
@@ -33,5 +35,7 @@ struct Process : Object {
   bool DeserializeKey(ObjectDeserializer&, StrView key) override;
   void OnUnsuspend() override;
 };
+
+extern ObjectSource::Table kMakeMemMeld;
 
 }  // namespace automat::library

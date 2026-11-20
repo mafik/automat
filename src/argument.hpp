@@ -98,6 +98,10 @@ struct Argument : Interface {
       return nullptr;
     };
 
+    std::unique_ptr<ArgumentToy> (*make_toy)(Argument, ui::Widget* parent) = nullptr;
+    void (*destroy_toy)(Argument, std::unique_ptr<automat::Toy>) =
+        [](Argument, std::unique_ptr<automat::Toy>) {};
+
     static std::unique_ptr<ui::Widget> DefaultMakeIcon(Interface, ui::Widget* parent);
     static std::unique_ptr<Action> DefaultActivate(Span<Interface>, ui::Pointer&, automat::Toy*);
 
@@ -131,6 +135,16 @@ struct Argument : Interface {
         is_connected = [](Argument self) { return static_cast<ImplT&>(self).OnIsConnected(); };
       if constexpr (requires { &ImplT::MakePrototype; })
         prototype = []() { return ImplT::MakePrototype(); };
+      if constexpr (requires(ImplT& i, ui::Widget* p) { i.OnMakeToy(p); })
+        make_toy = [](Argument self, ui::Widget* p) -> std::unique_ptr<ArgumentToy> {
+          return static_cast<ImplT&>(self).OnMakeToy(p);
+        };
+      if constexpr (requires(ImplT& i, std::unique_ptr<automat::Toy> t) {
+                      i.OnDestroyToy(std::move(t));
+                    })
+        destroy_toy = [](Argument self, std::unique_ptr<automat::Toy> toy) {
+          static_cast<ImplT&>(self).OnDestroyToy(std::move(toy));
+        };
     }
   };
 
@@ -230,7 +244,8 @@ struct ArgumentToy : Toy {
   std::unique_ptr<ui::Widget> prototype_ghost;
 
   ArgumentToy(ui::Widget* parent, Object& owner, Argument::Table& table)
-      : Toy(parent, owner, &table, table.monitor(Argument(owner, table))) {}
+      : Toy(parent, owner, &table,
+            &owner == &dead_object ? owner.monitor : table.monitor(Argument(owner, table))) {}
 
   Ptr<Location> StartLocation() const;
   Ptr<Location> EndLocation() const;

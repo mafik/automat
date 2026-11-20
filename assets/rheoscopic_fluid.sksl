@@ -1,0 +1,162 @@
+// kind=shader
+
+// Warning: coded with a stochastic parrot
+
+uniform float2 iCenter;
+uniform float iRadius;
+uniform float2 iSeed;
+uniform float iClockwise;
+uniform float3x3 iOrientation;
+uniform float iTime;
+uniform float iTurbulence;
+uniform float iLight;
+
+const float kTwist = 1.2;
+const float kTau = 6.2832;
+const float kPi = 3.1416;
+const float kTurn = 1.2;
+const float kCoarse = 5.0;
+const float kFine = 12.5;
+const float kWisps = 25.0;
+const float kFibers = 70.0;
+const float kEddyDistance = 0.55;
+const float2 kLight = float2(-0.7071, 0.7071);
+
+const float3 kDeepLit = float3(0.12, 0.38, 0.72);
+const float3 kGapLit = float3(0.19, 0.5, 0.82);
+const float3 kPearlLit = float3(0.93, 0.96, 1.0);
+const float3 kMilk = float3(0.72, 0.84, 0.95);
+const float3 kGapDark = float3(0.012, 0.018, 0.04);
+const float3 kStreakDark = float3(0.17, 0.22, 0.33);
+
+float hash(float2 p) {
+  float3 p3 = fract(float3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+
+float hash3(float3 p) {
+  float3 p3 = fract(p * 0.1031);
+  p3 += dot(p3, p3.zyx + 31.32);
+  return fract((p3.x + p3.y) * p3.z);
+}
+
+float noise(float3 p) {
+  float3 i = floor(p);
+  float3 f = fract(p);
+  float3 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  float a = hash3(i);
+  float b = hash3(i + float3(1, 0, 0));
+  float c = hash3(i + float3(0, 1, 0));
+  float d = hash3(i + float3(1, 1, 0));
+  float e = hash3(i + float3(0, 0, 1));
+  float g = hash3(i + float3(1, 0, 1));
+  float h = hash3(i + float3(0, 1, 1));
+  float k = hash3(i + float3(1, 1, 1));
+  float front = mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+  float back = mix(mix(e, g, u.x), mix(h, k, u.x), u.y);
+  return mix(front, back, u.z) * 2.0 - 1.0;
+}
+
+float periodicNoise(float x, float period, float seed) {
+  float i = floor(x);
+  float f = fract(x);
+  float u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  float a = hash(float2(mod(i, period), seed));
+  float b = hash(float2(mod(i + 1.0, period), seed));
+  return mix(a, b, u) * 2.0 - 1.0;
+}
+
+float3 rotateAround(float3 p, float3 axis, float angle) {
+  float s = sin(angle);
+  float c = cos(angle);
+  return p * c + cross(axis, p) * s + axis * dot(axis, p) * (1.0 - c);
+}
+
+float meander(float3 m, float3 seed) {
+  float3 drift = float3(0.13, -0.09, 0.07) * iTime;
+  float value = 0.3 * noise(m * 1.1 + seed) + 0.08 * noise(m * 2.4 + seed.yzx);
+  value += 0.025 * noise(m * 5.0 + seed + drift);
+  value += iTurbulence * (0.25 * noise(m * 3.5 + seed.zxy + drift) + 0.12 * noise(m * 7.5 + seed - drift));
+  return value;
+}
+
+half4 main(float2 p) {
+  float2 q = (p - iCenter) / iRadius;
+  float r = length(q);
+  float3 front = normalize(float3(q, sqrt(max(0.0, 1.0 - dot(q, q)))));
+  float3 position = front * iOrientation;
+  float3 seed = float3(iSeed, iSeed.x - iSeed.y);
+
+  float eyeDirection = kTau * hash(iSeed);
+  float eyeRadius = mix(0.15, 0.3, hash(iSeed + 1.7));
+  float2 eyeSide = float2(cos(eyeDirection), sin(eyeDirection));
+  float eyeDepth = sqrt(1.0 - eyeRadius * eyeRadius);
+  float3 axis = float3(eyeRadius * eyeSide, eyeDepth);
+  float3 across = float3(eyeDepth * eyeSide, -eyeRadius);
+  float3 around = float3(-eyeSide.y, eyeSide.x, 0.0);
+
+  float eddyDirection = eyeDirection + 3.1416 + 1.2 * (hash(iSeed + 3.1) - 0.5);
+  float2 eddySide = float2(cos(eddyDirection), sin(eddyDirection));
+  float eddyDepth = sqrt(1.0 - kEddyDistance * kEddyDistance);
+  float3 eddy = float3(kEddyDistance * eddySide, eddyDepth);
+  float3 eddyAcross = float3(eddyDepth * eddySide, -kEddyDistance);
+  float3 eddyAround = float3(-eddySide.y, eddySide.x, 0.0);
+
+  float height = dot(position, axis);
+  float angle = acos(clamp(height, -1.0, 1.0));
+  float2 v = float2(dot(position, across), dot(position, around));
+  float3 base = rotateAround(position, axis, -iClockwise * kTwist / (angle + 0.25));
+  float2 twisted = float2(dot(base, across), dot(base, around));
+  float2 stretched = twisted * (angle / max(length(twisted), 1e-4));
+  stretched.y *= mix(1.0, 1.35, smoothstep(-1.0, 0.2, height));
+  float flow = meander(base, seed);
+
+  float3 fromEddy = position - eddy;
+  float3 toEddy = float3(dot(fromEddy, eddyAcross) / 0.2, dot(fromEddy, eddyAround) / 0.4, dot(fromEddy, eddy) / 0.2);
+  float rings = length(stretched) + 0.42 * exp(-dot(toEddy, toEddy)) + flow;
+  float psi = rings - iClockwise * kTurn * atan(v.y, v.x) / kTau;
+
+  float2 dqx = dFdx(q);
+  float2 dqy = dFdy(q);
+  float3 dax = dFdx(position);
+  float3 day = dFdy(position);
+  float spiral = -iClockwise * kTurn / kTau / max(dot(v, v), 1e-4);
+  float dpx = dFdx(rings) + spiral * (v.x * dot(dax, around) - v.y * dot(dax, across));
+  float dpy = dFdy(rings) + spiral * (v.x * dot(day, around) - v.y * dot(day, across));
+  float det = dqx.x * dqy.y - dqx.y * dqy.x;
+  float2 gradient = float2(dqy.y * dpx - dqx.y * dpy, dqx.x * dpy - dqy.x * dpx) / det;
+  float shear = length(gradient);
+  float2 normal = gradient / max(shear, 1e-4);
+  float calm = smoothstep(0.04, 0.2, angle) * smoothstep(0.04, 0.2, kPi - angle);
+  float sheen = mix(0.5, abs(dot(normal, kLight)), smoothstep(0.05, 0.4, shear) * calm);
+  float width = shear * (length(dqx) + length(dqy)) / max(calm, 0.01);
+
+  float profile = 0.65 * periodicNoise(psi * kCoarse, kCoarse * kTurn, iSeed.x) + 0.35 * periodicNoise(psi * kFine, kFine * kTurn, iSeed.y);
+  profile = mix(0.05, profile, calm);
+  float sheet = smoothstep(-0.12, 0.25, profile);
+  float feather = smoothstep(-0.4, -0.12, profile) * (1.0 - sheet);
+  float along = 0.25 + 0.75 * smoothstep(-0.6, 0.5, noise(base * 1.8 + seed.yzx));
+  float wispFade = clamp(1.6 - width * kWisps, 0.0, 1.0);
+  float wisps = smoothstep(0.0, 0.9, 0.6 * sin(kTau * kWisps * psi + 2.0 * noise(base * 2.0 + seed)) + 0.4 * sin(kTau * 1.6 * kWisps * psi + 2.0 * noise(base * 2.7 + seed.zxy)));
+  float fiberFade = clamp(1.4 - width * kFibers, 0.0, 1.0);
+  float fibers = (0.6 * sin(kTau * kFibers * psi + 1.5 * noise(base * 3.0 + seed.yzx)) + 0.4 * sin(kTau * 1.5 * kFibers * psi + 1.5 * noise(base * 3.5 + seed))) * fiberFade;
+  float wispy = (feather + sheet * (1.0 - along)) * mix(0.35, 0.2 + 0.4 * wisps, wispFade);
+  float body = sheet * along * (0.92 + 0.06 * fibers) + 0.5 * wispy;
+
+  float alignment = 0.3 + 0.7 * sheen * sheen;
+  float depth = smoothstep(0.55, 1.05, r);
+  float reflection = clamp(body * alignment + 0.02 * fibers, 0.0, 1.0);
+  reflection = mix(reflection, 0.22, 0.5 * depth);
+
+  float haze = noise(base * 1.1 + seed + 9.1);
+  float3 gap = mix(kDeepLit, kGapLit, smoothstep(-0.5, -0.1, profile));
+  float3 lit = mix(gap, kPearlLit, reflection);
+  float3 opal = 0.5 + 0.5 * cos(atan(normal.y, normal.x) * 2.0 + haze * 3.0 + float3(0.0, 2.1, 4.2));
+  lit += (opal - 0.5) * 0.13 * smoothstep(0.45, 0.95, reflection);
+  lit = mix(lit, kMilk, 0.14 * smoothstep(-0.2, 0.8, haze));
+  lit *= (0.95 + 0.05 * haze) * (1.0 - 0.22 * depth);
+  float3 dark = mix(kGapDark, kStreakDark, reflection * reflection);
+  dark *= 1.0 - 0.4 * depth;
+  return half4(half3(mix(dark, lit, iLight)), 1);
+}

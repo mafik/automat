@@ -267,6 +267,8 @@ struct Object : public ReferenceCounted {
   Ptr<Location> HomeLocation();
 };
 
+extern Object& dead_object;
+
 extern ToC& global_toc;
 
 struct SetToc {

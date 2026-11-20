@@ -27,11 +27,17 @@ The event loop thread is responsible for receiving and responding to the OS even
 
 The render thread is responsible for smooth *rendering* of the UI. This is done by a an algorithm that analyzes the tree of widgets and selectively choses which widgets to render in the next frame and which ones should be rendered in the background. Some diagrams of the algorithm (called "Frame Packing") can be found [here](https://www.tldraw.com/ro/3d97dFMiuM0MLgqyyP0SG?d=v0.0.1369.751.oabcxxQj34hFXH8A6_75W).
 
-## Worker threads (TODO)
+## Worker threads
 
-Objects execute their code directly on the thread that they have been invoked on. They may also follow with the execution of the next object, reusing their current thread. Any side tasks should be put on the task queue, to be executed by worker threads. This avoids the use of extra threads for simple jobs and makes their execution more deterministic. The control of when to execute the next task immediately vs when to defer it to task queue should be controlled by the user (although specifics of how this may happen are not designed yet).
+Objects execute their code directly on the thread that they have been invoked on. They may also follow with the execution of the next object, reusing their current thread. Any side tasks should be put on the task queue, to be executed by worker threads. This avoids the use of extra threads for simple jobs and makes their execution more deterministic.
 
-Currently Automat uses only one worker thread (called "Automat Loop") and doesn't exploit thread reuse. This is temporary and will change eventually as the need for more accurate thread control comes up.
+Worker threads should be used for compute-heavy jobs and should never sleep.
+
+Within Automat they will be visualized as hearts.
+
+## Helper threads
+
+Any thread that waits on a blocking OS API needs to be designed carefully and must be accompanied by a "HELPER THREAD:" comment with an explanation as to why it's not possible to use Worker threads (+ epoll) for it.
 
 ## Tasks (TODO)
 

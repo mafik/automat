@@ -963,7 +963,9 @@ std::unique_ptr<Action> ClientWindow::process_Impl::OnActivate(ui::Pointer& poin
 }
 
 std::unique_ptr<ui::Widget> ClientWindow::process_Impl::OnMakeIcon(ui::Widget* parent) {
-  return prototypes->Find<Process>()->MakeToy(parent);
+  auto toy = prototypes->Find<Process>()->MakeToy(parent);
+  toy->iconified = true;
+  return toy;
 }
 
 Ptr<Launch> LaunchClone(const ClientWindow& original, ClientWindow& clone) {

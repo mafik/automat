@@ -427,6 +427,11 @@ ui::Tock RootWidget::Tick(time::Timer& timer) {
 
   if (tock.ing) {
     for (auto& each_pointer : pointers) {
+      for (auto& action : each_pointer.actions) {
+        if (action) {
+          action->Update();
+        }
+      }
       each_pointer.UpdatePath();
     }
   }

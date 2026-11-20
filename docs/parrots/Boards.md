@@ -43,8 +43,10 @@ Each board widget has its own ToyScope, which guarantees one widget per object o
 directly through a unique_ptr, together with an owning Ptr to the object. ToyScope is one way
 of managing widget lifetimes and is used only where the one-widget constraint must be
 enforced. Toys that a widget creates for its own subtree — a Wayland window's client surface
-toys, for example — are owned by the parent toy directly and never enter a scope, so they
-move between boards together with the widget tree.
+toys, for example — are owned by the parent toy directly, so they move between boards together
+with the widget tree. Such a toy enters a scope only when it is handed over to the board: the
+shaft of a MemMeld is made by its spear tip and enters the scope of a board while the board
+holds it (`docs/parrots/Mem Meld.md`).
 
 One resident widget per object per board is a deliberate limit:
 
@@ -76,7 +78,15 @@ There are three drag modes:
 1. **Board-owned move.** The widget stays owned by the board and follows the drag. It is not
    reparented to the pointer. The object's connections stay drawn.
 2. **Extraction.** The board removes the object. The pointer takes the owning reference and
-   the widget. The object's connections on that board stop being drawn.
+   the widget (`DragLocationAction::Extract`, src/drag_action.cpp). The board's scope gives up the
+   toys of the object's arguments and passes each to the `destroy_toy` entry of its
+   `Argument::Table` (src/argument.hpp). The default destroys the toy, and an argument whose toy
+   belongs to the toy of its object stores it there in its `OnDestroyToy`. The toy of an argument
+   is therefore owned by the toy that the argument chooses and never by `LocationWidget`, and the
+   table needs only one entry for the way into a board (`make_toy`) and one for the way out
+   (`destroy_toy`). A connection whose end object leaves the board keeps its toy in the board's
+   scope, and that toy hides itself while its end has no widget (`TickVisibility`,
+   src/ui_connection_widget.cpp). The object's connections on that board stop being drawn.
 3. **Duplication.** The pointer receives a new widget for the object and an additional owning
    reference. The source board keeps its resident widget and its connections.
 
@@ -85,10 +95,12 @@ The mode changes during the drag:
 - A board-owned move that crosses the edge of its board becomes an extraction. The same
   happens when the drag point moves into the black hole or another screen-space overlay.
 - A pointer-owned object over a board that does not own it converts immediately into a
-  board-owned move on that board: the board takes the ownership and the widget. The conversion
-  happens at entry rather than at drop so that the object's connections appear while the drag
-  is still in progress. In particular, dragging an object out of a board and back in restores
-  its connections at re-entry.
+  board-owned move on that board: the board takes the ownership and the widget
+  (`DragLocationAction::GiveToBoard`), and `BoardWidget::Tick` asks for the toys of the object's
+  arguments through `Argument::MakeToy` as for every argument. The conversion happens at entry
+  rather than at drop so that the object's connections appear while the drag is still in
+  progress. In particular, dragging an object out of a board and back in restores its connections
+  at re-entry.
 - A pointer-owned object over a board that already owns it stays pointer-owned. Dropping it
   there is a merge (next section).
 

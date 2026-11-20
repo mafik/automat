@@ -102,9 +102,13 @@ one after it exits. Re-running replaces it, which is also what bounds the
 capture buffers: one run, one set of buffers, overwritten by the next run.
 The exit chip and the stdout meters read through this launch.
 
-The process of a launch is displayed as a snow globe, the toy of its Process
-object: its colors are lit while the process runs and dimmed after it exits.
-The Program Launcher plate embeds this toy at a small size. The dimmed globe
+The process of a launch is displayed as a globe filled with a rheoscopic fluid,
+the toy of its Process object: the fluid is sky blue while the process
+runs and goes dark after it exits.
+The Program Launcher plate embeds this toy at a small size. On Linux the globe
+on a board has a spear tip above the ball while no MemMeld object of its
+process exists, and grabbing the tip creates one (`Mem Meld.md`); the globe on the plate and the menu icon of a
+window's Process option are iconified and show no tip. The dark globe
 deliberately changes nothing beyond the display:
 matching does not depend on the launch's state, so a window
 arriving after the process ended — the nemo forward, a slow application —

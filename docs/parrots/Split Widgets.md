@@ -22,10 +22,13 @@ itself stays a single object: one parent, one `Tick`, one cached texture, one hi
 ## Terminology
 
 - **split widget** — a widget whose drawing is divided between screen regions with different
-  depths. Sync belts and connection cables are the current split widgets.
+  depths. Sync belts, connection cables and the shaft of a MemMeld are the current split widgets.
+  The shaft of a MemMeld is split through `ArgumentToy::TickSplits`, like the other connection
+  toys.
 - **cover** — a widget that is drawn over some region of a split widget. Example: the
   FlipFlop's rocker is the cover of the sync belt end that connects to the FlipFlop; a
-  location resting on a connection's endpoint is a cover of that connection.
+  location resting on a connection's endpoint is a cover of that connection; the toy of a Process
+  globe is the cover of the end of a MemMeld shaft that connects to it.
 - **`splits_under`, `splits_over`** — two lists present on every widget (src/widget.hpp) that
   store the relation from both sides. The `splits_under` list of a cover holds the split
   widgets drawn under it. The `splits_over` list of a split widget holds its covers.

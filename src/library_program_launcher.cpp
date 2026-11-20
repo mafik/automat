@@ -598,6 +598,7 @@ struct ProgramLauncherToy : ui::beta::ObjectToy {
       shown_launch_ = launch ? launch->AcquireWeakPtr() : WeakPtr<Launch>{};
       if (launch) {
         process_toy = launch->process->MakeToy(this);
+        process_toy->iconified = true;
         Rect bounds = process_toy->Shape().getBounds();
         float scale = kProcessHeight / bounds.Height();
         process_toy->local_to_parent =

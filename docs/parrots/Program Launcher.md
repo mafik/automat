@@ -67,8 +67,11 @@ Every state change is shown on two channels (the Beta rule):
   does not resolve to an executable (`$PATH` search, same rules as
   `execvp`), and RUN is gray and hatched. When it resolves, RUN turns green.
 - The run itself is a Launch object (`Launches.md`), and the plate's lower
-  right shows its Process object as a small snow globe with the process id
-  beside it, lit while the process runs and dimmed after it exits.
+  right shows its Process object as a small globe with the process id
+  beside it, filled with a sky-blue fluid while the process runs and
+  dark after it exits. This globe is iconified: it shows no spear tip, which
+  a globe on a board has on Linux while no MemMeld of its process exists
+  (`Mem Meld.md`).
   While the child runs the button is a red STOP; STOP means SIGTERM.
 - After exit, a chip in the lower-left corner reports the result: green
   `exit 0`, red `exit N`, or the signal name if the child died by signal.

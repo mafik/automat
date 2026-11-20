@@ -38,6 +38,7 @@ Object& Argument::ObjectOrMake() const {
 }
 
 std::unique_ptr<Argument::Toy> Argument::MakeToy(ui::Widget* parent) {
+  if (table->make_toy) return table->make_toy(*this, parent);
   switch (table->style) {
     case Style::Arrow:
       return std::make_unique<ui::ConnectionWidget>(parent, *object_ptr, *table);

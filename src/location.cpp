@@ -272,6 +272,14 @@ ui::Tock LocationWidget::Tick(time::Timer& timer) {
       // Bring our cached ObjectToy with us so it doesn't outlive the path back to RootWidget.
       if (toy && toy->parent == this) {
         toy->MarkDead(timer.now);
+        if (auto object = toy->LockOwner()) {
+          object->Each<Argument>([&](Argument arg) {
+            if (auto* argument_toy = ToyScope().FindOrNull(arg)) {
+              argument_toy->MarkDead(timer.now);
+            }
+            return LoopControl::Continue;
+          });
+        }
       }
       MarkDead(timer.now);
     }

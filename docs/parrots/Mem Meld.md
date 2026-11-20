@@ -3,7 +3,8 @@
 `MemMeld` (`src/mem_meld.hpp`, `src/mem_meld.cpp`) keeps a live copy of another
 Linux process's memory inside Automat so that later code reads and writes the target with plain
 loads and stores rather than a system call per access. It is a utility layer below Automat's object
-layer; the Process object that will present a remote process to the user is built on top of it.
+layer. The `library::MemMeld` object, described at the end of this document, attaches a mirror
+to the process of a Process object and is shown as a spear.
 
 ## Why a mirror instead of per-access system calls
 
@@ -473,3 +474,253 @@ and the memory of the translation tables follow the number of regions, not their
   regions that a guard returns.
 - A guard that is held for a long time keeps every record and tree node retired meanwhile
   allocated.
+
+## The MemMeld object and its spear
+
+`library::MemMeld` (`src/library_mem_meld.hpp`, `src/library_mem_meld.cpp`) is the Object that owns an
+`automat::MemMeld` and is shown as a spear that sticks out of the globe of its Process. The spear
+consists of two toys: the spear tip is the toy of the object (`MemMeldToy`), and the shaft is the toy
+of its argument `process` (`SpearShaft`). It is registered with `HideInToolbar`
+(`src/prototypes.cpp`), because a MemMeld is made by taking the tip from a globe. The spear exists
+only where `automat::MemMeld` is supported, at present Linux: on other platforms
+`MakeSpearTip` in `src/library_process.cpp` returns null and no globe shows a tip.
+
+### The object
+
+- The argument `process` is an `ObjectArgument<Process>`. Its state stores a weak pointer to the
+  Process. The serializer of the board saves it with the other connected arguments under the key
+  `links` (`src/object.cpp`), and loading connects it again (`src/persistence.cpp`), so the object
+  has no state of its own to save.
+- `Process::mem_meld` names the MemMeld of a process, and the globe reads it to decide whether it
+  holds a tip. It is written in one place: `process_Impl::OnConnect` records the MemMeld there when
+  the field is expired. A field that names a living MemMeld is kept, so a second MemMeld of the same
+  process cannot take the place of the first one. The globe decides whether it holds a tip in its
+  `Tick`, so `process_Impl::OnConnect` and the destructor of `MemMeld` call `WakeToys` on the
+  Process, which bumps the monitor that the globe observes.
+- One MemMeld exists per attachment: the object is made for one session of `automat::MemMeld`,
+  whose `Attach` is single-use. `Start` does its work at most once per object (`start_once`, a
+  `Once` from `src/once.hpp`, one atomic byte whose `First` is true only for the first caller).
+  `Start` returns at once: `attach_thread`, a `std::jthread` owned by the object, runs `Attach`
+  until the session ends.
+- `attach_thread` is the last data member, so it is destroyed first and joined while `process` and
+  `mem_meld` still exist, which the end of the thread function uses. The destructor of `MemMeld` calls
+  `Detach`, which returns after the target has its private memory back. Deleting the last owner of
+  the object therefore detaches the mirror.
+- The callbacks of `Start` (`on_attached`, `on_changed`, `on_mapped`) and the end of the thread
+  function call `WakeBothToys`: `WakeToys` bumps the monitor of the object, which the tip observes,
+  and `process->WakeToys` bumps the monitor of the argument, which the shaft observes.
+- Every failure of `Start` is reported with `ReportError` (no running Process, `pidfd_open`, a status
+  of `Attach` that is not OK), and the tip shows the error flames, which `ObjectToy::OnWake`
+  updates through `ObjectToy::UpdateErrorFlames`.
+- A copy (`Clone`, through the copy constructor) has the same target in `process` and nothing else.
+  It is not attached, and it is not recorded in `Process::mem_meld`, because the copy constructor
+  does not call `OnConnect`. A copy is started with its `start` Command. The Clone entry of the menu
+  gives the same object another owner (`docs/parrots/Boards.md`); it is the same MemMeld with
+  another Location.
+
+### The spear tip and the shaft
+
+- One visible thing is one widget for its whole life. The tip is the toy of the object, because the
+  same widget is shown on the globe behind the ball, through the drag and on the board. A grab
+  re-binds this widget to the MemMeld that the grab makes (`Toy::SetOwner`) instead of replacing it,
+  so there is exactly one tip in every frame.
+- The shaft is the toy of the argument, because it is what links the MemMeld to its Process. Where it
+  connects two toys on one board it is an ordinary connection toy of that board: made through
+  `Argument::MakeToy`, ordered by the board, split under its end points by `ArgumentToy::TickSplits`
+  and anchored at both ends. The `MemMeldToy` therefore stays small, and its shape is the outline of
+  the tip.
+- `MemMeldToy` has its origin at the apex of the tip (`CenteredAtZero`) and draws itself turned by
+  `turn` around the origin. Its `Shape` is the outline of the tip turned by `turn`; it is what the
+  pointer touches and what `ErrorFlames` and `LocationWidget` use. Its `DrawBounds` include the
+  bounds of the shaft while it holds the shaft, because the renderer does not visit the children of a
+  widget whose bounds lie outside the window, and a free shaft can reach back into the window.
+- `SpearShaft` has an empty `Shape`, so it does not react to the pointer: the MemMeld is grabbed by
+  its tip. Its `DrawnUnderEndpoints` is true.
+- The tip and the shaft are made together: the constructor of `MemMeldToy` makes its shaft and
+  orders it below itself. The shaft has a `MortalPtr` to its tip.
+
+### Who holds the shaft
+
+- The tip toy holds the shaft in `MemMeldToy::shaft` from construction until a board first asks for
+  the toy of the argument. Until then the shaft has the owner that the tip had at construction,
+  which is `dead_object` for a tip made by a globe.
+- `BoardWidget::Tick` asks for the toy of an argument with `toys.FindOrMake(arg, this)` when its end
+  is on the same board (`src/board.cpp`). `Argument::MakeToy` returns the result of `make_toy` when
+  the table sets it, and `process_Impl::OnMakeToy` hands over the existing shaft of the tip toy in
+  the same scope: it binds the shaft to the MemMeld of the argument with `Toy::SetOwner` and
+  reparents it to the board. `SetOwner` is called there because the `Tick` of the board runs before
+  the `Tick` of the tip, and the tip toy may have been re-bound from `dead_object` in the same
+  event that put it on the board.
+- The shaft has two owners: its tip toy (`MemMeldToy::shaft`) or the scope of a board. The toy of
+  the argument is owned by the specific toy `MemMeldToy`, not by `LocationWidget` or `ObjectToy`,
+  and the extra API stays minimal: `make_toy` handles the way into a board, and `destroy_toy`
+  handles the way out (`docs/parrots/Boards.md`).
+- When the Location of the MemMeld leaves a board, `DragLocationAction::Extract` takes the shaft out
+  of the scope and passes it to `destroy_toy`. `process_Impl::OnDestroyToy` stores it in the tip
+  that it belongs to (`SpearShaft::tip`), reparents it to the tip and orders it below the tip; when
+  the tip is gone the shaft is destroyed. While the tip holds the shaft, `MemMeldToy::OnPoll` polls
+  it.
+- When only the globe leaves the board, the shaft stays in the scope of the board and is drawn with
+  a free end. A spear on a board without its globe keeps its shaft in the tip, because that board
+  does not ask for the toy of the argument.
+- `SpearShaft::OnReparent` applies the fix, wakes the shaft and calls `RedrawThisFrame`, because a
+  board assigns the identity to its transform right after it takes the toy, so the texture that the
+  shaft drew in the coordinates of its previous parent must not be shown.
+- `SpearShaft::Tick` marks the shaft dead when its tip toy is gone. While the shaft is not a child of
+  its tip, its `alpha` is the alpha of the `LocationWidget` that holds the tip, the rule of ordinary
+  connection toys (`TickVisibility` in `src/ui_connection_widget.cpp`), so a spear whose Location is
+  deleted fades as one. A shaft that a board holds and whose MemMeld is gone returns after these
+  two steps and keeps its pose, its covers and its ranges, as `TickLifecycle` only fades a
+  connection toy whose start argument cannot be locked; without this the shaft would lose its
+  globe, because the end of a dead argument cannot be found, and would swing to the free pose while
+  it fades. A shaft that is a child of its tip always computes its pose, also in the dead state, in
+  which its owner is always expired.
+- `kVisibleWhenDisconnected` is false, so a board asks for the toy of the argument only while both
+  ends have a Location on it.
+
+### The tip on the globe
+
+- `dead_object` (`src/object.hpp`, `src/object.cpp`) is a global `Object` with no owning reference
+  and one weak reference. A `WeakPtr` taken from it is expired and cannot be locked, and its memory
+  is never released. The instance is `[[clang::no_destroy]]`, because its destructor would read
+  globals of `src/object_lifetime.cpp` that may be destroyed already, and toys may still hold weak
+  pointers to it. A toy constructed with `dead_object` as its owner is in the dead state: it has no
+  object, and its menu is empty, because `ObjectToy::FillMenu` adds nothing without an owner. The
+  dead state lets a toy exist without an object through the existing constructors of its class and
+  with a real monitor. The constructor of `ArgumentToy` (`src/argument.hpp`) takes the monitor of
+  the object itself for `dead_object`, because the dead object has no state of any argument.
+- While no MemMeld of the process exists (`Process::mem_meld` expired), a globe that is not
+  iconified holds a tip toy in the dead state in `ProcessToy::spear_tip`, made by
+  `MemMeld::MakeDeadToy` through `MakeSpearTip` (`src/library_process.cpp`). Its shaft is in the
+  dead state too. An iconified globe (the plate of a Program Launcher, the menu icon of a Process
+  option) and a globe whose process has a MemMeld hold no tip. `ProcessToy::Tick` makes the tip and
+  drops it. A toy in the dead state has no object to observe, so the globe does not poll it
+  (`ProcessToy` has no `OnPoll`).
+- The tip is ordered below the globe, so the shaft appears to come from behind the ball. The globe
+  assigns `1_mm` to the `shadow_elevation` of the tip once, when it makes the tip, because
+  on a board the `LocationWidget` assigns it to its toy, and the tip on the globe has no
+  `LocationWidget`.
+- The grab area of the tip on the globe is the outline of the tip. `MemMeldToy::FindOption` returns
+  the table `kMakeMemMeld` bound to the Process for the left button while the parent of the tip is
+  the toy of a Process. A right press opens the menu of the globe: the menu of the tip is empty, so
+  `Pointer::ButtonDown` (`src/pointer.cpp`) asks the parent.
+- `kMakeMemMeld` (declared in `src/library_process.hpp`, defined in `src/library_process.cpp`) is an
+  `ObjectSource::Table` with `Cursor::Copy`. Its `take` calls `AttachMemMeld`, which makes a
+  MemMeld, connects its `process` to the Process (`OnConnect` records it in `Process::mem_meld`) and
+  calls `Start`, so grabbing the tip attaches the mirror. Its `activate` receives the tip toy, finds
+  the globe as its parent, takes the MemMeld, re-binds the tip toy to it with `Toy::SetOwner` and
+  hands the MemMeld and the tip toy to `DragNew`.
+- A toy is given another owner only while no `ToyScope` stores it, because the key of a scope is the
+  owner. The tip on the globe is held by the globe and stored in no scope, so the take can re-bind
+  it.
+- After menu Delete of a MemMeld the tip toy and the shaft fade with their Location like every
+  other toy, and the globe makes a new tip in the dead state, which rises from behind the ball. A
+  Delete changes only the VM, so no widget gets a new parent at that moment, and a widget that is
+  moved between two subtrees during `Tick` can have two nodes in the tree of the renderer.
+- A drop into the black hole destroys the tip toy with the MemMeld, so the globe makes a new tip in
+  the dead state, which rises from behind the ball.
+- The position of the tip on the globe is a property of the spear, so the tip toy holds it and the
+  toy of the Process holds no property of another toy. While the parent of the tip is the toy of a
+  Process, `MemMeldToy::Tick` places the tip `spear_length` above the first of the
+  `ConnectionPositions` of its parent and animates the `Kinetic` value `spear_length`
+  (`SineTowards`, `kSpearLengthPeriod`) towards `kSpearLengthOnGlobe` (`src/library_mem_meld.cpp`).
+  A new tip starts at `kSpearHiddenLength`, where the tip is behind the ball. The globe only makes
+  and drops the tip, orders it below itself and assigns its `shadow_elevation`.
+
+### The geometry of the shaft
+
+`SpearShaft::Tick` owns the geometry of the spear. It is written as titled blocks.
+
+- The globe is the toy that holds the tip (the parent of the tip toy, when it is an `ObjectToy`
+  whose owner is a Process; a `LocationWidget` is also an `ObjectToy`, so the owner is tested), or
+  else, while `EndLocation` is not null, the toy of the Process in the scope of the tip toy. A globe
+  that was deleted keeps its toy in the scope while it fades, but it has no Location and does not
+  count.
+- The apex is the origin of the tip toy. The blunt end is the first of the
+  `ObjectToy::ConnectionPositions` of the globe (the centre of the ball, `ProcessToy`), and without a
+  globe it lies `kFreeLength` straight below the apex. The free shaft is kept because it is where the
+  memory is shown when the spear is not on the board of its globe.
+- While the board holds the shaft and a pointer holds the toy at one end, the end point is taken from
+  the pointer-bound texture anchor of that toy (`PositionOf`, with the anchor from `GrabAnchor`): it
+  is the place where the compositor draws that point, not the place that the transform of the toy
+  reports. `LocationWidget` moves a dragged toy towards the pointer with a spring, and the
+  compositor shifts its texture by the rest of the way; a shaft drawn towards the transform would
+  bend at the tip. While the shaft is a child of its tip, the shaft is drawn in the space of the tip
+  and moves with its texture, so the transform is used.
+- Length and direction are a base plus a remainder, the pattern of `SyncBelt`. `length` and
+  `degrees` are the base, assigned in every `Tick` from the two end points, so an end that the
+  pointer moves is never behind it. `length_deflection` and `degrees_deflection` are the remainder:
+  `Kinetic` values that decay towards zero with `SineTowards` (`kBluntEndLengthPeriod`,
+  `kBluntEndAnglePeriod`). The drawn spear uses the sums (`SpearLength`, `Direction`, `BluntEnd`).
+- When the spear gains or loses its globe (`had_globe`), the remainder takes up the difference
+  between the base of the last `Tick` and the current base. The apex stays where it is and the
+  blunt end swings between the ball and the free position. The first `Tick` sets no remainder, so a
+  loaded spear on its globe appears in place.
+- The shaft then turns its tip: it writes `tip->turn`, and when the value changed it calls
+  `RedrawThisFrame` and wakes the tip toy. Render jobs are chosen after every `Tick` of the frame, so
+  the tip is drawn with the angle of the shaft in the same frame. `MemMeldToy::Tick` returns
+  `Tock::Shape`, so the shape of the tip follows the turn.
+- `hidden` is the part of the shaft that the globe covers: `Raycast` on `globe->shape` from outside
+  the globe towards the blunt end finds where the shaft leaves the outline, plus `kHiddenMargin`.
+  Without a globe it is 0. It is used only by `Draw`, as the place where the address pattern starts.
+
+### Texture anchors and covers
+
+- While the shaft is a child of its tip, it has no texture anchors. A detached child without
+  anchors of its own takes the anchors of its parent (the anchor pass in `src/renderer.cpp`), so the
+  shaft is warped together with its tip. The blunt end has an anchor only while the board holds
+  the shaft and a globe is found, because only then does the globe hold it in place.
+- While the board holds the shaft, it has the anchor `kApexAnchorId` at the apex, and while a globe
+  is found also `kBluntEndAnchorId` at the blunt end. Each one is a copy of the pointer-bound anchor
+  of the toy at that end, moved to the end point (the same pointer, decay and radius), when a
+  pointer holds that toy, and a plain anchor at the end point otherwise. The compositor then draws
+  both ends of the shaft where it draws the toys at the ends. Both ends use the same rule, so a
+  dragged globe pulls the blunt end with it.
+- `TickSplits` runs in every `Tick`. While the board holds the shaft, the shaft is drawn under the
+  tip and under the globe (`DrawnUnderEndpoints`, `docs/parrots/Split Widgets.md`), so the globe
+  covers the part of the shaft behind the ball. While the globe holds the tip, the shaft is a child
+  of the tip, which is ordered below the globe, so the ball covers it without a split.
+- The shaft copies the `shadow_elevation` of its tip.
+
+### The address pattern
+
+`SpearShaft::Draw` draws the visible shaft along a centre line with one segment per merged range of
+mapped memory, with a length proportional to its bytes, and one zig-zag for every gap, the first and
+the last included. The pattern starts where the shaft leaves the globe (`hidden`) and ends below the
+tip (`kShaftTop`); the part behind the globe is a plain rod. `SpearShaft::Tick` rebuilds
+`address_ranges` from a `ReadGuard` when `Toy::observed_monitor` differs from the value stored at
+the last rebuild, merging adjacent regions, so `Tick` loads no monitor. A shaft in the dead
+state has no address ranges and is a plain rod; a shaft whose MemMeld is gone keeps the ranges
+that it has.
+
+### The shading
+
+- The light comes from the upper left (`kLight`) at every angle of the spear. The shading that
+  depends on the light is computed in `Draw` from the turn of the spear: the gradient of the gold
+  ring, the sweep gradient of its edges (rotated against the turn), the brightness of the two halves
+  of the steel tip, the ridge and the highlight of the shaft. The two `RasterPatch` caches of
+  `MemMeldToy::Draw` are drawn through the rotated canvas and hold only detail that does not depend
+  on the light (scratches and shadows on the ring, dents and specks on the tip).
+- The ring refers to the IDIC of Star Trek: its hole is eccentric and the apex of the tip lies
+  inside it.
+- The shaft is a data display, so it stays close to black and keeps the weight of a black
+  silhouette. It is drawn in two layers. The silhouette is the outline of the pattern filled with
+  `kSteelShade`, antialiased. The highlight on top is a triangle strip along the centre line with two
+  vertices at every corner of the line; its texture coordinates are the positions with the offset of
+  the zig-zag removed, so the gradient across the rod (`kShaftHighlight`, whose alpha rises from 0
+  at both edges to 1 on the lit side of the axis) is sheared along every zig-zag piece.
+- The highlight is not antialiased, because `drawVertices` has no edge antialiasing in Graphite; it
+  needs none, because it is transparent at the edges of the rod, where the antialiased silhouette
+  lies.
+
+### Persistence and limits
+
+- A loaded MemMeld is connected to its Process (loading calls `Connect`, and `OnConnect` records it
+  in `Process::mem_meld`, so the globe shows no tip next to it), but it is not attached. It is started
+  with its `start` Command.
+- A second MemMeld cannot attach to a process that another MemMeld has attached to; its `Start`
+  reports the failure of the seize.
+- `Start` works once per object, so a MemMeld whose session ended cannot attach again (the TODO
+  in `src/library_mem_meld.hpp`).
+- A copy that outlives the MemMeld recorded in `Process::mem_meld` is not recorded there, so the
+  globe shows a tip again while the copy exists.

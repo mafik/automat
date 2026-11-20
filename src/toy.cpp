@@ -11,7 +11,15 @@ namespace automat {
 
 Toy::Toy(ui::Widget* parent, Object& owner, Interface::Table* iface,
          const std::atomic<uint32_t>& monitor)
-    : Widget(parent), owner(owner.AcquireWeakPtr()), iface(iface), monitor(monitor) {}
+    : Widget(parent), owner(owner.AcquireWeakPtr()), iface(iface), monitor(&monitor) {}
+
+void Toy::SetOwner(Object& owner, const std::atomic<uint32_t>& monitor) {
+  this->owner = owner.AcquireWeakPtr();
+  this->monitor = &monitor;
+  observed_monitor = monitor.load(std::memory_order_relaxed);
+  WakeAnimation();
+  OnWake();
+}
 
 Toy* Toy::BaseToy() const {
   Widget* base = const_cast<Widget*>((const Widget*)this);
@@ -41,7 +49,7 @@ void ForEachToy(Interface iface, std::function<void(ui::RootWidget&, Toy&)> cb) 
 }
 
 void Toy::Poll(time::Timer& timer) {
-  uint32_t current = monitor.load(std::memory_order_relaxed);
+  uint32_t current = monitor->load(std::memory_order_relaxed);
   if (current != observed_monitor || owner.IsExpired()) {
     observed_monitor = current;
     WakeAnimationAt(timer.last);

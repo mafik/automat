@@ -82,6 +82,9 @@ commands as interfaces, and the widgets only map triggers to those interfaces:
   the object, the activation starts the drag. Location `move`, `copy` and `clone`, the prototypes'
   `kMakeObject` (src/object.cpp), the instruction library's `pick` (its front card), the
   Board's `take_wallpaper`, which hands out the board's wallpaper File (docs/parrots/Boards.md),
+  `kMakeMemMeld` (src/library_process.cpp; bound to a Process by the `FindOption` of the spear tip
+  that its globe holds, `Cursor::Copy`, makes a MemMeld whose argument `process` is connected
+  to the Process, starts it and hands the tip toy of the globe to the drag; it is in no menu),
   and the `process` tables of `ProgramLauncher` (the Process object of its launch, taken from the
   globe on its plate), `Window` and `ClientWindow` (a new Process object for the process of the
   window, src/library_process.hpp) are the tables. The activation makes the new object's toy where the object is born and hands the object

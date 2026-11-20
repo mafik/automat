@@ -302,6 +302,13 @@ Object::~Object() {
   LifetimeObserver::CheckDestroyNotified(*this);
 }
 
+static struct DeadObject : Object {
+  DeadObject() { owning_refs.store(0, std::memory_order_relaxed); }
+  Ptr<Object> Clone() const override { return nullptr; }
+} dead_object_instance [[clang::no_destroy]];
+
+Object& dead_object = dead_object_instance;
+
 Hook::~Hook() {
   if (tail) {
     if (auto* tail_hook = dynamic_cast<Hook*>(tail)) {

@@ -10,6 +10,7 @@
 #include <ranges>
 
 #include "action.hpp"
+#include "argument.hpp"
 #include "board.hpp"
 #include "embedded.hpp"
 #include "library_file.hpp"
@@ -245,6 +246,14 @@ void DragLocationAction::Extract() {
   for (auto& location : locations) {
     location->InvalidateConnectionWidgets(true, false);
     board->Extract(*location);
+    if (location->object) {
+      location->object->Each<Argument>([&](Argument arg) {
+        if (auto argument_toy = bw.toys.Extract(arg)) {
+          arg.table->destroy_toy(arg, std::move(argument_toy));
+        }
+        return LoopControl::Continue;
+      });
+    }
     auto lw_unique = bw.toys.Extract(*location);
     if (auto* lw = static_cast<LocationWidget*>(lw_unique.get())) {
       if (location->object) {

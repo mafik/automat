@@ -709,7 +709,9 @@ std::unique_ptr<Action> Window::process_Impl::OnActivate(ui::Pointer& pointer, a
 }
 
 std::unique_ptr<ui::Widget> Window::process_Impl::OnMakeIcon(ui::Widget* parent) {
-  return prototypes->Find<Process>()->MakeToy(parent);
+  auto toy = prototypes->Find<Process>()->MakeToy(parent);
+  toy->iconified = true;
+  return toy;
 }
 
 void Window::syncable_Impl::OnSync() {

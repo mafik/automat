@@ -31,7 +31,7 @@ struct Object;
 struct Toy : ui::Widget {
   WeakPtr<Object> owner;
   Interface::Table* iface;
-  const std::atomic<uint32_t>& monitor;
+  const std::atomic<uint32_t>* monitor;
   uint32_t observed_monitor = 0;  // UI-thread only
 
   // The point of iconification is to allow Toys to vary the number of options that are presented to
@@ -59,6 +59,8 @@ struct Toy : ui::Widget {
   // monitor must be readable even after owner expires
   Toy(ui::Widget* parent, Object& owner, Interface::Table* iface,
       const std::atomic<uint32_t>& monitor);
+
+  void SetOwner(Object& owner, const std::atomic<uint32_t>& monitor);
 
   template <typename T = Object>
   Ptr<T> LockOwner() const {

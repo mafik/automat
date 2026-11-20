@@ -97,7 +97,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<TesseractOCR>();
   index.Register<Sources>();
 #if defined(__linux__)
-  index.Register<library::MemMeld>();
+  index.Register<library::MemMeld, HideInToolbar>();
 #endif
   index.Register<Gear, HideInToolbar>();
   index.Register<BetaShelf>();

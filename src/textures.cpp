@@ -182,7 +182,8 @@ sk_sp<SkImage> AutomatImageProvider::findOrCreate(skgpu::graphite::Recorder* rec
   if (it == cache.end()) {
     std::string msg = "Creating image " + std::to_string(image->uniqueID());
     TracyMessage(msg.c_str(), msg.size());
-    auto texture = SkImages::TextureFromImage(recorder, image, props);
+    auto texture = SkImages::TextureFromImage(upload_recorder, image, props);
+    has_uploads = true;
     auto [it2, _] = cache.emplace(image->uniqueID(), texture);
     it = it2;
   }

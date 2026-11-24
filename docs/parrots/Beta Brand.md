@@ -75,7 +75,7 @@ are shown with a red outline, an attached red exclamation chip and a
 squiggle. Pressed controls have a darker fill and no shine. Selected
 controls are marked with a dashed blue ring.
 
-The kind of a control is visible at rest, not only under the cursor. The
+The kind of a control is visible at all times, not only under the cursor. The
 view is straight top-down and nothing moves sideways when pressed. Buttons
 have a white specular shine on their face; the shine separates them from
 same-colored status pills and disappears while pressed. Buttons have no
@@ -94,11 +94,15 @@ on the board have low contrast; marks should be drawn on a panel.
 ## The beta shelf
 
 Parrot-made objects do not occupy individual toolbar slots. The toolbar
-carries one object drawn as the BETA starburst stamp (src/library_beta_shelf.hpp),
-and its bubble menu offers the parrot-made objects, grouped by library
+carries one object drawn as a flask (src/library_beta_shelf.cpp, described in
+`docs/parrots/Beta Flask.md`), and its bubble menu offers the parrot-made objects, grouped by library
 (Program Launcher, File and, on Windows, App Window directly; GStreamer, FFmpeg,
 GEGL, PipeWire and TensorFlow under a Pipelines group). Right-clicking any toolbar button opens
 its object's bubble menu, so the shelf is usable without dragging it onto
 the board first. Because the shelf sits at the window's bottom edge, its
 menu groups prefer upward directions, keeping the sub-menu rings inside the
-window. Nothing beyond the stamp is rendered until the menu is opened.
+window. Nothing beyond the flask is rendered until the menu is opened.
+
+The flask is not drawn in the beta style. It is the entrance to the beta
+objects and stands in the toolbar next to the hand-crafted toys, so it is
+drawn in their skeuomorphic style.

@@ -221,7 +221,7 @@ PipeWire shelf exists too (src/library_pipewire.cpp, PipeWireShelfToy),
 with its groups ordered the same producer-to-consumer way, and so does the
 GEGL shelf (src/library_gegl.cpp, GeglShelfToy), grouped by the categories
 key with render sources first and programming operations last. All are
-reached through the beta stamp's bubble menu, and all shelves place their
+reached through the beta shelf's bubble menu, and all shelves place their
 entries with the shared ui::ShelfButton.
 
 A shelf entry answers "what is this" before it is touched:

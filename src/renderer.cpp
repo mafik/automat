@@ -418,6 +418,7 @@ constexpr int kNumVkRecorderThreads = 4;
 crt::ChimeraThread vk_recorder_threads[kNumVkRecorderThreads];
 
 std::unique_ptr<skgpu::graphite::Recorder> global_foreground_recorder;
+std::unique_ptr<skgpu::graphite::Recorder> upload_recorder;
 
 constexpr int kWarpMapSize = 128;
 
@@ -471,6 +472,8 @@ void RendererInit() {
         });
   }
   global_foreground_recorder = vk::graphite_context->makeRecorder(options);
+  upload_recorder = vk::graphite_context->makeRecorder(options);
+  image_provider->upload_recorder = upload_recorder.get();
   renderer_initialized = true;
 }
 
@@ -494,9 +497,11 @@ void RendererShutdown() {
   next_frame_request.render_results.clear();
   if (image_provider) {
     image_provider->cache.clear();
+    image_provider->upload_recorder = nullptr;
   }
 
   global_foreground_recorder.reset();
+  upload_recorder.reset();
   render_fence.Destroy();
 
   renderer_initialized = false;
@@ -1734,6 +1739,16 @@ void RenderFrame(SkCanvas& canvas, ui::RootWidget& rw) {
     --pending_recordings;
     if (w->wait_count == 0) {
       ready_for_gpu.push_back(w);
+    }
+  }
+
+  std::unique_ptr<skgpu::graphite::Recording> upload_recording;
+  {  // Texture uploads
+    lock_guard lock(image_provider->mutex);
+    if (image_provider->has_uploads) {
+      upload_recording = upload_recorder->snap();
+      vk::graphite_context->insertRecording({.fRecording = upload_recording.get()});
+      image_provider->has_uploads = false;
     }
   }
 

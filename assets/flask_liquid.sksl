@@ -1,0 +1,146 @@
+// SPDX-FileCopyrightText: Copyright 2026 Automat Authors
+// SPDX-License-Identifier: MIT
+
+// Warning: coded with a stochastic parrot
+
+uniform shader iParticles;
+uniform float3x3 iDeviceToLocal;
+uniform float iLevel;
+uniform float iLevelWeight;
+uniform float iSpriteRadius;
+uniform float iConeHalfWidth;
+uniform float iConeSlope;
+uniform float iInsideBottom;
+uniform float iInsideNeckHalfWidth;
+uniform float iCorkBottom;
+
+const float mm = 0.001;
+
+const float kMeniscusRise = 0.35 * mm;
+const float kMeniscusWidth = 0.4 * mm;
+const float kSurfaceBand = 0.5 * mm;
+const float kMinSurfaceLineWidth = 0.08 * mm;
+const float kMeniscusShade = 0.2;
+const float kLitSurfaceGain = 0.1;
+const float kShadedSurfaceLoss = 0.15;
+const float kWallContact = 0.3 * mm;
+const float kWideWallShade = 1.2 * mm;
+const float kNarrowWallShade = 0.25 * mm;
+const float kWideWallShadeStrength = 0.06;
+const float kNarrowWallShadeStrength = 0.07;
+const float2 kMiddleOffset = float2(-1.5 * mm, -3.5 * mm);
+const float2 kMiddleRadii = float2(7 * mm, 4 * mm);
+const float kWarmGlowWidth = 1.5 * mm;
+const float kWarmGlowSideWidth = 6 * mm;
+const float kWarmGlowDepth = 3 * mm;
+const float kStreakStrength = 0.5;
+const float kSmallStreakStrength = 0.35;
+const float kSmallStreakPixel = 0.26 * mm;
+const float kLargeStreakPixel = 0.13 * mm;
+const float kStreakSpacing = 0.8 * mm;
+const float kStreakLength = 4 * mm;
+const float kMinStreakField = 0.25;
+const float2 kWarmStreakDirection = float2(0.6, 0.8);
+const float kMinSheenAlpha = 0.004;
+
+const float2 kLightDirection = float2(-0.7071, 0.7071);
+
+const half3 kLightSideColor = half3(0.74, 0.90, 0.87);
+const half3 kMiddleColor = half3(0.52, 0.84, 0.66);
+const half3 kShadeSideColor = half3(0.17, 0.50, 0.36);
+const half3 kWarmGlowColor = half3(0.72, 0.88, 0.46);
+const half3 kSurfaceColor = half3(0.86, 0.96, 0.90);
+const half3 kSurfaceLineColor = half3(0.95, 0.99, 0.96);
+const half3 kCoolPearlColor = half3(0.70, 0.96, 0.94);
+const half3 kWarmPearlColor = half3(0.88, 0.95, 0.72);
+
+float ConeHalfWidth(float y) { return iConeHalfWidth + iConeSlope * y; }
+
+float Sheen(half4 particles) { return particles.r / max(particles.a, kMinSheenAlpha); }
+
+half4 main(float2 px) {
+  float2 p = (iDeviceToLocal * float3(px, 1)).xy;
+  float pixel = length((iDeviceToLocal * float3(1, 0, 0)).xy);
+  float pool_depth = iLevel - iInsideBottom;
+
+  float cone_distance = (ConeHalfWidth(p.y) - abs(p.x)) / sqrt(1 + iConeSlope * iConeSlope);
+  float glass_distance = max(min(cone_distance, p.y - iInsideBottom),
+                             min(iInsideNeckHalfWidth - abs(p.x), iCorkBottom - p.y));
+
+  float surface_wall_distance = ConeHalfWidth(iLevel) - abs(p.x);
+  float rise = kMeniscusRise * exp(-max(surface_wall_distance, 0) / kMeniscusWidth);
+  float surface = iLevel + rise;
+  float slope = rise / kMeniscusWidth;
+  float level_distance = (surface - p.y) / sqrt(1 + slope * slope);
+  float level_depth = max(surface - p.y, 0);
+
+  float surface_distance = level_distance;
+  float depth = level_depth;
+  float band = 1;
+  float surface_shade = 0;
+  float streak = 0;
+  half3 streak_color = kCoolPearlColor;
+  if (iLevelWeight < 1) {
+    float field = iParticles.eval(px).a;
+    float2 gradient = float2(iParticles.eval(px + float2(1, 0)).a -
+                                 iParticles.eval(px - float2(1, 0)).a,
+                             iParticles.eval(px + float2(0, 1)).a -
+                                 iParticles.eval(px - float2(0, 1)).a) / 2;
+    float particle_distance = clamp((field - 0.5) / max(length(gradient), 0.0001) * pixel,
+                                    -iSpriteRadius, iSpriteRadius);
+    float free_surface = smoothstep(-kWallContact, kWallContact, glass_distance - particle_distance);
+    surface_distance = mix(particle_distance, level_distance, iLevelWeight);
+    depth = mix(max(particle_distance, 0), level_depth, iLevelWeight);
+    band = mix(free_surface, 1, iLevelWeight);
+
+    float2 normal = (iDeviceToLocal * float3(-gradient, 0)).xy;
+    float facing = dot(normal / max(length(normal), 1e-9), kLightDirection) - kLightDirection.y;
+    surface_shade = (1 - iLevelWeight) * free_surface * exp(-depth / kSurfaceBand) *
+                    (facing > 0 ? kLitSurfaceGain * facing / (1 - kLightDirection.y)
+                                : kShadedSurfaceLoss * facing / (1 + kLightDirection.y));
+
+    float spacing = kStreakSpacing / pixel;
+    half4 right = iParticles.eval(px + float2(spacing, 0));
+    half4 left = iParticles.eval(px - float2(spacing, 0));
+    half4 below = iParticles.eval(px + float2(0, spacing));
+    half4 above = iParticles.eval(px - float2(0, spacing));
+    float2 sheen_change =
+        float2(Sheen(right) - Sheen(left), Sheen(below) - Sheen(above)) *
+        smoothstep(0, kMinStreakField, min(min(right.a, left.a), min(below.a, above.a)));
+    float change = length(sheen_change);
+    float edge_fade = smoothstep(0, kStreakSpacing, min(glass_distance, particle_distance));
+    float strength = mix(kStreakStrength, kSmallStreakStrength,
+                         smoothstep(kLargeStreakPixel, kSmallStreakPixel, pixel));
+    streak =
+        strength *
+        clamp((1 - iLevelWeight) * edge_fade * change * kStreakLength / (2 * kStreakSpacing), 0, 1);
+    streak_color = mix(kCoolPearlColor, kWarmPearlColor,
+                       0.5 + 0.5 * dot(sheen_change, kWarmStreakDirection) / max(change, 0.0001));
+  }
+  float coverage = clamp(surface_distance / pixel + 0.5, 0, 1);
+
+  float wall_distance = max(glass_distance, 0);
+
+  float across = -dot(p - float2(0, iLevel - pool_depth / 2), kLightDirection) / pool_depth;
+  half3 color = mix(kLightSideColor, kShadeSideColor, smoothstep(-1, 1.2, across));
+
+  float2 middle_offset = (p - float2(0, iLevel) - kMiddleOffset) / kMiddleRadii;
+  color = mix(color, kMiddleColor, 0.7 * exp(-dot(middle_offset, middle_offset)));
+
+  color *= 1 - 0.1 * clamp(level_depth / pool_depth, 0, 1);
+  color *= 1 - kWideWallShadeStrength * exp(-wall_distance / kWideWallShade) -
+           kNarrowWallShadeStrength * exp(-wall_distance / kNarrowWallShade);
+  float glow_side =
+      smoothstep(0, kWarmGlowSideWidth, p.x) * smoothstep(0, kWarmGlowDepth, level_depth);
+  color = mix(color, kWarmGlowColor, 0.45 * glow_side * exp(-wall_distance / kWarmGlowWidth));
+  color = mix(color, streak_color, streak);
+  color = mix(color, kSurfaceColor, 0.7 * band * exp(-depth / kSurfaceBand));
+  float line_width = max(pixel, kMinSurfaceLineWidth);
+  float meniscus_line = (depth - 2 * line_width) / line_width;
+  color *= 1 - kMeniscusShade * min(1, 2 * kMinSurfaceLineWidth / pixel) * band *
+                   exp(-meniscus_line * meniscus_line);
+  color = mix(color, kSurfaceLineColor, 0.8 * band * exp(-depth / line_width));
+  color *= 1 + surface_shade;
+
+  return half4(color * coverage, coverage);
+}

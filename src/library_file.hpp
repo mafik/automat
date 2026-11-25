@@ -8,6 +8,7 @@
 #include <mutex>
 
 #include "base.hpp"
+#include "crop_tool.hpp"
 #include "image_provider.hpp"
 #include "optional.hpp"
 #include "status.hpp"
@@ -75,7 +76,21 @@ struct File : Object {
   void OnRun() { obj->ToggleFilename(); }
   DEF_END(toggle_filename);
 
-  mutable HeapToC base_toc{2};
+  struct CropParameters;
+
+  DEF_INTERFACE(File, Croppable, croppable, "Crop")
+  void CropViewSerialize(const CropView&, ObjectSerializer&);
+  void CropViewDeserialize(CropView&, ObjectDeserializer&);
+  std::unique_ptr<CropViewParameters> CropViewMakeParameters();
+  void CropScissorsOpen(CropView&, automat::Toy& croppable_toy, CropScissors&, Vec2 point);
+  void CropScissorsMove(CropView&, automat::Toy& croppable_toy, CropScissors&, Vec2 point);
+  ui::Tock CropScissorsTick(CropView&, automat::Toy& croppable_toy, CropScissors&, time::Timer&);
+  ui::Tock CropScissorsClose(CropScissors&, time::Timer&);
+  std::unique_ptr<automat::Toy> CropMakeToy(CropView&, ui::Widget* parent);
+  ui::Tock CropTickToy(CropView&, automat::Toy& cropped_toy, time::Timer&);
+  DEF_END(croppable);
+
+  mutable HeapToC base_toc{3};
 
   File();
   explicit File(StrView name);

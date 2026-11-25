@@ -387,6 +387,7 @@ ui::Tock BoardWidget::Tick(time::Timer& timer) {
     layers.OrderAbove(&lw);
   }
 
+  // TODO: merge this with the loop below
   for (auto& loc : board->locations) {
     auto& lw = toys.FindOrMake(*loc, this);
     loc->object->Each<Argument>([&](Argument arg) {
@@ -402,6 +403,22 @@ ui::Tock BoardWidget::Tick(time::Timer& timer) {
         }
       }
       layers.OrderAbove(conn, higher);
+      return LoopControl::Continue;
+    });
+  }
+
+  // TODO: merge this with the loop above
+  for (auto& loc : board->locations) {
+    loc->object->Each<Argument>([&](Argument arg) {
+      auto* conn = toys.FindOrNull(arg);
+      if (!conn) return LoopControl::Continue;
+      auto end = arg.Find();
+      auto* end_toy = end.object_ptr ? toys.FindOrNull(*end.object_ptr) : nullptr;
+      if (!end_toy) return LoopControl::Continue;
+      ui::Widget* end_widget = end_toy->FindWidget(end.table_ptr);
+      if (end_widget->parent == this && end_widget->IsAbove(*conn)) {
+        layers.OrderAbove(conn, end_widget);
+      }
       return LoopControl::Continue;
     });
   }

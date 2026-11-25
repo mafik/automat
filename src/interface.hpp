@@ -75,6 +75,7 @@ struct Interface {
     kLastCommand = kOnOff,
     kSyncable,
     kImageProvider,
+    kCroppable,
     kResizable,
     kStreamInput,
     kFdProvider,

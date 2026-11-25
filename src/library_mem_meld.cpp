@@ -23,15 +23,19 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <ranges>
 #include <thread>
 
+#include "action.hpp"
 #include "animation.hpp"
 #include "argument.hpp"
 #include "casting.hpp"
 #include "color.hpp"
+#include "crop_tool.hpp"
+#include "deserializer.hpp"
 #include "drawing.hpp"
 #include "fd.hpp"
 #include "format.hpp"
@@ -42,6 +46,7 @@
 #include "memory_landmarks.hpp"
 #include "mortal.hpp"
 #include "object.hpp"
+#include "pointer.hpp"
 #include "random.hpp"
 #include "raycast.hpp"
 #include "sincos.hpp"
@@ -170,11 +175,18 @@ void MemMeld::Start() {
 }
 
 constexpr float kFreeLength = 15_cm;
+constexpr float kCroppedLength = 5_cm;
 constexpr float kSpearLengthOnGlobe = 19.6_mm;
 constexpr float kSpearHiddenLength = 8_mm;
 constexpr float kSpearLengthPeriod = 0.5f;
 constexpr float kShaftTop = -5.75_mm;
 constexpr float kShaftReach = 1.5_mm;
+constexpr float kShaftHalfWidth = kMargin / 2;
+constexpr float kZigZagW = 0.5_mm;
+constexpr float kShaftMargin = 1.5_mm;
+constexpr float kCropBoxWidth = 5_mm;
+constexpr float kDefaultCropLength = 12_mm;
+constexpr float kMinCropLength = 2_mm;
 constexpr float kHiddenMargin = 0.5_mm;
 constexpr float kTipReach = 8_mm;
 constexpr float kBluntEndLengthPeriod = 0.125f;
@@ -213,6 +225,13 @@ constexpr SkColor4f kGoldTipShadow = "#1c0f00"_color4f;
 struct MemMeldToy;
 
 struct SpearShaft : ArgumentToy {
+  struct Section {
+    AddressRange addresses;
+    bool gap;
+    float bottom = 0;
+    float top = 0;
+  };
+
   MortalPtr<MemMeldToy> tip;
   float length = kFreeLength;
   float degrees = 90;
@@ -221,7 +240,7 @@ struct SpearShaft : ArgumentToy {
   bool had_globe = false;
   Vec2 apex;
   float hidden = 0;
-  Vec<AddressRange> address_ranges;  // merged address ranges in the remote process
+  Vec<Section> sections;
   uint64_t n_bytes = 0;
   uint32_t ranges_monitor = 0;
 
@@ -233,9 +252,47 @@ struct SpearShaft : ArgumentToy {
 
   Vec2 BluntEnd() const { return apex - Vec2::Polar(Direction(), SpearLength()); }
 
+  SkMatrix SpearToShaft() const {
+    return SkMatrix::Translate(apex.x, apex.y).preConcat((Direction() - 90_deg).ToMatrix());
+  }
+
+  AddressRange ShownRange() const {
+    return {sections.front().addresses.begin, sections.back().addresses.end};
+  }
+
+  float PositionOfAddress(uint64_t address) const {
+    address = std::clamp(address, sections.front().addresses.begin, sections.back().addresses.end);
+    for (auto& section : sections) {
+      if (address <= section.addresses.end || &section == &sections.back()) {
+        double fraction = double(address - section.addresses.begin) /
+                          double(section.addresses.end - section.addresses.begin);
+        return section.bottom + (section.top - section.bottom) * fraction;
+      }
+    }
+    return 0;
+  }
+
+  uint64_t AddressAt(float position) const {
+    for (auto& section : sections) {
+      if (position < section.top || &section == &sections.back()) {
+        if (position <= section.bottom) return section.addresses.begin;
+        if (position >= section.top) return section.addresses.end;
+        double fraction = (position - section.bottom) / (section.top - section.bottom);
+        return section.addresses.begin +
+               uint64_t(fraction * double(section.addresses.end - section.addresses.begin));
+      }
+    }
+    return 0;
+  }
+
   bool DrawnUnderEndpoints() const override { return true; }
 
-  SkPath Shape() const override { return SkPath(); }
+  SkPath Shape() const override {
+    if (sections.empty()) return SkPath();
+    Rect band(-kShaftHalfWidth - kShaftMargin, sections.front().bottom,
+              kShaftHalfWidth + kShaftMargin, sections.back().top);
+    return SkPath::Rect(band).makeTransform(SpearToShaft());
+  }
 
   Optional<Rect> DrawBounds() const override {
     Vec2 blunt_end = BluntEnd();
@@ -257,12 +314,8 @@ struct SpearShaft : ArgumentToy {
   void Draw(SkCanvas& canvas) const override {
     SinCos turn = Direction() - 90_deg;
     float tail = -SpearLength();
-    float from = std::min(hidden + tail, kShaftTop);
-    float to = kShaftTop;
     SkAutoCanvasRestore restore(&canvas, true);
-    canvas.translate(apex.x, apex.y);
-    canvas.concat(turn.ToMatrix());
-    constexpr float kW = kMargin / 2;
+    canvas.concat(SpearToShaft());
     SkPaint silhouette_paint;
     silhouette_paint.setAntiAlias(true);
     silhouette_paint.setColor4f(kSteelShade);
@@ -272,131 +325,77 @@ struct SpearShaft : ArgumentToy {
                             kShaftHighlight.withAlpha(0.75f), kShaftHighlight,
                             kShaftHighlight.withAlpha(0.75f), kShaftHighlight.withAlpha(0.25f),
                             kShaftHighlight.withAlpha(0)};
-      float peak = 0.5f + kShaftHighlightShift * (float)(kLight - turn).cos / (2 * kW);
+      float peak = 0.5f + kShaftHighlightShift * (float)(kLight - turn).cos / (2 * kShaftHalfWidth);
       float positions[] = {0, peak / 3, peak * 2 / 3, peak, (2 * peak + 1) / 3, (peak + 2) / 3, 1};
-      SkPoint pts[] = {Vec2(-kW, 0), Vec2(kW, 0)};
+      SkPoint pts[] = {Vec2(-kShaftHalfWidth, 0), Vec2(kShaftHalfWidth, 0)};
       highlight_paint.setShader(SkShaders::LinearGradient(
           pts, SkGradient{SkGradient::Colors{colors, positions, SkTileMode::kClamp}, {}}));
     }
     auto SetRow = [&](SkVertices::Builder& mesh, int row, float center, float y) {
-      mesh.positions()[2 * row] = Vec2(center - kW, y);
-      mesh.positions()[2 * row + 1] = Vec2(center + kW, y);
-      mesh.texCoords()[2 * row] = Vec2(-kW, y);
-      mesh.texCoords()[2 * row + 1] = Vec2(kW, y);
+      mesh.positions()[2 * row] = Vec2(center - kShaftHalfWidth, y);
+      mesh.positions()[2 * row + 1] = Vec2(center + kShaftHalfWidth, y);
+      mesh.texCoords()[2 * row] = Vec2(-kShaftHalfWidth, y);
+      mesh.texCoords()[2 * row + 1] = Vec2(kShaftHalfWidth, y);
     };
-    if (address_ranges.empty()) {
-      canvas.drawRect(Rect(-kW, tail, kW, to), silhouette_paint);
-      SkVertices::Builder mesh(SkVertices::kTriangleStrip_VertexMode, 4, 0,
-                               SkVertices::kHasTexCoords_BuilderFlag);
-      SetRow(mesh, 0, 0, tail);
-      SetRow(mesh, 1, 0, to);
-      canvas.drawVertices(mesh.detach(), SkBlendMode::kSrcOver, highlight_paint);
-      return;
-    }
 
-    int n_gaps = address_ranges.size() - 1;
-    if (address_ranges.front().begin > 0) n_gaps += 1;
-    if (address_ranges.back().end < UINT64_MAX) n_gaps += 1;
-
-    constexpr float kZigZagW = 0.5_mm;
     // Zig-zag bends at 60 degrees to the right (W to the right, W/2 up), then at 60 degrees
     // left (2W to the left, W up), then back 60deg to the right (W to the right, ending in the
     // middle, W/2 up). Total height is W*2.
-
-    float shaft_height = to - from;
-    float gap_height = min(kZigZagW * 2, shaft_height * 0.5f / n_gaps);
-    float gaps_height = gap_height * n_gaps;
-    float bytes_height = shaft_height - gaps_height;
+    auto ZigZag = [](const Section& section) {
+      float height = section.top - section.bottom;
+      float y = section.bottom;
+      return std::array<Vec2, 4>{Vec2(0, y), Vec2(kZigZagW, y + height / 4),
+                                 Vec2(-kZigZagW, y + height * 3 / 4), Vec2(0, y + height)};
+    };
 
     SkPathBuilder shaft_builder;
-    float x = 0;
-    float y = from;
-    uintptr_t addr = 0;
-    shaft_builder.moveTo(x + kW, tail);
-    shaft_builder.lineTo(x + kW, y);
-    for (auto [a, b] : address_ranges) {
-      if (a > addr) {
-        y += gap_height / 4;
-        shaft_builder.lineTo(x + kW + kZigZagW, y);
-        y += gap_height / 2;
-        shaft_builder.lineTo(x + kW - kZigZagW, y);
-        y += gap_height / 4;
-        shaft_builder.lineTo(x + kW, y);
+    shaft_builder.moveTo(kShaftHalfWidth, tail);
+    for (auto& section : sections) {
+      if (section.gap) {
+        for (Vec2 point : ZigZag(section)) {
+          shaft_builder.lineTo(point.x + kShaftHalfWidth, point.y);
+        }
       }
-      // float bottom = y;
-      y += bytes_height * (b - a) / n_bytes;
-      shaft_builder.lineTo(x + kW, y);
-      addr = b;
-      // float top = y;
-      // canvas.drawRect(Rect(x - kW, bottom, x + kW, top), {});
+      shaft_builder.lineTo(kShaftHalfWidth, section.top);
     }
-    if (UINT64_MAX > addr) {
-      y += gap_height / 4;
-      shaft_builder.lineTo(x + kW + kZigZagW, y);
-      y += gap_height / 2;
-      shaft_builder.lineTo(x + kW - kZigZagW, y);
-      y += gap_height / 4;
-      shaft_builder.lineTo(x + kW, y);
-    }
-    addr = UINT64_MAX;
-    shaft_builder.lineTo(x - kW, y);
-    for (auto [a, b] : std::ranges::reverse_view(address_ranges)) {
-      if (b < addr) {
-        y -= gap_height / 4;
-        shaft_builder.lineTo(x - kW - kZigZagW, y);
-        y -= gap_height / 2;
-        shaft_builder.lineTo(x - kW + kZigZagW, y);
-        y -= gap_height / 4;
-        shaft_builder.lineTo(x - kW, y);
+    for (auto& section : std::ranges::reverse_view(sections)) {
+      shaft_builder.lineTo(-kShaftHalfWidth, section.top);
+      if (section.gap) {
+        auto zig_zag = ZigZag(section);
+        for (int i = zig_zag.size() - 1; i >= 0; --i) {
+          shaft_builder.lineTo(zig_zag[i].x - kShaftHalfWidth, zig_zag[i].y);
+        }
       }
-      y -= bytes_height * (b - a) / n_bytes;
-      shaft_builder.lineTo(x - kW, y);
-      addr = a;
     }
-    if (addr > 0) {
-      y -= gap_height / 4;
-      shaft_builder.lineTo(x - kW - kZigZagW, y);
-      y -= gap_height / 2;
-      shaft_builder.lineTo(x - kW + kZigZagW, y);
-      y -= gap_height / 4;
-      shaft_builder.lineTo(x - kW, y);
-    }
-    shaft_builder.lineTo(x - kW, tail);
+    shaft_builder.lineTo(-kShaftHalfWidth, tail);
     shaft_builder.close();
 
     canvas.drawPath(shaft_builder.detach(), silhouette_paint);
 
-    int n_rows = 2 + address_ranges.size() + 3 * n_gaps;
+    int n_rows = 1;
+    for (auto& section : sections) n_rows += section.gap ? 5 : 1;
     SkVertices::Builder mesh(SkVertices::kTriangleStrip_VertexMode, 2 * n_rows, 0,
                              SkVertices::kHasTexCoords_BuilderFlag);
     int row = 0;
-    y = from;
-    addr = 0;
-    auto AddZigZagRows = [&] {
-      y += gap_height / 4;
-      SetRow(mesh, row++, kZigZagW, y);
-      y += gap_height / 2;
-      SetRow(mesh, row++, -kZigZagW, y);
-      y += gap_height / 4;
-      SetRow(mesh, row++, 0, y);
-    };
     SetRow(mesh, row++, 0, tail);
-    SetRow(mesh, row++, 0, y);
-    for (auto [a, b] : address_ranges) {
-      if (a > addr) AddZigZagRows();
-      y += bytes_height * (b - a) / n_bytes;
-      SetRow(mesh, row++, 0, y);
-      addr = b;
+    for (auto& section : sections) {
+      if (section.gap) {
+        for (Vec2 point : ZigZag(section)) SetRow(mesh, row++, point.x, point.y);
+      }
+      SetRow(mesh, row++, 0, section.top);
     }
-    if (UINT64_MAX > addr) AddZigZagRows();
     canvas.drawVertices(mesh.detach(), SkBlendMode::kSrcOver, highlight_paint);
   }
 };
 
 struct MemMeldToy : ObjectToy {
+  struct CropEndHandle;
+  struct DragCropEndAction;
+
   std::unique_ptr<SpearShaft> shaft;
   SinCos turn = 0_deg;
   animation::Kinetic<float> spear_length = kSpearHiddenLength;
+  Optional<AddressRange> crop;
 
   MemMeldToy(ui::Widget* parent, Object& owner)
       : ObjectToy(parent, owner), shaft(std::make_unique<SpearShaft>(this, owner)) {
@@ -412,7 +411,17 @@ struct MemMeldToy : ObjectToy {
     builder.arcTo({kRingRadius, kRingRadius}, 0, SkPathBuilder::kLarge_ArcSize,
                   SkPathDirection::kCCW, {1.69_mm, -4.23_mm});
     builder.lineTo(kTipCorner);
-    builder.lineTo(0, kTipBottom);
+    if (crop) {
+      constexpr float kHalfWidth = kShaftHalfWidth + kZigZagW;
+      float edge =
+          kTipCorner.y + (kTipBottom - kTipCorner.y) * (kTipCorner.x - kHalfWidth) / kTipCorner.x;
+      builder.lineTo(kHalfWidth, edge);
+      builder.lineTo(kHalfWidth, -kCroppedLength);
+      builder.lineTo(-kHalfWidth, -kCroppedLength);
+      builder.lineTo(-kHalfWidth, edge);
+    } else {
+      builder.lineTo(0, kTipBottom);
+    }
     builder.close();
     SkMatrix turn_matrix = turn.ToMatrix();
     return builder.detach(&turn_matrix);
@@ -430,6 +439,8 @@ struct MemMeldToy : ObjectToy {
     if (shaft) shaft->Poll(timer);
   }
 
+  ui::Widget* FindWidget(Interface::Table*) override;
+
   Interface FindOption(ui::Pointer&, ui::ActionTrigger trigger) override {
     if (trigger != ui::PointerButton::Left) return {};
     auto* holder = dynamic_cast<ObjectToy*>(parent.Get());
@@ -440,6 +451,7 @@ struct MemMeldToy : ObjectToy {
 
   Tock Tick(time::Timer& timer) override {
     Tock tock = Tock::Shape;
+    if (crop && shaft) shaft->WakeAnimation(&timer);
     auto* holder = dynamic_cast<ObjectToy*>(parent.Get());
     if (holder && dyn_cast_if_present<Process>(holder->LockOwner())) {
       tock.ing |=
@@ -657,17 +669,21 @@ ui::Tock SpearShaft::Tick(time::Timer& timer) {
   Tock tock;
   Vec2 old_apex = apex;
   Vec2 old_blunt_end = BluntEnd();
+  float old_hidden = hidden;
+  bool sections_changed = false;
 
   ObjectToy* globe = nullptr;
   Vec2 blunt_end;
   const TextureAnchor* apex_grab = nullptr;
   const TextureAnchor* blunt_end_grab = nullptr;
   {  // Globe and end points
-    auto* holder = dynamic_cast<ObjectToy*>(tip->parent.Get());
-    if (holder && dyn_cast_if_present<Process>(holder->LockOwner())) {
-      globe = holder;
-    } else if (auto end = EndLocation()) {
-      globe = tip->ToyScope().FindOrNull(*end->object);
+    if (!tip->crop) {
+      auto* holder = dynamic_cast<ObjectToy*>(tip->parent.Get());
+      if (holder && dyn_cast_if_present<Process>(holder->LockOwner())) {
+        globe = holder;
+      } else if (auto end = EndLocation()) {
+        globe = tip->ToyScope().FindOrNull(*end->object);
+      }
     }
     auto GrabAnchor = [&](ui::Widget* toy) -> const TextureAnchor* {
       if (!toy || parent == tip.Get()) return nullptr;
@@ -690,7 +706,7 @@ ui::Tock SpearShaft::Tick(time::Timer& timer) {
       globe->ConnectionPositions(positions);
       blunt_end = PositionOf(*globe, blunt_end_grab, positions.front().pos);
     } else {
-      blunt_end = apex - Vec2(0, kFreeLength);
+      blunt_end = apex - Vec2(0, tip->crop ? kCroppedLength : kFreeLength);
     }
   }
 
@@ -711,7 +727,6 @@ ui::Tock SpearShaft::Tick(time::Timer& timer) {
   }
 
   {  // Part of the shaft behind the globe
-    float old_hidden = hidden;
     hidden = 0;
     if (globe) {
       SkMatrix local_to_globe = TransformBetween(*this, *globe);
@@ -721,7 +736,6 @@ ui::Tock SpearShaft::Tick(time::Timer& timer) {
         hidden = Length(exit_local - BluntEnd()) + kHiddenMargin;
       }
     }
-    if (hidden != old_hidden) tock |= Tock::Draw;
   }
 
   {  // Turn of the spear tip
@@ -733,25 +747,73 @@ ui::Tock SpearShaft::Tick(time::Timer& timer) {
     }
   }
 
-  {  // Address ranges
-    if (ranges_monitor != observed_monitor) {
+  {  // Sections
+    AddressRange space = tip->crop.value_or(AddressRange{0, UINT64_MAX});
+    bool same_space = !sections.empty() && sections.front().addresses.begin == space.begin &&
+                      sections.back().addresses.end == space.end;
+    if (!same_space || ranges_monitor != observed_monitor) {
       ranges_monitor = observed_monitor;
-      if (auto mem_meld = LockOwner<MemMeld>()) {
-        address_ranges.clear();
-        n_bytes = 0;
-        automat::MemMeld::ReadGuard guard(mem_meld->mem_meld);
-        // TODO: rather than re-querying the tree, introduce an API to walk the tree
-        for (auto* it = guard.FindLowerBound(0); it != nullptr;
-             it = guard.FindLowerBound(it->remote + it->Size())) {
-          if (!address_ranges.empty() && address_ranges.back().end == it->remote) {  // merge
-            address_ranges.back().end = it->remote + it->Size();
-          } else {
-            address_ranges.emplace_back(it->remote, it->remote + it->Size());
-          }
-          n_bytes += it->Size();
+      int n = 0;
+      uint64_t cursor = space.begin;
+      auto Append = [&](uint64_t end, bool gap) {
+        Section section = {.addresses = {cursor, end}, .gap = gap};
+        if (n == (int)sections.size()) {
+          sections.push_back(section);
+          sections_changed = true;
+        } else if (sections[n].addresses.begin != cursor || sections[n].addresses.end != end ||
+                   sections[n].gap != gap) {
+          sections[n] = section;
+          sections_changed = true;
         }
-        tock |= Tock::Draw;
+        ++n;
+        cursor = end;
+      };
+      n_bytes = 0;
+      bool has_regions = false;
+      if (auto mem_meld = LockOwner<MemMeld>()) {
+        automat::MemMeld::ReadGuard guard(mem_meld->mem_meld);
+        uint64_t mapped_end = cursor;
+        // TODO: rather than re-querying the tree, introduce an API to walk the tree
+        for (auto* it = guard.FindLowerBound(space.begin); it != nullptr && it->remote < space.end;
+             it = guard.FindLowerBound(it->remote + it->Size())) {
+          has_regions = true;
+          uint64_t begin = std::max<uint64_t>(it->remote, space.begin);
+          uint64_t end = std::min<uint64_t>(it->remote + it->Size(), space.end);
+          if (begin != mapped_end) {
+            if (mapped_end > cursor) Append(mapped_end, false);
+            Append(begin, true);
+          }
+          mapped_end = end;
+          n_bytes += end - begin;
+        }
+        if (mapped_end > cursor) Append(mapped_end, false);
       }
+      if (cursor < space.end) Append(space.end, has_regions);
+      if (n != (int)sections.size()) {
+        sections.resize(n);
+        sections_changed = true;
+      }
+    }
+  }
+
+  {  // Positions of the sections
+    float bottom = std::min(hidden - SpearLength(), kShaftTop);
+    float height = kShaftTop - bottom;
+    int n_gaps = 0;
+    for (auto& section : sections) n_gaps += section.gap;
+    float gap_height = 0;
+    if (n_gaps > 0) gap_height = std::min(kZigZagW * 2, height * 0.5f / n_gaps);
+    float bytes_height = height - gap_height * n_gaps;
+    for (auto& section : sections) {
+      section.bottom = bottom;
+      if (section.gap) {
+        bottom += gap_height;
+      } else if (n_bytes == 0) {
+        bottom += bytes_height;
+      } else {
+        bottom += bytes_height * (section.addresses.end - section.addresses.begin) / n_bytes;
+      }
+      section.top = bottom;
     }
   }
 
@@ -775,8 +837,15 @@ ui::Tock SpearShaft::Tick(time::Timer& timer) {
     shadow_elevation = tip->shadow_elevation;
     tock |= Tock::Draw;
   }
-  if (apex != old_apex || BluntEnd() != old_blunt_end) tock |= Tock::Draw;
-  TickSplits();
+  if (apex != old_apex || BluntEnd() != old_blunt_end || hidden != old_hidden || sections_changed) {
+    tock |= Tock::Shape;
+    if (auto* location_widget = ui::Closest<LocationWidget>(*tip)) {
+      if (auto location = location_widget->LockLocation()) {
+        location->InvalidateConnectionWidgets(true, false);
+      }
+    }
+  }
+  if (!tip->crop) TickSplits();
   return tock;
 }
 
@@ -793,6 +862,318 @@ void MemMeld::process_Impl::OnDestroyToy(std::unique_ptr<automat::Toy> toy) {
   shaft.tip->shaft.reset(static_cast<SpearShaft*>(toy.release()));
   shaft.Reparent(*shaft.tip);
   shaft.tip->layers.OrderBelow(&shaft);
+}
+
+static AddressRange CropInside(AddressRange parent, AddressRange offsets) {
+  uint64_t size = parent.end - parent.begin;
+  uint64_t begin = std::min(offsets.begin, size - 1);
+  uint64_t end = std::clamp(offsets.end, begin + 1, size);
+  return {parent.begin + begin, parent.begin + end};
+}
+
+struct MemMeld::CropParameters : CropViewParameters {
+  AddressRange range = {0, UINT64_MAX};
+};
+
+struct MemMeldToy::CropEndHandle : CropHandle {
+  float side = 1;
+  MortalPtr<SpearShaft> shaft;
+
+  using CropHandle::CropHandle;
+};
+
+static Rect ShaftFractionsOf(SpearShaft& shaft, AddressRange range) {
+  float bottom = shaft.sections.front().bottom;
+  float length = shaft.sections.back().top - bottom;
+  return Rect(-0.5f, (shaft.PositionOfAddress(range.begin) - bottom) / length, 0.5f,
+              (shaft.PositionOfAddress(range.end) - bottom) / length);
+}
+
+struct MemMeldToy::DragCropEndAction : Action {
+  MortalPtr<SpearShaft> shaft;
+  MortalPtr<CropScissors> scissors;
+  Ptr<CropView> view;
+  Linked<Croppable> croppable;
+  float side;
+  float grab_offset;
+
+  DragCropEndAction(ui::Pointer& pointer, CropEndHandle& handle, Ptr<CropView> crop_view,
+                    Linked<Croppable> mem_meld_croppable)
+      : Action(pointer),
+        shaft(handle.shaft),
+        scissors(&static_cast<CropScissors&>(*handle.parent)),
+        view(std::move(crop_view)),
+        croppable(std::move(mem_meld_croppable)),
+        side(handle.side) {
+    AddressRange shown = shaft->ShownRange();
+    AddressRange range = shown;
+    {
+      auto lock = std::lock_guard(view->mutex);
+      if (view->chain_end == croppable) {
+        range = CropInside(shown, static_cast<MemMeld::CropParameters&>(*view->parameters).range);
+      }
+    }
+    grab_offset = shaft->PositionOfAddress(side > 0 ? range.end : range.begin) - PointerPosition();
+  }
+
+  float PointerPosition() const {
+    SkMatrix shaft_to_spear;
+    (void)shaft->SpearToShaft().invert(&shaft_to_spear);
+    return Vec2(shaft_to_spear.mapPoint(pointer.PositionWithin(*shaft))).y;
+  }
+
+  void Update() override {
+    if (!shaft || !scissors || shaft->sections.empty() ||
+        shaft->sections.back().top <= shaft->sections.front().bottom) {
+      pointer.ReplaceAction(*this, nullptr);
+      return;
+    }
+    AddressRange shown = shaft->ShownRange();
+    uint64_t size = shown.end - shown.begin;
+    float position = PointerPosition() + grab_offset;
+    AddressRange dragged;
+    {
+      auto lock = std::lock_guard(view->mutex);
+      if (view->chain_end != croppable) return;
+      AddressRange& range = static_cast<MemMeld::CropParameters&>(*view->parameters).range;
+      range = CropInside({0, size}, range);
+      if (side > 0) {
+        float low = shaft->PositionOfAddress(shown.begin + range.begin);
+        uint64_t offset = shaft->AddressAt(std::max(position, low + kMinCropLength)) - shown.begin;
+        range.end = std::max(offset, range.begin + 1);
+      } else {
+        float high = shaft->PositionOfAddress(shown.begin + range.end);
+        uint64_t offset = shaft->AddressAt(std::min(position, high - kMinCropLength)) - shown.begin;
+        range.begin = std::min(offset, range.end - 1);
+      }
+      dragged = range;
+    }
+    if (auto* group = scissors->FindGroup(croppable)) {
+      Rect fractions = ShaftFractionsOf(*shaft, CropInside(shown, dragged));
+      group->center = fractions.Center();
+      group->size = fractions.Size();
+    }
+    view->WakeToys();
+  }
+};
+
+static constinit Interface::Table kDragCropEnd = [] {
+  Interface::Table t(Interface::kMenu, "Crop End");
+  t.cursor = ui::Cursor::Crosshair;
+  t.activate = [](Span<Interface> chain, ui::Pointer& pointer, Toy*) -> std::unique_ptr<Action> {
+    auto* handle = dynamic_cast<MemMeldToy::CropEndHandle*>(pointer.hover.Get());
+    if (!handle || !handle->shaft) return nullptr;
+    auto& view = static_cast<CropView&>(*chain.back().object_ptr);
+    Linked<Croppable> croppable;
+    {
+      auto lock = std::lock_guard(view.mutex);
+      croppable = view.chain_end;
+    }
+    if (croppable.Unsafe().table_ptr != &MemMeld::croppable_tbl) return nullptr;
+    return std::make_unique<MemMeldToy::DragCropEndAction>(pointer, *handle, view.AcquirePtr(),
+                                                           std::move(croppable));
+  };
+  return t;
+}();
+
+static SpearShaft* FindShaft(MemMeldToy& tip, MemMeld& mem_meld) {
+  if (tip.shaft) return tip.shaft.get();
+  return static_cast<SpearShaft*>(tip.ToyScope().FindOrNull(mem_meld.process.Bind()));
+}
+
+ui::Widget* MemMeldToy::FindWidget(Interface::Table* table) {
+  if (table != &MemMeld::croppable_tbl) return this;
+  auto mem_meld = LockOwner<MemMeld>();
+  SpearShaft* shaft = mem_meld ? FindShaft(*this, *mem_meld) : nullptr;
+  return shaft ? static_cast<ui::Widget*>(shaft) : this;
+}
+
+static SpearShaft* FindVisibleShaft(MemMeldToy& tip, MemMeld& mem_meld) {
+  SpearShaft* shaft = FindShaft(tip, mem_meld);
+  if (!shaft || shaft->sections.empty()) return nullptr;
+  if (shaft->sections.back().top <= shaft->sections.front().bottom) return nullptr;
+  return shaft;
+}
+
+static AddressRange CropRangeAt(MemMeldToy& tip, SpearShaft& shaft, Vec2 point, float length) {
+  SkMatrix spear_to_tip = TransformBetween(shaft, tip);
+  spear_to_tip.preConcat(shaft.SpearToShaft());
+  SkMatrix tip_to_spear;
+  (void)spear_to_tip.invert(&tip_to_spear);
+  float center = Vec2(tip_to_spear.mapPoint(point)).y;
+  float bottom = shaft.sections.front().bottom;
+  float top = shaft.sections.back().top;
+  length = std::min(length, top - bottom);
+  float low = std::max(bottom, std::min(center - length / 2, top - length));
+  AddressRange shown = shaft.ShownRange();
+  return CropInside({0, shown.end - shown.begin}, {shaft.AddressAt(low) - shown.begin,
+                                                   shaft.AddressAt(low + length) - shown.begin});
+}
+
+static void PlaceCropGizmos(CropScissors::Group& group, Interface::Table* option) {
+  Vec2 size = group.DrawnSize() * group.extent;
+  static_cast<CropBox&>(*group.gizmos[0]).size = size;
+  for (int i = 0; i < 2; ++i) {
+    auto& handle = static_cast<MemMeldToy::CropEndHandle&>(*group.gizmos[i + 1]);
+    handle.origin = Vec2(0, handle.side * size.y / 2);
+    handle.scale = group.unfolding.value;
+    handle.option = option;
+  }
+}
+
+void MemMeld::croppable_Impl::CropViewSerialize(const CropView& view, ObjectSerializer& writer) {
+  AddressRange range = {0, UINT64_MAX};
+  {
+    auto lock = std::lock_guard(view.mutex);
+    if (view.chain_end.object_ptr == &*obj) {
+      range = static_cast<const MemMeld::CropParameters&>(*view.parameters).range;
+    }
+  }
+  writer.StartArray();
+  writer.Uint64(range.begin);
+  writer.Uint64(range.end);
+  writer.EndArray();
+}
+
+void MemMeld::croppable_Impl::CropViewDeserialize(CropView& view, ObjectDeserializer& d) {
+  AddressRange range = {0, UINT64_MAX};
+  uint64_t* ends[] = {&range.begin, &range.end};
+  Status status;
+  for (int i : ArrayView(d, status)) {
+    if (i < 2) {
+      d.Get(*ends[i], status);
+    } else {
+      d.Skip();
+    }
+  }
+  if (!OK(status)) {
+    view.ReportError(status.ToStr());
+    return;
+  }
+  auto lock = std::lock_guard(view.mutex);
+  if (view.chain_end.object_ptr != &*obj) return;
+  static_cast<MemMeld::CropParameters&>(*view.parameters).range = range;
+}
+
+std::unique_ptr<CropViewParameters> MemMeld::croppable_Impl::CropViewMakeParameters() {
+  return std::make_unique<MemMeld::CropParameters>();
+}
+
+void MemMeld::croppable_Impl::CropScissorsOpen(CropView& view, automat::Toy& croppable_toy,
+                                               CropScissors&, Vec2 point) {
+  auto& tip = static_cast<MemMeldToy&>(croppable_toy);
+  SpearShaft* shaft = FindVisibleShaft(tip, *obj);
+  if (!shaft) return;
+  AddressRange opened = CropRangeAt(tip, *shaft, point, kDefaultCropLength);
+  {
+    auto lock = std::lock_guard(view.mutex);
+    if (view.chain_end.object_ptr != &*obj) return;
+    static_cast<MemMeld::CropParameters&>(*view.parameters).range = opened;
+  }
+  view.WakeToys();
+}
+
+void MemMeld::croppable_Impl::CropScissorsMove(CropView& view, automat::Toy& croppable_toy,
+                                               CropScissors& scissors, Vec2 point) {
+  auto& tip = static_cast<MemMeldToy&>(croppable_toy);
+  SpearShaft* shaft = FindVisibleShaft(tip, *obj);
+  if (!shaft) return;
+  AddressRange shown = shaft->ShownRange();
+  AddressRange moved;
+  {
+    auto lock = std::lock_guard(view.mutex);
+    if (view.chain_end.object_ptr != &*obj) return;
+    AddressRange& range = static_cast<MemMeld::CropParameters&>(*view.parameters).range;
+    AddressRange current = CropInside(shown, range);
+    float length = shaft->PositionOfAddress(current.end) - shaft->PositionOfAddress(current.begin);
+    moved = CropRangeAt(tip, *shaft, point, length);
+    if (moved.begin == range.begin && moved.end == range.end) return;
+    range = moved;
+  }
+  if (auto* group = scissors.FindGroup(*this)) {
+    Rect fractions = ShaftFractionsOf(*shaft, CropInside(shown, moved));
+    group->center = fractions.Center();
+    group->size = fractions.Size();
+  }
+  view.WakeToys();
+}
+
+ui::Tock MemMeld::croppable_Impl::CropScissorsTick(CropView& view, automat::Toy& croppable_toy,
+                                                   CropScissors& scissors, time::Timer& timer) {
+  auto& tip = static_cast<MemMeldToy&>(croppable_toy);
+  SpearShaft* shaft = FindVisibleShaft(tip, *obj);
+  if (!shaft) return {};
+  AddressRange range = shaft->ShownRange();
+  {
+    auto lock = std::lock_guard(view.mutex);
+    if (view.chain_end.object_ptr != &*obj) return {};
+    range = CropInside(range, static_cast<MemMeld::CropParameters&>(*view.parameters).range);
+  }
+  Rect fractions = ShaftFractionsOf(*shaft, range);
+  auto& group = scissors.FindOrMakeGroup(*this);
+  if (group.gizmos.empty()) {
+    group.gizmos.push_back(std::make_unique<CropBox>(&scissors));
+    for (float side : {-1.f, 1.f}) {
+      auto handle = std::make_unique<MemMeldToy::CropEndHandle>(&scissors);
+      handle->side = side;
+      handle->outline = CropHandle::End(Vec2(0, side));
+      group.gizmos.push_back(std::move(handle));
+    }
+    group.center = fractions.Center();
+    group.size = fractions.Size();
+  }
+  ui::Tock tock = group.Unfold(fractions.Center(), fractions.Size(), timer);
+  float bottom = shaft->sections.front().bottom;
+  group.extent = Vec2(kCropBoxWidth, shaft->sections.back().top - bottom);
+  SkMatrix spear_to_scissors = TransformBetween(*shaft, scissors);
+  spear_to_scissors.preConcat(shaft->SpearToShaft());
+  Vec2 x_axis = spear_to_scissors.mapVector(1, 0);
+  scissors.box = CropScissors::Box{
+      .center = spear_to_scissors.mapPoint(Vec2(0, bottom) + group.DrawnCenter() * group.extent),
+      .turn = SinCos::FromVec2(x_axis),
+      .scale = Length(x_axis),
+      .size = group.DrawnSize() * group.extent,
+  };
+  PlaceCropGizmos(group, &kDragCropEnd);
+  for (int i = 0; i < 2; ++i) {
+    static_cast<MemMeldToy::CropEndHandle&>(*group.gizmos[i + 1]).shaft = shaft;
+  }
+  return tock;
+}
+
+ui::Tock MemMeld::croppable_Impl::CropScissorsClose(CropScissors& scissors, time::Timer& timer) {
+  auto* group = scissors.FindGroup(*this);
+  if (!group) return {};
+  ui::Tock tock = group->Fold(timer);
+  if (!group->gizmos.empty()) PlaceCropGizmos(*group, nullptr);
+  return tock;
+}
+
+std::unique_ptr<automat::Toy> MemMeld::croppable_Impl::CropMakeToy(CropView&, ui::Widget* parent) {
+  return obj->MakeToy(parent);
+}
+
+ui::Tock MemMeld::croppable_Impl::CropTickToy(CropView& view, automat::Toy& cropped_toy,
+                                              time::Timer&) {
+  auto CropOf = [this](this auto& self, CropView& link) -> AddressRange {
+    AddressRange offsets = {0, UINT64_MAX};
+    {
+      auto lock = std::lock_guard(link.mutex);
+      if (link.chain_end.object_ptr != &*obj) return offsets;
+      offsets = static_cast<MemMeld::CropParameters&>(*link.parameters).range;
+    }
+    AddressRange outer = {0, UINT64_MAX};
+    auto next = link.scissors->FindInterface();
+    if (next.table_ptr == &CropView::croppable_tbl) {
+      outer = self(static_cast<CropView&>(*next.object_ptr));
+    }
+    return CropInside(outer, offsets);
+  };
+  AddressRange crop = CropOf(view);
+  auto& tip = static_cast<MemMeldToy&>(cropped_toy);
+  if (tip.crop && tip.crop->begin == crop.begin && tip.crop->end == crop.end) return {};
+  tip.crop = crop;
+  return ui::Tock::Shape;
 }
 
 std::unique_ptr<MemMeld::Toy> MemMeld::MakeToy(ui::Widget* parent) {

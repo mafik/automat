@@ -6,6 +6,7 @@
 
 #include "argument.hpp"
 #include "base.hpp"
+#include "crop_tool.hpp"
 #include "library_process.hpp"
 #include "mem_meld.hpp"
 #include "once.hpp"
@@ -29,7 +30,21 @@ struct MemMeld : Object {
   void OnRun() { obj->Start(); }
   DEF_END(start);
 
-  INTERFACES(process_tbl, start_tbl);
+  struct CropParameters;
+
+  DEF_INTERFACE(MemMeld, Croppable, croppable, "Crop")
+  void CropViewSerialize(const CropView&, ObjectSerializer&);
+  void CropViewDeserialize(CropView&, ObjectDeserializer&);
+  std::unique_ptr<CropViewParameters> CropViewMakeParameters();
+  void CropScissorsOpen(CropView&, automat::Toy& croppable_toy, CropScissors&, Vec2 point);
+  void CropScissorsMove(CropView&, automat::Toy& croppable_toy, CropScissors&, Vec2 point);
+  ui::Tock CropScissorsTick(CropView&, automat::Toy& croppable_toy, CropScissors&, time::Timer&);
+  ui::Tock CropScissorsClose(CropScissors&, time::Timer&);
+  std::unique_ptr<automat::Toy> CropMakeToy(CropView&, ui::Widget* parent);
+  ui::Tock CropTickToy(CropView&, automat::Toy& cropped_toy, time::Timer&);
+  DEF_END(croppable);
+
+  INTERFACES(process_tbl, start_tbl, croppable_tbl);
 
   MemMeld() = default;
   MemMeld(const MemMeld&);

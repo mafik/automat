@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cctype>
 
+#include "action.hpp"
 #include "board.hpp"
 #include "deserializer.hpp"
 #include "file_import.hpp"
@@ -19,6 +20,7 @@
 #include "log.hpp"
 #include "menu.hpp"
 #include "object.hpp"
+#include "pointer.hpp"
 #include "tasks.hpp"
 #include "textures.hpp"
 #include "units.hpp"
@@ -36,6 +38,8 @@ constexpr float kIconSize = 1.5_cm;
 constexpr float kMinSize = 1_mm;
 constexpr float kMaxSize = 100_cm;
 constexpr float kLabelHeight = ui::WindowFrame::kTitleH / 2;
+constexpr Vec2 kDefaultCropSize = Vec2(25_mm, 22_mm);
+constexpr float kMinCropSize = 2_mm;
 
 Str Basename(StrView path) {
   auto slash = path.find_last_of("/\\");
@@ -156,6 +160,7 @@ ui::Font& LabelFont() {
 
 File::File() {
   base_toc[2] = &toggle_filename_tbl;
+  base_toc[3] = &croppable_tbl;
   toc.store(&base_toc, std::memory_order_relaxed);
 }
 
@@ -324,22 +329,47 @@ Vec2 File::Size() const {
 }
 
 struct FileToy : automat::ObjectToy {
+  struct DragCropHandleAction;
+
   sk_sp<SkImage> image;
   sk_sp<SkPicture> icon;
   Vec2 size;
   Str filename;
   bool show_filename = false;
   Rect label_bounds;
+  Optional<Rect> crop;
 
   FileToy(ui::Widget* parent, Object& obj) : ObjectToy(parent, obj) { Pull(); }
 
   bool CenteredAtZero() const override { return true; }
 
-  Rect Body() const { return Rect::MakeCenterZero(size.x, size.y); }
+  Rect Body() const {
+    if (!crop) return Rect::MakeCenterZero(size.x, size.y);
+    float scale = std::min(1 / crop->Width(), 1 / crop->Height());
+    return Rect::MakeCenterZero(crop->Width() * size.x * scale, crop->Height() * size.y * scale);
+  }
+
+  Rect PictureRect() const {
+    Rect body = Body();
+    if (!crop) return body;
+    Vec2 picture_size = body.Size() / crop->Size();
+    Vec2 bottom_left = body.BottomLeftCorner() - crop->BottomLeftCorner() * picture_size;
+    return Rect(bottom_left.x, bottom_left.y, bottom_left.x + picture_size.x,
+                bottom_left.y + picture_size.y);
+  }
+
+  SkMatrix ImageToLocal() const {
+    SkMatrix m = SkMatrix::RectToRect(SkRect::Make(image->dimensions()), PictureRect().sk,
+                                      SkMatrix::kFill_ScaleToFit);
+    m.preTranslate(0, image->height() / 2.f);
+    m.preScale(1, -1);
+    m.preTranslate(0, -image->height() / 2.f);
+    return m;
+  }
 
   ui::TitleText Label() const { return {LabelFont(), filename, kLabelHeight}; }
 
-  bool ShowsLabel() const { return show_filename && !filename.empty(); }
+  bool ShowsLabel() const { return show_filename && !filename.empty() && !crop; }
 
   void Pull() {
     auto file = LockObject<File>();
@@ -372,7 +402,7 @@ struct FileToy : automat::ObjectToy {
 
   Tock Tick(time::Timer&) override {
     Pull();
-    return Tock::Draw;
+    return Tock::Shape;
   }
 
   void FillMenu(ui::Pointer& pointer, Menu& menu) override {
@@ -385,18 +415,15 @@ struct FileToy : automat::ObjectToy {
 
   void Draw(SkCanvas& canvas) const override {
     Rect body = Body();
-    if (image) {
-      SkRect src = SkRect::Make(image->dimensions());
-      SkMatrix m = SkMatrix::RectToRect(src, body.sk, SkMatrix::kFill_ScaleToFit);
-      m.preTranslate(0, image->height() / 2.f);
-      m.preScale(1, -1);
-      m.preTranslate(0, -image->height() / 2.f);
-      canvas.save();
-      canvas.concat(m);
-      canvas.drawImage(image, 0, 0, kDefaultSamplingOptions, nullptr);
-      canvas.restore();
-    } else if (icon) {
-      DrawIconIn(canvas, *icon, body);
+    {
+      SkAutoCanvasRestore restore(&canvas, true);
+      if (crop) canvas.clipRect(body, true);
+      if (image) {
+        canvas.concat(ImageToLocal());
+        canvas.drawImage(image, 0, 0, kDefaultSamplingOptions, nullptr);
+      } else if (icon) {
+        DrawIconIn(canvas, *icon, PictureRect());
+      }
     }
     if (ShowsLabel()) {
       ui::TitleText label = Label();
@@ -412,6 +439,265 @@ struct FileToy : automat::ObjectToy {
 
 std::unique_ptr<automat::ObjectToy> File::MakeToy(ui::Widget* parent) {
   return std::make_unique<FileToy>(parent, *this);
+}
+
+struct File::CropParameters : CropViewParameters {
+  Rect rect = Rect(0, 0, 1, 1);
+};
+
+constexpr Vec2 kCropCorners[] = {Vec2(-1, -1), Vec2(1, -1), Vec2(1, 1), Vec2(-1, 1)};
+
+static Rect CropRectAt(Rect body, Vec2 point, Vec2 size) {
+  Vec2 center = (point - body.BottomLeftCorner()) / body.Size();
+  center.x = std::clamp(center.x, size.x / 2, 1 - size.x / 2);
+  center.y = std::clamp(center.y, size.y / 2, 1 - size.y / 2);
+  return Rect::MakeCenter(center, size.x, size.y);
+}
+
+static void PlaceCropGizmos(CropScissors::Group& group, Interface::Table* option) {
+  Vec2 size = group.DrawnSize() * group.extent;
+  static_cast<CropBox&>(*group.gizmos[0]).size = size;
+  for (int i = 0; i < 4; ++i) {
+    auto& handle = static_cast<CropHandle&>(*group.gizmos[i + 1]);
+    handle.origin = size * kCropCorners[i] / 2;
+    handle.scale = group.unfolding.value;
+    handle.option = option;
+  }
+}
+
+struct FileToy::DragCropHandleAction : Action {
+  MortalPtr<CropScissors> scissors;
+  Ptr<CropView> view;
+  Linked<Croppable> croppable;
+  SkMatrix scissors_to_fraction;
+  Vec2 min_size;
+  Vec2 corner;
+  Vec2 grab_offset;
+
+  DragCropHandleAction(ui::Pointer& pointer, CropScissors& crop_scissors, Ptr<CropView> crop_view,
+                       Linked<Croppable> file_croppable)
+      : Action(pointer),
+        scissors(&crop_scissors),
+        view(std::move(crop_view)),
+        croppable(std::move(file_croppable)) {
+    Rect rect(0, 0, 1, 1);
+    {
+      auto lock = std::lock_guard(view->mutex);
+      if (view->chain_end == croppable) {
+        rect = static_cast<File::CropParameters&>(*view->parameters).rect;
+      }
+    }
+    Vec2 body_size = crop_scissors.box->size / rect.Size();
+    min_size = Vec2(kMinCropSize, kMinCropSize) / body_size;
+    SkMatrix scissors_to_box;
+    (void)crop_scissors.box->ToScissors().invert(&scissors_to_box);
+    scissors_to_fraction = SkMatrix::Translate(rect.Center().x, rect.Center().y)
+                               .preScale(1 / body_size.x, 1 / body_size.y)
+                               .preConcat(scissors_to_box);
+    Vec2 in_box = scissors_to_box.mapPoint(pointer.PositionWithin(crop_scissors));
+    corner = Vec2(in_box.x < 0 ? -1 : 1, in_box.y < 0 ? -1 : 1);
+    Vec2 corner_fraction(corner.x > 0 ? rect.right : rect.left,
+                         corner.y > 0 ? rect.top : rect.bottom);
+    grab_offset = corner_fraction - PointerFraction();
+  }
+
+  Vec2 PointerFraction() const {
+    return scissors_to_fraction.mapPoint(pointer.PositionWithin(*scissors));
+  }
+
+  void Update() override {
+    if (!scissors) {
+      pointer.ReplaceAction(*this, nullptr);
+      return;
+    }
+    Vec2 target = PointerFraction() + grab_offset;
+    Rect dragged;
+    {
+      auto lock = std::lock_guard(view->mutex);
+      if (view->chain_end != croppable) return;
+      Rect& rect = static_cast<File::CropParameters&>(*view->parameters).rect;
+      if (corner.x > 0) {
+        rect.right = std::min(std::max(target.x, rect.left + min_size.x), 1.f);
+      } else {
+        rect.left = std::max(std::min(target.x, rect.right - min_size.x), 0.f);
+      }
+      if (corner.y > 0) {
+        rect.top = std::min(std::max(target.y, rect.bottom + min_size.y), 1.f);
+      } else {
+        rect.bottom = std::max(std::min(target.y, rect.top - min_size.y), 0.f);
+      }
+      dragged = rect;
+    }
+    if (auto* group = scissors->FindGroup(croppable)) {
+      group->center = dragged.Center();
+      group->size = dragged.Size();
+    }
+    view->WakeToys();
+  }
+};
+
+static constinit Interface::Table kDragCropHandle = [] {
+  Interface::Table t(Interface::kMenu, "Crop Handle");
+  t.cursor = ui::Cursor::Crosshair;
+  t.activate = [](Span<Interface> chain, ui::Pointer& pointer,
+                  Toy* toy) -> std::unique_ptr<Action> {
+    auto* scissors = dynamic_cast<CropScissors*>(toy);
+    if (!scissors || !scissors->box) return nullptr;
+    auto& view = static_cast<CropView&>(*chain.back().object_ptr);
+    Linked<Croppable> croppable;
+    {
+      auto lock = std::lock_guard(view.mutex);
+      croppable = view.chain_end;
+    }
+    if (croppable.Unsafe().table_ptr != &File::croppable_tbl) return nullptr;
+    return std::make_unique<FileToy::DragCropHandleAction>(pointer, *scissors, view.AcquirePtr(),
+                                                           std::move(croppable));
+  };
+  return t;
+}();
+
+void File::croppable_Impl::CropViewSerialize(const CropView& view, ObjectSerializer& writer) {
+  Rect rect(0, 0, 1, 1);
+  {
+    auto lock = std::lock_guard(view.mutex);
+    if (view.chain_end.object_ptr == &*obj) {
+      rect = static_cast<const File::CropParameters&>(*view.parameters).rect;
+    }
+  }
+  writer.StartArray();
+  writer.Double(rect.left);
+  writer.Double(rect.bottom);
+  writer.Double(rect.right);
+  writer.Double(rect.top);
+  writer.EndArray();
+}
+
+void File::croppable_Impl::CropViewDeserialize(CropView& view, ObjectDeserializer& d) {
+  Rect rect(0, 0, 1, 1);
+  float* sides[] = {&rect.left, &rect.bottom, &rect.right, &rect.top};
+  Status status;
+  for (int i : ArrayView(d, status)) {
+    if (i < 4) {
+      d.Get(*sides[i], status);
+    } else {
+      d.Skip();
+    }
+  }
+  if (!OK(status)) {
+    view.ReportError(status.ToStr());
+    return;
+  }
+  auto lock = std::lock_guard(view.mutex);
+  if (view.chain_end.object_ptr != &*obj) return;
+  static_cast<File::CropParameters&>(*view.parameters).rect = rect;
+}
+
+std::unique_ptr<CropViewParameters> File::croppable_Impl::CropViewMakeParameters() {
+  return std::make_unique<File::CropParameters>();
+}
+
+void File::croppable_Impl::CropScissorsOpen(CropView& view, automat::Toy& croppable_toy,
+                                            CropScissors&, Vec2 point) {
+  Rect body = static_cast<FileToy&>(croppable_toy).Body();
+  Vec2 size(std::min(1.f, kDefaultCropSize.x / body.Width()),
+            std::min(1.f, kDefaultCropSize.y / body.Height()));
+  {
+    auto lock = std::lock_guard(view.mutex);
+    if (view.chain_end.object_ptr != &*obj) return;
+    static_cast<File::CropParameters&>(*view.parameters).rect = CropRectAt(body, point, size);
+  }
+  view.WakeToys();
+}
+
+void File::croppable_Impl::CropScissorsMove(CropView& view, automat::Toy& croppable_toy,
+                                            CropScissors& scissors, Vec2 point) {
+  Rect body = static_cast<FileToy&>(croppable_toy).Body();
+  Rect moved;
+  {
+    auto lock = std::lock_guard(view.mutex);
+    if (view.chain_end.object_ptr != &*obj) return;
+    Rect& rect = static_cast<File::CropParameters&>(*view.parameters).rect;
+    moved = CropRectAt(body, point, rect.Size());
+    if (moved.sk == rect.sk) return;
+    rect = moved;
+  }
+  if (auto* group = scissors.FindGroup(*this)) {
+    group->center = moved.Center();
+    group->size = moved.Size();
+  }
+  view.WakeToys();
+}
+
+ui::Tock File::croppable_Impl::CropScissorsTick(CropView& view, automat::Toy& croppable_toy,
+                                                CropScissors& scissors, time::Timer& timer) {
+  auto& file_toy = static_cast<FileToy&>(croppable_toy);
+  Rect rect(0, 0, 1, 1);
+  {
+    auto lock = std::lock_guard(view.mutex);
+    if (view.chain_end.object_ptr != &*obj) return {};
+    rect = static_cast<File::CropParameters&>(*view.parameters).rect;
+  }
+  auto& group = scissors.FindOrMakeGroup(*this);
+  if (group.gizmos.empty()) {
+    group.gizmos.push_back(std::make_unique<CropBox>(&scissors));
+    for (Vec2 corner : kCropCorners) {
+      auto handle = std::make_unique<CropHandle>(&scissors);
+      handle->outline = CropHandle::Corner(corner);
+      group.gizmos.push_back(std::move(handle));
+    }
+    group.center = rect.Center();
+    group.size = rect.Size();
+  }
+  ui::Tock tock = group.Unfold(rect.Center(), rect.Size(), timer);
+  Rect body = file_toy.Body();
+  group.extent = body.Size();
+  SkMatrix toy_to_scissors = TransformBetween(file_toy, scissors);
+  Vec2 x_axis = toy_to_scissors.mapVector(1, 0);
+  scissors.box = CropScissors::Box{
+      .center =
+          toy_to_scissors.mapPoint(body.BottomLeftCorner() + group.DrawnCenter() * group.extent),
+      .turn = SinCos::FromVec2(x_axis),
+      .scale = Length(x_axis),
+      .size = group.DrawnSize() * group.extent,
+  };
+  PlaceCropGizmos(group, &kDragCropHandle);
+  return tock;
+}
+
+ui::Tock File::croppable_Impl::CropScissorsClose(CropScissors& scissors, time::Timer& timer) {
+  auto* group = scissors.FindGroup(*this);
+  if (!group) return {};
+  ui::Tock tock = group->Fold(timer);
+  if (!group->gizmos.empty()) PlaceCropGizmos(*group, nullptr);
+  return tock;
+}
+
+std::unique_ptr<automat::Toy> File::croppable_Impl::CropMakeToy(CropView&, ui::Widget* parent) {
+  return std::make_unique<FileToy>(parent, *obj);
+}
+
+ui::Tock File::croppable_Impl::CropTickToy(CropView& view, automat::Toy& cropped_toy,
+                                           time::Timer&) {
+  Rect crop(0, 0, 1, 1);
+  CropView* link = &view;
+  Locked<Croppable> next;
+  while (true) {
+    {
+      auto lock = std::lock_guard(link->mutex);
+      if (link->chain_end.object_ptr != &*obj) break;
+      Rect outer = static_cast<File::CropParameters&>(*link->parameters).rect;
+      crop =
+          Rect(outer.left + crop.left * outer.Width(), outer.bottom + crop.bottom * outer.Height(),
+               outer.left + crop.right * outer.Width(), outer.bottom + crop.top * outer.Height());
+    }
+    next = link->scissors->FindInterface();
+    if (next.table_ptr != &CropView::croppable_tbl) break;
+    link = static_cast<CropView*>(next.object_ptr);
+  }
+  auto& file_toy = static_cast<FileToy&>(cropped_toy);
+  if (file_toy.crop && file_toy.crop->sk == crop.sk) return {};
+  file_toy.crop = crop;
+  return ui::Tock::Shape;
 }
 
 }  // namespace automat::library

@@ -40,7 +40,7 @@ defaults. Until a modality shows such an object, it has no meaningful position.
 ## Interfaces and widgets
 
 Interfaces within an object can be mapped to 2D shapes or widgets. `Toy::FindWidget`
-(src/toy.hpp) maps an interface of the toy's owner to the child widget that displays it; the
+(src/toy.hpp) maps an interface of the toy's owner to the widget that displays it; the
 default is the whole toy. Connections use their endpoint interfaces' widgets as covers, which
 is how a sync belt disappears under a FlipFlop's rocker (docs/parrots/Split Widgets.md).
 

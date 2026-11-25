@@ -528,14 +528,20 @@ only where `automat::MemMeld` is supported, at present Linux: on other platforms
   connects two toys on one board it is an ordinary connection toy of that board: made through
   `Argument::MakeToy`, ordered by the board, split under its end points by `ArgumentToy::TickSplits`
   and anchored at both ends. The `MemMeldToy` therefore stays small, and its shape is the outline of
-  the tip.
+  the tip, extended to the blunt end only while the tip is cropped.
 - `MemMeldToy` has its origin at the apex of the tip (`CenteredAtZero`) and draws itself turned by
-  `turn` around the origin. Its `Shape` is the outline of the tip turned by `turn`; it is what the
+  `turn` around the origin. Its `Shape` is the outline of the tip turned by `turn`, continued for a
+  cropped tip by a band as wide as the drawn zig-zags down to the blunt end; it is what the
   pointer touches and what `ErrorFlames` and `LocationWidget` use. Its `DrawBounds` include the
   bounds of the shaft while it holds the shaft, because the renderer does not visit the children of a
   widget whose bounds lie outside the window, and a free shaft can reach back into the window.
-- `SpearShaft` has an empty `Shape`, so it does not react to the pointer: the MemMeld is grabbed by
-  its tip. Its `DrawnUnderEndpoints` is true.
+- `SpearShaft::Shape` is one closed contour around the visible shaft (from the bottom of the first
+  section to the top of the last one), widened by `kShaftMargin` on both sides, and empty without
+  sections; `SpearShaft::Tick` reports a shaping `Tock` when the geometry changes. It is the area in
+  which the Crop Scissors connect. A press on the shaft of a free spear, which is a child of its
+  tip, reaches the location of the tip through the parents and moves the spear as a press on the
+  tip does; a left press on a shaft that a board holds starts no action. Its `DrawnUnderEndpoints`
+  is true.
 - The tip and the shaft are made together: the constructor of `MemMeldToy` makes its shaft and
   orders it below itself. The shaft has a `MortalPtr` to its tip.
 
@@ -570,7 +576,7 @@ only where `automat::MemMeld` is supported, at present Linux: on other platforms
   its tip, its `alpha` is the alpha of the `LocationWidget` that holds the tip, the rule of ordinary
   connection toys (`TickVisibility` in `src/ui_connection_widget.cpp`), so a spear whose Location is
   deleted fades as one. A shaft that a board holds and whose MemMeld is gone returns after these
-  two steps and keeps its pose, its covers and its ranges, as `TickLifecycle` only fades a
+  two steps and keeps its pose, its covers and its sections, as `TickLifecycle` only fades a
   connection toy whose start argument cannot be locked; without this the shaft would lose its
   globe, because the end of a dead argument cannot be found, and would swing to the free pose while
   it fades. A shaft that is a child of its tip always computes its pose, also in the dead state, in
@@ -600,7 +606,8 @@ only where `automat::MemMeld` is supported, at present Linux: on other platforms
   assigns `1_mm` to the `shadow_elevation` of the tip once, when it makes the tip, because
   on a board the `LocationWidget` assigns it to its toy, and the tip on the globe has no
   `LocationWidget`.
-- The grab area of the tip on the globe is the outline of the tip. `MemMeldToy::FindOption` returns
+- The grab area of the tip on the globe is the outline of the tip and the shape of its shaft, which
+  is a child of the tip there. `MemMeldToy::FindOption` returns
   the table `kMakeMemMeld` bound to the Process for the left button while the parent of the tip is
   the toy of a Process. A right press opens the menu of the globe: the menu of the tip is empty, so
   `Pointer::ButtonDown` (`src/pointer.cpp`) asks the parent.
@@ -638,13 +645,14 @@ only where `automat::MemMeld` is supported, at present Linux: on other platforms
   count.
 - The apex is the origin of the tip toy. The blunt end is the first of the
   `ObjectToy::ConnectionPositions` of the globe (the centre of the ball, `ProcessToy`), and without a
-  globe it lies `kFreeLength` straight below the apex. The free shaft is kept because it is where the
+  globe it lies `kFreeLength` straight below the apex. A cropped shaft looks up no globe, and its
+  blunt end lies `kCroppedLength` below the apex. The free shaft is kept because it is where the
   memory is shown when the spear is not on the board of its globe.
 - While the board holds the shaft and a pointer holds the toy at one end, the end point is taken from
   the pointer-bound texture anchor of that toy (`PositionOf`, with the anchor from `GrabAnchor`): it
   is the place where the compositor draws that point, not the place that the transform of the toy
   reports. `LocationWidget` moves a dragged toy towards the pointer with a spring, and the
-  compositor shifts its texture by the rest of the way; a shaft drawn towards the transform would
+  compositor shifts its texture by the remaining distance; a shaft drawn towards the transform would
   bend at the tip. While the shaft is a child of its tip, the shaft is drawn in the space of the tip
   and moves with its texture, so the transform is used.
 - Length and direction are a base plus a remainder, the pattern of `SyncBelt`. `length` and
@@ -662,7 +670,8 @@ only where `automat::MemMeld` is supported, at present Linux: on other platforms
   `Tock::Shape`, so the shape of the tip follows the turn.
 - `hidden` is the part of the shaft that the globe covers: `Raycast` on `globe->shape` from outside
   the globe towards the blunt end finds where the shaft leaves the outline, plus `kHiddenMargin`.
-  Without a globe it is 0. It is used only by `Draw`, as the place where the address pattern starts.
+  Without a globe it is 0. It is used by the positions of the sections, as the place where the
+  address pattern starts.
 
 ### Texture anchors and covers
 
@@ -676,22 +685,54 @@ only where `automat::MemMeld` is supported, at present Linux: on other platforms
   pointer holds that toy, and a plain anchor at the end point otherwise. The compositor then draws
   both ends of the shaft where it draws the toys at the ends. Both ends use the same rule, so a
   dragged globe pulls the blunt end with it.
-- `TickSplits` runs in every `Tick`. While the board holds the shaft, the shaft is drawn under the
-  tip and under the globe (`DrawnUnderEndpoints`, `docs/parrots/Split Widgets.md`), so the globe
-  covers the part of the shaft behind the ball. While the globe holds the tip, the shaft is a child
-  of the tip, which is ordered below the globe, so the ball covers it without a split.
+- `TickSplits` runs in every `Tick` of a shaft that is not cropped. While the board holds the
+  shaft, the shaft is drawn under the tip and under the globe (`DrawnUnderEndpoints`,
+  `docs/parrots/Split Widgets.md`), so the globe covers the part of the shaft behind the ball.
+  While the globe holds the tip, the shaft is a child of the tip, which is ordered below the
+  globe, so the ball covers it without a split.
 - The shaft copies the `shadow_elevation` of its tip.
 
 ### The address pattern
 
-`SpearShaft::Draw` draws the visible shaft along a centre line with one segment per merged range of
-mapped memory, with a length proportional to its bytes, and one zig-zag for every gap, the first and
-the last included. The pattern starts where the shaft leaves the globe (`hidden`) and ends below the
-tip (`kShaftTop`); the part behind the globe is a plain rod. `SpearShaft::Tick` rebuilds
-`address_ranges` from a `ReadGuard` when `Toy::observed_monitor` differs from the value stored at
-the last rebuild, merging adjacent regions, so `Tick` loads no monitor. A shaft in the dead
-state has no address ranges and is a plain rod; a shaft whose MemMeld is gone keeps the ranges
-that it has.
+The layout of the shaft is the list `SpearShaft::sections`. The sections cover the shown range
+(the crop of the tip, or the whole address space) without holes: ranges of mapped memory, with
+adjacent regions merged and clipped to the shown range, and the gaps between them, the first and
+the last included. Each section has its position along the spear: a range of mapped memory has a
+length proportional to its bytes, and a gap has at most the height of one zig-zag. `SpearShaft::Draw`,
+`PositionOfAddress` and `AddressAt` read this one layout, so the drawing, the Crop Box and the
+drag of its ends agree. The pattern starts where the shaft leaves the globe (`hidden`) and ends
+below the tip (`kShaftTop`); the part behind the globe is a plain rod. `SpearShaft::Tick` rebuilds
+the sections from a `ReadGuard` when `Toy::observed_monitor` differs from the value stored at the
+last rebuild or when the shown range changed, so `Tick` loads no monitor, and it computes their
+positions in every `Tick`. A rebuild without a MemMeld, as in the dead state, makes one section
+that is not a gap, a plain rod.
+
+A change of the end points, of `hidden` or of a section calls `InvalidateConnectionWidgets` of the
+location that holds the tip, which wakes the scissors of the Crop Views that crop the object of
+that location. A
+rebuild counts as a change only when a section differs, because that call bumps the argument
+monitor that the shaft observes, and every rebuild would otherwise cause the next one.
+
+### Cropping
+
+`library::MemMeld` is Croppable (`docs/parrots/Crop Tool.md`). The crop parameters
+(`MemMeld::CropParameters`) are an address range as offsets from the begin of the parent crop,
+and `CropInside` keeps a range inside its parent and never empty. `crop_make_toy` makes a
+`MemMeldToy`, and `crop_tick_toy` assigns its `crop`, the absolute range of the chain. For a
+cropped tip, `SpearShaft::Tick` looks up no globe, skips `TickSplits` and places the blunt end
+`kCroppedLength` below the apex. The shape of a cropped tip ends at the same fixed length, so it
+does not depend on the first `Tick` of its shaft, and `MemMeldToy::Tick` wakes the shaft in every
+`Tick`. The scissors connect over the shaft and not over the tip: `MemMeldToy::FindWidget` returns
+the shaft for the `croppable` table (the shaft that the tip holds or the one in the scope of the
+board), and the scissors test the shape of that shaft. The entries of the scissors receive the tip
+as `croppable_toy` and find the shaft from it; while the shaft has no visible length they place no
+box. The seen target of a group of gizmos is in fractions of the visible shaft, and the extent of
+the group is `kCropBoxWidth` by the length of the visible shaft, so a dragged tip or globe moves
+the box without delay. The Crop Box is placed on the shaft between the positions of the ends of
+the range, and the two `MemMeldToy::CropEndHandle`s move one end each (`DragCropEndAction`), which
+keeps the ends at least `kMinCropLength` apart on the shaft. The outline of each end handle is made
+once with the handle, relative to its `origin`. The board orders the scissors above the shaft,
+because the shaft is itself a connection toy of the board (`docs/parrots/Boards.md`).
 
 ### The shading
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "prototypes.hpp"
 
+#include "crop_tool.hpp"
 #include "library_assembler.hpp"
 #include "library_beta_shelf.hpp"
 #include "library_data_offer.hpp"
@@ -96,6 +97,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<Window>();
   index.Register<TesseractOCR>();
   index.Register<Sources>();
+  index.Register<CropView, HideInToolbar>();
 #if defined(__linux__)
   index.Register<library::MemMeld, HideInToolbar>();
 #endif

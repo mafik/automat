@@ -723,6 +723,7 @@ struct BetaShelfToy : ObjectToy {
     menu.Place(W, Proto("Program Launcher"));
     menu.Place(NW, Proto("App Window"));
     menu.Place(SW, Proto("File"));
+    menu.Place(NE, Proto("Crop View"));
     menu.Place(N, Interface(*shelf, kPipelinesMenu));
   }
 };

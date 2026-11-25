@@ -205,6 +205,13 @@ board that owns both ends draws the connection, each with its own connection wid
 own ToyScope. A board that owns only one end draws nothing for the connection, even though the
 connection still exists in the Engine.
 
+`BoardWidget::Tick` orders every connection toy directly above the higher of the locations at its
+two ends (docs/parrots/Split Widgets.md). A second loop then orders a connection toy above the
+widget that the toy at its end returns from `FindWidget` for the interface at that end, when that
+widget is a child of the board and lies above the connection toy, so Crop Scissors lie above the
+shaft of the MemMeld that they crop. The shaft is itself a connection toy placed by the first
+loop, so the second loop runs after it and the result does not depend on the order of locations.
+
 ## Wallpaper
 
 A board may show the image of a `File` (src/library_file.hpp) in place of the default board

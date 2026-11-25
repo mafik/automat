@@ -86,7 +86,9 @@ seam and no double blending of translucent pixels at region boundaries, under an
 ## Ordering
 
 The board orders every connection — cable or sync belt, split or not — directly above the
-higher of its two endpoint locations (the ordering pass in `BoardWidget::Tick`, src/board.cpp).
+higher of its two endpoint locations, and above the widget of the interface at its end when that
+widget is a child of the board (the ordering passes in `BoardWidget::Tick`, src/board.cpp,
+docs/parrots/Boards.md).
 Above both endpoints, because a body ordered below an endpoint would be covered by that object
 in the area between the cover's rectangle and the object's boundary, which looks like a gap in
 the connection. Directly above and no higher, because connections are ordinary members of the

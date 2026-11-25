@@ -728,19 +728,21 @@ static void RenderHeightMap(skgpu::graphite::Recorder& recorder, WidgetDrawable&
   }
   auto* canvas = surface->getCanvas();
   canvas->clear(SK_ColorTRANSPARENT);
+  auto EncodedHeight = [](const WidgetDrawable& caster) {
+    return std::min(caster.shadow_elevation / kMaxShadowHeight, 1.f) * caster.fresh_alpha;
+  };
+  std::sort(
+      baker.shadow_casters.begin(), baker.shadow_casters.end(),
+      [&](WidgetDrawable* a, WidgetDrawable* b) { return EncodedHeight(*a) < EncodedHeight(*b); });
   for (auto* caster_ptr : baker.shadow_casters) {
     auto& caster = *caster_ptr;
     if (!caster.rendered().surface) {
       continue;
     }
-    float encoded = std::min(caster.shadow_elevation / kMaxShadowHeight, 1.f) * caster.fresh_alpha;
-    float alpha_to_red[20] = {};  // r = a * encoded, a = 1
-    alpha_to_red[3] = encoded;
-    alpha_to_red[19] = 1;
     SkPaint paint;
     paint.setShader(WarpSourceShader(caster));
-    paint.setColorFilter(SkColorFilters::Matrix(alpha_to_red));
-    paint.setBlendMode(SkBlendMode::kLighten);
+    paint.setColorFilter(SkColorFilters::Blend(SkColor4f{EncodedHeight(caster), 0, 0, 1}, nullptr,
+                                               SkBlendMode::kSrcIn));
     canvas->save();
     canvas->translate(-origin.x(), -origin.y());
     canvas->concat(caster.fresh_matrix);
